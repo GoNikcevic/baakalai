@@ -161,6 +161,17 @@ function migrate(db) {
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash      TEXT NOT NULL UNIQUE,
+      expires_at      TEXT NOT NULL,
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
   `);
 
   // Add user_id column to campaigns if not present
@@ -606,6 +617,34 @@ const users = {
   },
 };
 
+// =============================================
+// Refresh Tokens
+// =============================================
+
+const refreshTokens = {
+  create(userId, tokenHash, expiresAt) {
+    getDb().prepare(
+      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
+    ).run(userId, tokenHash, expiresAt);
+  },
+
+  getByHash(tokenHash) {
+    return getDb().prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?').get(tokenHash);
+  },
+
+  deleteByHash(tokenHash) {
+    return getDb().prepare('DELETE FROM refresh_tokens WHERE token_hash = ?').run(tokenHash);
+  },
+
+  deleteByUser(userId) {
+    return getDb().prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(userId);
+  },
+
+  deleteExpired() {
+    return getDb().prepare("DELETE FROM refresh_tokens WHERE expires_at < datetime('now')").run();
+  },
+};
+
 module.exports = {
   getDb,
   campaigns,
@@ -618,4 +657,5 @@ module.exports = {
   chatMessages,
   settings,
   users,
+  refreshTokens,
 };

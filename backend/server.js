@@ -14,8 +14,20 @@ const settingsRouter = require('./routes/settings');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// CORS — restrict origins in production, allow localhost in dev
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'];
+
+app.use(cors({
+  origin(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 // Serve frontend static files
@@ -62,4 +74,10 @@ app.listen(config.port, '0.0.0.0', () => {
     'notion.token',
     'claude.apiKey',
   ]);
+
+  // Clean up expired refresh tokens every hour
+  const db = require('./db');
+  setInterval(() => {
+    try { db.refreshTokens.deleteExpired(); } catch { /* ignore */ }
+  }, 60 * 60 * 1000);
 });

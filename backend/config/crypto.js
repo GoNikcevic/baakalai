@@ -2,17 +2,21 @@ const crypto = require('crypto');
 
 const ALGO = 'aes-256-gcm';
 const IV_LEN = 16;
-const TAG_LEN = 16;
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 /**
  * Derive a 32-byte encryption key from the server secret.
- * Uses ENCRYPTION_SECRET from env, falling back to a machine-derived key.
+ * In production, ENCRYPTION_SECRET must be set — the server will crash otherwise.
+ * In dev, a fallback is used with a warning.
  */
 function getEncryptionKey() {
   const secret = process.env.ENCRYPTION_SECRET;
   if (!secret) {
-    // Fallback: derive from a stable machine value so it survives restarts
-    // In production, ENCRYPTION_SECRET should always be set explicitly
+    if (IS_PRODUCTION) {
+      throw new Error('ENCRYPTION_SECRET is required in production. Set it in your .env file.');
+    }
+    console.warn('⚠️  ENCRYPTION_SECRET not set — using insecure fallback. Set it in .env for production.');
     const fallback = 'bakal-default-key-change-me-in-production';
     return crypto.scryptSync(fallback, 'bakal-salt', 32);
   }

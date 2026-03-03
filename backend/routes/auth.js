@@ -1,9 +1,59 @@
 const { Router } = require('express');
 const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
 const db = require('../db');
-const { signToken, requireAuth } = require('../middleware/auth');
+const {
+  signAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
+  requireAuth,
+} = require('../middleware/auth');
 
 const router = Router();
+
+// Rate limiting: 10 attempts per 15 minutes per IP on auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Try again in 15 minutes.' },
+});
+
+router.use('/login', authLimiter);
+router.use('/register', authLimiter);
+router.use('/refresh', authLimiter);
+
+/**
+ * Validate password strength.
+ * - Min 8 characters
+ * - At least 1 uppercase, 1 lowercase, 1 digit
+ */
+function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must contain at least one lowercase letter';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one digit';
+  }
+  return null;
+}
+
+/**
+ * Issue access + refresh tokens and return a standard auth response.
+ */
+function issueTokens(user) {
+  const accessToken = signAccessToken(user);
+  const refresh = generateRefreshToken();
+  db.refreshTokens.create(user.id, refresh.tokenHash, refresh.expiresAt);
+  return { accessToken, refreshToken: refresh.token };
+}
 
 // POST /api/auth/register — Create a new account
 router.post('/register', async (req, res) => {
@@ -13,8 +63,9 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Email, password, and name are required' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  const passwordError = validatePassword(password);
+  if (passwordError) {
+    return res.status(400).json({ error: passwordError });
   }
 
   // Check if email already exists
@@ -43,10 +94,11 @@ router.post('/register', async (req, res) => {
     } catch { /* columns may not exist yet */ }
   }
 
-  const token = signToken(user);
+  const { accessToken, refreshToken } = issueTokens(user);
 
   res.status(201).json({
-    token,
+    token: accessToken,
+    refreshToken,
     user: { id: user.id, email: user.email, name: user.name, role: user.role },
   });
 });
@@ -69,12 +121,66 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  const token = signToken({ id: user.id, email: user.email, role: user.role });
+  const { accessToken, refreshToken } = issueTokens({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+  });
 
   res.json({
-    token,
+    token: accessToken,
+    refreshToken,
     user: { id: user.id, email: user.email, name: user.name, company: user.company, role: user.role },
   });
+});
+
+// POST /api/auth/refresh — Exchange refresh token for new access + refresh tokens
+router.post('/refresh', (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(400).json({ error: 'Refresh token is required' });
+  }
+
+  const tokenHash = hashRefreshToken(refreshToken);
+  const stored = db.refreshTokens.getByHash(tokenHash);
+
+  if (!stored) {
+    return res.status(401).json({ error: 'Invalid refresh token' });
+  }
+
+  // Revoke the used token (rotation)
+  db.refreshTokens.deleteByHash(tokenHash);
+
+  // Check expiration
+  if (new Date(stored.expires_at) < new Date()) {
+    return res.status(401).json({ error: 'Refresh token expired' });
+  }
+
+  const user = db.users.getById(stored.user_id);
+  if (!user) {
+    return res.status(401).json({ error: 'User not found' });
+  }
+
+  // Issue new pair
+  const tokens = issueTokens({ id: user.id, email: user.email, role: user.role });
+
+  res.json({
+    token: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+  });
+});
+
+// POST /api/auth/logout — Revoke refresh token
+router.post('/logout', (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (refreshToken) {
+    const tokenHash = hashRefreshToken(refreshToken);
+    db.refreshTokens.deleteByHash(tokenHash);
+  }
+
+  res.json({ message: 'Logged out' });
 });
 
 // GET /api/auth/me — Get current user info (requires auth)
