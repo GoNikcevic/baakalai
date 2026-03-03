@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { config, validateConfig } = require('./config');
@@ -14,6 +15,10 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, '..', 'app')));
+app.use('/landing', express.static(path.join(__dirname, '..', 'landing')));
 
 // Health check
 app.get('/api/health', (_req, res) => {
