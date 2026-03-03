@@ -1,14 +1,19 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    BAKAL — Authentication Module
-   Handles login, register, token storage, and auth state.
+   Handles login, register, token storage, refresh, and auth state.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const BakalAuth = (() => {
   const TOKEN_KEY = 'bakal_token';
+  const REFRESH_KEY = 'bakal_refresh_token';
   const USER_KEY = 'bakal_user';
 
   function getToken() {
     return localStorage.getItem(TOKEN_KEY);
+  }
+
+  function getRefreshToken() {
+    return localStorage.getItem(REFRESH_KEY);
   }
 
   function getUser() {
@@ -17,13 +22,15 @@ const BakalAuth = (() => {
     } catch { return null; }
   }
 
-  function setSession(token, user) {
+  function setSession(token, refreshToken, user) {
     localStorage.setItem(TOKEN_KEY, token);
+    if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   }
 
   function clearSession() {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
   }
 
@@ -39,7 +46,7 @@ const BakalAuth = (() => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
-    setSession(data.token, data.user);
+    setSession(data.token, data.refreshToken, data.user);
     return data.user;
   }
 
@@ -51,11 +58,62 @@ const BakalAuth = (() => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
-    setSession(data.token, data.user);
+    setSession(data.token, data.refreshToken, data.user);
     return data.user;
   }
 
-  function logout() {
+  /**
+   * Refresh the access token using the stored refresh token.
+   * Returns the new access token, or null if refresh failed.
+   */
+  let _refreshPromise = null;
+
+  async function refreshAccessToken() {
+    // Deduplicate concurrent refresh calls
+    if (_refreshPromise) return _refreshPromise;
+
+    _refreshPromise = (async () => {
+      const rt = getRefreshToken();
+      if (!rt) return null;
+
+      try {
+        const res = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: rt }),
+        });
+
+        if (!res.ok) {
+          clearSession();
+          return null;
+        }
+
+        const data = await res.json();
+        localStorage.setItem(TOKEN_KEY, data.token);
+        if (data.refreshToken) localStorage.setItem(REFRESH_KEY, data.refreshToken);
+        return data.token;
+      } catch {
+        return null;
+      } finally {
+        _refreshPromise = null;
+      }
+    })();
+
+    return _refreshPromise;
+  }
+
+  async function logout() {
+    const rt = getRefreshToken();
+    // Revoke refresh token on the server (best-effort)
+    if (rt) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: rt }),
+        });
+      } catch { /* ignore */ }
+    }
     clearSession();
     showLoginScreen();
   }
@@ -67,12 +125,27 @@ const BakalAuth = (() => {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: 'Bearer ' + token },
       });
-      if (!res.ok) {
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+        return true;
+      }
+      // Token expired — try refresh
+      const newToken = await refreshAccessToken();
+      if (!newToken) {
         clearSession();
         return false;
       }
-      const data = await res.json();
-      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      // Re-validate with new token
+      const res2 = await fetch('/api/auth/me', {
+        headers: { Authorization: 'Bearer ' + newToken },
+      });
+      if (!res2.ok) {
+        clearSession();
+        return false;
+      }
+      const data2 = await res2.json();
+      localStorage.setItem(USER_KEY, JSON.stringify(data2.user));
       return true;
     } catch {
       return false;
@@ -128,7 +201,7 @@ const BakalAuth = (() => {
           <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Mot de passe</label>
           <input type="password" name="password" id="auth-password" required autocomplete="current-password"
             style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:14px;font-family:var(--font);outline:none;"
-            placeholder="Votre mot de passe" minlength="6">
+            placeholder="Votre mot de passe" minlength="8">
         </div>
         <div id="auth-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none;"></div>
         <button type="submit" id="auth-submit"
@@ -168,7 +241,7 @@ const BakalAuth = (() => {
           <label style="display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Mot de passe</label>
           <input type="password" name="password" id="auth-password" required autocomplete="new-password"
             style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:14px;font-family:var(--font);outline:none;"
-            placeholder="Min. 6 caract\u00e8res" minlength="6">
+            placeholder="Min. 8 car., majuscule, chiffre" minlength="8">
         </div>
         <div id="auth-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none;"></div>
         <button type="submit" id="auth-submit"
@@ -264,11 +337,13 @@ const BakalAuth = (() => {
 
   return {
     getToken,
+    getRefreshToken,
     getUser,
     isLoggedIn,
     login,
     register,
     logout,
+    refreshAccessToken,
     validateToken,
     showLoginScreen,
     hideLoginScreen,
