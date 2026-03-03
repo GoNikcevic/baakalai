@@ -147,8 +147,10 @@ async function testKey(field, key) {
     }
 
     if (field === 'lemlistKey') {
+      // Lemlist uses Basic Auth with empty username and API key as password
+      const basic = Buffer.from(':' + key).toString('base64');
       const resp = await fetch('https://api.lemlist.com/api/team', {
-        headers: { Authorization: `Bearer ${key}` },
+        headers: { Authorization: `Basic ${basic}` },
       });
       if (resp.ok) return { status: 'connected' };
       if (resp.status === 401) return { status: 'invalid', message: 'Invalid API key' };
