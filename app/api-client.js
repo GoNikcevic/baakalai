@@ -276,20 +276,79 @@ const BakalAPI = (() => {
       });
     },
 
+    /** Generate a full sequence from campaign parameters */
+    async generateSequence(params, dryRun = false) {
+      const qs = dryRun ? '?dry_run=true' : '';
+      return request('/ai/generate-sequence' + qs, {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    },
+
+    /** Generate a single touchpoint by type */
+    async generateTouchpoint(type, params, dryRun = false) {
+      const qs = dryRun ? '?dry_run=true' : '';
+      return request('/ai/generate-touchpoint' + qs, {
+        method: 'POST',
+        body: JSON.stringify({ type, ...params }),
+      });
+    },
+
     /** Request AI analysis of a campaign */
-    async analyzeCampaign(campaignId) {
-      return request('/ai/analyze', {
+    async analyzeCampaign(campaignId, dryRun = false) {
+      const qs = dryRun ? '?dry_run=true' : '';
+      return request('/ai/analyze' + qs, {
         method: 'POST',
         body: JSON.stringify({ campaignId }),
       });
     },
 
     /** Request AI sequence regeneration */
-    async regenerateSequence(campaignId, diagnostic, originalMessages, clientParams) {
-      return request('/ai/regenerate', {
+    async regenerateSequence(campaignId, diagnostic, originalMessages, clientParams, dryRun = false) {
+      const qs = dryRun ? '?dry_run=true' : '';
+      return request('/ai/regenerate' + qs, {
         method: 'POST',
         body: JSON.stringify({ campaignId, diagnostic, originalMessages, clientParams }),
       });
+    },
+
+    /** Run the full refinement loop (analyze → regenerate → track) */
+    async runRefinement(campaignId, dryRun = false) {
+      const qs = dryRun ? '?dry_run=true' : '';
+      return request('/ai/run-refinement' + qs, {
+        method: 'POST',
+        body: JSON.stringify({ campaignId }),
+      });
+    },
+
+    /** Generate variable chain for a campaign */
+    async generateVariables(params, dryRun = false) {
+      const qs = dryRun ? '?dry_run=true' : '';
+      return request('/ai/generate-variables' + qs, {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+    },
+
+    /** Consolidate cross-campaign memory */
+    async consolidateMemory(dryRun = false) {
+      const qs = dryRun ? '?dry_run=true' : '';
+      return request('/ai/consolidate-memory' + qs, { method: 'POST' });
+    },
+
+    /** Get memory patterns */
+    async getMemory() {
+      return request('/ai/memory');
+    },
+
+    /** Get diagnostics for a campaign */
+    async getDiagnostics(campaignId) {
+      return request('/ai/diagnostics/' + campaignId);
+    },
+
+    /** Get version history for a campaign */
+    async getVersions(campaignId) {
+      return request('/ai/versions/' + campaignId);
     },
 
     /** Test backend health and return service status */

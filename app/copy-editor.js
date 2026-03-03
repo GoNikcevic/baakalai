@@ -517,21 +517,18 @@ async function regenerateTouchpoint(tpId) {
   dots.textContent = '🤖 Régénération en cours...';
   body.parentElement.insertBefore(dots, body);
 
-  // Call AI API (with dry_run fallback)
+  // Call AI API
   if (typeof BakalAPI !== 'undefined' && _backendAvailable) {
     const backendId = c._backendId || activeEditorCampaign;
     const campaign = BAKAL.campaigns[activeEditorCampaign] || {};
 
     try {
-      const result = await BakalAPI.request('/ai/regenerate?dry_run=true', {
-        method: 'POST',
-        body: JSON.stringify({
-          campaignId: backendId,
-          diagnostic: `${tpId} — À régénérer : le message actuel sous-performe`,
-          originalMessages: [{ step: tpId, subject: stripEditorHtml(tp.subject || ''), body: stripEditorHtml(tp.body || '') }],
-          clientParams: { tone: campaign.tone, formality: campaign.formality, sector: campaign.sector, length: campaign.length },
-        }),
-      });
+      const result = await BakalAPI.regenerateSequence(
+        backendId,
+        `${tpId} — À régénérer : le message actuel sous-performe`,
+        [{ step: tpId, subject: stripEditorHtml(tp.subject || ''), body: stripEditorHtml(tp.body || '') }],
+        { tone: campaign.tone, formality: campaign.formality, sector: campaign.sector, length: campaign.length },
+      );
 
       // Apply the first variant if available
       const msg = (result.messages || []).find(m => m.step === tpId);
@@ -891,59 +888,89 @@ async function regenerateAll() {
   const cards = document.querySelectorAll('.touchpoint-card');
   cards.forEach(card => { card.style.opacity = '0.5'; });
 
-  const aiBar = document.querySelector('.ai-bar');
-  if (aiBar) {
-    aiBar.querySelector('.ai-bar-title').textContent = '🔄 Régénération en cours...';
-    aiBar.querySelector('.ai-bar-text').textContent = 'Claude régénère tous les touchpoints de cette campagne.';
-    aiBar.querySelectorAll('button').forEach(b => b.style.display = 'none');
-  }
-
   const c = editorCampaigns[activeEditorCampaign];
   const backendId = c._backendId || activeEditorCampaign;
   const campaign = (typeof BAKAL !== 'undefined' && BAKAL.campaigns[activeEditorCampaign]) || {};
 
+  // Show or create AI bar with loading state
+  let aiBar = document.querySelector('.ai-bar');
+  if (!aiBar) {
+    const header = document.querySelector('.editor-header');
+    if (header) {
+      const bar = document.createElement('div');
+      bar.className = 'ai-bar';
+      bar.innerHTML = `
+        <div class="ai-bar-icon">~</div>
+        <div class="ai-bar-content">
+          <div class="ai-bar-title">Régénération en cours...</div>
+          <div class="ai-bar-text">Claude analyse la campagne et régénère les touchpoints.</div>
+        </div>`;
+      header.after(bar);
+      aiBar = bar;
+    }
+  } else {
+    aiBar.querySelector('.ai-bar-title').textContent = 'Régénération en cours...';
+    aiBar.querySelector('.ai-bar-text').textContent = 'Claude analyse la campagne et régénère les touchpoints.';
+    aiBar.querySelectorAll('button').forEach(b => b.style.display = 'none');
+  }
+
   if (typeof BakalAPI !== 'undefined' && _backendAvailable) {
     try {
-      // First analyze
-      await BakalAPI.request('/ai/analyze?dry_run=true', {
-        method: 'POST',
-        body: JSON.stringify({ campaignId: backendId }),
-      });
+      // Use the full refinement loop
+      const result = await BakalAPI.runRefinement(backendId);
 
-      // Then regenerate
-      const result = await BakalAPI.request('/ai/regenerate?dry_run=true', {
-        method: 'POST',
-        body: JSON.stringify({
-          campaignId: backendId,
-          diagnostic: 'Régénération complète de la séquence demandée par l\'utilisateur',
-          originalMessages: c.touchpoints.map(tp => ({
-            step: tp.id,
-            subject: stripEditorHtml(tp.subject || ''),
-            body: stripEditorHtml(tp.body || ''),
-          })),
-          clientParams: { tone: campaign.tone, formality: campaign.formality, sector: campaign.sector, length: campaign.length },
-        }),
-      });
+      // Show analysis summary
+      if (result.analysis && aiBar) {
+        const summary = result.analysis.summary || '';
+        const priorities = (result.analysis.priorities || [])
+          .map(p => `${p.step}: ${p.issue} → ${p.recommendation}`)
+          .join('\n');
+        aiBar.querySelector('.ai-bar-text').innerHTML =
+          `<strong>Diagnostic :</strong> ${summary}` +
+          (priorities ? `<br><strong>Priorités :</strong> ${priorities.replace(/\n/g, '<br>')}` : '');
+      }
 
       // Apply regenerated messages
-      (result.messages || []).forEach(msg => {
-        if (!msg.variantA) return;
-        const card = document.querySelector(`[data-tp="${msg.step}"]`);
-        if (!card) return;
-        const subjectEl = card.querySelector('.tp-editable[data-field="subject"]');
-        const bodyEl = card.querySelector('.tp-editable[data-field="body"]');
-        if (subjectEl && msg.variantA.subject) subjectEl.innerHTML = highlightVars(msg.variantA.subject);
-        if (bodyEl && msg.variantA.body) bodyEl.innerHTML = highlightVars(msg.variantA.body).replace(/\n/g, '<br>');
-      });
+      if (result.regeneration) {
+        (result.regeneration.messages || []).forEach(msg => {
+          if (!msg.variantA) return;
+          const card = document.querySelector(`[data-tp="${msg.step}"]`);
+          if (!card) return;
+          const subjectEl = card.querySelector('.tp-editable[data-field="subject"]');
+          const bodyEl = card.querySelector('.tp-editable[data-field="body"]');
+          if (subjectEl && msg.variantA.subject) subjectEl.innerHTML = highlightVars(msg.variantA.subject);
+          if (bodyEl && msg.variantA.body) bodyEl.innerHTML = highlightVars(msg.variantA.body).replace(/\n/g, '<br>');
+        });
+      }
+
+      // Show results
+      if (aiBar) {
+        const stepsCount = result.stepsRegenerated?.length || 0;
+        aiBar.querySelector('.ai-bar-title').textContent = stepsCount > 0
+          ? `Régénération terminée — ${stepsCount} touchpoint(s) modifié(s)`
+          : 'Analyse terminée — aucune régénération nécessaire';
+        aiBar.style.borderColor = 'var(--success)';
+
+        if (result.regeneration?.expectedImpact) {
+          aiBar.querySelector('.ai-bar-text').innerHTML += `<br><strong>Impact estimé :</strong> ${result.regeneration.expectedImpact}`;
+        }
+      }
     } catch (err) {
-      console.warn('Regenerate all failed:', err.message);
+      console.warn('Refinement loop failed:', err.message);
+      if (aiBar) {
+        aiBar.querySelector('.ai-bar-title').textContent = 'Erreur lors de la régénération';
+        aiBar.querySelector('.ai-bar-text').textContent = err.message;
+        aiBar.style.borderColor = 'var(--danger)';
+      }
+    }
+  } else {
+    // No backend
+    if (aiBar) {
+      aiBar.querySelector('.ai-bar-title').textContent = 'Backend non disponible';
+      aiBar.querySelector('.ai-bar-text').textContent = 'Connectez le backend pour utiliser la régénération IA.';
+      aiBar.style.borderColor = 'var(--warning)';
     }
   }
 
   cards.forEach(card => { card.style.opacity = '1'; });
-  if (aiBar) {
-    aiBar.querySelector('.ai-bar-title').textContent = '✅ Régénération terminée';
-    aiBar.querySelector('.ai-bar-text').textContent = 'Vérifiez les nouvelles versions et sauvegardez.';
-    aiBar.style.borderColor = 'var(--success)';
-  }
 }

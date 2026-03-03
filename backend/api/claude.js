@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { config } = require('../config');
+const prompts = require('./prompts');
 
 let client;
 let clientKeyHash;
@@ -47,102 +48,19 @@ function wrapApiError(err) {
     return wrapped;
   }
 
-  // Unknown API error — keep original but clean up
   const wrapped = new Error('Erreur API Claude : ' + msg.substring(0, 200));
   wrapped.status = err.status || 500;
   wrapped.code = 'API_ERROR';
   return wrapped;
 }
 
-// =============================================
-// Performance Analysis
-// =============================================
-
-async function analyzeCampaign(campaignData) {
-  const systemPrompt = `Tu es un expert en prospection B2B multicanal (email + LinkedIn).
-Tu analyses les performances de campagnes d'outreach et fournis un diagnostic structuré.
-
-Benchmarks de référence :
-- Taux d'ouverture email : >50% = bon, 30-50% = moyen, <30% = problème
-- Taux de réponse email : >5% = bon, 2-5% = moyen, <2% = problème
-- Taux d'acceptation LinkedIn : >30% = bon, 15-30% = moyen, <15% = problème
-- Taux de réponse LinkedIn : >10% = bon, 5-10% = moyen, <5% = problème
-
-Format de sortie :
-1. Résumé global (2-3 phrases)
-2. Analyse par touchpoint (E1, E2, E3, E4, L1, L2)
-3. Priorités d'optimisation (classées par impact)
-4. Instructions de régénération pour chaque message à optimiser`;
-
+/** Helper: call Claude and parse JSON from response */
+async function callClaude(systemPrompt, userContent, maxTokens = 4000) {
   let response;
   try {
     response = await getClient().messages.create({
       model: config.claude.model,
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `Analyse cette campagne :\n\n${JSON.stringify(campaignData, null, 2)}`,
-        },
-      ],
-    });
-  } catch (err) {
-    throw wrapApiError(err);
-  }
-
-  return {
-    diagnostic: response.content[0].text,
-    usage: response.usage,
-  };
-}
-
-// =============================================
-// Sequence Regeneration
-// =============================================
-
-async function regenerateSequence(params) {
-  const { diagnostic, originalMessages, memory, clientParams } = params;
-
-  const systemPrompt = `Tu es un copywriter expert en prospection B2B.
-Tu régénères des messages d'outreach (email + LinkedIn) en tenant compte du diagnostic de performance et de la mémoire cross-campagne.
-
-Règles impératives :
-- Préserve les variables Lemlist : {{firstName}}, {{lastName}}, {{companyName}}, {{jobTitle}}
-- Ne mentionne JAMAIS "IA" ou "automatisé" dans le copy
-- Notes de connexion LinkedIn : max 300 caractères
-- Emails de break-up : 3-4 lignes max, jamais culpabilisant
-- Génère toujours une variante A et B pour chaque message modifié
-- Chaque variante doit avoir une hypothèse claire
-
-Ton : ${clientParams?.tone || 'Pro décontracté'}
-Formalité : ${clientParams?.formality || 'Vous'}
-Longueur : ${clientParams?.length || 'Standard'}
-
-Format de sortie JSON :
-{
-  "messages": [
-    {
-      "step": "E1",
-      "variantA": { "subject": "...", "body": "...", "hypothesis": "..." },
-      "variantB": { "subject": "...", "body": "...", "hypothesis": "..." }
-    }
-  ],
-  "summary": "Résumé des changements"
-}`;
-
-  const userContent = [
-    `Diagnostic :\n${diagnostic}`,
-    `\nMessages originaux :\n${JSON.stringify(originalMessages, null, 2)}`,
-    memory ? `\nMémoire cross-campagne :\n${JSON.stringify(memory, null, 2)}` : '',
-    clientParams ? `\nParamètres client :\n${JSON.stringify(clientParams, null, 2)}` : '',
-  ].filter(Boolean).join('\n');
-
-  let response;
-  try {
-    response = await getClient().messages.create({
-      model: config.claude.model,
-      max_tokens: 4000,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     });
@@ -155,17 +73,86 @@ Format de sortie JSON :
   // Try to extract JSON from response
   let parsed;
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\})/);
+    parsed = jsonMatch ? JSON.parse(jsonMatch[1] || jsonMatch[0]) : null;
   } catch {
     parsed = null;
   }
 
+  return { raw: text, parsed, usage: response.usage };
+}
+
+// =============================================
+// Generate Full Sequence (Master Prompt)
+// =============================================
+
+async function generateSequence(params) {
+  const systemPrompt = prompts.masterPrompt(params);
+  const userContent = `Génère la séquence de prospection complète pour cette campagne.
+
+Paramètres clés :
+- Secteur : ${params.sector}
+- Cible : ${params.position}
+- Canal : ${params.channel}
+- Angle : ${params.angle || 'Douleur client'}
+- Proposition de valeur : ${params.valueProp || 'À déduire du contexte'}
+- Douleurs : ${params.painPoints || 'À déduire du secteur'}
+
+Retourne UNIQUEMENT le JSON structuré.`;
+
+  return callClaude(systemPrompt, userContent, 6000);
+}
+
+// =============================================
+// Generate Single Touchpoint (Sub-Prompt)
+// =============================================
+
+async function generateTouchpoint(type, params) {
+  const subPromptFn = prompts.subPrompts[type];
+  if (!subPromptFn) {
+    throw new Error(`Type de touchpoint inconnu : ${type}. Types valides : ${Object.keys(prompts.subPrompts).join(', ')}`);
+  }
+
+  const systemPrompt = subPromptFn(params);
+  return callClaude(systemPrompt, 'Génère le touchpoint. Retourne UNIQUEMENT le JSON structuré.', 2000);
+}
+
+// =============================================
+// Performance Analysis
+// =============================================
+
+async function analyzeCampaign(campaignData) {
+  const systemPrompt = prompts.analysisPrompt(campaignData);
+  const result = await callClaude(
+    systemPrompt,
+    `Analyse cette campagne et fournis le diagnostic complet en JSON.\n\nDonnées brutes :\n${JSON.stringify(campaignData, null, 2)}`,
+    3000,
+  );
+
+  // For backwards compatibility, also extract text diagnostic
   return {
-    raw: text,
-    parsed,
-    usage: response.usage,
+    diagnostic: result.parsed?.summary
+      ? `## Résumé\n${result.parsed.summary}\n\n## Analyse détaillée\n${result.raw}`
+      : result.raw,
+    parsed: result.parsed,
+    usage: result.usage,
   };
+}
+
+// =============================================
+// Sequence Regeneration
+// =============================================
+
+async function regenerateSequence(params) {
+  const systemPrompt = prompts.regenerationPrompt(params);
+  const userContent = `Régénère les messages selon le diagnostic et les instructions.
+
+Messages originaux :
+${JSON.stringify(params.originalMessages, null, 2)}
+
+Retourne UNIQUEMENT le JSON structuré.`;
+
+  return callClaude(systemPrompt, userContent, 5000);
 }
 
 // =============================================
@@ -173,68 +160,99 @@ Format de sortie JSON :
 // =============================================
 
 async function consolidateMemory(diagnostics, existingMemory) {
-  const systemPrompt = `Tu es un analyste de données spécialisé en prospection B2B.
-Tu consolides les diagnostics de campagnes pour extraire des patterns récurrents.
+  const systemPrompt = prompts.memoryConsolidationPrompt(diagnostics, existingMemory);
+  return callClaude(
+    systemPrompt,
+    'Consolide les diagnostics et retourne les patterns en JSON.',
+    3000,
+  );
+}
 
-Niveaux de confiance :
-- Haute : >200 prospects testés
-- Moyenne : 50-200 prospects
-- Faible : <50 prospects
+// =============================================
+// Variable Chain Generator
+// =============================================
 
-Catégories de patterns :
-- Objets (lignes d'objet email)
-- Corps (contenu des messages)
-- Timing (meilleurs créneaux)
-- LinkedIn (spécificités LinkedIn)
-- Secteur (ce qui marche par industrie)
-- Cible (ce qui marche par type de décideur)
+async function generateVariables(params) {
+  const systemPrompt = prompts.variableGeneratorPrompt(params);
+  return callClaude(
+    systemPrompt,
+    `Analyse le contexte et propose une chaîne de variables personnalisées pour cette campagne.\nRetourne UNIQUEMENT le JSON structuré.`,
+    3000,
+  );
+}
 
-Format de sortie JSON :
-{
-  "patterns": [
-    {
-      "categorie": "Objets",
-      "pattern": "Description courte du pattern",
-      "donnees": "Explication détaillée avec données",
-      "confiance": "Haute|Moyenne|Faible",
-      "secteurs": ["Secteur1"],
-      "cibles": ["Cible1"]
-    }
-  ],
-  "summary": "Résumé des découvertes"
-}`;
+// =============================================
+// Icebreaker Execution (per prospect)
+// =============================================
 
+async function generateIcebreaker(params) {
+  const systemPrompt = prompts.icebreakerExecutionPrompt(params);
   let response;
   try {
     response = await getClient().messages.create({
       model: config.claude.model,
-      max_tokens: 3000,
+      max_tokens: 300,
       system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `Diagnostics du mois :\n${JSON.stringify(diagnostics, null, 2)}\n\nMémoire existante :\n${JSON.stringify(existingMemory, null, 2)}`,
-        },
-      ],
+      messages: [{ role: 'user', content: 'Génère l\'icebreaker.' }],
     });
   } catch (err) {
     throw wrapApiError(err);
   }
 
-  const text = response.content[0].text;
+  return {
+    icebreaker: response.content[0].text.trim(),
+    usage: response.usage,
+  };
+}
 
-  let parsed;
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-  } catch {
-    parsed = null;
+// =============================================
+// Full Refinement Loop
+// =============================================
+
+async function runRefinementLoop(campaignData, originalMessages, memory) {
+  // Step 1: Analyze
+  const analysis = await analyzeCampaign(campaignData);
+
+  // Step 2: Extract regeneration instructions from analysis
+  const regenerationInstructions = analysis.parsed?.regenerationInstructions || null;
+  const stepsToRegenerate = regenerationInstructions?.stepsToRegenerate || [];
+
+  // If nothing to regenerate, return analysis only
+  if (stepsToRegenerate.length === 0 && !analysis.parsed?.priorities?.length) {
+    return {
+      analysis,
+      regeneration: null,
+      stepsRegenerated: [],
+      totalUsage: analysis.usage,
+    };
   }
 
+  // Step 3: Regenerate
+  const messagesToRegenerate = originalMessages.filter(
+    m => stepsToRegenerate.includes(m.step) || stepsToRegenerate.length === 0,
+  );
+
+  const regeneration = await regenerateSequence({
+    diagnostic: analysis.diagnostic,
+    originalMessages: messagesToRegenerate,
+    memory,
+    clientParams: {
+      tone: campaignData.tone,
+      formality: campaignData.formality,
+      length: campaignData.length,
+      sector: campaignData.sector,
+    },
+    regenerationInstructions,
+  });
+
   return {
-    raw: text,
-    parsed,
-    usage: response.usage,
+    analysis,
+    regeneration,
+    stepsRegenerated: stepsToRegenerate,
+    totalUsage: {
+      input_tokens: (analysis.usage?.input_tokens || 0) + (regeneration.usage?.input_tokens || 0),
+      output_tokens: (analysis.usage?.output_tokens || 0) + (regeneration.usage?.output_tokens || 0),
+    },
   };
 }
 
@@ -274,6 +292,9 @@ Quand une campagne est prête à être créée, retourne un bloc JSON dans ta r�
     "angle": "Angle d'approche",
     "zone": "Zone géographique",
     "tone": "Ton du message",
+    "formality": "Tu|Vous",
+    "valueProp": "Proposition de valeur",
+    "painPoints": "Douleurs identifiées",
     "sequence": [
       { "step": "E1", "type": "email", "label": "Email initial", "timing": "J+0", "subject": "...", "body": "..." },
       { "step": "E2", "type": "email", "label": "Email relance", "timing": "J+3", "subject": "...", "body": "..." }
@@ -302,8 +323,13 @@ ${context ? `\nContexte actuel de l'utilisateur :\n${context}` : ''}`;
 }
 
 module.exports = {
+  generateSequence,
+  generateTouchpoint,
   analyzeCampaign,
   regenerateSequence,
   consolidateMemory,
+  generateVariables,
+  generateIcebreaker,
+  runRefinementLoop,
   chat,
 };

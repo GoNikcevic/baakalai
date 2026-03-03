@@ -519,18 +519,52 @@ function patchChatHybrid() {
 
   /* ─── createCampaignFromChat: action card button handler ─── */
   window.createCampaignFromChat = async function(campaignData) {
-    // Backend available → create via API, then register locally
-    if (_backendAvailable && typeof BakalAPI !== 'undefined' && _chatThreadId) {
+    // Backend available → create via API, then generate AI sequence
+    if (_backendAvailable && typeof BakalAPI !== 'undefined') {
       try {
-        const result = await BakalAPI.request('/chat/threads/' + _chatThreadId + '/create-campaign', {
+        // Step 1: Create the campaign in the backend
+        const result = await BakalAPI.request('/chat/threads/' + (_chatThreadId || 0) + '/create-campaign', {
           method: 'POST',
           body: JSON.stringify({ campaign: campaignData }),
         });
 
-        // Register in local BAKAL + editor
-        const backendId = result.campaign ? String(result.campaign.id) : null;
-        const id = createCampaignLocally(campaignData);
+        const backendId = result.campaign ? result.campaign.id : null;
 
+        // Step 2: Generate AI sequence for this campaign
+        if (backendId) {
+          appendMessage('assistant', `Campagne **"${campaignData.name}"** créée. Génération de la séquence par Claude en cours...`);
+
+          try {
+            const seqResult = await BakalAPI.generateSequence({
+              campaignId: backendId,
+              sector: campaignData.sector,
+              position: campaignData.position,
+              channel: campaignData.channel || 'email',
+              size: campaignData.size,
+              angle: campaignData.angle,
+              tone: campaignData.tone,
+              formality: campaignData.formality || 'Vous',
+              zone: campaignData.zone,
+              valueProp: campaignData.valueProp,
+              painPoints: campaignData.painPoints,
+            });
+
+            // Update local campaign data with AI-generated sequence
+            if (seqResult.sequence && seqResult.sequence.length > 0) {
+              campaignData.sequence = seqResult.sequence;
+            }
+
+            const id = createCampaignLocally(campaignData);
+            appendMessage('assistant', `Séquence de **${(seqResult.sequence || []).length} touchpoints** générée par Claude !\n\n${seqResult.strategy || ''}\n\nRedirection vers l'éditeur de séquences...`);
+            setTimeout(() => showPage('copyeditor'), 1500);
+            return;
+          } catch (aiErr) {
+            console.warn('AI sequence generation failed:', aiErr.message);
+            // Still created the campaign, just with local sequences
+          }
+        }
+
+        const id = createCampaignLocally(campaignData);
         appendMessage('assistant', `Campagne **"${campaignData.name}"** créée avec succès !\nRedirection vers l'éditeur de séquences...`);
         setTimeout(() => showPage('copyeditor'), 1200);
         return;
