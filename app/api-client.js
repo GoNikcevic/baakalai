@@ -19,12 +19,22 @@ const BakalAPI = (() => {
       headers['Authorization'] = 'Bearer ' + token;
     }
 
-    const res = await fetch(url, { headers, ...opts });
+    let res = await fetch(url, { headers, ...opts });
 
-    // Handle 401 — redirect to login
+    // Handle 401 — try refreshing the access token before giving up
     if (res.status === 401 && typeof BakalAuth !== 'undefined') {
-      BakalAuth.showLoginScreen();
-      throw Object.assign(new Error('Session expired'), { status: 401 });
+      const newToken = await BakalAuth.refreshAccessToken();
+      if (newToken) {
+        // Retry the original request with the new token
+        headers['Authorization'] = 'Bearer ' + newToken;
+        res = await fetch(url, { headers, ...opts });
+      }
+
+      // Still 401 after refresh — session is dead
+      if (res.status === 401) {
+        BakalAuth.showLoginScreen();
+        throw Object.assign(new Error('Session expired'), { status: 401 });
+      }
     }
 
     if (!res.ok) {
