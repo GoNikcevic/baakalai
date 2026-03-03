@@ -161,21 +161,108 @@ function generateSequence(params) {
   ];
 }
 
-/* ═══ API Key management via chat ═══ */
+/* ═══ Integrations catalog & API Key management via chat ═══ */
 
-const API_KEY_PATTERNS = {
-  claudeKey:   { regex: /\bsk-ant-[a-zA-Z0-9_-]{20,}\b/, label: 'Claude (Anthropic)', prefix: 'sk-ant-' },
-  notionToken: { regex: /\b(ntn_|secret_)[a-zA-Z0-9_-]{20,}\b/, label: 'Notion', prefix: 'ntn_ / secret_' },
-  lemlistKey:  { regex: null, label: 'Lemlist', prefix: null },  // no distinctive prefix
+const INTEGRATIONS = {
+  // ── Core (required) ──
+  lemlistKey: {
+    label: 'Lemlist', icon: '✉️', category: 'core', priority: 1,
+    regex: null, prefix: null,
+    desc: 'Automatisation multi-canal (email + LinkedIn)',
+    benefit: 'Envoyer vos séquences de prospection automatiquement, collecter les stats de performance, et déployer les optimisations.',
+    howToGet: 'Lemlist → Settings → Integrations → API',
+    url: 'https://app.lemlist.com/settings',
+  },
+  claudeKey: {
+    label: 'Claude (Anthropic)', icon: '🤖', category: 'core', priority: 2,
+    regex: /\bsk-ant-[a-zA-Z0-9_-]{20,}\b/, prefix: 'sk-ant-',
+    desc: 'IA pour la génération et l\'optimisation de copy',
+    benefit: 'Générer des séquences de prospection personnalisées, analyser vos performances, et optimiser automatiquement vos messages.',
+    howToGet: 'console.anthropic.com → Settings → API Keys',
+    url: 'https://console.anthropic.com/settings/keys',
+  },
+  notionToken: {
+    label: 'Notion', icon: '📝', category: 'core', priority: 3,
+    regex: /\b(ntn_|secret_)[a-zA-Z0-9_-]{20,}\b/, prefix: 'ntn_ / secret_',
+    desc: 'Hub de données et reporting',
+    benefit: 'Synchroniser vos campagnes, diagnostics et historiques dans Notion. Avoir un tableau de bord partageable avec votre équipe.',
+    howToGet: 'notion.so/my-integrations → Créer une intégration',
+    url: 'https://www.notion.so/my-integrations',
+  },
+  // ── CRM ──
+  hubspotKey: {
+    label: 'HubSpot', icon: '🟠', category: 'crm', priority: 4,
+    regex: /\bpat-[a-zA-Z0-9_-]{20,}\b/, prefix: 'pat-',
+    desc: 'CRM et gestion de pipeline commercial',
+    benefit: 'Synchroniser automatiquement les prospects intéressés dans votre CRM. Suivre le pipeline du premier contact au closing.',
+    howToGet: 'HubSpot → Settings → Integrations → Private Apps → Create',
+    url: 'https://app.hubspot.com/private-apps/',
+  },
+  pipedriveKey: {
+    label: 'Pipedrive', icon: '🟢', category: 'crm', priority: 5,
+    regex: null, prefix: null,
+    desc: 'CRM orienté vente et pipeline',
+    benefit: 'Créer automatiquement des deals dans Pipedrive quand un prospect répond positivement. Suivre chaque lead dans votre pipeline.',
+    howToGet: 'Pipedrive → Settings → Personal preferences → API',
+    url: 'https://app.pipedrive.com/settings/api',
+  },
+  salesforceKey: {
+    label: 'Salesforce', icon: '☁️', category: 'crm', priority: 6,
+    regex: null, prefix: null,
+    desc: 'CRM entreprise et gestion commerciale',
+    benefit: 'Intégrer Bakal dans votre écosystème Salesforce. Créer des leads et opportunités automatiquement.',
+    howToGet: 'Salesforce → Setup → Apps → Connected Apps → Consumer Key',
+    url: null,
+  },
+  // ── Enrichment ──
+  dropcontactKey: {
+    label: 'Dropcontact', icon: '📧', category: 'enrichment', priority: 7,
+    regex: null, prefix: null,
+    desc: 'Enrichissement d\'emails B2B (RGPD-compliant)',
+    benefit: 'Trouver et vérifier les emails professionnels de vos prospects. Conforme RGPD, données fraîches, taux de fiabilité >98%.',
+    howToGet: 'Dropcontact → Dashboard → API → API Key',
+    url: 'https://app.dropcontact.com/app/settings/api',
+  },
+  apolloKey: {
+    label: 'Apollo.io', icon: '🚀', category: 'enrichment', priority: 8,
+    regex: null, prefix: null,
+    desc: 'Base de données B2B + enrichissement',
+    benefit: 'Accéder à +275M de contacts B2B. Trouver des prospects par secteur, poste, taille d\'entreprise et zone géographique.',
+    howToGet: 'Apollo → Settings → Integrations → API Keys',
+    url: 'https://app.apollo.io/#/settings/integrations/api',
+  },
+  hunterKey: {
+    label: 'Hunter.io', icon: '🔍', category: 'enrichment', priority: 9,
+    regex: null, prefix: null,
+    desc: 'Recherche et vérification d\'emails',
+    benefit: 'Trouver les emails de n\'importe quel professionnel. Vérifier la validité des adresses avant l\'envoi pour protéger votre délivrabilité.',
+    howToGet: 'Hunter → Dashboard → API → Your API Key',
+    url: 'https://hunter.io/api-keys',
+  },
+  // ── Calendar ──
+  calendlyKey: {
+    label: 'Calendly', icon: '📅', category: 'calendar', priority: 10,
+    regex: null, prefix: null,
+    desc: 'Prise de rendez-vous automatisée',
+    benefit: 'Générer automatiquement des liens de RDV dans vos séquences. Tracker les rendez-vous pris directement dans Bakal.',
+    howToGet: 'Calendly → Integrations → API & Webhooks → Personal Access Token',
+    url: 'https://calendly.com/integrations/api_webhooks',
+  },
+};
+
+const CATEGORY_INFO = {
+  core:       { label: 'Essentiels', desc: 'Les 3 outils de base pour faire fonctionner Bakal', icon: '⚡' },
+  crm:        { label: 'CRM', desc: 'Synchronisez vos leads dans votre CRM existant', icon: '📊' },
+  enrichment: { label: 'Enrichissement', desc: 'Trouvez et vérifiez les données de vos prospects', icon: '🔎' },
+  calendar:   { label: 'Calendrier', desc: 'Automatisez la prise de rendez-vous', icon: '📅' },
 };
 
 function detectApiKeyInText(text) {
-  for (const [field, info] of Object.entries(API_KEY_PATTERNS)) {
+  for (const [field, info] of Object.entries(INTEGRATIONS)) {
     if (info.regex && info.regex.test(text)) {
       return { field, value: text.match(info.regex)[0] };
     }
   }
-  // If we're expecting a specific key (in api_keys stage), treat long strings as the key
   if (_conv.apiKeyField && text.trim().length >= 10 && !text.includes(' ')) {
     return { field: _conv.apiKeyField, value: text.trim() };
   }
@@ -190,7 +277,19 @@ function isApiKeyIntent(lower) {
      lower.includes('connecter') || lower.includes('paramètre') || lower.includes('parametre') ||
      lower.includes('setup') || lower.includes('modifier') || lower.includes('changer'))
   ) || (
-    lower.includes('configurer') && (lower.includes('lemlist') || lower.includes('notion') || lower.includes('claude') || lower.includes('anthropic'))
+    lower.includes('configurer') && detectWhichKey(lower)
+  ) || (
+    lower.match(/\b(intégration|integration|onboarding|connecter|outils)\b/) &&
+    lower.match(/\b(configur|ajouter|démarrer|commencer|setup|lancer)\b/)
+  );
+}
+
+function isOnboardingIntent(lower) {
+  return (
+    lower.match(/\b(onboarding|démarrer|commencer|setup|configurer tout|tout configurer|guide|guidé)\b/) ||
+    (lower.includes('intégration') && lower.match(/\b(toutes|tout|tous|lister|voir|quelles)\b/)) ||
+    (lower.includes('outil') && lower.match(/\b(connecter|disponible|proposez|lesquels|quels)\b/)) ||
+    lower.match(/\b(quels?.outils|quelles?.intégrations)\b/)
   );
 }
 
@@ -198,15 +297,18 @@ function detectWhichKey(lower) {
   if (lower.includes('lemlist')) return 'lemlistKey';
   if (lower.includes('notion')) return 'notionToken';
   if (lower.includes('claude') || lower.includes('anthropic')) return 'claudeKey';
+  if (lower.includes('hubspot')) return 'hubspotKey';
+  if (lower.includes('pipedrive')) return 'pipedriveKey';
+  if (lower.includes('salesforce')) return 'salesforceKey';
+  if (lower.includes('dropcontact')) return 'dropcontactKey';
+  if (lower.includes('apollo')) return 'apolloKey';
+  if (lower.includes('hunter')) return 'hunterKey';
+  if (lower.includes('calendly')) return 'calendlyKey';
+  // Category-level detection
+  if (lower.match(/\bcrm\b/)) return '_category_crm';
+  if (lower.match(/\b(enrichi|enrichment|données prospect|trouver.*email)\b/)) return '_category_enrichment';
+  if (lower.match(/\b(calendrier|rdv|rendez.?vous|booking)\b/)) return '_category_calendar';
   return null;
-}
-
-async function fetchKeyStatus() {
-  if (typeof BakalAPI === 'undefined' || !_backendAvailable) return null;
-  try {
-    const { keys } = await BakalAPI.getKeys();
-    return keys;
-  } catch { return null; }
 }
 
 async function saveApiKeyViaChat(field, value) {
@@ -218,7 +320,6 @@ async function saveApiKeyViaChat(field, value) {
     if (result.errors && result.errors.length > 0) {
       return { ok: false, error: result.errors[0] };
     }
-    // Test connectivity
     try {
       const testResult = await BakalAPI.testKeys();
       const status = testResult.results?.[field];
@@ -233,101 +334,179 @@ async function saveApiKeyViaChat(field, value) {
   }
 }
 
-function handleApiKeyIntent(text) {
-  const lower = text.toLowerCase();
-  const specificKey = detectWhichKey(lower);
+/* ── Onboarding flow ── */
 
-  if (specificKey) {
-    _conv.stage = 'api_keys';
-    _conv.apiKeyField = specificKey;
-    const info = API_KEY_PATTERNS[specificKey];
-    let msg = `Pour configurer votre clé **${info.label}**, collez-la directement ici.\n\n`;
-    if (info.prefix) {
-      msg += `Le format attendu commence par \`${info.prefix}\`.\n\n`;
-    }
-    msg += `Votre clé sera **chiffrée** et stockée de manière sécurisée sur le serveur.`;
-    return { content: msg };
-  }
-
-  // General API key intent — show status and ask which one
+function handleOnboardingStart() {
   _conv.stage = 'api_keys';
   _conv.apiKeyField = null;
+  _conv.onboardingStep = 'overview';
 
-  let msg = `Quelles clés souhaitez-vous configurer ?\n\n`;
-  msg += `- **Lemlist** — pour l'automatisation des campagnes email/LinkedIn\n`;
-  msg += `- **Claude (Anthropic)** — pour la génération AI de séquences\n`;
-  msg += `- **Notion** — pour la synchronisation des données\n\n`;
-  msg += `Dites-moi laquelle vous voulez configurer, ou collez directement une clé (je détecterai automatiquement son type).`;
+  let msg = `Bienvenue dans la configuration de Bakal ! Voici les outils que vous pouvez connecter :\n\n`;
+
+  for (const [catKey, catInfo] of Object.entries(CATEGORY_INFO)) {
+    const tools = Object.entries(INTEGRATIONS).filter(([, v]) => v.category === catKey);
+    msg += `**${catInfo.icon} ${catInfo.label}** — ${catInfo.desc}\n`;
+    tools.forEach(([, tool]) => {
+      msg += `  ${tool.icon} ${tool.label} — ${tool.desc}\n`;
+    });
+    msg += '\n';
+  }
+
+  msg += `---\n\n`;
+  msg += `Par où voulez-vous commencer ?\n\n`;
+  msg += `- **Essentiels** — Configurez Lemlist, Claude et Notion (recommandé pour démarrer)\n`;
+  msg += `- **CRM** — Connectez HubSpot, Pipedrive ou Salesforce\n`;
+  msg += `- **Enrichissement** — Dropcontact, Apollo ou Hunter\n`;
+  msg += `- **Calendrier** — Calendly pour la prise de RDV\n`;
+  msg += `- Ou nommez directement un outil (ex: "HubSpot")\n`;
 
   return { content: msg };
+}
+
+function handleCategoryExplain(category) {
+  const catInfo = CATEGORY_INFO[category];
+  const tools = Object.entries(INTEGRATIONS).filter(([, v]) => v.category === category);
+
+  let msg = `**${catInfo.icon} ${catInfo.label}** — ${catInfo.desc}\n\n`;
+
+  tools.forEach(([field, tool]) => {
+    msg += `### ${tool.icon} ${tool.label}\n`;
+    msg += `${tool.benefit}\n\n`;
+    msg += `📋 Où trouver la clé : *${tool.howToGet}*\n\n`;
+  });
+
+  msg += `Quel outil souhaitez-vous connecter ? Ou tapez **suivant** pour voir une autre catégorie.`;
+
+  _conv.stage = 'api_keys';
+  _conv.apiKeyField = null;
+  return { content: msg };
+}
+
+function handleToolExplain(field) {
+  const tool = INTEGRATIONS[field];
+  if (!tool) return { content: `Outil non reconnu.` };
+
+  _conv.stage = 'api_keys';
+  _conv.apiKeyField = field;
+
+  let msg = `### ${tool.icon} ${tool.label}\n\n`;
+  msg += `**Ce que ça permet :** ${tool.benefit}\n\n`;
+  msg += `**Comment obtenir la clé :**\n`;
+  msg += `1. Allez sur *${tool.howToGet}*\n`;
+  if (tool.url) msg += `2. Lien direct : ${tool.url}\n`;
+  msg += `3. Copiez la clé et collez-la ici\n\n`;
+  if (tool.prefix) {
+    msg += `Format attendu : commence par \`${tool.prefix}\`\n\n`;
+  }
+  msg += `Collez votre clé ci-dessous, ou tapez **passer** pour continuer sans configurer.`;
+
+  return { content: msg };
+}
+
+function handleApiKeyIntent(text) {
+  const lower = text.toLowerCase();
+
+  // Check for onboarding / overview intent
+  if (isOnboardingIntent(lower)) {
+    return handleOnboardingStart();
+  }
+
+  const detected = detectWhichKey(lower);
+
+  // Category-level redirect
+  if (detected && detected.startsWith('_category_')) {
+    return handleCategoryExplain(detected.replace('_category_', ''));
+  }
+
+  // Specific tool
+  if (detected) {
+    return handleToolExplain(detected);
+  }
+
+  // Generic "configure API keys" — show overview
+  return handleOnboardingStart();
 }
 
 async function handleApiKeyInput(text) {
   const lower = text.toLowerCase();
 
-  // User wants to go back or cancel
-  if (lower.match(/\b(annuler|cancel|retour|sortir|quitter|stop)\b/)) {
+  // Cancel / go back
+  if (lower.match(/\b(annuler|cancel|retour|sortir|quitter)\b/)) {
     _conv.stage = 'init';
     _conv.apiKeyField = null;
-    return { content: `OK, configuration annulée. Que puis-je faire d'autre pour vous ?` };
+    return { content: `Configuration terminée. Que puis-je faire d'autre ?` };
   }
 
-  // User specifies which key (when apiKeyField is null)
-  if (!_conv.apiKeyField) {
-    const specificKey = detectWhichKey(lower);
-    if (specificKey) {
-      _conv.apiKeyField = specificKey;
-      const info = API_KEY_PATTERNS[specificKey];
-      let msg = `Collez votre clé **${info.label}** ci-dessous.\n\n`;
-      if (info.prefix) msg += `Format attendu : commence par \`${info.prefix}\`\n\n`;
-      msg += `La clé sera chiffrée et stockée de manière sécurisée.`;
-      return { content: msg };
+  // "Skip" / "passer" current tool
+  if (lower.match(/\b(passer|skip|sauter|plus tard|later)\b/)) {
+    if (_conv.apiKeyField) {
+      const skipped = INTEGRATIONS[_conv.apiKeyField]?.label || '';
+      _conv.apiKeyField = null;
+      return { content: `OK, on passe ${skipped}. Quel autre outil souhaitez-vous configurer ? Ou tapez **terminé** pour finir.` };
     }
+    _conv.apiKeyField = null;
+    return { content: `Quel outil souhaitez-vous configurer ? Tapez **terminé** pour finir.` };
+  }
+
+  // Category selection
+  const catMatch = lower.match(/\b(essentiel|core|crm|enrichi|calendar|calendrier)\b/);
+  if (catMatch && !_conv.apiKeyField) {
+    const catMap = { essentiel: 'core', core: 'core', crm: 'crm', enrichi: 'enrichment', calendar: 'calendar', calendrier: 'calendar' };
+    const cat = catMap[catMatch[1]];
+    if (cat) return handleCategoryExplain(cat);
+  }
+
+  // Tool selection by name
+  const toolKey = detectWhichKey(lower);
+  if (toolKey && !toolKey.startsWith('_category_') && toolKey !== _conv.apiKeyField) {
+    return handleToolExplain(toolKey);
+  }
+  if (toolKey && toolKey.startsWith('_category_')) {
+    return handleCategoryExplain(toolKey.replace('_category_', ''));
   }
 
   // Try to detect a pasted key
-  const detected = detectApiKeyInText(text);
-  if (detected) {
-    const info = API_KEY_PATTERNS[detected.field];
-    const result = await saveApiKeyViaChat(detected.field, detected.value);
+  const detectedKey = detectApiKeyInText(text);
+  if (detectedKey) {
+    const tool = INTEGRATIONS[detectedKey.field];
+    const result = await saveApiKeyViaChat(detectedKey.field, detectedKey.value);
 
     if (!result.ok) {
-      return { content: `Erreur lors de la sauvegarde de la clé **${info.label}** : ${result.error}` };
+      return { content: `Erreur pour **${tool.label}** : ${result.error}` };
     }
 
-    let msg = `Clé **${info.label}** sauvegardée et chiffrée.`;
+    let msg = `${tool.icon} Clé **${tool.label}** sauvegardée et chiffrée.`;
     if (result.tested) {
-      msg += ` Test de connexion : **réussi**.`;
+      msg += ` Connexion **réussie** !`;
     } else if (result.warning) {
       msg += `\n\n⚠️ ${result.warning}`;
     }
 
-    // Ask if they want to configure another key
     _conv.apiKeyField = null;
-    msg += `\n\nVoulez-vous configurer une autre clé, ou avez-vous terminé ?`;
-    return { content: msg, _async: true };
+    msg += `\n\nVoulez-vous configurer un autre outil, ou avez-vous **terminé** ?`;
+    return { content: msg };
   }
 
-  // User said something like "yes" / "another" / "une autre"
-  if (lower.match(/\b(oui|yes|autre|encore|suivant|next)\b/)) {
+  // "Yes" / "another" / continue
+  if (lower.match(/\b(oui|yes|autre|encore|suivant|next|continuer)\b/)) {
     _conv.apiKeyField = null;
-    return handleApiKeyIntent('configurer clé api');
+    return handleOnboardingStart();
   }
 
-  // User said "done" / "fini" / "non"
+  // "Done" / "finished"
   if (lower.match(/\b(non|no|fini|terminé|c'est bon|rien|stop)\b/)) {
     _conv.stage = 'init';
     _conv.apiKeyField = null;
-    return { content: `Parfait ! Vos clés sont configurées. Que puis-je faire d'autre ?` };
+    return { content: `Parfait, la configuration est terminée ! Que puis-je faire d'autre pour vous ?` };
   }
 
   // Didn't detect a valid key
   if (_conv.apiKeyField) {
-    const info = API_KEY_PATTERNS[_conv.apiKeyField];
-    return { content: `Je n'ai pas pu détecter une clé **${info.label}** valide. Collez la clé complète (sans espaces), ou tapez **annuler** pour revenir.` };
+    const tool = INTEGRATIONS[_conv.apiKeyField];
+    return { content: `Je n'ai pas pu détecter une clé **${tool.label}** valide. Collez la clé complète (sans espaces).\n\nOù la trouver : *${tool.howToGet}*\n\nOu tapez **passer** pour continuer sans configurer.` };
   }
 
-  return { content: `Dites-moi quelle clé configurer (**Lemlist**, **Claude** ou **Notion**), ou collez directement une clé.` };
+  return { content: `Dites-moi quel outil configurer, ou tapez **intégrations** pour voir la liste complète.` };
 }
 
 /* ═══ Local response logic ═══ */
@@ -344,11 +523,17 @@ function buildResponse(userText) {
     return { content: null, _asyncApiKey: true, _text: text };
   }
 
+  // Detect onboarding / integration overview intent
+  if (_conv.stage !== 'confirm' && isOnboardingIntent(lower)) {
+    const response = handleOnboardingStart();
+    _conv.history.push({ role: 'assistant', content: response.content });
+    return response;
+  }
+
   // Detect API key intent from any stage (except confirm)
   if (_conv.stage !== 'confirm' && (isApiKeyIntent(lower) || detectApiKeyInText(text))) {
     const detected = detectApiKeyInText(text);
     if (detected) {
-      // User pasted a key directly — save it
       _conv.stage = 'api_keys';
       return { content: null, _asyncApiKey: true, _text: text };
     }
@@ -359,7 +544,7 @@ function buildResponse(userText) {
 
   // Detect "go to settings" intent
   if (lower.match(/\b(paramètre|parametre|settings|réglage|reglage)\b/) && !lower.includes('campagne')) {
-    const response = { content: `Vous pouvez configurer vos clés API et vos préférences dans la page **Paramètres**.\n\nVoulez-vous :\n- **Y aller** directement (tapez "paramètres")\n- **Configurer ici** une clé API dans le chat\n- **Créer une campagne** à la place` };
+    const response = { content: `Vous pouvez configurer vos intégrations et préférences dans **Paramètres**, ou directement ici dans le chat.\n\nVoulez-vous :\n- **Voir les intégrations** disponibles (tapez "intégrations")\n- **Configurer une clé** API spécifique\n- **Créer une campagne** à la place` };
     _conv.history.push({ role: 'assistant', content: response.content });
     return response;
   }

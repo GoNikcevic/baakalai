@@ -97,6 +97,13 @@ async function saveSettings() {
     lemlistKey: document.getElementById('settings-lemlist-key')?.value?.trim(),
     notionToken: document.getElementById('settings-notion-token')?.value?.trim(),
     claudeKey: document.getElementById('settings-claude-key')?.value?.trim(),
+    hubspotKey: document.getElementById('settings-hubspot-key')?.value?.trim(),
+    pipedriveKey: document.getElementById('settings-pipedrive-key')?.value?.trim(),
+    salesforceKey: document.getElementById('settings-salesforce-key')?.value?.trim(),
+    dropcontactKey: document.getElementById('settings-dropcontact-key')?.value?.trim(),
+    apolloKey: document.getElementById('settings-apollo-key')?.value?.trim(),
+    hunterKey: document.getElementById('settings-hunter-key')?.value?.trim(),
+    calendlyKey: document.getElementById('settings-calendly-key')?.value?.trim(),
   };
 
   // Collect non-sensitive settings (these stay in localStorage)
@@ -155,6 +162,13 @@ async function loadSettingsKeys() {
       lemlistKey: { inputId: 'settings-lemlist-key', statusId: 'status-lemlist' },
       notionToken: { inputId: 'settings-notion-token', statusId: 'status-notion' },
       claudeKey: { inputId: 'settings-claude-key', statusId: 'status-claude' },
+      hubspotKey: { inputId: 'settings-hubspot-key', statusId: 'status-hubspot' },
+      pipedriveKey: { inputId: 'settings-pipedrive-key', statusId: 'status-pipedrive' },
+      salesforceKey: { inputId: 'settings-salesforce-key', statusId: 'status-salesforce' },
+      dropcontactKey: { inputId: 'settings-dropcontact-key', statusId: 'status-dropcontact' },
+      apolloKey: { inputId: 'settings-apollo-key', statusId: 'status-apollo' },
+      hunterKey: { inputId: 'settings-hunter-key', statusId: 'status-hunter' },
+      calendlyKey: { inputId: 'settings-calendly-key', statusId: 'status-calendly' },
     };
 
     for (const [field, info] of Object.entries(keys)) {
@@ -219,6 +233,13 @@ async function testApiConnections() {
     lemlistKey: 'status-lemlist',
     notionToken: 'status-notion',
     claudeKey: 'status-claude',
+    hubspotKey: 'status-hubspot',
+    pipedriveKey: 'status-pipedrive',
+    salesforceKey: 'status-salesforce',
+    dropcontactKey: 'status-dropcontact',
+    apolloKey: 'status-apollo',
+    hunterKey: 'status-hunter',
+    calendlyKey: 'status-calendly',
   };
 
   // Show testing state for all
@@ -270,6 +291,13 @@ async function testApiConnections() {
     { id: 'settings-lemlist-key', statusId: 'status-lemlist', check: v => v.length > 10 },
     { id: 'settings-notion-token', statusId: 'status-notion', check: v => v.startsWith('ntn_') || v.startsWith('secret_') },
     { id: 'settings-claude-key', statusId: 'status-claude', check: v => v.startsWith('sk-ant-') },
+    { id: 'settings-hubspot-key', statusId: 'status-hubspot', check: v => v.startsWith('pat-') || v.length > 20 },
+    { id: 'settings-pipedrive-key', statusId: 'status-pipedrive', check: v => v.length > 10 },
+    { id: 'settings-salesforce-key', statusId: 'status-salesforce', check: v => v.length > 10 },
+    { id: 'settings-dropcontact-key', statusId: 'status-dropcontact', check: v => v.length > 10 },
+    { id: 'settings-apollo-key', statusId: 'status-apollo', check: v => v.length > 10 },
+    { id: 'settings-hunter-key', statusId: 'status-hunter', check: v => v.length > 10 },
+    { id: 'settings-calendly-key', statusId: 'status-calendly', check: v => v.length > 10 },
   ];
 
   for (const c of localChecks) {

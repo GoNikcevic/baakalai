@@ -3326,43 +3326,145 @@ body {
               <div class="settings-status-state offline" id="settings-conn-claude">Non connecté</div>
               <div class="settings-status-detail">IA & génération de copy</div>
             </div>
+            <div class="settings-status-card">
+              <div class="settings-status-icon">🟠</div>
+              <div class="settings-status-name">HubSpot</div>
+              <div class="settings-status-state offline" id="settings-conn-hubspot">Non connecté</div>
+              <div class="settings-status-detail">CRM & pipeline</div>
+            </div>
+            <div class="settings-status-card">
+              <div class="settings-status-icon">📧</div>
+              <div class="settings-status-name">Dropcontact</div>
+              <div class="settings-status-state offline" id="settings-conn-dropcontact">Non connecté</div>
+              <div class="settings-status-detail">Enrichissement email</div>
+            </div>
+            <div class="settings-status-card">
+              <div class="settings-status-icon">📅</div>
+              <div class="settings-status-name">Calendly</div>
+              <div class="settings-status-state offline" id="settings-conn-calendly">Non connecté</div>
+              <div class="settings-status-detail">Prise de RDV</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- API Keys -->
+      <!-- API Keys — Core -->
       <div class="card">
-        <div class="card-header"><div class="card-title">🔑 Clés API</div></div>
+        <div class="card-header"><div class="card-title">⚡ Intégrations essentielles</div></div>
         <div class="card-body">
           <div class="form-stack">
             <div class="form-group full">
-              <label class="form-label">Lemlist API Key</label>
+              <label class="form-label">✉️ Lemlist API Key</label>
               <div class="input-with-status">
                 <input class="form-input mono" id="settings-lemlist-key" type="password" placeholder="Copiez depuis Lemlist → Settings → Integrations → API" data-original-placeholder="Copiez depuis Lemlist → Settings → Integrations → API">
                 <span class="input-status" id="status-lemlist">Non connecté</span>
               </div>
-              <div class="form-hint">Trouvez-la dans Lemlist → Settings → Integrations → API · <em>Chiffré côté serveur</em></div>
+              <div class="form-hint">Lemlist → Settings → Integrations → API · <em>Chiffré côté serveur</em></div>
             </div>
             <div class="form-group full">
-              <label class="form-label">Notion Integration Token</label>
-              <div class="input-with-status">
-                <input class="form-input mono" id="settings-notion-token" type="password" placeholder="Copiez depuis notion.so/my-integrations" data-original-placeholder="Copiez depuis notion.so/my-integrations">
-                <span class="input-status" id="status-notion">Non connecté</span>
-              </div>
-              <div class="form-hint">Créez une intégration sur <strong>notion.so/my-integrations</strong>, puis partagez vos pages · <em>Chiffré côté serveur</em></div>
-            </div>
-            <div class="form-group full">
-              <label class="form-label">Anthropic API Key (Claude)</label>
+              <label class="form-label">🤖 Anthropic API Key (Claude)</label>
               <div class="input-with-status">
                 <input class="form-input mono" id="settings-claude-key" type="password" placeholder="sk-ant-..." data-original-placeholder="sk-ant-...">
                 <span class="input-status" id="status-claude">Non connecté</span>
               </div>
-              <div class="form-hint">Disponible sur <strong>console.anthropic.com/settings/keys</strong></div>
+              <div class="form-hint">console.anthropic.com → Settings → API Keys</div>
             </div>
-            <button class="btn btn-ghost" style="align-self:flex-start;" onclick="testApiConnections()">🔄 Tester les connexions</button>
+            <div class="form-group full">
+              <label class="form-label">📝 Notion Integration Token</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-notion-token" type="password" placeholder="Copiez depuis notion.so/my-integrations" data-original-placeholder="Copiez depuis notion.so/my-integrations">
+                <span class="input-status" id="status-notion">Non connecté</span>
+              </div>
+              <div class="form-hint">notion.so/my-integrations → Créer une intégration</div>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- API Keys — CRM -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">📊 CRM</div><span style="font-size:11px;color:var(--text-muted);">Connectez 1 CRM pour synchroniser vos leads</span></div>
+        <div class="card-body">
+          <div class="form-stack">
+            <div class="form-group full">
+              <label class="form-label">🟠 HubSpot API Key</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-hubspot-key" type="password" placeholder="pat-..." data-original-placeholder="pat-...">
+                <span class="input-status" id="status-hubspot">Non connecté</span>
+              </div>
+              <div class="form-hint">HubSpot → Settings → Integrations → Private Apps</div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">🟢 Pipedrive API Token</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-pipedrive-key" type="password" placeholder="Copiez depuis Pipedrive → Settings → API" data-original-placeholder="Copiez depuis Pipedrive → Settings → API">
+                <span class="input-status" id="status-pipedrive">Non connecté</span>
+              </div>
+              <div class="form-hint">Pipedrive → Settings → Personal preferences → API</div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">☁️ Salesforce Consumer Key</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-salesforce-key" type="password" placeholder="Connected App Consumer Key" data-original-placeholder="Connected App Consumer Key">
+                <span class="input-status" id="status-salesforce">Non connecté</span>
+              </div>
+              <div class="form-hint">Salesforce → Setup → Apps → Connected Apps</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Keys — Enrichment -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">🔎 Enrichissement de données</div><span style="font-size:11px;color:var(--text-muted);">Trouvez et vérifiez les emails de vos prospects</span></div>
+        <div class="card-body">
+          <div class="form-stack">
+            <div class="form-group full">
+              <label class="form-label">📧 Dropcontact API Key</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-dropcontact-key" type="password" placeholder="Copiez depuis Dropcontact → API" data-original-placeholder="Copiez depuis Dropcontact → API">
+                <span class="input-status" id="status-dropcontact">Non connecté</span>
+              </div>
+              <div class="form-hint">Dropcontact → Dashboard → API · RGPD-compliant</div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">🚀 Apollo.io API Key</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-apollo-key" type="password" placeholder="Copiez depuis Apollo → Settings → API" data-original-placeholder="Copiez depuis Apollo → Settings → API">
+                <span class="input-status" id="status-apollo">Non connecté</span>
+              </div>
+              <div class="form-hint">Apollo → Settings → Integrations → API Keys</div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">🔍 Hunter.io API Key</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-hunter-key" type="password" placeholder="Copiez depuis hunter.io → API" data-original-placeholder="Copiez depuis hunter.io → API">
+                <span class="input-status" id="status-hunter">Non connecté</span>
+              </div>
+              <div class="form-hint">Hunter → Dashboard → API → Your API Key</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Keys — Calendar -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">📅 Calendrier</div><span style="font-size:11px;color:var(--text-muted);">Automatisez la prise de rendez-vous</span></div>
+        <div class="card-body">
+          <div class="form-stack">
+            <div class="form-group full">
+              <label class="form-label">📅 Calendly Personal Access Token</label>
+              <div class="input-with-status">
+                <input class="form-input mono" id="settings-calendly-key" type="password" placeholder="Copiez depuis Calendly → Integrations → API" data-original-placeholder="Copiez depuis Calendly → Integrations → API">
+                <span class="input-status" id="status-calendly">Non connecté</span>
+              </div>
+              <div class="form-hint">Calendly → Integrations → API & Webhooks → Personal Access Token</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-ghost" style="align-self:flex-start;" onclick="testApiConnections()">🔄 Tester toutes les connexions</button>
 
       <!-- Lemlist Config -->
       <div class="card">
