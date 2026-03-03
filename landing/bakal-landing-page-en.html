@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bakal — AI-Native B2B Lead Generation</title>
+<meta name="description" content="Bakal is an AI-native lead generation service for B2B companies. Personalized outreach via email and LinkedIn, delivered as a done-for-you service.">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08090d;
+  --bg-subtle: #0e1017;
+  --bg-card: #13141f;
+  --bg-elevated: #1a1b2a;
+  --border: #1f2033;
+  --border-light: #2a2b42;
+  --text: #e8e8f0;
+  --text-secondary: #8889a0;
+  --text-muted: #55566a;
+  --accent: #6c5ce7;
+  --accent-light: #a29bfe;
+  --accent-glow: rgba(108, 92, 231, 0.12);
+  --accent-glow-strong: rgba(108, 92, 231, 0.25);
+  --green: #00d68f;
+  --green-bg: rgba(0, 214, 143, 0.08);
+  --orange: #ff922b;
+  --gradient: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-lg: 20px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════ NOISE TEXTURE ═══════════ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ═══════════ NAVIGATION ═══════════ */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 20px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  backdrop-filter: blur(20px);
+  background: rgba(8, 9, 13, 0.8);
+  border-bottom: 1px solid rgba(31, 32, 51, 0.5);
+}
+
+.nav-logo {
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.nav-logo span { color: var(--accent-light); }
+
+.nav-cta {
+  padding: 10px 24px;
+  background: var(--gradient);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+.nav-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--accent-glow-strong); }
+
+/* ═══════════ HERO ═══════════ */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 120px 24px 80px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 900px;
+  background: radial-gradient(circle, var(--accent-glow-strong) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
+}
+
+/* Animated grid lines */
+.grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(108, 92, 231, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108, 92, 231, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 70% 50% at 50% 40%, black 20%, transparent 70%);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 800px;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-glow);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+  border-radius: 50px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-light);
+  margin-bottom: 32px;
+  animation: fadeUp 0.8s ease-out;
+}
+.hero-badge::before { content: '✦'; font-size: 10px; }
+
+.hero h1 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(44px, 7vw, 80px);
+  font-weight: 400;
+  line-height: 1.05;
+  margin-bottom: 28px;
+  letter-spacing: -2px;
+  animation: fadeUp 0.8s ease-out 0.1s both;
+}
+
+.hero h1 em {
+  font-style: italic;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-size: 19px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-width: 580px;
+  margin: 0 auto 44px;
+  animation: fadeUp 0.8s ease-out 0.2s both;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  animation: fadeUp 0.8s ease-out 0.3s both;
+}
+
+.btn-primary {
+  padding: 16px 36px;
+  background: var(--gradient);
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary:hover { transform: translateY(-3px); box-shadow: 0 12px 40px var(--accent-glow-strong); }
+
+.btn-secondary {
+  padding: 16px 36px;
+  background: transparent;
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  font-size: 16px;
+  border: 1px solid var(--border-light);
+  border-radius: 50px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent-light); }
+
+/* ═══════════ SOCIAL PROOF ═══════════ */
+.proof {
+  padding: 0 24px 80px;
+  text-align: center;
+}
+
+.proof-row {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  flex-wrap: wrap;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.proof-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.proof-number {
+  font-family: 'Instrument Serif', serif;
+  font-size: 36px;
+  color: var(--accent-light);
+}
+
+.proof-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ═══════════ PROBLEM SECTION ═══════════ */
+.problem {
+  padding: 100px 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent-light);
+  margin-bottom: 20px;
+}
+
+.problem h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(32px, 4.5vw, 48px);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -1px;
+  margin-bottom: 48px;
+}
+
+.pain-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.pain-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  transition: all 0.3s;
+}
+.pain-card:hover {
+  border-color: var(--border-light);
+  transform: translateY(-4px);
+}
+
+.pain-icon {
+  font-size: 28px;
+  margin-bottom: 16px;
+}
+
+.pain-card h3 {
+  font-weight: 600;
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.pain-card p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+/* ═══════════ HOW IT WORKS ═══════════ */
+.how {
+  padding: 100px 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.how h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(32px, 4.5vw, 48px);
+  font-weight: 400;
+  letter-spacing: -1px;
+  margin-bottom: 60px;
+  text-align: center;
+}
+
+.steps {
+  display: grid;
+  gap: 0;
+  position: relative;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 28px;
+  padding: 32px 0;
+  position: relative;
+}
+
+.step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 39px;
+  top: 80px;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--accent), transparent);
+}
+
+.step-number {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Instrument Serif', serif;
+  font-size: 28px;
+  color: var(--accent-light);
+  background: var(--accent-glow);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+  flex-shrink: 0;
+}
+
+.step-content { padding-top: 14px; }
+
+.step-content h3 {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.step-content p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-width: 500px;
+}
+
+.step-tag {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 50px;
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid rgba(0, 214, 143, 0.15);
+}
+
+/* ═══════════ FEATURES / WHAT YOU GET ═══════════ */
+.features {
+  padding: 100px 24px;
+  background: var(--bg-subtle);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.features-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.features h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(32px, 4.5vw, 48px);
+  font-weight: 400;
+  letter-spacing: -1px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.features > .features-inner > p {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 17px;
+  margin-bottom: 56px;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  transition: all 0.3s;
+}
+.feature-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 40px var(--accent-glow);
+}
+
+.feature-emoji {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-bottom: 20px;
+}
+
+.feature-card h3 {
+  font-weight: 600;
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+.feature-card p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+/* ═══════════ PRICING ═══════════ */
+.pricing {
+  padding: 100px 24px;
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.pricing h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(32px, 4.5vw, 48px);
+  font-weight: 400;
+  letter-spacing: -1px;
+  margin-bottom: 16px;
+}
+
+.pricing > p {
+  color: var(--text-secondary);
+  font-size: 17px;
+  margin-bottom: 48px;
+}
+
+.price-card {
+  background: var(--bg-card);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-lg);
+  padding: 44px 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.price-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient);
+}
+
+.price-badge {
+  display: inline-block;
+  background: var(--gradient);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 50px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.price-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.price-amount .currency { font-size: 24px; font-weight: 300; color: var(--text-secondary); }
+.price-amount .value {
+  font-family: 'Instrument Serif', serif;
+  font-size: 60px;
+  line-height: 1;
+  color: var(--text);
+}
+.price-amount .period { font-size: 16px; color: var(--text-muted); }
+
+.price-setup {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 28px;
+}
+
+.price-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 -40px 28px;
+}
+
+.price-features {
+  list-style: none;
+  text-align: left;
+  margin-bottom: 32px;
+}
+
+.price-features li {
+  padding: 8px 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.price-features li::before {
+  content: '✓';
+  color: var(--green);
+  font-weight: 700;
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--green-bg);
+  flex-shrink: 0;
+}
+
+.price-card .btn-primary { width: 100%; justify-content: center; font-size: 17px; padding: 18px; }
+
+/* ═══════════ FORM SECTION ═══════════ */
+.form-section {
+  padding: 100px 24px;
+  background: var(--bg-subtle);
+  border-top: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.form-section::before {
+  content: '';
+  position: absolute;
+  top: -300px;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.form-inner {
+  max-width: 620px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+
+.form-section h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(32px, 4.5vw, 44px);
+  font-weight: 400;
+  letter-spacing: -1px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.form-section > .form-inner > p {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 16px;
+  margin-bottom: 48px;
+}
+
+.form-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group.full { grid-column: 1 / -1; }
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
+
+.form-group label .required { color: var(--accent-light); }
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.form-group select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238889a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+.form-group select option {
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-submit {
+  width: 100%;
+  padding: 18px;
+  background: var(--gradient);
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 17px;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: 8px;
+}
+.form-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--accent-glow-strong); }
+
+.form-note {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 16px;
+}
+
+/* Success state */
+.form-success {
+  display: none;
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.form-success.visible { display: block; }
+.form-success .success-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--green-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  margin: 0 auto 20px;
+  border: 2px solid rgba(0, 214, 143, 0.2);
+}
+
+.form-success h3 {
+  font-family: 'Instrument Serif', serif;
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+
+.form-success p {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* ═══════════ FAQ ═══════════ */
+.faq {
+  padding: 100px 24px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.faq h2 {
+  font-family: 'Instrument Serif', serif;
+  font-size: clamp(32px, 4.5vw, 44px);
+  font-weight: 400;
+  letter-spacing: -1px;
+  margin-bottom: 48px;
+  text-align: center;
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+  cursor: pointer;
+}
+
+.faq-q {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 16px;
+  gap: 16px;
+}
+
+.faq-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-muted);
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.faq-a {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease, padding 0.4s ease;
+}
+
+.faq-a-inner {
+  padding-top: 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.faq-item.open .faq-a {
+  max-height: 300px;
+}
+
+.faq-item.open .faq-toggle {
+  transform: rotate(45deg);
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent-light);
+}
+
+/* ═══════════ FOOTER ═══════════ */
+footer {
+  padding: 48px 24px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.footer-logo {
+  font-weight: 700;
+  font-size: 20px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.footer-logo span { color: var(--accent-light); }
+
+footer p {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ═══════════ ANIMATIONS ═══════════ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ═══════════ RESPONSIVE ═══════════ */
+@media (max-width: 768px) {
+  nav { padding: 16px 20px; }
+  .nav-cta { display: none; }
+  .hero { padding: 100px 20px 60px; }
+  .hero h1 { letter-spacing: -1px; }
+  .proof-row { gap: 32px; }
+  .form-row { grid-template-columns: 1fr; }
+  .form-card { padding: 28px 20px; }
+  .step { grid-template-columns: 56px 1fr; gap: 18px; }
+  .step-number { width: 56px; height: 56px; font-size: 22px; }
+  .step:not(:last-child)::after { left: 27px; top: 64px; }
+  .price-card { padding: 32px 24px; }
+  .price-divider { margin: 0 -24px 28px; }
+}
+
+@media (max-width: 480px) {
+  .hero-actions { flex-direction: column; align-items: center; }
+  .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+  .pain-grid { grid-template-columns: 1fr; }
+  .feature-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAVIGATION -->
+<nav>
+  <div class="nav-logo">bakal<span>.</span></div>
+  <a href="#contact" class="nav-cta">Get started →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="hero-content">
+    <div class="hero-badge">Pilot program — 3 spots available</div>
+    <h1>AI-native lead generation<br><em>for B2B services</em></h1>
+    <p class="hero-sub">We prospect for you via email and LinkedIn with AI-crafted, one-to-one messages. You just show up to the meetings.</p>
+    <div class="hero-actions">
+      <a href="#contact" class="btn-primary">Book a discovery call →</a>
+      <a href="#how" class="btn-secondary">How it works</a>
+    </div>
+  </div>
+</section>
+
+<!-- SOCIAL PROOF -->
+<section class="proof reveal">
+  <div class="proof-row">
+    <div class="proof-stat">
+      <div class="proof-number">2</div>
+      <div class="proof-label">channels combined</div>
+    </div>
+    <div class="proof-stat">
+      <div class="proof-number">100%</div>
+      <div class="proof-label">tailored messages</div>
+    </div>
+    <div class="proof-stat">
+      <div class="proof-number">0</div>
+      <div class="proof-label">effort on your end</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem reveal">
+  <div class="section-label">The problem</div>
+  <h2>You know you should be prospecting.<br>But you don't have the time — or the energy.</h2>
+  <div class="pain-grid">
+    <div class="pain-card">
+      <div class="pain-icon">⏰</div>
+      <h3>Your calendar is already packed</h3>
+      <p>Between serving current clients and running operations, prospecting always falls to the bottom of the list. When you do try, it takes hours for barely any results.</p>
+    </div>
+    <div class="pain-card">
+      <div class="pain-icon">📭</div>
+      <h3>Generic outreach doesn't work anymore</h3>
+      <p>Copy-pasting the same message to 200 people? Your prospects can tell. They delete without reading. Response rates hover near zero.</p>
+    </div>
+    <div class="pain-card">
+      <div class="pain-icon">🎯</div>
+      <h3>You're not reaching the right people</h3>
+      <p>Without precise targeting, you waste energy on contacts who'll never buy. Wrong title, wrong company size, wrong timing.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how reveal" id="how">
+  <div class="section-label" style="text-align: center">How it works</div>
+  <h2>Simple for you. Relentless on your prospects.</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>We learn your business</h3>
+        <p>A 15-minute call to understand your offer, your ideal clients, and how you like to sound. That's all we need from you.</p>
+        <span class="step-tag">15 min, one time only</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>We find the right decision-makers</h3>
+        <p>Using LinkedIn Sales Navigator, we target the people who actually need what you offer. Right title, right company, right size.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>AI writes one-to-one messages</h3>
+        <p>Every message is unique, tailored to the prospect's profile. No copy-paste templates. Email and LinkedIn, multi-touchpoint sequences with smart follow-ups.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h3>You get the meetings</h3>
+        <p>We filter replies for you. When a prospect is interested, you get notified with full context to prepare your conversation.</p>
+        <span class="step-tag">Real-time notifications</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features reveal">
+  <div class="features-inner">
+    <div class="section-label" style="text-align: center">What's included</div>
+    <h2>A complete service, not another tool</h2>
+    <p>Nothing to install, nothing to configure. We handle everything.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-emoji">🎯</div>
+        <h3>Surgical targeting</h3>
+        <p>We identify your ideal decision-makers via LinkedIn Sales Navigator: job title, industry, company size, geography. No wasted volume.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">✍️</div>
+        <h3>AI-written messages</h3>
+        <p>Every message is crafted specifically for its recipient. The tone, the hook, the angle — everything is adapted to the prospect's profile.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">📬</div>
+        <h3>Email + LinkedIn combined</h3>
+        <p>Multi-touchpoint sequences across the two most effective B2B channels. Follow-ups included, timing optimized.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">🔔</div>
+        <h3>Hot prospect alerts</h3>
+        <p>As soon as a prospect replies positively, you're notified with full context to prepare your conversation.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">🔄</div>
+        <h3>Continuous optimization</h3>
+        <p>We analyze the performance of every message and adjust angles, hooks, and targeting to improve results over time.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-emoji">📊</div>
+        <h3>Performance reports</h3>
+        <p>Regular updates on your campaign KPIs: open rates, reply rates, meetings booked, and recommendations for what's next.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing reveal" id="pricing">
+  <div class="section-label">Pilot pricing</div>
+  <h2>One price, no surprises</h2>
+  <p>Early adopter pricing for our first 3 clients.</p>
+  <div class="price-card">
+    <div class="price-badge">Launch offer</div>
+    <div class="price-amount">
+      <span class="currency">€</span>
+      <span class="value">350</span>
+      <span class="period">/mo</span>
+    </div>
+    <div class="price-setup">+ €250 one-time setup fee</div>
+    <div class="price-divider"></div>
+    <ul class="price-features">
+      <li>Targeting and identification of your ideal buyers</li>
+      <li>AI-personalized email + LinkedIn sequences</li>
+      <li>Up to 500 prospects contacted per month</li>
+      <li>Multi-touchpoint follow-ups included</li>
+      <li>Alerts as soon as a prospect is interested</li>
+      <li>Continuous message optimization</li>
+      <li>Regular performance reports</li>
+      <li>60-day commitment — no auto-renewal</li>
+    </ul>
+    <a href="#contact" class="btn-primary">Book a discovery call →</a>
+  </div>
+</section>
+
+<!-- FORM -->
+<section class="form-section" id="contact">
+  <div class="form-inner">
+    <div class="section-label" style="text-align: center">Let's talk</div>
+    <h2>See if Bakal is right for you</h2>
+    <p>Answer a few questions so we can prepare your discovery call. We'll get back to you within 24 hours.</p>
+
+    <div class="form-card" id="formCard">
+      <form id="qualForm" onsubmit="handleSubmit(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>First name <span class="required">*</span></label>
+            <input type="text" name="first_name" placeholder="Your first name" required>
+          </div>
+          <div class="form-group">
+            <label>Last name <span class="required">*</span></label>
+            <input type="text" name="last_name" placeholder="Your last name" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Work email <span class="required">*</span></label>
+            <input type="email" name="email" placeholder="you@company.com" required>
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="tel" name="phone" placeholder="+1 (555) 000-0000">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Company name <span class="required">*</span></label>
+          <input type="text" name="company" placeholder="Your company name" required>
+        </div>
+
+        <div class="form-group">
+          <label>What does your company do? <span class="required">*</span></label>
+          <input type="text" name="activity" placeholder="E.g.: Digital transformation consulting for mid-market manufacturers" required>
+        </div>
+
+        <div class="form-group">
+          <label>Website</label>
+          <input type="url" name="website" placeholder="https://www.your-site.com">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Your target clients? <span class="required">*</span></label>
+            <select name="target" required>
+              <option value="" disabled selected>Company size</option>
+              <option value="small">Small business (1-10 employees)</option>
+              <option value="mid">Mid-market (10-250 employees)</option>
+              <option value="upper_mid">Upper mid-market (250-5000)</option>
+              <option value="enterprise">Enterprise</option>
+              <option value="mixed">Mixed / All sizes</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Current prospecting budget <span class="required">*</span></label>
+            <select name="budget" required>
+              <option value="" disabled selected>Select</option>
+              <option value="none">None (I do everything myself)</option>
+              <option value="under_500">Under €500/month</option>
+              <option value="500_2000">€500 to €2,000/month</option>
+              <option value="over_2000">Over €2,000/month</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>How do you prospect today?</label>
+          <select name="current_method">
+            <option value="" disabled selected>Select</option>
+            <option value="word_of_mouth">Word of mouth only</option>
+            <option value="linkedin_manual">LinkedIn (manual)</option>
+            <option value="cold_email">Cold emailing</option>
+            <option value="events">Networking / events</option>
+            <option value="nothing">I don't really prospect</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Anything else to share?</label>
+          <textarea name="message" placeholder="Your goals, current challenges, questions... anything helps us prepare the call."></textarea>
+        </div>
+
+        <button type="submit" class="form-submit">Request a discovery call →</button>
+      </form>
+
+      <div class="form-success" id="formSuccess">
+        <div class="success-icon">✓</div>
+        <h3>Request sent!</h3>
+        <p>Thanks for your interest. We'll review your profile and get back to you within 24 hours to discuss your prospecting needs.</p>
+      </div>
+    </div>
+    <p class="form-note">Your information stays confidential. No spam, we promise.</p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq reveal">
+  <h2>Frequently asked questions</h2>
+
+  <div class="faq-item" onclick="toggleFaq(this)">
+    <div class="faq-q">
+      Do messages go out from my own email and LinkedIn?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+      <div class="faq-a-inner">Yes. We set up a dedicated prospecting email on your domain and use your LinkedIn profile. Your prospects receive authentic messages from you. You keep full control at all times.</div>
+    </div>
+  </div>
+
+  <div class="faq-item" onclick="toggleFaq(this)">
+    <div class="faq-q">
+      How soon will I see results?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+      <div class="faq-a-inner">First replies typically come in during the first week. Qualified meetings usually follow within 2 to 3 weeks, depending on your industry and target audience.</div>
+    </div>
+  </div>
+
+  <div class="faq-item" onclick="toggleFaq(this)">
+    <div class="faq-q">
+      I don't know anything about AI — is that a problem?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+      <div class="faq-a-inner">Not at all. This is a fully managed service: you give us a 15-minute brief, we handle everything else. The AI works behind the scenes — you don't touch anything. Your only job: respond to interested prospects.</div>
+    </div>
+  </div>
+
+  <div class="faq-item" onclick="toggleFaq(this)">
+    <div class="faq-q">
+      What happens after the 60 days?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+      <div class="faq-a-inner">After 60 days, you decide freely whether to continue. No auto-renewal, no hidden fees. If results are there, we keep going. If not, no hard feelings.</div>
+    </div>
+  </div>
+
+  <div class="faq-item" onclick="toggleFaq(this)">
+    <div class="faq-q">
+      What kind of businesses is this for?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+      <div class="faq-a-inner">Bakal works best for B2B service providers: consulting firms, agencies, trainers, accountants, business lawyers, IT consultants, and more. If you sell a service or expertise to other businesses, this is built for you.</div>
+    </div>
+  </div>
+
+  <div class="faq-item" onclick="toggleFaq(this)">
+    <div class="faq-q">
+      Will prospects feel like it's automated?
+      <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+      <div class="faq-a-inner">No — that's exactly our edge. Every message is written specifically for its recipient: natural tone, profile references, contextual hooks. Nothing like the generic templates everyone hates getting.</div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">bakal<span>.</span></div>
+  <p>AI-native B2B lead generation.</p>
+</footer>
+
+<!-- SCRIPTS -->
+<script>
+// Reveal on scroll
+const revealElements = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+revealElements.forEach(el => observer.observe(el));
+
+// FAQ toggle
+function toggleFaq(item) {
+  const wasOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+  if (!wasOpen) item.classList.add('open');
+}
+
+// Form submit
+function handleSubmit(e) {
+  e.preventDefault();
+  const form = document.getElementById('qualForm');
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData);
+
+  // Log data (in production, send to N8N webhook or email)
+  console.log('Form submission:', data);
+
+  // Show success
+  form.style.display = 'none';
+  document.getElementById('formSuccess').classList.add('visible');
+
+  // Scroll to success message
+  document.getElementById('formCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+</script>
+
+</body>
+</html>
