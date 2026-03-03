@@ -6,15 +6,16 @@
 
 /* ═══ Conversation state (local engine) ═══ */
 let _conv = {
-  stage: 'init',         // init | gathering | confirm | done
+  stage: 'init',         // init | gathering | confirm | done | api_keys
   params: {},            // collected campaign parameters
   asked: [],             // what we've already asked about
   history: [],           // message history for context
   threadTitle: null,
+  apiKeyField: null,     // which key we're currently collecting: lemlistKey | claudeKey | notionToken
 };
 
 function resetConversation() {
-  _conv = { stage: 'init', params: {}, asked: [], history: [], threadTitle: null };
+  _conv = { stage: 'init', params: {}, asked: [], history: [], threadTitle: null, apiKeyField: null };
 }
 
 /* ═══ Parameter extraction ═══ */
@@ -160,6 +161,175 @@ function generateSequence(params) {
   ];
 }
 
+/* ═══ API Key management via chat ═══ */
+
+const API_KEY_PATTERNS = {
+  claudeKey:   { regex: /\bsk-ant-[a-zA-Z0-9_-]{20,}\b/, label: 'Claude (Anthropic)', prefix: 'sk-ant-' },
+  notionToken: { regex: /\b(ntn_|secret_)[a-zA-Z0-9_-]{20,}\b/, label: 'Notion', prefix: 'ntn_ / secret_' },
+  lemlistKey:  { regex: null, label: 'Lemlist', prefix: null },  // no distinctive prefix
+};
+
+function detectApiKeyInText(text) {
+  for (const [field, info] of Object.entries(API_KEY_PATTERNS)) {
+    if (info.regex && info.regex.test(text)) {
+      return { field, value: text.match(info.regex)[0] };
+    }
+  }
+  // If we're expecting a specific key (in api_keys stage), treat long strings as the key
+  if (_conv.apiKeyField && text.trim().length >= 10 && !text.includes(' ')) {
+    return { field: _conv.apiKeyField, value: text.trim() };
+  }
+  return null;
+}
+
+function isApiKeyIntent(lower) {
+  return (
+    (lower.includes('clé') || lower.includes('cle') || lower.includes('key') || lower.includes('api') || lower.includes('token')) &&
+    (lower.includes('configur') || lower.includes('ajouter') || lower.includes('ajout') ||
+     lower.includes('saisir') || lower.includes('entrer') || lower.includes('mettre') ||
+     lower.includes('connecter') || lower.includes('paramètre') || lower.includes('parametre') ||
+     lower.includes('setup') || lower.includes('modifier') || lower.includes('changer'))
+  ) || (
+    lower.includes('configurer') && (lower.includes('lemlist') || lower.includes('notion') || lower.includes('claude') || lower.includes('anthropic'))
+  );
+}
+
+function detectWhichKey(lower) {
+  if (lower.includes('lemlist')) return 'lemlistKey';
+  if (lower.includes('notion')) return 'notionToken';
+  if (lower.includes('claude') || lower.includes('anthropic')) return 'claudeKey';
+  return null;
+}
+
+async function fetchKeyStatus() {
+  if (typeof BakalAPI === 'undefined' || !_backendAvailable) return null;
+  try {
+    const { keys } = await BakalAPI.getKeys();
+    return keys;
+  } catch { return null; }
+}
+
+async function saveApiKeyViaChat(field, value) {
+  if (typeof BakalAPI === 'undefined' || !_backendAvailable) {
+    return { ok: false, error: 'Backend non disponible. Configurez vos clés dans **Paramètres** quand le serveur sera connecté.' };
+  }
+  try {
+    const result = await BakalAPI.saveKeys({ [field]: value });
+    if (result.errors && result.errors.length > 0) {
+      return { ok: false, error: result.errors[0] };
+    }
+    // Test connectivity
+    try {
+      const testResult = await BakalAPI.testKeys();
+      const status = testResult.results?.[field];
+      if (status?.status === 'connected') return { ok: true, tested: true };
+      if (status?.status === 'invalid') return { ok: true, tested: false, warning: 'Clé sauvegardée mais le test de connexion a échoué — vérifiez que la clé est correcte.' };
+      return { ok: true, tested: false, warning: status?.message || null };
+    } catch {
+      return { ok: true, tested: false };
+    }
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function handleApiKeyIntent(text) {
+  const lower = text.toLowerCase();
+  const specificKey = detectWhichKey(lower);
+
+  if (specificKey) {
+    _conv.stage = 'api_keys';
+    _conv.apiKeyField = specificKey;
+    const info = API_KEY_PATTERNS[specificKey];
+    let msg = `Pour configurer votre clé **${info.label}**, collez-la directement ici.\n\n`;
+    if (info.prefix) {
+      msg += `Le format attendu commence par \`${info.prefix}\`.\n\n`;
+    }
+    msg += `Votre clé sera **chiffrée** et stockée de manière sécurisée sur le serveur.`;
+    return { content: msg };
+  }
+
+  // General API key intent — show status and ask which one
+  _conv.stage = 'api_keys';
+  _conv.apiKeyField = null;
+
+  let msg = `Quelles clés souhaitez-vous configurer ?\n\n`;
+  msg += `- **Lemlist** — pour l'automatisation des campagnes email/LinkedIn\n`;
+  msg += `- **Claude (Anthropic)** — pour la génération AI de séquences\n`;
+  msg += `- **Notion** — pour la synchronisation des données\n\n`;
+  msg += `Dites-moi laquelle vous voulez configurer, ou collez directement une clé (je détecterai automatiquement son type).`;
+
+  return { content: msg };
+}
+
+async function handleApiKeyInput(text) {
+  const lower = text.toLowerCase();
+
+  // User wants to go back or cancel
+  if (lower.match(/\b(annuler|cancel|retour|sortir|quitter|stop)\b/)) {
+    _conv.stage = 'init';
+    _conv.apiKeyField = null;
+    return { content: `OK, configuration annulée. Que puis-je faire d'autre pour vous ?` };
+  }
+
+  // User specifies which key (when apiKeyField is null)
+  if (!_conv.apiKeyField) {
+    const specificKey = detectWhichKey(lower);
+    if (specificKey) {
+      _conv.apiKeyField = specificKey;
+      const info = API_KEY_PATTERNS[specificKey];
+      let msg = `Collez votre clé **${info.label}** ci-dessous.\n\n`;
+      if (info.prefix) msg += `Format attendu : commence par \`${info.prefix}\`\n\n`;
+      msg += `La clé sera chiffrée et stockée de manière sécurisée.`;
+      return { content: msg };
+    }
+  }
+
+  // Try to detect a pasted key
+  const detected = detectApiKeyInText(text);
+  if (detected) {
+    const info = API_KEY_PATTERNS[detected.field];
+    const result = await saveApiKeyViaChat(detected.field, detected.value);
+
+    if (!result.ok) {
+      return { content: `Erreur lors de la sauvegarde de la clé **${info.label}** : ${result.error}` };
+    }
+
+    let msg = `Clé **${info.label}** sauvegardée et chiffrée.`;
+    if (result.tested) {
+      msg += ` Test de connexion : **réussi**.`;
+    } else if (result.warning) {
+      msg += `\n\n⚠️ ${result.warning}`;
+    }
+
+    // Ask if they want to configure another key
+    _conv.apiKeyField = null;
+    msg += `\n\nVoulez-vous configurer une autre clé, ou avez-vous terminé ?`;
+    return { content: msg, _async: true };
+  }
+
+  // User said something like "yes" / "another" / "une autre"
+  if (lower.match(/\b(oui|yes|autre|encore|suivant|next)\b/)) {
+    _conv.apiKeyField = null;
+    return handleApiKeyIntent('configurer clé api');
+  }
+
+  // User said "done" / "fini" / "non"
+  if (lower.match(/\b(non|no|fini|terminé|c'est bon|rien|stop)\b/)) {
+    _conv.stage = 'init';
+    _conv.apiKeyField = null;
+    return { content: `Parfait ! Vos clés sont configurées. Que puis-je faire d'autre ?` };
+  }
+
+  // Didn't detect a valid key
+  if (_conv.apiKeyField) {
+    const info = API_KEY_PATTERNS[_conv.apiKeyField];
+    return { content: `Je n'ai pas pu détecter une clé **${info.label}** valide. Collez la clé complète (sans espaces), ou tapez **annuler** pour revenir.` };
+  }
+
+  return { content: `Dites-moi quelle clé configurer (**Lemlist**, **Claude** ou **Notion**), ou collez directement une clé.` };
+}
+
 /* ═══ Local response logic ═══ */
 
 function buildResponse(userText) {
@@ -167,6 +337,32 @@ function buildResponse(userText) {
   const lower = text.toLowerCase();
 
   _conv.history.push({ role: 'user', content: text });
+
+  // API key management — detect intent or continue key flow
+  if (_conv.stage === 'api_keys') {
+    // handleApiKeyInput is async — mark response as pending
+    return { content: null, _asyncApiKey: true, _text: text };
+  }
+
+  // Detect API key intent from any stage (except confirm)
+  if (_conv.stage !== 'confirm' && (isApiKeyIntent(lower) || detectApiKeyInText(text))) {
+    const detected = detectApiKeyInText(text);
+    if (detected) {
+      // User pasted a key directly — save it
+      _conv.stage = 'api_keys';
+      return { content: null, _asyncApiKey: true, _text: text };
+    }
+    const response = handleApiKeyIntent(text);
+    _conv.history.push({ role: 'assistant', content: response.content });
+    return response;
+  }
+
+  // Detect "go to settings" intent
+  if (lower.match(/\b(paramètre|parametre|settings|réglage|reglage)\b/) && !lower.includes('campagne')) {
+    const response = { content: `Vous pouvez configurer vos clés API et vos préférences dans la page **Paramètres**.\n\nVoulez-vous :\n- **Y aller** directement (tapez "paramètres")\n- **Configurer ici** une clé API dans le chat\n- **Créer une campagne** à la place` };
+    _conv.history.push({ role: 'assistant', content: response.content });
+    return response;
+  }
 
   const newParams = extractAllParams(text);
   Object.assign(_conv.params, newParams);
@@ -479,7 +675,13 @@ function patchChatHybrid() {
     _chatSending = true;
     updateSendButton();
 
-    const response = buildResponse(text);
+    let response = buildResponse(text);
+
+    // Handle async API key operations
+    if (response._asyncApiKey) {
+      response = await handleApiKeyInput(response._text);
+      _conv.history.push({ role: 'assistant', content: response.content });
+    }
 
     // Typing delay proportional to response length
     const delay = Math.min(600 + response.content.length * 3, 2000);
