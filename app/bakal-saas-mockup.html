@@ -2088,6 +2088,76 @@ body {
   font-size: 12px; color: var(--text-muted); margin-top: 8px;
 }
 
+/* ═══════════ ONBOARDING WIZARD ═══════════ */
+.wizard-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  animation: wizardFadeIn 0.4s ease;
+}
+@keyframes wizardFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.wizard-modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 20px; width: 580px; max-width: 95vw; max-height: 90vh;
+  overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  animation: wizardSlideUp 0.4s ease;
+}
+@keyframes wizardSlideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+.wizard-header {
+  padding: 32px 32px 0; text-align: center;
+}
+.wizard-logo { font-size: 36px; margin-bottom: 8px; }
+.wizard-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+.wizard-subtitle { font-size: 14px; color: var(--text-secondary); }
+.wizard-steps {
+  display: flex; justify-content: center; gap: 8px; padding: 24px 32px 0;
+}
+.wizard-step-dot {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--border);
+  transition: all 0.3s;
+}
+.wizard-step-dot.active { background: var(--accent); width: 28px; border-radius: 5px; }
+.wizard-step-dot.done { background: var(--success); }
+.wizard-body {
+  padding: 24px 32px 32px;
+}
+.wizard-step { display: none; }
+.wizard-step.active { display: block; animation: wizardFadeIn 0.3s ease; }
+.wizard-step-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.wizard-step-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; }
+.wizard-actions {
+  display: flex; gap: 12px; justify-content: flex-end; padding-top: 16px;
+  border-top: 1px solid var(--border); margin-top: 20px;
+}
+.wizard-actions .btn { min-width: 120px; }
+.wizard-skip {
+  font-size: 12px; color: var(--text-muted); cursor: pointer; text-align: center;
+  margin-top: 12px; padding: 8px;
+}
+.wizard-skip:hover { color: var(--text-secondary); }
+.wizard-core-keys {
+  display: flex; flex-direction: column; gap: 16px;
+}
+.wizard-key-row {
+  display: flex; align-items: center; gap: 12px;
+}
+.wizard-key-icon { font-size: 24px; width: 40px; text-align: center; flex-shrink: 0; }
+.wizard-key-input { flex: 1; }
+.wizard-key-input .form-input { width: 100%; }
+.wizard-key-label { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.wizard-key-hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.wizard-complete-icon { font-size: 56px; text-align: center; margin-bottom: 16px; }
+.wizard-complete-title { font-size: 20px; font-weight: 800; text-align: center; margin-bottom: 8px; }
+.wizard-complete-desc { font-size: 14px; color: var(--text-secondary); text-align: center; line-height: 1.6; }
+.wizard-checklist {
+  display: flex; flex-direction: column; gap: 10px; margin-top: 20px;
+}
+.wizard-check-item {
+  display: flex; align-items: center; gap: 10px; font-size: 13px;
+  padding: 10px 14px; background: var(--bg-elevated); border-radius: var(--radius);
+}
+.wizard-check-icon { font-size: 16px; }
+
 /* ═══════════ RESPONSIVE ═══════════ */
 @media (max-width: 1200px) {
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
@@ -4236,6 +4306,94 @@ body {
 <script src="notifications.js"></script>
 <script src="pages.js"></script>
 <script src="app.js"></script>
+
+<!-- ═══ Onboarding Wizard ═══ -->
+<div class="wizard-overlay" id="wizardOverlay" style="display:none;">
+  <div class="wizard-modal">
+    <div class="wizard-header">
+      <div class="wizard-logo">B</div>
+      <div class="wizard-title">Bienvenue sur Bakal</div>
+      <div class="wizard-subtitle">Configurez votre espace en 2 minutes</div>
+    </div>
+    <div class="wizard-steps" id="wizardDots">
+      <div class="wizard-step-dot active"></div>
+      <div class="wizard-step-dot"></div>
+      <div class="wizard-step-dot"></div>
+    </div>
+    <div class="wizard-body">
+
+      <!-- Step 1: Documents -->
+      <div class="wizard-step active" id="wizardStep1">
+        <div class="wizard-step-title">1. Uploadez vos documents business</div>
+        <div class="wizard-step-desc">Pitch decks, brochures, cas clients, offres commerciales... L'IA analyse vos documents pour comprendre votre activité et personnaliser chaque message.</div>
+        <div id="wizardDropzone" style="border:2px dashed var(--border-light);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;background:var(--bg-elevated);" onclick="document.getElementById('wizardFileInput').click()">
+          <div style="font-size:28px;margin-bottom:8px;">📁</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Glissez vos fichiers ici</div>
+          <div style="font-size:12px;color:var(--text-muted);">ou cliquez pour parcourir — PDF, DOCX, PPTX, XLSX, CSV, TXT, images</div>
+          <input type="file" id="wizardFileInput" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp" style="display:none;" onchange="wizardHandleFiles(this.files)">
+        </div>
+        <div id="wizardUploadStatus" style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:center;"></div>
+        <div class="wizard-actions">
+          <button class="btn btn-ghost" onclick="wizardGoTo(2)">Passer cette étape</button>
+          <button class="btn btn-primary" onclick="wizardGoTo(2)">Continuer</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Core APIs -->
+      <div class="wizard-step" id="wizardStep2">
+        <div class="wizard-step-title">2. Connectez vos outils essentiels</div>
+        <div class="wizard-step-desc">Les 3 intégrations principales pour démarrer. Vous pourrez en ajouter d'autres dans les Paramètres.</div>
+        <div class="wizard-core-keys">
+          <div class="wizard-key-row">
+            <div class="wizard-key-icon">✉️</div>
+            <div class="wizard-key-input">
+              <div class="wizard-key-label">Lemlist API Key</div>
+              <input class="form-input mono" id="wizard-lemlist-key" type="password" placeholder="Copiez depuis Lemlist → Settings → API" onclick="event.stopPropagation()">
+              <div class="wizard-key-hint">Envoi d'emails & LinkedIn</div>
+            </div>
+          </div>
+          <div class="wizard-key-row">
+            <div class="wizard-key-icon">🤖</div>
+            <div class="wizard-key-input">
+              <div class="wizard-key-label">Anthropic API Key (Claude)</div>
+              <input class="form-input mono" id="wizard-claude-key" type="password" placeholder="sk-ant-..." onclick="event.stopPropagation()">
+              <div class="wizard-key-hint">IA & génération de copy</div>
+            </div>
+          </div>
+          <div class="wizard-key-row">
+            <div class="wizard-key-icon">📝</div>
+            <div class="wizard-key-input">
+              <div class="wizard-key-label">Notion Integration Token</div>
+              <input class="form-input mono" id="wizard-notion-key" type="password" placeholder="notion.so/my-integrations" onclick="event.stopPropagation()">
+              <div class="wizard-key-hint">Hub données & CRM</div>
+            </div>
+          </div>
+        </div>
+        <div class="wizard-actions">
+          <button class="btn btn-ghost" onclick="wizardGoTo(1)">Retour</button>
+          <button class="btn btn-primary" onclick="wizardSaveKeysAndNext()">Connecter & continuer</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Done -->
+      <div class="wizard-step" id="wizardStep3">
+        <div class="wizard-complete-icon">🚀</div>
+        <div class="wizard-complete-title">Vous êtes prêt !</div>
+        <div class="wizard-complete-desc">Votre espace Bakal est configuré. Voici ce que vous pouvez faire maintenant :</div>
+        <div class="wizard-checklist">
+          <div class="wizard-check-item"><span class="wizard-check-icon">💬</span> Discuter avec l'Assistant IA pour créer vos premières séquences</div>
+          <div class="wizard-check-item"><span class="wizard-check-icon">📊</span> Configurer votre profil entreprise pour des messages ultra-personnalisés</div>
+          <div class="wizard-check-item"><span class="wizard-check-icon">⚙️</span> Ajouter d'autres intégrations dans les Paramètres</div>
+        </div>
+        <div class="wizard-actions">
+          <button class="btn btn-primary" onclick="wizardFinish()" style="width:100%;">Commencer à prospecter</button>
+        </div>
+      </div>
+
+    </div>
+    <div class="wizard-skip" onclick="wizardFinish()">Passer la configuration</div>
+  </div>
+</div>
 
 </body>
 </html>

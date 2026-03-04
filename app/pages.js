@@ -806,6 +806,106 @@ function updateApiCatalogDots() {
   }
 }
 
+/* ═══════════════════════════════════════════════
+   Onboarding Wizard
+   ═══════════════════════════════════════════════ */
+
+function shouldShowWizard() {
+  return !localStorage.getItem('bakal_onboarding_done');
+}
+
+function wizardGoTo(step) {
+  // Update step visibility
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById(`wizardStep${i}`);
+    if (el) el.classList.toggle('active', i === step);
+  }
+  // Update dots
+  const dots = document.querySelectorAll('#wizardDots .wizard-step-dot');
+  dots.forEach((dot, idx) => {
+    dot.classList.remove('active', 'done');
+    if (idx + 1 === step) dot.classList.add('active');
+    else if (idx + 1 < step) dot.classList.add('done');
+  });
+}
+
+function wizardHandleFiles(files) {
+  if (!files || files.length === 0) return;
+  const statusEl = document.getElementById('wizardUploadStatus');
+  if (statusEl) statusEl.textContent = `Uploading ${files.length} file(s)...`;
+
+  // Reuse the main upload handler
+  handleDocUpload(files).then(() => {
+    if (statusEl) statusEl.textContent = `${files.length} document(s) uploaded successfully`;
+    // Reset file input
+    const input = document.getElementById('wizardFileInput');
+    if (input) input.value = '';
+  }).catch(() => {
+    if (statusEl) statusEl.textContent = 'Upload failed — try again or skip';
+  });
+}
+
+async function wizardSaveKeysAndNext() {
+  const lemlist = document.getElementById('wizard-lemlist-key')?.value?.trim();
+  const claude = document.getElementById('wizard-claude-key')?.value?.trim();
+  const notion = document.getElementById('wizard-notion-key')?.value?.trim();
+
+  // Copy values to the main settings inputs
+  if (lemlist) {
+    const el = document.getElementById('settings-lemlist-key');
+    if (el) el.value = lemlist;
+  }
+  if (claude) {
+    const el = document.getElementById('settings-claude-key');
+    if (el) el.value = claude;
+  }
+  if (notion) {
+    const el = document.getElementById('settings-notion-token');
+    if (el) el.value = notion;
+  }
+
+  // Save via existing saveSettings mechanism
+  if (lemlist || claude || notion) {
+    const keysToSave = {};
+    if (lemlist) keysToSave.lemlistKey = lemlist;
+    if (claude) keysToSave.claudeKey = claude;
+    if (notion) keysToSave.notionToken = notion;
+
+    if (typeof BakalAPI !== 'undefined') {
+      try {
+        await BakalAPI.saveKeys(keysToSave);
+        await loadSettingsKeys();
+      } catch { /* proceed anyway */ }
+    }
+  }
+
+  wizardGoTo(3);
+}
+
+function wizardFinish() {
+  localStorage.setItem('bakal_onboarding_done', '1');
+  const overlay = document.getElementById('wizardOverlay');
+  if (overlay) {
+    overlay.style.transition = 'opacity 0.3s';
+    overlay.style.opacity = '0';
+    setTimeout(() => { overlay.style.display = 'none'; }, 300);
+  }
+  // Navigate to chat (default page)
+  if (typeof showPage === 'function') showPage('chat');
+}
+
+function initWizardDropzone() {
+  const dz = document.getElementById('wizardDropzone');
+  if (!dz) return;
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.style.borderColor = 'var(--accent)'; });
+  dz.addEventListener('dragleave', () => { dz.style.borderColor = 'var(--border-light)'; });
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dz.style.borderColor = 'var(--border-light)';
+    if (e.dataTransfer.files.length) wizardHandleFiles(e.dataTransfer.files);
+  });
+}
+
 /* ═══ Init — Load saved data on page load ═══ */
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
@@ -815,4 +915,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initDocDropzone();
   loadDocuments();
   filterApiCatalog();
+
+  // Show onboarding wizard for first-time users
+  if (shouldShowWizard()) {
+    const overlay = document.getElementById('wizardOverlay');
+    if (overlay) {
+      overlay.style.display = 'flex';
+      initWizardDropzone();
+    }
+  }
 });
