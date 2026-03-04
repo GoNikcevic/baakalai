@@ -4,34 +4,50 @@
    ═══════════════════════════════════════════════════ */
 
 /* ═══ Profile Page — Save ═══ */
-function saveProfile() {
+async function saveProfile() {
   const data = {
     company: document.getElementById('profil-company')?.value,
     sector: document.getElementById('profil-sector')?.value,
     website: document.getElementById('profil-website')?.value,
-    teamSize: document.getElementById('profil-team-size')?.value,
+    team_size: document.getElementById('profil-team-size')?.value,
     description: document.getElementById('profil-description')?.value,
-    valueProp: document.getElementById('profil-value-prop')?.value,
-    socialProof: document.getElementById('profil-social-proof')?.value,
-    painPoints: document.getElementById('profil-pain-points')?.value,
+    value_prop: document.getElementById('profil-value-prop')?.value,
+    social_proof: document.getElementById('profil-social-proof')?.value,
+    pain_points: document.getElementById('profil-pain-points')?.value,
     objections: document.getElementById('profil-objections')?.value,
-    personaPrimary: document.getElementById('profil-persona-primary')?.value,
-    personaSecondary: document.getElementById('profil-persona-secondary')?.value,
-    targetSectors: document.getElementById('profil-target-sectors')?.value,
-    targetSize: document.getElementById('profil-target-size')?.value,
-    targetZones: document.getElementById('profil-target-zones')?.value,
-    defaultTone: document.getElementById('profil-default-tone')?.value,
-    defaultFormality: document.getElementById('profil-default-formality')?.value,
-    avoidWords: document.getElementById('profil-avoid-words')?.value,
-    signaturePhrases: document.getElementById('profil-signature-phrases')?.value,
+    persona_primary: document.getElementById('profil-persona-primary')?.value,
+    persona_secondary: document.getElementById('profil-persona-secondary')?.value,
+    target_sectors: document.getElementById('profil-target-sectors')?.value,
+    target_size: document.getElementById('profil-target-size')?.value,
+    target_zones: document.getElementById('profil-target-zones')?.value,
+    default_tone: document.getElementById('profil-default-tone')?.value,
+    default_formality: document.getElementById('profil-default-formality')?.value,
+    avoid_words: document.getElementById('profil-avoid-words')?.value,
+    signature_phrases: document.getElementById('profil-signature-phrases')?.value,
   };
 
-  // Store in localStorage for now (backend will handle persistence later)
+  // Also keep in localStorage as fallback
   localStorage.setItem('bakal_profile', JSON.stringify(data));
 
-  // Flash save confirmation
   const btn = document.querySelector('#page-profil .btn-primary');
   const original = btn.innerHTML;
+
+  // Save to backend
+  try {
+    const token = localStorage.getItem('bakal-token');
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Save failed');
+  } catch {
+    // Backend not available — localStorage fallback already done
+  }
+
   btn.innerHTML = '✅ Enregistré';
   btn.style.background = 'var(--success)';
   setTimeout(() => {
@@ -40,51 +56,87 @@ function saveProfile() {
   }, 2000);
 }
 
-function loadProfile() {
+async function loadProfile() {
+  // Try backend first
+  try {
+    const token = localStorage.getItem('bakal-token');
+    const res = await fetch('/api/profile', {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    });
+    if (res.ok) {
+      const { profile } = await res.json();
+      if (profile) {
+        populateProfileForm(profile);
+        return;
+      }
+    }
+  } catch { /* backend not available */ }
+
+  // Fallback to localStorage
   const saved = localStorage.getItem('bakal_profile');
   if (!saved) return;
   try {
     const data = JSON.parse(saved);
-    const fields = {
-      'profil-company': data.company,
-      'profil-sector': data.sector,
-      'profil-website': data.website,
-      'profil-description': data.description,
-      'profil-value-prop': data.valueProp,
-      'profil-social-proof': data.socialProof,
-      'profil-pain-points': data.painPoints,
-      'profil-objections': data.objections,
-      'profil-persona-primary': data.personaPrimary,
-      'profil-persona-secondary': data.personaSecondary,
-      'profil-target-sectors': data.targetSectors,
-      'profil-target-size': data.targetSize,
-      'profil-target-zones': data.targetZones,
-      'profil-avoid-words': data.avoidWords,
-      'profil-signature-phrases': data.signaturePhrases,
-    };
-    Object.entries(fields).forEach(([id, val]) => {
-      const el = document.getElementById(id);
-      if (el && val) el.value = val;
+    // Remap camelCase keys to snake_case for the form populator
+    populateProfileForm({
+      company: data.company, sector: data.sector, website: data.website,
+      team_size: data.team_size || data.teamSize,
+      description: data.description, value_prop: data.value_prop || data.valueProp,
+      social_proof: data.social_proof || data.socialProof,
+      pain_points: data.pain_points || data.painPoints,
+      objections: data.objections,
+      persona_primary: data.persona_primary || data.personaPrimary,
+      persona_secondary: data.persona_secondary || data.personaSecondary,
+      target_sectors: data.target_sectors || data.targetSectors,
+      target_size: data.target_size || data.targetSize,
+      target_zones: data.target_zones || data.targetZones,
+      default_tone: data.default_tone || data.defaultTone,
+      default_formality: data.default_formality || data.defaultFormality,
+      avoid_words: data.avoid_words || data.avoidWords,
+      signature_phrases: data.signature_phrases || data.signaturePhrases,
     });
-    if (data.teamSize) {
-      const sel = document.getElementById('profil-team-size');
-      for (let i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].text === data.teamSize) sel.selectedIndex = i;
+  } catch { /* ignore parse errors */ }
+}
+
+function populateProfileForm(data) {
+  const textFields = {
+    'profil-company': data.company,
+    'profil-sector': data.sector,
+    'profil-website': data.website,
+    'profil-description': data.description,
+    'profil-value-prop': data.value_prop,
+    'profil-social-proof': data.social_proof,
+    'profil-pain-points': data.pain_points,
+    'profil-objections': data.objections,
+    'profil-persona-primary': data.persona_primary,
+    'profil-persona-secondary': data.persona_secondary,
+    'profil-target-sectors': data.target_sectors,
+    'profil-target-size': data.target_size,
+    'profil-target-zones': data.target_zones,
+    'profil-avoid-words': data.avoid_words,
+    'profil-signature-phrases': data.signature_phrases,
+  };
+  Object.entries(textFields).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el && val) el.value = val;
+  });
+
+  const selectFields = {
+    'profil-team-size': data.team_size,
+    'profil-default-tone': data.default_tone,
+    'profil-default-formality': data.default_formality,
+  };
+  Object.entries(selectFields).forEach(([id, val]) => {
+    if (!val) return;
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    for (let i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].text === val || sel.options[i].value === val) {
+        sel.selectedIndex = i;
+        break;
       }
     }
-    if (data.defaultTone) {
-      const sel = document.getElementById('profil-default-tone');
-      for (let i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].text === data.defaultTone) sel.selectedIndex = i;
-      }
-    }
-    if (data.defaultFormality) {
-      const sel = document.getElementById('profil-default-formality');
-      for (let i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].text === data.defaultFormality) sel.selectedIndex = i;
-      }
-    }
-  } catch (e) { /* ignore parse errors */ }
+  });
 }
 
 /* ═══ Settings Page — Save ═══ */

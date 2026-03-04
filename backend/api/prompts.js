@@ -26,6 +26,10 @@ function masterPrompt(params) {
     personalizationLevel = 'Standard',
     zone = '',
     language = 'fr',
+    avoidWords = '',
+    signaturePhrases = '',
+    objections = '',
+    documentContext = '',
   } = params;
 
   const channelInstructions = {
@@ -57,7 +61,7 @@ Tu génères des séquences de prospection complètes, personnalisées et prête
 - Longueur : ${length}
 - Langue : ${language === 'fr' ? 'Français' : 'English'}
 
-### Séquence
+${avoidWords ? `### Contraintes de vocabulaire\n- Mots/expressions à éviter : ${avoidWords}\n` : ''}${signaturePhrases ? `### Vocabulaire maison\n- Expressions à privilégier : ${signaturePhrases}\n` : ''}${objections ? `### Objections fréquentes à anticiper\n${objections}\n` : ''}${documentContext ? `### Contexte business (extraits de documents)\n${documentContext.slice(0, 4000)}\n` : ''}### Séquence
 - Canal : ${channel}
 - ${channelInstructions[channel] || channelInstructions.email}
 - Angle d'approche : ${angle}
