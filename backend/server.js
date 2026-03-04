@@ -11,6 +11,7 @@ const dashboardRouter = require('./routes/dashboard');
 const aiRouter = require('./routes/ai');
 const chatRouter = require('./routes/chat');
 const settingsRouter = require('./routes/settings');
+const documentsRouter = require('./routes/documents');
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use('/api/dashboard', requireAuth, dashboardRouter);
 app.use('/api/ai', requireAuth, aiRouter);
 app.use('/api/chat', requireAuth, chatRouter);
 app.use('/api/settings', requireAuth, settingsRouter);
+app.use('/api/documents', requireAuth, documentsRouter);
 
 // Error handling
 app.use(errorHandler);

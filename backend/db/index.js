@@ -172,6 +172,20 @@ function migrate(db) {
 
     CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
     CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+
+    CREATE TABLE IF NOT EXISTS documents (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      filename        TEXT NOT NULL,
+      original_name   TEXT NOT NULL,
+      mime_type       TEXT,
+      file_size       INTEGER,
+      file_path       TEXT NOT NULL,
+      parsed_text     TEXT,
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
   `);
 
   // Add user_id column to campaigns if not present
@@ -645,6 +659,42 @@ const refreshTokens = {
   },
 };
 
+// =============================================
+// Documents
+// =============================================
+
+const documents = {
+  listByUser(userId) {
+    return getDb().prepare(
+      'SELECT id, filename, original_name, mime_type, file_size, created_at FROM documents WHERE user_id = ? ORDER BY created_at DESC'
+    ).all(userId);
+  },
+
+  get(id) {
+    return getDb().prepare('SELECT * FROM documents WHERE id = ?').get(id);
+  },
+
+  create(data) {
+    const stmt = getDb().prepare(
+      'INSERT INTO documents (user_id, filename, original_name, mime_type, file_size, file_path, parsed_text) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    const result = stmt.run(
+      data.userId, data.filename, data.originalName, data.mimeType, data.fileSize, data.filePath, data.parsedText || null
+    );
+    return { id: result.lastInsertRowid, ...data };
+  },
+
+  delete(id) {
+    return getDb().prepare('DELETE FROM documents WHERE id = ?').run(id);
+  },
+
+  getParsedTextByUser(userId) {
+    return getDb().prepare(
+      'SELECT original_name, parsed_text FROM documents WHERE user_id = ? AND parsed_text IS NOT NULL ORDER BY created_at DESC'
+    ).all(userId);
+  },
+};
+
 module.exports = {
   getDb,
   campaigns,
@@ -658,4 +708,5 @@ module.exports = {
   settings,
   users,
   refreshTokens,
+  documents,
 };

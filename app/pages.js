@@ -582,10 +582,152 @@ function initTheme() {
   });
 }
 
+/* ═══════════════════════════════════════════════
+   Documents Upload
+   ═══════════════════════════════════════════════ */
+
+function initDocDropzone() {
+  const dropzone = document.getElementById('docDropzone');
+  if (!dropzone) return;
+
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('drag-over');
+  });
+  dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('drag-over');
+  });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) {
+      handleDocUpload(e.dataTransfer.files);
+    }
+  });
+}
+
+async function handleDocUpload(files) {
+  if (!files || files.length === 0) return;
+
+  const progress = document.getElementById('docUploadProgress');
+  if (progress) progress.style.display = 'block';
+
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('files', file);
+  }
+
+  try {
+    const token = localStorage.getItem('bakal-token');
+    const res = await fetch('/api/documents/upload', {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Upload failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    if (typeof showToast === 'function') {
+      showToast(`${data.uploaded.length} document(s) uploaded`, 'success');
+    }
+    loadDocuments();
+  } catch (err) {
+    console.error('Upload error:', err);
+    if (typeof showToast === 'function') {
+      showToast(err.message || 'Upload failed', 'error');
+    }
+  } finally {
+    if (progress) progress.style.display = 'none';
+    // Reset file input
+    const input = document.getElementById('docFileInput');
+    if (input) input.value = '';
+  }
+}
+
+async function loadDocuments() {
+  const list = document.getElementById('docList');
+  const count = document.getElementById('docCount');
+  if (!list) return;
+
+  try {
+    const token = localStorage.getItem('bakal-token');
+    const res = await fetch('/api/documents', {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    });
+
+    if (!res.ok) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Could not load documents</div>';
+      return;
+    }
+
+    const data = await res.json();
+    const docs = data.documents || [];
+
+    if (count) count.textContent = `${docs.length} document${docs.length !== 1 ? 's' : ''}`;
+
+    if (docs.length === 0) {
+      list.innerHTML = '';
+      return;
+    }
+
+    const icons = {
+      'application/pdf': '📕',
+      'text/plain': '📝',
+      'text/csv': '📊',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📘',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': '📙',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📗',
+    };
+
+    list.innerHTML = docs.map(doc => {
+      const icon = icons[doc.mime_type] || (doc.mime_type?.startsWith('image/') ? '🖼️' : '📄');
+      const size = doc.file_size < 1024 * 1024
+        ? `${(doc.file_size / 1024).toFixed(0)} KB`
+        : `${(doc.file_size / (1024 * 1024)).toFixed(1)} MB`;
+      const date = new Date(doc.created_at).toLocaleDateString();
+      return `<div class="doc-item">
+        <div class="doc-icon">${icon}</div>
+        <div class="doc-info">
+          <div class="doc-name" title="${doc.original_name}">${doc.original_name}</div>
+          <div class="doc-meta">${size} — ${date}</div>
+        </div>
+        <button class="doc-delete" onclick="deleteDocument(${doc.id})" title="Delete">✕</button>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('Load documents error:', err);
+  }
+}
+
+async function deleteDocument(id) {
+  if (!confirm('Delete this document?')) return;
+
+  try {
+    const token = localStorage.getItem('bakal-token');
+    const res = await fetch(`/api/documents/${id}`, {
+      method: 'DELETE',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    });
+
+    if (res.ok) {
+      if (typeof showToast === 'function') showToast('Document deleted', 'success');
+      loadDocuments();
+    }
+  } catch (err) {
+    console.error('Delete error:', err);
+  }
+}
+
 /* ═══ Init — Load saved data on page load ═══ */
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   loadProfile();
   loadSettingsPrefs();
   loadSettingsKeys();
+  initDocDropzone();
+  loadDocuments();
 });

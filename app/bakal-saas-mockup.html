@@ -526,6 +526,16 @@ body {
 }
 .inspiration-panel.show { display: block; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#docDropzone.drag-over { border-color: var(--accent); background: var(--accent-glow, rgba(108, 92, 231, 0.08)); }
+.doc-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.doc-item .doc-icon { font-size: 18px; flex-shrink: 0; }
+.doc-item .doc-info { flex: 1; min-width: 0; }
+.doc-item .doc-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc-item .doc-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.doc-item .doc-delete { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--text-muted); padding: 4px 8px; border-radius: 4px; transition: all 0.15s; }
+.doc-item .doc-delete:hover { background: rgba(255,0,0,0.08); color: #e74c3c; }
 .inspi-header {
   display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
 }
@@ -3303,6 +3313,33 @@ body {
     </div>
 
     <div class="settings-grid">
+      <!-- Document Upload Zone -->
+      <div class="card" id="docUploadCard">
+        <div class="card-header">
+          <div class="card-title">📄 Business Documents</div>
+          <div style="font-size:12px;color:var(--text-muted);" id="docCount">0 documents</div>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Upload your pitch decks, brochures, case studies, and any content that describes your business. The AI uses these to understand your context and craft personalized outreach.</p>
+
+          <div id="docDropzone" style="border:2px dashed var(--border-light);border-radius:12px;padding:40px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg-subtle);" onclick="document.getElementById('docFileInput').click()">
+            <div style="font-size:32px;margin-bottom:12px;">📁</div>
+            <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Drag & drop files here</div>
+            <div style="font-size:13px;color:var(--text-muted);">or click to browse — PDF, DOCX, PPTX, XLSX, CSV, TXT, images (max 20MB)</div>
+            <input type="file" id="docFileInput" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp" style="display:none;" onchange="handleDocUpload(this.files)">
+          </div>
+
+          <div id="docUploadProgress" style="display:none;margin-top:16px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="spinner" style="width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;"></div>
+              <span style="font-size:13px;color:var(--text-secondary);">Uploading & parsing...</span>
+            </div>
+          </div>
+
+          <div id="docList" style="margin-top:16px;display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+      </div>
+
       <!-- Connection Status Dashboard -->
       <div class="card">
         <div class="card-header"><div class="card-title">📡 État des connexions</div><button class="btn btn-ghost" style="font-size:11px;padding:6px 12px;" onclick="testApiConnections()">🔄 Tester</button></div>
