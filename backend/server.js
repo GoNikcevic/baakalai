@@ -13,6 +13,7 @@ const chatRouter = require('./routes/chat');
 const settingsRouter = require('./routes/settings');
 const documentsRouter = require('./routes/documents');
 const profileRouter = require('./routes/profile');
+const statsRouter = require('./routes/stats');
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use('/api/chat', requireAuth, chatRouter);
 app.use('/api/settings', requireAuth, settingsRouter);
 app.use('/api/documents', requireAuth, documentsRouter);
 app.use('/api/profile', requireAuth, profileRouter);
+app.use('/api/stats', requireAuth, statsRouter);
 
 // Error handling
 app.use(errorHandler);
