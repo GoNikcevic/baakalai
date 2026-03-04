@@ -2226,6 +2226,21 @@ body {
 
   .refine-overview { grid-template-columns: 1fr; }
   .variant-metrics { grid-template-columns: repeat(2, 1fr); }
+
+  /* API Catalog mobile */
+  .api-catalog-toolbar { flex-direction: column; }
+  .api-catalog-filters { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; }
+  .api-cat-filter { flex-shrink: 0; }
+  .api-card-top { flex-wrap: wrap; }
+  .api-card-status { margin-left: 0; margin-top: 4px; width: 100%; }
+
+  /* Wizard mobile */
+  .wizard-modal { border-radius: 16px; }
+  .wizard-header { padding: 24px 20px 0; }
+  .wizard-body { padding: 20px; }
+  .wizard-title { font-size: 19px; }
+  .wizard-actions { flex-direction: column; }
+  .wizard-actions .btn { width: 100%; }
 }
 
 @media (max-width: 600px) {
@@ -2263,6 +2278,23 @@ body {
   .reco-filters { gap: 6px; }
   .reco-filter { font-size: 11px; padding: 5px 10px; }
   .demo-toggle { bottom: 68px; }
+
+  /* API Catalog small mobile */
+  .api-card { padding: 14px; }
+  .api-card-icon { width: 40px; height: 40px; font-size: 22px; }
+  .api-card-name { font-size: 13px; }
+  .api-card-desc { font-size: 11px; }
+
+  /* Wizard small mobile */
+  .wizard-modal { max-height: 95vh; }
+  .wizard-header { padding: 20px 16px 0; }
+  .wizard-body { padding: 16px; }
+  .wizard-logo { font-size: 28px; }
+  .wizard-title { font-size: 17px; }
+  .wizard-subtitle { font-size: 12px; }
+  .wizard-step-title { font-size: 15px; }
+  .wizard-key-row { flex-direction: column; align-items: stretch; }
+  .wizard-key-icon { display: none; }
 }
 </style>
 </head>
