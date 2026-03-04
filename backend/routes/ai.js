@@ -10,6 +10,39 @@ function isDryRun(req) {
   return req.query.dry_run === 'true' || req.query.dry_run === '1';
 }
 
+// Enrich params with user profile defaults and document context
+function enrichWithProfile(params, userId) {
+  const profile = db.profiles.get(userId);
+  if (profile) {
+    // Fill missing params from profile (don't override explicit values)
+    if (!params.companyName && profile.company) params.companyName = profile.company;
+    if (!params.sector && profile.sector) params.sector = profile.sector;
+    if (!params.valueProp && profile.value_prop) params.valueProp = profile.value_prop;
+    if (!params.painPoints && profile.pain_points) params.painPoints = profile.pain_points;
+    if (!params.socialProof && profile.social_proof) params.socialProof = profile.social_proof;
+    if (!params.tone && profile.default_tone) params.tone = profile.default_tone;
+    if (!params.formality && profile.default_formality) params.formality = profile.default_formality;
+    if (!params.zone && profile.target_zones) params.zone = profile.target_zones;
+    if (!params.position && profile.persona_primary) params.position = profile.persona_primary;
+    if (!params.size && profile.target_size) params.size = profile.target_size;
+    // Pass copy preferences
+    if (profile.avoid_words) params.avoidWords = profile.avoid_words;
+    if (profile.signature_phrases) params.signaturePhrases = profile.signature_phrases;
+    if (profile.objections) params.objections = profile.objections;
+  }
+
+  // Attach document context (truncated)
+  const docs = db.documents.getParsedTextByUser(userId);
+  if (docs && docs.length > 0) {
+    const docText = docs
+      .map(d => `[${d.original_name}] ${(d.parsed_text || '').slice(0, 1500)}`)
+      .join('\n\n');
+    params.documentContext = docText.slice(0, 6000);
+  }
+
+  return params;
+}
+
 // =============================================
 // POST /api/ai/generate-sequence
 // Generate a full sequence from campaign parameters
@@ -17,7 +50,7 @@ function isDryRun(req) {
 
 router.post('/generate-sequence', async (req, res, next) => {
   try {
-    const params = req.body;
+    const params = enrichWithProfile(req.body, req.user.id);
 
     if (!params.sector && !params.position) {
       return res.status(400).json({ error: 'Au moins sector ou position requis' });
@@ -67,7 +100,8 @@ router.post('/generate-sequence', async (req, res, next) => {
 
 router.post('/generate-touchpoint', async (req, res, next) => {
   try {
-    const { type, ...params } = req.body;
+    const { type, ...rawParams } = req.body;
+    const params = enrichWithProfile(rawParams, req.user.id);
 
     if (!type) {
       return res.status(400).json({

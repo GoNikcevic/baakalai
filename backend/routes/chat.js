@@ -60,11 +60,54 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       content: m.content,
     }));
 
-    // Build context from existing campaigns (scoped to user)
+    // Build rich context from profile + documents + campaigns
+    const contextParts = [];
+
+    // User profile
+    const profile = db.profiles.get(req.user.id);
+    if (profile) {
+      const profileLines = [];
+      if (profile.company) profileLines.push(`Entreprise: ${profile.company}`);
+      if (profile.sector) profileLines.push(`Secteur: ${profile.sector}`);
+      if (profile.description) profileLines.push(`Description: ${profile.description}`);
+      if (profile.value_prop) profileLines.push(`Proposition de valeur: ${profile.value_prop}`);
+      if (profile.social_proof) profileLines.push(`Preuves sociales: ${profile.social_proof}`);
+      if (profile.pain_points) profileLines.push(`Pain points clients: ${profile.pain_points}`);
+      if (profile.persona_primary) profileLines.push(`Persona principal: ${profile.persona_primary}`);
+      if (profile.persona_secondary) profileLines.push(`Persona secondaire: ${profile.persona_secondary}`);
+      if (profile.target_sectors) profileLines.push(`Secteurs cibles: ${profile.target_sectors}`);
+      if (profile.target_size) profileLines.push(`Taille cible: ${profile.target_size}`);
+      if (profile.target_zones) profileLines.push(`Zones géographiques: ${profile.target_zones}`);
+      if (profile.default_tone) profileLines.push(`Ton: ${profile.default_tone}`);
+      if (profile.default_formality) profileLines.push(`Formalité: ${profile.default_formality}`);
+      if (profile.avoid_words) profileLines.push(`Mots à éviter: ${profile.avoid_words}`);
+      if (profile.signature_phrases) profileLines.push(`Expressions signatures: ${profile.signature_phrases}`);
+      if (profile.objections) profileLines.push(`Objections fréquentes: ${profile.objections}`);
+      if (profileLines.length > 0) {
+        contextParts.push(`PROFIL ENTREPRISE:\n${profileLines.join('\n')}`);
+      }
+    }
+
+    // Uploaded documents context (truncated to avoid token overflow)
+    const docs = db.documents.getParsedTextByUser(req.user.id);
+    if (docs && docs.length > 0) {
+      const docContext = docs
+        .map(d => `--- ${d.original_name} ---\n${(d.parsed_text || '').slice(0, 2000)}`)
+        .join('\n\n');
+      if (docContext.length > 0) {
+        contextParts.push(`DOCUMENTS BUSINESS (extraits):\n${docContext.slice(0, 8000)}`);
+      }
+    }
+
+    // Existing campaigns
     const campaigns = db.campaigns.list({ userId: req.user.id });
-    const context = campaigns.length > 0
-      ? `Campagnes existantes: ${campaigns.map(c => `"${c.name}" (${c.status}, ${c.channel})`).join(', ')}`
-      : 'Aucune campagne créée pour le moment.';
+    if (campaigns.length > 0) {
+      contextParts.push(`CAMPAGNES EXISTANTES:\n${campaigns.map(c => `"${c.name}" (${c.status}, ${c.channel})`).join(', ')}`);
+    } else {
+      contextParts.push('Aucune campagne créée pour le moment.');
+    }
+
+    const context = contextParts.join('\n\n');
 
     // Call Claude
     const aiResponse = await claude.chat(claudeMessages, context);

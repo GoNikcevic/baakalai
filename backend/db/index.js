@@ -186,6 +186,29 @@ function migrate(db) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
+
+    CREATE TABLE IF NOT EXISTS user_profiles (
+      user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      company         TEXT,
+      sector          TEXT,
+      website         TEXT,
+      team_size       TEXT,
+      description     TEXT,
+      value_prop      TEXT,
+      social_proof    TEXT,
+      pain_points     TEXT,
+      objections      TEXT,
+      persona_primary TEXT,
+      persona_secondary TEXT,
+      target_sectors  TEXT,
+      target_size     TEXT,
+      target_zones    TEXT,
+      default_tone    TEXT DEFAULT 'Pro décontracté',
+      default_formality TEXT DEFAULT 'Vous',
+      avoid_words     TEXT,
+      signature_phrases TEXT,
+      updated_at      TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // Add user_id column to campaigns if not present
@@ -695,6 +718,58 @@ const documents = {
   },
 };
 
+// =============================================
+// User Profiles
+// =============================================
+
+const profiles = {
+  get(userId) {
+    return getDb().prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(userId);
+  },
+
+  upsert(userId, data) {
+    const existing = this.get(userId);
+    if (existing) {
+      const sets = [];
+      const vals = [];
+      const fields = [
+        'company', 'sector', 'website', 'team_size', 'description',
+        'value_prop', 'social_proof', 'pain_points', 'objections',
+        'persona_primary', 'persona_secondary', 'target_sectors',
+        'target_size', 'target_zones', 'default_tone', 'default_formality',
+        'avoid_words', 'signature_phrases',
+      ];
+      for (const f of fields) {
+        if (data[f] !== undefined) {
+          sets.push(`${f} = ?`);
+          vals.push(data[f]);
+        }
+      }
+      if (sets.length === 0) return existing;
+      sets.push("updated_at = datetime('now')");
+      vals.push(userId);
+      getDb().prepare(`UPDATE user_profiles SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals);
+    } else {
+      getDb().prepare(`
+        INSERT INTO user_profiles (user_id, company, sector, website, team_size, description,
+          value_prop, social_proof, pain_points, objections, persona_primary, persona_secondary,
+          target_sectors, target_size, target_zones, default_tone, default_formality,
+          avoid_words, signature_phrases)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        userId, data.company || null, data.sector || null, data.website || null,
+        data.team_size || null, data.description || null, data.value_prop || null,
+        data.social_proof || null, data.pain_points || null, data.objections || null,
+        data.persona_primary || null, data.persona_secondary || null,
+        data.target_sectors || null, data.target_size || null, data.target_zones || null,
+        data.default_tone || 'Pro décontracté', data.default_formality || 'Vous',
+        data.avoid_words || null, data.signature_phrases || null
+      );
+    }
+    return this.get(userId);
+  },
+};
+
 module.exports = {
   getDb,
   campaigns,
@@ -709,4 +784,5 @@ module.exports = {
   users,
   refreshTokens,
   documents,
+  profiles,
 };
