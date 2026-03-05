@@ -39,27 +39,50 @@ const BakalAuth = (() => {
   }
 
   async function login(email, password) {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
-    setSession(data.token, data.refreshToken, data.user);
-    return data.user;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) throw new Error('offline');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Login failed');
+      setSession(data.token, data.refreshToken, data.user);
+      return data.user;
+    } catch (err) {
+      // Backend unreachable (GitHub Pages / offline) — demo mode
+      if (err.message === 'offline' || err.name === 'TypeError') {
+        const demoUser = { name: email.split('@')[0], email, role: 'demo' };
+        setSession('demo-token', null, demoUser);
+        return demoUser;
+      }
+      throw err;
+    }
   }
 
   async function register(name, email, password, company) {
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, company }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Registration failed');
-    setSession(data.token, data.refreshToken, data.user);
-    return data.user;
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, company }),
+      });
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) throw new Error('offline');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Registration failed');
+      setSession(data.token, data.refreshToken, data.user);
+      return data.user;
+    } catch (err) {
+      if (err.message === 'offline' || err.name === 'TypeError') {
+        const demoUser = { name, email, role: 'demo' };
+        setSession('demo-token', null, demoUser);
+        return demoUser;
+      }
+      throw err;
+    }
   }
 
   /**
