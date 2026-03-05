@@ -2116,6 +2116,8 @@ body {
 .wizard-key-input .form-input { width: 100%; }
 .wizard-key-label { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
 .wizard-key-hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.wizard-opt-expand.open { display: block !important; }
+.wizard-optional-card:hover { border-color: var(--border-light) !important; }
 .wizard-complete-icon { font-size: 56px; text-align: center; margin-bottom: 16px; }
 .wizard-complete-title { font-size: 20px; font-weight: 800; text-align: center; margin-bottom: 8px; }
 .wizard-complete-desc { font-size: 14px; color: var(--text-secondary); text-align: center; line-height: 1.6; }
@@ -2263,6 +2265,8 @@ body {
   .wizard-step-title { font-size: 15px; }
   .wizard-key-row { flex-direction: column; align-items: stretch; }
   .wizard-key-icon { display: none; }
+  #wizardStep1 [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+  #wizardStep2 [style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
 }
 </style>
 </head>
@@ -3434,12 +3438,19 @@ body {
           <div style="font-size:12px;color:var(--text-muted);" id="docCount">0 documents</div>
         </div>
         <div class="card-body">
-          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Upload your pitch decks, brochures, case studies, and any content that describes your business. The AI uses these to understand your context and craft personalized outreach.</p>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">L'IA analyse vos documents pour rédiger des messages personnalisés et crédibles.</p>
 
-          <div id="docDropzone" style="border:2px dashed var(--border-light);border-radius:12px;padding:40px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg-subtle);" onclick="document.getElementById('docFileInput').click()">
-            <div style="font-size:32px;margin-bottom:12px;">📁</div>
-            <div style="font-size:15px;font-weight:600;margin-bottom:4px;">Drag & drop files here</div>
-            <div style="font-size:13px;color:var(--text-muted);">or click to browse — PDF, DOCX, PPTX, XLSX, CSV, TXT, images (max 20MB)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">🏢 <strong>Votre offre</strong> — Plaquette, tarifs, page services</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">🏆 <strong>Vos résultats</strong> — Cas clients, témoignages</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">🎯 <strong>Votre cible</strong> — Liste prospects, ICP</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">💬 <strong>Vos échanges</strong> — Emails passés, scripts</div>
+          </div>
+
+          <div id="docDropzone" style="border:2px dashed var(--border-light);border-radius:12px;padding:32px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg-subtle);" onclick="document.getElementById('docFileInput').click()">
+            <div style="font-size:28px;margin-bottom:8px;">📁</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Glissez vos fichiers ici</div>
+            <div style="font-size:12px;color:var(--text-muted);">ou cliquez pour parcourir — PDF, DOCX, PPTX, XLSX, CSV, TXT, images (max 20MB)</div>
             <input type="file" id="docFileInput" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp" style="display:none;" onchange="handleDocUpload(this.files)">
           </div>
 
@@ -4305,15 +4316,42 @@ body {
 
       <!-- Step 1: Documents -->
       <div class="wizard-step active" id="wizardStep1">
-        <div class="wizard-step-title">1. Uploadez vos documents business</div>
-        <div class="wizard-step-desc">Pitch decks, brochures, cas clients, offres commerciales... L'IA analyse vos documents pour comprendre votre activité et personnaliser chaque message.</div>
-        <div id="wizardDropzone" style="border:2px dashed var(--border-light);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;background:var(--bg-elevated);" onclick="document.getElementById('wizardFileInput').click()">
-          <div style="font-size:28px;margin-bottom:8px;">📁</div>
+        <div class="wizard-step-title">1. Partagez vos documents business</div>
+        <div class="wizard-step-desc">L'IA analyse vos documents pour rédiger des messages de prospection personnalisés et crédibles. Voici ce qui l'aide le plus :</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;">
+          <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="font-size:16px;margin-bottom:4px;">🏢 <strong>Votre offre</strong></div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.4;">Plaquette commerciale, grille tarifaire, page services de votre site...</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;font-style:italic;">→ Pour décrire votre valeur ajoutée avec vos mots</div>
+          </div>
+          <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="font-size:16px;margin-bottom:4px;">🏆 <strong>Vos résultats</strong></div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.4;">Études de cas, témoignages clients, chiffres clés...</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;font-style:italic;">→ Pour intégrer des preuves sociales crédibles</div>
+          </div>
+          <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="font-size:16px;margin-bottom:4px;">🎯 <strong>Votre cible</strong></div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.4;">Liste de prospects (CSV/Excel), description de votre client idéal...</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;font-style:italic;">→ Pour personnaliser le ton et les accroches</div>
+          </div>
+          <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px;">
+            <div style="font-size:16px;margin-bottom:4px;">💬 <strong>Vos échanges</strong></div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.4;">Emails de prospection passés, scripts de vente, FAQ...</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;font-style:italic;">→ Pour s'adapter à votre style de communication</div>
+          </div>
+        </div>
+
+        <div id="wizardDropzone" style="border:2px dashed var(--border-light);border-radius:12px;padding:24px 20px;text-align:center;cursor:pointer;background:var(--bg-elevated);" onclick="document.getElementById('wizardFileInput').click()">
+          <div style="font-size:24px;margin-bottom:6px;">📁</div>
           <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Glissez vos fichiers ici</div>
           <div style="font-size:12px;color:var(--text-muted);">ou cliquez pour parcourir — PDF, DOCX, PPTX, XLSX, CSV, TXT, images</div>
           <input type="file" id="wizardFileInput" multiple accept=".pdf,.docx,.pptx,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp" style="display:none;" onchange="wizardHandleFiles(this.files)">
         </div>
         <div id="wizardUploadStatus" style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:center;"></div>
+        <div style="text-align:center;margin-top:8px;padding:8px 12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;color:var(--text-secondary);">
+          Pas besoin d'avoir tout — même 1 ou 2 documents suffisent pour démarrer. Vous pourrez en ajouter à tout moment.
+        </div>
         <div class="wizard-actions">
           <button class="btn btn-ghost" onclick="wizardGoTo(2)">Passer cette étape</button>
           <button class="btn btn-primary" onclick="wizardGoTo(2)">Continuer</button>
@@ -4322,34 +4360,156 @@ body {
 
       <!-- Step 2: Core APIs -->
       <div class="wizard-step" id="wizardStep2">
-        <div class="wizard-step-title">2. Connectez vos outils essentiels</div>
-        <div class="wizard-step-desc">Les 3 intégrations principales pour démarrer. Vous pourrez en ajouter d'autres dans les Paramètres.</div>
+        <div class="wizard-step-title">2. Connectez vos outils</div>
+        <div class="wizard-step-desc">Commencez par les 3 essentiels, puis ajoutez les optionnels selon vos besoins.</div>
+
+        <!-- Essentiels -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--accent);margin-bottom:8px;">Essentiels pour démarrer</div>
         <div class="wizard-core-keys">
           <div class="wizard-key-row">
             <div class="wizard-key-icon">✉️</div>
             <div class="wizard-key-input">
-              <div class="wizard-key-label">Lemlist API Key</div>
+              <div class="wizard-key-label">Lemlist API Key <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— Outreach</span></div>
               <input class="form-input mono" id="wizard-lemlist-key" type="password" placeholder="Copiez depuis Lemlist → Settings → API" onclick="event.stopPropagation()">
-              <div class="wizard-key-hint">Envoi d'emails & LinkedIn</div>
+              <div class="wizard-key-hint">Envoi d'emails & séquences LinkedIn</div>
             </div>
           </div>
           <div class="wizard-key-row">
             <div class="wizard-key-icon">🤖</div>
             <div class="wizard-key-input">
-              <div class="wizard-key-label">Anthropic API Key (Claude)</div>
+              <div class="wizard-key-label">Anthropic API Key <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— Intelligence IA</span></div>
               <input class="form-input mono" id="wizard-claude-key" type="password" placeholder="sk-ant-..." onclick="event.stopPropagation()">
-              <div class="wizard-key-hint">IA & génération de copy</div>
+              <div class="wizard-key-hint">Génération de copy & analyse de performance</div>
             </div>
           </div>
           <div class="wizard-key-row">
             <div class="wizard-key-icon">📝</div>
             <div class="wizard-key-input">
-              <div class="wizard-key-label">Notion Integration Token</div>
+              <div class="wizard-key-label">Notion Integration Token <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— Hub & CRM</span></div>
               <input class="form-input mono" id="wizard-notion-key" type="password" placeholder="notion.so/my-integrations" onclick="event.stopPropagation()">
-              <div class="wizard-key-hint">Hub données & CRM</div>
+              <div class="wizard-key-hint">Hub données, suivi campagnes & CRM</div>
             </div>
           </div>
         </div>
+
+        <!-- Optionnels par catégorie -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin:16px 0 8px;">Boostez vos résultats <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;background:var(--bg-elevated);padding:2px 6px;border-radius:4px;margin-left:4px;">Optionnel</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+
+          <!-- Outreach alternatif -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">📧</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">Instantly</div>
+                <div style="font-size:10px;color:var(--text-muted);">Outreach email alternatif</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-instantly-key" type="password" placeholder="API Key Instantly" onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+          <!-- IA alternatif -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">🧠</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">OpenAI</div>
+                <div style="font-size:10px;color:var(--text-muted);">IA alternative</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-openai-key" type="password" placeholder="sk-..." onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+          <!-- CRM -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">🔶</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">HubSpot</div>
+                <div style="font-size:10px;color:var(--text-muted);">CRM & pipeline</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-hubspot-key" type="password" placeholder="API Key HubSpot" onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+          <!-- CRM alternatif -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">🟢</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">Pipedrive</div>
+                <div style="font-size:10px;color:var(--text-muted);">CRM léger pour PME</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-pipedrive-key" type="password" placeholder="API Key Pipedrive" onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+          <!-- Enrichissement -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">🔍</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">Dropcontact</div>
+                <div style="font-size:10px;color:var(--text-muted);">Enrichissement RGPD</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-dropcontact-key" type="password" placeholder="API Key Dropcontact" onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+          <!-- Enrichissement / Prospection -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">🚀</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">Apollo.io</div>
+                <div style="font-size:10px;color:var(--text-muted);">Recherche de prospects</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-apollo-key" type="password" placeholder="API Key Apollo" onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+          <!-- Scraping -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">👻</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">PhantomBuster</div>
+                <div style="font-size:10px;color:var(--text-muted);">Scraping LinkedIn</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-phantom-key" type="password" placeholder="API Key PhantomBuster" onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+          <!-- Orchestration -->
+          <div class="wizard-optional-card" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;" onclick="this.querySelector('.wizard-opt-expand').classList.toggle('open')">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px;">⚙️</span>
+              <div>
+                <div style="font-size:12px;font-weight:600;">N8N / Make</div>
+                <div style="font-size:10px;color:var(--text-muted);">Orchestration workflows</div>
+              </div>
+            </div>
+            <div class="wizard-opt-expand" style="display:none;margin-top:8px;">
+              <input class="form-input mono" id="wizard-n8n-key" type="password" placeholder="Webhook URL ou API Key" onclick="event.stopPropagation()" style="font-size:12px;">
+            </div>
+          </div>
+
+        </div>
+
         <div class="wizard-actions">
           <button class="btn btn-ghost" onclick="wizardGoTo(1)">Retour</button>
           <button class="btn btn-primary" onclick="wizardSaveKeysAndNext()">Connecter & continuer</button>
