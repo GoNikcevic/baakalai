@@ -95,7 +95,7 @@ body {
 }
 .logo {
   display: flex; align-items: center; gap: 10px;
-  padding: 0 8px 20px; margin-bottom: 4px;
+  padding: 0 8px 20px; margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
 .logo-icon {
@@ -108,19 +108,19 @@ body {
 .logo-text { font-weight: 600; font-size: 16px; letter-spacing: -0.3px; }
 .logo-text span { color: var(--text-muted); font-weight: 400; }
 
-.nav { margin-top: 12px; flex: 1; }
-.nav-section { margin-bottom: 20px; }
+.nav { margin-top: 20px; flex: 1; }
+.nav-section { margin-bottom: 28px; }
 .nav-label {
   font-size: 11px; font-weight: 500; letter-spacing: 0;
   color: var(--text-muted);
-  padding: 0 10px; margin-bottom: 4px;
+  padding: 0 10px; margin-bottom: 6px;
 }
 .nav-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: var(--radius-sm);
+  padding: 9px 10px; border-radius: var(--radius-sm);
   color: var(--text-secondary); font-size: 13px; font-weight: 400;
   cursor: pointer; transition: all var(--transition);
-  margin-bottom: 1px;
+  margin-bottom: 2px;
 }
 .nav-item:hover { background: var(--accent-glow); color: var(--text-primary); }
 .nav-item.active {
@@ -134,35 +134,6 @@ body {
   color: var(--text-muted); font-size: 10px; font-weight: 500;
   padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border);
 }
-
-/* ── Stack section ── */
-.stack-section { padding: 0 4px; margin-bottom: 4px; }
-.stack-header {
-  display: flex; align-items: center; gap: 7px;
-  padding: 0 8px; margin-bottom: 6px;
-  font-size: 11px; font-weight: 500; letter-spacing: 0;
-  color: var(--text-muted);
-}
-.stack-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 5px 8px; border-radius: 6px;
-  font-size: 12px; color: var(--text-secondary); cursor: default;
-  transition: background 0.15s; margin-bottom: 1px;
-}
-.stack-item:hover { background: var(--accent-glow); }
-.stack-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.stack-dot.online { background: var(--success); box-shadow: 0 0 6px rgba(52, 211, 153, 0.3); }
-.stack-dot.offline { background: var(--danger); box-shadow: 0 0 6px rgba(248, 113, 113, 0.2); }
-.stack-dot.pending { background: var(--warning); box-shadow: 0 0 6px rgba(251, 191, 36, 0.2); }
-.stack-add {
-  display: flex; align-items: center; gap: 7px;
-  margin: 4px 4px 0; padding: 5px 10px;
-  background: transparent; border: 1px dashed var(--border);
-  border-radius: 6px; color: var(--text-muted);
-  font-family: inherit; font-size: 11px; cursor: pointer;
-  transition: all 0.18s; width: calc(100% - 8px);
-}
-.stack-add:hover { border-color: var(--text-secondary); color: var(--text-secondary); }
 
 /* ── Campaign sub-items in sidebar ── */
 .nav-campaign-item {
@@ -189,7 +160,6 @@ body {
 .sidebar-create-btn:hover { opacity: 0.85; transform: translateY(-1px); }
 .sidebar-create-btn svg { flex-shrink: 0; }
 
-.sidebar-sep { height: 1px; background: var(--border); margin: 8px 4px; }
 
 .sidebar-footer {
   border-top: 1px solid var(--border); padding-top: 12px; position: relative;
@@ -2179,9 +2149,7 @@ body {
   .sidebar .nav-label,
   .sidebar .nav-item span:not(.icon),
   .sidebar .nav-item .badge,
-  .sidebar .stack-section,
   .sidebar .sidebar-create-btn span,
-  .sidebar .sidebar-sep,
   .sidebar .user-info,
   .sidebar .user-chevron,
   .sidebar .nav-campaign-item { display: none; }
@@ -2323,25 +2291,6 @@ body {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Nouvelle campagne
   </button>
-
-  <div class="sidebar-sep"></div>
-
-  <!-- Stack: connected tools -->
-  <div class="stack-section">
-    <div class="stack-header">Stack</div>
-    <div id="sidebarStack">
-      <div class="stack-item"><span class="stack-dot online"></span>Lemlist</div>
-      <div class="stack-item"><span class="stack-dot online"></span>Notion</div>
-      <div class="stack-item"><span class="stack-dot pending" id="stackN8n"></span>N8N</div>
-      <div class="stack-item"><span class="stack-dot offline" id="stackClaude"></span>Claude API</div>
-    </div>
-    <button class="stack-add">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Ajouter
-    </button>
-  </div>
-
-  <div class="sidebar-sep"></div>
 
   <nav class="nav">
     <div class="nav-section">
