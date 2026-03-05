@@ -792,6 +792,16 @@ function toggleApiCard(card) {
   card.classList.toggle('open');
 }
 
+function toggleMoreApis() {
+  const section = document.getElementById('apiExtendedSection');
+  const label = document.getElementById('apiShowMoreLabel');
+  const chevron = document.getElementById('apiShowMoreChevron');
+  const isOpen = section.style.display !== 'none';
+  section.style.display = isOpen ? 'none' : '';
+  label.textContent = isOpen ? 'Voir plus d\'intégrations' : 'Masquer les intégrations';
+  chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
 function setApiCatFilter(cat, btn) {
   apiCatFilterActive = cat;
   document.querySelectorAll('.api-cat-filter').forEach(b => b.classList.remove('active'));
@@ -800,8 +810,8 @@ function setApiCatFilter(cat, btn) {
 }
 
 function filterApiCatalog() {
-  const query = (document.getElementById('apiCatalogSearch')?.value || '').toLowerCase();
-  const cards = document.querySelectorAll('.api-card');
+  const query = (document.getElementById('apiCatalogSearchExtended')?.value || '').toLowerCase();
+  const cards = document.querySelectorAll('#apiCatalogGridExtended .api-card');
   let visible = 0;
 
   cards.forEach(card => {
@@ -821,7 +831,7 @@ function filterApiCatalog() {
   });
 
   const countEl = document.getElementById('apiCatalogCount');
-  if (countEl) countEl.textContent = `${visible} intégration${visible !== 1 ? 's' : ''}`;
+  if (countEl) countEl.textContent = `${visible + 3} intégration${visible + 3 !== 1 ? 's' : ''}`;
 }
 
 function updateApiCatalogDots() {
@@ -967,6 +977,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initDocDropzone();
   loadDocuments();
   filterApiCatalog();
+  const moreCount = document.getElementById('apiMoreCount');
+  const extendedCards = document.querySelectorAll('#apiCatalogGridExtended .api-card');
+  if (moreCount) moreCount.textContent = extendedCards.length;
 
   // Show onboarding wizard for first-time users
   if (shouldShowWizard()) {
