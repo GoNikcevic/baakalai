@@ -3562,38 +3562,7 @@ body {
               </div>
             </div>
 
-          </div><!-- /api-catalog-grid (core only) -->
-
-          <!-- Voir plus toggle -->
-          <div id="apiShowMoreBtn" style="text-align:center;margin:16px 0 8px;">
-            <button class="btn btn-ghost" onclick="toggleMoreApis()" style="font-size:13px;padding:8px 20px;display:inline-flex;align-items:center;gap:6px;">
-              <span id="apiShowMoreLabel">Voir plus d'intégrations</span>
-              <span id="apiShowMoreChevron" style="font-size:10px;transition:transform 0.2s;">▼</span>
-              <span style="background:var(--bg-elevated);padding:2px 8px;border-radius:10px;font-size:11px;color:var(--text-muted);margin-left:4px;" id="apiMoreCount"></span>
-            </button>
-          </div>
-
-          <!-- Extended APIs (hidden by default) -->
-          <div id="apiExtendedSection" style="display:none;">
-            <!-- Search & Filters (moved here) -->
-            <div class="api-catalog-toolbar" style="margin-bottom:12px;">
-              <div class="api-catalog-search-wrap">
-                <input class="api-catalog-search" type="text" placeholder="Rechercher une intégration..." id="apiCatalogSearchExtended" oninput="filterApiCatalog()">
-              </div>
-              <div class="api-catalog-filters" id="apiCatalogFiltersExtended">
-                <button class="api-cat-filter active" data-cat="all" onclick="setApiCatFilter('all',this)">Toutes</button>
-                <button class="api-cat-filter" data-cat="crm" onclick="setApiCatFilter('crm',this)">CRM</button>
-                <button class="api-cat-filter" data-cat="enrichment" onclick="setApiCatFilter('enrichment',this)">Enrichissement</button>
-                <button class="api-cat-filter" data-cat="outreach" onclick="setApiCatFilter('outreach',this)">Outreach</button>
-                <button class="api-cat-filter" data-cat="scraping" onclick="setApiCatFilter('scraping',this)">Scraping</button>
-                <button class="api-cat-filter" data-cat="calendar" onclick="setApiCatFilter('calendar',this)">Calendrier</button>
-                <button class="api-cat-filter" data-cat="deliverability" onclick="setApiCatFilter('deliverability',this)">Délivrabilité</button>
-              </div>
-            </div>
-
-            <div class="api-catalog-grid" id="apiCatalogGridExtended">
-
-            <!-- ═══ CRM ═══ -->
+            <!-- ═══ CRM (visible) ═══ -->
             <div class="api-card" data-cat="crm" onclick="toggleApiCard(this)">
               <span class="api-card-chevron">▼</span>
               <div class="api-card-top">
@@ -3638,6 +3607,38 @@ body {
               </div>
             </div>
 
+          </div><!-- /api-catalog-grid (5 visible) -->
+
+          <!-- Voir plus toggle -->
+          <div id="apiShowMoreBtn" style="text-align:center;margin:16px 0 8px;">
+            <button class="btn btn-ghost" onclick="toggleMoreApis()" style="font-size:13px;padding:8px 20px;display:inline-flex;align-items:center;gap:6px;">
+              <span id="apiShowMoreLabel">Voir plus d'intégrations</span>
+              <span id="apiShowMoreChevron" style="font-size:10px;transition:transform 0.2s;">▼</span>
+              <span style="background:var(--bg-elevated);padding:2px 8px;border-radius:10px;font-size:11px;color:var(--text-muted);margin-left:4px;" id="apiMoreCount"></span>
+            </button>
+          </div>
+
+          <!-- Extended APIs (hidden by default) -->
+          <div id="apiExtendedSection" style="display:none;">
+            <!-- Search & Filters (moved here) -->
+            <div class="api-catalog-toolbar" style="margin-bottom:12px;">
+              <div class="api-catalog-search-wrap">
+                <input class="api-catalog-search" type="text" placeholder="Rechercher une intégration..." id="apiCatalogSearchExtended" oninput="filterApiCatalog()">
+              </div>
+              <div class="api-catalog-filters" id="apiCatalogFiltersExtended">
+                <button class="api-cat-filter active" data-cat="all" onclick="setApiCatFilter('all',this)">Toutes</button>
+                <button class="api-cat-filter" data-cat="crm" onclick="setApiCatFilter('crm',this)">CRM</button>
+                <button class="api-cat-filter" data-cat="enrichment" onclick="setApiCatFilter('enrichment',this)">Enrichissement</button>
+                <button class="api-cat-filter" data-cat="outreach" onclick="setApiCatFilter('outreach',this)">Outreach</button>
+                <button class="api-cat-filter" data-cat="scraping" onclick="setApiCatFilter('scraping',this)">Scraping</button>
+                <button class="api-cat-filter" data-cat="calendar" onclick="setApiCatFilter('calendar',this)">Calendrier</button>
+                <button class="api-cat-filter" data-cat="deliverability" onclick="setApiCatFilter('deliverability',this)">Délivrabilité</button>
+              </div>
+            </div>
+
+            <div class="api-catalog-grid" id="apiCatalogGridExtended">
+
+            <!-- ═══ CRM (extended) ═══ -->
             <div class="api-card" data-cat="crm" onclick="toggleApiCard(this)">
               <span class="api-card-chevron">▼</span>
               <div class="api-card-top">

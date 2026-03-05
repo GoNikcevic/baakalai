@@ -831,7 +831,8 @@ function filterApiCatalog() {
   });
 
   const countEl = document.getElementById('apiCatalogCount');
-  if (countEl) countEl.textContent = `${visible + 3} intégration${visible + 3 !== 1 ? 's' : ''}`;
+  const visibleBase = document.querySelectorAll('#apiCatalogGrid .api-card').length;
+  if (countEl) countEl.textContent = `${visible + visibleBase} intégration${visible + visibleBase !== 1 ? 's' : ''}`;
 }
 
 function updateApiCatalogDots() {
