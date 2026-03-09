@@ -921,6 +921,103 @@ function createCampaignLocally(campaignData) {
   return id;
 }
 
+/* ═══ Contextual suggestions ═══ */
+
+function getSuggestionsForContext(metadata) {
+  const campaigns = typeof BAKAL !== 'undefined' ? Object.values(BAKAL.campaigns) : [];
+  const activeCampaigns = campaigns.filter(c => c.status === 'active');
+  const hasCampaigns = campaigns.length > 0;
+
+  // After campaign creation
+  if (metadata && metadata.action === 'create_campaign') {
+    return [
+      'Créer cette campagne',
+      'Changer le canal',
+      'Modifier la cible',
+      'Changer l\'angle d\'approche',
+    ];
+  }
+
+  // Campaign confirmed and being created
+  if (_conv.stage === 'done') {
+    return [
+      'Créer une autre campagne',
+      'Analyser mes stats',
+      'Voir les intégrations disponibles',
+    ];
+  }
+
+  // Gathering params — suggest common values for what's missing
+  if (_conv.stage === 'gathering') {
+    const missing = getMissingParams();
+    if (missing.length > 0) {
+      const param = missing[0];
+      const quickSuggestions = {
+        sector: ['Tech & SaaS', 'Comptabilité & Finance', 'Conseil & Consulting'],
+        position: ['Dirigeant / CEO', 'DAF', 'DRH'],
+        channel: ['Email', 'LinkedIn', 'Multi (Email + LinkedIn)'],
+        zone: ['France entière', 'Île-de-France', 'Lyon / Rhône-Alpes'],
+        size: ['1-10 sal. (TPE)', '11-50 sal. (PME)', '50-200 sal. (ETI)'],
+      };
+      return quickSuggestions[param] || [];
+    }
+  }
+
+  // Waiting for confirmation
+  if (_conv.stage === 'confirm') {
+    return ['Oui, créer la campagne', 'Modifier quelque chose', 'Recommencer'];
+  }
+
+  // API keys flow
+  if (_conv.stage === 'api_keys') {
+    if (_conv.apiKeyField) {
+      return ['Passer', 'Voir un autre outil', 'Terminé'];
+    }
+    return ['Essentiels', 'CRM', 'Enrichissement', 'Terminé'];
+  }
+
+  // Default — init stage
+  const suggestions = [];
+  if (hasCampaigns) {
+    suggestions.push('Créer une nouvelle campagne');
+    if (activeCampaigns.length > 0) {
+      suggestions.push('Analyser mes campagnes actives');
+      suggestions.push('Optimiser une campagne');
+    }
+  } else {
+    suggestions.push('Créer ma première campagne');
+    suggestions.push('Quel angle pour le secteur tech ?');
+  }
+  suggestions.push('Configurer mes intégrations');
+  return suggestions;
+}
+
+function getWelcomeSuggestions() {
+  const campaigns = typeof BAKAL !== 'undefined' ? Object.values(BAKAL.campaigns) : [];
+  const active = campaigns.filter(c => c.status === 'active');
+
+  if (active.length > 0) {
+    const c = active[0];
+    return [
+      `Analyser "${c.name}"`,
+      'Créer une nouvelle campagne',
+      'Optimiser une campagne qui sous-performe',
+    ];
+  }
+  if (campaigns.length > 0) {
+    return [
+      'Créer une nouvelle campagne',
+      'Analyser mes stats',
+      'Quel angle pour mon secteur ?',
+    ];
+  }
+  return [
+    'Cibler des DAF en Île-de-France',
+    'Quel angle pour le secteur tech ?',
+    'Configurer mes intégrations',
+  ];
+}
+
 /* ═══ Thread management (local fallback) ═══ */
 
 let _localThreads = [];

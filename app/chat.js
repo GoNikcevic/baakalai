@@ -112,6 +112,18 @@ function showChatWelcome() {
   document.getElementById('chatMessagesInner').innerHTML = '';
   document.getElementById('chatInput').value = '';
   document.getElementById('chatInput').focus();
+  renderWelcomeSuggestions();
+}
+
+function renderWelcomeSuggestions() {
+  const container = document.getElementById('chatWelcomeSuggestions');
+  if (!container) return;
+  const suggestions = typeof getWelcomeSuggestions === 'function'
+    ? getWelcomeSuggestions()
+    : ['Cibler des DAF en Île-de-France', 'Optimiser ma campagne', 'Quel angle pour le secteur tech ?'];
+  container.innerHTML = suggestions.map(s =>
+    `<button class="chat-suggestion" onclick="sendSuggestion(this)">${s}</button>`
+  ).join('');
 }
 
 function showChatMessages() {
@@ -148,6 +160,22 @@ function appendMessage(role, content, metadata, animate = true) {
     actionCardHtml = renderActionCard(metadata.campaign);
   }
 
+  // Remove previous inline suggestions
+  const prevSuggestions = inner.querySelectorAll('.chat-inline-suggestions');
+  prevSuggestions.forEach(el => el.remove());
+
+  // Build inline suggestions for assistant messages
+  let suggestionsHtml = '';
+  if (role === 'assistant' && animate && typeof getSuggestionsForContext === 'function') {
+    const suggestions = getSuggestionsForContext(metadata);
+    if (suggestions && suggestions.length > 0) {
+      const chips = suggestions.map(s =>
+        `<button class="chat-inline-chip" onclick="sendChatMessage('${escapeHtml(s.replace(/'/g, "\\'"))}')">${escapeHtml(s)}</button>`
+      ).join('');
+      suggestionsHtml = `<div class="chat-inline-suggestions">${chips}</div>`;
+    }
+  }
+
   const msgHtml = `
     <div class="chat-msg ${role}"${animate ? ' style="animation:chatFadeIn 0.25s ease"' : ''}>
       <div class="chat-msg-avatar">${avatar}</div>
@@ -156,7 +184,7 @@ function appendMessage(role, content, metadata, animate = true) {
         ${actionCardHtml}
         <div class="chat-msg-time">${timeStr}</div>
       </div>
-    </div>`;
+    </div>${suggestionsHtml}`;
 
   inner.insertAdjacentHTML('beforeend', msgHtml);
   scrollChatToBottom();

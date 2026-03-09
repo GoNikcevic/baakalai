@@ -1697,6 +1697,22 @@ body {
   background: var(--accent-glow);
 }
 
+/* ── Inline suggestion chips (after assistant messages) ── */
+.chat-inline-suggestions {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; margin-bottom: 4px;
+  animation: chatFadeIn 0.3s ease 0.15s both;
+}
+.chat-inline-chip {
+  padding: 6px 12px; border-radius: 16px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted); font-size: 12px;
+  cursor: pointer; transition: all var(--transition); font-family: inherit;
+  white-space: nowrap;
+}
+.chat-inline-chip:hover {
+  border-color: var(--border-light); color: var(--text-secondary);
+  background: var(--accent-glow);
+}
+
 /* ── Message bubbles ── */
 .chat-msg { display: flex; gap: 12px; margin-bottom: 20px; animation: chatFadeIn 0.2s ease; }
 .chat-msg.user { flex-direction: row-reverse; }
@@ -3242,12 +3258,8 @@ body {
             </button>
           </div>
 
-          <!-- Suggestion chips -->
-          <div class="chat-suggestions">
-            <button class="chat-suggestion" onclick="sendSuggestion(this)">Cibler des DAF en &Icirc;le-de-France</button>
-            <button class="chat-suggestion" onclick="sendSuggestion(this)">Optimiser ma campagne qui sous-performe</button>
-            <button class="chat-suggestion" onclick="sendSuggestion(this)">Quel angle pour le secteur tech ?</button>
-          </div>
+          <!-- Suggestion chips (dynamic) -->
+          <div class="chat-suggestions" id="chatWelcomeSuggestions"></div>
         </div>
 
         <!-- Messages area (hidden until first message) -->
