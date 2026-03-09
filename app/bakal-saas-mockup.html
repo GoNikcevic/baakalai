@@ -2397,10 +2397,16 @@ body {
     <div class="logo-text">bakal<span>.ai</span></div>
   </div>
 
-  <button class="sidebar-create-btn" onclick="toggleCreator()">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-    Nouvelle campagne
-  </button>
+  <div style="display:flex;flex-direction:column;gap:6px;padding:0 16px;">
+    <button class="sidebar-create-btn" onclick="toggleCreator()" style="margin:0;width:100%;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nouvelle campagne
+    </button>
+    <button class="sidebar-create-btn" onclick="toggleProjectCreator()" style="margin:0;width:100%;background:transparent;border:1px solid var(--border);color:var(--text-secondary);">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nouveau projet
+    </button>
+  </div>
 
   <nav class="nav">
     <div class="nav-section">
@@ -4298,6 +4304,12 @@ body {
     <div class="creator-body">
       <div class="form-grid">
         <div class="form-group full">
+          <label class="form-label">Projet</label>
+          <select class="form-select" id="creator-project">
+            <option value="">— Aucun projet —</option>
+          </select>
+        </div>
+        <div class="form-group full">
           <label class="form-label">Nom de la campagne</label>
           <input class="form-input" id="creator-name" placeholder="Ex: DRH PME Lyon — Mars 2026">
         </div>
@@ -4392,6 +4404,46 @@ body {
     <div class="creator-footer" id="creatorFooter">
       <button class="btn btn-ghost" onclick="toggleCreator()">Annuler</button>
       <button class="btn btn-primary" onclick="createCampaign()">🚀 Créer la campagne</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PROJECT CREATOR MODAL ═══════════ -->
+<div class="creator-overlay" id="projectCreatorModal">
+  <div class="creator-modal" style="max-width:480px;">
+    <div class="creator-header">
+      <h2>📁 Nouveau projet</h2>
+      <button class="creator-close" onclick="toggleProjectCreator()">✕</button>
+    </div>
+    <div class="creator-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">Nom du projet</label>
+          <input class="form-input" id="project-creator-name" placeholder="Ex: FormaPro Consulting — Q1 2026">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Client</label>
+          <input class="form-input" id="project-creator-client" placeholder="Nom du client">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Description</label>
+          <input class="form-input" id="project-creator-desc" placeholder="Ex: Prospection multi-cible pour cabinet de formation">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Couleur</label>
+          <select class="form-select" id="project-creator-color">
+            <option value="var(--blue)">Bleu</option>
+            <option value="var(--purple)">Violet</option>
+            <option value="var(--orange)">Orange</option>
+            <option value="var(--success)">Vert</option>
+            <option value="var(--danger)">Rouge</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="creator-footer" id="projectCreatorFooter">
+      <button class="btn btn-ghost" onclick="toggleProjectCreator()">Annuler</button>
+      <button class="btn btn-primary" onclick="createProject()">📁 Créer le projet</button>
     </div>
   </div>
 </div>

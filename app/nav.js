@@ -43,6 +43,7 @@ function toggleCreator() {
   // Reset footer to default state when opening
   if (document.getElementById('creatorModal').classList.contains('show')) {
     resetCreatorFooter();
+    populateProjectSelector();
   }
 }
 
@@ -154,10 +155,112 @@ function showPage(page, section) {
   });
 }
 
+/* ═══ Project Creator ═══ */
+function toggleProjectCreator() {
+  document.getElementById('projectCreatorModal').classList.toggle('show');
+  if (document.getElementById('projectCreatorModal').classList.contains('show')) {
+    // Reset footer
+    document.getElementById('projectCreatorFooter').innerHTML = `
+      <button class="btn btn-ghost" onclick="toggleProjectCreator()">Annuler</button>
+      <button class="btn btn-primary" onclick="createProject()">📁 Créer le projet</button>
+    `;
+    // Pre-fill client from profile if available
+    const profile = JSON.parse(localStorage.getItem('bakal_profile') || '{}');
+    const clientInput = document.getElementById('project-creator-client');
+    if (clientInput && !clientInput.value && profile.company) {
+      clientInput.value = profile.company;
+    }
+  }
+}
+
+async function createProject() {
+  const name = document.getElementById('project-creator-name').value.trim();
+  const client = document.getElementById('project-creator-client').value.trim();
+  const description = document.getElementById('project-creator-desc').value.trim();
+  const color = document.getElementById('project-creator-color').value;
+
+  if (!name) {
+    const input = document.getElementById('project-creator-name');
+    input.style.boxShadow = '0 0 0 2px var(--danger)';
+    input.placeholder = 'Veuillez nommer votre projet';
+    input.focus();
+    input.addEventListener('input', function handler() {
+      input.style.boxShadow = '';
+      input.placeholder = 'Ex: FormaPro Consulting — Q1 2026';
+      input.removeEventListener('input', handler);
+    });
+    return;
+  }
+
+  const id = name.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  // Persist to backend
+  let backendId = null;
+  if (typeof BakalAPI !== 'undefined' && _backendAvailable) {
+    try {
+      const res = await BakalAPI.request('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({ name, client, description, color }),
+      });
+      backendId = res.id;
+    } catch (err) {
+      console.warn('Backend project create failed:', err.message);
+      if (typeof showToast === 'function') showToast('Erreur serveur — projet sauvé localement', 'warning');
+    }
+  }
+
+  const today = new Date();
+  const projectId = backendId ? String(backendId) : id;
+
+  if (typeof BAKAL !== 'undefined') {
+    BAKAL.projects[projectId] = {
+      id: projectId,
+      name,
+      client: client || name,
+      description: description || '',
+      color,
+      createdDate: today.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
+      campaignIds: [],
+      files: []
+    };
+    initFromData();
+    populateProjectSelector();
+  }
+
+  // Success feedback
+  const footer = document.getElementById('projectCreatorFooter');
+  footer.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;flex:1;">
+      <span style="font-size:18px;">✅</span>
+      <div>
+        <div style="font-weight:600;font-size:14px;">Projet « ${name} » créé</div>
+        <div style="font-size:12px;color:var(--text-muted);">${client || 'Pas de client'} · ${description || 'Pas de description'}</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="toggleProjectCreator(); document.getElementById('project-creator-name').value=''; document.getElementById('project-creator-client').value=''; document.getElementById('project-creator-desc').value='';">Fermer</button>
+  `;
+
+  // Announce in chat
+  if (typeof announceChatEvent === 'function') {
+    announceChatEvent(`📁 Projet « ${name} » créé${client ? ` pour ${client}` : ''}.`);
+  }
+}
+
+function populateProjectSelector() {
+  const sel = document.getElementById('creator-project');
+  if (!sel || typeof BAKAL === 'undefined') return;
+  const projects = Object.values(BAKAL.projects || {});
+  sel.innerHTML = '<option value="">— Aucun projet —</option>'
+    + projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+}
+
 /* ═══ Creator form ═══ */
 function getCreatorFormValues() {
   return {
     name:     document.getElementById('creator-name').value.trim(),
+    projectId: document.getElementById('creator-project').value || null,
     sector:   document.getElementById('creator-sector').value,
     position: document.getElementById('creator-position').value,
     size:     document.getElementById('creator-size').value,
@@ -219,14 +322,26 @@ async function createCampaign() {
   };
   const ch = channelMap[values.channel] || channelMap['Email + LinkedIn'];
 
+  // Resolve client name from project or profile (never hardcode)
+  let clientName = '';
+  if (values.projectId && typeof BAKAL !== 'undefined' && BAKAL.projects[values.projectId]) {
+    clientName = BAKAL.projects[values.projectId].client || BAKAL.projects[values.projectId].name;
+  }
+  if (!clientName) {
+    const profile = JSON.parse(localStorage.getItem('bakal_profile') || '{}');
+    clientName = profile.company || '';
+  }
+
   // Persist to backend if available
   let backendId = null;
+  let backendError = false;
   if (typeof BakalAPI !== 'undefined' && _backendAvailable) {
     try {
       const created = await BakalAPI.createCampaign(values);
       backendId = created.id;
     } catch (err) {
       console.warn('Backend create failed:', err.message);
+      backendError = true;
     }
   }
 
@@ -239,7 +354,8 @@ async function createCampaign() {
       _backendId: backendId,
       id: backendId ? String(backendId) : id,
       name: values.name,
-      client: 'FormaPro Consulting',
+      projectId: values.projectId || null,
+      client: clientName,
       status: 'prep',
       channel: ch.channel,
       channelLabel: ch.label,
@@ -279,18 +395,29 @@ async function createCampaign() {
       }
     };
 
+    // Link campaign to project
+    if (values.projectId && BAKAL.projects[values.projectId]) {
+      const proj = BAKAL.projects[values.projectId];
+      if (!proj.campaignIds) proj.campaignIds = [];
+      proj.campaignIds.push(backendId ? String(backendId) : id);
+    }
+
     // Re-render all sections (handles empty→populated transition)
     initFromData();
   }
 
-  // Show success state in footer
+  // Show success/warning state in footer
   const footer = document.getElementById('creatorFooter');
+  const projectLabel = values.projectId && BAKAL.projects[values.projectId] ? ` → ${BAKAL.projects[values.projectId].name}` : '';
+  const icon = backendError ? '⚠️' : '✅';
+  const warningLine = backendError ? '<div style="font-size:11px;color:var(--orange);margin-top:2px;">Sauvegarde serveur échouée — données locales uniquement</div>' : '';
   footer.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;flex:1;">
-      <span style="font-size:18px;">✅</span>
+      <span style="font-size:18px;">${icon}</span>
       <div>
-        <div style="font-weight:600;font-size:14px;">Campagne « ${values.name} » créée</div>
+        <div style="font-weight:600;font-size:14px;">Campagne « ${values.name} » créée${projectLabel}</div>
         <div style="font-size:12px;color:var(--text-muted);">${values.channel} · ${values.sector} · ${values.angle} · ${values.zone}</div>
+        ${warningLine}
       </div>
     </div>
     <button class="btn btn-primary" onclick="toggleCreator(); resetCreatorForm();">Fermer</button>

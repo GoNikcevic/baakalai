@@ -34,7 +34,7 @@ async function saveProfile() {
 
   // Save to backend
   try {
-    const token = localStorage.getItem('bakal-token');
+    const token = localStorage.getItem('bakal_token');
     const res = await fetch('/api/profile', {
       method: 'POST',
       headers: {
@@ -59,7 +59,7 @@ async function saveProfile() {
 async function loadProfile() {
   // Try backend first
   try {
-    const token = localStorage.getItem('bakal-token');
+    const token = localStorage.getItem('bakal_token');
     const res = await fetch('/api/profile', {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     });
@@ -678,7 +678,7 @@ async function handleDocUpload(files) {
   }
 
   try {
-    const token = localStorage.getItem('bakal-token');
+    const token = localStorage.getItem('bakal_token');
     const res = await fetch('/api/documents/upload', {
       method: 'POST',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -714,7 +714,7 @@ async function loadDocuments() {
   if (!list) return;
 
   try {
-    const token = localStorage.getItem('bakal-token');
+    const token = localStorage.getItem('bakal_token');
     const res = await fetch('/api/documents', {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     });
@@ -767,7 +767,7 @@ async function deleteDocument(id) {
   if (!confirm('Delete this document?')) return;
 
   try {
-    const token = localStorage.getItem('bakal-token');
+    const token = localStorage.getItem('bakal_token');
     const res = await fetch(`/api/documents/${id}`, {
       method: 'DELETE',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -909,11 +909,22 @@ function wizardHandleFiles(files) {
 }
 
 async function wizardSaveKeysAndNext() {
+  // Essential keys
   const lemlist = document.getElementById('wizard-lemlist-key')?.value?.trim();
   const claude = document.getElementById('wizard-claude-key')?.value?.trim();
   const notion = document.getElementById('wizard-notion-key')?.value?.trim();
 
-  // Copy values to the main settings inputs
+  // Optional keys
+  const instantly = document.getElementById('wizard-instantly-key')?.value?.trim();
+  const openai = document.getElementById('wizard-openai-key')?.value?.trim();
+  const hubspot = document.getElementById('wizard-hubspot-key')?.value?.trim();
+  const pipedrive = document.getElementById('wizard-pipedrive-key')?.value?.trim();
+  const dropcontact = document.getElementById('wizard-dropcontact-key')?.value?.trim();
+  const apollo = document.getElementById('wizard-apollo-key')?.value?.trim();
+  const phantom = document.getElementById('wizard-phantom-key')?.value?.trim();
+  const n8n = document.getElementById('wizard-n8n-key')?.value?.trim();
+
+  // Copy essential values to the main settings inputs
   if (lemlist) {
     const el = document.getElementById('settings-lemlist-key');
     if (el) el.value = lemlist;
@@ -927,18 +938,28 @@ async function wizardSaveKeysAndNext() {
     if (el) el.value = notion;
   }
 
-  // Save via existing saveSettings mechanism
-  if (lemlist || claude || notion) {
-    const keysToSave = {};
-    if (lemlist) keysToSave.lemlistKey = lemlist;
-    if (claude) keysToSave.claudeKey = claude;
-    if (notion) keysToSave.notionToken = notion;
+  // Build keys payload (essential + optional)
+  const keysToSave = {};
+  if (lemlist) keysToSave.lemlistKey = lemlist;
+  if (claude) keysToSave.claudeKey = claude;
+  if (notion) keysToSave.notionToken = notion;
+  if (instantly) keysToSave.instantlyKey = instantly;
+  if (openai) keysToSave.openaiKey = openai;
+  if (hubspot) keysToSave.hubspotKey = hubspot;
+  if (pipedrive) keysToSave.pipedriveKey = pipedrive;
+  if (dropcontact) keysToSave.dropcontactKey = dropcontact;
+  if (apollo) keysToSave.apolloKey = apollo;
+  if (phantom) keysToSave.phantomKey = phantom;
+  if (n8n) keysToSave.n8nKey = n8n;
 
-    if (typeof BakalAPI !== 'undefined') {
-      try {
-        await BakalAPI.saveKeys(keysToSave);
-        await loadSettingsKeys();
-      } catch { /* proceed anyway */ }
+  if (Object.keys(keysToSave).length > 0 && typeof BakalAPI !== 'undefined') {
+    try {
+      await BakalAPI.saveKeys(keysToSave);
+      await loadSettingsKeys();
+      if (typeof showToast === 'function') showToast(`${Object.keys(keysToSave).length} clé(s) sauvegardée(s)`, 'success');
+    } catch (err) {
+      console.error('Wizard key save failed:', err);
+      if (typeof showToast === 'function') showToast('Erreur lors de la sauvegarde des clés — réessayez dans Paramètres', 'error');
     }
   }
 
