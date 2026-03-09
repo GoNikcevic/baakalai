@@ -686,6 +686,8 @@ function buildResponse(userText) {
     response = handleOptimizationQuery(text);
   } else if (_conv.stage === 'init' && (lower.includes('angle') || lower.includes('approche')) && lower.includes('secteur')) {
     response = handleAngleQuery(text);
+  } else if (_conv.stage === 'init' && handleStrategicQuery(text)) {
+    response = handleStrategicQuery(text);
   } else if (_conv.stage === 'confirm') {
     response = handleConfirmation(text);
   } else {
@@ -1078,6 +1080,83 @@ function handleAngleQuery(text) {
   };
 }
 
+/* ═══ Strategic knowledge base ═══ */
+
+const KNOWLEDGE_BASE = [
+  {
+    triggers: ['meilleur moment', 'quand envoyer', 'heure', 'jour', 'timing', 'quel jour', 'quelle heure', 'horaire'],
+    answer: `### Meilleur timing d'envoi\n\n**Email B2B :**\n- **Mardi et jeudi matin (9h-10h30)** — meilleur taux d'ouverture (+15% vs moyenne)\n- Éviter le lundi matin (boîte saturée) et le vendredi après-midi\n- Les relances en milieu de semaine (mercredi) fonctionnent bien\n\n**LinkedIn :**\n- **Mardi-jeudi, 8h-9h ou 17h-18h** — pics de connexion\n- Les notes envoyées le week-end ont un taux d'acceptation plus bas (-8pts)\n\n**Espacement entre touchpoints :**\n- E1 → E2 : 3 jours (assez pour lire, pas assez pour oublier)\n- E2 → E3 : 4-5 jours (changement d'angle)\n- E3 → E4 (break-up) : 5-7 jours`,
+  },
+  {
+    triggers: ['combien touchpoint', 'combien email', 'combien de messages', 'nombre de relance', 'combien relance', 'trop de relance', 'nombre touchpoint', 'combien de mail'],
+    answer: `### Nombre optimal de touchpoints\n\n**Email seul :** 4 touchpoints est le sweet spot\n- E1 (initial) → E2 (valeur/preuve) → E3 (angle différent) → E4 (break-up)\n- Au-delà de 4, le taux de désinscription monte significativement\n- 80% des réponses arrivent sur E1 et E2\n\n**LinkedIn seul :** 2 touchpoints\n- Note de connexion (max 300 chars, pas de pitch)\n- Message post-connexion (conversationnel)\n\n**Multi-canal (recommandé) :** 5 touchpoints\n- Email + LinkedIn combinés → +40% de taux de réponse vs email seul\n- Le LinkedIn entre deux emails crée un "effet de présence"\n\n**Règle d'or :** Mieux vaut 4 messages bien écrits que 8 messages moyens.`,
+  },
+  {
+    triggers: ['tu ou vous', 'tutoyer', 'vouvoyer', 'tutoiement', 'vouvoiement', 'formel', 'informel', 'formalité'],
+    answer: `### Tu vs Vous en prospection B2B\n\n**Vous (défaut recommandé) :**\n- Secteurs traditionnels (finance, juridique, industrie, santé)\n- Cibles senior (DAF, DG, DRH)\n- Premier contact avec des grands comptes\n\n**Tu envisageable :**\n- Startups et scale-ups tech\n- Cibles junior-mid (Growth, Marketing, DevRel)\n- Si votre propre marque est très décontractée\n\n**Notre constat :** Le vouvoiement ne fait jamais perdre de deal. Le tutoiement peut en faire perdre. En cas de doute, vouvoyez.\n\n**Astuce :** Commencez en "vous" puis passez au "tu" naturellement si le prospect répond de manière informelle.`,
+  },
+  {
+    triggers: ['objet email', 'subject line', 'ligne objet', 'titre email', 'quel objet', 'objet efficace'],
+    answer: `### Rédiger des objets email efficaces\n\n**Ce qui fonctionne :**\n- **Personnalisation** : "{{firstName}}, une question rapide" (+12pts d'ouverture)\n- **Curiosité** : "Une idée pour {{companyName}}" \n- **Re:** en follow-up : crée un effet de thread (+15pts)\n- **Court** : 4-7 mots idéalement\n\n**Ce qui ne fonctionne pas :**\n- Majuscules ("URGENT", "OFFRE") → spam filter\n- Émojis en B2B (sauf secteur créatif) → -5pts d'ouverture\n- Trop générique ("Proposition de collaboration")\n- Mensonger ("Re:" sur un premier email → perte de confiance)\n\n**A/B testing :** Toujours tester 2 variantes d'objet. 200 envois minimum pour un résultat fiable.\n\n**Nos top performers :**\n1. "{{firstName}}, une question sur {{companyName}}"\n2. "Idée pour votre [problème spécifique]"\n3. "{{firstName}} — 15 min cette semaine ?"`,
+  },
+  {
+    triggers: ['longueur', 'combien de mots', 'email court', 'email long', 'taille du message', 'message court', 'message long'],
+    answer: `### Longueur idéale des messages\n\n**Email initial (E1) :** 3-5 phrases max\n- Hook (1 phrase) → Contexte (1-2 phrases) → CTA question (1 phrase)\n- Les emails de plus de 150 mots perdent 30% de réponses\n\n**Email valeur (E2) :** 4-6 phrases\n- Peut être un peu plus long car il apporte de la preuve\n- Mais toujours scannable (paragraphes courts)\n\n**Email break-up (E4) :** 2-3 phrases MAXIMUM\n- Le plus court de la séquence\n- Jamais de culpabilisation\n\n**Note LinkedIn :** Max 300 caractères (limite plateforme)\n- Pas de pitch, juste une raison de connecter\n\n**Message LinkedIn :** 3-4 phrases\n- Conversationnel, comme un message à un collègue`,
+  },
+  {
+    triggers: ['cta', 'call to action', 'appel à l\'action', 'question ouverte', 'proposition call', 'demander rdv', 'comment conclure'],
+    answer: `### Quel CTA utiliser ?\n\n**Question ouverte (recommandé en E1) :**\n- "C'est aussi un sujet chez {{companyName}} ?" → +3pts de réponse vs proposition de call\n- Moins engageant, plus naturel, ouvre la conversation\n\n**Proposition de call (E2 ou E3) :**\n- "15 minutes cette semaine pour en discuter ?" → bon en follow-up\n- Trop direct en premier contact (sauf secteurs transactionnels)\n\n**Lien Calendly :**\n- Uniquement après un échange positif ou en E3\n- En E1, ça fait spam\n\n**Soft close (E4 break-up) :**\n- "Mon offre reste ouverte" → crée la rareté sans pression\n- 5-10% des réponses arrivent sur le break-up\n\n**Nos données :** CTA question ouverte > proposition call > Calendly en premier contact.`,
+  },
+  {
+    triggers: ['délivrabilité', 'deliverability', 'spam', 'inbox', 'warm up', 'warmup', 'email en spam', 'boîte de réception'],
+    answer: `### Optimiser la délivrabilité\n\n**Les bases :**\n- **SPF, DKIM, DMARC** configurés sur votre domaine\n- **Warm-up** de 2-3 semaines avant d'envoyer en volume (Mailreach, Warmbox)\n- **Volume progressif** : commencer à 20-30/jour, monter à 50-80/jour max\n\n**Red flags à éviter :**\n- Plus de 80 emails/jour/boîte\n- Taux de bounce > 5% (nettoyez vos listes !)\n- Liens trackés en masse (1 lien max par email)\n- Pièces jointes en cold email\n- Mots spam : "gratuit", "offre limitée", "cliquez ici"\n\n**Monitoring :**\n- Vérifiez votre score expéditeur sur mail-tester.com\n- Un taux d'ouverture < 30% = problème de délivrabilité\n\n**Outils recommandés :** Mailreach ou Warmbox pour le warm-up, Dropcontact pour la vérification d'emails.`,
+  },
+  {
+    triggers: ['linkedin', 'note de connexion', 'linkedin message', 'profil linkedin', 'social selling', 'connection request'],
+    answer: `### Best practices LinkedIn\n\n**Note de connexion (max 300 chars) :**\n- JAMAIS de pitch commercial\n- Mentionnez un point commun (secteur, ville, connexion mutuelle)\n- "Ravi d'échanger" > "Je souhaiterais vous présenter"\n- Benchmark : 30-40% d'acceptation = bon\n\n**Message post-connexion :**\n- Attendre 2-3 jours après l'acceptation\n- Conversationnel, comme un message entre pairs\n- UNE question ouverte, pas un pavé\n- Benchmark : 5-8% de réponse = bon\n\n**Profil optimisé (indispensable) :**\n- Photo pro, bannière avec proposition de valeur\n- Titre orienté bénéfice ("J'aide les X à Y") pas titre de poste\n- 3+ posts récents pour crédibiliser\n\n**Multi-canal :** Le combo Email J+0 → LinkedIn J+2 → Email J+5 est le plus efficace.`,
+  },
+  {
+    triggers: ['taux', 'benchmark', 'bon taux', 'taux moyen', 'kpi', 'objectif', 'indicateur'],
+    answer: `### Benchmarks B2B (cold outreach)\n\n**Email :**\n| Métrique | 🔴 Faible | 🟡 Correct | 🟢 Bon | 🚀 Excellent |\n|----------|-----------|------------|--------|-------------|\n| Ouverture | <35% | 35-50% | 50-65% | >65% |\n| Réponse | <2% | 2-5% | 5-8% | >8% |\n| Désinscription | >3% | 1.5-3% | <1.5% | <0.5% |\n\n**LinkedIn :**\n| Métrique | 🔴 Faible | 🟡 Correct | 🟢 Bon |\n|----------|-----------|------------|--------|\n| Acceptation | <20% | 20-30% | >30% |\n| Réponse | <3% | 3-5% | >5% |\n\n**Conversion globale :**\n- Prospect → Réponse positive : 2-5%\n- Réponse positive → RDV : 30-50%\n- RDV → Client : 15-30%\n\n**Règle :** Il faut ~200 prospects contactés pour des stats fiables.`,
+  },
+  {
+    triggers: ['combien de prospect', 'volume', 'taille liste', 'combien envoyer', 'nombre prospect', 'liste prospect'],
+    answer: `### Volume et taille de liste\n\n**Volume recommandé par campagne :**\n- **Minimum :** 100 prospects (pour des stats exploitables)\n- **Idéal :** 200-500 prospects\n- **Maximum par boîte email :** 50-80/jour\n\n**Pour atteindre vos objectifs :**\n- Objectif 3 RDV/mois → ~300 prospects contactés\n- Objectif 5 RDV/mois → ~500 prospects contactés\n- Objectif 10 RDV/mois → ~1000 prospects (2 campagnes)\n\n**Qualité > Quantité :**\n- Une liste de 200 prospects ultra-ciblés > 1000 prospects vagues\n- Le ciblage précis (secteur + poste + taille + zone) multiplie par 2-3 le taux de réponse\n\n**Sources de prospects :** LinkedIn Sales Navigator, Apollo.io, Dropcontact, PhantomBuster.`,
+  },
+  {
+    triggers: ['a/b test', 'ab test', 'tester', 'variante', 'variant', 'split test', 'test ab'],
+    answer: `### A/B Testing en prospection\n\n**Quoi tester (par priorité) :**\n1. **Objet email** — impact le plus fort sur l'ouverture\n2. **CTA** — impact direct sur la réponse\n3. **Angle d'approche** — douleur vs preuve sociale vs curiosité\n4. **Longueur** — court vs détaillé\n\n**Méthodologie :**\n- **1 variable à la fois** — sinon impossible de savoir ce qui a marché\n- **200 prospects minimum** par variante (100+100)\n- **7 jours minimum** avant de conclure\n- **Mesurer le bon KPI** : ouverture pour les objets, réponse pour le corps\n\n**Piège courant :** Tester l'objet ET le corps en même temps. Si les résultats s'améliorent, vous ne savez pas pourquoi.\n\n**Comment Bakal gère ça :** Le système de régénération crée automatiquement des variantes A/B avec des hypothèses claires.`,
+  },
+];
+
+function matchKnowledge(text) {
+  const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const entry of KNOWLEDGE_BASE) {
+    let score = 0;
+    for (const trigger of entry.triggers) {
+      const normalTrigger = trigger.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (lower.includes(normalTrigger)) score += normalTrigger.length;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = entry;
+    }
+  }
+
+  return bestScore >= 3 ? bestMatch : null;
+}
+
+function handleStrategicQuery(text) {
+  const kb = matchKnowledge(text);
+  if (kb) {
+    return { content: kb.answer + `\n\nUne autre question, ou voulez-vous **créer une campagne** avec ces principes ?` };
+  }
+  return null;
+}
+
 function buildCampaignName(p) {
   const pos = (p.position || 'Prospects').split('/')[0].trim();
   const sec = (p.sector || '').split('&')[0].trim().split(' ')[0];
@@ -1229,6 +1308,16 @@ function getSuggestionsForContext(metadata) {
       return ['Passer', 'Voir un autre outil', 'Terminé'];
     }
     return ['Essentiels', 'CRM', 'Enrichissement', 'Terminé'];
+  }
+
+  // After strategic/knowledge response
+  if (lastMsg && lastMsg.content && lastMsg.content.includes('Une autre question')) {
+    return [
+      'Créer une campagne',
+      'Meilleur timing d\'envoi ?',
+      'Benchmarks B2B',
+      'Tu ou Vous ?',
+    ];
   }
 
   // Default — init stage
