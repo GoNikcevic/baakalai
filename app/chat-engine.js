@@ -1362,10 +1362,49 @@ function getWelcomeSuggestions() {
   ];
 }
 
-/* ═══ Thread management (local fallback) ═══ */
+/* ═══ Thread management (local fallback with localStorage persistence) ═══ */
+
+const STORAGE_KEY_THREADS = 'bakal_chat_threads';
+const STORAGE_KEY_MESSAGES = 'bakal_chat_messages';
+const STORAGE_KEY_COUNTER = 'bakal_chat_counter';
 
 let _localThreads = [];
 let _localThreadIdCounter = 1;
+let _localMessages = {}; // { threadId: [{ role, content, metadata, timestamp }] }
+
+function loadLocalHistory() {
+  try {
+    const threads = localStorage.getItem(STORAGE_KEY_THREADS);
+    if (threads) _localThreads = JSON.parse(threads);
+    const messages = localStorage.getItem(STORAGE_KEY_MESSAGES);
+    if (messages) _localMessages = JSON.parse(messages);
+    const counter = localStorage.getItem(STORAGE_KEY_COUNTER);
+    if (counter) _localThreadIdCounter = parseInt(counter, 10);
+  } catch { /* corrupt data — start fresh */ }
+}
+
+function saveLocalHistory() {
+  try {
+    localStorage.setItem(STORAGE_KEY_THREADS, JSON.stringify(_localThreads));
+    localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(_localMessages));
+    localStorage.setItem(STORAGE_KEY_COUNTER, String(_localThreadIdCounter));
+  } catch { /* storage full — fail silently */ }
+}
+
+function addLocalMessage(threadId, role, content, metadata) {
+  if (!_localMessages[threadId]) _localMessages[threadId] = [];
+  _localMessages[threadId].push({
+    role,
+    content,
+    metadata: metadata || null,
+    timestamp: new Date().toISOString(),
+  });
+  saveLocalHistory();
+}
+
+function getLocalMessages(threadId) {
+  return _localMessages[threadId] || [];
+}
 
 function createLocalThread(title) {
   const thread = {
@@ -1375,11 +1414,15 @@ function createLocalThread(title) {
     updated_at: new Date().toISOString(),
   };
   _localThreads.unshift(thread);
+  _localMessages[thread.id] = [];
+  saveLocalHistory();
   return thread;
 }
 
 function deleteLocalThread(id) {
   _localThreads = _localThreads.filter(t => t.id !== id);
+  delete _localMessages[id];
+  saveLocalHistory();
 }
 
 /* ═══ Hybrid integration with chat.js ═══ */
@@ -1422,6 +1465,7 @@ function patchChatHybrid() {
     }
 
     appendMessage('user', text);
+    addLocalMessage(_chatThreadId, 'user', text);
     showTypingIndicator();
     _chatSending = true;
     updateSendButton();
@@ -1439,6 +1483,7 @@ function patchChatHybrid() {
 
     hideTypingIndicator();
     await streamMessage(response.content, response.metadata);
+    addLocalMessage(_chatThreadId, 'assistant', response.content, response.metadata);
 
     // Update thread title
     if (_conv.threadTitle) {
@@ -1446,6 +1491,7 @@ function patchChatHybrid() {
       if (thread) {
         thread.title = _conv.threadTitle;
         thread.updated_at = new Date().toISOString();
+        saveLocalHistory();
         renderChatThreadList();
       }
     }
@@ -1559,7 +1605,20 @@ function patchChatHybrid() {
     }
     _chatThreadId = threadId;
     renderChatThreadList();
-    showChatWelcome();
+
+    // Restore messages from localStorage
+    const messages = getLocalMessages(threadId);
+    if (messages.length === 0) {
+      showChatWelcome();
+    } else {
+      showChatMessages();
+      const inner = document.getElementById('chatMessagesInner');
+      inner.innerHTML = '';
+      messages.forEach(m => {
+        appendMessage(m.role, m.content, m.metadata, false);
+      });
+      scrollChatToBottom();
+    }
   };
 
   window.deleteChatThread = function(threadId, e) {
@@ -1602,9 +1661,11 @@ function getLastCampaignMetadata() {
 /* ═══ Init ═══ */
 
 document.addEventListener('DOMContentLoaded', () => {
+  loadLocalHistory();
   patchChatHybrid();
 });
 
 if (document.readyState !== 'loading') {
+  loadLocalHistory();
   patchChatHybrid();
 }
