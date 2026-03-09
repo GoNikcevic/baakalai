@@ -243,6 +243,79 @@ function hideTypingIndicator() {
   document.getElementById('chatTyping')?.remove();
 }
 
+/* ═══ Streaming message display ═══ */
+
+async function streamMessage(content, metadata) {
+  showChatMessages();
+  const inner = document.getElementById('chatMessagesInner');
+
+  // Remove previous inline suggestions
+  const prevSuggestions = inner.querySelectorAll('.chat-inline-suggestions');
+  prevSuggestions.forEach(el => el.remove());
+
+  const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+  // Build action card if present
+  let actionCardHtml = '';
+  if (metadata && metadata.action === 'create_campaign' && metadata.campaign) {
+    actionCardHtml = renderActionCard(metadata.campaign);
+  }
+
+  // Create the message shell with empty content
+  const msgId = 'stream-' + Date.now();
+  const msgHtml = `
+    <div class="chat-msg assistant" style="animation:chatFadeIn 0.25s ease" id="${msgId}">
+      <div class="chat-msg-avatar">b</div>
+      <div class="chat-msg-body">
+        <div class="chat-msg-content" id="${msgId}-content"></div>
+        <div id="${msgId}-action" style="display:none;">${actionCardHtml}</div>
+        <div class="chat-msg-time">${timeStr}</div>
+      </div>
+    </div>`;
+  inner.insertAdjacentHTML('beforeend', msgHtml);
+  scrollChatToBottom();
+
+  const contentEl = document.getElementById(`${msgId}-content`);
+  if (!contentEl) return;
+
+  // Strip JSON blocks for display (action cards handle them)
+  let displayContent = content.replace(/```json\s*[\s\S]*?```/g, '').trim();
+
+  // Stream by chunks (groups of words for natural feel)
+  const words = displayContent.split(/(\s+)/);
+  let buffer = '';
+  const chunkSize = 3; // words per chunk
+  const baseDelay = 18; // ms per chunk
+
+  for (let i = 0; i < words.length; i++) {
+    buffer += words[i];
+    if (i % chunkSize === chunkSize - 1 || i === words.length - 1) {
+      contentEl.innerHTML = formatMarkdown(buffer);
+      scrollChatToBottom();
+      await new Promise(r => setTimeout(r, baseDelay + Math.random() * 12));
+    }
+  }
+
+  // Show action card
+  const actionEl = document.getElementById(`${msgId}-action`);
+  if (actionEl && actionCardHtml) {
+    actionEl.style.display = '';
+  }
+
+  // Add inline suggestions
+  if (typeof getSuggestionsForContext === 'function') {
+    const suggestions = getSuggestionsForContext(metadata);
+    if (suggestions && suggestions.length > 0) {
+      const chips = suggestions.map(s =>
+        `<button class="chat-inline-chip" onclick="sendChatMessage('${escapeHtml(s.replace(/'/g, "\\'"))}')">${escapeHtml(s)}</button>`
+      ).join('');
+      inner.insertAdjacentHTML('beforeend', `<div class="chat-inline-suggestions">${chips}</div>`);
+    }
+  }
+
+  scrollChatToBottom();
+}
+
 /* ═══ Send messages ═══ */
 
 async function sendChatMessage(overrideText) {

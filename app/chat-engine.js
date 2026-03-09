@@ -1434,12 +1434,11 @@ function patchChatHybrid() {
       _conv.history.push({ role: 'assistant', content: response.content });
     }
 
-    // Typing delay proportional to response length
-    const delay = Math.min(600 + response.content.length * 3, 2000);
-    await new Promise(r => setTimeout(r, delay));
+    // Short typing delay then stream the response
+    await new Promise(r => setTimeout(r, 400 + Math.random() * 300));
 
     hideTypingIndicator();
-    appendMessage('assistant', response.content, response.metadata);
+    await streamMessage(response.content, response.metadata);
 
     // Update thread title
     if (_conv.threadTitle) {
