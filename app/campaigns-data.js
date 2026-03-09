@@ -6,11 +6,32 @@
 
 /* ═══ Demo data backup (used for toggle) ═══ */
 const BAKAL_DEMO_DATA = {
+  projects: {
+    'formapro': {
+      id: 'formapro',
+      name: 'FormaPro Consulting',
+      client: 'FormaPro Consulting',
+      description: 'Prospection multi-cible pour cabinet de formation professionnelle',
+      color: 'var(--blue)',
+      createdDate: '20 jan. 2026',
+      campaignIds: ['daf-idf', 'dirigeants-formation', 'drh-lyon']
+    },
+    'techvision': {
+      id: 'techvision',
+      name: 'TechVision SaaS',
+      client: 'TechVision',
+      description: 'Lancement produit SaaS — acquisition early adopters B2B',
+      color: 'var(--purple)',
+      createdDate: '5 fév. 2026',
+      campaignIds: []
+    }
+  },
   campaigns: {
     'daf-idf': {
       id: 'daf-idf',
       name: 'DAF Île-de-France',
       client: 'FormaPro Consulting',
+      projectId: 'formapro',
       status: 'active',
       channel: 'email',
       channelLabel: '✉️ Email',
@@ -55,6 +76,7 @@ const BAKAL_DEMO_DATA = {
       id: 'dirigeants-formation',
       name: 'Dirigeants Formation',
       client: 'FormaPro Consulting',
+      projectId: 'formapro',
       status: 'active',
       channel: 'linkedin',
       channelLabel: '💼 LinkedIn',
@@ -93,6 +115,7 @@ const BAKAL_DEMO_DATA = {
       id: 'drh-lyon',
       name: 'DRH PME Lyon',
       client: 'FormaPro Consulting',
+      projectId: 'formapro',
       status: 'prep',
       channel: 'multi',
       channelLabel: '📧+💼 Multi',
@@ -170,6 +193,7 @@ const BAKAL_DEMO_DATA = {
 
 /* ═══ Live data object — starts with demo, toggled to empty for new-user mode ═══ */
 const BAKAL = {
+  projects: {},
   campaigns: {},
   globalKpis: {},
   opportunities: [],
@@ -198,6 +222,7 @@ function isEmptyDashboard() {
 
 function loadDemoData() {
   // Deep-copy demo data into BAKAL
+  BAKAL.projects = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.projects));
   BAKAL.campaigns = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.campaigns));
   BAKAL.globalKpis = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.globalKpis));
   BAKAL.opportunities = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.opportunities));
@@ -207,6 +232,7 @@ function loadDemoData() {
 }
 
 function clearData() {
+  BAKAL.projects = {};
   BAKAL.campaigns = {};
   BAKAL.globalKpis = {};
   BAKAL.opportunities = [];
@@ -479,45 +505,114 @@ function renderReports() {
    RENDERING FUNCTIONS — Campaigns List
    ═══════════════════════════════════════════════════════════════════════════ */
 
+function renderCampaignRow(c) {
+  const isPrep = c.status === 'prep';
+  const isLinkedin = c.channel === 'linkedin';
+  const statusHtml = c.status === 'active'
+    ? '<span class="status-badge status-active"><span class="pulse-dot" style="width:6px;height:6px;"></span> Active</span>'
+    : '<span class="status-badge status-prep">⏳ Préparation</span>';
+
+  let stat1Value, stat1Label, stat2Value, stat2Label;
+  if (isPrep) {
+    stat1Value = '—'; stat1Label = '—'; stat2Value = '—'; stat2Label = '—';
+  } else if (isLinkedin) {
+    stat1Value = '—'; stat1Label = 'N/A LinkedIn';
+    stat2Value = c.kpis.replyRate + '%'; stat2Label = 'Réponse';
+  } else {
+    stat1Value = c.kpis.openRate + '%'; stat1Label = 'Ouverture';
+    stat2Value = c.kpis.replyRate + '%'; stat2Label = 'Réponse';
+  }
+
+  const stat1Color = (stat1Value !== '—' && parseFloat(stat1Value) >= 50) ? 'var(--success)' : (stat1Value === '—' ? 'var(--text-muted)' : 'var(--warning)');
+  const stat2Color = (stat2Value !== '—' && parseFloat(stat2Value) >= 8) ? 'var(--blue)' : (stat2Value === '—' ? 'var(--text-muted)' : 'var(--warning)');
+
+  const dateLabel = isPrep ? 'Créée' : 'Lancée';
+
+  return `<div class="campaign-row" onclick="showCampaignDetail('${c.id}')">
+    <div><div class="campaign-row-name">${c.name}</div><div class="campaign-row-meta">${c.sectorShort} · ${c.size} · ${c.angle} · ${dateLabel} ${c.startDate}</div></div>
+    <div class="campaign-row-channel"><span style="color:${c.channelColor}">${c.channelLabel}</span></div>
+    <div class="campaign-row-stat">${statusHtml}</div>
+    <div class="campaign-row-stat"><div class="campaign-row-stat-value" style="color:${stat1Color}">${stat1Value}</div><div class="campaign-row-stat-label">${stat1Label}</div></div>
+    <div class="campaign-row-stat"><div class="campaign-row-stat-value" style="color:${stat2Color}">${stat2Value}</div><div class="campaign-row-stat-label">${stat2Label}</div></div>
+    <div class="campaign-row-arrow">→</div>
+  </div>`;
+}
+
 function renderCampaignsList() {
   const campaigns = Object.values(BAKAL.campaigns);
-  const countText = `${campaigns.length} campagne${campaigns.length > 1 ? 's' : ''}`;
+  const projects = Object.values(BAKAL.projects || {});
+  const countText = `${campaigns.length} campagne${campaigns.length > 1 ? 's' : ''} · ${projects.length} projet${projects.length > 1 ? 's' : ''}`;
 
-  const rowsHtml = campaigns.map(c => {
-    const isPrep = c.status === 'prep';
-    const isLinkedin = c.channel === 'linkedin';
-    const statusHtml = c.status === 'active'
-      ? '<span class="status-badge status-active"><span class="pulse-dot" style="width:6px;height:6px;"></span> Active</span>'
-      : '<span class="status-badge status-prep">⏳ Préparation</span>';
+  let html = '';
 
-    let stat1Value, stat1Label, stat2Value, stat2Label;
-    if (isPrep) {
-      stat1Value = '—'; stat1Label = '—'; stat2Value = '—'; stat2Label = '—';
-    } else if (isLinkedin) {
-      stat1Value = '—'; stat1Label = 'N/A LinkedIn';
-      stat2Value = c.kpis.replyRate + '%'; stat2Label = 'Réponse';
-    } else {
-      stat1Value = c.kpis.openRate + '%'; stat1Label = 'Ouverture';
-      stat2Value = c.kpis.replyRate + '%'; stat2Label = 'Réponse';
+  // Group campaigns by project
+  if (projects.length > 0) {
+    projects.forEach(p => {
+      const projectCampaigns = campaigns.filter(c => c.projectId === p.id);
+      const activeCount = projectCampaigns.filter(c => c.status === 'active').length;
+      const totalCount = projectCampaigns.length;
+
+      html += `<div class="project-group">
+        <div class="project-header" onclick="toggleProjectGroup('${p.id}')">
+          <div class="project-header-left">
+            <span class="project-chevron" id="chevron-${p.id}">▾</span>
+            <span class="project-color-dot" style="background:${p.color}"></span>
+            <div>
+              <div class="project-header-name">${p.name}</div>
+              <div class="project-header-meta">${p.description}</div>
+            </div>
+          </div>
+          <div class="project-header-right">
+            <span class="project-badge">${totalCount} campagne${totalCount > 1 ? 's' : ''}</span>
+            ${activeCount > 0 ? `<span class="project-badge project-badge-active">${activeCount} active${activeCount > 1 ? 's' : ''}</span>` : ''}
+          </div>
+        </div>
+        <div class="project-campaigns" id="project-campaigns-${p.id}">
+          ${projectCampaigns.length > 0
+            ? projectCampaigns.map(c => renderCampaignRow(c)).join('')
+            : '<div class="project-empty">Aucune campagne dans ce projet. <a href="#" onclick="event.preventDefault();toggleCreator()">Créer une campagne</a></div>'}
+        </div>
+      </div>`;
+    });
+
+    // Orphan campaigns (no projectId)
+    const orphans = campaigns.filter(c => !c.projectId);
+    if (orphans.length > 0) {
+      html += `<div class="project-group">
+        <div class="project-header" onclick="toggleProjectGroup('_orphans')">
+          <div class="project-header-left">
+            <span class="project-chevron" id="chevron-_orphans">▾</span>
+            <span class="project-color-dot" style="background:var(--text-muted)"></span>
+            <div>
+              <div class="project-header-name">Sans projet</div>
+              <div class="project-header-meta">Campagnes non assignées à un projet</div>
+            </div>
+          </div>
+          <div class="project-header-right">
+            <span class="project-badge">${orphans.length} campagne${orphans.length > 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        <div class="project-campaigns" id="project-campaigns-_orphans">
+          ${orphans.map(c => renderCampaignRow(c)).join('')}
+        </div>
+      </div>`;
     }
-
-    const stat1Color = (stat1Value !== '—' && parseFloat(stat1Value) >= 50) ? 'var(--success)' : (stat1Value === '—' ? 'var(--text-muted)' : 'var(--warning)');
-    const stat2Color = (stat2Value !== '—' && parseFloat(stat2Value) >= 8) ? 'var(--blue)' : (stat2Value === '—' ? 'var(--text-muted)' : 'var(--warning)');
-
-    const dateLabel = isPrep ? 'Créée' : 'Lancée';
-
-    return `<div class="campaign-row" onclick="showCampaignDetail('${c.id}')">
-      <div><div class="campaign-row-name">${c.name}</div><div class="campaign-row-meta">${c.sectorShort} · ${c.size} · ${c.angle} · ${dateLabel} ${c.startDate}</div></div>
-      <div class="campaign-row-channel"><span style="color:${c.channelColor}">${c.channelLabel}</span></div>
-      <div class="campaign-row-stat">${statusHtml}</div>
-      <div class="campaign-row-stat"><div class="campaign-row-stat-value" style="color:${stat1Color}">${stat1Value}</div><div class="campaign-row-stat-label">${stat1Label}</div></div>
-      <div class="campaign-row-stat"><div class="campaign-row-stat-value" style="color:${stat2Color}">${stat2Value}</div><div class="campaign-row-stat-label">${stat2Label}</div></div>
-      <div class="campaign-row-arrow">→</div>
-    </div>`;
-  }).join('');
+  } else {
+    // No projects — flat list fallback
+    html = campaigns.map(c => renderCampaignRow(c)).join('');
+  }
 
   document.querySelector('#campaigns-list-view > div:first-child > div:first-child').textContent = countText;
-  document.querySelector('.campaigns-list').innerHTML = rowsHtml;
+  document.querySelector('.campaigns-list').innerHTML = html;
+}
+
+function toggleProjectGroup(projectId) {
+  const container = document.getElementById('project-campaigns-' + projectId);
+  const chevron = document.getElementById('chevron-' + projectId);
+  if (!container) return;
+  const collapsed = container.style.display === 'none';
+  container.style.display = collapsed ? '' : 'none';
+  if (chevron) chevron.textContent = collapsed ? '▾' : '▸';
 }
 
 

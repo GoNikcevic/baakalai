@@ -853,6 +853,44 @@ body {
 .campaign-row-arrow { font-size: 16px; color: var(--text-muted); transition: color var(--transition); }
 .campaign-row:hover .campaign-row-arrow { color: var(--text-secondary); }
 
+/* ═══ Project grouping ═══ */
+.project-group { margin-bottom: 16px; }
+.project-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0; cursor: pointer;
+  transition: background var(--transition);
+}
+.project-header:hover { background: var(--bg-card-hover); }
+.project-header-left { display: flex; align-items: center; gap: 10px; }
+.project-header-right { display: flex; align-items: center; gap: 8px; }
+.project-chevron { font-size: 12px; color: var(--text-muted); width: 14px; text-align: center; transition: color var(--transition); }
+.project-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.project-header-name { font-weight: 600; font-size: 14px; }
+.project-header-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.project-badge {
+  font-size: 11px; font-weight: 500; padding: 3px 10px;
+  border-radius: 20px; background: var(--bg-elevated); color: var(--text-secondary);
+}
+.project-badge-active { background: var(--success-bg); color: var(--success); }
+.project-campaigns { border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
+.project-campaigns .campaign-row { border-radius: 0; border-left: none; border-right: none; border-bottom: 1px solid var(--border); margin: 0; }
+.project-campaigns .campaign-row:last-child { border-bottom: none; }
+.project-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--text-muted); }
+.project-empty a { color: var(--blue); text-decoration: none; }
+.project-empty a:hover { text-decoration: underline; }
+
+/* ── Sidebar project labels ── */
+.nav-project-group { margin-bottom: 4px; }
+.nav-project-label {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 10px 5px 18px; font-size: 11px; font-weight: 600;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;
+  cursor: pointer; transition: color var(--transition);
+}
+.nav-project-label:hover { color: var(--text-secondary); }
+.nav-project-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
 /* Campaign detail view */
 .campaign-detail { animation: fadeIn 0.3s ease; }
 .campaign-detail-back {

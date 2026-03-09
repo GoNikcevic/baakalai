@@ -525,15 +525,44 @@ function renderSidebarCampaigns() {
     return;
   }
   const campaigns = Object.values(BAKAL.campaigns);
-  if (campaigns.length === 0) {
+  const projects = Object.values(BAKAL.projects || {});
+  if (campaigns.length === 0 && projects.length === 0) {
     container.innerHTML = '';
     return;
   }
-  container.innerHTML = campaigns.slice(0, 6).map(c => {
-    const name = c.name || c.id;
-    const shortName = name.length > 22 ? name.slice(0, 22) + '…' : name;
-    return '<div class="nav-campaign-item" onclick="showPage(\'dashboard\',\'campaigns\')">' + shortName + '</div>';
-  }).join('');
+
+  let html = '';
+  if (projects.length > 0) {
+    projects.forEach(p => {
+      const pCampaigns = campaigns.filter(c => c.projectId === p.id);
+      const shortName = p.name.length > 20 ? p.name.slice(0, 20) + '…' : p.name;
+      html += '<div class="nav-project-group">';
+      html += '<div class="nav-project-label" onclick="showPage(\'dashboard\',\'campaigns\')">';
+      html += '<span class="nav-project-dot" style="background:' + p.color + '"></span>' + shortName;
+      html += '</div>';
+      pCampaigns.slice(0, 4).forEach(c => {
+        const cName = (c.name || c.id);
+        const cShort = cName.length > 20 ? cName.slice(0, 20) + '…' : cName;
+        html += '<div class="nav-campaign-item" onclick="showPage(\'dashboard\',\'campaigns\')">' + cShort + '</div>';
+      });
+      html += '</div>';
+    });
+    // Orphan campaigns
+    const orphans = campaigns.filter(c => !c.projectId);
+    orphans.slice(0, 3).forEach(c => {
+      const name = (c.name || c.id);
+      const shortName = name.length > 22 ? name.slice(0, 22) + '…' : name;
+      html += '<div class="nav-campaign-item" onclick="showPage(\'dashboard\',\'campaigns\')">' + shortName + '</div>';
+    });
+  } else {
+    // Fallback: flat list
+    campaigns.slice(0, 6).forEach(c => {
+      const name = c.name || c.id;
+      const shortName = name.length > 22 ? name.slice(0, 22) + '…' : name;
+      html += '<div class="nav-campaign-item" onclick="showPage(\'dashboard\',\'campaigns\')">' + shortName + '</div>';
+    });
+  }
+  container.innerHTML = html;
 }
 
 /* ═══ Stack status check ═══ */
