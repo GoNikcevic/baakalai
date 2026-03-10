@@ -6,6 +6,7 @@ import { useState } from 'react';
 import SequenceStep from './SequenceStep';
 import EditParamsPanel from './EditParamsPanel';
 import { InfoRow, CheckItem } from './shared';
+import api from '../../services/api-client';
 
 export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }) {
   const [showEditPanel, setShowEditPanel] = useState(false);
@@ -48,26 +49,33 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
       return;
     }
 
-    // Launch the campaign
+    // Launch the campaign — persist to backend then update local state
+    const updates = {
+      status: 'active',
+      iteration: 1,
+      startDate: new Date().toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+      }),
+      kpis: {
+        contacts: 0,
+        openRate: 0,
+        replyRate: 0,
+        interested: 0,
+        meetings: 0,
+        stops: 0,
+      },
+    };
+
+    // Persist to backend
+    const backendId = c._backendId || c.id;
+    api.updateCampaign(backendId, { status: 'active', iteration: 1 }).catch((err) => {
+      console.warn('Failed to persist campaign launch:', err.message);
+    });
+
     setCampaigns((prev) => ({
       ...prev,
-      [c.id]: {
-        ...prev[c.id],
-        status: 'active',
-        iteration: 1,
-        startDate: new Date().toLocaleDateString('fr-FR', {
-          day: 'numeric',
-          month: 'short',
-        }),
-        kpis: {
-          contacts: 0,
-          openRate: 0,
-          replyRate: 0,
-          interested: 0,
-          meetings: 0,
-          stops: 0,
-        },
-      },
+      [c.id]: { ...prev[c.id], ...updates },
     }));
   };
 

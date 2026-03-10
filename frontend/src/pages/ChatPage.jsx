@@ -538,7 +538,31 @@ export default function ChatPage() {
     if (sending) return;
 
     const text = overrideText || inputValue.trim();
-    if (!text) return;
+    if (!text && attachedFiles.length === 0) return;
+
+    // Upload attached files first (if any)
+    let uploadedFiles = [];
+    if (attachedFiles.length > 0 && backendAvailable) {
+      setUploadingFiles(true);
+      try {
+        const result = await api.uploadFiles(attachedFiles);
+        uploadedFiles = result.uploaded || [];
+        setAttachedFiles([]);
+      } catch (err) {
+        console.warn('File upload failed:', err.message);
+      }
+      setUploadingFiles(false);
+    }
+
+    // Build message text including file references
+    let messageText = text || '';
+    if (uploadedFiles.length > 0) {
+      const fileNames = uploadedFiles.map(f => f.originalName).join(', ');
+      const fileNote = `\n\n[Fichiers joints : ${fileNames}]`;
+      messageText = (messageText + fileNote).trim();
+    }
+
+    if (!messageText) return;
 
     // Clear input
     if (!overrideText) {
@@ -555,7 +579,7 @@ export default function ChatPage() {
       try {
         const thread = await api.request('/chat/threads', {
           method: 'POST',
-          body: JSON.stringify({ title: text.slice(0, 60) }),
+          body: JSON.stringify({ title: messageText.slice(0, 60) }),
         });
         threadId = thread.id;
         setCurrentThreadId(threadId);
@@ -569,7 +593,7 @@ export default function ChatPage() {
     const userMsg = {
       id: Date.now(),
       role: 'user',
-      content: text,
+      content: messageText,
       metadata: null,
       animate: true,
     };
@@ -585,7 +609,7 @@ export default function ChatPage() {
       try {
         const data = await api.request('/chat/threads/' + threadId + '/messages', {
           method: 'POST',
-          body: JSON.stringify({ message: text }),
+          body: JSON.stringify({ message: messageText }),
         });
         setShowTyping(false);
 
@@ -643,13 +667,84 @@ export default function ChatPage() {
 
     setSending(false);
     if (inputRef.current) inputRef.current.focus();
-  }, [sending, inputValue, currentThreadId, backendAvailable, loadThreads, scrollToBottom]);
+  }, [sending, inputValue, attachedFiles, currentThreadId, backendAvailable, loadThreads, scrollToBottom]);
 
   /* ─── Action button starters ─── */
   const startAction = useCallback((action) => {
     const text = ACTION_PROMPTS[action];
     if (text) sendMessage(text);
   }, [sendMessage]);
+
+  /* ─── File attachments (drag & drop + file picker) ─── */
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const fileInputRef = useRef(null);
+  const dragCounterRef = useRef(0);
+
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const addFiles = useCallback((files) => {
+    const MAX_SIZE = 20 * 1024 * 1024;
+    const newFiles = Array.from(files).filter(f => {
+      if (f.size > MAX_SIZE) {
+        console.warn(`File ${f.name} too large (max 20MB)`);
+        return false;
+      }
+      return true;
+    });
+    if (newFiles.length > 0) {
+      setAttachedFiles(prev => [...prev, ...newFiles]);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  }, [addFiles]);
+
+  const handleFileInputChange = useCallback((e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      addFiles(e.target.files);
+      e.target.value = '';
+    }
+  }, [addFiles]);
+
+  const removeAttachedFile = useCallback((index) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const formatFileSize = useCallback((bytes) => {
+    if (bytes < 1024) return bytes + ' o';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' Ko';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+  }, []);
 
   /* ─── Input handling ─── */
   const handleKeyDown = useCallback((e) => {
@@ -691,7 +786,36 @@ export default function ChatPage() {
       </div>
 
       {/* ─── Main Chat Area ─── */}
-      <div className="chat-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div
+        className="chat-main"
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Drag overlay */}
+        {isDragging && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 50,
+            background: 'rgba(96, 165, 250, 0.08)',
+            border: '2px dashed var(--blue)',
+            borderRadius: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            <div style={{
+              textAlign: 'center', color: 'var(--blue)',
+              fontSize: '15px', fontWeight: 600,
+            }}>
+              <div style={{ fontSize: '28px', marginBottom: '8px' }}>+</div>
+              Deposez vos fichiers ici
+              <div style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '4px' }}>
+                CSV, Excel, PDF, DOCX — max 20 Mo
+              </div>
+            </div>
+          </div>
+        )}
         {/* Welcome screen or messages */}
         {showWelcome && messages.length === 0 ? (
           <WelcomeScreen
@@ -742,13 +866,79 @@ export default function ChatPage() {
           </div>
         )}
 
+        {/* ─── Attached files preview ─── */}
+        {attachedFiles.length > 0 && (
+          <div style={{
+            padding: '8px 20px 0',
+            borderTop: '1px solid var(--border)',
+            display: 'flex', flexWrap: 'wrap', gap: '6px',
+          }}>
+            {attachedFiles.map((file, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: '8px', padding: '4px 10px', fontSize: '12px',
+                color: 'var(--text-secondary)',
+              }}>
+                <span style={{ fontSize: '14px' }}>
+                  {file.type?.includes('csv') || file.type?.includes('spreadsheet') ? '📊'
+                    : file.type?.includes('pdf') ? '📄'
+                    : file.type?.includes('image') ? '🖼️'
+                    : '📎'}
+                </span>
+                <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {file.name}
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+                  {formatFileSize(file.size)}
+                </span>
+                <button
+                  onClick={() => removeAttachedFile(i)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-muted)', fontSize: '14px', padding: '0 2px',
+                    lineHeight: 1,
+                  }}
+                >
+                  x
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ─── Input bar ─── */}
-        <div className="chat-input-bar" style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+        <div className="chat-input-bar" style={{ padding: '12px 20px', borderTop: attachedFiles.length > 0 ? 'none' : '1px solid var(--border)', display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".csv,.xlsx,.xls,.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
+            style={{ display: 'none' }}
+            onChange={handleFileInputChange}
+          />
+          {/* File picker button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Joindre un fichier"
+            style={{
+              background: 'none', border: '1px solid var(--border)',
+              borderRadius: '10px', padding: '10px 12px',
+              cursor: 'pointer', color: 'var(--text-secondary)',
+              fontSize: '16px', lineHeight: 1, flexShrink: 0,
+              transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--text-muted)'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+          >
+            +
+          </button>
           <textarea
             ref={inputRef}
             id="chatInput"
             className="chat-input"
-            placeholder="Ecrivez votre message..."
+            placeholder={attachedFiles.length > 0 ? 'Ajoutez un message pour accompagner vos fichiers...' : 'Ecrivez votre message...'}
             rows={1}
             value={inputValue}
             onChange={handleInputChange}
@@ -773,10 +963,10 @@ export default function ChatPage() {
             id="chatSendBtn"
             className="btn btn-primary"
             style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px', flexShrink: 0 }}
-            disabled={sending}
+            disabled={sending || uploadingFiles}
             onClick={() => sendMessage()}
           >
-            Envoyer
+            {uploadingFiles ? 'Upload...' : 'Envoyer'}
           </button>
         </div>
       </div>

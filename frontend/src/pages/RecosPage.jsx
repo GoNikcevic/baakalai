@@ -4,8 +4,9 @@
    Shows AI recommendations with filter, apply/modify/dismiss actions, diff panels.
    =============================================================================== */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
+import api from '../services/api-client';
 
 /* ─── Demo recommendation data ─── */
 
@@ -102,15 +103,79 @@ const PRIORITY_MAP = {
 /* ─── Component ─── */
 
 export default function RecosPage() {
-  useApp();
+  const { campaigns, backendAvailable } = useApp();
 
   // Local state
   const [recos, setRecos] = useState(DEMO_RECOS);
+  const [insights, setInsights] = useState(INSIGHTS);
   const [activeFilter, setActiveFilter] = useState('Toutes');
   const [activeCampaign, setActiveCampaign] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
   const [analysisRunning, setAnalysisRunning] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  /* ─── Fetch real diagnostics & memory from backend ─── */
+
+  const fetchRecos = useCallback(async () => {
+    if (!backendAvailable) return;
+    try {
+      const campaignEntries = Object.values(campaigns);
+      if (campaignEntries.length === 0) return;
+
+      // Fetch diagnostics for all campaigns + memory patterns in parallel
+      const [memoryRes, ...diagResults] = await Promise.all([
+        api.getMemory().catch(() => ({ patterns: [] })),
+        ...campaignEntries.map(c =>
+          api.getDiagnostics(c._backendId || c.id).catch(() => ({ diagnostics: [] }))
+        ),
+      ]);
+
+      // Build recommendations from diagnostics
+      const realRecos = [];
+      campaignEntries.forEach((c, i) => {
+        const diags = diagResults[i]?.diagnostics || [];
+        diags.forEach((d, j) => {
+          realRecos.push({
+            id: `diag-${c.id}-${j}`,
+            priority: d.priority === 'high' ? 'critical' : d.priority === 'medium' ? 'important' : 'suggestion',
+            campaign: c.name,
+            step: d.step || `Touchpoint ${j + 1}`,
+            title: d.title || d.summary || 'Recommandation',
+            desc: d.text || d.description || '',
+            impact: d.impact || '',
+            date: d.created_at ? new Date(d.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '',
+            before: d.before || '',
+            after: d.after || '',
+          });
+        });
+      });
+
+      if (realRecos.length > 0) {
+        setRecos(realRecos);
+      }
+
+      // Build insights from memory patterns
+      const patterns = memoryRes.patterns || [];
+      if (patterns.length > 0) {
+        setInsights(patterns.map(p => ({
+          title: p.pattern || p.title || '',
+          text: p.data || p.description || '',
+          confidence: (p.confidence || '').toLowerCase() === 'haute' ? 'high'
+            : (p.confidence || '').toLowerCase() === 'moyenne' ? 'medium' : 'low',
+          confidenceLabel: `Confiance ${p.confidence || 'inconnue'}`,
+        })));
+      }
+
+      setDataLoaded(true);
+    } catch (err) {
+      console.warn('Failed to load recommendations:', err.message);
+    }
+  }, [backendAvailable, campaigns]);
+
+  useEffect(() => {
+    if (!dataLoaded) fetchRecos();
+  }, [fetchRecos, dataLoaded]);
 
   // Derive campaign names for filter buttons
   const campaignNames = useMemo(() => {
@@ -218,10 +283,23 @@ export default function RecosPage() {
     applyReco(id);
   }, [editText, applyReco]);
 
-  const rerunAnalysis = useCallback(() => {
+  const rerunAnalysis = useCallback(async () => {
     setAnalysisRunning(true);
-    setTimeout(() => setAnalysisRunning(false), 3000);
-  }, []);
+    if (backendAvailable) {
+      try {
+        // Run analysis on all active campaigns
+        const campaignEntries = Object.values(campaigns).filter(c => c.status === 'active');
+        for (const c of campaignEntries) {
+          await api.analyzeCampaign(c._backendId || c.id).catch(() => {});
+        }
+        // Re-fetch updated diagnostics
+        setDataLoaded(false);
+      } catch {
+        /* ignore */
+      }
+    }
+    setAnalysisRunning(false);
+  }, [backendAvailable, campaigns]);
 
   /* ─── Render helpers ─── */
 
@@ -447,7 +525,7 @@ export default function RecosPage() {
       <div className="reco-insight-card">
         <div className="reco-insight-title">Patterns cross-campagne d\u00e9tect\u00e9s</div>
         <div className="reco-insight-grid">
-          {INSIGHTS.map((ins, i) => (
+          {insights.map((ins, i) => (
             <div key={i} className="reco-insight-item">
               <div className="reco-insight-item-title">{ins.title}</div>
               <div className="reco-insight-item-text">{ins.text}</div>

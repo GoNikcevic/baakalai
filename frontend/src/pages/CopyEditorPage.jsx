@@ -1050,33 +1050,15 @@ export default function CopyEditorPage() {
           />
         )}
 
-        {/* AI bar */}
-        {currentCampaign.aiBar && (
+        {/* AI bar — show AiBar component for both campaign suggestions and regen status */}
+        {(currentCampaign.aiBar || regenAllStatus) && (
           <AiBar
-            aiBar={regenAllStatus ? { title: regenAllStatus === 'loading' ? 'Regeneration en cours...' : regenAllMessage, text: regenAllMessage } : currentCampaign.aiBar}
+            aiBar={regenAllStatus
+              ? { title: regenAllStatus === 'loading' ? 'Regeneration en cours...' : regenAllMessage, text: regenAllMessage }
+              : currentCampaign.aiBar}
             onApplyAll={applyAllSuggestions}
             onDismissAll={dismissAllSuggestions}
           />
-        )}
-
-        {/* Regen-all status bar (if no aiBar) */}
-        {!currentCampaign.aiBar && regenAllStatus && (
-          <div
-            className="ai-bar"
-            style={{
-              borderColor: regenAllStatus === 'done' ? 'var(--success)'
-                : regenAllStatus === 'error' ? 'var(--danger)'
-                : undefined,
-            }}
-          >
-            <div className="ai-bar-icon">~</div>
-            <div className="ai-bar-content">
-              <div className="ai-bar-title">
-                {regenAllStatus === 'loading' ? 'Regeneration en cours...' : regenAllMessage}
-              </div>
-              <div className="ai-bar-text">{regenAllMessage}</div>
-            </div>
-          </div>
         )}
 
         {/* Touchpoint cards */}

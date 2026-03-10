@@ -237,15 +237,15 @@ export default function SettingsPage() {
         return next;
       });
     } catch {
-      // Offline fallback — basic format validation
+      // Offline fallback — cannot truly validate without backend
       setKeyStatuses(prev => {
         const next = { ...prev };
         for (const cfg of API_KEYS_CONFIG) {
           const value = apiKeys[cfg.key]?.trim();
           if (!value) {
-            next[cfg.key] = { configured: false, text: 'Non connect\u00e9', className: 'input-status' };
+            next[cfg.key] = { configured: false, text: 'Non configur\u00e9', className: 'input-status' };
           } else if (value.length > 10) {
-            next[cfg.key] = { configured: true, text: 'Format OK', className: 'input-status connected' };
+            next[cfg.key] = { configured: false, text: 'Backend indisponible \u2014 test impossible', className: 'input-status error' };
           } else {
             next[cfg.key] = { configured: false, text: 'Format invalide', className: 'input-status error' };
           }

@@ -404,6 +404,43 @@ export async function testKeys() {
   return request('/settings/keys/test', { method: 'POST' });
 }
 
+/** Upload files (multipart/form-data) */
+export async function uploadFiles(files) {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('files', file);
+  }
+
+  const url = BASE + '/documents/upload';
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  // Do NOT set Content-Type — browser sets multipart boundary automatically
+
+  const res = await fetch(url, { method: 'POST', headers, body: formData });
+
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      headers['Authorization'] = 'Bearer ' + newToken;
+      const retry = await fetch(url, { method: 'POST', headers, body: formData });
+      if (!retry.ok) {
+        const body = await retry.json().catch(() => ({}));
+        throw Object.assign(new Error(body.error || `HTTP ${retry.status}`), { status: retry.status });
+      }
+      return retry.json();
+    }
+    clearSession();
+    throw Object.assign(new Error('Session expired'), { status: 401 });
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(body.error || `HTTP ${res.status}`), { status: res.status });
+  }
+  return res.json();
+}
+
 /* ═══ Default export for backwards compat ═══ */
 
 const BakalAPI = {
@@ -430,6 +467,7 @@ const BakalAPI = {
   getKeys,
   saveKeys,
   testKeys,
+  uploadFiles,
   campaignToBackend,
   sequenceToBackend,
   transformCampaign,
