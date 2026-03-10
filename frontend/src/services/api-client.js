@@ -235,6 +235,26 @@ export async function fetchAllCampaigns() {
   return result;
 }
 
+/** Fetch all projects and return keyed by ID */
+export async function fetchProjects() {
+  const data = await request('/projects');
+  const result = {};
+  for (const p of data.projects) {
+    result[p.id] = {
+      id: String(p.id),
+      name: p.name,
+      client: p.client,
+      description: p.description,
+      color: p.color || 'var(--blue)',
+      createdDate: p.createdDate,
+      campaignCount: p.campaignCount || 0,
+      campaignIds: [],
+      files: p.files || [],
+    };
+  }
+  return result;
+}
+
 /** Fetch a single campaign with full detail */
 export async function fetchCampaignDetail(id) {
   const data = await request('/campaigns/' + id);
@@ -390,6 +410,7 @@ const BakalAPI = {
   request,
   checkHealth,
   fetchAllCampaigns,
+  fetchProjects,
   fetchCampaignDetail,
   fetchDashboard,
   createCampaign,

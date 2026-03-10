@@ -27,7 +27,7 @@ const KPI_LABELS = {
 };
 
 export default function DashboardPage({ section, onNavigateCampaign }) {
-  const { campaigns, globalKpis } = useApp();
+  const { campaigns, globalKpis, opportunities, recommendations, reports, chartData } = useApp();
   const [tab, setTab] = useState(section || 'overview');
 
   // Sync tab when `section` prop changes — derive from props directly
@@ -87,11 +87,14 @@ export default function DashboardPage({ section, onNavigateCampaign }) {
           isEmpty={isEmpty}
           globalKpis={globalKpis}
           campaigns={campaignsList}
+          opportunities={opportunities}
+          recommendations={recommendations}
+          chartData={chartData}
           onShowCampaigns={() => setTab('campaigns')}
         />
       )}
 
-      {currentTab === 'reports' && <ReportsSection isEmpty={isEmpty} />}
+      {currentTab === 'reports' && <ReportsSection isEmpty={isEmpty} reports={reports} />}
 
       {currentTab === 'analytics' && <AnalyticsSection isEmpty={isEmpty} />}
 
@@ -109,7 +112,7 @@ export default function DashboardPage({ section, onNavigateCampaign }) {
    Overview Section
    ═══════════════════════════════════════════════════ */
 
-function OverviewSection({ isEmpty, globalKpis, campaigns, onShowCampaigns }) {
+function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recommendations, chartData, onShowCampaigns }) {
   if (isEmpty) {
     return (
       <div id="section-overview">
@@ -154,33 +157,44 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, onShowCampaigns }) {
           </div>
         </div>
 
-        {/* Performance chart placeholder */}
+        {/* Performance chart */}
         <div className="card">
           <div className="card-header">
             <div className="card-title">📈 Performance 4 semaines</div>
           </div>
           <div className="card-body">
-            <div className="chart-container">
-              <div className="chart-bars">
-                {/* Chart bars would be rendered here from chartData */}
+            {chartData && chartData.length > 0 ? (
+              <>
+                <div className="chart-container">
+                  <div className="chart-bars" style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', height: '120px', padding: '0 8px' }}>
+                    {chartData.map((d) => {
+                      const maxVal = Math.max(...chartData.map(x => Math.max(x.email || 0, x.linkedin || 0)), 1);
+                      return (
+                        <div key={d.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                          <div style={{ display: 'flex', gap: '3px', alignItems: 'flex-end', height: '100px' }}>
+                            <div style={{ width: '16px', background: 'var(--blue)', borderRadius: '3px 3px 0 0', height: `${((d.email || 0) / maxVal) * 100}%`, minHeight: '2px' }} />
+                            <div style={{ width: '16px', background: 'var(--purple)', borderRadius: '3px 3px 0 0', height: `${((d.linkedin || 0) / maxVal) * 100}%`, minHeight: '2px' }} />
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{d.label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="chart-legend">
+                  <div className="chart-legend-item">
+                    <div className="chart-legend-dot" style={{ background: 'var(--blue)' }}></div> Email
+                  </div>
+                  <div className="chart-legend-item">
+                    <div className="chart-legend-dot" style={{ background: 'var(--purple)' }}></div> LinkedIn
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
+                Les graphiques apparaitront avec les donnees de campagne.
               </div>
-            </div>
-            <div className="chart-legend">
-              <div className="chart-legend-item">
-                <div
-                  className="chart-legend-dot"
-                  style={{ background: 'var(--blue)' }}
-                ></div>{' '}
-                Email
-              </div>
-              <div className="chart-legend-item">
-                <div
-                  className="chart-legend-dot"
-                  style={{ background: 'var(--purple)' }}
-                ></div>{' '}
-                LinkedIn
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -190,23 +204,25 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, onShowCampaigns }) {
             <div className="card-title">🔥 Opportunites recentes</div>
           </div>
           <div className="card-body" style={{ padding: '16px 24px' }}>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '13px',
-                  color: 'var(--text-muted)',
-                  textAlign: 'center',
-                  padding: '24px 0',
-                }}
-              >
-                Les opportunites s'afficheront ici.
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {opportunities && opportunities.length > 0 ? (
+                opportunities.map((opp, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < opportunities.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '13px' }}>{opp.name}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{opp.title} · {opp.company} · {opp.size}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: opp.statusColor, background: opp.statusBg, padding: '2px 8px', borderRadius: '4px' }}>{opp.status}</span>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{opp.timing}</div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
+                  Les opportunites s'afficheront ici.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -217,23 +233,19 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, onShowCampaigns }) {
             <div className="card-title">💡 Recommandations Claude</div>
           </div>
           <div className="card-body">
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '13px',
-                  color: 'var(--text-muted)',
-                  textAlign: 'center',
-                  padding: '24px 0',
-                }}
-              >
-                Les recommandations IA s'afficheront ici.
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {recommendations && recommendations.length > 0 ? (
+                recommendations.map((rec, i) => (
+                  <div key={i} className={`alert alert-${rec.level}`} style={{ padding: '12px 16px', borderRadius: '8px', fontSize: '13px' }}>
+                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{rec.label}</div>
+                    <div dangerouslySetInnerHTML={{ __html: rec.text }} />
+                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
+                  Les recommandations IA s'afficheront ici.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -527,8 +539,8 @@ function EmptyOverviewGrid() {
    Reports Section
    ═══════════════════════════════════════════════════ */
 
-function ReportsSection({ isEmpty }) {
-  if (isEmpty) {
+function ReportsSection({ isEmpty, reports }) {
+  if (isEmpty || !reports || reports.length === 0) {
     return (
       <div id="section-reports">
         <div className="empty-state">
@@ -549,15 +561,30 @@ function ReportsSection({ isEmpty }) {
 
   return (
     <div id="section-reports">
-      <div
-        style={{
-          fontSize: '13px',
-          color: 'var(--text-muted)',
-          textAlign: 'center',
-          padding: '48px 0',
-        }}
-      >
-        Les rapports seront affiches ici une fois les donnees disponibles.
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {reports.map((r, i) => (
+          <div className="card" key={i}>
+            <div className="card-header">
+              <div>
+                <div className="card-title">{r.week}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{r.dateRange}</div>
+              </div>
+              <span style={{ fontSize: '13px', fontWeight: 600 }}>{r.scoreLabel}</span>
+            </div>
+            <div className="card-body">
+              {/* Mini KPIs */}
+              <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Contacts:</span> <strong>{r.metrics.contacts}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Ouverture:</span> <strong>{r.metrics.openRate}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Reponse:</span> <strong>{r.metrics.replyRate}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Interesses:</span> <strong>{r.metrics.interested}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>RDV:</span> <strong>{r.metrics.meetings}</strong></div>
+              </div>
+              {/* Synthesis */}
+              <div style={{ fontSize: '13px', lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: r.synthesis }} />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

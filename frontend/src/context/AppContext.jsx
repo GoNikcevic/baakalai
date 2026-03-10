@@ -13,6 +13,10 @@ export function AppProvider({ children }) {
   const [campaigns, setCampaigns] = useState({});
   const [projects, setProjects] = useState({});
   const [globalKpis, setGlobalKpis] = useState({});
+  const [opportunities, setOpportunities] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [chartData, setChartData] = useState([]);
   const [backendAvailable, setBackendAvailable] = useState(false);
   const [user, setUser] = useState(() => (isLoggedIn() ? getUser() : null));
 
@@ -34,13 +38,15 @@ export function AppProvider({ children }) {
         setBackendAvailable(true);
 
         // Fetch live data in parallel
-        const [campaignsData, kpisData] = await Promise.all([
+        const [campaignsData, kpisData, projectsData] = await Promise.all([
           api.fetchAllCampaigns(),
           api.fetchDashboard(),
+          api.fetchProjects().catch(() => ({})),
         ]);
 
         setCampaigns(campaignsData);
         setGlobalKpis(kpisData);
+        setProjects(projectsData);
       } else {
         throw new Error('Backend unreachable');
       }
@@ -48,10 +54,14 @@ export function AppProvider({ children }) {
       // Backend not available — load demo data
       setBackendAvailable(false);
 
-      const { default: demoData } = await import('../data/demo-data');
-      setCampaigns(demoData.campaigns || {});
-      setProjects(demoData.projects || {});
-      setGlobalKpis(demoData.globalKpis || {});
+      const { DEMO_DATA } = await import('../data/demo-data');
+      setCampaigns(DEMO_DATA.campaigns || {});
+      setProjects(DEMO_DATA.projects || {});
+      setGlobalKpis(DEMO_DATA.globalKpis || {});
+      setOpportunities(DEMO_DATA.opportunities || []);
+      setRecommendations(DEMO_DATA.recommendations || []);
+      setReports(DEMO_DATA.reports || []);
+      setChartData(DEMO_DATA.chartData || []);
     }
   }, []);
 
@@ -60,6 +70,10 @@ export function AppProvider({ children }) {
     campaigns,
     projects,
     globalKpis,
+    opportunities,
+    recommendations,
+    reports,
+    chartData,
     backendAvailable,
     user,
 
@@ -67,6 +81,10 @@ export function AppProvider({ children }) {
     setCampaigns,
     setProjects,
     setGlobalKpis,
+    setOpportunities,
+    setRecommendations,
+    setReports,
+    setChartData,
     setBackendAvailable,
     setUser,
 
