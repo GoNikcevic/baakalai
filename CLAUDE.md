@@ -6,12 +6,12 @@
 
 ## 🎯 Project Overview
 
-**Bakal** is a B2B prospecting automation service (done-for-you model) that combines:
+**Bakal** is a B2B prospecting automation **product** that combines:
 - Multi-channel outreach (Email + LinkedIn)
 - AI-generated personalized copy
-- Automated performance optimization through a refinement loop
+- Automated performance optimization through a cross-campaign learning loop
 
-**Business Model:** Agency-style service at €350/month + €250 setup (pilot offer)
+**Positioning:** The power of a prospecting agency, delivered as an automated product at €350/month + €250 setup (pilot offer). Bakal is NOT an agency — it's a self-serve product that replaces one.
 
 **Target Market:** SMB owners/directors who need leads but lack time/expertise to prospect
 
@@ -28,22 +28,29 @@
 ## 🏗️ Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         BAKAL SYSTEM                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │   LEMLIST    │───▶│     N8N      │───▶│   CLAUDE     │      │
-│  │  (Campaigns) │    │  (Workflows) │    │   (AI/Copy)  │      │
-│  └──────────────┘    └──────────────┘    └──────────────┘      │
-│         │                   │                   │               │
-│         │                   ▼                   │               │
-│         │            ┌──────────────┐           │               │
-│         └───────────▶│   NOTION     │◀──────────┘               │
-│                      │  (Hub/Data)  │                           │
-│                      └──────────────┘                           │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                           BAKAL SYSTEM                               │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐           │
+│  │   LEMLIST    │───▶│     N8N      │───▶│   CLAUDE     │           │
+│  │  (Campaigns) │    │  (Workflows) │    │   (AI/Copy)  │           │
+│  └──────────────┘    └──────────────┘    └──────────────┘           │
+│         │                   │                   │                    │
+│         │                   ▼                   │                    │
+│         │            ┌──────────────┐           │                    │
+│         └───────────▶│  POSTGRESQL  │◀──────────┘                    │
+│                      │  (Database)  │  ← Source de vérité            │
+│                      └──────┬───────┘                                │
+│                      ┌──────┴───────┐                                │
+│                      ▼              ▼                                 │
+│               ┌──────────┐   ┌──────────────┐                       │
+│               │DASHBOARD │   │    NOTION    │                        │
+│               │  BAKAL   │   │  (interne)   │                        │
+│               └──────────┘   └──────────────┘                        │
+│                Client         Équipe Bakal                           │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -55,7 +62,9 @@
 | Email/LinkedIn Automation | **Lemlist** | Campaign execution, sequence management, stats collection |
 | Workflow Automation | **N8N** | Orchestration between tools, scheduled jobs, API calls |
 | AI Generation | **Claude API** | Copy generation, performance analysis, optimization |
-| Business Hub | **Notion** | Client management, campaign tracking, knowledge base |
+| Database | **PostgreSQL** (Supabase or Neon) | Source of truth — campaigns, stats, memory, diagnostics |
+| Client Dashboard | **Bakal SaaS** | Client-facing dashboard — campaigns, stats, copy, optimization history |
+| Internal Ops | **Notion** (internal only) | Team-only — operational tracking, client notes, processes |
 | Landing Page | **Static HTML** | Client-facing marketing site |
 
 ---
@@ -74,7 +83,7 @@
   copy-editor.js                    # Copy & sequences editor module
 
 /workflows/
-  01-stats-collection.json          # N8N — Daily stats from Lemlist → Notion → Claude analysis
+  01-stats-collection.json          # N8N — Daily stats from Lemlist → PostgreSQL → Claude analysis
   02-regeneration-deployment.json   # N8N — Claude regeneration → Lemlist A/B deployment
   03-memory-consolidation.json      # N8N — Monthly cross-campaign pattern library
   README.md                         # Setup guide and configuration checklist
@@ -142,65 +151,78 @@ Lemlist (stats) → N8N → Claude (analyze) → Claude (regenerate) → N8N →
 **Workflow 1: Stats Collection (daily @ 8am)**
 - Fetch active campaigns from Lemlist API
 - Calculate per-touchpoint metrics
-- Store in Notion "Campagnes — Résultats"
+- Store in PostgreSQL `campaigns_results`
 - Trigger analysis if campaign >50 prospects AND >7 days old
 
 **Workflow 2: Regeneration + Deployment**
 - Triggered by Workflow 1 when optimization needed
-- Reads original messages + memory from Notion
+- Reads original messages + memory from PostgreSQL
 - Calls Claude for regeneration
 - Updates Lemlist sequences with A/B variants
+- Stores new version in PostgreSQL `campaigns_versions`
 
 **Workflow 3: Memory Consolidation (monthly)**
-- Aggregates all monthly diagnostics
-- Updates "Mémoire Cross-Campagne" in Notion
+- Aggregates all monthly diagnostics from PostgreSQL
+- Updates `cross_campaign_memory` table in PostgreSQL
 
 ---
 
-## 📊 Notion Database Structure
+## 📊 Database Structure (PostgreSQL)
 
-### Base 1: Campagnes — Résultats
-| Property | Type |
-|----------|------|
-| Nom campagne | Title |
-| Client | Relation |
-| Date collecte | Date |
-| Statut | Select (Active/Terminée/En optimisation) |
-| Nb prospects | Number |
-| Open rate E1-E4 | Number |
-| Reply rate E1-E4 | Number |
-| Accept rate LK | Number |
-| Reply rate LK | Number |
+PostgreSQL is the **source of truth** for all campaign data. Notion is used internally by the team only. The client sees everything through the Bakal dashboard.
 
-### Base 2: Campagnes — Diagnostics
-| Property | Type |
-|----------|------|
-| Campagne | Relation |
-| Date analyse | Date |
-| Diagnostic | Rich text |
-| Priorités | Multi-select |
-| Nb messages à optimiser | Number |
+### Table: campaigns_results
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | Primary key |
+| campaign_name | TEXT | |
+| client_id | UUID | FK → clients |
+| collected_at | TIMESTAMP | |
+| status | ENUM | active / completed / optimizing |
+| prospect_count | INTEGER | |
+| open_rate_e1 to e4 | DECIMAL | Per-touchpoint |
+| reply_rate_e1 to e4 | DECIMAL | Per-touchpoint |
+| accept_rate_lk | DECIMAL | LinkedIn |
+| reply_rate_lk | DECIMAL | LinkedIn |
 
-### Base 3: Campagnes — Historique Versions
-| Property | Type |
-|----------|------|
-| Campagne | Relation |
-| Version | Number |
-| Date | Date |
-| Messages modifiés | Multi-select |
-| Hypothèses testées | Text |
-| Résultat | Select (En cours/Amélioré/Dégradé/Neutre) |
+### Table: campaigns_diagnostics
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | Primary key |
+| campaign_id | UUID | FK → campaigns_results |
+| analyzed_at | TIMESTAMP | |
+| diagnostic | JSONB | Structured diagnostic |
+| priorities | TEXT[] | Array of priorities |
+| messages_to_optimize | INTEGER | |
 
-### Base 4: Mémoire Cross-Campagne
-| Property | Type |
-|----------|------|
-| Catégorie | Select (Objets/Corps/Timing/LinkedIn/Secteur/Cible) |
-| Pattern | Title |
-| Données | Text |
-| Confiance | Select (Haute/Moyenne/Faible) |
-| Date découverte | Date |
-| Secteur | Multi-select |
-| Cible | Multi-select |
+### Table: campaigns_versions
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | Primary key |
+| campaign_id | UUID | FK → campaigns_results |
+| version | INTEGER | |
+| created_at | TIMESTAMP | |
+| modified_messages | TEXT[] | |
+| hypotheses | TEXT | |
+| result | ENUM | pending / improved / degraded / neutral |
+
+### Table: cross_campaign_memory
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | Primary key |
+| category | ENUM | subjects / body / timing / linkedin / sector / target |
+| pattern | TEXT | |
+| data | JSONB | Stats, examples, evidence |
+| confidence | ENUM | high (>200) / medium (50-200) / low (<50) |
+| discovered_at | TIMESTAMP | |
+| sectors | TEXT[] | |
+| targets | TEXT[] | |
+
+### Migration Path
+1. **Phase 1 (now)** — Notion for manual ops, schema design ready
+2. **Phase 2** — PostgreSQL deployed, cross-campaign memory migrated first (first bottleneck)
+3. **Phase 3** — All data in PostgreSQL, Notion becomes internal-only read view
+4. **Scale (1000+ users)** — Notion optional, replaceable by admin panel in dashboard
 
 ---
 
@@ -220,9 +242,11 @@ Lemlist (stats) → N8N → Claude (analyze) → Claude (regenerate) → N8N →
 
 1. **Why Lemlist?** — Best-in-class for multi-channel sequences, good API, handles deliverability
 2. **Why N8N over Zapier?** — Self-hostable, more complex logic support, better for AI integrations
-3. **Why Notion as hub?** — Client already uses it, good API, flexible schema, serves as visible "control center"
-4. **Why not pay-per-lead?** — Lead value varies wildly by sector; flat fee simpler and more predictable
-5. **Why 60-day pilot?** — Enough time to run optimization cycles, not so long that bad fit clients are stuck
+3. **Why PostgreSQL as source of truth?** — Scalable to 1000+ users, supports complex queries/aggregations for cross-campaign memory, reliable under load. Supabase/Neon for managed hosting.
+4. **Why keep Notion?** — Internal team ops only (client notes, processes). NOT exposed to clients. Replaceable by admin panel at scale.
+5. **Why a dashboard, not Notion, for clients?** — Clients see their campaigns on the Bakal SaaS dashboard. Professional product experience, no dependency on third-party UX.
+6. **Why not pay-per-lead?** — Lead value varies wildly by sector; flat fee simpler and more predictable
+7. **Why 60-day pilot?** — Enough time to run optimization cycles, not so long that bad fit clients are stuck
 
 ---
 
@@ -230,11 +254,12 @@ Lemlist (stats) → N8N → Claude (analyze) → Claude (regenerate) → N8N →
 
 When building the platform:
 
-1. **Start with Workflow 1** — Stats collection is foundation for everything
-2. **Notion structure first** — Databases need to exist before workflows can write to them
+1. **PostgreSQL schema first** — Deploy database tables before workflows can write to them
+2. **Start with Workflow 1** — Stats collection is foundation for everything
 3. **Test analysis prompt manually** — Validate diagnostic quality before automating
 4. **A/B testing infrastructure** — Ensure Lemlist setup supports variant deployment
-5. **Monitoring/alerts** — Know when campaigns need attention before clients notice
+5. **Dashboard MVP** — Client-facing views for campaigns, stats, and optimization history
+6. **Monitoring/alerts** — Know when campaigns need attention before clients notice
 
 ---
 
@@ -273,9 +298,16 @@ When building the platform:
 - Endpoint: `POST /messages`
 - Model: Use latest available (claude-3-opus or claude-3-sonnet)
 
-### Notion API
+### PostgreSQL (via Supabase or Neon)
+- **Supabase**: Auto-generated REST API at `https://<project>.supabase.co/rest/v1`
+- **Neon**: Standard PostgreSQL connection string, use with any ORM/client
+- Auth: API key (Supabase) or connection string (Neon)
+- All campaign data, diagnostics, versions, and cross-campaign memory stored here
+
+### Notion API (internal team use only)
 - Base: `https://api.notion.com/v1`
 - Auth: Bearer token
+- Used for internal ops only — NOT part of the product data flow
 - Key endpoints:
   - `POST /databases/{id}/query` — Read database
   - `POST /pages` — Create entry
@@ -310,11 +342,11 @@ When generating copy for Bakal clients:
 # 4. Update landing page
 → Edit landing/bakal-landing-page.html (dark) or landing/bakal-landing-page-light.html
 
-# 5. Extend Notion structure
-→ Follow schema patterns from refinement-system.md
+# 5. Extend database structure
+→ Follow PostgreSQL schema patterns from this file, migrate to SQL
 ```
 
 ---
 
-*Last updated: February 2026*
+*Last updated: March 2026*
 *For questions about project history, check conversation context or ask Goran.*
