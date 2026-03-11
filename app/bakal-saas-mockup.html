@@ -127,8 +127,6 @@ body {
   background: var(--accent-glow); color: var(--text-primary);
   font-weight: 500;
 }
-.nav-item .icon { font-size: 15px; width: 20px; text-align: center; opacity: 0.7; }
-.nav-item.active .icon { opacity: 1; }
 .nav-item .badge {
   margin-left: auto; background: var(--bg-elevated);
   color: var(--text-muted); font-size: 10px; font-weight: 500;
@@ -2356,7 +2354,6 @@ body {
   .sidebar { width: 60px; padding: 12px 6px; }
   .sidebar .logo-text,
   .sidebar .nav-label,
-  .sidebar .nav-item span:not(.icon),
   .sidebar .nav-item .badge,
   .sidebar .sidebar-create-btn span,
   .sidebar .user-info,
@@ -2364,7 +2361,6 @@ body {
   .sidebar .nav-campaign-item { display: none; }
   .sidebar .logo { padding: 0 0 12px; justify-content: center; }
   .sidebar .nav-item { justify-content: center; padding: 10px; }
-  .sidebar .nav-item .icon { font-size: 18px; width: auto; }
   .sidebar .sidebar-create-btn { padding: 10px; justify-content: center; }
   .sidebar .sidebar-create-btn svg { width: 18px; height: 18px; }
   .sidebar .user-card { justify-content: center; }
@@ -2440,7 +2436,6 @@ body {
   }
   .mobile-nav-item:hover,
   .mobile-nav-item.active { color: var(--text-primary); }
-  .mobile-nav-item .icon { font-size: 18px; }
 
   body { padding-bottom: 60px; }
   .kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -2515,22 +2510,22 @@ body {
     </div>
     <div class="nav-section">
       <div class="nav-label">Workspace</div>
-      <div class="nav-item" onclick="showPage('dashboard')"><span class="icon">◻</span> Dashboard <span class="badge">Live</span></div>
-      <div class="nav-item" onclick="showPage('dashboard','campaigns')"><span class="icon">◻</span> Campagnes</div>
+      <div class="nav-item" onclick="showPage('dashboard')">Dashboard <span class="badge">Live</span></div>
+      <div class="nav-item" onclick="showPage('dashboard','campaigns')">Campagnes</div>
       <div id="sidebarCampaignList"></div>
-      <div class="nav-item" onclick="showPage('dashboard','overview')"><span class="icon">◻</span> Opportunit&eacute;s <span class="badge">3</span></div>
-      <div class="nav-item" onclick="showPage('dashboard','reports')"><span class="icon">◻</span> Rapports</div>
+      <div class="nav-item" onclick="showPage('dashboard','overview')">Opportunit&eacute;s <span class="badge">3</span></div>
+      <div class="nav-item" onclick="showPage('dashboard','reports')">Rapports</div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Configuration</div>
-      <div class="nav-item" onclick="showPage('profil')"><span class="icon">◻</span> Profil Entreprise</div>
-      <div class="nav-item" onclick="showPage('copyeditor')"><span class="icon">◻</span> Copy & S&eacute;quences</div>
-      <div class="nav-item" onclick="showPage('settings')"><span class="icon">◻</span> Param&egrave;tres</div>
+      <div class="nav-item" onclick="showPage('profil')">Profil Entreprise</div>
+      <div class="nav-item" onclick="showPage('copyeditor')">Copy & S&eacute;quences</div>
+      <div class="nav-item" onclick="showPage('settings')">Param&egrave;tres</div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Intelligence</div>
-      <div class="nav-item" onclick="showPage('dashboard','refinement')"><span class="icon">◻</span> Refinement A/B</div>
-      <div class="nav-item" onclick="showPage('recos')"><span class="icon">◻</span> Recommandations <span class="badge">3</span></div>
+      <div class="nav-item" onclick="showPage('dashboard','refinement')">Refinement A/B</div>
+      <div class="nav-item" onclick="showPage('recos')">Recommandations <span class="badge">3</span></div>
     </div>
   </nav>
 
