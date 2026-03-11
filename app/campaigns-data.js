@@ -258,25 +258,40 @@ async function loadFromBackend() {
 
     _backendAvailable = true;
 
-    // Fetch campaigns (primary data)
-    const campaigns = await BakalAPI.fetchAllCampaigns();
-
-    // Fetch dashboard KPIs
-    let kpis = {};
-    try {
-      kpis = await BakalAPI.fetchDashboard();
-    } catch { /* dashboard endpoint may fail if no data */ }
+    // Fetch all data in parallel
+    const [campaigns, kpis, projects, opportunities, reports, chartData] = await Promise.all([
+      BakalAPI.fetchAllCampaigns().catch(() => ({})),
+      BakalAPI.fetchDashboard().catch(() => ({})),
+      BakalAPI.fetchProjects().catch(() => ({})),
+      BakalAPI.fetchOpportunities().catch(() => []),
+      BakalAPI.fetchReports().catch(() => []),
+      BakalAPI.fetchChartData().catch(() => []),
+    ]);
 
     // If backend has data, use it
     if (Object.keys(campaigns).length > 0) {
       BAKAL.campaigns = campaigns;
       BAKAL.globalKpis = kpis;
-      // Opportunities, recommendations, reports, chartData
-      // not yet served by backend — supplement with demo data
-      BAKAL.opportunities = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.opportunities));
+      BAKAL.projects = Object.keys(projects).length > 0 ? projects : JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.projects));
+
+      // Link campaigns to projects
+      for (const [pid, proj] of Object.entries(BAKAL.projects)) {
+        proj.campaignIds = Object.values(BAKAL.campaigns)
+          .filter(c => c.projectId === pid)
+          .map(c => c.id);
+      }
+
+      // Use real data if available, demo data as fallback
+      BAKAL.opportunities = opportunities.length > 0
+        ? opportunities
+        : JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.opportunities));
       BAKAL.recommendations = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.recommendations));
-      BAKAL.reports = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.reports));
-      BAKAL.chartData = JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.chartData));
+      BAKAL.reports = reports.length > 0
+        ? reports
+        : JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.reports));
+      BAKAL.chartData = chartData.length > 0
+        ? chartData
+        : JSON.parse(JSON.stringify(BAKAL_DEMO_DATA.chartData));
       return true;
     }
 
@@ -332,8 +347,9 @@ async function initData() {
     const toggle = document.getElementById('demoToggle');
     const label = document.getElementById('demoToggleLabel');
     if (toggle) toggle.classList.remove('active');
-    if (label) label.textContent = 'Données live';
-    console.log('Loaded data from backend');
+    const source = (typeof BakalAPI !== 'undefined' && BakalAPI.useSupabase) ? 'Supabase' : 'Backend';
+    if (label) label.textContent = `Données live (${source})`;
+    console.log(`Loaded data from ${source}`);
   } else {
     // No backend data — load demo data as default
     loadDemoData();

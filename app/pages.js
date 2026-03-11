@@ -990,12 +990,97 @@ function initWizardDropzone() {
   });
 }
 
+/* ═══════════════════════════════════════════════
+   Supabase Database — Settings
+   ═══════════════════════════════════════════════ */
+
+function loadSupabaseSettings() {
+  if (typeof BakalSupabase === 'undefined') return;
+  try {
+    const config = JSON.parse(localStorage.getItem('bakal_supabase_config') || '{}');
+    const urlInput = document.getElementById('settings-supabase-url');
+    const keyInput = document.getElementById('settings-supabase-anon-key');
+    if (urlInput && config.url) urlInput.value = config.url;
+    if (keyInput && config.anonKey) keyInput.placeholder = config.anonKey.slice(0, 20) + '...';
+
+    updateSupabaseStatus();
+  } catch { /* ignore */ }
+}
+
+function saveSupabaseConfig() {
+  const url = document.getElementById('settings-supabase-url')?.value?.trim();
+  const anonKey = document.getElementById('settings-supabase-anon-key')?.value?.trim();
+
+  if (!url || !anonKey) {
+    if (typeof showToast === 'function') showToast('URL et clé anon requises', 'error');
+    return;
+  }
+
+  if (typeof BakalSupabase !== 'undefined') {
+    BakalSupabase.configure(url, anonKey);
+  }
+
+  // Clear the plaintext key from the input
+  document.getElementById('settings-supabase-anon-key').value = '';
+  document.getElementById('settings-supabase-anon-key').placeholder = anonKey.slice(0, 20) + '...';
+
+  updateSupabaseStatus();
+  if (typeof showToast === 'function') showToast('Connexion Supabase enregistrée', 'success');
+}
+
+function clearSupabaseConfig() {
+  localStorage.removeItem('bakal_supabase_config');
+  const urlInput = document.getElementById('settings-supabase-url');
+  const keyInput = document.getElementById('settings-supabase-anon-key');
+  if (urlInput) urlInput.value = '';
+  if (keyInput) { keyInput.value = ''; keyInput.placeholder = 'eyJhbGciOi...'; }
+  updateSupabaseStatus();
+  if (typeof showToast === 'function') showToast('Connexion Supabase supprimée', 'success');
+}
+
+async function testSupabaseConnection() {
+  const status = document.getElementById('supabase-status');
+  if (!status) return;
+
+  status.textContent = 'Test en cours...';
+  status.style.color = 'var(--text-secondary)';
+
+  if (typeof BakalSupabase === 'undefined' || !BakalSupabase.isReady()) {
+    status.textContent = 'Non configuré';
+    status.style.color = 'var(--text-muted)';
+    return;
+  }
+
+  const ok = await BakalSupabase.checkHealth();
+  if (ok) {
+    status.textContent = 'Connecté';
+    status.style.color = 'var(--success)';
+  } else {
+    status.textContent = 'Connexion échouée';
+    status.style.color = 'var(--danger)';
+  }
+}
+
+function updateSupabaseStatus() {
+  const status = document.getElementById('supabase-status');
+  if (!status) return;
+
+  if (typeof BakalSupabase !== 'undefined' && BakalSupabase.isReady()) {
+    status.textContent = 'Configuré';
+    status.style.color = 'var(--success)';
+  } else {
+    status.textContent = 'Non configuré';
+    status.style.color = 'var(--text-muted)';
+  }
+}
+
 /* ═══ Init — Load saved data on page load ═══ */
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   loadProfile();
   loadSettingsPrefs();
   loadSettingsKeys();
+  loadSupabaseSettings();
   initDocDropzone();
   loadDocuments();
   filterApiCatalog();

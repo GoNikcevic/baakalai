@@ -4363,6 +4363,40 @@ body {
         </div>
       </div>
 
+      <!-- Supabase Database -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🗃️ Base de données (Supabase)</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="supabase-status" style="font-size:11px;color:var(--text-muted);">Non configuré</span>
+            <button class="btn btn-ghost" style="font-size:11px;padding:6px 12px;" onclick="testSupabaseConnection()">🔄 Tester</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-stack">
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+              Connectez votre base Supabase pour stocker les campagnes, statistiques et données de prospection. Source de vérité pour toutes les données.
+            </p>
+            <div class="form-group full">
+              <label class="form-label">URL du projet Supabase</label>
+              <input class="form-input mono" id="settings-supabase-url" type="url"
+                placeholder="https://votre-projet.supabase.co">
+              <div class="form-hint">Dashboard Supabase → Settings → API → Project URL</div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">Clé publique (anon key)</label>
+              <input class="form-input mono" id="settings-supabase-anon-key" type="password"
+                placeholder="eyJhbGciOi...">
+              <div class="form-hint">Dashboard Supabase → Settings → API → Project API keys → anon/public</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" style="font-size:12px;" onclick="saveSupabaseConfig()">Enregistrer la connexion</button>
+              <button class="btn btn-ghost" style="font-size:12px;" onclick="clearSupabaseConfig()">Déconnecter</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Data Management -->
       <div class="card">
         <div class="card-header"><div class="card-title">🗄️ Gestion des données</div></div>
@@ -4550,6 +4584,7 @@ body {
   <span id="demoToggleLabel">Données démo</span>
 </div>
 
+<script src="supabase-client.js"></script>
 <script src="auth.js"></script>
 <script src="api-client.js"></script>
 <script src="chat.js"></script>
