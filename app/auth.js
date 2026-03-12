@@ -4,6 +4,9 @@
    Fallback: Express backend /api/auth/* or offline demo mode.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// Skip if preview mode already set up a mock BakalAuth
+if (!window.__BAKAL_PREVIEW) {
+
 const BakalAuth = (() => {
   const TOKEN_KEY = 'bakal_token';
   const REFRESH_KEY = 'bakal_refresh_token';
@@ -474,3 +477,5 @@ const BakalAuth = (() => {
     updateUserDisplay,
   };
 })();
+
+} // end preview guard

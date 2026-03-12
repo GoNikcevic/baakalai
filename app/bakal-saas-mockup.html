@@ -4584,6 +4584,13 @@ body {
   <span id="demoToggleLabel">Données démo</span>
 </div>
 
+<script>
+// Preview mode: skip auth & API calls when opened via file://
+if (window.location.protocol === 'file:') {
+  window.__BAKAL_PREVIEW = true;
+  window.BakalAuth = { isLoggedIn: () => true, validateToken: async () => true, showLoginScreen: () => {}, updateUserDisplay: () => {}, getUser: () => ({name:'Preview',email:'preview@bakal.fr'}), logout: () => location.reload() };
+}
+</script>
 <script src="supabase-client.js"></script>
 <script src="auth.js"></script>
 <script src="api-client.js"></script>
