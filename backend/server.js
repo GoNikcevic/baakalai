@@ -39,11 +39,6 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'app')));
 app.use('/landing', express.static(path.join(__dirname, '..', 'landing')));
 
-// Redirect root to dashboard
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'app', 'bakal-saas-mockup.html'));
-});
-
 // Health check (public)
 app.get('/api/health', (_req, res) => {
   const configOk = validateConfig([
