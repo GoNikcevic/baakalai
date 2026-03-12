@@ -657,9 +657,24 @@ function renderEditorMain() {
 }
 
 /* ═══ Select Campaign ═══ */
-function selectEditorCampaign(key) {
+async function selectEditorCampaign(key) {
   activeEditorCampaign = key;
   renderEditorSidebar();
+
+  // Fetch full detail from Supabase if touchpoints are empty
+  const c = editorCampaigns[key];
+  if (c && (!c.touchpoints || c.touchpoints.length === 0) && typeof BakalAPI !== 'undefined') {
+    try {
+      const full = await BakalAPI.fetchCampaignDetail(c._backendId || key);
+      if (full && full.sequence && full.sequence.length > 0) {
+        BAKAL.campaigns[key] = full;
+        syncEditorFromBAKAL();
+      }
+    } catch {
+      // Keep existing data
+    }
+  }
+
   renderEditorMain();
 }
 
@@ -672,8 +687,9 @@ function syncEditorFromBAKAL() {
   const chLabels = { email: 'Email', linkedin: 'LinkedIn', multi: 'Multi-canal' };
 
   for (const [id, c] of Object.entries(BAKAL.campaigns)) {
-    // Skip if already registered with touchpoint data from editor-specific interactions
-    if (editorCampaigns[id] && editorCampaigns[id]._synced) continue;
+    // Skip if already synced AND has touchpoints (unless BAKAL has newer data with touchpoints)
+    if (editorCampaigns[id] && editorCampaigns[id]._synced && editorCampaigns[id].touchpoints.length > 0
+        && (!c.sequence || c.sequence.length === 0)) continue;
 
     const ch = c.channel || 'email';
     const seq = c.sequence || [];
@@ -715,7 +731,30 @@ function syncEditorFromBAKAL() {
 }
 
 /* ═══ Init ═══ */
-function initCopyEditor() {
+async function initCopyEditor() {
+  // Try fetching campaigns with touchpoints from Supabase first
+  if (typeof BakalAPI !== 'undefined') {
+    try {
+      const campaigns = await BakalAPI.fetchAllCampaigns();
+      if (campaigns && Object.keys(campaigns).length > 0) {
+        // Fetch full detail (with touchpoints) for each campaign
+        for (const [id, c] of Object.entries(campaigns)) {
+          try {
+            const full = await BakalAPI.fetchCampaignDetail(c._backendId || id);
+            if (full) {
+              BAKAL.campaigns[id] = full;
+            }
+          } catch {
+            // Keep basic campaign data
+            BAKAL.campaigns[id] = c;
+          }
+        }
+      }
+    } catch {
+      // Fallback to existing BAKAL data
+    }
+  }
+
   // Sync live data from BAKAL, fall back to hardcoded data
   syncEditorFromBAKAL();
 

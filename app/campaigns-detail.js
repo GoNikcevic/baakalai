@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════ */
 
 /* ═══ Navigation ═══ */
-function showCampaignDetail(id) {
+async function showCampaignDetail(id) {
   document.getElementById('campaigns-list-view').style.display = 'none';
 
   // Hide all detail containers, show the requested one
@@ -19,6 +19,22 @@ function showCampaignDetail(id) {
     detailEl.id = 'detail-' + id;
     detailEl.className = 'campaign-detail';
     document.getElementById('section-campaigns').appendChild(detailEl);
+  }
+
+  // Try fetching full detail (touchpoints, diagnostics, versions) from Supabase
+  if (typeof BakalAPI !== 'undefined') {
+    try {
+      detailEl.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text-muted);">Chargement...</div>';
+      detailEl.style.display = 'block';
+
+      const fullCampaign = await BakalAPI.fetchCampaignDetail(id);
+      if (fullCampaign) {
+        // Update BAKAL cache with full data
+        BAKAL.campaigns[id] = fullCampaign;
+      }
+    } catch {
+      // Fallback to existing BAKAL data
+    }
   }
 
   detailEl.innerHTML = renderCampaignDetail(id);

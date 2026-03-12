@@ -136,22 +136,51 @@ const BakalAPI = (() => {
   }
 
   function transformDiagnostic(d) {
-    return {
-      step: '',
-      level: 'blue',
-      title: '📊 Analyse',
-      text: d.diagnostic || '',
-    };
+    // Try parsing JSONB diagnostic for structured data
+    let diag = d.diagnostic || '';
+    let level = 'blue';
+    let title = '📊 Analyse';
+    let step = '';
+
+    if (typeof diag === 'object') {
+      level = diag.level || 'blue';
+      title = diag.title || '📊 Analyse';
+      step = diag.step || '';
+      diag = diag.text || JSON.stringify(diag);
+    } else if (typeof diag === 'string') {
+      // Try parsing JSON string
+      try {
+        const parsed = JSON.parse(diag);
+        if (parsed.level) level = parsed.level;
+        if (parsed.title) title = parsed.title;
+        if (parsed.step) step = parsed.step;
+        if (parsed.text) diag = parsed.text;
+      } catch {
+        // Plain text diagnostic — infer level from priorities
+        if (d.priorities && d.priorities.length > 0) {
+          const pri = d.priorities[0].toLowerCase();
+          if (pri.includes('urgent') || pri.includes('critique')) level = 'warning';
+          else if (pri.includes('ok') || pri.includes('bon')) level = 'success';
+        }
+      }
+    }
+
+    return { step, level, title, text: diag };
   }
 
   function transformVersion(v) {
+    const dateStr = v.date || v.created_at;
+    const formatted = dateStr
+      ? new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      : '';
+
     return {
       version: 'v' + v.version,
       title: v.hypotheses || 'Version ' + v.version,
       desc: v.hypotheses || '',
       result: v.result,
       resultText: resultTextMap[v.result] || v.result,
-      date: v.date || '',
+      date: formatted,
     };
   }
 
