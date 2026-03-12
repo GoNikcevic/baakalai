@@ -11,10 +11,9 @@ function isDryRun(req) {
 }
 
 // Enrich params with user profile defaults and document context
-function enrichWithProfile(params, userId) {
-  const profile = db.profiles.get(userId);
+async function enrichWithProfile(params, userId) {
+  const profile = await db.profiles.get(userId);
   if (profile) {
-    // Fill missing params from profile (don't override explicit values)
     if (!params.companyName && profile.company) params.companyName = profile.company;
     if (!params.sector && profile.sector) params.sector = profile.sector;
     if (!params.valueProp && profile.value_prop) params.valueProp = profile.value_prop;
@@ -25,14 +24,12 @@ function enrichWithProfile(params, userId) {
     if (!params.zone && profile.target_zones) params.zone = profile.target_zones;
     if (!params.position && profile.persona_primary) params.position = profile.persona_primary;
     if (!params.size && profile.target_size) params.size = profile.target_size;
-    // Pass copy preferences
     if (profile.avoid_words) params.avoidWords = profile.avoid_words;
     if (profile.signature_phrases) params.signaturePhrases = profile.signature_phrases;
     if (profile.objections) params.objections = profile.objections;
   }
 
-  // Attach document context (truncated)
-  const docs = db.documents.getParsedTextByUser(userId);
+  const docs = await db.documents.getParsedTextByUser(userId);
   if (docs && docs.length > 0) {
     const docText = docs
       .map(d => `[${d.original_name}] ${(d.parsed_text || '').slice(0, 1500)}`)
@@ -43,14 +40,10 @@ function enrichWithProfile(params, userId) {
   return params;
 }
 
-// =============================================
 // POST /api/ai/generate-sequence
-// Generate a full sequence from campaign parameters
-// =============================================
-
 router.post('/generate-sequence', async (req, res, next) => {
   try {
-    const params = enrichWithProfile(req.body, req.user.id);
+    const params = await enrichWithProfile(req.body, req.user.id);
 
     if (!params.sector && !params.position) {
       return res.status(400).json({ error: 'Au moins sector ou position requis' });
@@ -60,14 +53,11 @@ router.post('/generate-sequence', async (req, res, next) => {
       ? dryRun.generateSequence(params)
       : await claude.generateSequence(params);
 
-    // If a campaignId is provided, save touchpoints to DB
     if (params.campaignId && result.parsed?.sequence) {
-      // Clear existing touchpoints
-      db.touchpoints.deleteByCampaign(params.campaignId);
-
-      // Save new ones
-      result.parsed.sequence.forEach((tp, i) => {
-        db.touchpoints.create(params.campaignId, {
+      await db.touchpoints.deleteByCampaign(params.campaignId);
+      for (let i = 0; i < result.parsed.sequence.length; i++) {
+        const tp = result.parsed.sequence[i];
+        await db.touchpoints.create(params.campaignId, {
           step: tp.step,
           type: tp.type,
           label: tp.label,
@@ -78,7 +68,7 @@ router.post('/generate-sequence', async (req, res, next) => {
           maxChars: tp.maxChars || (tp.step.startsWith('L') && tp.step.includes('1') ? 300 : null),
           sortOrder: i,
         });
-      });
+      }
     }
 
     res.json({
@@ -93,15 +83,11 @@ router.post('/generate-sequence', async (req, res, next) => {
   }
 });
 
-// =============================================
 // POST /api/ai/generate-touchpoint
-// Generate a single touchpoint by type
-// =============================================
-
 router.post('/generate-touchpoint', async (req, res, next) => {
   try {
     const { type, ...rawParams } = req.body;
-    const params = enrichWithProfile(rawParams, req.user.id);
+    const params = await enrichWithProfile(rawParams, req.user.id);
 
     if (!type) {
       return res.status(400).json({
@@ -124,33 +110,28 @@ router.post('/generate-touchpoint', async (req, res, next) => {
   }
 });
 
-// =============================================
-// POST /api/ai/analyze — Analyze campaign performance
-// =============================================
-
+// POST /api/ai/analyze
 router.post('/analyze', async (req, res, next) => {
   try {
     const { campaignId } = req.body;
-    const campaign = db.campaigns.get(campaignId);
+    const campaign = await db.campaigns.get(campaignId);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
-    const sequence = db.touchpoints.listByCampaign(campaignId);
+    const sequence = await db.touchpoints.listByCampaign(campaignId);
 
     const result = isDryRun(req)
       ? dryRun.analyzeCampaign({ ...campaign, sequence })
       : await claude.analyzeCampaign({ ...campaign, sequence });
 
-    // Extract priorities from parsed result or text
     const priorities = result.parsed?.priorities?.map(p => p.step)
       || extractPriorities(result.diagnostic);
 
-    const diag = db.diagnostics.create(campaignId, {
+    const diag = await db.diagnostics.create(campaignId, {
       diagnostic: result.diagnostic,
       priorities,
       nbToOptimize: priorities.length,
     });
 
-    // Background sync to Notion
     notionSync.syncDiagnostic(diag.id, campaignId).catch(console.error);
 
     res.json({
@@ -166,27 +147,22 @@ router.post('/analyze', async (req, res, next) => {
   }
 });
 
-// =============================================
-// POST /api/ai/regenerate — Regenerate sequence
-// =============================================
-
+// POST /api/ai/regenerate
 router.post('/regenerate', async (req, res, next) => {
   try {
     const { campaignId, diagnostic, originalMessages, clientParams, regenerationInstructions } = req.body;
 
-    // Fetch cross-campaign memory
-    const memory = db.memoryPatterns.list({});
+    const memory = await db.memoryPatterns.list({});
 
     const result = isDryRun(req)
       ? dryRun.regenerateSequence({ diagnostic, originalMessages, memory, clientParams })
       : await claude.regenerateSequence({ diagnostic, originalMessages, memory, clientParams, regenerationInstructions });
 
-    // Record version if we have a campaign
     if (campaignId) {
-      const existing = db.versions.listByCampaign(campaignId);
+      const existing = await db.versions.listByCampaign(campaignId);
       const nextVersion = (existing[0]?.version || 0) + 1;
 
-      const version = db.versions.create(campaignId, {
+      const version = await db.versions.create(campaignId, {
         version: nextVersion,
         messagesModified: result.parsed?.messages?.map((m) => m.step) || [],
         hypotheses: result.parsed?.summary || result.parsed?.hypotheses?.join('; ') || '',
@@ -209,35 +185,28 @@ router.post('/regenerate', async (req, res, next) => {
   }
 });
 
-// =============================================
-// POST /api/ai/run-refinement — Full loop
-// Analyze → Regenerate → Track version
-// =============================================
-
+// POST /api/ai/run-refinement
 router.post('/run-refinement', async (req, res, next) => {
   try {
     const { campaignId } = req.body;
-    const campaign = db.campaigns.get(campaignId);
+    const campaign = await db.campaigns.get(campaignId);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
-    const sequence = db.touchpoints.listByCampaign(campaignId);
-    const memory = db.memoryPatterns.list({});
+    const sequence = await db.touchpoints.listByCampaign(campaignId);
+    const memory = await db.memoryPatterns.list({});
 
     const originalMessages = sequence.map(tp => ({
-      step: tp.step,
-      subject: tp.subject,
-      body: tp.body,
+      step: tp.step, subject: tp.subject, body: tp.body,
     }));
 
     const result = isDryRun(req)
       ? dryRun.runRefinementLoop({ ...campaign, sequence }, originalMessages, memory)
       : await claude.runRefinementLoop({ ...campaign, sequence }, originalMessages, memory);
 
-    // Save diagnostic
     const diagPriorities = result.analysis.parsed?.priorities?.map(p => p.step)
       || extractPriorities(result.analysis.diagnostic);
 
-    const diag = db.diagnostics.create(campaignId, {
+    const diag = await db.diagnostics.create(campaignId, {
       diagnostic: result.analysis.diagnostic,
       priorities: diagPriorities,
       nbToOptimize: diagPriorities.length,
@@ -245,13 +214,12 @@ router.post('/run-refinement', async (req, res, next) => {
 
     notionSync.syncDiagnostic(diag.id, campaignId).catch(console.error);
 
-    // Save version if regeneration happened
     let versionId = null;
     if (result.regeneration) {
-      const existing = db.versions.listByCampaign(campaignId);
+      const existing = await db.versions.listByCampaign(campaignId);
       const nextVersion = (existing[0]?.version || 0) + 1;
 
-      const version = db.versions.create(campaignId, {
+      const version = await db.versions.create(campaignId, {
         version: nextVersion,
         messagesModified: result.stepsRegenerated,
         hypotheses: result.regeneration.parsed?.summary || result.regeneration.parsed?.hypotheses?.join('; ') || '',
@@ -262,8 +230,7 @@ router.post('/run-refinement', async (req, res, next) => {
       notionSync.syncVersion(version.id, campaignId).catch(console.error);
     }
 
-    // Update campaign status
-    db.campaigns.update(campaignId, { status: 'optimizing' });
+    await db.campaigns.update(campaignId, { status: 'optimizing' });
 
     res.json({
       diagnosticId: diag.id,
@@ -288,14 +255,10 @@ router.post('/run-refinement', async (req, res, next) => {
   }
 });
 
-// =============================================
-// POST /api/ai/generate-variables — Variable chain
-// =============================================
-
+// POST /api/ai/generate-variables
 router.post('/generate-variables', async (req, res, next) => {
   try {
     const params = req.body;
-
     if (!params.sector) {
       return res.status(400).json({ error: 'Secteur requis pour la génération de variables' });
     }
@@ -315,32 +278,28 @@ router.post('/generate-variables', async (req, res, next) => {
   }
 });
 
-// =============================================
-// POST /api/ai/consolidate-memory — Monthly
-// =============================================
-
+// POST /api/ai/consolidate-memory
 router.post('/consolidate-memory', async (req, res, next) => {
   try {
-    const campaigns = db.campaigns.list({});
+    const campaigns = await db.campaigns.list({});
     const allDiagnostics = [];
     for (const campaign of campaigns) {
-      const diags = db.diagnostics.listByCampaign(campaign.id);
+      const diags = await db.diagnostics.listByCampaign(campaign.id);
       allDiagnostics.push(
         ...diags.map((d) => ({ ...d, campaign: campaign.name, sector: campaign.sector }))
       );
     }
 
-    const existingMemory = db.memoryPatterns.list({});
+    const existingMemory = await db.memoryPatterns.list({});
 
     const result = isDryRun(req)
       ? dryRun.consolidateMemory(allDiagnostics, existingMemory)
       : await claude.consolidateMemory(allDiagnostics, existingMemory);
 
-    // Save new patterns
     const saved = [];
     if (result.parsed?.patterns) {
       for (const pattern of result.parsed.patterns) {
-        const created = db.memoryPatterns.create({
+        const created = await db.memoryPatterns.create({
           pattern: pattern.pattern,
           category: pattern.categorie,
           data: pattern.donnees,
@@ -353,11 +312,10 @@ router.post('/consolidate-memory', async (req, res, next) => {
       }
     }
 
-    // Update existing patterns confidence if instructed
     if (result.parsed?.updatedPatterns) {
       for (const update of result.parsed.updatedPatterns) {
         if (update.existingId && update.newConfidence) {
-          db.memoryPatterns.update(update.existingId, { confidence: update.newConfidence });
+          await db.memoryPatterns.update(update.existingId, { confidence: update.newConfidence });
         }
       }
     }
@@ -375,39 +333,30 @@ router.post('/consolidate-memory', async (req, res, next) => {
   }
 });
 
-// =============================================
-// GET /api/ai/memory — List memory patterns
-// =============================================
-
-router.get('/memory', (_req, res, next) => {
+// GET /api/ai/memory
+router.get('/memory', async (_req, res, next) => {
   try {
-    const patterns = db.memoryPatterns.list({});
+    const patterns = await db.memoryPatterns.list({});
     res.json({ patterns, count: patterns.length });
   } catch (err) {
     next(err);
   }
 });
 
-// =============================================
-// GET /api/ai/diagnostics/:campaignId — List diagnostics
-// =============================================
-
-router.get('/diagnostics/:campaignId', (req, res, next) => {
+// GET /api/ai/diagnostics/:campaignId
+router.get('/diagnostics/:campaignId', async (req, res, next) => {
   try {
-    const diagnostics = db.diagnostics.listByCampaign(parseInt(req.params.campaignId));
+    const diagnostics = await db.diagnostics.listByCampaign(req.params.campaignId);
     res.json({ diagnostics });
   } catch (err) {
     next(err);
   }
 });
 
-// =============================================
-// GET /api/ai/versions/:campaignId — List versions
-// =============================================
-
-router.get('/versions/:campaignId', (req, res, next) => {
+// GET /api/ai/versions/:campaignId
+router.get('/versions/:campaignId', async (req, res, next) => {
   try {
-    const versions = db.versions.listByCampaign(parseInt(req.params.campaignId));
+    const versions = await db.versions.listByCampaign(req.params.campaignId);
     res.json({ versions });
   } catch (err) {
     next(err);

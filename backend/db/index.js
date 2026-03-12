@@ -1,265 +1,14 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const { Pool } = require('pg');
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, '..', 'data', 'bakal.db');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+});
 
-let db;
-
-function getDb() {
-  if (!db) {
-    const fs = require('fs');
-    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    migrate(db);
-  }
-  return db;
-}
-
-function migrate(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS campaigns (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      name            TEXT NOT NULL,
-      client          TEXT NOT NULL,
-      status          TEXT NOT NULL DEFAULT 'prep'
-                      CHECK (status IN ('active','prep','terminated','optimizing')),
-      channel         TEXT NOT NULL DEFAULT 'email'
-                      CHECK (channel IN ('email','linkedin','multi')),
-      sector          TEXT,
-      sector_short    TEXT,
-      position        TEXT,
-      size            TEXT,
-      angle           TEXT,
-      zone            TEXT,
-      tone            TEXT DEFAULT 'Pro décontracté',
-      formality       TEXT DEFAULT 'Vous',
-      length          TEXT DEFAULT 'Standard',
-      cta             TEXT,
-      start_date      TEXT,
-      lemlist_id      TEXT,
-      iteration       INTEGER DEFAULT 1,
-      nb_prospects    INTEGER DEFAULT 0,
-      sent            INTEGER DEFAULT 0,
-      planned         INTEGER DEFAULT 0,
-      open_rate       REAL,
-      reply_rate      REAL,
-      accept_rate_lk  REAL,
-      reply_rate_lk   REAL,
-      interested      INTEGER DEFAULT 0,
-      meetings        INTEGER DEFAULT 0,
-      stops           REAL,
-      last_collected  TEXT,
-      notion_page_id  TEXT,
-      created_at      TEXT DEFAULT (datetime('now')),
-      updated_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS touchpoints (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id     INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-      step            TEXT NOT NULL,
-      type            TEXT NOT NULL CHECK (type IN ('email','linkedin')),
-      label           TEXT,
-      sub_type        TEXT,
-      timing          TEXT,
-      subject         TEXT,
-      body            TEXT,
-      max_chars       INTEGER,
-      open_rate       REAL,
-      reply_rate      REAL,
-      stop_rate       REAL,
-      accept_rate     REAL,
-      interested      INTEGER DEFAULT 0,
-      sort_order      INTEGER DEFAULT 0,
-      created_at      TEXT DEFAULT (datetime('now')),
-      updated_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS diagnostics (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id     INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-      date_analyse    TEXT DEFAULT (date('now')),
-      diagnostic      TEXT NOT NULL,
-      priorities      TEXT,
-      nb_to_optimize  INTEGER DEFAULT 0,
-      notion_page_id  TEXT,
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS versions (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id     INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-      version         INTEGER NOT NULL,
-      date            TEXT DEFAULT (date('now')),
-      messages_modified TEXT,
-      hypotheses      TEXT,
-      result          TEXT DEFAULT 'testing'
-                      CHECK (result IN ('testing','improved','degraded','neutral')),
-      notion_page_id  TEXT,
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS memory_patterns (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      pattern         TEXT NOT NULL,
-      category        TEXT NOT NULL
-                      CHECK (category IN ('Objets','Corps','Timing','LinkedIn','Secteur','Cible')),
-      data            TEXT,
-      confidence      TEXT DEFAULT 'Faible'
-                      CHECK (confidence IN ('Haute','Moyenne','Faible')),
-      date_discovered TEXT DEFAULT (date('now')),
-      sectors         TEXT,
-      targets         TEXT,
-      notion_page_id  TEXT,
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
-    CREATE INDEX IF NOT EXISTS idx_campaigns_lemlist ON campaigns(lemlist_id);
-    CREATE INDEX IF NOT EXISTS idx_touchpoints_campaign ON touchpoints(campaign_id);
-    CREATE INDEX IF NOT EXISTS idx_diagnostics_campaign ON diagnostics(campaign_id);
-    CREATE INDEX IF NOT EXISTS idx_versions_campaign ON versions(campaign_id);
-    CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_patterns(category);
-    CREATE INDEX IF NOT EXISTS idx_memory_confidence ON memory_patterns(confidence);
-
-    CREATE TABLE IF NOT EXISTS chat_threads (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      title           TEXT DEFAULT 'Nouvelle conversation',
-      created_at      TEXT DEFAULT (datetime('now')),
-      updated_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS chat_messages (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      thread_id       INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
-      role            TEXT NOT NULL CHECK (role IN ('user','assistant')),
-      content         TEXT NOT NULL,
-      metadata        TEXT,
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id);
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key             TEXT PRIMARY KEY,
-      value           TEXT NOT NULL,
-      updated_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS users (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      email           TEXT NOT NULL UNIQUE,
-      password_hash   TEXT NOT NULL,
-      name            TEXT NOT NULL,
-      company         TEXT,
-      role            TEXT NOT NULL DEFAULT 'client'
-                      CHECK (role IN ('admin','client')),
-      created_at      TEXT DEFAULT (datetime('now')),
-      updated_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
-
-    CREATE TABLE IF NOT EXISTS refresh_tokens (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      token_hash      TEXT NOT NULL UNIQUE,
-      expires_at      TEXT NOT NULL,
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
-    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
-
-    CREATE TABLE IF NOT EXISTS projects (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name            TEXT NOT NULL,
-      client          TEXT,
-      description     TEXT,
-      color           TEXT DEFAULT 'var(--blue)',
-      created_at      TEXT DEFAULT (datetime('now')),
-      updated_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
-
-    CREATE TABLE IF NOT EXISTS project_files (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id      INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      filename        TEXT NOT NULL,
-      original_name   TEXT NOT NULL,
-      mime_type       TEXT,
-      file_size       INTEGER,
-      file_path       TEXT NOT NULL,
-      parsed_text     TEXT,
-      category        TEXT DEFAULT 'other',
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
-
-    CREATE TABLE IF NOT EXISTS documents (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      filename        TEXT NOT NULL,
-      original_name   TEXT NOT NULL,
-      mime_type       TEXT,
-      file_size       INTEGER,
-      file_path       TEXT NOT NULL,
-      parsed_text     TEXT,
-      created_at      TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id);
-
-    CREATE TABLE IF NOT EXISTS user_profiles (
-      user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      company         TEXT,
-      sector          TEXT,
-      website         TEXT,
-      team_size       TEXT,
-      description     TEXT,
-      value_prop      TEXT,
-      social_proof    TEXT,
-      pain_points     TEXT,
-      objections      TEXT,
-      persona_primary TEXT,
-      persona_secondary TEXT,
-      target_sectors  TEXT,
-      target_size     TEXT,
-      target_zones    TEXT,
-      default_tone    TEXT DEFAULT 'Pro décontracté',
-      default_formality TEXT DEFAULT 'Vous',
-      avoid_words     TEXT,
-      signature_phrases TEXT,
-      updated_at      TEXT DEFAULT (datetime('now'))
-    );
-  `);
-
-  // Add user_id column to campaigns if not present
-  try {
-    db.prepare("SELECT user_id FROM campaigns LIMIT 1").get();
-  } catch {
-    db.exec("ALTER TABLE campaigns ADD COLUMN user_id INTEGER REFERENCES users(id)");
-  }
-
-  // Add project_id column to campaigns if not present
-  try {
-    db.prepare("SELECT project_id FROM campaigns LIMIT 1").get();
-  } catch {
-    db.exec("ALTER TABLE campaigns ADD COLUMN project_id INTEGER REFERENCES projects(id)");
-  }
-
-  // Add user_id column to chat_threads if not present
-  try {
-    db.prepare("SELECT user_id FROM chat_threads LIMIT 1").get();
-  } catch {
-    db.exec("ALTER TABLE chat_threads ADD COLUMN user_id INTEGER REFERENCES users(id)");
-  }
+// Helper: run a query and return rows
+async function query(text, params) {
+  const result = await pool.query(text, params);
+  return result;
 }
 
 // =============================================
@@ -267,43 +16,47 @@ function migrate(db) {
 // =============================================
 
 const campaigns = {
-  list(filter = {}) {
+  async list(filter = {}) {
     let sql = 'SELECT * FROM campaigns';
     const conditions = [];
     const params = [];
+    let i = 1;
     if (filter.userId) {
-      conditions.push('user_id = ?');
+      conditions.push(`user_id = $${i++}`);
       params.push(filter.userId);
     }
     if (filter.status) {
-      conditions.push('status = ?');
+      conditions.push(`status = $${i++}`);
       params.push(filter.status);
     }
     if (filter.channel) {
-      conditions.push('channel = ?');
+      conditions.push(`channel = $${i++}`);
       params.push(filter.channel);
     }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY updated_at DESC';
-    return getDb().prepare(sql).all(...params);
+    const result = await query(sql, params);
+    return result.rows;
   },
 
-  get(id) {
-    return getDb().prepare('SELECT * FROM campaigns WHERE id = ?').get(id);
+  async get(id) {
+    const result = await query('SELECT * FROM campaigns WHERE id = $1', [id]);
+    return result.rows[0] || null;
   },
 
-  getByLemlistId(lemlistId) {
-    return getDb().prepare('SELECT * FROM campaigns WHERE lemlist_id = ?').get(lemlistId);
+  async getByLemlistId(lemlistId) {
+    const result = await query('SELECT * FROM campaigns WHERE lemlist_id = $1', [lemlistId]);
+    return result.rows[0] || null;
   },
 
-  create(data) {
-    const stmt = getDb().prepare(`
+  async create(data) {
+    const result = await query(`
       INSERT INTO campaigns (name, client, status, channel, sector, sector_short, position, size,
         angle, zone, tone, formality, length, cta, start_date, lemlist_id, iteration,
         nb_prospects, sent, planned, user_id, project_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+      RETURNING *
+    `, [
       data.name,
       data.client,
       data.status || 'prep',
@@ -326,13 +79,14 @@ const campaigns = {
       data.planned || 0,
       data.userId || null,
       data.projectId || null,
-    );
-    return { id: result.lastInsertRowid, ...data };
+    ]);
+    return result.rows[0];
   },
 
-  update(id, data) {
+  async update(id, data) {
     const sets = [];
     const values = [];
+    let i = 1;
 
     const mapping = {
       name: 'name', client: 'client', status: 'status', channel: 'channel',
@@ -358,21 +112,25 @@ const campaigns = {
     for (const [inputKey, col] of Object.entries(mapping)) {
       if (data[inputKey] !== undefined && !seen.has(col)) {
         seen.add(col);
-        sets.push(`${col} = ?`);
+        sets.push(`${col} = $${i++}`);
         values.push(data[inputKey]);
       }
     }
 
     if (sets.length === 0) return null;
-    sets.push("updated_at = datetime('now')");
+    sets.push('updated_at = now()');
     values.push(id);
 
-    getDb().prepare(`UPDATE campaigns SET ${sets.join(', ')} WHERE id = ?`).run(...values);
-    return this.get(id);
+    const result = await query(
+      `UPDATE campaigns SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`,
+      values
+    );
+    return result.rows[0] || null;
   },
 
-  delete(id) {
-    return getDb().prepare('DELETE FROM campaigns WHERE id = ?').run(id);
+  async delete(id) {
+    const result = await query('DELETE FROM campaigns WHERE id = $1', [id]);
+    return { changes: result.rowCount };
   },
 };
 
@@ -381,19 +139,21 @@ const campaigns = {
 // =============================================
 
 const touchpoints = {
-  listByCampaign(campaignId) {
-    return getDb()
-      .prepare('SELECT * FROM touchpoints WHERE campaign_id = ? ORDER BY sort_order')
-      .all(campaignId);
+  async listByCampaign(campaignId) {
+    const result = await query(
+      'SELECT * FROM touchpoints WHERE campaign_id = $1 ORDER BY sort_order',
+      [campaignId]
+    );
+    return result.rows;
   },
 
-  create(campaignId, data) {
-    const stmt = getDb().prepare(`
+  async create(campaignId, data) {
+    const result = await query(`
       INSERT INTO touchpoints (campaign_id, step, type, label, sub_type, timing,
         subject, body, max_chars, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *
+    `, [
       campaignId,
       data.step,
       data.type,
@@ -404,13 +164,14 @@ const touchpoints = {
       data.body || '',
       data.maxChars || null,
       data.sortOrder || 0,
-    );
-    return { id: result.lastInsertRowid };
+    ]);
+    return result.rows[0];
   },
 
-  update(id, data) {
+  async update(id, data) {
     const sets = [];
     const values = [];
+    let i = 1;
     const mapping = {
       step: 'step', type: 'type', label: 'label',
       sub_type: 'sub_type', subType: 'sub_type',
@@ -427,18 +188,19 @@ const touchpoints = {
     for (const [inputKey, col] of Object.entries(mapping)) {
       if (data[inputKey] !== undefined && !seen.has(col)) {
         seen.add(col);
-        sets.push(`${col} = ?`);
+        sets.push(`${col} = $${i++}`);
         values.push(data[inputKey]);
       }
     }
     if (sets.length === 0) return null;
-    sets.push("updated_at = datetime('now')");
+    sets.push('updated_at = now()');
     values.push(id);
-    getDb().prepare(`UPDATE touchpoints SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    await query(`UPDATE touchpoints SET ${sets.join(', ')} WHERE id = $${i}`, values);
   },
 
-  deleteByCampaign(campaignId) {
-    return getDb().prepare('DELETE FROM touchpoints WHERE campaign_id = ?').run(campaignId);
+  async deleteByCampaign(campaignId) {
+    const result = await query('DELETE FROM touchpoints WHERE campaign_id = $1', [campaignId]);
+    return { changes: result.rowCount };
   },
 };
 
@@ -447,25 +209,27 @@ const touchpoints = {
 // =============================================
 
 const diagnostics = {
-  listByCampaign(campaignId) {
-    return getDb()
-      .prepare('SELECT * FROM diagnostics WHERE campaign_id = ? ORDER BY date_analyse DESC')
-      .all(campaignId);
+  async listByCampaign(campaignId) {
+    const result = await query(
+      'SELECT * FROM diagnostics WHERE campaign_id = $1 ORDER BY date_analyse DESC',
+      [campaignId]
+    );
+    return result.rows;
   },
 
-  create(campaignId, data) {
-    const stmt = getDb().prepare(`
+  async create(campaignId, data) {
+    const result = await query(`
       INSERT INTO diagnostics (campaign_id, date_analyse, diagnostic, priorities, nb_to_optimize)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [
       campaignId,
       data.dateAnalyse || new Date().toISOString().split('T')[0],
       data.diagnostic,
-      JSON.stringify(data.priorities || []),
+      data.priorities || [],
       data.nbToOptimize || 0,
-    );
-    return { id: result.lastInsertRowid };
+    ]);
+    return result.rows[0];
   },
 };
 
@@ -474,30 +238,32 @@ const diagnostics = {
 // =============================================
 
 const versions = {
-  listByCampaign(campaignId) {
-    return getDb()
-      .prepare('SELECT * FROM versions WHERE campaign_id = ? ORDER BY version DESC')
-      .all(campaignId);
+  async listByCampaign(campaignId) {
+    const result = await query(
+      'SELECT * FROM versions WHERE campaign_id = $1 ORDER BY version DESC',
+      [campaignId]
+    );
+    return result.rows;
   },
 
-  create(campaignId, data) {
-    const stmt = getDb().prepare(`
+  async create(campaignId, data) {
+    const result = await query(`
       INSERT INTO versions (campaign_id, version, date, messages_modified, hypotheses, result)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [
       campaignId,
       data.version,
       data.date || new Date().toISOString().split('T')[0],
-      JSON.stringify(data.messagesModified || []),
+      data.messagesModified || [],
       data.hypotheses || '',
       data.result || 'testing',
-    );
-    return { id: result.lastInsertRowid };
+    ]);
+    return result.rows[0];
   },
 
-  updateResult(id, result) {
-    getDb().prepare('UPDATE versions SET result = ? WHERE id = ?').run(result, id);
+  async updateResult(id, resultVal) {
+    await query('UPDATE versions SET result = $1 WHERE id = $2', [resultVal, id]);
   },
 };
 
@@ -506,49 +272,52 @@ const versions = {
 // =============================================
 
 const memoryPatterns = {
-  list(filter = {}) {
+  async list(filter = {}) {
     let sql = 'SELECT * FROM memory_patterns';
     const conditions = [];
     const params = [];
+    let i = 1;
     if (filter.category) {
-      conditions.push('category = ?');
+      conditions.push(`category = $${i++}`);
       params.push(filter.category);
     }
     if (filter.confidence) {
-      conditions.push('confidence = ?');
+      conditions.push(`confidence = $${i++}`);
       params.push(filter.confidence);
     }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY date_discovered DESC';
-    return getDb().prepare(sql).all(...params);
+    const result = await query(sql, params);
+    return result.rows;
   },
 
-  create(data) {
-    const stmt = getDb().prepare(`
+  async create(data) {
+    const result = await query(`
       INSERT INTO memory_patterns (pattern, category, data, confidence, date_discovered, sectors, targets)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [
       data.pattern,
       data.category,
-      data.data || '',
+      data.data || null,
       data.confidence || 'Faible',
       data.dateDiscovered || new Date().toISOString().split('T')[0],
-      JSON.stringify(data.sectors || []),
-      JSON.stringify(data.targets || []),
-    );
-    return { id: result.lastInsertRowid };
+      data.sectors || [],
+      data.targets || [],
+    ]);
+    return result.rows[0];
   },
 
-  update(id, data) {
+  async update(id, data) {
     const sets = [];
     const values = [];
-    if (data.confidence) { sets.push('confidence = ?'); values.push(data.confidence); }
-    if (data.sectors) { sets.push('sectors = ?'); values.push(JSON.stringify(data.sectors)); }
-    if (data.targets) { sets.push('targets = ?'); values.push(JSON.stringify(data.targets)); }
+    let i = 1;
+    if (data.confidence) { sets.push(`confidence = $${i++}`); values.push(data.confidence); }
+    if (data.sectors) { sets.push(`sectors = $${i++}`); values.push(data.sectors); }
+    if (data.targets) { sets.push(`targets = $${i++}`); values.push(data.targets); }
     if (sets.length === 0) return;
     values.push(id);
-    getDb().prepare(`UPDATE memory_patterns SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    await query(`UPDATE memory_patterns SET ${sets.join(', ')} WHERE id = $${i}`, values);
   },
 };
 
@@ -556,22 +325,23 @@ const memoryPatterns = {
 // Stats helpers
 // =============================================
 
-function dashboardKpis(userId) {
-  const where = userId
-    ? "WHERE status = 'active' AND user_id = ?"
-    : "WHERE status = 'active'";
+async function dashboardKpis(userId) {
   const params = userId ? [userId] : [];
-  return getDb().prepare(`
+  const where = userId
+    ? "WHERE status = 'active' AND user_id = $1"
+    : "WHERE status = 'active'";
+  const result = await query(`
     SELECT
       COUNT(*) as active_campaigns,
       COALESCE(SUM(nb_prospects), 0) as total_contacts,
-      ROUND(AVG(CASE WHEN open_rate IS NOT NULL THEN open_rate END), 1) as avg_open_rate,
-      ROUND(AVG(CASE WHEN reply_rate IS NOT NULL THEN reply_rate END), 1) as avg_reply_rate,
-      ROUND(AVG(CASE WHEN accept_rate_lk IS NOT NULL THEN accept_rate_lk END), 1) as avg_accept_rate,
+      ROUND(AVG(CASE WHEN open_rate IS NOT NULL THEN open_rate END)::numeric, 1) as avg_open_rate,
+      ROUND(AVG(CASE WHEN reply_rate IS NOT NULL THEN reply_rate END)::numeric, 1) as avg_reply_rate,
+      ROUND(AVG(CASE WHEN accept_rate_lk IS NOT NULL THEN accept_rate_lk END)::numeric, 1) as avg_accept_rate,
       COALESCE(SUM(interested), 0) as total_interested,
       COALESCE(SUM(meetings), 0) as total_meetings
     FROM campaigns ${where}
-  `).get(...params);
+  `, params);
+  return result.rows[0];
 }
 
 // =============================================
@@ -579,58 +349,66 @@ function dashboardKpis(userId) {
 // =============================================
 
 const chatThreads = {
-  list(userId) {
+  async list(userId) {
     if (userId) {
-      return getDb()
-        .prepare('SELECT * FROM chat_threads WHERE user_id = ? ORDER BY updated_at DESC')
-        .all(userId);
+      const result = await query(
+        'SELECT * FROM chat_threads WHERE user_id = $1 ORDER BY updated_at DESC',
+        [userId]
+      );
+      return result.rows;
     }
-    return getDb()
-      .prepare('SELECT * FROM chat_threads ORDER BY updated_at DESC')
-      .all();
+    const result = await query('SELECT * FROM chat_threads ORDER BY updated_at DESC');
+    return result.rows;
   },
 
-  get(id) {
-    return getDb().prepare('SELECT * FROM chat_threads WHERE id = ?').get(id);
+  async get(id) {
+    const result = await query('SELECT * FROM chat_threads WHERE id = $1', [id]);
+    return result.rows[0] || null;
   },
 
-  create(title, userId) {
-    const stmt = getDb().prepare('INSERT INTO chat_threads (title, user_id) VALUES (?, ?)');
-    const result = stmt.run(title || 'Nouvelle conversation', userId || null);
-    return { id: result.lastInsertRowid, title: title || 'Nouvelle conversation' };
+  async create(title, userId) {
+    const result = await query(
+      'INSERT INTO chat_threads (title, user_id) VALUES ($1, $2) RETURNING *',
+      [title || 'Nouvelle conversation', userId || null]
+    );
+    return result.rows[0];
   },
 
-  updateTitle(id, title) {
-    getDb().prepare("UPDATE chat_threads SET title = ?, updated_at = datetime('now') WHERE id = ?").run(title, id);
+  async updateTitle(id, title) {
+    await query('UPDATE chat_threads SET title = $1, updated_at = now() WHERE id = $2', [title, id]);
   },
 
-  touch(id) {
-    getDb().prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?").run(id);
+  async touch(id) {
+    await query('UPDATE chat_threads SET updated_at = now() WHERE id = $1', [id]);
   },
 
-  delete(id) {
-    return getDb().prepare('DELETE FROM chat_threads WHERE id = ?').run(id);
+  async delete(id) {
+    const result = await query('DELETE FROM chat_threads WHERE id = $1', [id]);
+    return { changes: result.rowCount };
   },
 };
 
 const chatMessages = {
-  listByThread(threadId) {
-    return getDb()
-      .prepare('SELECT * FROM chat_messages WHERE thread_id = ? ORDER BY created_at ASC')
-      .all(threadId);
-  },
-
-  create(threadId, role, content, metadata) {
-    const stmt = getDb().prepare(
-      'INSERT INTO chat_messages (thread_id, role, content, metadata) VALUES (?, ?, ?, ?)'
+  async listByThread(threadId) {
+    const result = await query(
+      'SELECT * FROM chat_messages WHERE thread_id = $1 ORDER BY created_at ASC',
+      [threadId]
     );
-    const result = stmt.run(threadId, role, content, metadata ? JSON.stringify(metadata) : null);
-    chatThreads.touch(threadId);
-    return { id: result.lastInsertRowid, threadId, role, content, metadata };
+    return result.rows;
   },
 
-  deleteByThread(threadId) {
-    return getDb().prepare('DELETE FROM chat_messages WHERE thread_id = ?').run(threadId);
+  async create(threadId, role, content, metadata) {
+    const result = await query(
+      'INSERT INTO chat_messages (thread_id, role, content, metadata) VALUES ($1, $2, $3, $4) RETURNING *',
+      [threadId, role, content, metadata ? JSON.stringify(metadata) : null]
+    );
+    await chatThreads.touch(threadId);
+    return result.rows[0];
+  },
+
+  async deleteByThread(threadId) {
+    const result = await query('DELETE FROM chat_messages WHERE thread_id = $1', [threadId]);
+    return { changes: result.rowCount };
   },
 };
 
@@ -639,24 +417,27 @@ const chatMessages = {
 // =============================================
 
 const settings = {
-  get(key) {
-    return getDb().prepare('SELECT * FROM settings WHERE key = ?').get(key);
+  async get(key) {
+    const result = await query('SELECT * FROM settings WHERE key = $1', [key]);
+    return result.rows[0] || null;
   },
 
-  getAll() {
-    return getDb().prepare('SELECT * FROM settings').all();
+  async getAll() {
+    const result = await query('SELECT * FROM settings');
+    return result.rows;
   },
 
-  set(key, value) {
-    getDb().prepare(`
+  async set(key, value) {
+    await query(`
       INSERT INTO settings (key, value, updated_at)
-      VALUES (?, ?, datetime('now'))
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
-    `).run(key, value);
+      VALUES ($1, $2, now())
+      ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+    `, [key, value]);
   },
 
-  delete(key) {
-    return getDb().prepare('DELETE FROM settings WHERE key = ?').run(key);
+  async delete(key) {
+    const result = await query('DELETE FROM settings WHERE key = $1', [key]);
+    return { changes: result.rowCount };
   },
 };
 
@@ -665,30 +446,30 @@ const settings = {
 // =============================================
 
 const users = {
-  getByEmail(email) {
-    return getDb().prepare('SELECT * FROM users WHERE email = ?').get(email);
+  async getByEmail(email) {
+    const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+    return result.rows[0] || null;
   },
 
-  getById(id) {
-    return getDb().prepare('SELECT id, email, name, company, role, created_at FROM users WHERE id = ?').get(id);
-  },
-
-  create(data) {
-    const stmt = getDb().prepare(
-      'INSERT INTO users (email, password_hash, name, company, role) VALUES (?, ?, ?, ?, ?)'
+  async getById(id) {
+    const result = await query(
+      'SELECT id, email, name, company, role, created_at FROM users WHERE id = $1',
+      [id]
     );
-    const result = stmt.run(
-      data.email,
-      data.passwordHash,
-      data.name,
-      data.company || null,
-      data.role || 'client',
-    );
-    return { id: result.lastInsertRowid, email: data.email, name: data.name, role: data.role || 'client' };
+    return result.rows[0] || null;
   },
 
-  count() {
-    return getDb().prepare('SELECT COUNT(*) as c FROM users').get().c;
+  async create(data) {
+    const result = await query(
+      'INSERT INTO users (email, password_hash, name, company, role) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [data.email, data.passwordHash, data.name, data.company || null, data.role || 'client']
+    );
+    return result.rows[0];
+  },
+
+  async count() {
+    const result = await query('SELECT COUNT(*) as c FROM users');
+    return parseInt(result.rows[0].c, 10);
   },
 };
 
@@ -697,26 +478,31 @@ const users = {
 // =============================================
 
 const refreshTokens = {
-  create(userId, tokenHash, expiresAt) {
-    getDb().prepare(
-      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
-    ).run(userId, tokenHash, expiresAt);
+  async create(userId, tokenHash, expiresAt) {
+    await query(
+      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+      [userId, tokenHash, expiresAt]
+    );
   },
 
-  getByHash(tokenHash) {
-    return getDb().prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?').get(tokenHash);
+  async getByHash(tokenHash) {
+    const result = await query('SELECT * FROM refresh_tokens WHERE token_hash = $1', [tokenHash]);
+    return result.rows[0] || null;
   },
 
-  deleteByHash(tokenHash) {
-    return getDb().prepare('DELETE FROM refresh_tokens WHERE token_hash = ?').run(tokenHash);
+  async deleteByHash(tokenHash) {
+    const result = await query('DELETE FROM refresh_tokens WHERE token_hash = $1', [tokenHash]);
+    return { changes: result.rowCount };
   },
 
-  deleteByUser(userId) {
-    return getDb().prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(userId);
+  async deleteByUser(userId) {
+    const result = await query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
+    return { changes: result.rowCount };
   },
 
-  deleteExpired() {
-    return getDb().prepare("DELETE FROM refresh_tokens WHERE expires_at < datetime('now')").run();
+  async deleteExpired() {
+    const result = await query("DELETE FROM refresh_tokens WHERE expires_at < now()");
+    return { changes: result.rowCount };
   },
 };
 
@@ -725,34 +511,38 @@ const refreshTokens = {
 // =============================================
 
 const documents = {
-  listByUser(userId) {
-    return getDb().prepare(
-      'SELECT id, filename, original_name, mime_type, file_size, created_at FROM documents WHERE user_id = ? ORDER BY created_at DESC'
-    ).all(userId);
-  },
-
-  get(id) {
-    return getDb().prepare('SELECT * FROM documents WHERE id = ?').get(id);
-  },
-
-  create(data) {
-    const stmt = getDb().prepare(
-      'INSERT INTO documents (user_id, filename, original_name, mime_type, file_size, file_path, parsed_text) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  async listByUser(userId) {
+    const result = await query(
+      'SELECT id, filename, original_name, mime_type, file_size, created_at FROM documents WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
     );
-    const result = stmt.run(
-      data.userId, data.filename, data.originalName, data.mimeType, data.fileSize, data.filePath, data.parsedText || null
+    return result.rows;
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM documents WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async create(data) {
+    const result = await query(
+      'INSERT INTO documents (user_id, filename, original_name, mime_type, file_size, file_path, parsed_text) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [data.userId, data.filename, data.originalName, data.mimeType, data.fileSize, data.filePath, data.parsedText || null]
     );
-    return { id: result.lastInsertRowid, ...data };
+    return result.rows[0];
   },
 
-  delete(id) {
-    return getDb().prepare('DELETE FROM documents WHERE id = ?').run(id);
+  async delete(id) {
+    const result = await query('DELETE FROM documents WHERE id = $1', [id]);
+    return { changes: result.rowCount };
   },
 
-  getParsedTextByUser(userId) {
-    return getDb().prepare(
-      'SELECT original_name, parsed_text FROM documents WHERE user_id = ? AND parsed_text IS NOT NULL ORDER BY created_at DESC'
-    ).all(userId);
+  async getParsedTextByUser(userId) {
+    const result = await query(
+      'SELECT original_name, parsed_text FROM documents WHERE user_id = $1 AND parsed_text IS NOT NULL ORDER BY created_at DESC',
+      [userId]
+    );
+    return result.rows;
   },
 };
 
@@ -761,15 +551,17 @@ const documents = {
 // =============================================
 
 const profiles = {
-  get(userId) {
-    return getDb().prepare('SELECT * FROM user_profiles WHERE user_id = ?').get(userId);
+  async get(userId) {
+    const result = await query('SELECT * FROM user_profiles WHERE user_id = $1', [userId]);
+    return result.rows[0] || null;
   },
 
-  upsert(userId, data) {
-    const existing = this.get(userId);
+  async upsert(userId, data) {
+    const existing = await this.get(userId);
     if (existing) {
       const sets = [];
       const vals = [];
+      let i = 1;
       const fields = [
         'company', 'sector', 'website', 'team_size', 'description',
         'value_prop', 'social_proof', 'pain_points', 'objections',
@@ -779,30 +571,30 @@ const profiles = {
       ];
       for (const f of fields) {
         if (data[f] !== undefined) {
-          sets.push(`${f} = ?`);
+          sets.push(`${f} = $${i++}`);
           vals.push(data[f]);
         }
       }
       if (sets.length === 0) return existing;
-      sets.push("updated_at = datetime('now')");
+      sets.push('updated_at = now()');
       vals.push(userId);
-      getDb().prepare(`UPDATE user_profiles SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals);
+      await query(`UPDATE user_profiles SET ${sets.join(', ')} WHERE user_id = $${i}`, vals);
     } else {
-      getDb().prepare(`
+      await query(`
         INSERT INTO user_profiles (user_id, company, sector, website, team_size, description,
           value_prop, social_proof, pain_points, objections, persona_primary, persona_secondary,
           target_sectors, target_size, target_zones, default_tone, default_formality,
           avoid_words, signature_phrases)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      `, [
         userId, data.company || null, data.sector || null, data.website || null,
         data.team_size || null, data.description || null, data.value_prop || null,
         data.social_proof || null, data.pain_points || null, data.objections || null,
         data.persona_primary || null, data.persona_secondary || null,
         data.target_sectors || null, data.target_size || null, data.target_zones || null,
         data.default_tone || 'Pro décontracté', data.default_formality || 'Vous',
-        data.avoid_words || null, data.signature_phrases || null
-      );
+        data.avoid_words || null, data.signature_phrases || null,
+      ]);
     }
     return this.get(userId);
   },
@@ -813,46 +605,50 @@ const profiles = {
 // =============================================
 
 const projects = {
-  list(userId) {
-    return getDb()
-      .prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC')
-      .all(userId);
-  },
-
-  get(id) {
-    return getDb().prepare('SELECT * FROM projects WHERE id = ?').get(id);
-  },
-
-  create(data) {
-    const stmt = getDb().prepare(
-      'INSERT INTO projects (user_id, name, client, description, color) VALUES (?, ?, ?, ?, ?)'
+  async list(userId) {
+    const result = await query(
+      'SELECT * FROM projects WHERE user_id = $1 ORDER BY updated_at DESC',
+      [userId]
     );
-    const result = stmt.run(
-      data.userId, data.name, data.client || null,
-      data.description || null, data.color || 'var(--blue)'
-    );
-    return { id: result.lastInsertRowid, ...data };
+    return result.rows;
   },
 
-  update(id, data) {
+  async get(id) {
+    const result = await query('SELECT * FROM projects WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async create(data) {
+    const result = await query(
+      'INSERT INTO projects (user_id, name, client, description, color) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [data.userId, data.name, data.client || null, data.description || null, data.color || 'var(--blue)']
+    );
+    return result.rows[0];
+  },
+
+  async update(id, data) {
     const sets = [];
     const values = [];
+    let i = 1;
     const fields = ['name', 'client', 'description', 'color'];
     for (const f of fields) {
       if (data[f] !== undefined) {
-        sets.push(`${f} = ?`);
+        sets.push(`${f} = $${i++}`);
         values.push(data[f]);
       }
     }
-    if (sets.length === 0) return this.get(id);
-    sets.push("updated_at = datetime('now')");
+    if (sets.length === 0) {
+      return this.get(id);
+    }
+    sets.push('updated_at = now()');
     values.push(id);
-    getDb().prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    await query(`UPDATE projects SET ${sets.join(', ')} WHERE id = $${i}`, values);
     return this.get(id);
   },
 
-  delete(id) {
-    return getDb().prepare('DELETE FROM projects WHERE id = ?').run(id);
+  async delete(id) {
+    const result = await query('DELETE FROM projects WHERE id = $1', [id]);
+    return { changes: result.rowCount };
   },
 };
 
@@ -861,48 +657,56 @@ const projects = {
 // =============================================
 
 const projectFiles = {
-  listByProject(projectId) {
-    return getDb()
-      .prepare('SELECT * FROM project_files WHERE project_id = ? ORDER BY created_at DESC')
-      .all(projectId);
-  },
-
-  get(id) {
-    return getDb().prepare('SELECT * FROM project_files WHERE id = ?').get(id);
-  },
-
-  create(data) {
-    const stmt = getDb().prepare(
-      'INSERT INTO project_files (project_id, user_id, filename, original_name, mime_type, file_size, file_path, parsed_text, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  async listByProject(projectId) {
+    const result = await query(
+      'SELECT * FROM project_files WHERE project_id = $1 ORDER BY created_at DESC',
+      [projectId]
     );
-    const result = stmt.run(
-      data.projectId, data.userId, data.filename, data.originalName,
-      data.mimeType, data.fileSize, data.filePath, data.parsedText || null,
-      data.category || 'other'
+    return result.rows;
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM project_files WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async create(data) {
+    const result = await query(
+      'INSERT INTO project_files (project_id, user_id, filename, original_name, mime_type, file_size, file_path, parsed_text, category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+      [data.projectId, data.userId, data.filename, data.originalName, data.mimeType, data.fileSize, data.filePath, data.parsedText || null, data.category || 'other']
     );
-    return { id: result.lastInsertRowid, ...data };
+    return result.rows[0];
   },
 
-  delete(id) {
-    return getDb().prepare('DELETE FROM project_files WHERE id = ?').run(id);
+  async delete(id) {
+    const result = await query('DELETE FROM project_files WHERE id = $1', [id]);
+    return { changes: result.rowCount };
   },
 
-  getContextByProject(projectId) {
-    return getDb().prepare(
-      'SELECT original_name, parsed_text, category FROM project_files WHERE project_id = ? AND parsed_text IS NOT NULL ORDER BY created_at DESC'
-    ).all(projectId);
+  async getContextByProject(projectId) {
+    const result = await query(
+      'SELECT original_name, parsed_text, category FROM project_files WHERE project_id = $1 AND parsed_text IS NOT NULL ORDER BY created_at DESC',
+      [projectId]
+    );
+    return result.rows;
   },
 };
 
-function closeDb() {
-  if (db) {
-    try { db.close(); } catch { /* ignore */ }
-    db = null;
-  }
+// =============================================
+// Raw query helper (for special cases in routes)
+// =============================================
+
+async function rawQuery(text, params) {
+  const result = await pool.query(text, params);
+  return result;
+}
+
+async function closeDb() {
+  await pool.end();
 }
 
 module.exports = {
-  getDb,
+  query: rawQuery,
   closeDb,
   campaigns,
   touchpoints,

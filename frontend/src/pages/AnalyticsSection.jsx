@@ -134,10 +134,10 @@ export default function AnalyticsSection({ onNavigate }) {
 
     const openVal = globalKpis.openRate
       ? (typeof globalKpis.openRate === 'object' ? globalKpis.openRate.value : globalKpis.openRate)
-      : '\u2014';
+      : '—';
     const replyVal = globalKpis.replyRate
       ? (typeof globalKpis.replyRate === 'object' ? globalKpis.replyRate.value : globalKpis.replyRate)
-      : '\u2014';
+      : '—';
 
     return { openRate: openVal, replyRate: replyVal, interested: totalInterested, meetings: totalMeetings };
   }, [activeCampaigns, globalKpis]);
@@ -174,7 +174,7 @@ export default function AnalyticsSection({ onNavigate }) {
 
       if (replyRate !== null && replyRate !== undefined) {
         const replyColor = replyRate >= 8 ? 'var(--blue)' : 'var(--warning)';
-        html += `<div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">R\u00e9ponse</div><div class="campaign-perf-bar-track"><div class="campaign-perf-bar-fill" style="width:${Math.min(replyRate * 10, 100)}%;background:${replyColor};"></div></div></div><div class="campaign-perf-value" style="color:${replyColor}">${replyRate}%</div>`;
+        html += `<div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Réponse</div><div class="campaign-perf-bar-track"><div class="campaign-perf-bar-fill" style="width:${Math.min(replyRate * 10, 100)}%;background:${replyColor};"></div></div></div><div class="campaign-perf-value" style="color:${replyColor}">${replyRate}%</div>`;
       }
 
       html += `</div></div>`;
@@ -221,10 +221,10 @@ export default function AnalyticsSection({ onNavigate }) {
     const replied = Math.round(totalContacts * 0.081);
 
     return [
-      { label: 'Contact\u00e9s', value: totalContacts, color: 'var(--text-muted)', width: 100 },
+      { label: 'Contactés', value: totalContacts, color: 'var(--text-muted)', width: 100 },
       { label: 'Ouvert', value: opened, color: 'var(--blue)', width: Math.round(avgOpen) || 60 },
-      { label: 'R\u00e9pondu', value: replied, color: 'var(--success)', width: Math.min(Math.round(8.1 * 5), 50) },
-      { label: 'Int\u00e9ress\u00e9', value: totalInterested, color: 'var(--warning)', width: Math.round(totalInterested / (totalContacts || 1) * 100 * 5) || 15 },
+      { label: 'Répondu', value: replied, color: 'var(--success)', width: Math.min(Math.round(8.1 * 5), 50) },
+      { label: 'Intéressé', value: totalInterested, color: 'var(--warning)', width: Math.round(totalInterested / (totalContacts || 1) * 100 * 5) || 15 },
       { label: 'RDV', value: totalMeetings, color: 'var(--purple)', width: Math.round(totalMeetings / (totalContacts || 1) * 100 * 10) || 8 },
     ];
   }, [activeCampaigns]);
@@ -238,7 +238,7 @@ export default function AnalyticsSection({ onNavigate }) {
           <div className="empty-state-icon">{'📈'}</div>
           <div className="empty-state-title">Analytics non disponibles</div>
           <div className="empty-state-desc">
-            Les graphiques de performance s'afficheront d\u00e8s que votre premi\u00e8re campagne sera active avec des donn\u00e9es de prospection.
+            Les graphiques de performance s'afficheront dès que votre première campagne sera active avec des données de prospection.
           </div>
           {onNavigate && (
             <button className="btn btn-ghost" onClick={() => onNavigate('overview')}>
@@ -262,11 +262,11 @@ export default function AnalyticsSection({ onNavigate }) {
           <div className="analytics-kpi-value" id="analytics-open-rate">{kpis.openRate}</div>
         </div>
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">Taux de r\u00e9ponse</div>
+          <div className="analytics-kpi-label">Taux de réponse</div>
           <div className="analytics-kpi-value" id="analytics-reply-rate">{kpis.replyRate}</div>
         </div>
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">Int\u00e9ress\u00e9s</div>
+          <div className="analytics-kpi-label">Intéressés</div>
           <div className="analytics-kpi-value" id="analytics-interested">{kpis.interested}</div>
         </div>
         <div className="analytics-kpi-card">
@@ -300,7 +300,7 @@ export default function AnalyticsSection({ onNavigate }) {
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
-              R\u00e9ponse
+              Réponse
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--purple)', display: 'inline-block' }} />
@@ -330,7 +330,7 @@ export default function AnalyticsSection({ onNavigate }) {
 
         {/* Channel Breakdown */}
         <div className="card">
-          <div className="card-title">R\u00e9partition par canal</div>
+          <div className="card-title">Répartition par canal</div>
           <div className="card-body" id="channelBreakdown">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Channel bars */}

@@ -294,19 +294,19 @@ export default function AuthGate({ onAuth }) {
             {loading
               ? 'Chargement...'
               : isRegister
-                ? 'Cr\u00e9er mon compte'
+                ? 'Créer mon compte'
                 : 'Se connecter'}
           </button>
 
           {/* Toggle login / register */}
           <p style={styles.toggleText}>
-            {isRegister ? 'D\u00e9j\u00e0 un compte ? ' : 'Pas encore de compte ? '}
+            {isRegister ? 'Déjà un compte ? ' : 'Pas encore de compte ? '}
             <button
               type="button"
               style={styles.toggleLink}
               onClick={toggleMode}
             >
-              {isRegister ? 'Se connecter' : 'Cr\u00e9er un compte'}
+              {isRegister ? 'Se connecter' : 'Créer un compte'}
             </button>
           </p>
         </form>

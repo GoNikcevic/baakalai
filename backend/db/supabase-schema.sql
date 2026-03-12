@@ -291,12 +291,25 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply trigger to tables with updated_at
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_projects_updated_at ON projects;
 CREATE TRIGGER trg_projects_updated_at BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_campaigns_updated_at ON campaigns;
 CREATE TRIGGER trg_campaigns_updated_at BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_touchpoints_updated_at ON touchpoints;
 CREATE TRIGGER trg_touchpoints_updated_at BEFORE UPDATE ON touchpoints FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_chat_threads_updated_at ON chat_threads;
 CREATE TRIGGER trg_chat_threads_updated_at BEFORE UPDATE ON chat_threads FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_settings_updated_at ON settings;
 CREATE TRIGGER trg_settings_updated_at BEFORE UPDATE ON settings FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_user_profiles_updated_at ON user_profiles;
 CREATE TRIGGER trg_user_profiles_updated_at BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- =============================================
@@ -318,15 +331,38 @@ ALTER TABLE project_files ENABLE ROW LEVEL SECURITY;
 
 -- Allow service role full access (for N8N workflows and backend)
 -- Clients will access through the backend API, not directly via Supabase client
+DROP POLICY IF EXISTS "Service role full access" ON users;
 CREATE POLICY "Service role full access" ON users FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON campaigns;
 CREATE POLICY "Service role full access" ON campaigns FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON touchpoints;
 CREATE POLICY "Service role full access" ON touchpoints FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON diagnostics;
 CREATE POLICY "Service role full access" ON diagnostics FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON versions;
 CREATE POLICY "Service role full access" ON versions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON memory_patterns;
 CREATE POLICY "Service role full access" ON memory_patterns FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON chat_threads;
 CREATE POLICY "Service role full access" ON chat_threads FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON chat_messages;
 CREATE POLICY "Service role full access" ON chat_messages FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON documents;
 CREATE POLICY "Service role full access" ON documents FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON user_profiles;
 CREATE POLICY "Service role full access" ON user_profiles FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON projects;
 CREATE POLICY "Service role full access" ON projects FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access" ON project_files;
 CREATE POLICY "Service role full access" ON project_files FOR ALL USING (true) WITH CHECK (true);

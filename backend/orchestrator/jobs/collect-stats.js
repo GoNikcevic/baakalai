@@ -1,7 +1,7 @@
 /**
  * Job: Collect Stats (Workflow 1 replacement)
  *
- * Flow: Lemlist API → compute metrics → SQLite + Notion sync → trigger analysis if needed
+ * Flow: Lemlist API → compute metrics → PostgreSQL + Notion sync → trigger analysis if needed
  *
  * Trigger conditions for analysis:
  *   - Campaign has >50 prospects
@@ -33,14 +33,12 @@ async function run() {
 
   for (const lc of campaigns) {
     try {
-      // Step 1: Fetch detailed stats for this campaign
       const rawStats = await lemlist.getCampaignStats(lc._id);
       const metrics = computeMetrics(rawStats);
 
-      // Step 2: Find or create local campaign record
-      let campaign = db.campaigns.getByLemlistId(lc._id);
+      let campaign = await db.campaigns.getByLemlistId(lc._id);
       if (!campaign) {
-        campaign = db.campaigns.create({
+        campaign = await db.campaigns.create({
           name: lc.name,
           client: lc.client || 'Lemlist Import',
           status: 'active',
@@ -49,7 +47,7 @@ async function run() {
           nbProspects: metrics.totalProspects,
         });
       } else {
-        db.campaigns.update(campaign.id, {
+        await db.campaigns.update(campaign.id, {
           nb_prospects: metrics.totalProspects,
           open_rate: metrics.openRate,
           reply_rate: metrics.replyRate,
@@ -58,19 +56,17 @@ async function run() {
           stops: metrics.stops,
           last_collected: new Date().toISOString().split('T')[0],
         });
-        campaign = db.campaigns.get(campaign.id);
+        campaign = await db.campaigns.get(campaign.id);
       }
 
-      // Step 3: Sync to Notion (fire-and-forget)
       notionSync.syncCampaign(campaign.id).catch((err) =>
         console.warn(`[collect-stats] Notion sync failed for ${campaign.name}:`, err.message)
       );
 
-      // Step 4: Check if analysis should be triggered
       let analyzed = false;
       if (shouldAnalyze(lc, metrics)) {
         try {
-          const sequence = db.touchpoints.listByCampaign(campaign.id);
+          const sequence = await db.touchpoints.listByCampaign(campaign.id);
           const stepStats = computeStepStats(rawStats);
 
           const analysisResult = await claude.analyzeCampaign({
@@ -82,8 +78,7 @@ async function run() {
             sequence,
           });
 
-          // Store diagnostic
-          const diag = db.diagnostics.create(campaign.id, {
+          const diag = await db.diagnostics.create(campaign.id, {
             diagnostic: analysisResult.diagnostic,
             priorities: analysisResult.parsed?.priorities?.map((p) => p.step) || [],
             nbToOptimize: analysisResult.parsed?.priorities?.length || 0,
@@ -91,7 +86,6 @@ async function run() {
 
           notionSync.syncDiagnostic(diag.id, campaign.id).catch(console.error);
 
-          // Step 5: Trigger regeneration if priorities found
           const stepsToRegenerate = analysisResult.parsed?.regenerationInstructions?.stepsToRegenerate || [];
           if (stepsToRegenerate.length > 0) {
             await regenerate.run({ campaignId: campaign.id, metrics, diagnostic: analysisResult });
@@ -123,10 +117,6 @@ async function run() {
   return { collected: results.length, analyzed: results.filter((r) => r.analyzed).length, campaigns: results, errors };
 }
 
-/**
- * Compute aggregate metrics from raw Lemlist export data.
- * Reuses the same logic as lemlist.transformCampaignStats but adds per-step data.
- */
 function computeMetrics(rawStats) {
   const base = lemlist.transformCampaignStats(rawStats);
   return {
@@ -140,9 +130,6 @@ function computeMetrics(rawStats) {
   };
 }
 
-/**
- * Compute per-step (E1-E6) open/reply rates for detailed analysis.
- */
 function computeStepStats(rawStats) {
   const stepStats = {};
   for (let i = 0; i < 6; i++) {

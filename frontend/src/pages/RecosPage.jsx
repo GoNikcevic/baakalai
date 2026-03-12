@@ -15,25 +15,25 @@ const DEMO_RECOS = [
     id: 'reco-1',
     priority: 'critical',
     campaign: 'DRH PME Lyon',
-    step: 'E1 — Email initial \u00b7 Offre directe',
+    step: 'E1 — Email initial · Offre directe',
     title: 'Remplacer le CTA agressif par une question ouverte',
-    desc: 'Le CTA "Seriez-vous disponible 15 minutes cette semaine ?" est trop direct pour un premier contact DRH. Vos donn\u00e9es cross-campagne montrent que les <strong>questions ouvertes</strong> sur les pain points g\u00e9n\u00e8rent 2x plus de r\u00e9ponses que les propositions de call directes sur ce segment.',
-    impact: '+2-3pts reply estim\u00e9',
+    desc: 'Le CTA "Seriez-vous disponible 15 minutes cette semaine ?" est trop direct pour un premier contact DRH. Vos données cross-campagne montrent que les <strong>questions ouvertes</strong> sur les pain points génèrent 2x plus de réponses que les propositions de call directes sur ce segment.',
+    impact: '+2-3pts reply estimé',
     date: 'Il y a 1h',
-    before: 'Nous aidons des DRH de PME comme {{companyName}} \u00e0 r\u00e9duire de 40% leur temps de recrutement. <span class="strikethrough">Seriez-vous disponible 15 minutes cette semaine pour en discuter ?</span>',
-    after: 'Nous aidons des DRH de PME comme {{companyName}} \u00e0 r\u00e9duire de 40% leur temps de recrutement. <span class="highlight">Quel est votre plus gros d\u00e9fi recrutement en ce moment ?</span>',
+    before: 'Nous aidons des DRH de PME comme {{companyName}} à réduire de 40% leur temps de recrutement. <span class="strikethrough">Seriez-vous disponible 15 minutes cette semaine pour en discuter ?</span>',
+    after: 'Nous aidons des DRH de PME comme {{companyName}} à réduire de 40% leur temps de recrutement. <span class="highlight">Quel est votre plus gros défi recrutement en ce moment ?</span>',
   },
   {
     id: 'reco-2',
     priority: 'important',
-    campaign: 'DAF \u00cele-de-France',
-    step: 'E3 — Email relance \u00b7 J+7',
-    title: "Remplacer l'angle \"co\u00fbt de l'erreur\" par \"gain de temps\"",
-    desc: "L'E3 a un taux de r\u00e9ponse de seulement 1.4% (vs 4.2% sur E1). L'angle anxiog\u00e8ne \"co\u00fbt d'une erreur de saisie\" est mal re\u00e7u par les DAF qui y voient une remise en question de leur comp\u00e9tence. Votre m\u00e9moire cross-campagne montre que l'angle positif <strong>\"gain de temps\"</strong> performe syst\u00e9matiquement mieux (+2.1pts en moyenne) sur le segment Comptabilit\u00e9/Finance.",
-    impact: '+2.1pts reply estim\u00e9',
+    campaign: 'DAF Île-de-France',
+    step: 'E3 — Email relance · J+7',
+    title: "Remplacer l'angle \"coût de l'erreur\" par \"gain de temps\"",
+    desc: "L'E3 a un taux de réponse de seulement 1.4% (vs 4.2% sur E1). L'angle anxiogène \"coût d'une erreur de saisie\" est mal reçu par les DAF qui y voient une remise en question de leur compétence. Votre mémoire cross-campagne montre que l'angle positif <strong>\"gain de temps\"</strong> performe systématiquement mieux (+2.1pts en moyenne) sur le segment Comptabilité/Finance.",
+    impact: '+2.1pts reply estimé',
     date: 'Il y a 3h',
-    before: '{{firstName}}, je change d\'approche. Plut\u00f4t que de parler d\'automatisation, une question simple : <span class="strikethrough">quel est le co\u00fbt r\u00e9el d\'une erreur de saisie dans un bilan chez {{companyName}} ?</span>',
-    after: '{{firstName}}, une question diff\u00e9rente : <span class="highlight">si vous pouviez r\u00e9cup\u00e9rer une journ\u00e9e compl\u00e8te par semaine pour du conseil \u00e0 valeur ajout\u00e9e, qu\'en feriez-vous ?</span> C\'est exactement ce que nos clients dans la finance ont obtenu.',
+    before: '{{firstName}}, je change d\'approche. Plutôt que de parler d\'automatisation, une question simple : <span class="strikethrough">quel est le coût réel d\'une erreur de saisie dans un bilan chez {{companyName}} ?</span>',
+    after: '{{firstName}}, une question différente : <span class="highlight">si vous pouviez récupérer une journée complète par semaine pour du conseil à valeur ajoutée, qu\'en feriez-vous ?</span> C\'est exactement ce que nos clients dans la finance ont obtenu.',
   },
   {
     id: 'reco-3',
@@ -41,63 +41,63 @@ const DEMO_RECOS = [
     campaign: 'Dirigeants Formation',
     step: 'L2 — Message post-connexion LinkedIn',
     title: 'Passer de preuve sociale vers angle douleur client',
-    desc: 'Le taux de r\u00e9ponse LinkedIn (6.8%) est sous l\'objectif de 8%. Le message actuel utilise une preuve sociale vague ("3 organismes de formation") qui manque de sp\u00e9cificit\u00e9. Les donn\u00e9es montrent que les <strong>questions directes sur les pain points</strong> fonctionnent mieux sur LinkedIn car le format conversationnel s\'y pr\u00eate naturellement.',
-    impact: '+1.5pts reply estim\u00e9',
+    desc: 'Le taux de réponse LinkedIn (6.8%) est sous l\'objectif de 8%. Le message actuel utilise une preuve sociale vague ("3 organismes de formation") qui manque de spécificité. Les données montrent que les <strong>questions directes sur les pain points</strong> fonctionnent mieux sur LinkedIn car le format conversationnel s\'y prête naturellement.',
+    impact: '+1.5pts reply estimé',
     date: 'Il y a 5h',
-    before: "Merci d'avoir accept\u00e9, {{firstName}} ! <span class=\"strikethrough\">J'ai accompagn\u00e9 3 organismes de formation comme le v\u00f4tre \u00e0 g\u00e9n\u00e9rer entre 5 et 12 RDV qualifi\u00e9s par mois.</span> Curieux de savoir comment vous g\u00e9rez votre d\u00e9veloppement commercial actuellement ?",
-    after: "Merci d'avoir accept\u00e9, {{firstName}} ! <span class=\"highlight\">Quel est votre plus gros frein pour trouver de nouveaux clients en ce moment ?</span> Je pose la question car c'est un sujet qui revient souvent chez les dirigeants d'organismes de formation.",
+    before: "Merci d'avoir accepté, {{firstName}} ! <span class=\"strikethrough\">J'ai accompagné 3 organismes de formation comme le vôtre à générer entre 5 et 12 RDV qualifiés par mois.</span> Curieux de savoir comment vous gérez votre développement commercial actuellement ?",
+    after: "Merci d'avoir accepté, {{firstName}} ! <span class=\"highlight\">Quel est votre plus gros frein pour trouver de nouveaux clients en ce moment ?</span> Je pose la question car c'est un sujet qui revient souvent chez les dirigeants d'organismes de formation.",
   },
   {
     id: 'reco-4',
     priority: 'suggestion',
-    campaign: 'DAF \u00cele-de-France',
-    step: 'E4 — Email break-up \u00b7 J+12',
-    title: 'Raccourcir le break-up de 4 phrases \u00e0 3',
-    desc: "Le break-up actuel fait 4 phrases, l'objectif est 3 max. La phrase \"Juste un dernier mot : si un jour 12h/semaine...\" peut \u00eatre fusionn\u00e9e avec la pr\u00e9c\u00e9dente. Impact faible mais align\u00e9 avec les bonnes pratiques de break-up email (court = plus de respect per\u00e7u = meilleure image de marque).",
+    campaign: 'DAF Île-de-France',
+    step: 'E4 — Email break-up · J+12',
+    title: 'Raccourcir le break-up de 4 phrases à 3',
+    desc: "Le break-up actuel fait 4 phrases, l'objectif est 3 max. La phrase \"Juste un dernier mot : si un jour 12h/semaine...\" peut être fusionnée avec la précédente. Impact faible mais aligné avec les bonnes pratiques de break-up email (court = plus de respect perçu = meilleure image de marque).",
     impact: '',
     date: 'Il y a 5h',
-    before: "{{firstName}}, je ne veux pas encombrer votre bo\u00eete.<br>Si ce n'est pas le bon moment, pas de souci \u2014 je ne reviendrai pas.<br><span class=\"strikethrough\">Juste un dernier mot : si un jour 12h/semaine r\u00e9cup\u00e9r\u00e9es \u00e7a vous int\u00e9resse, mon agenda est ouvert.</span><br>Bonne continuation.",
-    after: "{{firstName}}, je ne veux pas encombrer votre bo\u00eete.<br><span class=\"highlight\">Si ce n'est pas le bon moment, aucun souci \u2014 mon agenda reste ouvert si un jour 12h/semaine r\u00e9cup\u00e9r\u00e9es vous int\u00e9ressent.</span><br>Bonne continuation.",
+    before: "{{firstName}}, je ne veux pas encombrer votre boîte.<br>Si ce n'est pas le bon moment, pas de souci — je ne reviendrai pas.<br><span class=\"strikethrough\">Juste un dernier mot : si un jour 12h/semaine récupérées ça vous intéresse, mon agenda est ouvert.</span><br>Bonne continuation.",
+    after: "{{firstName}}, je ne veux pas encombrer votre boîte.<br><span class=\"highlight\">Si ce n'est pas le bon moment, aucun souci — mon agenda reste ouvert si un jour 12h/semaine récupérées vous intéressent.</span><br>Bonne continuation.",
   },
   {
     id: 'reco-5',
     priority: 'applied',
-    campaign: 'DAF \u00cele-de-France',
+    campaign: 'DAF Île-de-France',
     step: 'E1 — Objet email initial',
     title: "Personnaliser l'objet avec {{firstName}} + question sectorielle",
-    desc: "Remplacement de l'objet g\u00e9n\u00e9rique par un objet personnalis\u00e9 avec le pr\u00e9nom du prospect et une question cibl\u00e9e sur le secteur. R\u00e9sultat : <strong>+8 points de taux d'ouverture</strong> (de 60% \u00e0 68%).",
-    impact: '\u25b2 +8pts ouverture',
-    date: '3 f\u00e9v.',
+    desc: "Remplacement de l'objet générique par un objet personnalisé avec le prénom du prospect et une question ciblée sur le secteur. Résultat : <strong>+8 points de taux d'ouverture</strong> (de 60% à 68%).",
+    impact: '▲ +8pts ouverture',
+    date: '3 fév.',
     before: '',
     after: '',
-    appliedNote: 'Appliqu\u00e9e le 3 f\u00e9v. \u00b7 R\u00e9sultat confirm\u00e9 apr\u00e8s 150 prospects \u00b7 It\u00e9ration v2 \u2192 v3',
+    appliedNote: 'Appliquée le 3 fév. · Résultat confirmé après 150 prospects · Itération v2 → v3',
   },
 ];
 
 const INSIGHTS = [
   {
     title: 'Questions ouvertes > CTA directs',
-    text: 'Les CTA sous forme de question ("Quel est votre plus gros frein...?") g\u00e9n\u00e8rent 2.1x plus de r\u00e9ponses que les propositions de call directes. Observ\u00e9 sur les 3 campagnes actives.',
+    text: 'Les CTA sous forme de question ("Quel est votre plus gros frein...?") génèrent 2.1x plus de réponses que les propositions de call directes. Observé sur les 3 campagnes actives.',
     confidence: 'high',
-    confidenceLabel: 'Confiance haute \u00b7 400+ prospects',
+    confidenceLabel: 'Confiance haute · 400+ prospects',
   },
   {
-    title: 'Angle positif > anxiog\u00e8ne',
-    text: '"Gain de temps" et "r\u00e9cup\u00e9rer X heures" performent +2.1pts mieux que "co\u00fbt de l\'erreur" et "risque de..." sur les profils finance et RH.',
+    title: 'Angle positif > anxiogène',
+    text: '"Gain de temps" et "récupérer X heures" performent +2.1pts mieux que "coût de l\'erreur" et "risque de..." sur les profils finance et RH.',
     confidence: 'medium',
-    confidenceLabel: 'Confiance moyenne \u00b7 150 prospects',
+    confidenceLabel: 'Confiance moyenne · 150 prospects',
   },
 ];
 
 /* ─── Filter definitions ─── */
 
-const PRIORITY_FILTERS = ['Toutes', 'Critiques', 'Importantes', 'Suggestions', 'Appliqu\u00e9es'];
+const PRIORITY_FILTERS = ['Toutes', 'Critiques', 'Importantes', 'Suggestions', 'Appliquées'];
 
 const PRIORITY_MAP = {
   'Critiques': 'critical',
   'Importantes': 'important',
   'Suggestions': 'suggestion',
-  'Appliqu\u00e9es': 'applied',
+  'Appliquées': 'applied',
 };
 
 /* ─── Component ─── */
@@ -248,7 +248,7 @@ export default function RecosPage() {
         ...r,
         status: 'applied',
         priority: 'applied',
-        appliedNote: `Appliqu\u00e9e le ${dateStr} \u00b7 En attente de donn\u00e9es${r.impact ? ' \u00b7 Impact attendu : ' + r.impact : ''}`,
+        appliedNote: `Appliquée le ${dateStr} · En attente de données${r.impact ? ' · Impact attendu : ' + r.impact : ''}`,
       };
     }));
     setEditingId(null);
@@ -305,7 +305,7 @@ export default function RecosPage() {
 
   function renderBadge(reco) {
     if (reco.status === 'applied' || reco.priority === 'applied') {
-      return <span className="reco-priority-badge applied">Appliqu\u00e9e</span>;
+      return <span className="reco-priority-badge applied">Appliquée</span>;
     }
     if (reco.status === 'dismissed') {
       return (
@@ -313,7 +313,7 @@ export default function RecosPage() {
           className="reco-priority-badge"
           style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
         >
-          Ignor\u00e9e
+          Ignorée
         </span>
       );
     }
@@ -401,7 +401,7 @@ export default function RecosPage() {
             {isApplied && reco.after && (
               <div className="reco-diff">
                 <div className="reco-diff-panel">
-                  <div className="reco-diff-label after">Version appliqu\u00e9e</div>
+                  <div className="reco-diff-label after">Version appliquée</div>
                   <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: reco.after }} />
                 </div>
               </div>
@@ -420,7 +420,7 @@ export default function RecosPage() {
                 {isEditing ? (
                   <>
                     <button className="reco-btn accept" onClick={() => applyModified(reco.id)}>
-                      Appliquer la version modifi\u00e9e
+                      Appliquer la version modifiée
                     </button>
                     <button className="reco-btn dismiss" onClick={cancelModify}>Annuler</button>
                   </>
@@ -452,7 +452,7 @@ export default function RecosPage() {
           <div className="reco-page-subtitle" style={analysisRunning ? { color: 'var(--text-secondary)' } : undefined}>
             {analysisRunning
               ? 'Claude analyse vos campagnes... Veuillez patienter.'
-              : "Claude analyse vos campagnes et propose des optimisations \u00b7 Mis \u00e0 jour il y a 2h"
+              : "Claude analyse vos campagnes et propose des optimisations · Mis à jour il y a 2h"
             }
           </div>
         </div>
@@ -473,20 +473,20 @@ export default function RecosPage() {
         </div>
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--success)' }}>{stats.applied}</div>
-          <div className="reco-stat-label">Appliqu\u00e9es</div>
-          <div className="reco-stat-trend up">{'\u25b2'} +4.2pts r\u00e9ponse en moyenne</div>
+          <div className="reco-stat-label">Appliquées</div>
+          <div className="reco-stat-trend up">{'▲'} +4.2pts réponse en moyenne</div>
         </div>
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--warning)' }}>{stats.pending}</div>
           <div className="reco-stat-label">En attente</div>
           <div className="reco-stat-trend" style={{ color: 'var(--warning)' }}>
-            {stats.pending > 0 ? '1 critique' : '\u2014'}
+            {stats.pending > 0 ? '1 critique' : '—'}
           </div>
         </div>
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--text-muted)' }}>{stats.ignored}</div>
-          <div className="reco-stat-label">Ignor\u00e9es</div>
-          <div className="reco-stat-trend" style={{ color: 'var(--text-muted)' }}>{'\u2014'}</div>
+          <div className="reco-stat-label">Ignorées</div>
+          <div className="reco-stat-trend" style={{ color: 'var(--text-muted)' }}>{'—'}</div>
         </div>
       </div>
 
@@ -523,7 +523,7 @@ export default function RecosPage() {
 
       {/* Cross-campaign insights */}
       <div className="reco-insight-card">
-        <div className="reco-insight-title">Patterns cross-campagne d\u00e9tect\u00e9s</div>
+        <div className="reco-insight-title">Patterns cross-campagne détectés</div>
         <div className="reco-insight-grid">
           {insights.map((ins, i) => (
             <div key={i} className="reco-insight-item">

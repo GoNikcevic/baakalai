@@ -52,7 +52,7 @@ export default function DashboardPage({ section, onNavigateCampaign }) {
             month: 'short',
             year: 'numeric',
           });
-        return `${activeCount} campagne${activeCount > 1 ? 's' : ''} active${activeCount > 1 ? 's' : ''} \u00B7 ${weekStr}`;
+        return `${activeCount} campagne${activeCount > 1 ? 's' : ''} active${activeCount > 1 ? 's' : ''} · ${weekStr}`;
       })();
 
   return (

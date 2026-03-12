@@ -86,8 +86,8 @@ app.listen(config.port, '0.0.0.0', () => {
 
   // Clean up expired refresh tokens every hour
   const db = require('./db');
-  setInterval(() => {
-    try { db.refreshTokens.deleteExpired(); } catch { /* ignore */ }
+  setInterval(async () => {
+    try { await db.refreshTokens.deleteExpired(); } catch { /* ignore */ }
   }, 60 * 60 * 1000);
 
   // Start orchestrator (cron jobs) if enabled

@@ -169,7 +169,7 @@ export default function ProfilePage() {
           value={profile[field] || ''}
           onChange={(e) => handleChange(field, e.target.value)}
         >
-          <option value="">-- S\u00e9lectionner --</option>
+          <option value="">-- Sélectionner --</option>
           {options.map(opt => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
@@ -185,7 +185,7 @@ export default function ProfilePage() {
       <div className="page-header">
         <div>
           <div className="page-title">Profil Entreprise</div>
-          <div className="page-subtitle">Ces informations sont utilis\u00e9es par Claude pour personnaliser vos campagnes</div>
+          <div className="page-subtitle">Ces informations sont utilisées par Claude pour personnaliser vos campagnes</div>
         </div>
         <div className="header-actions">
           <button
@@ -194,7 +194,7 @@ export default function ProfilePage() {
             disabled={saving}
             style={saveStatus === 'saved' ? { background: 'var(--success)' } : undefined}
           >
-            {saving ? 'Enregistrement...' : saveStatus === 'saved' ? 'Enregistr\u00e9' : 'Sauvegarder le profil'}
+            {saving ? 'Enregistrement...' : saveStatus === 'saved' ? 'Enregistré' : 'Sauvegarder le profil'}
           </button>
         </div>
       </div>
@@ -204,14 +204,14 @@ export default function ProfilePage() {
         <div className="card-title">Informations entreprise</div>
         <div className="form-grid">
           {renderInput('Nom de l\'entreprise', 'company', { placeholder: 'Ex: FormaPro Consulting' })}
-          {renderInput('Secteur d\'activit\u00e9', 'sector', { placeholder: 'Ex: Formation professionnelle' })}
+          {renderInput('Secteur d\'activité', 'sector', { placeholder: 'Ex: Formation professionnelle' })}
           {renderInput('Site web', 'website', { type: 'url', placeholder: 'https://...' })}
-          {renderSelect('Taille d\'\u00e9quipe', 'team_size', [
+          {renderSelect('Taille d\'équipe', 'team_size', [
             '1-5', '6-10', '11-25', '26-50', '51-100', '100+',
           ])}
         </div>
-        {renderTextarea('Description de l\'activit\u00e9', 'description', {
-          placeholder: 'D\u00e9crivez bri\u00e8vement votre activit\u00e9 et vos services principaux...',
+        {renderTextarea('Description de l\'activité', 'description', {
+          placeholder: 'Décrivez brièvement votre activité et vos services principaux...',
           rows: 3,
         })}
       </div>
@@ -220,19 +220,19 @@ export default function ProfilePage() {
       <div className="card">
         <div className="card-title">Proposition de valeur</div>
         {renderTextarea('Proposition de valeur principale', 'value_prop', {
-          placeholder: 'Quel probl\u00e8me r\u00e9solvez-vous et quelle est votre promesse client ?',
+          placeholder: 'Quel problème résolvez-vous et quelle est votre promesse client ?',
           rows: 3,
         })}
-        {renderTextarea('Preuves sociales / R\u00e9f\u00e9rences', 'social_proof', {
-          placeholder: 'Clients notables, chiffres cl\u00e9s, t\u00e9moignages, certifications...',
+        {renderTextarea('Preuves sociales / Références', 'social_proof', {
+          placeholder: 'Clients notables, chiffres clés, témoignages, certifications...',
           rows: 3,
         })}
         {renderTextarea('Pain points clients', 'pain_points', {
-          placeholder: 'Les frustrations et difficult\u00e9s principales de vos clients cibles...',
+          placeholder: 'Les frustrations et difficultés principales de vos clients cibles...',
           rows: 3,
         })}
-        {renderTextarea('Objections fr\u00e9quentes', 'objections', {
-          placeholder: 'Les raisons pour lesquelles les prospects h\u00e9sitent...',
+        {renderTextarea('Objections fréquentes', 'objections', {
+          placeholder: 'Les raisons pour lesquelles les prospects hésitent...',
           rows: 3,
         })}
       </div>
@@ -241,7 +241,7 @@ export default function ProfilePage() {
       <div className="card">
         <div className="card-title">Personas cibles</div>
         {renderTextarea('Persona principal', 'persona_primary', {
-          placeholder: 'D\u00e9crivez votre interlocuteur id\u00e9al : poste, responsabilit\u00e9s, d\u00e9fis quotidiens...',
+          placeholder: 'Décrivez votre interlocuteur idéal : poste, responsabilités, défis quotidiens...',
           rows: 3,
         })}
         {renderTextarea('Persona secondaire', 'persona_secondary', {
@@ -255,8 +255,8 @@ export default function ProfilePage() {
         <div className="card-title">Ciblage</div>
         <div className="form-grid">
           {renderInput('Secteurs cibles', 'target_sectors', { placeholder: 'Ex: Finance, RH, Formation' })}
-          {renderInput('Taille d\'entreprise cible', 'target_size', { placeholder: 'Ex: 11-50 salari\u00e9s' })}
-          {renderInput('Zones g\u00e9ographiques', 'target_zones', { placeholder: 'Ex: \u00cele-de-France, Lyon, France' })}
+          {renderInput('Taille d\'entreprise cible', 'target_size', { placeholder: 'Ex: 11-50 salariés' })}
+          {renderInput('Zones géographiques', 'target_zones', { placeholder: 'Ex: Île-de-France, Lyon, France' })}
         </div>
       </div>
 
@@ -264,15 +264,15 @@ export default function ProfilePage() {
       <div className="card">
         <div className="card-title">Style de communication</div>
         <div className="form-grid">
-          {renderSelect('Ton par d\u00e9faut', 'default_tone', [
-            'Pro d\u00e9contract\u00e9', 'Formel', 'Amical', 'Direct', 'Expert',
+          {renderSelect('Ton par défaut', 'default_tone', [
+            'Pro décontracté', 'Formel', 'Amical', 'Direct', 'Expert',
           ])}
-          {renderSelect('Formalit\u00e9', 'default_formality', [
+          {renderSelect('Formalité', 'default_formality', [
             'Vous', 'Tu',
           ])}
         </div>
-        {renderTextarea('Mots / expressions \u00e0 \u00e9viter', 'avoid_words', {
-          placeholder: 'Ex: "innovant", "synergies", "n\'h\u00e9sitez pas"...',
+        {renderTextarea('Mots / expressions à éviter', 'avoid_words', {
+          placeholder: 'Ex: "innovant", "synergies", "n\'hésitez pas"...',
           rows: 2,
         })}
         {renderTextarea('Expressions signature', 'signature_phrases', {

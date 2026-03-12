@@ -98,7 +98,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
     );
   }
 
-  const countText = `${campaignsList.length} campagne${campaignsList.length > 1 ? 's' : ''} \u00B7 ${projectsList.length} projet${projectsList.length > 1 ? 's' : ''}`;
+  const countText = `${campaignsList.length} campagne${campaignsList.length > 1 ? 's' : ''} · ${projectsList.length} projet${projectsList.length > 1 ? 's' : ''}`;
 
   return (
     <div id="campaigns-list-view">
@@ -184,7 +184,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
                   >
                     <div className="project-header-left">
                       <span className="project-chevron">
-                        {isCollapsed ? '\u25B8' : '\u25BE'}
+                        {isCollapsed ? '▸' : '▾'}
                       </span>
                       <span
                         className="project-color-dot"
@@ -243,7 +243,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
                 >
                   <div className="project-header-left">
                     <span className="project-chevron">
-                      {collapsedProjects._orphans ? '\u25B8' : '\u25BE'}
+                      {collapsedProjects._orphans ? '▸' : '▾'}
                     </span>
                     <span
                       className="project-color-dot"

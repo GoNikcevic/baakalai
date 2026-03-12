@@ -5,8 +5,7 @@ const notionSync = require('../api/notion-sync');
 
 const router = Router();
 
-// GET /api/campaigns/lemlist/list — List campaigns from Lemlist (for linking)
-// MUST be before /:id to avoid Express matching "lemlist" as an id param
+// GET /api/campaigns/lemlist/list
 router.get('/lemlist/list', async (_req, res, next) => {
   try {
     const campaigns = await lemlist.listCampaigns();
@@ -16,103 +15,117 @@ router.get('/lemlist/list', async (_req, res, next) => {
   }
 });
 
-// GET /api/campaigns — List campaigns (scoped to user)
-router.get('/', (req, res) => {
-  const { status, channel } = req.query;
-  const campaigns = db.campaigns.list({ status, channel, userId: req.user.id });
+// GET /api/campaigns
+router.get('/', async (req, res, next) => {
+  try {
+    const { status, channel } = req.query;
+    const campaigns = await db.campaigns.list({ status, channel, userId: req.user.id });
 
-  // Attach touchpoints to each campaign
-  const result = campaigns.map((c) => ({
-    ...c,
-    sequence: db.touchpoints.listByCampaign(c.id),
-  }));
+    const result = [];
+    for (const c of campaigns) {
+      const sequence = await db.touchpoints.listByCampaign(c.id);
+      result.push({ ...c, sequence });
+    }
 
-  res.json({ campaigns: result });
-});
-
-// GET /api/campaigns/:id — Campaign detail (ownership check)
-router.get('/:id', (req, res) => {
-  const campaign = db.campaigns.get(req.params.id);
-  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-  if (campaign.user_id && campaign.user_id !== req.user.id && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Access denied' });
+    res.json({ campaigns: result });
+  } catch (err) {
+    next(err);
   }
-
-  res.json({
-    campaign,
-    sequence: db.touchpoints.listByCampaign(campaign.id),
-    diagnostics: db.diagnostics.listByCampaign(campaign.id),
-    history: db.versions.listByCampaign(campaign.id),
-  });
 });
 
-// POST /api/campaigns — Create a new campaign (assigned to user)
-router.post('/', (req, res) => {
-  const campaign = db.campaigns.create({ ...req.body, userId: req.user.id });
+// GET /api/campaigns/:id
+router.get('/:id', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.user_id && campaign.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
-  // Create touchpoints if provided
-  if (Array.isArray(req.body.sequence)) {
-    req.body.sequence.forEach((tp, i) => {
-      db.touchpoints.create(campaign.id, { ...tp, sortOrder: i });
+    res.json({
+      campaign,
+      sequence: await db.touchpoints.listByCampaign(campaign.id),
+      diagnostics: await db.diagnostics.listByCampaign(campaign.id),
+      history: await db.versions.listByCampaign(campaign.id),
     });
+  } catch (err) {
+    next(err);
   }
-
-  // Background sync to Notion
-  notionSync.syncCampaign(campaign.id).catch(console.error);
-
-  res.status(201).json(campaign);
 });
 
-// PATCH /api/campaigns/:id — Update campaign (ownership check)
-router.patch('/:id', (req, res) => {
-  const existing = db.campaigns.get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Campaign not found' });
-  if (existing.user_id && existing.user_id !== req.user.id && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Access denied' });
+// POST /api/campaigns
+router.post('/', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.create({ ...req.body, userId: req.user.id });
+
+    if (Array.isArray(req.body.sequence)) {
+      for (let i = 0; i < req.body.sequence.length; i++) {
+        await db.touchpoints.create(campaign.id, { ...req.body.sequence[i], sortOrder: i });
+      }
+    }
+
+    notionSync.syncCampaign(campaign.id).catch(console.error);
+    res.status(201).json(campaign);
+  } catch (err) {
+    next(err);
   }
-
-  const updated = db.campaigns.update(req.params.id, req.body);
-  if (!updated) return res.status(404).json({ error: 'No changes' });
-
-  // Background sync to Notion
-  notionSync.syncCampaign(updated.id).catch(console.error);
-
-  res.json(updated);
 });
 
-// PUT /api/campaigns/:id/sequence — Replace full sequence
-router.put('/:id/sequence', (req, res) => {
-  const campaign = db.campaigns.get(req.params.id);
-  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-  if (campaign.user_id && campaign.user_id !== req.user.id && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Access denied' });
+// PATCH /api/campaigns/:id
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const existing = await db.campaigns.get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Campaign not found' });
+    if (existing.user_id && existing.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const updated = await db.campaigns.update(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'No changes' });
+
+    notionSync.syncCampaign(updated.id).catch(console.error);
+    res.json(updated);
+  } catch (err) {
+    next(err);
   }
-
-  // Delete existing and insert new
-  db.touchpoints.deleteByCampaign(campaign.id);
-  const sequence = (req.body.sequence || []).map((tp, i) => {
-    const created = db.touchpoints.create(campaign.id, { ...tp, sortOrder: i });
-    return { ...tp, id: created.id };
-  });
-
-  res.json({ sequence });
 });
 
-// POST /api/campaigns/:id/sync-stats — Pull fresh stats from Lemlist
+// PUT /api/campaigns/:id/sequence
+router.put('/:id/sequence', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.user_id && campaign.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await db.touchpoints.deleteByCampaign(campaign.id);
+    const sequence = [];
+    const tps = req.body.sequence || [];
+    for (let i = 0; i < tps.length; i++) {
+      const created = await db.touchpoints.create(campaign.id, { ...tps[i], sortOrder: i });
+      sequence.push({ ...tps[i], id: created.id });
+    }
+
+    res.json({ sequence });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/campaigns/:id/sync-stats
 router.post('/:id/sync-stats', async (req, res, next) => {
   try {
-    const campaign = db.campaigns.get(req.params.id);
+    const campaign = await db.campaigns.get(req.params.id);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
     if (!campaign.lemlist_id) {
       return res.status(400).json({ error: 'No Lemlist ID linked to this campaign' });
     }
 
-    // Fetch from Lemlist
     const rawStats = await lemlist.getCampaignStats(campaign.lemlist_id);
     const stats = lemlist.transformCampaignStats(rawStats);
 
-    // Update local DB
-    db.campaigns.update(campaign.id, {
+    await db.campaigns.update(campaign.id, {
       nb_prospects: stats.contacts,
       open_rate: stats.openRate,
       reply_rate: stats.replyRate,
@@ -121,32 +134,32 @@ router.post('/:id/sync-stats', async (req, res, next) => {
       last_collected: new Date().toISOString().split('T')[0],
     });
 
-    // Background sync to Notion
     notionSync.syncCampaign(campaign.id).catch(console.error);
-
     res.json({ stats, synced: true });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/campaigns/:id/versions — Record a new version
-router.post('/:id/versions', (req, res) => {
-  const campaign = db.campaigns.get(req.params.id);
-  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+// POST /api/campaigns/:id/versions
+router.post('/:id/versions', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
-  const existing = db.versions.listByCampaign(campaign.id);
-  const nextVersion = (existing[0]?.version || 0) + 1;
+    const existing = await db.versions.listByCampaign(campaign.id);
+    const nextVersion = (existing[0]?.version || 0) + 1;
 
-  const version = db.versions.create(campaign.id, {
-    version: nextVersion,
-    ...req.body,
-  });
+    const version = await db.versions.create(campaign.id, {
+      version: nextVersion,
+      ...req.body,
+    });
 
-  // Background sync to Notion
-  notionSync.syncVersion(version.id, campaign.id).catch(console.error);
-
-  res.status(201).json(version);
+    notionSync.syncVersion(version.id, campaign.id).catch(console.error);
+    res.status(201).json(version);
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

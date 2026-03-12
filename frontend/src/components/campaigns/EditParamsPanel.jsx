@@ -30,7 +30,7 @@ export default function EditParamsPanel({ campaign: c, setCampaigns, onClose }) 
       updated.tone = tone;
       updated.info = {
         ...updated.info,
-        copyDesc: `${tone} \u00B7 ${updated.formality || 'Vous'} \u00B7 ${angle} \u00B7 FR`,
+        copyDesc: `${tone} · ${updated.formality || 'Vous'} · ${angle} · FR`,
       };
       return { ...prev, [c.id]: updated };
     });

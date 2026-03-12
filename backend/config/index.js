@@ -3,6 +3,10 @@ require('dotenv').config();
 const config = {
   port: process.env.PORT || 3001,
 
+  database: {
+    url: process.env.DATABASE_URL,
+  },
+
   lemlist: {
     apiKey: process.env.LEMLIST_API_KEY,
     baseUrl: 'https://api.lemlist.com/api',
@@ -30,7 +34,7 @@ const config = {
  * DB keys take priority over .env values.
  * Called after keys are saved via the settings API.
  */
-function reloadKeys() {
+async function reloadKeys() {
   try {
     const db = require('../db');
     const { decrypt } = require('./crypto');
@@ -42,7 +46,7 @@ function reloadKeys() {
     };
 
     for (const [dbKey, setter] of Object.entries(keyMap)) {
-      const row = db.settings.get(dbKey);
+      const row = await db.settings.get(dbKey);
       if (row) {
         try {
           setter(decrypt(row.value));
@@ -57,7 +61,7 @@ function reloadKeys() {
 }
 
 // Load DB keys on startup (after a short delay to let DB initialize)
-setTimeout(reloadKeys, 0);
+setTimeout(reloadKeys, 100);
 
 function validateConfig(keys) {
   const missing = keys.filter((k) => {

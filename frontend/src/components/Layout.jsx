@@ -13,12 +13,12 @@ const NAV_ITEMS = [
   { label: 'Assistant',           to: '/chat',                 icon: 'chat' },
   { label: 'Dashboard',           to: '/dashboard',            icon: 'dashboard',  end: true },
   { label: 'Campagnes',           to: '/dashboard/campaigns',  icon: 'campaigns' },
-  { label: 'Copy & S\u00e9quences', to: '/copyeditor',         icon: 'copy' },
+  { label: 'Copy & Séquences', to: '/copyeditor',         icon: 'copy' },
   { label: 'Recommandations',     to: '/recos',                icon: 'recos' },
   { label: 'Rapports',            to: '/dashboard/reports',    icon: 'reports' },
   { label: 'Refinement',          to: '/dashboard/refinement', icon: 'refinement' },
   { label: 'Profil',              to: '/profil',               icon: 'profil' },
-  { label: 'Param\u00e8tres',     to: '/settings',             icon: 'settings' },
+  { label: 'Paramètres',     to: '/settings',             icon: 'settings' },
 ];
 
 /* ─── Mobile bottom nav (subset) ─── */
@@ -145,7 +145,7 @@ export default function Layout() {
             <button
               className="sidebar-logout-btn"
               onClick={handleLogout}
-              title="Se d\u00e9connecter"
+              title="Se déconnecter"
             >
               <svg
                 width="16"

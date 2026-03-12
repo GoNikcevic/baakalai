@@ -49,9 +49,9 @@ const SYNC_LABELS = {
 };
 
 const SYNC_ICONS = {
-  synced: '\u2713',
-  custom: '\u2191',
-  local:  '\u2014',
+  synced: '✓',
+  custom: '↑',
+  local:  '—',
 };
 
 /* ─── Toast sub-component ─── */
@@ -283,7 +283,7 @@ function CreateVarModal({ onClose, onCreate, existingKeys }) {
 function VarItem({ variable, isCustom, onInsert, onDelete }) {
   const [flashed, setFlashed] = useState(false);
   const syncClass = variable.sync || 'local';
-  const syncIcon = SYNC_ICONS[syncClass] || '\u2014';
+  const syncIcon = SYNC_ICONS[syncClass] || '—';
 
   const handleClick = useCallback(() => {
     onInsert(variable.key);
@@ -314,7 +314,7 @@ function VarItem({ variable, isCustom, onInsert, onDelete }) {
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             title="Supprimer"
           >
-            \u2715
+            ✕
           </button>
         </div>
       )}
@@ -412,7 +412,7 @@ export default function VariableManager({
       return updated;
     });
     setShowModal(false);
-    const syncNote = newVar.syncMode !== 'local' ? ' \u00B7 Sync Lemlist activee' : '';
+    const syncNote = newVar.syncMode !== 'local' ? ' · Sync Lemlist activee' : '';
     setToast(`Variable {{${newVar.key}}} creee${syncNote}`);
   }, [onRegistryChange]);
 

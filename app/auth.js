@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    BAKAL — Authentication Module
-   Handles login, register, token storage, refresh, and auth state.
+   Primary: Supabase Auth (GoTrue).
+   Fallback: Express backend /api/auth/* or offline demo mode.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const BakalAuth = (() => {
@@ -9,10 +10,15 @@ const BakalAuth = (() => {
   const USER_KEY = 'bakal_user';
 
   function getToken() {
+    // Prefer Supabase token if available
+    const sbToken = localStorage.getItem('bakal_supabase_access_token');
+    if (sbToken) return sbToken;
     return localStorage.getItem(TOKEN_KEY);
   }
 
   function getRefreshToken() {
+    const sbRefresh = localStorage.getItem('bakal_supabase_refresh_token');
+    if (sbRefresh) return sbRefresh;
     return localStorage.getItem(REFRESH_KEY);
   }
 
@@ -32,13 +38,46 @@ const BakalAuth = (() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem('bakal_supabase_access_token');
+    localStorage.removeItem('bakal_supabase_refresh_token');
   }
 
   function isLoggedIn() {
     return !!getToken();
   }
 
+  /* ─── Supabase Auth detection ─── */
+
+  function supabaseReady() {
+    return typeof BakalSupabase !== 'undefined' && BakalSupabase.isReady();
+  }
+
+  /* ─── Login ─── */
+
   async function login(email, password) {
+    // Try Supabase Auth first
+    if (supabaseReady()) {
+      try {
+        const data = await BakalSupabase.signIn(email, password);
+        const user = {
+          id: data.user?.id,
+          name: data.user?.user_metadata?.name || email.split('@')[0],
+          email: data.user?.email || email,
+          role: 'authenticated',
+        };
+        // Also store in our standard keys for backward compat
+        setSession(data.access_token, data.refresh_token, user);
+        return user;
+      } catch (err) {
+        // If it's a real auth error (not network), throw it
+        if (err.message && !err.message.includes('fetch')) {
+          throw err;
+        }
+        // Network error — fall through to Express backend
+      }
+    }
+
+    // Try Express backend
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -52,7 +91,7 @@ const BakalAuth = (() => {
       setSession(data.token, data.refreshToken, data.user);
       return data.user;
     } catch (err) {
-      // Backend unreachable (GitHub Pages / offline) — demo mode
+      // Backend unreachable — demo mode
       if (err.message === 'offline' || err.name === 'TypeError') {
         const demoUser = { name: email.split('@')[0], email, role: 'demo' };
         setSession('demo-token', null, demoUser);
@@ -62,7 +101,29 @@ const BakalAuth = (() => {
     }
   }
 
+  /* ─── Register ─── */
+
   async function register(name, email, password, company) {
+    // Try Supabase Auth first
+    if (supabaseReady()) {
+      try {
+        const data = await BakalSupabase.signUp(email, password, { name, company });
+        const user = {
+          id: data.user?.id,
+          name: name || email.split('@')[0],
+          email: data.user?.email || email,
+          role: 'authenticated',
+        };
+        setSession(data.access_token || 'pending-confirmation', data.refresh_token, user);
+        return user;
+      } catch (err) {
+        if (err.message && !err.message.includes('fetch')) {
+          throw err;
+        }
+      }
+    }
+
+    // Try Express backend
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -85,18 +146,27 @@ const BakalAuth = (() => {
     }
   }
 
-  /**
-   * Refresh the access token using the stored refresh token.
-   * Returns the new access token, or null if refresh failed.
-   */
+  /* ─── Token refresh ─── */
+
   let _refreshPromise = null;
 
   async function refreshAccessToken() {
-    // Deduplicate concurrent refresh calls
     if (_refreshPromise) return _refreshPromise;
 
     _refreshPromise = (async () => {
-      const rt = getRefreshToken();
+      // Try Supabase refresh
+      if (supabaseReady() && localStorage.getItem('bakal_supabase_refresh_token')) {
+        try {
+          const newToken = await BakalSupabase.refreshSession();
+          if (newToken) {
+            localStorage.setItem(TOKEN_KEY, newToken);
+            return newToken;
+          }
+        } catch { /* fall through */ }
+      }
+
+      // Try Express refresh
+      const rt = localStorage.getItem(REFRESH_KEY);
       if (!rt) return null;
 
       try {
@@ -125,9 +195,16 @@ const BakalAuth = (() => {
     return _refreshPromise;
   }
 
+  /* ─── Logout ─── */
+
   async function logout() {
-    const rt = getRefreshToken();
-    // Revoke refresh token on the server (best-effort)
+    // Supabase signout
+    if (supabaseReady()) {
+      try { await BakalSupabase.signOut(); } catch { /* ignore */ }
+    }
+
+    // Express signout
+    const rt = localStorage.getItem(REFRESH_KEY);
     if (rt) {
       try {
         await fetch('/api/auth/logout', {
@@ -137,13 +214,40 @@ const BakalAuth = (() => {
         });
       } catch { /* ignore */ }
     }
+
     clearSession();
     showLoginScreen();
   }
 
+  /* ─── Token validation ─── */
+
   async function validateToken() {
     const token = getToken();
     if (!token) return false;
+    if (token === 'demo-token') return true;
+
+    // Supabase: validate via /auth/v1/user
+    if (supabaseReady() && localStorage.getItem('bakal_supabase_access_token')) {
+      try {
+        const user = await BakalSupabase.getUser();
+        if (user && user.id) {
+          localStorage.setItem(USER_KEY, JSON.stringify({
+            id: user.id,
+            name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+            email: user.email,
+            role: user.role || 'authenticated',
+          }));
+          return true;
+        }
+        // Token expired — try refresh
+        const newToken = await refreshAccessToken();
+        return !!newToken;
+      } catch {
+        return false;
+      }
+    }
+
+    // Express: validate via /api/auth/me
     try {
       const res = await fetch('/api/auth/me', {
         headers: { Authorization: 'Bearer ' + token },
@@ -153,13 +257,11 @@ const BakalAuth = (() => {
         localStorage.setItem(USER_KEY, JSON.stringify(data.user));
         return true;
       }
-      // Token expired — try refresh
       const newToken = await refreshAccessToken();
       if (!newToken) {
         clearSession();
         return false;
       }
-      // Re-validate with new token
       const res2 = await fetch('/api/auth/me', {
         headers: { Authorization: 'Bearer ' + newToken },
       });
@@ -350,7 +452,6 @@ const BakalAuth = (() => {
     const user = getUser();
     if (!user) return;
 
-    // Update sidebar user display if it exists
     const userEl = document.getElementById('sidebar-user-name');
     if (userEl) userEl.textContent = user.name;
 
