@@ -1,0 +1,16 @@
+[build]
+builder = "nixpacks"
+watchPatterns = ["backend/**", "app/**", "landing/**"]
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[build.nixpacksPlan.phases.install]
+cmds = ["cd backend && npm install"]
+
+[deploy]
+startCommand = "cd backend && node server.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

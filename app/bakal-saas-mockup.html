@@ -146,6 +146,17 @@ body {
 .nav-campaign-item::before { content: '›'; color: var(--text-muted); font-size: 13px; transition: color 0.15s; }
 .nav-campaign-item:hover::before { color: var(--text-secondary); }
 
+/* ── Collapsible campaign toggle ── */
+.nav-item-toggle {
+  display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+}
+.nav-item-toggle .nav-chevron {
+  font-size: 10px; color: var(--text-muted); transition: transform 0.2s ease;
+}
+.nav-item-toggle.open .nav-chevron { transform: rotate(90deg); }
+.nav-campaign-list { overflow: hidden; transition: max-height 0.25s ease; max-height: 0; }
+.nav-campaign-list.open { max-height: 500px; }
+
 /* ── Sidebar create button ── */
 .sidebar-create-btn {
   display: flex; align-items: center; gap: 8px;
@@ -2554,8 +2565,8 @@ body {
     <div class="nav-section">
       <div class="nav-label">Workspace</div>
       <div class="nav-item" onclick="showPage('dashboard')">Dashboard <span class="badge">Live</span></div>
-      <div class="nav-item" onclick="showPage('dashboard','campaigns')">Campagnes</div>
-      <div id="sidebarCampaignList"></div>
+      <div class="nav-item nav-item-toggle" id="campaignsToggle" onclick="toggleSidebarCampaigns(event)">Campagnes <span class="nav-chevron">&#9654;</span></div>
+      <div class="nav-campaign-list" id="sidebarCampaignList"></div>
       <div class="nav-item" onclick="showPage('dashboard','overview')">Opportunit&eacute;s <span class="badge">3</span></div>
       <div class="nav-item" onclick="showPage('dashboard','reports')">Rapports</div>
     </div>

@@ -523,6 +523,19 @@ document.addEventListener('click', function(e) {
   }
 });
 
+/* ═══ Sidebar campaign toggle ═══ */
+
+function toggleSidebarCampaigns(e) {
+  e.stopPropagation();
+  const toggle = document.getElementById('campaignsToggle');
+  const list = document.getElementById('sidebarCampaignList');
+  if (!toggle || !list) return;
+  const isOpen = toggle.classList.toggle('open');
+  list.classList.toggle('open', isOpen);
+  // Clicking the text (not just chevron) also navigates to campaigns
+  if (isOpen) showPage('dashboard', 'campaigns');
+}
+
 /* ═══ Sidebar campaign list ═══ */
 
 function renderSidebarCampaigns() {
