@@ -8,6 +8,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
 import CampaignsList from './CampaignsList';
 import VarGenerator from '../components/VarGenerator';
+import { exportCampaignsCsv, exportReportPdf } from '../services/api-client';
 
 const TABS = [
   { key: 'overview', label: 'Vue globale' },
@@ -561,6 +562,23 @@ function ReportsSection({ isEmpty, reports }) {
 
   return (
     <div id="section-reports">
+      {/* Export buttons */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', justifyContent: 'flex-end' }}>
+        <button
+          className="btn btn-ghost"
+          style={{ fontSize: '12px', padding: '8px 14px' }}
+          onClick={exportCampaignsCsv}
+        >
+          Exporter CSV
+        </button>
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: '12px', padding: '8px 14px' }}
+          onClick={exportReportPdf}
+        >
+          Rapport PDF
+        </button>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {reports.map((r, i) => (
           <div className="card" key={i}>

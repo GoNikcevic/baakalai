@@ -399,9 +399,72 @@ export async function saveKeys(keys) {
   });
 }
 
+/** Fetch custom variables for the current user */
+export async function fetchVariables() {
+  const data = await request('/variables');
+  return data.variables || [];
+}
+
+/** Create a custom variable */
+export async function createVariable(data) {
+  return request('/variables', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Delete a custom variable */
+export async function deleteVariable(id) {
+  return request('/variables/' + id, { method: 'DELETE' });
+}
+
 /** Test API key connectivity */
 export async function testKeys() {
   return request('/settings/keys/test', { method: 'POST' });
+}
+
+/** Download CSV export of all campaigns */
+export function exportCampaignsCsv() {
+  const token = getToken();
+  const url = BASE + '/export/campaigns/csv';
+  const link = document.createElement('a');
+  // Use fetch to include auth header, then trigger download
+  fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+    .then(r => r.blob())
+    .then(blob => {
+      link.href = URL.createObjectURL(blob);
+      link.download = 'bakal-campagnes.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+}
+
+/** Download CSV export of a single campaign's sequence */
+export function exportCampaignCsv(campaignId) {
+  const token = getToken();
+  const url = BASE + '/export/campaigns/' + campaignId + '/csv';
+  fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+    .then(r => r.blob())
+    .then(blob => {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'bakal-campagne-' + campaignId + '.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+}
+
+/** Open PDF report in new tab (printable HTML) */
+export function exportReportPdf() {
+  const token = getToken();
+  const url = BASE + '/export/report/pdf';
+  fetch(url, { headers: { Authorization: 'Bearer ' + token } })
+    .then(r => r.text())
+    .then(html => {
+      const w = window.open('', '_blank');
+      w.document.write(html);
+      w.document.close();
+    });
 }
 
 /** Upload files (multipart/form-data) */
@@ -468,6 +531,12 @@ const BakalAPI = {
   saveKeys,
   testKeys,
   uploadFiles,
+  fetchVariables,
+  createVariable,
+  deleteVariable,
+  exportCampaignsCsv,
+  exportCampaignCsv,
+  exportReportPdf,
   campaignToBackend,
   sequenceToBackend,
   transformCampaign,

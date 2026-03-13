@@ -15,6 +15,8 @@ const documentsRouter = require('./routes/documents');
 const profileRouter = require('./routes/profile');
 const statsRouter = require('./routes/stats');
 const projectsRouter = require('./routes/projects');
+const variablesRouter = require('./routes/variables');
+const exportRouter = require('./routes/export');
 const orchestrator = require('./orchestrator');
 
 const app = express();
@@ -71,6 +73,8 @@ app.use('/api/documents', requireAuth, documentsRouter);
 app.use('/api/profile', requireAuth, profileRouter);
 app.use('/api/stats', requireAuth, statsRouter);
 app.use('/api/projects', requireAuth, projectsRouter);
+app.use('/api/variables', requireAuth, variablesRouter);
+app.use('/api/export', requireAuth, exportRouter);
 
 // Error handling
 app.use(errorHandler);

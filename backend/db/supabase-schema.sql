@@ -280,6 +280,30 @@ CREATE TABLE IF NOT EXISTS project_files (
 CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
 
 -- =============================================
+-- Custom Variables (user-defined template variables)
+-- =============================================
+CREATE TABLE IF NOT EXISTS custom_variables (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key             TEXT NOT NULL,
+  label           TEXT,
+  category        TEXT DEFAULT 'custom'
+                  CHECK (category IN ('prospect', 'company', 'enrichment', 'custom')),
+  sync_mode       TEXT DEFAULT 'local'
+                  CHECK (sync_mode IN ('push', 'pull', 'bidirectional', 'local')),
+  default_value   TEXT,
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  updated_at      TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_custom_variables_user ON custom_variables(user_id);
+
+ALTER TABLE custom_variables ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access" ON custom_variables;
+CREATE POLICY "Service role full access" ON custom_variables FOR ALL USING (true) WITH CHECK (true);
+
+-- =============================================
 -- Auto-update updated_at trigger
 -- =============================================
 CREATE OR REPLACE FUNCTION update_updated_at()

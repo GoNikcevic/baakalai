@@ -4,7 +4,8 @@
    Ported from /app/variables.js — full React hooks implementation.
    =============================================================================== */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { fetchVariables, createVariable, deleteVariable } from '../services/api-client';
 
 /* ─── Variable Registry (initial data) ─── */
 
@@ -375,6 +376,37 @@ export default function VariableManager({
   );
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState(null);
+  const [backendLoaded, setBackendLoaded] = useState(false);
+
+  /* ─── Load custom variables from backend on mount ─── */
+  useEffect(() => {
+    if (backendLoaded) return;
+    fetchVariables()
+      .then((vars) => {
+        if (vars.length > 0) {
+          setRegistry(prev => {
+            const syncMap = { push: 'custom', pull: 'synced', bidirectional: 'synced', local: 'local' };
+            const customVars = vars.map(v => ({
+              key: v.key,
+              label: v.label || v.key,
+              sync: syncMap[v.sync_mode] || 'local',
+              source: v.sync_mode === 'local' ? 'local' : 'lemlist',
+              defaultValue: v.default_value || null,
+              syncMode: v.sync_mode,
+              isCustom: true,
+              _backendId: v.id,
+            }));
+            const updated = { ...prev, custom: customVars };
+            if (onRegistryChange) onRegistryChange(updated);
+            return updated;
+          });
+        }
+        setBackendLoaded(true);
+      })
+      .catch(() => {
+        setBackendLoaded(true);
+      });
+  }, [backendLoaded, onRegistryChange]);
 
   /* ─── Computed ─── */
 
@@ -401,7 +433,25 @@ export default function VariableManager({
     }
   }, [onInsertVariable]);
 
-  const handleCreateVariable = useCallback((newVar, targetCategory) => {
+  const handleCreateVariable = useCallback(async (newVar, targetCategory) => {
+    // Persist to backend
+    try {
+      const saved = await createVariable({
+        key: newVar.key,
+        label: newVar.label,
+        category: targetCategory,
+        syncMode: newVar.syncMode,
+        defaultValue: newVar.defaultValue,
+      });
+      newVar._backendId = saved.id;
+    } catch (err) {
+      if (err.status === 409) {
+        setToast('Cette variable existe deja.');
+        return;
+      }
+      // Continue with local-only if backend unavailable
+    }
+
     setRegistry(prev => {
       const cat = targetCategory === 'custom' ? 'custom' : targetCategory;
       const updated = {
@@ -416,19 +466,29 @@ export default function VariableManager({
     setToast(`Variable {{${newVar.key}}} creee${syncNote}`);
   }, [onRegistryChange]);
 
-  const handleDeleteCustomVar = useCallback((index) => {
+  const handleDeleteCustomVar = useCallback(async (index) => {
+    const deleted = registry.custom[index];
+    if (!deleted) return;
+
+    // Delete from backend if it has a backend ID
+    if (deleted._backendId) {
+      try {
+        await deleteVariable(deleted._backendId);
+      } catch {
+        // Continue with local removal even if backend fails
+      }
+    }
+
     setRegistry(prev => {
-      const deleted = prev.custom[index];
-      if (!deleted) return prev;
       const updated = {
         ...prev,
         custom: prev.custom.filter((_, i) => i !== index),
       };
       if (onRegistryChange) onRegistryChange(updated);
-      setToast(`Variable {{${deleted.key}}} supprimee`);
       return updated;
     });
-  }, [onRegistryChange]);
+    setToast(`Variable {{${deleted.key}}} supprimee`);
+  }, [registry.custom, onRegistryChange]);
 
   /* ─── Render ─── */
 

@@ -693,6 +693,44 @@ const projectFiles = {
 };
 
 // =============================================
+// Custom Variables
+// =============================================
+
+const customVariables = {
+  async listByUser(userId) {
+    const result = await query(
+      'SELECT * FROM custom_variables WHERE user_id = $1 ORDER BY created_at ASC',
+      [userId]
+    );
+    return result.rows;
+  },
+
+  async create(userId, data) {
+    const result = await query(`
+      INSERT INTO custom_variables (user_id, key, label, category, sync_mode, default_value)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [
+      userId,
+      data.key,
+      data.label || data.key,
+      data.category || 'custom',
+      data.syncMode || 'local',
+      data.defaultValue || null,
+    ]);
+    return result.rows[0];
+  },
+
+  async delete(id, userId) {
+    const result = await query(
+      'DELETE FROM custom_variables WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    return { changes: result.rowCount };
+  },
+};
+
+// =============================================
 // Raw query helper (for special cases in routes)
 // =============================================
 
@@ -723,4 +761,5 @@ module.exports = {
   profiles,
   projects,
   projectFiles,
+  customVariables,
 };

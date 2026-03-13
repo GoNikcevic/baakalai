@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useApp } from '../context/useApp';
-import api from '../services/api-client';
+import api, { exportCampaignCsv } from '../services/api-client';
 import VariableManager from '../components/VariableManager';
 
 /* ─── Fallback data ─── */
@@ -396,6 +396,7 @@ function TouchpointCard({
   activeCampaignKey,
   onDuplicate,
   onDelete,
+  onTouchpointUpdate,
 }) {
   const isLinkedin = tp.type === 'linkedin';
   const [regenStatus, setRegenStatus] = useState(null); // null | 'loading' | 'done' | 'error' | 'offline'
@@ -403,6 +404,18 @@ function TouchpointCard({
   const [editing, setEditing] = useState(false);
   const bodyRef = useRef(null);
   const subjectRef = useRef(null);
+
+  /* ─── Track edits and propagate to parent state ─── */
+  const handleFieldBlur = useCallback((field) => {
+    setEditing(false);
+    const ref = field === 'subject' ? subjectRef : bodyRef;
+    if (!ref.current) return;
+    const newValue = stripEditorHtml(ref.current.innerHTML);
+    const oldValue = field === 'subject' ? (tp.subject || '') : (tp.body || '');
+    if (newValue !== oldValue) {
+      onTouchpointUpdate(tp.id, { [field]: newValue });
+    }
+  }, [tp.id, tp.subject, tp.body, onTouchpointUpdate]);
 
   /* ─── Regenerate single touchpoint ─── */
   const handleRegenerate = useCallback(async () => {
@@ -530,7 +543,7 @@ function TouchpointCard({
               data-field="subject"
               dangerouslySetInnerHTML={{ __html: subjectHtml }}
               onFocus={() => setEditing(true)}
-              onBlur={() => setEditing(false)}
+              onBlur={() => handleFieldBlur('subject')}
             />
           </div>
         )}
@@ -549,7 +562,7 @@ function TouchpointCard({
             data-field="body"
             dangerouslySetInnerHTML={{ __html: bodyHtml }}
             onFocus={() => setEditing(true)}
-            onBlur={() => setEditing(false)}
+            onBlur={() => handleFieldBlur('body')}
             style={regenStatus === 'loading' ? { opacity: 0.4 } : undefined}
           />
         </div>
@@ -700,6 +713,7 @@ export default function CopyEditorPage() {
   const [regenAllStatus, setRegenAllStatus] = useState(null); // null | 'loading' | 'done' | 'error'
   const [regenAllMessage, setRegenAllMessage] = useState('');
   const [varRegistry, setVarRegistry] = useState(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   /* ─── Select campaign ─── */
   const selectCampaign = useCallback((key) => {
@@ -739,6 +753,24 @@ export default function CopyEditorPage() {
     }
   }, []);
 
+  /* ─── Handle touchpoint field updates (from inline editing) ─── */
+  const handleTouchpointUpdate = useCallback((tpId, changes) => {
+    setIsDirty(true);
+    setEditorCampaigns((prev) => {
+      const c = prev[activeCampaign];
+      if (!c) return prev;
+      return {
+        ...prev,
+        [activeCampaign]: {
+          ...c,
+          touchpoints: c.touchpoints.map((tp) =>
+            tp.id === tpId ? { ...tp, ...changes } : tp
+          ),
+        },
+      };
+    });
+  }, [activeCampaign, setEditorCampaigns]);
+
   /* ─── Current campaign data ─── */
   const currentCampaign = activeCampaign ? editorCampaigns[activeCampaign] : null;
 
@@ -760,6 +792,7 @@ export default function CopyEditorPage() {
 
   /* ─── Duplicate touchpoint ─── */
   const duplicateTouchpoint = useCallback((tpId) => {
+    setIsDirty(true);
     setEditorCampaigns((prev) => {
       const c = prev[activeCampaign];
       if (!c) return prev;
@@ -780,6 +813,7 @@ export default function CopyEditorPage() {
 
   /* ─── Delete touchpoint ─── */
   const deleteTouchpoint = useCallback((tpId) => {
+    setIsDirty(true);
     setEditorCampaigns((prev) => {
       const c = prev[activeCampaign];
       if (!c) return prev;
@@ -882,6 +916,7 @@ export default function CopyEditorPage() {
       };
     });
 
+    setIsDirty(false);
     const suffix = savedToBackend ? ' -- Synchronise' : ' -- Local';
     setSaveStatus('saved');
     setSaveMessage(`Sequences sauvegardees -- ${time}${suffix}`);
@@ -902,6 +937,7 @@ export default function CopyEditorPage() {
       synced = JSON.parse(JSON.stringify(EDITOR_FALLBACK));
     }
     setEditorCampaigns(synced);
+    setIsDirty(false);
   }, [campaigns, setEditorCampaigns]);
 
   /* ─── Regenerate all ─── */
@@ -1021,6 +1057,16 @@ export default function CopyEditorPage() {
               Parametres
             </button>
             <button
+              className="btn btn-ghost"
+              style={{ fontSize: '12px', padding: '8px 14px' }}
+              onClick={() => {
+                const backendId = currentCampaign._backendId || activeCampaign;
+                exportCampaignCsv(backendId);
+              }}
+            >
+              Exporter CSV
+            </button>
+            <button
               className="btn btn-primary"
               style={{ fontSize: '12px', padding: '8px 14px' }}
               onClick={regenerateAll}
@@ -1071,7 +1117,7 @@ export default function CopyEditorPage() {
             activeCampaignKey={activeCampaign}
             onDuplicate={() => duplicateTouchpoint(tp.id)}
             onDelete={() => deleteTouchpoint(tp.id)}
-            onTouchpointUpdate={() => {}}
+            onTouchpointUpdate={handleTouchpointUpdate}
           />
         ))}
 
@@ -1082,6 +1128,8 @@ export default function CopyEditorPage() {
               <span style={{ color: 'var(--success)', fontWeight: 600 }}>{saveMessage}</span>
             ) : saveStatus === 'error' ? (
               <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{saveMessage}</span>
+            ) : isDirty ? (
+              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>Modifications non sauvegardees</span>
             ) : saveMessage ? (
               saveMessage
             ) : (
