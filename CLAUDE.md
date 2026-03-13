@@ -6,12 +6,14 @@
 
 ## 🎯 Project Overview
 
-**Bakal** is a B2B prospecting automation **product** that combines:
-- Multi-channel outreach (Email + LinkedIn)
+**Bakal** is a B2B prospecting automation platform that acts as an **API aggregator and AI orchestrator**:
+- Centralizes and orchestrates existing tools (Lemlist, N8N, Claude) via their APIs
 - AI-generated personalized copy
 - Automated performance optimization through a cross-campaign learning loop
 
-**Positioning:** The power of a prospecting agency, delivered as an automated product at €350/month + €250 setup (pilot offer). Bakal is NOT an agency — it's a self-serve product that replaces one.
+**Positioning:** Bakal is NOT a SaaS and NOT an agency — it's an **intelligent orchestration layer** that connects prospecting tools and adds AI-powered optimization on top. The value is in the orchestration and intelligence, not in building yet another tool.
+
+**Pricing:** Entry point at **~€25/month** — accessible SMB volume play, not premium agency pricing.
 
 **Target Market:** SMB owners/directors who need leads but lack time/expertise to prospect
 
@@ -63,7 +65,7 @@
 | Workflow Automation | **N8N** | Orchestration between tools, scheduled jobs, API calls |
 | AI Generation | **Claude API** | Copy generation, performance analysis, optimization |
 | Database | **PostgreSQL** (Supabase or Neon) | Source of truth — campaigns, stats, memory, diagnostics |
-| Client Dashboard | **Bakal SaaS** | Client-facing dashboard — campaigns, stats, copy, optimization history |
+| Client Dashboard | **Bakal Dashboard** | Client-facing dashboard — campaigns, stats, copy, optimization history, retention UX (progress bias, etc.) |
 | Internal Ops | **Notion** (internal only) | Team-only — operational tracking, client notes, processes |
 | Landing Page | **Static HTML** | Client-facing marketing site |
 
@@ -238,6 +240,42 @@ PostgreSQL is the **source of truth** for all campaign data. Notion is used inte
 
 ---
 
+## 🧠 Retention Biases (Dashboard UX)
+
+The dashboard leverages cognitive biases to increase engagement and reduce churn:
+
+### Implemented Biases
+
+1. **Progress Bias (Endowed Progress Effect)**
+   - Users shown a progress bar toward a goal that's already partially filled
+   - Campaign setup wizard starts at "20% complete" (account created = free progress)
+   - Optimization score shows cumulative improvement over time
+   - "Your AI has learned X patterns" — always growing, never resetting
+   - Monthly milestone badges (Bronze → Silver → Gold → Platinum prospector)
+
+2. **Loss Aversion**
+   - "You've built X patterns — canceling resets your AI memory"
+   - Show accumulated value that would be lost on churn
+
+3. **Streak Bias**
+   - "Active for X consecutive days/weeks"
+   - Campaign activity streaks with visual reinforcement
+
+4. **Social Proof / Benchmarking**
+   - "Your open rate is above 73% of users in your sector"
+   - Anonymous peer comparison metrics
+
+5. **Sunk Cost Visualization**
+   - "Total prospects reached: X" — cumulative counters that never go down
+   - "AI optimizations performed: X" — investment visualization
+
+### Design Principles for Biases
+- Always **truthful** — show real data, never fabricate progress
+- **Subtle** — integrated naturally into the dashboard, not popup-heavy
+- **Value-aligned** — biases reinforce behaviors that genuinely help the user
+
+---
+
 ## 🔑 Key Design Decisions
 
 1. **Why Lemlist?** — Best-in-class for multi-channel sequences, good API, handles deliverability
@@ -246,7 +284,8 @@ PostgreSQL is the **source of truth** for all campaign data. Notion is used inte
 4. **Why keep Notion?** — Internal team ops only (client notes, processes). NOT exposed to clients. Replaceable by admin panel at scale.
 5. **Why a dashboard, not Notion, for clients?** — Clients see their campaigns on the Bakal SaaS dashboard. Professional product experience, no dependency on third-party UX.
 6. **Why not pay-per-lead?** — Lead value varies wildly by sector; flat fee simpler and more predictable
-7. **Why 60-day pilot?** — Enough time to run optimization cycles, not so long that bad fit clients are stuck
+7. **Why ~€25/month entry point?** — Low barrier, SMB volume play. Value comes from orchestration, not infrastructure cost.
+8. **Why retention biases?** — At €25/month, churn is the #1 risk. Progress bias and sunk cost visualization keep users engaged by showing real accumulated value.
 
 ---
 
@@ -268,7 +307,7 @@ When building the platform:
 - Two themes exist: dark (Outfit font, gradient accents) and light (DM Sans, cleaner)
 - Both available in French and English
 - Key sections: Hero → Pain points → How it works → What's included → Pricing → Testimonials → FAQ → CTA
-- Pricing displayed: €350/month + €250 setup, 2-month commitment
+- Pricing displayed: ~€25/month entry point
 - CTA links to Calendly (placeholder URL needs replacement)
 
 ---

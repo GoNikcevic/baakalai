@@ -1156,6 +1156,9 @@ function initFromData() {
 
   // ─── Analytics section (removed — KPIs in dashboard overview) ───
 
+  // ─── Retention biases (progress bar, cumulative stats, benchmarks) ───
+  if (typeof renderRetentionBiases === 'function') renderRetentionBiases();
+
   // ─── Refinement section (now standalone page) ───
   const refinementSection = document.getElementById('section-refinement');
   if (!refinementSection) return;

@@ -2524,6 +2524,111 @@ body {
   #wizardStep1 [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
   #wizardStep2 [style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
 }
+
+/* ═══════════ RETENTION BIASES ═══════════ */
+.retention-card { grid-column: 1 / -1; }
+.retention-card .card-header { border-bottom: 1px solid var(--border); }
+.tier-badge {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Setup progress bar */
+.setup-progress-bar {
+  width: 100%; height: 8px; background: var(--bg-elevated);
+  border-radius: 4px; overflow: hidden; margin-bottom: 16px;
+}
+.setup-progress-fill {
+  height: 100%; background: linear-gradient(90deg, var(--success), #6ee7b7);
+  border-radius: 4px; transition: width 0.6s ease;
+}
+
+/* Setup steps checklist */
+.setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.progress-step {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-muted); padding: 6px 0;
+}
+.progress-step.done { color: var(--text-secondary); }
+.progress-step-check {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1.5px solid var(--border); display: flex;
+  align-items: center; justify-content: center;
+  font-size: 10px; color: var(--text-muted); flex-shrink: 0;
+}
+.progress-step.done .progress-step-check {
+  background: var(--success); border-color: var(--success);
+  color: #fff; font-weight: 700;
+}
+.setup-hint {
+  text-align: center; font-size: 12px; color: var(--text-muted);
+  padding-top: 4px;
+}
+
+/* Retention stats grid (post-setup) */
+.retention-stats-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+  margin-bottom: 16px;
+}
+.retention-stat { text-align: center; }
+.retention-stat-value {
+  font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
+  color: var(--text-primary);
+}
+.retention-stat-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* Tier progress */
+.tier-progress { padding-top: 4px; }
+.tier-progress-label {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;
+}
+.tier-progress-bar {
+  width: 100%; height: 6px; background: var(--bg-elevated);
+  border-radius: 3px; overflow: hidden;
+}
+.tier-progress-fill {
+  height: 100%; border-radius: 3px; transition: width 0.6s ease;
+}
+
+/* Cumulative value banner */
+.cumulative-banner {
+  display: flex; align-items: center; justify-content: center;
+  gap: 24px; padding: 14px 20px; margin-bottom: 20px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); animation: fadeInBanner 0.4s ease;
+}
+@keyframes fadeInBanner { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+.cumulative-item { display: flex; align-items: baseline; gap: 6px; }
+.cumulative-value {
+  font-size: 18px; font-weight: 700; color: var(--text-primary);
+  font-feature-settings: 'tnum';
+}
+.cumulative-label { font-size: 12px; color: var(--text-muted); }
+.cumulative-divider {
+  width: 1px; height: 20px; background: var(--border);
+}
+.streak-value { color: var(--warning); }
+
+/* Benchmark badge */
+.benchmark-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; margin-bottom: 20px;
+  background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2);
+  border-radius: var(--radius); font-size: 13px; color: var(--success);
+}
+.benchmark-icon { font-size: 16px; }
+
+@media (max-width: 768px) {
+  .setup-steps { grid-template-columns: repeat(2, 1fr); }
+  .retention-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .cumulative-banner { flex-wrap: wrap; gap: 12px; }
+  .cumulative-divider { display: none; }
+}
+@media (max-width: 480px) {
+  .setup-steps { grid-template-columns: 1fr; }
+}
+
 </style>
 </head>
 <body>
@@ -4599,6 +4704,7 @@ if (window.location.protocol === 'file:') {
 <script src="recos.js"></script>
 <script src="analytics.js"></script>
 <script src="notifications.js"></script>
+<script src="retention-biases.js"></script>
 <script src="pages.js"></script>
 <script src="app.js"></script>
 
