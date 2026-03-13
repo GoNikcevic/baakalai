@@ -1143,12 +1143,7 @@ function initFromData() {
     if (recosContainer) recosContainer.innerHTML = renderRecommendations();
   }
 
-  // ─── Reports section ───
-  if (empty) {
-    document.getElementById('section-reports').innerHTML = renderEmptyReports();
-  } else {
-    document.getElementById('section-reports').innerHTML = renderReports();
-  }
+  // ─── Reports section (removed — single dashboard view) ───
 
   // ─── Campaigns list section ───
   if (empty) {
@@ -1159,22 +1154,11 @@ function initFromData() {
     renderCampaignsList();
   }
 
-  // ─── Analytics section ───
-  const analyticsSection = document.getElementById('section-analytics');
-  if (analyticsSection) {
-    if (empty) {
-      if (!analyticsSection.dataset.originalSaved) {
-        analyticsSection.dataset.originalHtml = analyticsSection.innerHTML;
-        analyticsSection.dataset.originalSaved = 'true';
-      }
-      if (typeof renderEmptyAnalytics === 'function') renderEmptyAnalytics();
-    } else if (analyticsSection.dataset.originalSaved) {
-      analyticsSection.innerHTML = analyticsSection.dataset.originalHtml;
-    }
-  }
+  // ─── Analytics section (removed — KPIs in dashboard overview) ───
 
-  // ─── Refinement section ───
+  // ─── Refinement section (now standalone page) ───
   const refinementSection = document.getElementById('section-refinement');
+  if (!refinementSection) return;
   if (empty) {
     // Save original content if not already saved
     if (!refinementSection.dataset.originalSaved) {

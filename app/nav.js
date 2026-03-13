@@ -66,26 +66,20 @@ function toggleInspiration() {
   }, 300);
 }
 
-/* ═══ Section navigation (dashboard tabs) ═══ */
+/* ═══ Section navigation (dashboard — single view, campaigns detail) ═══ */
 function showSection(name) {
-  ['overview', 'reports', 'analytics', 'campaigns', 'refinement'].forEach(s => {
+  ['overview', 'campaigns'].forEach(s => {
     const el = document.getElementById('section-' + s);
     if (el) el.style.display = s === name ? 'block' : 'none';
   });
-  document.querySelectorAll('.tab').forEach((t, i) => {
-    t.classList.toggle('active', ['overview', 'reports', 'analytics', 'campaigns', 'refinement'][i] === name);
-  });
   if (name === 'campaigns') backToCampaignsList();
-  if (name === 'refinement' && typeof initVarGenerator === 'function') initVarGenerator();
-  if (name === 'analytics' && typeof renderAnalytics === 'function') renderAnalytics();
 }
 
 /* ═══ Page-level navigation ═══ */
 function showPage(page, section) {
-  const dashEls = ['section-overview','section-reports','section-analytics','section-campaigns','section-refinement'];
+  const dashEls = ['section-overview','section-campaigns'];
   const dashHeader = document.querySelector('.main > .page-header');
-  const dashTabs = document.querySelector('.main > .tabs');
-  const allPages = ['page-chat','page-copyeditor','page-recos','page-profil','page-settings'];
+  const allPages = ['page-chat','page-copyeditor','page-recos','page-profil','page-settings','page-refinement'];
 
   // Hide all standalone pages
   allPages.forEach(id => {
@@ -93,37 +87,33 @@ function showPage(page, section) {
     if (el) el.style.display = 'none';
   });
 
-  if (page === 'chat') {
+  // Helper: hide dashboard elements
+  function hideDash() {
     dashHeader.style.display = 'none';
-    dashTabs.style.display = 'none';
-    dashEls.forEach(id => document.getElementById(id).style.display = 'none');
+    dashEls.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  }
+
+  if (page === 'chat') {
+    hideDash();
     document.getElementById('page-chat').style.display = 'block';
     if (typeof initChat === 'function') initChat();
   } else if (page === 'copyeditor') {
-    dashHeader.style.display = 'none';
-    dashTabs.style.display = 'none';
-    dashEls.forEach(id => document.getElementById(id).style.display = 'none');
+    hideDash();
     document.getElementById('page-copyeditor').style.display = 'block';
     if (typeof initCopyEditor === 'function') initCopyEditor();
-  } else if (page === 'recos') {
-    dashHeader.style.display = 'none';
-    dashTabs.style.display = 'none';
-    dashEls.forEach(id => document.getElementById(id).style.display = 'none');
-    document.getElementById('page-recos').style.display = 'block';
+  } else if (page === 'refinement') {
+    hideDash();
+    document.getElementById('page-refinement').style.display = 'block';
+    if (typeof initVarGenerator === 'function') initVarGenerator();
   } else if (page === 'profil') {
-    dashHeader.style.display = 'none';
-    dashTabs.style.display = 'none';
-    dashEls.forEach(id => document.getElementById(id).style.display = 'none');
+    hideDash();
     document.getElementById('page-profil').style.display = 'block';
   } else if (page === 'settings') {
-    dashHeader.style.display = 'none';
-    dashTabs.style.display = 'none';
-    dashEls.forEach(id => document.getElementById(id).style.display = 'none');
+    hideDash();
     document.getElementById('page-settings').style.display = 'block';
   } else {
-    // Dashboard — show header + tabs + section
+    // Dashboard — show header + overview (single view, no tabs)
     dashHeader.style.display = 'flex';
-    dashTabs.style.display = 'flex';
     showSection(section || 'overview');
   }
 
@@ -134,13 +124,10 @@ function showPage(page, section) {
     if (page === 'chat' && text.includes('Assistant')) item.classList.add('active');
     if (page === 'copyeditor' && text.includes('Copy')) item.classList.add('active');
     if (page === 'dashboard' && text.includes('Dashboard')) item.classList.add('active');
-    if (page === 'recos' && text.includes('Recommandations')) item.classList.add('active');
+    if (page === 'refinement' && text.includes('Refinement')) item.classList.add('active');
     if (page === 'profil' && text.includes('Profil')) item.classList.add('active');
     if (page === 'settings' && text.includes('Paramètres')) item.classList.add('active');
-    // Section shortcuts from sidebar
     if (page === 'dashboard' && section === 'campaigns' && text.includes('Campagnes') && !text.includes('Dashboard')) item.classList.add('active');
-    if (page === 'dashboard' && section === 'reports' && text.includes('Rapports')) item.classList.add('active');
-    if (page === 'dashboard' && section === 'refinement' && text.includes('Refinement')) item.classList.add('active');
   });
 
   // Update mobile nav active state
@@ -150,7 +137,7 @@ function showPage(page, section) {
     if (page === 'chat' && txt.includes('Chat')) btn.classList.add('active');
     if (page === 'dashboard' && txt.includes('Dashboard')) btn.classList.add('active');
     if (page === 'copyeditor' && txt.includes('Copy')) btn.classList.add('active');
-    if (page === 'recos' && txt.includes('Recos')) btn.classList.add('active');
+    if (page === 'refinement' && txt.includes('Refine')) btn.classList.add('active');
     if (page === 'settings' && txt.includes('Config')) btn.classList.add('active');
   });
 }

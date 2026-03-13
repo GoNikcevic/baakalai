@@ -2534,9 +2534,9 @@ body {
 <!-- ═══════════ MOBILE NAV (hidden by default, visible < 600px) ═══════════ -->
 <nav class="mobile-nav" style="display:none;">
   <button class="mobile-nav-item active" onclick="showPage('chat')"><span class="icon">💬</span>Chat</button>
-  <button class="mobile-nav-item" onclick="showPage('dashboard','overview')"><span class="icon">📊</span>Dashboard</button>
+  <button class="mobile-nav-item" onclick="showPage('dashboard')"><span class="icon">📊</span>Dashboard</button>
   <button class="mobile-nav-item" onclick="showPage('copyeditor')"><span class="icon">✍️</span>Copy</button>
-  <button class="mobile-nav-item" onclick="showPage('recos')"><span class="icon">💡</span>Recos</button>
+  <button class="mobile-nav-item" onclick="showPage('refinement')"><span class="icon">🧬</span>Refine</button>
   <button class="mobile-nav-item" onclick="showPage('settings')"><span class="icon">⚙️</span>Config</button>
 </nav>
 
@@ -2567,8 +2567,6 @@ body {
       <div class="nav-item" onclick="showPage('dashboard')">Dashboard <span class="badge">Live</span></div>
       <div class="nav-item nav-item-toggle" id="campaignsToggle" onclick="toggleSidebarCampaigns(event)">Campagnes <span class="nav-chevron">&#9654;</span></div>
       <div class="nav-campaign-list" id="sidebarCampaignList"></div>
-      <div class="nav-item" onclick="showPage('dashboard','overview')">Opportunit&eacute;s <span class="badge">3</span></div>
-      <div class="nav-item" onclick="showPage('dashboard','reports')">Rapports</div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Configuration</div>
@@ -2578,8 +2576,7 @@ body {
     </div>
     <div class="nav-section">
       <div class="nav-label">Intelligence</div>
-      <div class="nav-item" onclick="showPage('dashboard','refinement')">Refinement A/B</div>
-      <div class="nav-item" onclick="showPage('recos')">Recommandations <span class="badge">3</span></div>
+      <div class="nav-item" onclick="showPage('refinement')">Refinement A/B</div>
     </div>
   </nav>
 
@@ -2668,14 +2665,7 @@ body {
     </div>
   </div>
 
-  <!-- Tabs -->
-  <div class="tabs">
-    <div class="tab active" onclick="showSection('overview')">Vue d'ensemble</div>
-    <div class="tab" onclick="showSection('reports')">Rapports hebdo</div>
-    <div class="tab" onclick="showSection('analytics')">📈 Analytics</div>
-    <div class="tab" onclick="showSection('campaigns')">Détail campagnes</div>
-    <div class="tab" onclick="showSection('refinement')">🧬 Refinement A/B</div>
-  </div>
+  <!-- Tabs removed: single dashboard view -->
 
   <!-- ═══════════ OVERVIEW (populated by campaigns-data.js) ═══════════ -->
   <div id="section-overview">
@@ -2745,93 +2735,7 @@ body {
     </div>
   </div>
 
-  <!-- ═══════════ REPORTS (populated by campaigns-data.js) ═══════════ -->
-  <div id="section-reports" style="display:none;"></div>
 
-  <!-- ═══════════ ANALYTICS (charts & detailed performance) ═══════════ -->
-  <div id="section-analytics" style="display:none;">
-    <!-- Analytics KPI row -->
-    <div class="analytics-kpi-row" id="analyticsKpis">
-      <div class="analytics-kpi">
-        <div class="analytics-kpi-label">Taux d'ouverture moyen</div>
-        <div class="analytics-kpi-value" id="analytics-open-rate">62%</div>
-        <div class="analytics-kpi-trend up">▲ +4pts vs mois dernier</div>
-        <div class="analytics-kpi-sparkline"><svg viewBox="0 0 120 40" preserveAspectRatio="none"><polyline points="0,35 30,28 60,22 90,18 120,14" fill="none" stroke="var(--success)" stroke-width="2"/></svg></div>
-      </div>
-      <div class="analytics-kpi">
-        <div class="analytics-kpi-label">Taux de réponse moyen</div>
-        <div class="analytics-kpi-value" id="analytics-reply-rate">8.1%</div>
-        <div class="analytics-kpi-trend up">▲ +1.3pts</div>
-        <div class="analytics-kpi-sparkline"><svg viewBox="0 0 120 40" preserveAspectRatio="none"><polyline points="0,32 30,30 60,25 90,20 120,16" fill="none" stroke="var(--blue)" stroke-width="2"/></svg></div>
-      </div>
-      <div class="analytics-kpi">
-        <div class="analytics-kpi-label">Prospects intéressés</div>
-        <div class="analytics-kpi-value" id="analytics-interested">9</div>
-        <div class="analytics-kpi-trend up">▲ +5 cette période</div>
-        <div class="analytics-kpi-sparkline"><svg viewBox="0 0 120 40" preserveAspectRatio="none"><polyline points="0,38 30,32 60,28 90,22 120,15" fill="none" stroke="var(--warning)" stroke-width="2"/></svg></div>
-      </div>
-      <div class="analytics-kpi">
-        <div class="analytics-kpi-label">RDV qualifiés</div>
-        <div class="analytics-kpi-value" id="analytics-meetings">4</div>
-        <div class="analytics-kpi-trend up">▲ +2 cette semaine</div>
-        <div class="analytics-kpi-sparkline"><svg viewBox="0 0 120 40" preserveAspectRatio="none"><polyline points="0,36 30,34 60,28 90,20 120,12" fill="none" stroke="var(--purple)" stroke-width="2"/></svg></div>
-      </div>
-    </div>
-
-    <div class="analytics-grid">
-      <!-- Weekly Engagement Chart -->
-      <div class="card analytics-full">
-        <div class="card-header">
-          <div class="card-title">📈 Engagement hebdomadaire</div>
-          <div class="analytics-period-selector">
-            <button class="analytics-period-btn active" onclick="setAnalyticsPeriod(this, '4w')">4 sem.</button>
-            <button class="analytics-period-btn" onclick="setAnalyticsPeriod(this, '8w')">8 sem.</button>
-            <button class="analytics-period-btn" onclick="setAnalyticsPeriod(this, '12w')">12 sem.</button>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="chart-canvas-wrap" id="engagementChartWrap">
-            <!-- Rendered by JS: SVG line chart -->
-          </div>
-          <div class="chart-legend">
-            <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--blue)"></div> Ouvertures</div>
-            <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--success)"></div> Réponses</div>
-            <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--purple)"></div> LinkedIn Accept</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Performance by Campaign -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">🎯 Performance par campagne</div>
-        </div>
-        <div class="card-body" id="campaignPerfChart">
-          <!-- Rendered by JS -->
-        </div>
-      </div>
-
-      <!-- Channel Breakdown -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">📊 Répartition par canal</div>
-        </div>
-        <div class="card-body" id="channelBreakdown">
-          <!-- Rendered by JS -->
-        </div>
-      </div>
-
-      <!-- Funnel Visualization -->
-      <div class="card analytics-full">
-        <div class="card-header">
-          <div class="card-title">🔄 Entonnoir de conversion</div>
-        </div>
-        <div class="card-body" id="funnelChart">
-          <!-- Rendered by JS -->
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- ═══════════ CAMPAIGNS (populated by campaigns-data.js) ═══════════ -->
   <div id="section-campaigns" style="display:none;">
@@ -2853,8 +2757,15 @@ body {
 
   </div>
 
-  <!-- ═══════════ REFINEMENT A/B SECTION ═══════════ -->
-  <div id="section-refinement" style="display:none;">
+  <!-- ═══════════ REFINEMENT A/B PAGE (standalone) ═══════════ -->
+  <div id="page-refinement" style="display:none;">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Refinement A/B</div>
+        <div class="page-subtitle">Tests de variantes et optimisation continue des séquences</div>
+      </div>
+    </div>
+  <div id="section-refinement">
     
     <!-- Overview Stats -->
     <div class="refine-overview">
@@ -3046,6 +2957,7 @@ body {
     </div>
 
   </div>
+  </div><!-- /page-refinement -->
 
   <!-- ═══════════ COPY & SEQUENCES EDITOR ═══════════ -->
   <div id="page-copyeditor" style="display:none;">
@@ -3064,15 +2976,6 @@ body {
         <div class="editor-sidebar-title">Campagnes</div>
         <div id="editor-campaign-list"></div>
         <div style="border-top:1px solid var(--border);margin:16px 0;"></div>
-        <div class="editor-sidebar-title">Bibliothèque</div>
-        <div class="editor-campaign-item" style="opacity:0.5;cursor:default;">
-          <div class="eci-icon" style="background:var(--bg-elevated);">📚</div>
-          <div><div class="eci-name" style="font-size:13px;">Modèles sauvegardés</div><div class="eci-meta">3 modèles</div></div>
-        </div>
-        <div class="editor-campaign-item" style="opacity:0.5;cursor:default;">
-          <div class="eci-icon" style="background:var(--bg-elevated);">💎</div>
-          <div><div class="eci-name" style="font-size:13px;">Golden nuggets</div><div class="eci-meta">5 apprentissages</div></div>
-        </div>
 
         <!-- Variable Manager Panel -->
         <div class="var-panel" id="var-panel">
@@ -3147,8 +3050,8 @@ body {
     </div>
   </div>
 
-  <!-- ═══════════ RECOMMANDATIONS IA PAGE ═══════════ -->
-  <div id="page-recos" style="display:none;">
+  <!-- Recommandations page — disabled (merged into Copy Editor as inline suggestions) -->
+  <div id="page-recos" style="display:none !important;">
     <div class="reco-page-header">
       <div>
         <div class="reco-page-title">Recommandations IA</div>
@@ -3810,36 +3713,14 @@ body {
               </div>
             </div>
 
+            <!-- ═══ CRM (promoted to Core) ═══ -->
             <div class="api-card" data-cat="core" onclick="toggleApiCard(this)">
-              <span class="api-card-chevron">▼</span>
-              <div class="api-card-top">
-                <div class="api-card-icon">📝</div>
-                <div class="api-card-info">
-                  <div class="api-card-name">Notion</div>
-                  <span class="api-card-badge core">Core</span>
-                </div>
-                <div class="api-card-status">
-                  <div class="api-card-status-dot" id="dot-notion"></div>
-                  <span class="api-card-status-text" id="status-notion">Non connecté</span>
-                </div>
-              </div>
-              <div class="api-card-desc">Hub centralisé pour vos données : gestion clients, suivi campagnes, base de connaissances et mémoire cross-campagne.</div>
-              <div class="api-card-expand">
-                <div class="input-with-status">
-                  <input class="form-input mono" id="settings-notion-token" type="password" placeholder="Copiez depuis notion.so/my-integrations" data-original-placeholder="Copiez depuis notion.so/my-integrations" onclick="event.stopPropagation()">
-                </div>
-                <div class="form-hint">notion.so/my-integrations → Créer une intégration</div>
-              </div>
-            </div>
-
-            <!-- ═══ CRM (visible) ═══ -->
-            <div class="api-card" data-cat="crm" onclick="toggleApiCard(this)">
               <span class="api-card-chevron">▼</span>
               <div class="api-card-top">
                 <div class="api-card-icon">🟠</div>
                 <div class="api-card-info">
                   <div class="api-card-name">HubSpot</div>
-                  <span class="api-card-badge crm">CRM</span>
+                  <span class="api-card-badge core">Core</span>
                 </div>
                 <div class="api-card-status">
                   <div class="api-card-status-dot" id="dot-hubspot"></div>
@@ -3855,29 +3736,7 @@ body {
               </div>
             </div>
 
-            <div class="api-card" data-cat="crm" onclick="toggleApiCard(this)">
-              <span class="api-card-chevron">▼</span>
-              <div class="api-card-top">
-                <div class="api-card-icon">🟢</div>
-                <div class="api-card-info">
-                  <div class="api-card-name">Pipedrive</div>
-                  <span class="api-card-badge crm">CRM</span>
-                </div>
-                <div class="api-card-status">
-                  <div class="api-card-status-dot" id="dot-pipedrive"></div>
-                  <span class="api-card-status-text" id="status-pipedrive">Non connecté</span>
-                </div>
-              </div>
-              <div class="api-card-desc">CRM orienté vente avec pipeline visuel. Sync des deals et contacts générés par vos campagnes de prospection.</div>
-              <div class="api-card-expand">
-                <div class="input-with-status">
-                  <input class="form-input mono" id="settings-pipedrive-key" type="password" placeholder="Copiez depuis Pipedrive → Settings → API" data-original-placeholder="Copiez depuis Pipedrive → Settings → API" onclick="event.stopPropagation()">
-                </div>
-                <div class="form-hint">Pipedrive → Settings → Personal preferences → API</div>
-              </div>
-            </div>
-
-          </div><!-- /api-catalog-grid (5 visible) -->
+          </div><!-- /api-catalog-grid (3 core visible) -->
 
           <!-- Voir plus toggle -->
           <div id="apiShowMoreBtn" style="text-align:center;margin:16px 0 8px;">
@@ -3907,6 +3766,75 @@ body {
             </div>
 
             <div class="api-catalog-grid" id="apiCatalogGridExtended">
+
+            <!-- ═══ PRODUCTIVITY (moved from core) ═══ -->
+            <div class="api-card" data-cat="productivity" onclick="toggleApiCard(this)">
+              <span class="api-card-chevron">▼</span>
+              <div class="api-card-top">
+                <div class="api-card-icon">📝</div>
+                <div class="api-card-info">
+                  <div class="api-card-name">Notion</div>
+                  <span class="api-card-badge productivity">Productivité</span>
+                </div>
+                <div class="api-card-status">
+                  <div class="api-card-status-dot" id="dot-notion"></div>
+                  <span class="api-card-status-text" id="status-notion">Non connecté</span>
+                </div>
+              </div>
+              <div class="api-card-desc">Hub centralisé pour vos données : gestion clients, suivi campagnes, base de connaissances et mémoire cross-campagne.</div>
+              <div class="api-card-expand">
+                <div class="input-with-status">
+                  <input class="form-input mono" id="settings-notion-token" type="password" placeholder="Copiez depuis notion.so/my-integrations" data-original-placeholder="Copiez depuis notion.so/my-integrations" onclick="event.stopPropagation()">
+                </div>
+                <div class="form-hint">notion.so/my-integrations → Créer une intégration</div>
+              </div>
+            </div>
+
+            <!-- ═══ ENRICHMENT (Clay) ═══ -->
+            <div class="api-card" data-cat="enrichment" onclick="toggleApiCard(this)">
+              <span class="api-card-chevron">▼</span>
+              <div class="api-card-top">
+                <div class="api-card-icon">🧱</div>
+                <div class="api-card-info">
+                  <div class="api-card-name">Clay</div>
+                  <span class="api-card-badge enrichment">Enrichissement</span>
+                </div>
+                <div class="api-card-status">
+                  <div class="api-card-status-dot" id="dot-clay"></div>
+                  <span class="api-card-status-text" id="status-clay">Non connecté</span>
+                </div>
+              </div>
+              <div class="api-card-desc">Enrichissement de données B2B avancé avec waterfall enrichment. Scraping, scoring et séquençage de prospects dans un seul outil.</div>
+              <div class="api-card-expand">
+                <div class="input-with-status">
+                  <input class="form-input mono" id="settings-clay-key" type="password" placeholder="Copiez depuis Clay → Settings → API" data-original-placeholder="Copiez depuis Clay → Settings → API" onclick="event.stopPropagation()">
+                </div>
+                <div class="form-hint">Clay → Settings → API Keys · Waterfall enrichment</div>
+              </div>
+            </div>
+
+            <!-- ═══ CRM (moved from main grid) ═══ -->
+            <div class="api-card" data-cat="crm" onclick="toggleApiCard(this)">
+              <span class="api-card-chevron">▼</span>
+              <div class="api-card-top">
+                <div class="api-card-icon">🟢</div>
+                <div class="api-card-info">
+                  <div class="api-card-name">Pipedrive</div>
+                  <span class="api-card-badge crm">CRM</span>
+                </div>
+                <div class="api-card-status">
+                  <div class="api-card-status-dot" id="dot-pipedrive"></div>
+                  <span class="api-card-status-text" id="status-pipedrive">Non connecté</span>
+                </div>
+              </div>
+              <div class="api-card-desc">CRM orienté vente avec pipeline visuel. Sync des deals et contacts générés par vos campagnes de prospection.</div>
+              <div class="api-card-expand">
+                <div class="input-with-status">
+                  <input class="form-input mono" id="settings-pipedrive-key" type="password" placeholder="Copiez depuis Pipedrive → Settings → API" data-original-placeholder="Copiez depuis Pipedrive → Settings → API" onclick="event.stopPropagation()">
+                </div>
+                <div class="form-hint">Pipedrive → Settings → Personal preferences → API</div>
+              </div>
+            </div>
 
             <!-- ═══ CRM (extended) ═══ -->
             <div class="api-card" data-cat="crm" onclick="toggleApiCard(this)">
