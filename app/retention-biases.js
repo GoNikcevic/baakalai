@@ -36,14 +36,8 @@ function computeRetentionMetrics() {
   const createdDate = new Date(localStorage.getItem('bakal_account_created'));
   const daysSinceCreation = Math.max(1, Math.floor((Date.now() - createdDate.getTime()) / 86400000));
 
-  // Streak: consecutive days with activity (simplified: based on campaigns with data)
-  const activeStreak = Math.min(daysSinceCreation, activeCampaigns.length > 0 ? daysSinceCreation : 0);
-
   // Setup progress (endowed progress — starts at 20%)
   const setupSteps = computeSetupProgress();
-
-  // Milestone tier
-  const tier = computeMilestoneTier(totalProspects, totalOptimizations, daysSinceCreation);
 
   // Best performing metric (for social proof benchmarking)
   const bestOpenRate = Math.max(...allCampaigns.map(c => c.kpis?.openRate || 0), 0);
@@ -56,9 +50,7 @@ function computeRetentionMetrics() {
     totalVersions,
     patternsLearned,
     daysSinceCreation,
-    activeStreak,
     setupSteps,
-    tier,
     bestOpenRate,
     bestReplyRate,
     campaignCount: allCampaigns.length,
@@ -86,20 +78,6 @@ function computeSetupProgress() {
   return { steps, completed, total: steps.length, percent };
 }
 
-/* ═══ Milestone Tiers ═══ */
-function computeMilestoneTier(prospects, optimizations, days) {
-  if (prospects >= 1000 && optimizations >= 10) {
-    return { name: 'Platinum', icon: '💎', color: 'var(--purple)', next: null, progress: 100 };
-  }
-  if (prospects >= 500 && optimizations >= 5) {
-    return { name: 'Gold', icon: '🥇', color: '#fbbf24', next: 'Platinum', progress: Math.round(Math.min(100, (prospects / 1000) * 50 + (optimizations / 10) * 50)) };
-  }
-  if (prospects >= 100 && optimizations >= 1) {
-    return { name: 'Silver', icon: '🥈', color: '#a1a1aa', next: 'Gold', progress: Math.round(Math.min(100, (prospects / 500) * 50 + (optimizations / 5) * 50)) };
-  }
-  return { name: 'Bronze', icon: '🥉', color: '#fb923c', next: 'Silver', progress: Math.round(Math.min(100, (prospects / 100) * 50 + (optimizations > 0 ? 50 : 0))) };
-}
-
 /* ═══ Render: Progress Card (main dashboard widget) ═══ */
 function renderProgressCard(metrics) {
   if (!metrics) return '';
@@ -115,12 +93,11 @@ function renderProgressCard(metrics) {
     </div>`
   ).join('');
 
-  // If setup complete, show cumulative stats instead
+  // If setup complete, show cumulative stats (sunk cost visualization)
   if (isComplete) {
     return `<div class="card retention-card">
       <div class="card-header">
-        <div class="card-title">${metrics.tier.icon} Votre progression</div>
-        <span class="tier-badge" style="color:${metrics.tier.color}">${metrics.tier.name}</span>
+        <div class="card-title">📊 Votre capital IA</div>
       </div>
       <div class="card-body">
         <div class="retention-stats-grid">
@@ -141,19 +118,6 @@ function renderProgressCard(metrics) {
             <div class="retention-stat-label">D'expérience accumulée</div>
           </div>
         </div>
-        ${metrics.tier.next ? `
-        <div class="tier-progress">
-          <div class="tier-progress-label">
-            <span>Prochain niveau : <strong>${metrics.tier.next}</strong></span>
-            <span>${metrics.tier.progress}%</span>
-          </div>
-          <div class="tier-progress-bar">
-            <div class="tier-progress-fill" style="width:${metrics.tier.progress}%;background:${metrics.tier.color}"></div>
-          </div>
-        </div>` : `
-        <div style="text-align:center;padding:8px 0;color:var(--text-muted);font-size:12px;">
-          Niveau maximum atteint — vous êtes un expert !
-        </div>`}
       </div>
     </div>`;
   }
@@ -199,12 +163,6 @@ function renderCumulativeValueBanner(metrics) {
       <span class="cumulative-value">${metrics.patternsLearned}</span>
       <span class="cumulative-label">patterns appris par l'IA</span>
     </div>
-    ${metrics.activeStreak > 7 ? `
-    <div class="cumulative-divider"></div>
-    <div class="cumulative-item">
-      <span class="cumulative-value streak-value">${metrics.activeStreak}j</span>
-      <span class="cumulative-label">d'activité continue</span>
-    </div>` : ''}
   </div>`;
 }
 

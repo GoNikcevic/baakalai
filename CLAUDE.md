@@ -251,21 +251,16 @@ The dashboard leverages cognitive biases to increase engagement and reduce churn
    - Campaign setup wizard starts at "20% complete" (account created = free progress)
    - Optimization score shows cumulative improvement over time
    - "Your AI has learned X patterns" — always growing, never resetting
-   - Monthly milestone badges (Bronze → Silver → Gold → Platinum prospector)
 
 2. **Loss Aversion**
    - "You've built X patterns — canceling resets your AI memory"
    - Show accumulated value that would be lost on churn
 
-3. **Streak Bias**
-   - "Active for X consecutive days/weeks"
-   - Campaign activity streaks with visual reinforcement
-
-4. **Social Proof / Benchmarking**
+3. **Social Proof / Benchmarking**
    - "Your open rate is above 73% of users in your sector"
    - Anonymous peer comparison metrics
 
-5. **Sunk Cost Visualization**
+4. **Sunk Cost Visualization**
    - "Total prospects reached: X" — cumulative counters that never go down
    - "AI optimizations performed: X" — investment visualization
 
