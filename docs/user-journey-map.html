@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bakal — User Journey Map</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0a0a0c;
+    color: #e0e0e0;
+    padding: 40px 20px;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #a78bfa, #6366f1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    color: #888;
+    font-size: 15px;
+    margin-bottom: 48px;
+  }
+
+  /* ── Journey Track ── */
+  .journey {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Vertical connector line */
+  .journey::before {
+    content: '';
+    position: absolute;
+    left: 36px;
+    top: 36px;
+    bottom: 36px;
+    width: 3px;
+    background: linear-gradient(to bottom, #6366f1, #a78bfa, #22d3ee, #10b981, #f59e0b, #6366f1);
+    border-radius: 2px;
+  }
+
+  /* ── Step ── */
+  .step {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    position: relative;
+    padding: 20px 0;
+  }
+
+  .step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    z-index: 2;
+    position: relative;
+    left: 23px;
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
+
+  .step-content {
+    background: #141418;
+    border: 1px solid #2a2a30;
+    border-radius: 16px;
+    padding: 24px 28px;
+    flex: 1;
+    transition: border-color 0.2s;
+  }
+
+  .step-content:hover {
+    border-color: #4a4a55;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .step-icon {
+    font-size: 24px;
+  }
+
+  .step-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .step-page {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(99, 102, 241, 0.15);
+    color: #a78bfa;
+    font-weight: 500;
+    margin-left: auto;
+  }
+
+  .step-desc {
+    color: #aaa;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  /* ── Actions list ── */
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .action-tag {
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: #1e1e24;
+    border: 1px solid #333;
+    color: #ccc;
+  }
+
+  /* ── Emotion row ── */
+  .emotion-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #222;
+  }
+
+  .emotion-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    min-width: 70px;
+  }
+
+  .emotion-bar {
+    flex: 1;
+    height: 6px;
+    background: #1e1e24;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .emotion-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  .emotion-text {
+    font-size: 12px;
+    color: #888;
+    min-width: 120px;
+    text-align: right;
+  }
+
+  /* ── Color variants ── */
+  .dot-purple { background: #6366f1; }
+  .dot-blue { background: #3b82f6; }
+  .dot-cyan { background: #22d3ee; }
+  .dot-green { background: #10b981; }
+  .dot-amber { background: #f59e0b; }
+  .dot-pink { background: #ec4899; }
+  .dot-violet { background: #8b5cf6; }
+
+  .fill-anxious { background: linear-gradient(90deg, #f59e0b, #ef4444); width: 35%; }
+  .fill-curious { background: linear-gradient(90deg, #3b82f6, #6366f1); width: 55%; }
+  .fill-focused { background: linear-gradient(90deg, #6366f1, #8b5cf6); width: 65%; }
+  .fill-creative { background: linear-gradient(90deg, #a78bfa, #ec4899); width: 70%; }
+  .fill-confident { background: linear-gradient(90deg, #10b981, #22d3ee); width: 75%; }
+  .fill-excited { background: linear-gradient(90deg, #22d3ee, #10b981); width: 85%; }
+  .fill-empowered { background: linear-gradient(90deg, #10b981, #6366f1); width: 90%; }
+
+  /* ── Loop visual ── */
+  .loop-section {
+    margin-top: 40px;
+    background: #141418;
+    border: 1px solid #2a2a30;
+    border-radius: 16px;
+    padding: 32px;
+  }
+
+  .loop-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  .loop-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .loop-node {
+    background: #1e1e24;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 14px 20px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 130px;
+  }
+
+  .loop-node .node-icon { font-size: 22px; display: block; margin-bottom: 6px; }
+  .loop-node .node-label { color: #ccc; }
+
+  .loop-arrow {
+    font-size: 20px;
+    color: #555;
+  }
+
+  .loop-back {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+  }
+
+  .loop-back-arrow {
+    font-size: 13px;
+    color: #6366f1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Summary grid ── */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 40px;
+  }
+
+  .summary-card {
+    background: #141418;
+    border: 1px solid #2a2a30;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .summary-card .sc-icon { font-size: 28px; margin-bottom: 8px; }
+  .summary-card .sc-title { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+  .summary-card .sc-desc { font-size: 12px; color: #888; }
+
+  /* ── Legend ── */
+  .legend {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid #222;
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #888;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <h1>Bakal — Parcours Utilisateur</h1>
+  <p class="subtitle">User Journey Map · État actuel de la plateforme · 7 étapes du premier contact à la boucle d'optimisation</p>
+
+  <!-- ════════════════ JOURNEY ════════════════ -->
+  <div class="journey">
+
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-dot dot-purple">1</div>
+      <div class="step-content">
+        <div class="step-header">
+          <span class="step-icon">🚪</span>
+          <span class="step-title">Onboarding — Wizard 3 étapes</span>
+          <span class="step-page">Première connexion</span>
+        </div>
+        <p class="step-desc">
+          L'utilisateur arrive pour la première fois. Un wizard plein écran le guide en 3 étapes :
+          upload de documents business (plaquettes, études de cas), connexion des APIs (Lemlist, Claude, Notion),
+          et configuration initiale du profil. Le dashboard affiche ensuite un bandeau de bienvenue avec checklist.
+        </p>
+        <div class="actions">
+          <span class="action-tag">📄 Drag & drop documents</span>
+          <span class="action-tag">🔑 Saisie clés API</span>
+          <span class="action-tag">✅ Checklist 4 étapes</span>
+        </div>
+        <div class="emotion-row">
+          <span class="emotion-label">Émotion</span>
+          <div class="emotion-bar"><div class="emotion-fill fill-anxious"></div></div>
+          <span class="emotion-text">Curieux mais hésitant</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-dot dot-blue">2</div>
+      <div class="step-content">
+        <div class="step-header">
+          <span class="step-icon">🏢</span>
+          <span class="step-title">Profil Entreprise</span>
+          <span class="step-page">Page Profil</span>
+        </div>
+        <p class="step-desc">
+          Le client renseigne son identité business : proposition de valeur, preuves sociales, pain points de ses cibles,
+          personas (décideur, secteur, taille, zone géo), et préférences de copy (ton, formalité, vocabulaire).
+          Ces infos alimentent directement la génération IA des séquences.
+        </p>
+        <div class="actions">
+          <span class="action-tag">✏️ Valeur prop & preuve sociale</span>
+          <span class="action-tag">🎯 Personas cibles</span>
+          <span class="action-tag">🗣️ Ton & formalité</span>
+          <span class="action-tag">📎 Upload documents</span>
+        </div>
+        <div class="emotion-row">
+          <span class="emotion-label">Émotion</span>
+          <div class="emotion-bar"><div class="emotion-fill fill-curious"></div></div>
+          <span class="emotion-text">Concentré, investi</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-dot dot-cyan">3</div>
+      <div class="step-content">
+        <div class="step-header">
+          <span class="step-icon">🚀</span>
+          <span class="step-title">Création de campagne</span>
+          <span class="step-page">Modal création</span>
+        </div>
+        <p class="step-desc">
+          Via le bouton "Nouvelle campagne", une modal s'ouvre. Le client choisit : secteur cible, poste visé,
+          zone géo, canal (Email / LinkedIn / les deux), angle d'approche (pain point, preuve sociale, éducatif…),
+          volume de prospects. Option "Inspiration" qui redirige vers l'assistant IA pour brainstormer.
+        </p>
+        <div class="actions">
+          <span class="action-tag">📝 Formulaire campagne</span>
+          <span class="action-tag">🎯 Choix angle & canal</span>
+          <span class="action-tag">💬 Assistant IA (optionnel)</span>
+          <span class="action-tag">📊 Volume prospects</span>
+        </div>
+        <div class="emotion-row">
+          <span class="emotion-label">Émotion</span>
+          <div class="emotion-bar"><div class="emotion-fill fill-focused"></div></div>
+          <span class="emotion-text">Motivé, décisionnel</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-dot dot-pink">4</div>
+      <div class="step-content">
+        <div class="step-header">
+          <span class="step-icon">✍️</span>
+          <span class="step-title">Édition Copy & Séquences</span>
+          <span class="step-page">Page Copy Editor</span>
+        </div>
+        <p class="step-desc">
+          Éditeur split-panel : liste des campagnes à gauche, touchpoints à droite. Chaque message (E1→E4, LinkedIn)
+          est éditable inline avec variables {{firstName}}, {{companyName}}. Des suggestions IA apparaissent en contexte
+          avec rationale — le client peut Accepter, Modifier ou Ignorer. Mode preview avec données fictives.
+        </p>
+        <div class="actions">
+          <span class="action-tag">📧 Édition inline</span>
+          <span class="action-tag">🤖 Suggestions IA</span>
+          <span class="action-tag">👁️ Mode preview</span>
+          <span class="action-tag">🔤 Variables dynamiques</span>
+          <span class="action-tag">📏 Compteur 300 chars LinkedIn</span>
+        </div>
+        <div class="emotion-row">
+          <span class="emotion-label">Émotion</span>
+          <div class="emotion-bar"><div class="emotion-fill fill-creative"></div></div>
+          <span class="emotion-text">Créatif, en contrôle</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step">
+      <div class="step-dot dot-green">5</div>
+      <div class="step-content">
+        <div class="step-header">
+          <span class="step-icon">📊</span>
+          <span class="step-title">Suivi quotidien — Dashboard</span>
+          <span class="step-page">Page Dashboard</span>
+        </div>
+        <p class="step-desc">
+          Vue d'ensemble avec 6 KPIs (prospects contactés, ouverture, réponse, intéressés, RDV, valeur estimée),
+          tableau des campagnes actives, graphe de performance 4 semaines, opportunités récentes,
+          et widget "Recommandations Claude". Notifications en temps réel (alertes perf, RDV, analyses).
+        </p>
+        <div class="actions">
+          <span class="action-tag">📈 6 KPIs temps réel</span>
+          <span class="action-tag">📋 Tableau campagnes</span>
+          <span class="action-tag">📉 Graphe tendance</span>
+          <span class="action-tag">🔔 Notifications</span>
+          <span class="action-tag">💡 Recommandations</span>
+        </div>
+        <div class="emotion-row">
+          <span class="emotion-label">Émotion</span>
+          <div class="emotion-bar"><div class="emotion-fill fill-confident"></div></div>
+          <span class="emotion-text">Confiant, informé</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="step">
+      <div class="step-dot dot-amber">6</div>
+      <div class="step-content">
+        <div class="step-header">
+          <span class="step-icon">🧪</span>
+          <span class="step-title">Optimisation — Refinement A/B</span>
+          <span class="step-page">Page Refinement</span>
+        </div>
+        <p class="step-desc">
+          Comparaison visuelle Variant A (contrôle) vs Variant B (challenger) avec métriques côte à côte.
+          Stats globales : variants testées, gain moyen, golden nuggets identifiées.
+          Timeline d'apprentissage : patterns validés, angles abandonnés, insights cross-campagnes avec niveaux de confiance.
+        </p>
+        <div class="actions">
+          <span class="action-tag">⚔️ A/B comparaison</span>
+          <span class="action-tag">💎 Golden nuggets</span>
+          <span class="action-tag">🧠 Mémoire apprentissage</span>
+          <span class="action-tag">📊 Niveaux de confiance</span>
+        </div>
+        <div class="emotion-row">
+          <span class="emotion-label">Émotion</span>
+          <div class="emotion-bar"><div class="emotion-fill fill-excited"></div></div>
+          <span class="emotion-text">Excité par les résultats</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="step">
+      <div class="step-dot dot-violet">7</div>
+      <div class="step-content">
+        <div class="step-header">
+          <span class="step-icon">🔄</span>
+          <span class="step-title">Boucle continue — Auto-amélioration</span>
+          <span class="step-page">Toutes les pages</span>
+        </div>
+        <p class="step-desc">
+          Le système boucle automatiquement : stats collectées → Claude analyse → recommandations inline dans Copy →
+          nouveau test A/B → apprentissages consolidés dans la mémoire cross-campagne.
+          Chaque nouvelle campagne bénéficie de tout ce qui a été appris. Le client supervise, le système optimise.
+        </p>
+        <div class="actions">
+          <span class="action-tag">⚡ Stats auto (Lemlist → N8N)</span>
+          <span class="action-tag">🤖 Analyse Claude</span>
+          <span class="action-tag">✍️ Régénération copy</span>
+          <span class="action-tag">🧠 Mémoire consolidée</span>
+        </div>
+        <div class="emotion-row">
+          <span class="emotion-label">Émotion</span>
+          <div class="emotion-bar"><div class="emotion-fill fill-empowered"></div></div>
+          <span class="emotion-text">Autonome, confiant</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ════════════════ LOOP VISUAL ════════════════ -->
+  <div class="loop-section">
+    <div class="loop-title">🔄 La boucle d'optimisation continue</div>
+    <div class="loop-flow">
+      <div class="loop-node">
+        <span class="node-icon">📬</span>
+        <span class="node-label">Campagne active<br><small style="color:#666">Lemlist</small></span>
+      </div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">
+        <span class="node-icon">📊</span>
+        <span class="node-label">Stats collectées<br><small style="color:#666">N8N quotidien</small></span>
+      </div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">
+        <span class="node-icon">🤖</span>
+        <span class="node-label">Analyse Claude<br><small style="color:#666">Diagnostic</small></span>
+      </div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">
+        <span class="node-icon">✍️</span>
+        <span class="node-label">Régénération<br><small style="color:#666">Copy optimisé</small></span>
+      </div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">
+        <span class="node-icon">🧪</span>
+        <span class="node-label">Test A/B<br><small style="color:#666">Déploiement</small></span>
+      </div>
+      <span class="loop-arrow">→</span>
+      <div class="loop-node">
+        <span class="node-icon">🧠</span>
+        <span class="node-label">Mémoire<br><small style="color:#666">Apprentissages</small></span>
+      </div>
+    </div>
+    <div class="loop-back">
+      <span class="loop-back-arrow">↩ La mémoire enrichit chaque nouvelle campagne et chaque régénération</span>
+    </div>
+  </div>
+
+  <!-- ════════════════ PAGES SUMMARY ════════════════ -->
+  <div class="summary">
+    <div class="summary-card">
+      <div class="sc-icon">💬</div>
+      <div class="sc-title">Assistant IA</div>
+      <div class="sc-desc">Chat conversationnel pour brainstormer, demander des suggestions, explorer des angles</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">📊</div>
+      <div class="sc-title">Dashboard</div>
+      <div class="sc-desc">Vue d'ensemble KPIs, campagnes actives, performance, recommandations</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">📋</div>
+      <div class="sc-title">Campagnes</div>
+      <div class="sc-desc">Liste + détail par campagne : stats par touchpoint, diagnostics, historique versions</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">✍️</div>
+      <div class="sc-title">Copy & Séquences</div>
+      <div class="sc-desc">Éditeur split-panel, suggestions IA inline, preview, variables dynamiques</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">🧪</div>
+      <div class="sc-title">Refinement A/B</div>
+      <div class="sc-desc">Tests A/B, golden nuggets, mémoire d'apprentissage, insights cross-campagnes</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">🏢</div>
+      <div class="sc-title">Profil Entreprise</div>
+      <div class="sc-desc">Identité business, personas, préférences copy, documents uploadés</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-icon">⚙️</div>
+      <div class="sc-title">Paramètres</div>
+      <div class="sc-desc">Catalogue APIs (18 intégrations), export données, thème clair/sombre</div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#6366f1;"></div> Onboarding</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;"></div> Configuration</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#22d3ee;"></div> Création</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ec4899;"></div> Édition</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#10b981;"></div> Suivi</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div> Optimisation</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6;"></div> Boucle continue</div>
+  </div>
+
+</div>
+
+</body>
+</html>
