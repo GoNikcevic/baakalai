@@ -20,6 +20,8 @@ vi.mock('../../services/api-client', () => ({
     regenerateSequence: vi.fn().mockResolvedValue({ messages: [] }),
     runRefinement: vi.fn().mockResolvedValue({ analysis: {}, regeneration: {} }),
   },
+  fetchVariables: vi.fn().mockResolvedValue([]),
+  exportCampaignCsv: vi.fn(),
 }));
 
 function renderEditor() {

@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/useApp';
 import api from '../services/api-client';
+import { sanitizeHtml } from '../services/sanitize';
 
 /* ─── Helpers ─── */
 
@@ -196,7 +197,7 @@ function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSen
       <div className="chat-msg-body">
         <div
           className="chat-msg-content"
-          dangerouslySetInnerHTML={{ __html: formattedContent }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(formattedContent) }}
         />
         {hasActionCard && (
           <ActionCard
@@ -251,7 +252,7 @@ function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage }
       <div className="chat-msg-body">
         <div
           className="chat-msg-content"
-          dangerouslySetInnerHTML={{ __html: displayedContent }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayedContent) }}
         />
         {showAction && hasActionCard && (
           <ActionCard

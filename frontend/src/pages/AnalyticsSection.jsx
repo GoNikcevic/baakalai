@@ -8,6 +8,7 @@
 
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/useApp';
+// Note: dangerouslySetInnerHTML here uses internally-generated SVG/HTML content only — no user input
 
 /* ─── Chart data for different periods ─── */
 

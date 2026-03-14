@@ -5,6 +5,7 @@
    =============================================================================== */
 
 import { useState, useCallback, useMemo } from 'react';
+import { sanitizeHtml } from '../services/sanitize';
 
 /* ─── Scenario data ─── */
 
@@ -342,7 +343,7 @@ function VarCard({ variable, onAccept, onDismiss, onEdit, onRefreshPreview }) {
               variable.examples.map((ex, i) => (
                 <div key={i} className="vargen-preview-example">
                   <span className="vargen-preview-prospect">{ex.prospect}</span>
-                  <span className="vargen-preview-value" dangerouslySetInnerHTML={{ __html: ex.value }} />
+                  <span className="vargen-preview-value" dangerouslySetInnerHTML={{ __html: sanitizeHtml(ex.value) }} />
                 </div>
               ))
             )}
@@ -555,7 +556,7 @@ export default function VarGenerator({
               <div
                 className="vargen-explanation-text"
                 style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}
-                dangerouslySetInnerHTML={{ __html: scenario.explanation.text }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(scenario.explanation.text) }}
               />
             </div>
 

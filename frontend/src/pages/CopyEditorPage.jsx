@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useApp } from '../context/useApp';
 import api, { exportCampaignCsv } from '../services/api-client';
 import VariableManager from '../components/VariableManager';
+import { sanitizeHtml } from '../services/sanitize';
 
 /* ─── Fallback data ─── */
 
@@ -342,7 +343,7 @@ function TouchpointSuggestion({ suggestion, onApply, onDismiss }) {
   return (
     <div className="tp-ai-suggestion">
       <div className="tp-ai-suggestion-label">{suggestion.label}</div>
-      <div className="tp-ai-suggestion-text" dangerouslySetInnerHTML={{ __html: suggestion.text }} />
+      <div className="tp-ai-suggestion-text" dangerouslySetInnerHTML={{ __html: sanitizeHtml(suggestion.text) }} />
       <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
         <button
           className="tp-action ai"
@@ -541,7 +542,7 @@ function TouchpointCard({
               contentEditable
               suppressContentEditableWarning
               data-field="subject"
-              dangerouslySetInnerHTML={{ __html: subjectHtml }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(subjectHtml) }}
               onFocus={() => setEditing(true)}
               onBlur={() => handleFieldBlur('subject')}
             />
@@ -560,7 +561,7 @@ function TouchpointCard({
             contentEditable
             suppressContentEditableWarning
             data-field="body"
-            dangerouslySetInnerHTML={{ __html: bodyHtml }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(bodyHtml) }}
             onFocus={() => setEditing(true)}
             onBlur={() => handleFieldBlur('body')}
             style={regenStatus === 'loading' ? { opacity: 0.4 } : undefined}

@@ -7,6 +7,7 @@ import SequenceStep from './SequenceStep';
 import EditParamsPanel from './EditParamsPanel';
 import { InfoRow, CheckItem } from './shared';
 import api from '../../services/api-client';
+import { sanitizeHtml } from '../../services/sanitize';
 
 export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }) {
   const [showEditPanel, setShowEditPanel] = useState(false);
@@ -266,7 +267,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
           >
             <div
               style={{ fontSize: '13px', color: 'var(--text-secondary)' }}
-              dangerouslySetInnerHTML={{ __html: c.preLaunchReco.text }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(c.preLaunchReco.text) }}
             />
             <div
               style={{ display: 'flex', gap: '8px', marginTop: '14px' }}

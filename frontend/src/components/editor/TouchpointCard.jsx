@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../services/api-client';
 import { highlightVars, stripEditorHtml, getPlainTextLength } from './editor-helpers';
+import { sanitizeHtml } from '../../services/sanitize';
 
 function TouchpointSuggestion({ suggestion, onApply, onDismiss }) {
   const [state, setState] = useState('visible'); // visible | applied | dismissed
@@ -24,7 +25,7 @@ function TouchpointSuggestion({ suggestion, onApply, onDismiss }) {
   return (
     <div className="tp-ai-suggestion">
       <div className="tp-ai-suggestion-label">{suggestion.label}</div>
-      <div className="tp-ai-suggestion-text" dangerouslySetInnerHTML={{ __html: suggestion.text }} />
+      <div className="tp-ai-suggestion-text" dangerouslySetInnerHTML={{ __html: sanitizeHtml(suggestion.text) }} />
       <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
         <button
           className="tp-action ai"
@@ -211,7 +212,7 @@ export default function TouchpointCard({
               contentEditable
               suppressContentEditableWarning
               data-field="subject"
-              dangerouslySetInnerHTML={{ __html: subjectHtml }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(subjectHtml) }}
               onFocus={() => setEditing(true)}
               onBlur={() => setEditing(false)}
             />
@@ -230,7 +231,7 @@ export default function TouchpointCard({
             contentEditable
             suppressContentEditableWarning
             data-field="body"
-            dangerouslySetInnerHTML={{ __html: bodyHtml }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(bodyHtml) }}
             onFocus={() => setEditing(true)}
             onBlur={() => setEditing(false)}
             style={regenStatus === 'loading' ? { opacity: 0.4 } : undefined}

@@ -9,6 +9,7 @@ import { useApp } from '../context/useApp';
 import CampaignsList from './CampaignsList';
 import VarGenerator from '../components/VarGenerator';
 import { exportCampaignsCsv, exportReportPdf } from '../services/api-client';
+import { sanitizeHtml } from '../services/sanitize';
 
 const TABS = [
   { key: 'overview', label: 'Vue globale' },
@@ -239,7 +240,7 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
                 recommendations.map((rec, i) => (
                   <div key={i} className={`alert alert-${rec.level}`} style={{ padding: '12px 16px', borderRadius: '8px', fontSize: '13px' }}>
                     <div style={{ fontWeight: 600, marginBottom: '4px' }}>{rec.label}</div>
-                    <div dangerouslySetInnerHTML={{ __html: rec.text }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(rec.text) }} />
                   </div>
                 ))
               ) : (
@@ -599,7 +600,7 @@ function ReportsSection({ isEmpty, reports }) {
                 <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>RDV:</span> <strong>{r.metrics.meetings}</strong></div>
               </div>
               {/* Synthesis */}
-              <div style={{ fontSize: '13px', lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: r.synthesis }} />
+              <div style={{ fontSize: '13px', lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(r.synthesis) }} />
             </div>
           </div>
         ))}

@@ -1,6 +1,7 @@
 /* ===============================================================================
    BAKAL — Settings Page (React)
    API key management with encrypted storage, test connectivity, masked display.
+   Includes preferences, theme toggle, notification settings, and integrations library.
    Backend: routes/settings.js (GET/POST /api/settings/keys, POST /keys/test)
    =============================================================================== */
 
@@ -9,15 +10,13 @@ import { getKeys, saveKeys, testKeys } from '../services/api-client';
 
 /* ─── Key definitions grouped by category ─── */
 
-const KEY_GROUPS = [
-  {
-    label: 'Core',
-    keys: [
-      { field: 'lemlistKey', label: 'Lemlist', placeholder: 'Votre clé API Lemlist', required: true },
-      { field: 'claudeKey', label: 'Claude (Anthropic)', placeholder: 'sk-ant-...', required: true },
-      { field: 'notionToken', label: 'Notion', placeholder: 'ntn_ ou secret_...' },
-    ],
-  },
+const CORE_KEYS = [
+  { field: 'lemlistKey', label: 'Lemlist', placeholder: 'Votre clé API Lemlist', required: true },
+  { field: 'claudeKey', label: 'Claude (Anthropic)', placeholder: 'sk-ant-...', required: true },
+  { field: 'notionToken', label: 'Notion', placeholder: 'ntn_ ou secret_...' },
+];
+
+const EXTENDED_GROUPS = [
   {
     label: 'CRM',
     keys: [
@@ -69,6 +68,14 @@ const KEY_GROUPS = [
   },
 ];
 
+const DEFAULT_PREFERENCES = {
+  lemlistDailyLimit: '50',
+  sendingWindow: '9h-18h',
+  sendingDays: 'Lun-Ven',
+  claudeModel: 'claude-3-sonnet',
+  notificationEmail: '',
+};
+
 /* ─── Status badge helpers ─── */
 
 function StatusBadge({ status }) {
@@ -94,13 +101,21 @@ function StatusBadge({ status }) {
 /* ─── Component ─── */
 
 export default function SettingsPage() {
-  const [keyStatus, setKeyStatus] = useState({});    // { field: { configured, masked, updatedAt } }
-  const [testStatus, setTestStatus] = useState({});   // { field: { status, message } }
-  const [drafts, setDrafts] = useState({});            // { field: 'new-value' } — only fields being edited
-  const [editing, setEditing] = useState({});          // { field: true } — which fields are in edit mode
+  const [keyStatus, setKeyStatus] = useState({});
+  const [testStatus, setTestStatus] = useState({});
+  const [drafts, setDrafts] = useState({});
+  const [editing, setEditing] = useState({});
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showExtended, setShowExtended] = useState(false);
+  const [preferences, setPreferences] = useState(() => {
+    const saved = localStorage.getItem('bakal-preferences');
+    return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : { ...DEFAULT_PREFERENCES };
+  });
+  const [theme, setTheme] = useState(() =>
+    document.documentElement.getAttribute('data-theme') || 'dark'
+  );
 
   /* ─── Load key status ─── */
 
@@ -186,7 +201,6 @@ export default function SettingsPage() {
 
   async function handleTestAll() {
     setTesting(true);
-    // Mark all configured as testing
     const testingState = {};
     for (const [field, info] of Object.entries(keyStatus)) {
       if (info.configured) testingState[field] = { status: 'testing' };
@@ -204,10 +218,123 @@ export default function SettingsPage() {
     }
   }
 
+  /* ─── Theme toggle ─── */
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('bakal-theme', next);
+  }
+
+  /* ─── Preferences ─── */
+
+  function updatePreference(key, value) {
+    setPreferences(prev => {
+      const next = { ...prev, [key]: value };
+      localStorage.setItem('bakal-preferences', JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function resetPreferences() {
+    setPreferences({ ...DEFAULT_PREFERENCES });
+    localStorage.removeItem('bakal-preferences');
+    showToast('Préférences réinitialisées');
+  }
+
+  function handleSaveAll() {
+    localStorage.setItem('bakal-preferences', JSON.stringify(preferences));
+    showToast('Paramètres enregistrés');
+  }
+
   /* ─── Count configured keys ─── */
 
+  const allKeyDefs = [
+    ...CORE_KEYS,
+    ...EXTENDED_GROUPS.flatMap(g => g.keys),
+  ];
   const configuredCount = Object.values(keyStatus).filter(k => k.configured).length;
-  const totalCount = Object.keys(keyStatus).length || KEY_GROUPS.reduce((n, g) => n + g.keys.length, 0);
+  const totalCount = Object.keys(keyStatus).length || allKeyDefs.length;
+
+  /* ─── Render key row ─── */
+
+  function renderKeyRow(keyDef) {
+    const info = keyStatus[keyDef.field] || {};
+    const isEditing = editing[keyDef.field];
+    const test = testStatus[keyDef.field];
+
+    return (
+      <div className="settings-key-row" key={keyDef.field}>
+        <div className="settings-key-info">
+          <div className="settings-key-label">
+            {keyDef.label}
+            {keyDef.required && <span className="settings-required">requis</span>}
+          </div>
+          {info.configured && !isEditing && (
+            <div className="settings-key-masked">{info.masked}</div>
+          )}
+          {info.configured && info.updatedAt && !isEditing && (
+            <div className="settings-key-date">
+              Mis à jour le {new Date(info.updatedAt).toLocaleDateString('fr-FR')}
+            </div>
+          )}
+        </div>
+
+        <div className="settings-key-actions">
+          {test && <StatusBadge status={test} />}
+
+          {isEditing ? (
+            <div className="settings-key-edit-row">
+              <input
+                className="form-input settings-key-input"
+                type="password"
+                placeholder={keyDef.placeholder}
+                value={drafts[keyDef.field] || ''}
+                onChange={e => setDrafts(prev => ({ ...prev, [keyDef.field]: e.target.value }))}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter') saveField(keyDef.field);
+                  if (e.key === 'Escape') cancelEdit(keyDef.field);
+                }}
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => saveField(keyDef.field)}
+                disabled={saving || !(drafts[keyDef.field] || '').trim()}
+              >
+                Sauver
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => cancelEdit(keyDef.field)}
+              >
+                Annuler
+              </button>
+            </div>
+          ) : (
+            <div className="settings-key-btns">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => startEdit(keyDef.field)}
+              >
+                {info.configured ? 'Modifier' : 'Configurer'}
+              </button>
+              {info.configured && (
+                <button
+                  className="btn btn-ghost btn-sm settings-btn-danger"
+                  onClick={() => removeField(keyDef.field)}
+                  disabled={saving}
+                >
+                  Supprimer
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   /* ─── Render ─── */
 
@@ -217,16 +344,22 @@ export default function SettingsPage() {
         <div>
           <div className="page-title">Paramètres</div>
           <div className="page-subtitle">
-            Gérez vos clés API et intégrations — {configuredCount}/{totalCount} configurée{configuredCount !== 1 ? 's' : ''}
+            Configuration des intégrations et préférences — {configuredCount}/{totalCount} configurée{configuredCount !== 1 ? 's' : ''}
           </div>
         </div>
         <div className="header-actions">
           <button
             className="btn btn-ghost"
             onClick={handleTestAll}
-            disabled={testing || configuredCount === 0}
+            disabled={testing}
           >
-            {testing ? 'Test en cours...' : 'Tester les connexions'}
+            {testing ? 'Test en cours...' : 'Tester tout'}
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveAll}
+          >
+            Enregistrer
           </button>
         </div>
       </div>
@@ -238,92 +371,154 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Key groups */}
-      {KEY_GROUPS.map(group => (
+      {/* Core integrations */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">Core</div>
+        </div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {CORE_KEYS.map(renderKeyRow)}
+        </div>
+      </div>
+
+      {/* Integrations library */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">Bibliothèque d'intégrations</div>
+        </div>
+        <div className="card-body">
+          {!showExtended ? (
+            <button
+              className="btn btn-ghost"
+              onClick={() => setShowExtended(true)}
+              style={{ width: '100%' }}
+            >
+              Voir plus d'intégrations
+            </button>
+          ) : (
+            <button
+              className="btn btn-ghost"
+              onClick={() => setShowExtended(false)}
+              style={{ width: '100%', marginBottom: 16 }}
+            >
+              Masquer les intégrations
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Extended integration groups */}
+      {showExtended && EXTENDED_GROUPS.map(group => (
         <div className="card" key={group.label} style={{ marginBottom: 16 }}>
           <div className="card-header">
             <div className="card-title">{group.label}</div>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
-            {group.keys.map(keyDef => {
-              const info = keyStatus[keyDef.field] || {};
-              const isEditing = editing[keyDef.field];
-              const test = testStatus[keyDef.field];
-
-              return (
-                <div className="settings-key-row" key={keyDef.field}>
-                  <div className="settings-key-info">
-                    <div className="settings-key-label">
-                      {keyDef.label}
-                      {keyDef.required && <span className="settings-required">requis</span>}
-                    </div>
-                    {info.configured && !isEditing && (
-                      <div className="settings-key-masked">{info.masked}</div>
-                    )}
-                    {info.configured && info.updatedAt && !isEditing && (
-                      <div className="settings-key-date">
-                        Mis à jour le {new Date(info.updatedAt).toLocaleDateString('fr-FR')}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="settings-key-actions">
-                    {test && <StatusBadge status={test} />}
-
-                    {isEditing ? (
-                      <div className="settings-key-edit-row">
-                        <input
-                          className="form-input settings-key-input"
-                          type="password"
-                          placeholder={keyDef.placeholder}
-                          value={drafts[keyDef.field] || ''}
-                          onChange={e => setDrafts(prev => ({ ...prev, [keyDef.field]: e.target.value }))}
-                          autoFocus
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') saveField(keyDef.field);
-                            if (e.key === 'Escape') cancelEdit(keyDef.field);
-                          }}
-                        />
-                        <button
-                          className="btn btn-primary btn-sm"
-                          onClick={() => saveField(keyDef.field)}
-                          disabled={saving || !(drafts[keyDef.field] || '').trim()}
-                        >
-                          Sauver
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => cancelEdit(keyDef.field)}
-                        >
-                          Annuler
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="settings-key-btns">
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => startEdit(keyDef.field)}
-                        >
-                          {info.configured ? 'Modifier' : 'Configurer'}
-                        </button>
-                        {info.configured && (
-                          <button
-                            className="btn btn-ghost btn-sm settings-btn-danger"
-                            onClick={() => removeField(keyDef.field)}
-                            disabled={saving}
-                          >
-                            Supprimer
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {group.keys.map(renderKeyRow)}
           </div>
         </div>
       ))}
+
+      {/* Preferences */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">Préférences</div>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="settings-pref-row">
+              <label className="settings-pref-label">Limite quotidienne Lemlist</label>
+              <select
+                className="form-input"
+                value={preferences.lemlistDailyLimit}
+                onChange={e => updatePreference('lemlistDailyLimit', e.target.value)}
+              >
+                <option value="25">25 emails/jour</option>
+                <option value="50">50 emails/jour</option>
+                <option value="100">100 emails/jour</option>
+                <option value="200">200 emails/jour</option>
+              </select>
+            </div>
+            <div className="settings-pref-row">
+              <label className="settings-pref-label">Fenêtre d'envoi</label>
+              <select
+                className="form-input"
+                value={preferences.sendingWindow}
+                onChange={e => updatePreference('sendingWindow', e.target.value)}
+              >
+                <option value="8h-17h">8h-17h</option>
+                <option value="9h-18h">9h-18h</option>
+                <option value="10h-19h">10h-19h</option>
+              </select>
+            </div>
+            <div className="settings-pref-row">
+              <label className="settings-pref-label">Jours d'envoi</label>
+              <select
+                className="form-input"
+                value={preferences.sendingDays}
+                onChange={e => updatePreference('sendingDays', e.target.value)}
+              >
+                <option value="Lun-Ven">Lun-Ven</option>
+                <option value="Lun-Sam">Lun-Sam</option>
+                <option value="Tous les jours">Tous les jours</option>
+              </select>
+            </div>
+            <div className="settings-pref-row">
+              <label className="settings-pref-label">Modèle Claude</label>
+              <select
+                className="form-input"
+                value={preferences.claudeModel}
+                onChange={e => updatePreference('claudeModel', e.target.value)}
+              >
+                <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                <option value="claude-3-opus">Claude 3 Opus</option>
+                <option value="claude-3-haiku">Claude 3 Haiku</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Theme toggle */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">Thème</div>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>{theme === 'dark' ? 'Mode sombre activé' : 'Mode clair activé'}</span>
+            <div className="theme-toggle" onClick={toggleTheme} style={{ cursor: 'pointer', padding: '8px 16px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+              {theme === 'dark' ? 'Passer en clair' : 'Passer en sombre'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notification email */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">Notifications</div>
+        </div>
+        <div className="card-body">
+          <div className="settings-pref-row">
+            <label className="settings-pref-label">Email de notification</label>
+            <input
+              className="form-input"
+              type="email"
+              placeholder="votre@email.com"
+              value={preferences.notificationEmail}
+              onChange={e => updatePreference('notificationEmail', e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Reset */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+        <button className="btn btn-ghost" onClick={resetPreferences}>
+          Réinitialiser les préférences
+        </button>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════════ */
 
 import { StepStat } from './shared';
+import { sanitizeHtml } from '../../services/sanitize';
 
 export default function SequenceStep({ step: s, faded }) {
   const hasStats = s.stats !== null && s.stats !== undefined;
@@ -102,7 +103,7 @@ export default function SequenceStep({ step: s, faded }) {
         <div className="step-type">{typeLabel}</div>
         <div
           className="step-preview"
-          dangerouslySetInnerHTML={{ __html: s.body }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(s.body) }}
         />
       </div>
       {statsContent}

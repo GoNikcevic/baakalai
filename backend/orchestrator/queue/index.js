@@ -21,20 +21,33 @@ async function add(jobName, data = {}) {
   if (!processing) processNext();
 }
 
+const MAX_RETRIES = 3;
+const deadLetter = [];
+
 async function processNext() {
   if (pending.length === 0) { processing = false; return; }
   processing = true;
   const job = pending.shift();
+  job.attempts = (job.attempts || 0) + 1;
   try {
     await processors.process(job.jobName, job.data);
   } catch (err) {
-    console.error(`[queue] Job ${job.jobName} failed:`, err.message);
-    // TODO: retry logic, dead-letter handling
+    console.error(`[queue] Job ${job.jobName} failed (attempt ${job.attempts}/${MAX_RETRIES}):`, err.message);
+    if (job.attempts < MAX_RETRIES) {
+      pending.push(job);
+    } else {
+      console.error(`[queue] Job ${job.jobName} moved to dead-letter after ${MAX_RETRIES} attempts`);
+      deadLetter.push({ ...job, error: err.message, failedAt: new Date() });
+    }
   }
   processNext();
 }
 
-module.exports = { add };
+function getDeadLetterQueue() {
+  return [...deadLetter];
+}
+
+module.exports = { add, getDeadLetterQueue };
 
 // --- BullMQ upgrade (Phase B) ---
 // const { Queue, Worker } = require('bullmq');

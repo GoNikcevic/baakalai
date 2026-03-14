@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import RecosPage from '../RecosPage';
@@ -150,11 +150,13 @@ describe('RecosPage', () => {
     expect(screen.getByRole('button', { name: /Relancer/ })).toBeInTheDocument();
   });
 
-  it('shows analysis running state', () => {
+  it('shows analysis running state', async () => {
     renderRecos();
 
     fireEvent.click(screen.getByRole('button', { name: /Relancer/ }));
 
-    expect(screen.getByText(/Claude analyse vos campagnes.*Veuillez patienter/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Claude analyse vos campagnes.*Veuillez patienter/)).toBeInTheDocument();
+    });
   });
 });

@@ -1,12 +1,24 @@
-const { Pool } = require('pg');
+const useSqlite = !!process.env.DATABASE_PATH;
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-});
+let pool;
+if (!useSqlite) {
+  const { Pool } = require('pg');
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+  });
+}
+
+let sqliteAdapter;
+if (useSqlite) {
+  sqliteAdapter = require('./sqlite-adapter');
+}
 
 // Helper: run a query and return rows
 async function query(text, params) {
+  if (useSqlite) {
+    return sqliteAdapter.query(text, params);
+  }
   const result = await pool.query(text, params);
   return result;
 }
@@ -735,12 +747,19 @@ const customVariables = {
 // =============================================
 
 async function rawQuery(text, params) {
+  if (useSqlite) {
+    return sqliteAdapter.query(text, params);
+  }
   const result = await pool.query(text, params);
   return result;
 }
 
 async function closeDb() {
-  await pool.end();
+  if (useSqlite && sqliteAdapter) {
+    sqliteAdapter.closeDb();
+  } else if (pool) {
+    await pool.end();
+  }
 }
 
 module.exports = {

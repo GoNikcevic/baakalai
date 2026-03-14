@@ -2,6 +2,8 @@
    Shared Sub-Components for Campaign Detail
    ═══════════════════════════════════════════════════ */
 
+import { sanitizeHtml } from '../../services/sanitize';
+
 /* ── Step Stat ── */
 export function StepStat({ value, label, color, pct, barColor }) {
   return (
@@ -49,7 +51,7 @@ export function DiagBlock({ color, title, text }) {
           color: 'var(--text-secondary)',
           lineHeight: 1.5,
         }}
-        dangerouslySetInnerHTML={{ __html: text }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(text) }}
       />
     </div>
   );

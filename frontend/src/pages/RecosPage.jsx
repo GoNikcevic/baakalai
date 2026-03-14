@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
 import api from '../services/api-client';
+import { sanitizeHtml } from '../services/sanitize';
 
 /* ─── Demo recommendation data ─── */
 
@@ -285,6 +286,8 @@ export default function RecosPage() {
 
   const rerunAnalysis = useCallback(async () => {
     setAnalysisRunning(true);
+    // Yield to allow React to render the loading state before continuing
+    await new Promise(r => setTimeout(r, 0));
     if (backendAvailable) {
       try {
         // Run analysis on all active campaigns
@@ -357,14 +360,14 @@ export default function RecosPage() {
         {!isDismissed && (
           <div className="reco-card-body">
             <div className="reco-card-title">{reco.title}</div>
-            <div className="reco-card-desc" dangerouslySetInnerHTML={{ __html: reco.desc }} />
+            <div className="reco-card-desc" dangerouslySetInnerHTML={{ __html: sanitizeHtml(reco.desc) }} />
 
             {/* Diff panels */}
             {(reco.before || reco.after) && !isApplied && (
               <div className="reco-diff">
                 <div className="reco-diff-panel">
                   <div className="reco-diff-label before">Actuel</div>
-                  <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: reco.before }} />
+                  <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: sanitizeHtml(reco.before) }} />
                 </div>
                 <div className="reco-diff-panel">
                   <div className={`reco-diff-label ${isEditing ? 'after' : 'after'}`}>
@@ -391,7 +394,7 @@ export default function RecosPage() {
                       autoFocus
                     />
                   ) : (
-                    <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: reco.after }} />
+                    <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: sanitizeHtml(reco.after) }} />
                   )}
                 </div>
               </div>
@@ -402,7 +405,7 @@ export default function RecosPage() {
               <div className="reco-diff">
                 <div className="reco-diff-panel">
                   <div className="reco-diff-label after">Version appliquée</div>
-                  <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: reco.after }} />
+                  <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: sanitizeHtml(reco.after) }} />
                 </div>
               </div>
             )}
