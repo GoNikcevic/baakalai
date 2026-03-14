@@ -153,7 +153,7 @@ Lemlist (stats) → N8N → Claude (analyze) → Claude (regenerate) → N8N →
 **Workflow 1: Stats Collection (daily @ 8am)**
 - Fetch active campaigns from Lemlist API
 - Calculate per-touchpoint metrics
-- Store in PostgreSQL `campaigns_results`
+- Store in PostgreSQL `campaigns` + `touchpoints`
 - Trigger analysis if campaign >50 prospects AND >7 days old
 
 **Workflow 2: Regeneration + Deployment**
@@ -161,70 +161,192 @@ Lemlist (stats) → N8N → Claude (analyze) → Claude (regenerate) → N8N →
 - Reads original messages + memory from PostgreSQL
 - Calls Claude for regeneration
 - Updates Lemlist sequences with A/B variants
-- Stores new version in PostgreSQL `campaigns_versions`
+- Stores new version in PostgreSQL `versions`
 
 **Workflow 3: Memory Consolidation (monthly)**
 - Aggregates all monthly diagnostics from PostgreSQL
-- Updates `cross_campaign_memory` table in PostgreSQL
+- Updates `memory_patterns` table in PostgreSQL
 
 ---
 
-## 📊 Database Structure (PostgreSQL)
+## 📊 Database Structure (PostgreSQL / Supabase)
 
-PostgreSQL is the **source of truth** for all campaign data. Notion is used internally by the team only. The client sees everything through the Bakal dashboard.
+PostgreSQL (Supabase) is the **source of truth** for all campaign data. The client sees everything through the Bakal dashboard. Schema is deployed and live.
 
-### Table: campaigns_results
+**Seed data:** `backend/db/seed-demo-data.sql` — run in Supabase SQL Editor to populate demo data.
+
+### Table: users
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | Primary key |
-| campaign_name | TEXT | |
-| client_id | UUID | FK → clients |
-| collected_at | TIMESTAMP | |
-| status | ENUM | active / completed / optimizing |
-| prospect_count | INTEGER | |
-| open_rate_e1 to e4 | DECIMAL | Per-touchpoint |
-| reply_rate_e1 to e4 | DECIMAL | Per-touchpoint |
-| accept_rate_lk | DECIMAL | LinkedIn |
-| reply_rate_lk | DECIMAL | LinkedIn |
+| id | UUID | PK, uuid_generate_v4() |
+| email | TEXT | NOT NULL, unique |
+| password_hash | TEXT | NOT NULL, bcrypt |
+| name | TEXT | NOT NULL |
+| company | TEXT | |
+| role | TEXT | default 'client' |
+| created_at | TIMESTAMPTZ | |
+| updated_at | TIMESTAMPTZ | |
 
-### Table: campaigns_diagnostics
+### Table: user_profiles
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | Primary key |
-| campaign_id | UUID | FK → campaigns_results |
-| analyzed_at | TIMESTAMP | |
-| diagnostic | JSONB | Structured diagnostic |
-| priorities | TEXT[] | Array of priorities |
-| messages_to_optimize | INTEGER | |
+| user_id | UUID | PK, FK → users |
+| company, sector, website, team_size | TEXT | Company info |
+| description, value_prop, social_proof | TEXT | Positioning |
+| pain_points, objections | TEXT | Sales context |
+| persona_primary, persona_secondary | TEXT | Target personas |
+| target_sectors, target_size, target_zones | TEXT | Targeting |
+| default_tone | TEXT | default 'Pro décontracté' |
+| default_formality | TEXT | default 'Vous' |
+| avoid_words, signature_phrases | TEXT | Style prefs |
 
-### Table: campaigns_versions
+### Table: projects
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | Primary key |
-| campaign_id | UUID | FK → campaigns_results |
-| version | INTEGER | |
-| created_at | TIMESTAMP | |
-| modified_messages | TEXT[] | |
-| hypotheses | TEXT | |
-| result | ENUM | pending / improved / degraded / neutral |
+| id | UUID | PK |
+| user_id | UUID | FK → users |
+| name | TEXT | NOT NULL |
+| client | TEXT | |
+| description | TEXT | |
+| color | TEXT | default 'var(--blue)' |
 
-### Table: cross_campaign_memory
+### Table: campaigns
 | Column | Type | Notes |
 |--------|------|-------|
-| id | UUID | Primary key |
-| category | ENUM | subjects / body / timing / linkedin / sector / target |
-| pattern | TEXT | |
+| id | UUID | PK |
+| user_id | UUID | FK → users |
+| project_id | UUID | FK → projects |
+| name | TEXT | NOT NULL |
+| client | TEXT | NOT NULL |
+| status | TEXT | default 'prep' (prep / active / completed / optimizing) |
+| channel | TEXT | default 'email' (email / linkedin / multi) |
+| sector, sector_short | TEXT | Target sector |
+| position | TEXT | Target job title (DAF, DRH, Dirigeant...) |
+| size | TEXT | Company size filter |
+| angle | TEXT | Copy angle (Douleur client, Preuve sociale...) |
+| zone | TEXT | Geographic zone |
+| tone | TEXT | default 'Pro décontracté' |
+| formality | TEXT | default 'Vous' |
+| length | TEXT | default 'Standard' |
+| cta | TEXT | CTA type |
+| start_date | DATE | |
+| lemlist_id | TEXT | Lemlist campaign reference |
+| iteration | INTEGER | default 1 |
+| nb_prospects | INTEGER | default 0 |
+| sent, planned | INTEGER | default 0 |
+| open_rate | NUMERIC | Global open rate |
+| reply_rate | NUMERIC | Global reply rate |
+| accept_rate_lk | NUMERIC | LinkedIn acceptance rate |
+| reply_rate_lk | NUMERIC | LinkedIn reply rate |
+| interested | INTEGER | default 0 |
+| meetings | INTEGER | default 0 |
+| stops | NUMERIC | Unsubscribe rate |
+| last_collected | TIMESTAMPTZ | Last stats collection |
+| notion_page_id | TEXT | Legacy Notion link |
+
+### Table: touchpoints
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| campaign_id | UUID | FK → campaigns, NOT NULL |
+| step | TEXT | NOT NULL (E1, E2, L1, L2...) |
+| type | TEXT | NOT NULL (email / linkedin) |
+| label | TEXT | Display label |
+| sub_type | TEXT | Angle/variant descriptor |
+| timing | TEXT | Delay (J+0, J+3...) |
+| subject | TEXT | Email subject line (null for LinkedIn) |
+| body | TEXT | Message body |
+| max_chars | INTEGER | Character limit (300 for LinkedIn notes) |
+| open_rate, reply_rate, stop_rate, accept_rate | NUMERIC | Per-touchpoint stats |
+| interested | INTEGER | default 0 |
+| sort_order | INTEGER | default 0 |
+
+### Table: diagnostics
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| campaign_id | UUID | FK → campaigns, NOT NULL |
+| date_analyse | DATE | default CURRENT_DATE |
+| diagnostic | TEXT | Structured analysis text (or JSON string) |
+| priorities | TEXT[] | Array of action priorities |
+| nb_to_optimize | INTEGER | default 0 |
+| notion_page_id | TEXT | Legacy |
+
+### Table: versions
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| campaign_id | UUID | FK → campaigns, NOT NULL |
+| version | INTEGER | NOT NULL |
+| date | DATE | default CURRENT_DATE |
+| messages_modified | TEXT[] | Array of step IDs modified |
+| hypotheses | TEXT | What was tested |
+| result | TEXT | default 'testing' (testing / improved / degraded / neutral) |
+| notion_page_id | TEXT | Legacy |
+
+### Table: memory_patterns
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| pattern | TEXT | NOT NULL — what was learned |
+| category | TEXT | NOT NULL (Objets / Corps / Timing / LinkedIn / Cible) |
 | data | JSONB | Stats, examples, evidence |
-| confidence | ENUM | high (>200) / medium (50-200) / low (<50) |
-| discovered_at | TIMESTAMP | |
-| sectors | TEXT[] | |
-| targets | TEXT[] | |
+| confidence | TEXT | default 'Faible' (Haute / Moyenne / Faible) |
+| date_discovered | DATE | default CURRENT_DATE |
+| sectors | TEXT[] | Applicable sectors |
+| targets | TEXT[] | Applicable target personas |
+| notion_page_id | TEXT | Legacy |
 
-### Migration Path
-1. **Phase 1 (now)** — Notion for manual ops, schema design ready
-2. **Phase 2** — PostgreSQL deployed, cross-campaign memory migrated first (first bottleneck)
-3. **Phase 3** — All data in PostgreSQL, Notion becomes internal-only read view
-4. **Scale (1000+ users)** — Notion optional, replaceable by admin panel in dashboard
+### Table: opportunities
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| user_id | UUID | FK → users, NOT NULL |
+| campaign_id | UUID | FK → campaigns |
+| name | TEXT | NOT NULL — prospect name |
+| title | TEXT | Job title |
+| company | TEXT | |
+| company_size | TEXT | |
+| status | TEXT | default 'new' |
+| status_color | TEXT | CSS color var |
+| timing | TEXT | Next action timing |
+
+### Table: reports
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| user_id | UUID | FK → users, NOT NULL |
+| week | TEXT | NOT NULL — week label |
+| date_range | TEXT | |
+| score | TEXT | default 'ok' (excellent / good / ok / warning) |
+| score_label | TEXT | |
+| contacts | INTEGER | default 0 |
+| open_rate, reply_rate | NUMERIC | |
+| interested | INTEGER | default 0 |
+| meetings | INTEGER | default 0 |
+| synthesis | TEXT | AI-generated weekly summary |
+
+### Table: chart_data
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | PK |
+| user_id | UUID | FK → users, NOT NULL |
+| label | TEXT | NOT NULL (S1, S2...) |
+| email_count | INTEGER | default 0 |
+| linkedin_count | INTEGER | default 0 |
+| week_start | DATE | |
+
+### Other tables
+- **chat_threads** / **chat_messages** — AI chat history
+- **documents** / **project_files** — Uploaded files (briefs, personas, guidelines)
+- **refresh_tokens** — JWT refresh token management
+- **settings** — Key-value app settings
+
+### Database Status
+- **Schema:** Deployed on Supabase (production)
+- **Seed data:** Available in `backend/db/seed-demo-data.sql`
+- **RLS:** Enabled, service role has full access
+- **Dashboard connection:** `api-client.js` maps snake_case DB → camelCase frontend automatically
 
 ---
 
@@ -232,11 +354,11 @@ PostgreSQL is the **source of truth** for all campaign data. Notion is used inte
 
 | Phase | Timeline | Scope |
 |-------|----------|-------|
-| **Phase 1 — Manual** | Now | Use prompts manually, copy stats from Lemlist, apply recommendations by hand |
-| **Phase 2 — Semi-auto** | Months 2-3 | N8N automates stats collection + analysis, human validates before deployment |
-| **Phase 3 — Full auto** | Months 4-5 | Complete loop automated, human oversight for edge cases only |
+| **Phase 1 — Manual** | Done | Prompts documented, schema deployed, dashboard built |
+| **Phase 2 — Semi-auto** | In progress | N8N automates stats collection + analysis, human validates before deployment |
+| **Phase 3 — Full auto** | Planned | Complete loop automated, human oversight for edge cases only |
 
-**Current Status:** Phase 1 (documentation complete, ready for implementation)
+**Current Status:** Phase 2 (Supabase schema deployed, dashboard connected, seed data ready, N8N workflows in progress)
 
 ---
 
