@@ -2156,6 +2156,54 @@ body {
   font-size: 12px; color: var(--text-muted); margin-top: 8px;
 }
 
+/* ═══════════ SETTINGS PAGE ═══════════ */
+.settings-key-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+}
+.settings-key-row:last-child { border-bottom: none; }
+.settings-key-info { flex: 1; min-width: 0; }
+.settings-key-label {
+  font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+}
+.settings-required {
+  font-size: 10px; font-weight: 500; color: var(--warning);
+  background: var(--warning-bg); padding: 1px 6px; border-radius: 4px;
+}
+.settings-key-masked {
+  font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);
+  margin-top: 3px; letter-spacing: 0.5px;
+}
+.settings-key-date { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.settings-key-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.settings-key-btns { display: flex; gap: 6px; }
+.settings-key-edit-row { display: flex; align-items: center; gap: 8px; }
+.settings-key-input { width: 260px; font-size: 13px; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.settings-btn-danger { color: var(--danger); }
+.settings-btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+.settings-status-badge {
+  font-size: 11px; font-weight: 500; padding: 3px 10px;
+  border-radius: 6px; white-space: nowrap;
+}
+.settings-status-ok { background: var(--success-bg); color: var(--success); }
+.settings-status-none { background: var(--bg-elevated); color: var(--text-muted); }
+.settings-status-err { background: var(--danger-bg); color: var(--danger); }
+.settings-status-testing { background: var(--blue-bg); color: var(--blue); }
+.settings-toast {
+  position: fixed; top: 24px; right: 24px; z-index: 9999;
+  background: var(--success); color: #0c0c0e; padding: 10px 20px;
+  border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+  animation: wizardFadeIn 0.2s ease; box-shadow: var(--shadow);
+}
+.settings-toast-err { background: var(--danger); color: #fff; }
+
+@media (max-width: 900px) {
+  .settings-key-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .settings-key-edit-row { width: 100%; }
+  .settings-key-input { width: 100%; flex: 1; }
+}
+
 /* ═══════════ ONBOARDING WIZARD ═══════════ */
 .wizard-overlay {
   position: fixed; inset: 0; z-index: 9999;
