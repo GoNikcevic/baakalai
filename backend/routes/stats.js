@@ -9,11 +9,11 @@ const router = Router();
 // POST /api/stats/collect
 router.post('/collect', async (req, res, next) => {
   try {
-    const keyRow = await db.settings.get('lemlist_api_key');
+    const keyRow = await db.userIntegrations.get(req.user.id, 'lemlist');
     if (!keyRow) return res.status(400).json({ error: 'Lemlist API key not configured' });
 
     let apiKey;
-    try { apiKey = decrypt(keyRow.value); }
+    try { apiKey = decrypt(keyRow.access_token); }
     catch { return res.status(500).json({ error: 'Could not decrypt Lemlist key' }); }
 
     const basic = Buffer.from(':' + apiKey).toString('base64');

@@ -33,44 +33,32 @@ const config = {
     model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
   },
 
-  // HubSpot tokens are now stored per-user in user_integrations table.
-  // No global hubspot config needed.
+  // All integration tokens are now stored per-user in user_integrations table.
+  // The .env values above serve as system-level fallbacks only.
 };
 
 /**
- * Reload API keys from the database (encrypted storage).
- * DB keys take priority over .env values.
- * Called after keys are saved via the settings API.
+ * Get a user's decrypted API key for a given provider.
+ * Falls back to .env config if no per-user key is stored.
  */
-async function reloadKeys() {
+async function getUserKey(userId, provider) {
   try {
     const db = require('../db');
     const { decrypt } = require('./crypto');
-
-    const keyMap = {
-      lemlist_api_key: (val) => { config.lemlist.apiKey = val; },
-      notion_token: (val) => { config.notion.token = val; },
-      anthropic_api_key: (val) => { config.claude.apiKey = val; },
-      // HubSpot tokens are per-user now (stored in user_integrations)
-    };
-
-    for (const [dbKey, setter] of Object.entries(keyMap)) {
-      const row = await db.settings.get(dbKey);
-      if (row) {
-        try {
-          setter(decrypt(row.value));
-        } catch {
-          // Decryption failed — keep existing .env value
-        }
-      }
-    }
+    const row = await db.userIntegrations.get(userId, provider);
+    if (row) return decrypt(row.access_token);
   } catch {
-    // DB not ready yet — use .env values
+    // Decryption or DB error — fall through to .env
   }
-}
 
-// Load DB keys on startup (after a short delay to let DB initialize)
-setTimeout(reloadKeys, 100);
+  // Fallback to .env values for core services
+  const envFallback = {
+    lemlist: config.lemlist.apiKey,
+    notion: config.notion.token,
+    claude: config.claude.apiKey,
+  };
+  return envFallback[provider] || null;
+}
 
 function validateConfig(keys) {
   const missing = keys.filter((k) => {
@@ -87,4 +75,4 @@ function validateConfig(keys) {
   return missing.length === 0;
 }
 
-module.exports = { config, validateConfig, reloadKeys };
+module.exports = { config, validateConfig, getUserKey };

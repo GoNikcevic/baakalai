@@ -4,40 +4,38 @@ const { encrypt, decrypt, maskKey } = require('../config/crypto');
 
 const router = Router();
 
-// CRM keys stored per-user in user_integrations (not global settings)
-const PER_USER_CRM_KEYS = {
+// ALL integration keys are now stored per-user in user_integrations.
+// Maps frontend field names → provider slug in user_integrations table.
+const PROVIDER_MAP = {
+  // ── Core ──
+  lemlistKey: 'lemlist',
+  notionToken: 'notion',
+  claudeKey: 'claude',
+  // ── CRM ──
   hubspotKey: 'hubspot',
   pipedriveKey: 'pipedrive',
   salesforceKey: 'salesforce',
   folkKey: 'folk',
-};
-
-// The API keys we manage globally — maps frontend field names to DB keys
-const KEY_MAP = {
-  // ── Core ──
-  lemlistKey: 'lemlist_api_key',
-  notionToken: 'notion_token',
-  claudeKey: 'anthropic_api_key',
   // ── Enrichment ──
-  dropcontactKey: 'dropcontact_api_key',
-  apolloKey: 'apollo_api_key',
-  hunterKey: 'hunter_api_key',
-  kasprKey: 'kaspr_api_key',
-  lushaKey: 'lusha_api_key',
-  snovKey: 'snov_api_key',
+  dropcontactKey: 'dropcontact',
+  apolloKey: 'apollo',
+  hunterKey: 'hunter',
+  kasprKey: 'kaspr',
+  lushaKey: 'lusha',
+  snovKey: 'snov',
   // ── Outreach ──
-  instantlyKey: 'instantly_api_key',
-  lgmKey: 'lgm_api_key',
-  waalaxyKey: 'waalaxy_api_key',
+  instantlyKey: 'instantly',
+  lgmKey: 'lgm',
+  waalaxyKey: 'waalaxy',
   // ── LinkedIn / Scraping ──
-  phantombusterKey: 'phantombuster_api_key',
-  captaindataKey: 'captaindata_api_key',
+  phantombusterKey: 'phantombuster',
+  captaindataKey: 'captaindata',
   // ── Calendar ──
-  calendlyKey: 'calendly_api_key',
-  calcomKey: 'calcom_api_key',
+  calendlyKey: 'calendly',
+  calcomKey: 'calcom',
   // ── Deliverability ──
-  mailreachKey: 'mailreach_api_key',
-  warmboxKey: 'warmbox_api_key',
+  mailreachKey: 'mailreach',
+  warmboxKey: 'warmbox',
 };
 
 // GET /api/settings/keys — Return masked key status (never plaintext)
@@ -45,23 +43,7 @@ router.get('/keys', async (req, res, next) => {
   try {
     const result = {};
 
-    // Global keys
-    for (const [field, dbKey] of Object.entries(KEY_MAP)) {
-      const row = await db.settings.get(dbKey);
-      if (row) {
-        try {
-          const plain = decrypt(row.value);
-          result[field] = { configured: true, masked: maskKey(plain), updatedAt: row.updated_at };
-        } catch {
-          result[field] = { configured: false, masked: null, updatedAt: null };
-        }
-      } else {
-        result[field] = { configured: false, masked: null, updatedAt: null };
-      }
-    }
-
-    // Per-user CRM keys
-    for (const [field, provider] of Object.entries(PER_USER_CRM_KEYS)) {
+    for (const [field, provider] of Object.entries(PROVIDER_MAP)) {
       const row = await db.userIntegrations.get(req.user.id, provider);
       if (row) {
         try {
@@ -93,36 +75,16 @@ router.post('/keys', async (req, res, next) => {
     const errors = [];
 
     for (const [field, value] of Object.entries(keys)) {
-      const trimmed = (value || '').trim();
-
-      // Per-user CRM keys
-      const provider = PER_USER_CRM_KEYS[field];
-      if (provider) {
-        if (!trimmed) {
-          await db.userIntegrations.delete(req.user.id, provider);
-          saved.push(field);
-          continue;
-        }
-        const validation = validateKeyFormat(field, trimmed);
-        if (!validation.valid) {
-          errors.push(`${field}: ${validation.error}`);
-          continue;
-        }
-        const encrypted = encrypt(trimmed);
-        await db.userIntegrations.upsert(req.user.id, provider, { accessToken: encrypted });
-        saved.push(field);
-        continue;
-      }
-
-      // Global keys
-      const dbKey = KEY_MAP[field];
-      if (!dbKey) {
+      const provider = PROVIDER_MAP[field];
+      if (!provider) {
         errors.push(`Unknown key field: ${field}`);
         continue;
       }
 
+      const trimmed = (value || '').trim();
+
       if (!trimmed) {
-        await db.settings.delete(dbKey);
+        await db.userIntegrations.delete(req.user.id, provider);
         saved.push(field);
         continue;
       }
@@ -134,14 +96,9 @@ router.post('/keys', async (req, res, next) => {
       }
 
       const encrypted = encrypt(trimmed);
-      await db.settings.set(dbKey, encrypted);
+      await db.userIntegrations.upsert(req.user.id, provider, { accessToken: encrypted });
       saved.push(field);
     }
-
-    try {
-      const { reloadKeys } = require('../config');
-      if (typeof reloadKeys === 'function') await reloadKeys();
-    } catch { /* config reload not available yet */ }
 
     res.json({
       saved,
@@ -157,24 +114,7 @@ router.post('/keys/test', async (req, res, next) => {
   try {
     const results = {};
 
-    // Global keys
-    for (const [field, dbKey] of Object.entries(KEY_MAP)) {
-      const row = await db.settings.get(dbKey);
-      if (!row) {
-        results[field] = { status: 'not_configured' };
-        continue;
-      }
-
-      try {
-        const plain = decrypt(row.value);
-        results[field] = await testKey(field, plain);
-      } catch {
-        results[field] = { status: 'error', message: 'Decryption failed' };
-      }
-    }
-
-    // Per-user CRM keys
-    for (const [field, provider] of Object.entries(PER_USER_CRM_KEYS)) {
+    for (const [field, provider] of Object.entries(PROVIDER_MAP)) {
       const row = await db.userIntegrations.get(req.user.id, provider);
       if (!row) {
         results[field] = { status: 'not_configured' };
