@@ -639,6 +639,13 @@ const BakalAPI = (() => {
       });
     },
 
+    async deployToLemlist(campaignId, messages) {
+      return request('/ai/deploy-to-lemlist', {
+        method: 'POST',
+        body: JSON.stringify({ campaignId, messages }),
+      });
+    },
+
     async consolidateMemory(dryRun = false) {
       const qs = dryRun ? '?dry_run=true' : '';
       return request('/ai/consolidate-memory' + qs, { method: 'POST' });
@@ -682,6 +689,56 @@ const BakalAPI = (() => {
 
     async testKeys() {
       return request('/settings/keys/test', { method: 'POST' });
+    },
+
+    /* ─── Chat Endpoints ─── */
+
+    async fetchChatThreads() {
+      return request('/chat/threads');
+    },
+
+    async createChatThread(title) {
+      return request('/chat/threads', {
+        method: 'POST',
+        body: JSON.stringify({ title: title || 'Nouvelle conversation' }),
+      });
+    },
+
+    async deleteChatThread(threadId) {
+      return request('/chat/threads/' + threadId, { method: 'DELETE' });
+    },
+
+    async fetchChatMessages(threadId) {
+      return request('/chat/threads/' + threadId + '/messages');
+    },
+
+    async sendChatMessage(threadId, message, files) {
+      const payload = { message: message || '' };
+      if (files && files.length > 0) payload.files = files;
+      return request('/chat/threads/' + threadId + '/messages', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+
+    async createCampaignFromChat(threadId, campaignData) {
+      return request('/chat/threads/' + threadId + '/create-campaign', {
+        method: 'POST',
+        body: JSON.stringify({ campaign: campaignData }),
+      });
+    },
+
+    /* ─── Campaign Delete ─── */
+
+    async deleteCampaign(id) {
+      if (_useSupabase && supabaseReady()) {
+        await BakalSupabase.remove('touchpoints', { campaign_id: id });
+        await BakalSupabase.remove('diagnostics', { campaign_id: id });
+        await BakalSupabase.remove('versions', { campaign_id: id });
+        await BakalSupabase.remove('campaigns', { id });
+        return { ok: true };
+      }
+      return request('/campaigns/' + id, { method: 'DELETE' });
     },
 
     /* ─── State helpers ─── */

@@ -7,6 +7,11 @@ const config = {
     url: process.env.DATABASE_URL,
   },
 
+  supabase: {
+    url: process.env.SUPABASE_URL || '',
+    anonKey: process.env.SUPABASE_ANON_KEY || '',
+  },
+
   lemlist: {
     apiKey: process.env.LEMLIST_API_KEY,
     baseUrl: 'https://api.lemlist.com/api',

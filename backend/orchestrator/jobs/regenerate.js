@@ -8,6 +8,7 @@
  */
 
 const claude = require('../../api/claude');
+const lemlist = require('../../api/lemlist');
 const notionSync = require('../../api/notion-sync');
 const db = require('../../db');
 
@@ -72,12 +73,27 @@ async function run({ campaignId, metrics, diagnostic } = {}) {
     notionSync.syncVersion(version.id, campaignId).catch(console.error);
     await db.campaigns.update(campaignId, { status: 'optimizing' });
 
-    console.log(`[regenerate] Done for campaign ${campaignId}. Version ${nextVersion} created.`);
+    // Deploy A/B variants to Lemlist if campaign has a Lemlist ID
+    let lemlistDeployed = false;
+    if (campaign.lemlist_id && regenerationResult.parsed?.messages?.length > 0) {
+      try {
+        lemlistDeployed = await deployToLemlist(
+          campaign.lemlist_id,
+          regenerationResult.parsed.messages,
+          sequence
+        );
+      } catch (err) {
+        console.error(`[regenerate] Lemlist deployment failed for ${campaign.name}:`, err.message);
+      }
+    }
+
+    console.log(`[regenerate] Done for campaign ${campaignId}. Version ${nextVersion} created.${lemlistDeployed ? ' Deployed to Lemlist.' : ''}`);
     return {
       success: true,
       versionId: version.id,
       version: nextVersion,
       messagesRegenerated: regenerationResult.parsed?.messages?.length || 0,
+      lemlistDeployed,
     };
   } catch (err) {
     console.error(`[regenerate] Failed for campaign ${campaignId}:`, err.message);
@@ -85,4 +101,57 @@ async function run({ campaignId, metrics, diagnostic } = {}) {
   }
 }
 
-module.exports = { run };
+/**
+ * Deploy regenerated A/B variants to Lemlist sequences.
+ * Maps each regenerated message to its Lemlist step and updates via PATCH.
+ */
+async function deployToLemlist(lemlistCampaignId, regeneratedMessages, existingSequence) {
+  // Get current Lemlist sequences to find step IDs
+  let lemlistSequences;
+  try {
+    lemlistSequences = await lemlist.getSequences(lemlistCampaignId);
+  } catch (err) {
+    console.error('[regenerate] Could not fetch Lemlist sequences:', err.message);
+    return false;
+  }
+
+  if (!lemlistSequences || !Array.isArray(lemlistSequences)) {
+    console.warn('[regenerate] No Lemlist sequences found for campaign');
+    return false;
+  }
+
+  let deployedCount = 0;
+
+  for (const msg of regeneratedMessages) {
+    const step = msg.step; // e.g. "E1", "E2", "L1"
+    const variant = msg.variantA || msg; // Primary variant
+
+    if (!variant.body && !variant.subject) continue;
+
+    // Find matching Lemlist step by index (E1=0, E2=1, etc.)
+    const stepIndex = parseInt(step.replace(/[^\d]/g, ''), 10) - 1;
+    const lemlistStep = lemlistSequences[stepIndex];
+
+    if (!lemlistStep || !lemlistStep._id) {
+      console.warn(`[regenerate] No Lemlist step found for ${step}`);
+      continue;
+    }
+
+    // Build update payload
+    const updateData = {};
+    if (variant.subject) updateData.subject = variant.subject;
+    if (variant.body) updateData.text = variant.body;
+
+    try {
+      await lemlist.updateSequenceStep(lemlistCampaignId, lemlistStep._id, updateData);
+      deployedCount++;
+      console.log(`[regenerate] Deployed ${step} to Lemlist step ${lemlistStep._id}`);
+    } catch (err) {
+      console.error(`[regenerate] Failed to deploy ${step} to Lemlist:`, err.message);
+    }
+  }
+
+  return deployedCount > 0;
+}
+
+module.exports = { run, deployToLemlist };

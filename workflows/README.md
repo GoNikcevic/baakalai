@@ -1,69 +1,114 @@
 # Bakal — N8N Workflows
 
 These are importable N8N workflow definitions for the Bakal optimization loop.
+All workflows delegate to the **Bakal backend API**, keeping credentials centralized and logic in one place.
+
+## Architecture
+
+```
+N8N (scheduler/triggers) → Bakal Backend API → PostgreSQL + Claude + Lemlist + Notion
+```
+
+N8N only handles **scheduling and orchestration**. All business logic (stats collection, AI analysis, regeneration, deployment, Notion sync) lives in the backend.
 
 ## Workflows
 
-| File | Name | Trigger | Purpose |
-|------|------|---------|---------|
-| `01-stats-collection.json` | Stats Collection | Daily @ 8am | Fetch Lemlist stats, store in Notion, trigger analysis if eligible |
-| `02-regeneration-deployment.json` | Regeneration + Deployment | Webhook (from WF1) | Regenerate underperforming messages via Claude, deploy to Lemlist |
-| `03-memory-consolidation.json` | Memory Consolidation | Monthly (1st @ 6am) | Aggregate patterns across campaigns into cross-campaign memory |
+| File | Name | Trigger | Backend Endpoint |
+|------|------|---------|-----------------|
+| `01-stats-collection.json` | Stats Collection | Daily @ 8am | `POST /api/stats/collect` |
+| `02-regeneration-deployment.json` | Regeneration + Deployment | Webhook | `POST /api/ai/run-refinement` + `POST /api/ai/deploy-to-lemlist` |
+| `03-memory-consolidation.json` | Memory Consolidation | Monthly (1st @ 6am) | `POST /api/ai/consolidate-memory` |
 
 ## How to Import
 
 1. Open your N8N instance
 2. Go to **Workflows** > **Import from File**
 3. Import in order: `01` → `02` → `03`
-4. After importing Workflow 2, copy its webhook URL and paste it into Workflow 1's "Trigger Regeneration Workflow" node
+4. Configure the environment variable and credential (see below)
+5. Activate each workflow
 
 ## Setup Checklist
 
-Before activating, you need to configure these placeholders:
+### 1. N8N Environment Variable
 
-### Credentials
-- [ ] **Lemlist API Key** — Create an HTTP Query Auth credential with parameter name `api_key`
-- [ ] **Notion API Token** — Create an HTTP Header Auth credential with value `Bearer YOUR_NOTION_TOKEN`
-- [ ] **Claude API Key** — Replace `CLAUDE_API_KEY` in the header of each Claude node (3 nodes total across WF1 + WF2 + WF3)
+Set in your N8N instance (Settings → Variables, or via `N8N_` env vars):
 
-### Notion Database IDs
-Replace these placeholders in the workflow nodes:
+```
+BAKAL_BACKEND_URL=http://localhost:3001
+```
 
-| Placeholder | Notion Database |
-|-------------|----------------|
-| `NOTION_DB_RESULTATS_ID` | Campagnes — Résultats |
-| `NOTION_DB_DIAGNOSTICS_ID` | Campagnes — Diagnostics |
-| `NOTION_DB_HISTORIQUE_ID` | Campagnes — Historique Versions |
-| `NOTION_DB_MEMOIRE_ID` | Mémoire Cross-Campagne |
+Replace with your production backend URL if deploying remotely.
 
-To find a database ID: open the database in Notion as a full page, copy the URL. The ID is the 32-character string before the `?v=` parameter.
+### 2. Backend JWT Credential
 
-### Inter-Workflow Links
-- [ ] After importing WF2, copy its webhook URL → paste into WF1's "Trigger Regeneration Workflow" node (replace `WORKFLOW_2_WEBHOOK_URL`)
+Create **one** HTTP Header Auth credential in N8N:
+
+- **Name:** `Bakal Backend JWT`
+- **Header Name:** `Authorization`
+- **Header Value:** `Bearer <admin-jwt-token>`
+
+To generate an admin JWT token:
+1. Start the Bakal backend: `cd backend && npm start`
+2. Login as admin: `curl -X POST http://localhost:3001/api/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@bakal.io","password":"admin123"}'`
+3. Copy the `token` from the response
+4. Use it as the Header Value: `Bearer eyJhbG...`
+
+### 3. Inter-Workflow Link (optional)
+
+If you want WF1 to trigger WF2 automatically:
+1. Import WF2 first
+2. Copy its webhook URL
+3. Add an HTTP Request node in WF1 after "Campaigns Analyzed?" to POST to that URL
+
+By default, the backend orchestrator handles the full loop internally when `ORCHESTRATOR_ENABLED=true` in `.env`.
 
 ## Workflow Flow
 
 ```
 WF1: Stats Collection (daily)
-  ├── Lemlist API → fetch active campaigns
-  ├── Calculate per-touchpoint metrics
-  ├── Store in Notion (Résultats)
-  ├── IF eligible (>50 prospects, >7 days)
-  │   ├── Claude → performance analysis
-  │   ├── Store diagnostic in Notion
-  │   └── Trigger WF2 via webhook
-  └── ELSE → skip
+  ├── Backend /api/stats/collect
+  │   ├── Fetches campaigns from Lemlist API
+  │   ├── Calculates per-touchpoint metrics
+  │   ├── Stores in PostgreSQL (campaigns + touchpoints)
+  │   ├── Runs Claude analysis if eligible (>50 prospects)
+  │   └── Stores diagnostics in PostgreSQL + syncs to Notion
+  ├── IF campaigns were analyzed → trigger WF2
+  └── ELSE → done
 
 WF2: Regeneration + Deployment (on demand)
-  ├── Receive diagnostic from WF1
-  ├── Fetch: campaign history + memory + original sequences
-  ├── Claude → regenerate with A/B variants
-  ├── Store version in Notion (Historique)
-  └── Update Lemlist sequences
+  ├── Backend /api/ai/run-refinement
+  │   ├── Reads campaign + touchpoints + memory from PostgreSQL
+  │   ├── Claude → performance analysis + diagnostic
+  │   ├── Claude → regenerate underperforming messages
+  │   ├── Stores version history in PostgreSQL + Notion
+  │   └── Updates campaign status to 'optimizing'
+  ├── IF regeneration produced messages → deploy
+  │   └── Backend /api/ai/deploy-to-lemlist
+  │       ├── Maps messages to Lemlist sequence steps
+  │       ├── PATCHes Lemlist sequences with new content
+  │       └── Updates touchpoints in PostgreSQL
+  └── ELSE → analysis only, no deployment
 
 WF3: Memory Consolidation (monthly)
-  ├── Fetch all diagnostics from past month
-  ├── Fetch existing memory patterns
-  ├── Claude → identify/update patterns
-  └── Create or update Notion (Mémoire)
+  └── Backend /api/ai/consolidate-memory
+      ├── Aggregates all diagnostics from PostgreSQL
+      ├── Fetches existing memory patterns
+      ├── Claude → identify/update/create patterns
+      ├── Stores patterns in PostgreSQL
+      └── Syncs to Notion
 ```
+
+## Backend vs N8N
+
+The backend already has a built-in orchestrator (`ORCHESTRATOR_ENABLED=true` in `.env`) that runs:
+- **collect-stats**: Daily at 8am (same as WF1)
+- **regenerate**: After stats collection for eligible campaigns
+- **consolidate**: Monthly on the 1st at 9am (same as WF3)
+
+N8N workflows are an **alternative** to the built-in orchestrator, useful when:
+- You need visual workflow monitoring
+- You want to add custom steps (Slack notifications, email alerts, etc.)
+- You prefer N8N's retry/error handling over cron
+
+You can use **either** the built-in orchestrator **or** N8N — not both simultaneously.
+To use N8N instead, set `ORCHESTRATOR_ENABLED=false` in the backend `.env`.

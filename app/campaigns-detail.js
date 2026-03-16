@@ -221,6 +221,7 @@ function renderActiveCampaign(c) {
         <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px;" onclick="togglePauseCampaign('${c.id}', this)">⏸ Pause</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px;" onclick="exportCampaign('${c.id}')">📥 Exporter</button>
         <button class="btn btn-primary" style="font-size:12px;padding:8px 14px;" onclick="launchABTest('${c.id}')">🧬 Lancer un test A/B</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px;color:var(--danger);border-color:var(--danger);" onclick="deleteCampaign('${c.id}')">🗑 Supprimer</button>
       </div>
     </div>
 
@@ -324,6 +325,7 @@ function renderPrepCampaign(c) {
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px;" onclick="editPrepCampaign('${c.id}')">✏️ Modifier</button>
         <button class="btn btn-success" style="font-size:12px;padding:8px 14px;" onclick="launchPrepCampaign('${c.id}')">🚀 Lancer la campagne</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px;color:var(--danger);border-color:var(--danger);" onclick="deleteCampaign('${c.id}')">🗑 Supprimer</button>
       </div>
     </div>
 
@@ -352,6 +354,24 @@ function renderPrepCampaign(c) {
 /* ═══════════════════════════════════════════
    ACTION HANDLERS
    ═══════════════════════════════════════════ */
+
+/* ═══ Delete campaign ═══ */
+async function deleteCampaign(id) {
+  const c = BAKAL.campaigns[id];
+  if (!c) return;
+  if (!confirm(`Supprimer la campagne "${c.name}" ? Cette action est irréversible.`)) return;
+
+  try {
+    if (typeof BakalAPI !== 'undefined') {
+      await BakalAPI.deleteCampaign(c.backendId || id);
+    }
+    delete BAKAL.campaigns[id];
+    backToCampaignsList();
+    if (typeof initFromData === 'function') initFromData();
+  } catch (err) {
+    alert('Erreur lors de la suppression : ' + err.message);
+  }
+}
 
 /* ═══ Active campaign: Pause/Resume ═══ */
 function togglePauseCampaign(id, btn) {

@@ -144,4 +144,28 @@ router.get('/diagnostics/:campaignId', async (req, res, next) => {
   }
 });
 
+// POST /api/stats/run-orchestrator — Manual trigger for orchestrator jobs
+router.post('/run-orchestrator', async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+    const orchestrator = require('../orchestrator');
+    const { job } = req.body; // 'collect-stats' | 'consolidate'
+
+    if (job === 'collect-stats') {
+      const result = await orchestrator.collectStats.run();
+      return res.json({ job, result });
+    }
+    if (job === 'consolidate') {
+      const result = await orchestrator.consolidate.run();
+      return res.json({ job, result });
+    }
+
+    res.status(400).json({ error: 'Invalid job. Use: collect-stats, consolidate' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

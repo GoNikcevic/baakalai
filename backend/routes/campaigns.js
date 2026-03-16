@@ -162,4 +162,31 @@ router.post('/:id/versions', async (req, res, next) => {
   }
 });
 
+// DELETE /api/campaigns/:id
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.user_id && campaign.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Delete related data first
+    await db.touchpoints.deleteByCampaign(campaign.id);
+    const diagnostics = await db.diagnostics.listByCampaign(campaign.id);
+    for (const d of diagnostics) {
+      await db.diagnostics.delete(d.id);
+    }
+    const versions = await db.versions.listByCampaign(campaign.id);
+    for (const v of versions) {
+      await db.versions.delete(v.id);
+    }
+    await db.campaigns.delete(campaign.id);
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

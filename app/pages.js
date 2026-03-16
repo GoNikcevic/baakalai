@@ -3,6 +3,15 @@
    Handles Profil, Settings, Exports, and global buttons
    ═══════════════════════════════════════════════════ */
 
+// Close export dropdown on outside click
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('export-dropdown');
+  const wrap = document.getElementById('export-dropdown-wrap');
+  if (dd && wrap && !wrap.contains(e.target)) {
+    dd.classList.remove('show');
+  }
+});
+
 /* ═══ Profile Page — Save ═══ */
 async function saveProfile() {
   const data = {
@@ -454,6 +463,24 @@ function exportDashboardReport() {
   });
 
   downloadCSV(rows, 'bakal_rapport_dashboard.csv');
+}
+
+/* ═══ Dashboard — PDF Report ═══ */
+function exportDashboardPDF() {
+  // Try backend route first; fall back to client-side print
+  if (typeof BakalAPI !== 'undefined') {
+    const baseUrl = BakalAPI._baseUrl || '/api';
+    window.open(baseUrl + '/export/report/pdf', '_blank');
+  } else {
+    // Client-side fallback: build printable HTML in a new tab
+    const campaigns = typeof BAKAL !== 'undefined' ? Object.values(BAKAL.campaigns) : [];
+    const rows = campaigns.map(c => `<tr><td>${c.name}</td><td>${c.status}</td><td>${c.channel}</td><td>${c.kpis?.contacts ?? 0}</td><td>${c.kpis?.openRate ?? '—'}%</td><td>${c.kpis?.replyRate ?? '—'}%</td><td>${c.kpis?.interested ?? 0}</td><td>${c.kpis?.meetings ?? 0}</td></tr>`).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rapport Bakal</title><style>body{font-family:sans-serif;margin:40px;color:#1a1a2e}h1{font-size:22px}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;padding:8px 12px;background:#f0f0f5;border-bottom:2px solid #ddd}td{padding:8px 12px;border-bottom:1px solid #eee}</style></head><body><h1>Rapport Bakal</h1><table><thead><tr><th>Campagne</th><th>Statut</th><th>Canal</th><th>Prospects</th><th>Ouverture</th><th>Réponse</th><th>Intéressés</th><th>RDV</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 500);
+  }
 }
 
 /* ═══ Copy Editor — Export all sequences ═══ */
@@ -991,10 +1018,23 @@ function initWizardDropzone() {
 }
 
 /* ═══════════════════════════════════════════════
-   Supabase Database — Settings
+   Supabase Database — Settings (Admin only)
    ═══════════════════════════════════════════════ */
 
+function isAdminUser() {
+  try {
+    const user = typeof BakalAuth !== 'undefined' ? BakalAuth.getUser() : JSON.parse(localStorage.getItem('bakal_user'));
+    return user && user.role === 'admin';
+  } catch { return false; }
+}
+
 function loadSupabaseSettings() {
+  // Only show Supabase config for admin users
+  const card = document.getElementById('supabase-settings-card');
+  if (card) {
+    card.style.display = isAdminUser() ? '' : 'none';
+  }
+  if (!isAdminUser()) return;
   if (typeof BakalSupabase === 'undefined') return;
   try {
     const config = JSON.parse(localStorage.getItem('bakal_supabase_config') || '{}');
@@ -1008,6 +1048,7 @@ function loadSupabaseSettings() {
 }
 
 function saveSupabaseConfig() {
+  if (!isAdminUser()) return;
   const url = document.getElementById('settings-supabase-url')?.value?.trim();
   const anonKey = document.getElementById('settings-supabase-anon-key')?.value?.trim();
 
@@ -1029,6 +1070,7 @@ function saveSupabaseConfig() {
 }
 
 function clearSupabaseConfig() {
+  if (!isAdminUser()) return;
   localStorage.removeItem('bakal_supabase_config');
   const urlInput = document.getElementById('settings-supabase-url');
   const keyInput = document.getElementById('settings-supabase-anon-key');
@@ -1039,6 +1081,7 @@ function clearSupabaseConfig() {
 }
 
 async function testSupabaseConnection() {
+  if (!isAdminUser()) return;
   const status = document.getElementById('supabase-status');
   if (!status) return;
 

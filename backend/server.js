@@ -37,6 +37,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Inject Supabase config into frontend (before static serving)
+app.get('/supabase-config.js', (_req, res) => {
+  const { supabase } = config;
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`// Auto-injected Supabase configuration
+window.BAKAL_SUPABASE_URL = ${JSON.stringify(supabase.url)};
+window.BAKAL_SUPABASE_ANON_KEY = ${JSON.stringify(supabase.anonKey)};
+`);
+});
+
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '..', 'app')));
 app.use('/landing', express.static(path.join(__dirname, '..', 'landing')));

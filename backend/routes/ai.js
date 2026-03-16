@@ -1,8 +1,10 @@
 const { Router } = require('express');
 const claude = require('../api/claude');
+const lemlist = require('../api/lemlist');
 const db = require('../db');
 const notionSync = require('../api/notion-sync');
 const dryRun = require('../api/dry-run');
+const regenerateJob = require('../orchestrator/jobs/regenerate');
 
 const router = Router();
 
@@ -358,6 +360,47 @@ router.get('/versions/:campaignId', async (req, res, next) => {
   try {
     const versions = await db.versions.listByCampaign(req.params.campaignId);
     res.json({ versions });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/deploy-to-lemlist — Deploy regenerated variants to Lemlist
+router.post('/deploy-to-lemlist', async (req, res, next) => {
+  try {
+    const { campaignId, messages } = req.body;
+    const campaign = await db.campaigns.get(campaignId);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    if (!campaign.lemlist_id) {
+      return res.status(400).json({ error: 'Campaign has no Lemlist ID. Link it in campaign settings first.' });
+    }
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'No messages to deploy' });
+    }
+
+    const sequence = await db.touchpoints.listByCampaign(campaignId);
+    const deployed = await regenerateJob.deployToLemlist(campaign.lemlist_id, messages, sequence);
+
+    // Update touchpoints with new content
+    for (const msg of messages) {
+      const variant = msg.variantA || msg;
+      const tp = sequence.find(t => t.step === msg.step);
+      if (tp) {
+        const updates = {};
+        if (variant.subject) updates.subject = variant.subject;
+        if (variant.body) updates.body = variant.body;
+        if (Object.keys(updates).length > 0) {
+          await db.touchpoints.update(tp.id, updates);
+        }
+      }
+    }
+
+    res.json({
+      deployed,
+      stepsDeployed: messages.map(m => m.step),
+    });
   } catch (err) {
     next(err);
   }

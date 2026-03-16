@@ -19,105 +19,8 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.lemlist.com/api/campaigns",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000002",
-      "name": "Lemlist — Get Campaigns",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [220, 300],
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "LEMLIST_CREDENTIAL_ID",
-          "name": "Lemlist API Key"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "filter-active",
-              "leftValue": "={{ $json.status }}",
-              "rightValue": "active",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000003",
-      "name": "Filter Active Campaigns",
-      "type": "n8n-nodes-base.filter",
-      "typeVersion": 2,
-      "position": [440, 300]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "=https://api.lemlist.com/api/campaigns/{{ $json._id }}/export",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000004",
-      "name": "Lemlist — Get Campaign Stats",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [660, 300],
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "LEMLIST_CREDENTIAL_ID",
-          "name": "Lemlist API Key"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Calculate per-touchpoint metrics from Lemlist export data\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  const campaignName = data.campaignName || data.name || 'Unknown';\n  const campaignId = data.campaignId || data._id || '';\n  const prospects = Array.isArray(data) ? data : (data.prospects || data.export || [data]);\n  \n  const nbProspects = prospects.length;\n  \n  // Initialize counters per step\n  const steps = {\n    E1: { sent: 0, opened: 0, replied: 0 },\n    E2: { sent: 0, opened: 0, replied: 0 },\n    E3: { sent: 0, opened: 0, replied: 0 },\n    E4: { sent: 0, opened: 0, replied: 0 },\n    LK_connect: { sent: 0, accepted: 0 },\n    LK_message: { sent: 0, replied: 0 }\n  };\n  \n  // Parse prospect activities to compute metrics\n  for (const prospect of prospects) {\n    const activities = prospect.activities || prospect.sequenceSteps || [];\n    \n    for (const activity of activities) {\n      const stepNum = activity.stepNumber || activity.step || 0;\n      const channel = (activity.channel || 'email').toLowerCase();\n      \n      if (channel === 'email' || channel === 'mail') {\n        const key = `E${stepNum}`;\n        if (steps[key]) {\n          if (activity.sent || activity.type === 'emailsSent') steps[key].sent++;\n          if (activity.opened || activity.type === 'emailsOpened') steps[key].opened++;\n          if (activity.replied || activity.type === 'emailsReplied') steps[key].replied++;\n        }\n      } else if (channel === 'linkedin') {\n        if (activity.type === 'linkedinConnectionSent' || activity.subtype === 'connection') {\n          steps.LK_connect.sent++;\n          if (activity.accepted) steps.LK_connect.accepted++;\n        }\n        if (activity.type === 'linkedinMessageSent' || activity.subtype === 'message') {\n          steps.LK_message.sent++;\n          if (activity.replied) steps.LK_message.replied++;\n        }\n      }\n    }\n  }\n  \n  // Calculate rates\n  const safeRate = (num, den) => den > 0 ? Math.round((num / den) * 10000) / 100 : 0;\n  \n  const createdAt = data.createdAt || data.dateCreated || null;\n  const campaignAge = createdAt \n    ? Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24))\n    : 0;\n  \n  results.push({\n    json: {\n      campaignId,\n      campaignName,\n      nbProspects,\n      campaignAge,\n      createdAt,\n      dateCollecte: new Date().toISOString().split('T')[0],\n      // Email metrics\n      openRateE1: safeRate(steps.E1.opened, steps.E1.sent),\n      openRateE2: safeRate(steps.E2.opened, steps.E2.sent),\n      openRateE3: safeRate(steps.E3.opened, steps.E3.sent),\n      openRateE4: safeRate(steps.E4.opened, steps.E4.sent),\n      replyRateE1: safeRate(steps.E1.replied, steps.E1.sent),\n      replyRateE2: safeRate(steps.E2.replied, steps.E2.sent),\n      replyRateE3: safeRate(steps.E3.replied, steps.E3.sent),\n      replyRateE4: safeRate(steps.E4.replied, steps.E4.sent),\n      // LinkedIn metrics\n      acceptRateLK: safeRate(steps.LK_connect.accepted, steps.LK_connect.sent),\n      replyRateLK: safeRate(steps.LK_message.replied, steps.LK_message.sent),\n      // Raw counts for debugging\n      rawSteps: steps,\n      // Flag for optimization eligibility\n      eligibleForOptimization: nbProspects > 50 && campaignAge > 7\n    }\n  });\n}\n\nreturn results;"
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000005",
-      "name": "Calculate Metrics",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [880, 300]
-    },
-    {
-      "parameters": {
         "method": "POST",
-        "url": "https://api.notion.com/v1/pages",
+        "url": "={{$env.BAKAL_BACKEND_URL}}/api/stats/collect",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -126,29 +29,34 @@
             {
               "name": "Content-Type",
               "value": "application/json"
-            },
-            {
-              "name": "Notion-Version",
-              "value": "2022-06-28"
             }
           ]
         },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"NOTION_DB_RESULTATS_ID\"\n  },\n  \"properties\": {\n    \"Nom campagne\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"{{ $json.campaignName }}\"\n          }\n        }\n      ]\n    },\n    \"Date collecte\": {\n      \"date\": {\n        \"start\": \"{{ $json.dateCollecte }}\"\n      }\n    },\n    \"Statut\": {\n      \"select\": {\n        \"name\": \"Active\"\n      }\n    },\n    \"Nb prospects\": {\n      \"number\": {{ $json.nbProspects }}\n    },\n    \"Open rate E1\": {\n      \"number\": {{ $json.openRateE1 }}\n    },\n    \"Open rate E2\": {\n      \"number\": {{ $json.openRateE2 }}\n    },\n    \"Open rate E3\": {\n      \"number\": {{ $json.openRateE3 }}\n    },\n    \"Open rate E4\": {\n      \"number\": {{ $json.openRateE4 }}\n    },\n    \"Reply rate E1\": {\n      \"number\": {{ $json.replyRateE1 }}\n    },\n    \"Reply rate E2\": {\n      \"number\": {{ $json.replyRateE2 }}\n    },\n    \"Reply rate E3\": {\n      \"number\": {{ $json.replyRateE3 }}\n    },\n    \"Reply rate E4\": {\n      \"number\": {{ $json.replyRateE4 }}\n    },\n    \"Accept rate LK\": {\n      \"number\": {{ $json.acceptRateLK }}\n    },\n    \"Reply rate LK\": {\n      \"number\": {{ $json.replyRateLK }}\n    }\n  }\n}",
-        "options": {}
+        "options": {
+          "timeout": 120000
+        }
       },
-      "id": "a1b2c3d4-0001-4000-8000-000000000006",
-      "name": "Notion — Store Results",
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Backend — Collect Stats",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 300],
+      "position": [240, 300],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "NOTION_CREDENTIAL_ID",
-          "name": "Notion API Token"
+          "id": "BAKAL_BACKEND_CREDENTIAL_ID",
+          "name": "Bakal Backend JWT"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log results and check for errors\nconst response = $input.first().json;\nconst collected = response.collected || 0;\nconst analyzed = response.analyzed || 0;\nconst campaigns = response.campaigns || [];\n\nconst eligible = campaigns.filter(c => c.eligible);\nconst needsRegeneration = campaigns.filter(c => c.analyzed);\n\nreturn [{\n  json: {\n    collected,\n    analyzed,\n    eligibleCount: eligible.length,\n    campaigns: campaigns.map(c => ({\n      name: c.campaign,\n      lemlistId: c.lemlistId,\n      eligible: c.eligible,\n      analyzed: c.analyzed\n    })),\n    timestamp: new Date().toISOString(),\n    hasEligible: eligible.length > 0,\n    hasAnalyzed: needsRegeneration.length > 0\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Parse Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
     },
     {
       "parameters": {
@@ -160,8 +68,8 @@
           },
           "conditions": [
             {
-              "id": "check-eligible",
-              "leftValue": "={{ $('Calculate Metrics').item.json.eligibleForOptimization }}",
+              "id": "check-analyzed",
+              "leftValue": "={{ $json.hasAnalyzed }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -173,16 +81,16 @@
         },
         "options": {}
       },
-      "id": "a1b2c3d4-0001-4000-8000-000000000007",
-      "name": "Eligible for Optimization?",
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Campaigns Analyzed?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1320, 300]
+      "position": [680, 300]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "={{$env.BAKAL_BACKEND_URL}}/api/stats/run-orchestrator",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -191,105 +99,35 @@
             {
               "name": "Content-Type",
               "value": "application/json"
-            },
-            {
-              "name": "x-api-key",
-              "value": "CLAUDE_API_KEY"
-            },
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Tu es un expert en prospection B2B multicanal. Analyse les performances de cette campagne et fournis un diagnostic structuré.\\n\\n## Campagne: {{ $('Calculate Metrics').item.json.campaignName }}\\n\\n## Métriques par étape:\\n- E1 (Email initial): Open {{ $('Calculate Metrics').item.json.openRateE1 }}% | Reply {{ $('Calculate Metrics').item.json.replyRateE1 }}%\\n- E2 (Email valeur): Open {{ $('Calculate Metrics').item.json.openRateE2 }}% | Reply {{ $('Calculate Metrics').item.json.replyRateE2 }}%\\n- E3 (Email relance): Open {{ $('Calculate Metrics').item.json.openRateE3 }}% | Reply {{ $('Calculate Metrics').item.json.replyRateE3 }}%\\n- E4 (Email break-up): Open {{ $('Calculate Metrics').item.json.openRateE4 }}% | Reply {{ $('Calculate Metrics').item.json.replyRateE4 }}%\\n- LinkedIn connexion: Accept {{ $('Calculate Metrics').item.json.acceptRateLK }}%\\n- LinkedIn message: Reply {{ $('Calculate Metrics').item.json.replyRateLK }}%\\n\\n## Volume: {{ $('Calculate Metrics').item.json.nbProspects }} prospects\\n\\n## Benchmarks de référence:\\n- Open rate: >50% = bon, 30-50% = moyen, <30% = mauvais\\n- Reply rate: >5% = bon, 2-5% = moyen, <2% = mauvais\\n- LinkedIn accept: >30% = bon, 15-30% = moyen, <15% = mauvais\\n\\n## Format de réponse attendu:\\n\\n### 1. Résumé global\\n(1-2 phrases sur la santé globale de la campagne)\\n\\n### 2. Diagnostic par étape\\nPour chaque étape, indique:\\n- Performance: Bonne / Moyenne / Mauvaise\\n- Cause probable du problème (si applicable)\\n- Recommandation spécifique\\n\\n### 3. Priorités d'optimisation\\nListe ordonnée des messages à régénérer en premier (impact maximum)\\n\\n### 4. Instructions de régénération\\nPour chaque message à optimiser, donne des instructions précises:\\n- Ce qui ne fonctionne pas\\n- Direction à prendre\\n- Éléments à conserver\"\n    }\n  ]\n}",
-        "options": {}
+        "jsonBody": "{\"job\": \"collect-stats\"}",
+        "options": {
+          "timeout": 180000
+        }
       },
-      "id": "a1b2c3d4-0001-4000-8000-000000000008",
-      "name": "Claude — Performance Analysis",
+      "id": "a1b2c3d4-0001-4000-8000-000000000005",
+      "name": "Backend — Trigger Regeneration",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1540, 200]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Extract Claude's analysis response\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const response = item.json;\n  const content = response.content || [];\n  const textBlock = content.find(b => b.type === 'text');\n  const diagnostic = textBlock ? textBlock.text : 'No analysis returned';\n  \n  // Extract priorities from the diagnostic text\n  const priorityMatches = diagnostic.match(/### 3\\. Priorités[\\s\\S]*?(?=### 4|$)/i);\n  const prioritySection = priorityMatches ? priorityMatches[0] : '';\n  \n  // Count messages to optimize\n  const optimizeMatches = diagnostic.match(/à (régénérer|optimiser|modifier)/gi) || [];\n  \n  results.push({\n    json: {\n      diagnostic,\n      prioritySection,\n      nbMessagesToOptimize: Math.max(optimizeMatches.length, 1),\n      campaignName: $('Calculate Metrics').item.json.campaignName,\n      campaignId: $('Calculate Metrics').item.json.campaignId,\n      dateAnalyse: new Date().toISOString().split('T')[0]\n    }\n  });\n}\n\nreturn results;"
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000009",
-      "name": "Parse Analysis",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1760, 200]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.notion.com/v1/pages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Notion-Version",
-              "value": "2022-06-28"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"NOTION_DB_DIAGNOSTICS_ID\"\n  },\n  \"properties\": {\n    \"Campagne\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"{{ $json.campaignName }}\"\n          }\n        }\n      ]\n    },\n    \"Date analyse\": {\n      \"date\": {\n        \"start\": \"{{ $json.dateAnalyse }}\"\n      }\n    },\n    \"Nb messages à optimiser\": {\n      \"number\": {{ $json.nbMessagesToOptimize }}\n    }\n  },\n  \"children\": [\n    {\n      \"object\": \"block\",\n      \"type\": \"paragraph\",\n      \"paragraph\": {\n        \"rich_text\": [\n          {\n            \"type\": \"text\",\n            \"text\": {\n              \"content\": {{ JSON.stringify($json.diagnostic).slice(0, 2000) }}\n            }\n          }\n        ]\n      }\n    }\n  ]\n}",
-        "options": {}
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000010",
-      "name": "Notion — Store Diagnostic",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1980, 200],
+      "position": [900, 200],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "NOTION_CREDENTIAL_ID",
-          "name": "Notion API Token"
+          "id": "BAKAL_BACKEND_CREDENTIAL_ID",
+          "name": "Bakal Backend JWT"
         }
       }
     },
     {
-      "parameters": {
-        "method": "POST",
-        "url": "WORKFLOW_2_WEBHOOK_URL",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"campaignId\": \"{{ $json.campaignId }}\",\n  \"campaignName\": \"{{ $json.campaignName }}\",\n  \"diagnostic\": {{ JSON.stringify($json.diagnostic) }}\n}",
-        "options": {}
-      },
-      "id": "a1b2c3d4-0001-4000-8000-000000000011",
-      "name": "Trigger Regeneration Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2200, 200]
-    },
-    {
       "parameters": {},
-      "id": "a1b2c3d4-0001-4000-8000-000000000012",
+      "id": "a1b2c3d4-0001-4000-8000-000000000006",
       "name": "No Optimization Needed",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1540, 420]
+      "position": [900, 420]
     }
   ],
   "connections": {
@@ -297,73 +135,40 @@
       "main": [
         [
           {
-            "node": "Lemlist — Get Campaigns",
+            "node": "Backend — Collect Stats",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lemlist — Get Campaigns": {
+    "Backend — Collect Stats": {
       "main": [
         [
           {
-            "node": "Filter Active Campaigns",
+            "node": "Parse Results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Active Campaigns": {
+    "Parse Results": {
       "main": [
         [
           {
-            "node": "Lemlist — Get Campaign Stats",
+            "node": "Campaigns Analyzed?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lemlist — Get Campaign Stats": {
+    "Campaigns Analyzed?": {
       "main": [
         [
           {
-            "node": "Calculate Metrics",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Calculate Metrics": {
-      "main": [
-        [
-          {
-            "node": "Notion — Store Results",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notion — Store Results": {
-      "main": [
-        [
-          {
-            "node": "Eligible for Optimization?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Eligible for Optimization?": {
-      "main": [
-        [
-          {
-            "node": "Claude — Performance Analysis",
+            "node": "Backend — Trigger Regeneration",
             "type": "main",
             "index": 0
           }
@@ -376,39 +181,6 @@
           }
         ]
       ]
-    },
-    "Claude — Performance Analysis": {
-      "main": [
-        [
-          {
-            "node": "Parse Analysis",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Analysis": {
-      "main": [
-        [
-          {
-            "node": "Notion — Store Diagnostic",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notion — Store Diagnostic": {
-      "main": [
-        [
-          {
-            "node": "Trigger Regeneration Workflow",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
   "active": false,
@@ -416,14 +188,10 @@
     "executionOrder": "v1"
   },
   "tags": [
-    {
-      "name": "bakal"
-    },
-    {
-      "name": "stats"
-    }
+    { "name": "bakal" },
+    { "name": "stats" }
   ],
   "meta": {
-    "notes": "SETUP REQUIRED:\n1. Create Lemlist API credential (HTTP Query Auth with key 'api_key')\n2. Create Notion API credential (HTTP Header Auth with 'Bearer YOUR_TOKEN')\n3. Replace CLAUDE_API_KEY in the Claude node header\n4. Replace NOTION_DB_RESULTATS_ID with your 'Campagnes — Résultats' database ID\n5. Replace NOTION_DB_DIAGNOSTICS_ID with your 'Campagnes — Diagnostics' database ID\n6. Replace WORKFLOW_2_WEBHOOK_URL with the webhook URL from Workflow 2 after importing it"
+    "notes": "SETUP REQUIRED:\n1. Set N8N environment variable BAKAL_BACKEND_URL (e.g. http://localhost:3001)\n2. Create 'Bakal Backend JWT' HTTP Header Auth credential:\n   - Header Name: Authorization\n   - Header Value: Bearer <admin-jwt-token>\n   Generate a JWT for an admin user using the backend auth endpoints.\n3. Activate the workflow once configured."
   }
 }

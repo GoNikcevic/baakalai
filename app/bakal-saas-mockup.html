@@ -439,6 +439,7 @@ body {
   z-index: 200; align-items: center; justify-content: center;
 }
 .creator-overlay.show { display: flex; }
+#export-dropdown.show { display: block !important; }
 .creator-modal {
   background: var(--bg-secondary); border: 1px solid var(--border);
   border-radius: var(--radius-lg); width: 680px; max-height: 85vh;
@@ -2744,7 +2745,13 @@ body {
           </div>
         </div>
       </div>
-      <button class="btn btn-ghost" onclick="exportDashboardReport()">📥 Exporter</button>
+      <div style="position:relative;display:inline-block;" id="export-dropdown-wrap">
+        <button class="btn btn-ghost" onclick="document.getElementById('export-dropdown').classList.toggle('show')">📥 Exporter ▾</button>
+        <div id="export-dropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:4px 0;min-width:180px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+          <button class="btn btn-ghost" style="width:100%;text-align:left;border-radius:0;padding:8px 16px;font-size:13px;" onclick="exportDashboardReport();document.getElementById('export-dropdown').classList.remove('show');">📊 Export CSV</button>
+          <button class="btn btn-ghost" style="width:100%;text-align:left;border-radius:0;padding:8px 16px;font-size:13px;" onclick="exportDashboardPDF();document.getElementById('export-dropdown').classList.remove('show');">📄 Rapport PDF</button>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="toggleCreator()">✨ Nouvelle campagne</button>
     </div>
   </div>
@@ -2826,15 +2833,36 @@ body {
 
     <!-- Campaign List View -->
     <div id="campaigns-list-view">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <div>
           <div style="font-size:16px;font-weight:600;">0 campagnes</div>
           <div style="font-size:13px;color:var(--text-muted);">Cliquez sur une campagne pour voir le détail</div>
         </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px;" onclick="filterCampaignsList()">🔍 Filtrer</button>
-          <button class="btn btn-ghost" style="font-size:12px;padding:8px 14px;" onclick="sortCampaignsList()">↕ Trier par perf.</button>
+      </div>
+      <!-- Search & Filter Bar -->
+      <div id="campaigns-filter-bar" style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+        <div style="position:relative;flex:1;min-width:200px;">
+          <input type="text" id="campaigns-search" placeholder="Rechercher une campagne..." oninput="applyCampaignFilters()"
+            style="width:100%;padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);color:var(--text-primary);font-size:13px;outline:none;">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:13px;pointer-events:none;">🔍</span>
         </div>
+        <select id="filter-status" onchange="applyCampaignFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);color:var(--text-primary);font-size:12px;">
+          <option value="">Tous les statuts</option>
+          <option value="active">Active</option>
+          <option value="prep">En préparation</option>
+          <option value="completed">Terminée</option>
+          <option value="optimizing">En optimisation</option>
+        </select>
+        <select id="filter-channel" onchange="applyCampaignFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);color:var(--text-primary);font-size:12px;">
+          <option value="">Tous les canaux</option>
+          <option value="email">Email</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="multi">Multi-canal</option>
+        </select>
+        <select id="filter-sector" onchange="applyCampaignFilters()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);color:var(--text-primary);font-size:12px;">
+          <option value="">Tous les secteurs</option>
+        </select>
+        <button class="btn btn-ghost" style="font-size:12px;padding:8px 12px;" onclick="resetCampaignFilters()">Réinitialiser</button>
       </div>
       <div class="campaigns-list"></div>
     </div>
@@ -4441,8 +4469,8 @@ body {
         </div>
       </div>
 
-      <!-- Supabase Database -->
-      <div class="card">
+      <!-- Supabase Database — Admin only, hidden from clients -->
+      <div class="card" id="supabase-settings-card" style="display:none;">
         <div class="card-header">
           <div class="card-title">🗃️ Base de données (Supabase)</div>
           <div style="display:flex;gap:8px;align-items:center;">
@@ -4483,9 +4511,12 @@ body {
             <div class="toggle-row">
               <div class="toggle-info">
                 <div class="toggle-title">Exporter toutes les données</div>
-                <div class="toggle-desc">Télécharger vos campagnes, séquences et statistiques au format CSV</div>
+                <div class="toggle-desc">Télécharger vos campagnes, séquences et statistiques au format CSV ou PDF</div>
               </div>
-              <button class="btn btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="exportDashboardReport()">📥 Exporter</button>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="exportDashboardReport()">📊 CSV</button>
+                <button class="btn btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="exportDashboardPDF()">📄 PDF</button>
+              </div>
             </div>
             <div class="toggle-row">
               <div class="toggle-info">
@@ -4668,6 +4699,11 @@ if (window.location.protocol === 'file:') {
   window.__BAKAL_PREVIEW = true;
   window.BakalAuth = { isLoggedIn: () => true, validateToken: async () => true, showLoginScreen: () => {}, updateUserDisplay: () => {}, getUser: () => ({name:'Preview',email:'preview@bakal.fr'}), logout: () => location.reload() };
 }
+</script>
+<script>
+  // Supabase default configuration
+  window.BAKAL_SUPABASE_URL = 'https://wbxmdchrsceaibhjtwxl.supabase.co';
+  window.BAKAL_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndieG1kY2hyc2NlYWliaGp0d3hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMzI5NjUsImV4cCI6MjA4ODgwODk2NX0.lYSQzqaJ_vOEt1cuqY9-SUeJ5AhU-fMXP6jZzXgDzis';
 </script>
 <script src="supabase-client.js"></script>
 <script src="auth.js"></script>

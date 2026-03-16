@@ -570,6 +570,93 @@ function renderCampaignRow(c) {
   </div>`;
 }
 
+/* ─── Campaign Filtering ─── */
+
+function getFilteredCampaigns() {
+  let campaigns = Object.values(BAKAL.campaigns);
+
+  const searchEl = document.getElementById('campaigns-search');
+  const statusEl = document.getElementById('filter-status');
+  const channelEl = document.getElementById('filter-channel');
+  const sectorEl = document.getElementById('filter-sector');
+
+  const search = (searchEl?.value || '').trim().toLowerCase();
+  const status = statusEl?.value || '';
+  const channel = channelEl?.value || '';
+  const sector = sectorEl?.value || '';
+
+  if (search) {
+    campaigns = campaigns.filter(c =>
+      (c.name || '').toLowerCase().includes(search) ||
+      (c.client || '').toLowerCase().includes(search) ||
+      (c.sector || '').toLowerCase().includes(search) ||
+      (c.position || '').toLowerCase().includes(search) ||
+      (c.zone || '').toLowerCase().includes(search)
+    );
+  }
+  if (status) {
+    campaigns = campaigns.filter(c => c.status === status);
+  }
+  if (channel) {
+    campaigns = campaigns.filter(c => c.channel === channel);
+  }
+  if (sector) {
+    campaigns = campaigns.filter(c => (c.sector || '').includes(sector));
+  }
+
+  return campaigns;
+}
+
+function applyCampaignFilters() {
+  const campaigns = getFilteredCampaigns();
+  const projects = Object.values(BAKAL.projects || {});
+  const total = Object.values(BAKAL.campaigns).length;
+  const filtered = campaigns.length;
+  const countEl = document.querySelector('#campaigns-list-view > div:first-child > div:first-child');
+  if (countEl) {
+    countEl.textContent = filtered < total
+      ? `${filtered} / ${total} campagne${total > 1 ? 's' : ''}`
+      : `${total} campagne${total > 1 ? 's' : ''} · ${projects.length} projet${projects.length > 1 ? 's' : ''}`;
+  }
+
+  // Re-render with filtered campaigns
+  renderFilteredCampaignsList(campaigns);
+}
+
+function resetCampaignFilters() {
+  const searchEl = document.getElementById('campaigns-search');
+  const statusEl = document.getElementById('filter-status');
+  const channelEl = document.getElementById('filter-channel');
+  const sectorEl = document.getElementById('filter-sector');
+  if (searchEl) searchEl.value = '';
+  if (statusEl) statusEl.value = '';
+  if (channelEl) channelEl.value = '';
+  if (sectorEl) sectorEl.value = '';
+  renderCampaignsList();
+}
+
+function populateSectorFilter() {
+  const sectorEl = document.getElementById('filter-sector');
+  if (!sectorEl) return;
+  const sectors = [...new Set(Object.values(BAKAL.campaigns).map(c => c.sector).filter(Boolean))];
+  const current = sectorEl.value;
+  sectorEl.innerHTML = '<option value="">Tous les secteurs</option>' +
+    sectors.map(s => `<option value="${s}"${s === current ? ' selected' : ''}>${s}</option>`).join('');
+}
+
+function renderFilteredCampaignsList(campaigns) {
+  const listEl = document.querySelector('.campaigns-list');
+  if (!listEl) return;
+
+  if (campaigns.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">Aucune campagne ne correspond aux filtres.</div>';
+    return;
+  }
+
+  // Flat list when filtering
+  listEl.innerHTML = campaigns.map(c => renderCampaignRow(c)).join('');
+}
+
 function renderCampaignsList() {
   const campaigns = Object.values(BAKAL.campaigns);
   const projects = Object.values(BAKAL.projects || {});
@@ -1152,6 +1239,7 @@ function initFromData() {
   } else {
     document.querySelector('#campaigns-list-view > div:first-child').style.display = '';
     renderCampaignsList();
+    populateSectorFilter();
   }
 
   // ─── Analytics section (removed — KPIs in dashboard overview) ───

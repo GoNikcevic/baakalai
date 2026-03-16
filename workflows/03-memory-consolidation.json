@@ -20,268 +20,44 @@
     },
     {
       "parameters": {
-        "jsCode": "// Calculate date range for the previous month\nconst now = new Date();\nconst firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);\nconst firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);\nconst lastDayLastMonth = new Date(firstDayThisMonth.getTime() - 1);\n\nreturn [{\n  json: {\n    startDate: firstDayLastMonth.toISOString().split('T')[0],\n    endDate: lastDayLastMonth.toISOString().split('T')[0],\n    monthLabel: firstDayLastMonth.toLocaleString('fr-FR', { month: 'long', year: 'numeric' })\n  }\n}];"
+        "method": "POST",
+        "url": "={{$env.BAKAL_BACKEND_URL}}/api/ai/consolidate-memory",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 180000
+        }
       },
       "id": "c1b2c3d4-0003-4000-8000-000000000002",
-      "name": "Calculate Date Range",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [220, 300]
+      "name": "Backend — Consolidate Memory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BAKAL_BACKEND_CREDENTIAL_ID",
+          "name": "Bakal Backend JWT"
+        }
+      }
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.notion.com/v1/databases/NOTION_DB_DIAGNOSTICS_ID/query",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Notion-Version",
-              "value": "2022-06-28"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"filter\": {\n    \"and\": [\n      {\n        \"property\": \"Date analyse\",\n        \"date\": {\n          \"on_or_after\": \"{{ $json.startDate }}\"\n        }\n      },\n      {\n        \"property\": \"Date analyse\",\n        \"date\": {\n          \"on_or_before\": \"{{ $json.endDate }}\"\n        }\n      }\n    ]\n  },\n  \"page_size\": 100\n}",
-        "options": {}
+        "jsCode": "// Log consolidation results\nconst response = $input.first().json;\n\nreturn [{\n  json: {\n    patternsCreated: response.patternsCreated || 0,\n    patternsUpdated: response.patternsUpdated || 0,\n    contradictions: response.contradictions || [],\n    summary: response.summary || '',\n    timestamp: new Date().toISOString()\n  }\n}];"
       },
       "id": "c1b2c3d4-0003-4000-8000-000000000003",
-      "name": "Notion — Get Monthly Diagnostics",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [460, 200],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "NOTION_CREDENTIAL_ID",
-          "name": "Notion API Token"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.notion.com/v1/databases/NOTION_DB_MEMOIRE_ID/query",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Notion-Version",
-              "value": "2022-06-28"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{\n  \"page_size\": 100\n}",
-        "options": {}
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000004",
-      "name": "Notion — Get Existing Memory",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [460, 420],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "NOTION_CREDENTIAL_ID",
-          "name": "Notion API Token"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "combine",
-        "mergeByFields": {},
-        "combinationMode": "multiplex",
-        "options": {}
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000005",
-      "name": "Merge Diagnostics + Memory",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [700, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Build the memory consolidation prompt\nconst diagnosticsData = $('Notion — Get Monthly Diagnostics').first().json;\nconst memoryData = $('Notion — Get Existing Memory').first().json;\nconst dateRange = $('Calculate Date Range').first().json;\n\n// Format all diagnostics from the month\nconst diagnostics = (diagnosticsData.results || []).map(page => {\n  const props = page.properties || {};\n  const campaign = props.Campagne?.title?.[0]?.text?.content || 'Unknown';\n  const date = props['Date analyse']?.date?.start || '';\n  // Get diagnostic from page content (stored as children blocks)\n  const diagnostic = props.Diagnostic?.rich_text?.[0]?.text?.content || 'See page content';\n  return `## Campagne: ${campaign} (${date})\\n${diagnostic}`;\n}).join('\\n\\n---\\n\\n');\n\n// Format existing memory\nconst existingMemory = (memoryData.results || []).map(page => {\n  const props = page.properties || {};\n  const pattern = props.Pattern?.title?.[0]?.text?.content || '';\n  const category = props.Catégorie?.select?.name || '';\n  const data = props.Données?.rich_text?.[0]?.text?.content || '';\n  const confidence = props.Confiance?.select?.name || '';\n  const sectors = (props.Secteur?.multi_select || []).map(s => s.name).join(', ');\n  const targets = (props.Cible?.multi_select || []).map(s => s.name).join(', ');\n  return `[${confidence}] ${category} | ${pattern} | Secteurs: ${sectors} | Cibles: ${targets}\\n${data}`;\n}).join('\\n\\n');\n\n// Store existing memory page IDs for later updates\nconst existingMemoryPages = (memoryData.results || []).map(page => ({\n  id: page.id,\n  pattern: page.properties?.Pattern?.title?.[0]?.text?.content || '',\n  category: page.properties?.Catégorie?.select?.name || ''\n}));\n\nconst prompt = `Tu es un analyste spécialisé en prospection B2B. Ta mission est de consolider la mémoire cross-campagne en analysant les diagnostics du mois écoulé.\n\n## Période: ${dateRange.monthLabel}\n\n## Diagnostics du mois\n${diagnostics || 'Aucun diagnostic ce mois-ci.'}\n\n## Mémoire existante\n${existingMemory || 'Aucune mémoire existante — c\\'est la première consolidation.'}\n\n## Instructions\n\n1. Analyse tous les diagnostics et identifie des PATTERNS récurrents\n2. Classe chaque pattern dans une catégorie:\n   - **Objets**: Ce qui fonctionne/ne fonctionne pas pour les lignes d'objet\n   - **Corps**: Patterns dans le corps des messages\n   - **Timing**: Insights sur le timing/séquençage\n   - **LinkedIn**: Spécificités LinkedIn (connexion, messages)\n   - **Secteur**: Ce qui marche par secteur d'activité\n   - **Cible**: Ce qui marche par type de décideur\n\n3. Pour chaque pattern, indique un niveau de confiance:\n   - **Haute**: Observé sur >200 prospects cumulés\n   - **Moyenne**: Observé sur 50-200 prospects\n   - **Faible**: Observé sur <50 prospects\n\n4. Si un pattern existant est confirmé, augmente sa confiance\n5. Si un pattern existant est contredit, note la contradiction\n\n## Format de réponse (JSON strict)\n\\`\\`\\`json\n[\n  {\n    \"category\": \"Objets|Corps|Timing|LinkedIn|Secteur|Cible\",\n    \"pattern\": \"Titre court du pattern\",\n    \"data\": \"Description détaillée avec données\",\n    \"confidence\": \"Haute|Moyenne|Faible\",\n    \"sectors\": [\"secteur1\", \"secteur2\"],\n    \"targets\": [\"cible1\", \"cible2\"],\n    \"action\": \"create|update|invalidate\"\n  }\n]\n\\`\\`\\`\n\nRéponds UNIQUEMENT avec le JSON, pas de texte autour.`;\n\nreturn [{ json: { prompt, existingMemoryPages, monthLabel: dateRange.monthLabel } }];"
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000006",
-      "name": "Build Memory Prompt",
+      "name": "Parse Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [920, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "x-api-key",
-              "value": "CLAUDE_API_KEY"
-            },
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.prompt) }}\n    }\n  ]\n}",
-        "options": {}
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000007",
-      "name": "Claude — Consolidate Memory",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1140, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Parse Claude's JSON response into memory patterns\nconst response = $input.first().json;\nconst content = response.content || [];\nconst textBlock = content.find(b => b.type === 'text');\nconst rawText = textBlock ? textBlock.text : '[]';\n\n// Extract JSON from response (handle markdown code blocks)\nlet jsonText = rawText;\nconst jsonMatch = rawText.match(/```json\\s*([\\s\\S]*?)```/);\nif (jsonMatch) {\n  jsonText = jsonMatch[1];\n}\n\nlet patterns;\ntry {\n  patterns = JSON.parse(jsonText.trim());\n} catch (e) {\n  // Try to salvage partial JSON\n  const arrayMatch = rawText.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  patterns = arrayMatch ? JSON.parse(arrayMatch[0]) : [];\n}\n\nconst existingMemoryPages = $('Build Memory Prompt').first().json.existingMemoryPages || [];\n\n// Convert each pattern to a Notion-ready item\nconst results = patterns.map(pattern => {\n  // Check if this pattern already exists\n  const existing = existingMemoryPages.find(\n    p => p.pattern === pattern.pattern && p.category === pattern.category\n  );\n  \n  return {\n    json: {\n      action: pattern.action || (existing ? 'update' : 'create'),\n      existingPageId: existing ? existing.id : null,\n      category: pattern.category,\n      pattern: pattern.pattern,\n      data: pattern.data,\n      confidence: pattern.confidence,\n      sectors: pattern.sectors || [],\n      targets: pattern.targets || [],\n      dateDecouverte: new Date().toISOString().split('T')[0]\n    }\n  };\n});\n\nreturn results.length > 0 ? results : [{ json: { action: 'none' } }];"
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000008",
-      "name": "Parse Memory Patterns",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1360, 300]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "is-create",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "create",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000009",
-      "name": "Create or Update?",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3,
-      "position": [1580, 300],
-      "onFallback": "output1"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.notion.com/v1/pages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Notion-Version",
-              "value": "2022-06-28"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"NOTION_DB_MEMOIRE_ID\"\n  },\n  \"properties\": {\n    \"Pattern\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"{{ $json.pattern }}\"\n          }\n        }\n      ]\n    },\n    \"Catégorie\": {\n      \"select\": {\n        \"name\": \"{{ $json.category }}\"\n      }\n    },\n    \"Données\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": {{ JSON.stringify($json.data.slice(0, 2000)) }}\n          }\n        }\n      ]\n    },\n    \"Confiance\": {\n      \"select\": {\n        \"name\": \"{{ $json.confidence }}\"\n      }\n    },\n    \"Date découverte\": {\n      \"date\": {\n        \"start\": \"{{ $json.dateDecouverte }}\"\n      }\n    },\n    \"Secteur\": {\n      \"multi_select\": {{ JSON.stringify($json.sectors.map(s => ({name: s}))) }}\n    },\n    \"Cible\": {\n      \"multi_select\": {{ JSON.stringify($json.targets.map(t => ({name: t}))) }}\n    }\n  }\n}",
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 1000
-            }
-          }
-        }
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000010",
-      "name": "Notion — Create Memory Pattern",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1800, 200],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "NOTION_CREDENTIAL_ID",
-          "name": "Notion API Token"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "=https://api.notion.com/v1/pages/{{ $json.existingPageId }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Notion-Version",
-              "value": "2022-06-28"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"properties\": {\n    \"Données\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": {{ JSON.stringify($json.data.slice(0, 2000)) }}\n          }\n        }\n      ]\n    },\n    \"Confiance\": {\n      \"select\": {\n        \"name\": \"{{ $json.confidence }}\"\n      }\n    },\n    \"Secteur\": {\n      \"multi_select\": {{ JSON.stringify($json.sectors.map(s => ({name: s}))) }}\n    },\n    \"Cible\": {\n      \"multi_select\": {{ JSON.stringify($json.targets.map(t => ({name: t}))) }}\n    }\n  }\n}",
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 1000
-            }
-          }
-        }
-      },
-      "id": "c1b2c3d4-0003-4000-8000-000000000011",
-      "name": "Notion — Update Memory Pattern",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1800, 420],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "NOTION_CREDENTIAL_ID",
-          "name": "Notion API Token"
-        }
-      }
+      "position": [500, 300]
     }
   ],
   "connections": {
@@ -289,107 +65,18 @@
       "main": [
         [
           {
-            "node": "Calculate Date Range",
+            "node": "Backend — Consolidate Memory",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Calculate Date Range": {
+    "Backend — Consolidate Memory": {
       "main": [
         [
           {
-            "node": "Notion — Get Monthly Diagnostics",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Notion — Get Existing Memory",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notion — Get Monthly Diagnostics": {
-      "main": [
-        [
-          {
-            "node": "Merge Diagnostics + Memory",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notion — Get Existing Memory": {
-      "main": [
-        [
-          {
-            "node": "Merge Diagnostics + Memory",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Merge Diagnostics + Memory": {
-      "main": [
-        [
-          {
-            "node": "Build Memory Prompt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Memory Prompt": {
-      "main": [
-        [
-          {
-            "node": "Claude — Consolidate Memory",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude — Consolidate Memory": {
-      "main": [
-        [
-          {
-            "node": "Parse Memory Patterns",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Memory Patterns": {
-      "main": [
-        [
-          {
-            "node": "Create or Update?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Create or Update?": {
-      "main": [
-        [
-          {
-            "node": "Notion — Create Memory Pattern",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Notion — Update Memory Pattern",
+            "node": "Parse Results",
             "type": "main",
             "index": 0
           }
@@ -402,14 +89,10 @@
     "executionOrder": "v1"
   },
   "tags": [
-    {
-      "name": "bakal"
-    },
-    {
-      "name": "memory"
-    }
+    { "name": "bakal" },
+    { "name": "memory" }
   ],
   "meta": {
-    "notes": "SETUP REQUIRED:\n1. Create Notion API credential (HTTP Header Auth with 'Bearer YOUR_TOKEN')\n2. Replace CLAUDE_API_KEY in the Claude node header\n3. Replace NOTION_DB_DIAGNOSTICS_ID with your 'Campagnes — Diagnostics' database ID\n4. Replace NOTION_DB_MEMOIRE_ID with your 'Mémoire Cross-Campagne' database ID"
+    "notes": "SETUP REQUIRED:\n1. Set N8N environment variable BAKAL_BACKEND_URL (e.g. http://localhost:3001)\n2. Create 'Bakal Backend JWT' HTTP Header Auth credential:\n   - Header Name: Authorization\n   - Header Value: Bearer <admin-jwt-token>\n3. The backend handles all logic: fetching diagnostics from PostgreSQL, calling Claude for consolidation, storing patterns, and syncing to Notion."
   }
 }

@@ -9,7 +9,10 @@
     "setup-notion": "node scripts/setup-notion.js",
     "seed": "node scripts/seed-demo.js",
     "seed:reset": "node scripts/seed-demo.js --reset",
-    "test": "node --test tests/*.test.js"
+    "seed:supabase": "node scripts/seed-supabase.js",
+    "seed:supabase:reset": "node scripts/seed-supabase.js --reset",
+    "test": "node --test tests/*.test.js",
+    "check": "node scripts/check-connection.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

@@ -1207,8 +1207,9 @@ async function regenerateAll() {
           (priorities ? `<br><strong>Priorités :</strong> ${priorities.replace(/\n/g, '<br>')}` : '');
       }
 
-      // Apply regenerated messages
+      // Apply regenerated messages to UI and save to backend
       if (result.regeneration) {
+        const updatedTouchpoints = [];
         (result.regeneration.messages || []).forEach(msg => {
           if (!msg.variantA) return;
           const card = document.querySelector(`[data-tp="${msg.step}"]`);
@@ -1217,7 +1218,22 @@ async function regenerateAll() {
           const bodyEl = card.querySelector('.tp-editable[data-field="body"]');
           if (subjectEl && msg.variantA.subject) subjectEl.innerHTML = highlightVars(msg.variantA.subject);
           if (bodyEl && msg.variantA.body) bodyEl.innerHTML = highlightVars(msg.variantA.body).replace(/\n/g, '<br>');
+
+          // Update local data
+          const tp = c.sequence?.find(t => t.id === msg.step);
+          if (tp) {
+            if (msg.variantA.subject) tp.subject = msg.variantA.subject;
+            if (msg.variantA.body) tp.body = msg.variantA.body;
+            updatedTouchpoints.push(tp);
+          }
         });
+
+        // Save updated sequence back to backend
+        if (updatedTouchpoints.length > 0 && c.sequence) {
+          BakalAPI.saveSequence(backendId, c.sequence).catch(err =>
+            console.warn('Failed to save regenerated sequence:', err.message)
+          );
+        }
       }
 
       // Show results

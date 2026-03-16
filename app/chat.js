@@ -12,7 +12,7 @@ let _chatSending = false;
 async function loadChatThreads() {
   if (typeof BakalAPI === 'undefined' || !_backendAvailable) return;
   try {
-    const data = await BakalAPI.request('/chat/threads');
+    const data = await BakalAPI.fetchChatThreads();
     _chatThreads = data.threads || [];
     renderChatThreadList();
   } catch {
@@ -29,10 +29,7 @@ async function newChatThread() {
     return;
   }
   try {
-    const thread = await BakalAPI.request('/chat/threads', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Nouvelle conversation' }),
-    });
+    const thread = await BakalAPI.createChatThread();
     _chatThreadId = thread.id;
     await loadChatThreads();
     showChatWelcome();
@@ -49,7 +46,7 @@ async function selectChatThread(threadId) {
 
   if (typeof BakalAPI === 'undefined' || !_backendAvailable) return;
   try {
-    const data = await BakalAPI.request('/chat/threads/' + threadId + '/messages');
+    const data = await BakalAPI.fetchChatMessages(threadId);
     const messages = data.messages || [];
     if (messages.length === 0) {
       showChatWelcome();
@@ -72,7 +69,7 @@ async function deleteChatThread(threadId, e) {
   e.stopPropagation();
   if (typeof BakalAPI === 'undefined' || !_backendAvailable) return;
   try {
-    await BakalAPI.request('/chat/threads/' + threadId, { method: 'DELETE' });
+    await BakalAPI.deleteChatThread(threadId);
     if (_chatThreadId === threadId) {
       _chatThreadId = null;
       showChatWelcome();
@@ -339,10 +336,7 @@ async function sendChatMessage(overrideText) {
   // If no thread, create one first
   if (!_chatThreadId && typeof BakalAPI !== 'undefined' && _backendAvailable) {
     try {
-      const thread = await BakalAPI.request('/chat/threads', {
-        method: 'POST',
-        body: JSON.stringify({ title: text.slice(0, 60) }),
-      });
+      const thread = await BakalAPI.createChatThread(text.slice(0, 60));
       _chatThreadId = thread.id;
       await loadChatThreads();
     } catch (err) {
@@ -360,12 +354,11 @@ async function sendChatMessage(overrideText) {
   if (_chatThreadId && typeof BakalAPI !== 'undefined' && _backendAvailable) {
     try {
       const fileNames = attachedFiles.map(f => f.name);
-      const payload = { message: text || '' };
-      if (fileNames.length > 0) payload.files = fileNames;
-      const data = await BakalAPI.request('/chat/threads/' + _chatThreadId + '/messages', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+      const data = await BakalAPI.sendChatMessage(
+        _chatThreadId,
+        text || '',
+        fileNames.length > 0 ? fileNames : undefined
+      );
       hideTypingIndicator();
       appendMessage('assistant', data.message.content, data.message.metadata);
       // Refresh thread list (title may have changed)
@@ -397,10 +390,7 @@ async function createCampaignFromChat(campaignData) {
   // Create via backend if available
   if (_chatThreadId && typeof BakalAPI !== 'undefined' && _backendAvailable) {
     try {
-      const result = await BakalAPI.request('/chat/threads/' + _chatThreadId + '/create-campaign', {
-        method: 'POST',
-        body: JSON.stringify({ campaign: campaignData }),
-      });
+      const result = await BakalAPI.createCampaignFromChat(_chatThreadId, campaignData);
 
       // Add to local BAKAL data
       if (typeof BAKAL !== 'undefined' && result.campaign) {
