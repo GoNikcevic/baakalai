@@ -390,3 +390,28 @@ CREATE POLICY "Service role full access" ON projects FOR ALL USING (true) WITH C
 
 DROP POLICY IF EXISTS "Service role full access" ON project_files;
 CREATE POLICY "Service role full access" ON project_files FOR ALL USING (true) WITH CHECK (true);
+
+-- =============================================
+-- User Integrations (per-user CRM tokens)
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS user_integrations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  metadata JSONB DEFAULT '{}',
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, provider)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_integrations_user_provider
+  ON user_integrations (user_id, provider);
+
+ALTER TABLE user_integrations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Service role full access" ON user_integrations;
+CREATE POLICY "Service role full access" ON user_integrations FOR ALL USING (true) WITH CHECK (true);

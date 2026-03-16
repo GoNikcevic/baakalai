@@ -17,6 +17,7 @@ const statsRouter = require('./routes/stats');
 const projectsRouter = require('./routes/projects');
 const variablesRouter = require('./routes/variables');
 const exportRouter = require('./routes/export');
+const crmRouter = require('./routes/crm');
 const orchestrator = require('./orchestrator');
 
 const app = express();
@@ -85,6 +86,7 @@ app.use('/api/stats', requireAuth, statsRouter);
 app.use('/api/projects', requireAuth, projectsRouter);
 app.use('/api/variables', requireAuth, variablesRouter);
 app.use('/api/export', requireAuth, exportRouter);
+app.use('/api/crm', requireAuth, crmRouter);
 
 // Error handling
 app.use(errorHandler);

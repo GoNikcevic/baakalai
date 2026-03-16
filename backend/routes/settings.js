@@ -4,17 +4,20 @@ const { encrypt, decrypt, maskKey } = require('../config/crypto');
 
 const router = Router();
 
-// The API keys we manage — maps frontend field names to DB keys
+// CRM keys stored per-user in user_integrations (not global settings)
+const PER_USER_CRM_KEYS = {
+  hubspotKey: 'hubspot',
+  pipedriveKey: 'pipedrive',
+  salesforceKey: 'salesforce',
+  folkKey: 'folk',
+};
+
+// The API keys we manage globally — maps frontend field names to DB keys
 const KEY_MAP = {
   // ── Core ──
   lemlistKey: 'lemlist_api_key',
   notionToken: 'notion_token',
   claudeKey: 'anthropic_api_key',
-  // ── CRM ──
-  hubspotKey: 'hubspot_api_key',
-  pipedriveKey: 'pipedrive_api_key',
-  salesforceKey: 'salesforce_api_key',
-  folkKey: 'folk_api_key',
   // ── Enrichment ──
   dropcontactKey: 'dropcontact_api_key',
   apolloKey: 'apollo_api_key',
@@ -38,15 +41,31 @@ const KEY_MAP = {
 };
 
 // GET /api/settings/keys — Return masked key status (never plaintext)
-router.get('/keys', async (_req, res, next) => {
+router.get('/keys', async (req, res, next) => {
   try {
     const result = {};
 
+    // Global keys
     for (const [field, dbKey] of Object.entries(KEY_MAP)) {
       const row = await db.settings.get(dbKey);
       if (row) {
         try {
           const plain = decrypt(row.value);
+          result[field] = { configured: true, masked: maskKey(plain), updatedAt: row.updated_at };
+        } catch {
+          result[field] = { configured: false, masked: null, updatedAt: null };
+        }
+      } else {
+        result[field] = { configured: false, masked: null, updatedAt: null };
+      }
+    }
+
+    // Per-user CRM keys
+    for (const [field, provider] of Object.entries(PER_USER_CRM_KEYS)) {
+      const row = await db.userIntegrations.get(req.user.id, provider);
+      if (row) {
+        try {
+          const plain = decrypt(row.access_token);
           result[field] = { configured: true, masked: maskKey(plain), updatedAt: row.updated_at };
         } catch {
           result[field] = { configured: false, masked: null, updatedAt: null };
@@ -74,13 +93,34 @@ router.post('/keys', async (req, res, next) => {
     const errors = [];
 
     for (const [field, value] of Object.entries(keys)) {
+      const trimmed = (value || '').trim();
+
+      // Per-user CRM keys
+      const provider = PER_USER_CRM_KEYS[field];
+      if (provider) {
+        if (!trimmed) {
+          await db.userIntegrations.delete(req.user.id, provider);
+          saved.push(field);
+          continue;
+        }
+        const validation = validateKeyFormat(field, trimmed);
+        if (!validation.valid) {
+          errors.push(`${field}: ${validation.error}`);
+          continue;
+        }
+        const encrypted = encrypt(trimmed);
+        await db.userIntegrations.upsert(req.user.id, provider, { accessToken: encrypted });
+        saved.push(field);
+        continue;
+      }
+
+      // Global keys
       const dbKey = KEY_MAP[field];
       if (!dbKey) {
         errors.push(`Unknown key field: ${field}`);
         continue;
       }
 
-      const trimmed = (value || '').trim();
       if (!trimmed) {
         await db.settings.delete(dbKey);
         saved.push(field);
@@ -113,10 +153,11 @@ router.post('/keys', async (req, res, next) => {
 });
 
 // POST /api/settings/keys/test — Test connectivity for each configured key
-router.post('/keys/test', async (_req, res, next) => {
+router.post('/keys/test', async (req, res, next) => {
   try {
     const results = {};
 
+    // Global keys
     for (const [field, dbKey] of Object.entries(KEY_MAP)) {
       const row = await db.settings.get(dbKey);
       if (!row) {
@@ -126,6 +167,22 @@ router.post('/keys/test', async (_req, res, next) => {
 
       try {
         const plain = decrypt(row.value);
+        results[field] = await testKey(field, plain);
+      } catch {
+        results[field] = { status: 'error', message: 'Decryption failed' };
+      }
+    }
+
+    // Per-user CRM keys
+    for (const [field, provider] of Object.entries(PER_USER_CRM_KEYS)) {
+      const row = await db.userIntegrations.get(req.user.id, provider);
+      if (!row) {
+        results[field] = { status: 'not_configured' };
+        continue;
+      }
+
+      try {
+        const plain = decrypt(row.access_token);
         results[field] = await testKey(field, plain);
       } catch {
         results[field] = { status: 'error', message: 'Decryption failed' };

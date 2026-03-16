@@ -439,7 +439,10 @@ const BakalAPI = (() => {
         });
         return (rows || []).map(transformOpportunity);
       }
-      return [];
+      try {
+        const data = await request('/dashboard/opportunities');
+        return (data.opportunities || []).map(transformOpportunity);
+      } catch { return []; }
     },
 
     /** Fetch reports */
@@ -451,7 +454,10 @@ const BakalAPI = (() => {
         });
         return (rows || []).map(transformReport);
       }
-      return [];
+      try {
+        const data = await request('/dashboard/reports');
+        return (data.reports || []).map(transformReport);
+      } catch { return []; }
     },
 
     /** Fetch chart data */
@@ -463,7 +469,10 @@ const BakalAPI = (() => {
         });
         return (rows || []).map(transformChartPoint);
       }
-      return [];
+      try {
+        const data = await request('/dashboard/chart-data');
+        return (data.chartData || []).map(transformChartPoint);
+      } catch { return []; }
     },
 
     /** Fetch projects */

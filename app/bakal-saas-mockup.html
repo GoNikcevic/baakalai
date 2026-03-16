@@ -4702,9 +4702,14 @@ if (window.location.protocol === 'file:') {
 </script>
 <script>
   // Supabase default configuration
-  window.BAKAL_SUPABASE_URL = 'https://wbxmdchrsceaibhjtwxl.supabase.co';
-  window.BAKAL_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndieG1kY2hyc2NlYWliaGp0d3hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMzI5NjUsImV4cCI6MjA4ODgwODk2NX0.lYSQzqaJ_vOEt1cuqY9-SUeJ5AhU-fMXP6jZzXgDzis';
+  // Supabase config: set via supabase-config.js when served by Express backend,
+  // or hardcoded below for standalone/file:// usage
+  if (!window.BAKAL_SUPABASE_URL) {
+    window.BAKAL_SUPABASE_URL = 'https://wbxmdchrsceaibhjtwxl.supabase.co';
+    window.BAKAL_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndieG1kY2hyc2NlYWliaGp0d3hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMzI5NjUsImV4cCI6MjA4ODgwODk2NX0.lYSQzqaJ_vOEt1cuqY9-SUeJ5AhU-fMXP6jZzXgDzis';
+  }
 </script>
+<script src="supabase-config.js" onerror="/* ok: standalone mode */"></script>
 <script src="supabase-client.js"></script>
 <script src="auth.js"></script>
 <script src="api-client.js"></script>

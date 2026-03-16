@@ -820,6 +820,231 @@ const customVariables = {
 };
 
 // =============================================
+// Opportunities
+// =============================================
+
+const opportunities = {
+  async listByUser(userId, limit = 10) {
+    const result = await query(
+      'SELECT * FROM opportunities WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [userId, limit]
+    );
+    return result.rows;
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM opportunities WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async create(data) {
+    const result = await query(`
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, hubspot_contact_id, hubspot_deal_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
+    `, [
+      data.userId || null,
+      data.campaignId || null,
+      data.name,
+      data.title || null,
+      data.company || null,
+      data.companySize || null,
+      data.status || 'new',
+      data.statusColor || null,
+      data.timing || null,
+      data.email || null,
+      data.hubspotContactId || null,
+      data.hubspotDealId || null,
+    ]);
+    return result.rows[0];
+  },
+
+  async update(id, data) {
+    const sets = [];
+    const values = [];
+    let i = 1;
+    const mapping = {
+      name: 'name', title: 'title', company: 'company',
+      company_size: 'company_size', companySize: 'company_size',
+      status: 'status', status_color: 'status_color', statusColor: 'status_color',
+      timing: 'timing', email: 'email',
+      hubspot_contact_id: 'hubspot_contact_id', hubspotContactId: 'hubspot_contact_id',
+      hubspot_deal_id: 'hubspot_deal_id', hubspotDealId: 'hubspot_deal_id',
+    };
+    const seen = new Set();
+    for (const [inputKey, col] of Object.entries(mapping)) {
+      if (data[inputKey] !== undefined && !seen.has(col)) {
+        seen.add(col);
+        sets.push(`${col} = $${i++}`);
+        values.push(data[inputKey]);
+      }
+    }
+    if (sets.length === 0) return null;
+    sets.push('updated_at = now()');
+    values.push(id);
+    const result = await query(
+      `UPDATE opportunities SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`,
+      values
+    );
+    return result.rows[0] || null;
+  },
+
+  async delete(id) {
+    const result = await query('DELETE FROM opportunities WHERE id = $1', [id]);
+    return { changes: result.rowCount };
+  },
+};
+
+// =============================================
+// Reports
+// =============================================
+
+const reports = {
+  async listByUser(userId, limit = 10) {
+    const result = await query(
+      'SELECT * FROM reports WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [userId, limit]
+    );
+    return result.rows;
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM reports WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async create(data) {
+    const result = await query(`
+      INSERT INTO reports (user_id, week, date_range, score, score_label, contacts, open_rate, reply_rate, interested, meetings, synthesis)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *
+    `, [
+      data.userId || null,
+      data.week,
+      data.dateRange || null,
+      data.score || 'ok',
+      data.scoreLabel || null,
+      data.contacts || 0,
+      data.openRate || null,
+      data.replyRate || null,
+      data.interested || 0,
+      data.meetings || 0,
+      data.synthesis || null,
+    ]);
+    return result.rows[0];
+  },
+
+  async delete(id) {
+    const result = await query('DELETE FROM reports WHERE id = $1', [id]);
+    return { changes: result.rowCount };
+  },
+};
+
+// =============================================
+// Chart Data
+// =============================================
+
+const chartData = {
+  async listByUser(userId, limit = 12) {
+    const result = await query(
+      'SELECT * FROM chart_data WHERE user_id = $1 ORDER BY week_start ASC LIMIT $2',
+      [userId, limit]
+    );
+    return result.rows;
+  },
+
+  async create(data) {
+    const result = await query(`
+      INSERT INTO chart_data (user_id, label, email_count, linkedin_count, week_start)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [
+      data.userId || null,
+      data.label,
+      data.emailCount || 0,
+      data.linkedinCount || 0,
+      data.weekStart || null,
+    ]);
+    return result.rows[0];
+  },
+
+  async deleteByUser(userId) {
+    const result = await query('DELETE FROM chart_data WHERE user_id = $1', [userId]);
+    return { changes: result.rowCount };
+  },
+};
+
+// =============================================
+// User Integrations (per-user CRM tokens)
+// =============================================
+
+const userIntegrations = {
+  async get(userId, provider) {
+    const result = await query(
+      'SELECT * FROM user_integrations WHERE user_id = $1 AND provider = $2',
+      [userId, provider]
+    );
+    return result.rows[0] || null;
+  },
+
+  async listByUser(userId) {
+    const result = await query(
+      'SELECT * FROM user_integrations WHERE user_id = $1 ORDER BY provider',
+      [userId]
+    );
+    return result.rows;
+  },
+
+  async upsert(userId, provider, data) {
+    const existing = await this.get(userId, provider);
+    if (existing) {
+      const sets = ['access_token = $1', 'updated_at = now()'];
+      const values = [data.accessToken];
+      let i = 2;
+      if (data.refreshToken !== undefined) {
+        sets.push(`refresh_token = $${i++}`);
+        values.push(data.refreshToken);
+      }
+      if (data.metadata !== undefined) {
+        sets.push(`metadata = $${i++}`);
+        values.push(typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata));
+      }
+      if (data.expiresAt !== undefined) {
+        sets.push(`expires_at = $${i++}`);
+        values.push(data.expiresAt);
+      }
+      values.push(userId, provider);
+      const result = await query(
+        `UPDATE user_integrations SET ${sets.join(', ')} WHERE user_id = $${i++} AND provider = $${i} RETURNING *`,
+        values
+      );
+      return result.rows[0] || null;
+    }
+    const result = await query(`
+      INSERT INTO user_integrations (user_id, provider, access_token, refresh_token, metadata, expires_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [
+      userId,
+      provider,
+      data.accessToken,
+      data.refreshToken || null,
+      data.metadata ? (typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata)) : '{}',
+      data.expiresAt || null,
+    ]);
+    return result.rows[0];
+  },
+
+  async delete(userId, provider) {
+    const result = await query(
+      'DELETE FROM user_integrations WHERE user_id = $1 AND provider = $2',
+      [userId, provider]
+    );
+    return { changes: result.rowCount };
+  },
+};
+
+// =============================================
 // Raw query helper (for special cases in routes)
 // =============================================
 
@@ -858,4 +1083,8 @@ module.exports = {
   projects,
   projectFiles,
   customVariables,
+  opportunities,
+  reports,
+  chartData,
+  userIntegrations,
 };

@@ -9,6 +9,7 @@
 const claude = require('../../api/claude');
 const notionSync = require('../../api/notion-sync');
 const db = require('../../db');
+const hubspotSync = require('./hubspot-sync');
 
 async function run() {
   console.log('[consolidate] Starting monthly memory consolidation...');
@@ -57,12 +58,19 @@ async function run() {
       }
     }
 
-    console.log(`[consolidate] Done. Created: ${savedIds.length}, Updated: ${updatedCount}`);
+    // Push high-confidence patterns to HubSpot deals
+    const hubspotResult = await hubspotSync.pushPatternsToDeals().catch((err) => {
+      console.warn('[consolidate] HubSpot patterns push failed:', err.message);
+      return { synced: 0 };
+    });
+
+    console.log(`[consolidate] Done. Created: ${savedIds.length}, Updated: ${updatedCount}, HubSpot: ${hubspotResult.synced} deals`);
     return {
       patternsCreated: savedIds.length,
       patternsUpdated: updatedCount,
       contradictions: result.parsed?.contradictions || [],
       summary: result.parsed?.summary || '',
+      hubspotSynced: hubspotResult.synced,
     };
   } catch (err) {
     console.error('[consolidate] Failed:', err.message);
