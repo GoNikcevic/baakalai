@@ -1,14 +1,13 @@
 /* ===============================================================================
-   BAKAL — Analytics Section (React)
-   Ported from app/analytics.js.
-   KPI row, period selector, SVG line chart, campaign bars, channel breakdown,
-   conversion funnel, empty state.
-   Used as a tab within the Dashboard page.
+   BAKAL — Analytics Section (React + Recharts)
+   KPI row, period selector, engagement line chart, campaign perf bars,
+   channel breakdown, conversion funnel.
    =============================================================================== */
 
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/useApp';
-// Note: dangerouslySetInnerHTML here uses internally-generated SVG/HTML content only — no user input
+import EngagementChart from '../components/charts/EngagementChart';
+import FunnelChart from '../components/charts/FunnelChart';
 
 /* ─── Chart data for different periods ─── */
 
@@ -47,73 +46,52 @@ const ANALYTICS_DATA = {
 
 const PERIODS = ['4w', '8w', '12w'];
 
-/* ─── SVG Line Chart (pure function, returns SVG string) ─── */
+/* ─── Campaign Performance Row (React) ─── */
 
-function buildLineChartSvg(data, lines, options = {}) {
-  const width = 700;
-  const height = 200;
-  const paddingLeft = 45;
-  const paddingRight = 20;
-  const paddingTop = 10;
-  const paddingBottom = 30;
-  const chartWidth = width - paddingLeft - paddingRight;
-  const chartHeight = height - paddingTop - paddingBottom;
+function CampaignPerfRow({ campaign }) {
+  const isLinkedin = campaign.channel === 'linkedin';
+  const openRate = isLinkedin ? null : campaign.kpis?.openRate;
+  const replyRate = campaign.kpis?.replyRate;
 
-  // Find max value for scaling
-  let maxVal = 0;
-  lines.forEach(line => {
-    data.forEach(d => {
-      const v = d[line.key];
-      if (v > maxVal) maxVal = v;
-    });
-  });
-  maxVal = Math.ceil(maxVal / 10) * 10 || 100;
-
-  const xStep = data.length > 1 ? chartWidth / (data.length - 1) : chartWidth;
-  const suffix = options.suffix || '%';
-
-  let svg = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" style="width:100%;height:100%;">`;
-
-  // Grid lines
-  for (let i = 0; i <= 4; i++) {
-    const y = paddingTop + (chartHeight / 4) * i;
-    const val = Math.round(maxVal - (maxVal / 4) * i);
-    svg += `<line x1="${paddingLeft}" y1="${y}" x2="${width - paddingRight}" y2="${y}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="4,4"/>`;
-    svg += `<text x="${paddingLeft - 8}" y="${y + 4}" fill="var(--text-muted)" font-size="10" text-anchor="end" font-family="Inter, sans-serif">${val}${suffix}</text>`;
-  }
-
-  // X-axis labels
-  data.forEach((d, i) => {
-    const x = paddingLeft + i * xStep;
-    svg += `<text x="${x}" y="${height - 5}" fill="var(--text-muted)" font-size="10" text-anchor="middle" font-family="Inter, sans-serif">${d.label}</text>`;
-  });
-
-  // Draw each line
-  lines.forEach(line => {
-    const points = data.map((d, i) => {
-      const x = paddingLeft + i * xStep;
-      const y = paddingTop + chartHeight - (d[line.key] / maxVal) * chartHeight;
-      return `${x},${y}`;
-    }).join(' ');
-
-    const firstX = paddingLeft;
-    const lastX = paddingLeft + (data.length - 1) * xStep;
-    const bottomY = paddingTop + chartHeight;
-
-    // Area fill
-    svg += `<polygon points="${firstX},${bottomY} ${points} ${lastX},${bottomY}" fill="${line.color}" opacity="0.06"/>`;
-    // Line
-    svg += `<polyline points="${points}" fill="none" stroke="${line.color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-    // Dots
-    data.forEach((d, i) => {
-      const x = paddingLeft + i * xStep;
-      const y = paddingTop + chartHeight - (d[line.key] / maxVal) * chartHeight;
-      svg += `<circle cx="${x}" cy="${y}" r="3.5" fill="${line.color}" stroke="var(--bg-card)" stroke-width="2"/>`;
-    });
-  });
-
-  svg += '</svg>';
-  return svg;
+  return (
+    <div className="campaign-perf-row">
+      <div className="campaign-perf-name">{campaign.name}</div>
+      <div className="campaign-perf-bars">
+        {openRate != null && (
+          <>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px' }}>Ouverture</div>
+              <div className="campaign-perf-bar-track">
+                <div
+                  className="campaign-perf-bar-fill"
+                  style={{ width: `${openRate}%`, background: openRate >= 50 ? 'var(--success)' : 'var(--warning)' }}
+                />
+              </div>
+            </div>
+            <div className="campaign-perf-value" style={{ color: openRate >= 50 ? 'var(--success)' : 'var(--warning)' }}>
+              {openRate}%
+            </div>
+          </>
+        )}
+        {replyRate != null && (
+          <>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px' }}>Reponse</div>
+              <div className="campaign-perf-bar-track">
+                <div
+                  className="campaign-perf-bar-fill"
+                  style={{ width: `${Math.min(replyRate * 10, 100)}%`, background: replyRate >= 8 ? 'var(--blue)' : 'var(--warning)' }}
+                />
+              </div>
+            </div>
+            <div className="campaign-perf-value" style={{ color: replyRate >= 8 ? 'var(--blue)' : 'var(--warning)' }}>
+              {replyRate}%
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /* ─── Component ─── */
@@ -135,53 +113,17 @@ export default function AnalyticsSection({ onNavigate }) {
 
     const openVal = globalKpis.openRate
       ? (typeof globalKpis.openRate === 'object' ? globalKpis.openRate.value : globalKpis.openRate)
-      : '—';
+      : '\u2014';
     const replyVal = globalKpis.replyRate
       ? (typeof globalKpis.replyRate === 'object' ? globalKpis.replyRate.value : globalKpis.replyRate)
-      : '—';
+      : '\u2014';
 
     return { openRate: openVal, replyRate: replyVal, interested: totalInterested, meetings: totalMeetings };
   }, [activeCampaigns, globalKpis]);
 
-  /* ─── Engagement chart SVG ─── */
+  /* ─── Engagement chart data ─── */
 
-  const engagementSvg = useMemo(() => {
-    const data = ANALYTICS_DATA[period] || ANALYTICS_DATA['4w'];
-    return buildLineChartSvg(data, [
-      { key: 'open', color: 'var(--blue)' },
-      { key: 'reply', color: 'var(--success)' },
-      { key: 'linkedin', color: 'var(--purple)' },
-    ]);
-  }, [period]);
-
-  /* ─── Campaign performance bars ─── */
-
-  const campaignPerfHtml = useMemo(() => {
-    if (activeCampaigns.length === 0) {
-      return '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">Aucune campagne active pour le moment.</div>';
-    }
-    let html = '';
-    activeCampaigns.forEach(c => {
-      const isLinkedin = c.channel === 'linkedin';
-      const openRate = isLinkedin ? null : c.kpis?.openRate;
-      const replyRate = c.kpis?.replyRate;
-
-      html += `<div class="campaign-perf-row"><div class="campaign-perf-name">${c.name}</div><div class="campaign-perf-bars">`;
-
-      if (openRate !== null && openRate !== undefined) {
-        const openColor = openRate >= 50 ? 'var(--success)' : 'var(--warning)';
-        html += `<div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Ouverture</div><div class="campaign-perf-bar-track"><div class="campaign-perf-bar-fill" style="width:${openRate}%;background:${openColor};"></div></div></div><div class="campaign-perf-value" style="color:${openColor}">${openRate}%</div>`;
-      }
-
-      if (replyRate !== null && replyRate !== undefined) {
-        const replyColor = replyRate >= 8 ? 'var(--blue)' : 'var(--warning)';
-        html += `<div style="flex:1;"><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;">Réponse</div><div class="campaign-perf-bar-track"><div class="campaign-perf-bar-fill" style="width:${Math.min(replyRate * 10, 100)}%;background:${replyColor};"></div></div></div><div class="campaign-perf-value" style="color:${replyColor}">${replyRate}%</div>`;
-      }
-
-      html += `</div></div>`;
-    });
-    return html;
-  }, [activeCampaigns]);
+  const engagementData = useMemo(() => ANALYTICS_DATA[period] || ANALYTICS_DATA['4w'], [period]);
 
   /* ─── Channel breakdown ─── */
 
@@ -222,11 +164,11 @@ export default function AnalyticsSection({ onNavigate }) {
     const replied = Math.round(totalContacts * 0.081);
 
     return [
-      { label: 'Contactés', value: totalContacts, color: 'var(--text-muted)', width: 100 },
-      { label: 'Ouvert', value: opened, color: 'var(--blue)', width: Math.round(avgOpen) || 60 },
-      { label: 'Répondu', value: replied, color: 'var(--success)', width: Math.min(Math.round(8.1 * 5), 50) },
-      { label: 'Intéressé', value: totalInterested, color: 'var(--warning)', width: Math.round(totalInterested / (totalContacts || 1) * 100 * 5) || 15 },
-      { label: 'RDV', value: totalMeetings, color: 'var(--purple)', width: Math.round(totalMeetings / (totalContacts || 1) * 100 * 10) || 8 },
+      { label: 'Contactes', value: totalContacts },
+      { label: 'Ouvert', value: opened },
+      { label: 'Repondu', value: replied },
+      { label: 'Interesse', value: totalInterested },
+      { label: 'RDV', value: totalMeetings },
     ];
   }, [activeCampaigns]);
 
@@ -239,7 +181,7 @@ export default function AnalyticsSection({ onNavigate }) {
           <div className="empty-state-icon">{'📈'}</div>
           <div className="empty-state-title">Analytics non disponibles</div>
           <div className="empty-state-desc">
-            Les graphiques de performance s'afficheront dès que votre première campagne sera active avec des données de prospection.
+            Les graphiques de performance s'afficheront des que votre premiere campagne sera active avec des donnees de prospection.
           </div>
           {onNavigate && (
             <button className="btn btn-ghost" onClick={() => onNavigate('overview')}>
@@ -260,23 +202,23 @@ export default function AnalyticsSection({ onNavigate }) {
       <div className="analytics-kpi-row">
         <div className="analytics-kpi-card">
           <div className="analytics-kpi-label">Taux d'ouverture</div>
-          <div className="analytics-kpi-value" id="analytics-open-rate">{kpis.openRate}</div>
+          <div className="analytics-kpi-value">{kpis.openRate}</div>
         </div>
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">Taux de réponse</div>
-          <div className="analytics-kpi-value" id="analytics-reply-rate">{kpis.replyRate}</div>
+          <div className="analytics-kpi-label">Taux de reponse</div>
+          <div className="analytics-kpi-value">{kpis.replyRate}</div>
         </div>
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">Intéressés</div>
-          <div className="analytics-kpi-value" id="analytics-interested">{kpis.interested}</div>
+          <div className="analytics-kpi-label">Interesses</div>
+          <div className="analytics-kpi-value">{kpis.interested}</div>
         </div>
         <div className="analytics-kpi-card">
           <div className="analytics-kpi-label">RDV obtenus</div>
-          <div className="analytics-kpi-value" id="analytics-meetings">{kpis.meetings}</div>
+          <div className="analytics-kpi-value">{kpis.meetings}</div>
         </div>
       </div>
 
-      {/* Engagement Trends */}
+      {/* Engagement Trends — Recharts */}
       <div className="card">
         <div className="card-header">
           <div className="card-title">Tendances d'engagement</div>
@@ -293,46 +235,31 @@ export default function AnalyticsSection({ onNavigate }) {
           </div>
         </div>
         <div className="card-body">
-          {/* Legend */}
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '11px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--blue)', display: 'inline-block' }} />
-              Ouverture
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
-              Réponse
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--purple)', display: 'inline-block' }} />
-              LinkedIn
-            </span>
-          </div>
-          <div
-            id="engagementChartWrap"
-            style={{ width: '100%', height: '200px' }}
-            dangerouslySetInnerHTML={{ __html: engagementSvg }}
-          />
+          <EngagementChart data={engagementData} />
         </div>
       </div>
 
-      {/* Campaign Performance */}
+      {/* Campaign Performance — React components instead of innerHTML */}
       <div className="card">
         <div className="card-title">Performance par campagne</div>
-        <div
-          className="card-body"
-          id="campaignPerfChart"
-          dangerouslySetInnerHTML={{ __html: campaignPerfHtml }}
-        />
+        <div className="card-body">
+          {activeCampaigns.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>
+              Aucune campagne active pour le moment.
+            </div>
+          ) : (
+            activeCampaigns.map(c => <CampaignPerfRow key={c.id} campaign={c} />)
+          )}
+        </div>
       </div>
 
-      {/* Channel Breakdown + Funnel — side by side */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      {/* Channel Breakdown + Funnel — side by side, responsive */}
+      <div className="analytics-bottom-grid">
 
         {/* Channel Breakdown */}
         <div className="card">
-          <div className="card-title">Répartition par canal</div>
-          <div className="card-body" id="channelBreakdown">
+          <div className="card-title">Repartition par canal</div>
+          <div className="card-body">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Channel bars */}
               <div style={{ display: 'flex', gap: '4px', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
@@ -343,98 +270,41 @@ export default function AnalyticsSection({ onNavigate }) {
 
               {/* Channel details */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {/* Email */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--blue)' }} />
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600 }}>Email</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{channelData.emailCount} campagne{channelData.emailCount !== 1 ? 's' : ''}</div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--blue)' }}>{channelData.avgOpenRate}%</div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Ouverture moy.</div>
-                  </div>
-                </div>
-
-                {/* LinkedIn */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--purple)' }} />
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600 }}>LinkedIn</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{channelData.linkedinCount} campagne{channelData.linkedinCount !== 1 ? 's' : ''}</div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--purple)' }}>{channelData.avgAcceptRate}%</div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Accept. moy.</div>
-                  </div>
-                </div>
-
-                {/* Multi-canal */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--orange)' }} />
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 600 }}>Multi-canal</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{channelData.multiCount} campagne{channelData.multiCount !== 1 ? 's' : ''}</div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--orange)' }}>{Math.round(channelData.multiCount / channelData.total * 100)}%</div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>du portefeuille</div>
-                  </div>
-                </div>
+                <ChannelRow label="Email" count={channelData.emailCount} color="var(--blue)" value={`${channelData.avgOpenRate}%`} metric="Ouverture moy." />
+                <ChannelRow label="LinkedIn" count={channelData.linkedinCount} color="var(--purple)" value={`${channelData.avgAcceptRate}%`} metric="Accept. moy." />
+                <ChannelRow label="Multi-canal" count={channelData.multiCount} color="var(--orange)" value={`${Math.round(channelData.multiCount / channelData.total * 100)}%`} metric="du portefeuille" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Conversion Funnel */}
+        {/* Conversion Funnel — Recharts */}
         <div className="card">
           <div className="card-title">Entonnoir de conversion</div>
-          <div className="card-body" id="funnelChart">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-              {funnelStages.map((stage, i) => {
-                const w = Math.max(stage.width, 8);
-                const totalContacts = funnelStages[0].value || 1;
-                return (
-                  <div key={stage.label}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-                      <div style={{ width: '80px', textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{stage.label}</div>
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                          width: `${w}%`,
-                          height: '36px',
-                          background: stage.color,
-                          borderRadius: '6px',
-                          opacity: 1 - i * 0.15,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'width 0.6s ease',
-                          minWidth: '40px',
-                        }}>
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{stage.value}</span>
-                        </div>
-                        {i > 0 && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            {totalContacts > 0 ? (stage.value / totalContacts * 100).toFixed(1) : 0}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {i < funnelStages.length - 1 && (
-                      <div style={{ width: '2px', height: '8px', background: 'var(--border)', marginLeft: '88px' }} />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+          <div className="card-body">
+            <FunnelChart stages={funnelStages} />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Channel Row helper ─── */
+
+function ChannelRow({ label, count, color, value, metric }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: color }} />
+        <div>
+          <div style={{ fontSize: '13px', fontWeight: 600 }}>{label}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{count} campagne{count !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: '16px', fontWeight: 700, color }}>{value}</div>
+        <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{metric}</div>
       </div>
     </div>
   );

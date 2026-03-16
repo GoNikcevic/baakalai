@@ -8,6 +8,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
 import CampaignsList from './CampaignsList';
 import VarGenerator from '../components/VarGenerator';
+import { ProgressCard, CumulativeValueBanner, BenchmarkBadge } from '../components/RetentionBiases';
+import PerformanceChart from '../components/charts/PerformanceChart';
 import { exportCampaignsCsv, exportReportPdf } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 
@@ -140,12 +142,19 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
         ))}
       </div>
 
+      {/* Retention: Cumulative value banner + benchmark */}
+      <CumulativeValueBanner />
+      <BenchmarkBadge />
+
       {/* Section grid */}
       <div className="section-grid">
+        {/* Retention: Progress / AI capital card */}
+        <ProgressCard />
+
         {/* Campaigns table */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">🎯 Campagnes actives</div>
+            <div className="card-title">Campagnes actives</div>
             <button
               className="btn btn-ghost"
               style={{ padding: '6px 12px', fontSize: '12px' }}
@@ -159,44 +168,13 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
           </div>
         </div>
 
-        {/* Performance chart */}
+        {/* Performance chart — recharts */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">📈 Performance 4 semaines</div>
+            <div className="card-title">Performance 4 semaines</div>
           </div>
           <div className="card-body">
-            {chartData && chartData.length > 0 ? (
-              <>
-                <div className="chart-container">
-                  <div className="chart-bars" style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', height: '120px', padding: '0 8px' }}>
-                    {chartData.map((d) => {
-                      const maxVal = Math.max(...chartData.map(x => Math.max(x.email || 0, x.linkedin || 0)), 1);
-                      return (
-                        <div key={d.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                          <div style={{ display: 'flex', gap: '3px', alignItems: 'flex-end', height: '100px' }}>
-                            <div style={{ width: '16px', background: 'var(--blue)', borderRadius: '3px 3px 0 0', height: `${((d.email || 0) / maxVal) * 100}%`, minHeight: '2px' }} />
-                            <div style={{ width: '16px', background: 'var(--purple)', borderRadius: '3px 3px 0 0', height: `${((d.linkedin || 0) / maxVal) * 100}%`, minHeight: '2px' }} />
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{d.label}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="chart-legend">
-                  <div className="chart-legend-item">
-                    <div className="chart-legend-dot" style={{ background: 'var(--blue)' }}></div> Email
-                  </div>
-                  <div className="chart-legend-item">
-                    <div className="chart-legend-dot" style={{ background: 'var(--purple)' }}></div> LinkedIn
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
-                Les graphiques apparaitront avec les donnees de campagne.
-              </div>
-            )}
+            <PerformanceChart data={chartData} />
           </div>
         </div>
 

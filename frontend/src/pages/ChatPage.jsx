@@ -772,8 +772,8 @@ export default function ChatPage() {
   return (
     <div className="chat-page" style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       {/* ─── Sidebar: Thread List ─── */}
-      <div className="chat-sidebar" style={{ width: '260px', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div className="chat-sidebar-header" style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="chat-sidebar">
+        <div className="chat-sidebar-header">
           <span style={{ fontWeight: 600, fontSize: '14px' }}>Conversations</span>
           <AiStatusBadge online={backendAvailable} />
         </div>
@@ -789,7 +789,6 @@ export default function ChatPage() {
       {/* ─── Main Chat Area ─── */}
       <div
         className="chat-main"
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
