@@ -109,38 +109,116 @@ function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew }) {
   );
 }
 
-function ActionCard({ campaign, onCreateCampaign, onModify }) {
-  const params = [campaign.sector, campaign.position, campaign.size, campaign.channel, campaign.angle, campaign.zone]
-    .filter(Boolean)
-    .map((p) => (
-      <span key={p} className="chat-action-param">{escapeHtml(p)}</span>
-    ));
+function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
+  const action = metadata?.action;
 
-  const steps = campaign.sequence && campaign.sequence.length > 0
-    ? campaign.sequence.map((s) => (
-        <div key={s.step} className="chat-action-step">
-          <div className={`chat-action-step-dot ${s.type}`}></div>
-          <span>{escapeHtml(s.step)} &mdash; {escapeHtml(s.label || s.type)}</span>
-          <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{escapeHtml(s.timing || '')}</span>
+  // Create campaign card
+  if (action === 'create_campaign' && metadata.campaign) {
+    const campaign = metadata.campaign;
+    const params = [campaign.sector, campaign.position, campaign.size, campaign.channel, campaign.angle, campaign.zone]
+      .filter(Boolean)
+      .map((p) => (
+        <span key={p} className="chat-action-param">{escapeHtml(p)}</span>
+      ));
+
+    const steps = campaign.sequence && campaign.sequence.length > 0
+      ? campaign.sequence.map((s) => (
+          <div key={s.step} className="chat-action-step">
+            <div className={`chat-action-step-dot ${s.type}`}></div>
+            <span>{escapeHtml(s.step)} &mdash; {escapeHtml(s.label || s.type)}</span>
+            <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{escapeHtml(s.timing || '')}</span>
+          </div>
+        ))
+      : null;
+
+    return (
+      <div className="chat-action-card">
+        <div className="chat-action-title">Campagne prete : {escapeHtml(campaign.name)}</div>
+        <div className="chat-action-params">{params}</div>
+        {steps && <div className="chat-action-sequence">{steps}</div>}
+        <div className="chat-action-buttons">
+          <button className="chat-action-btn primary" onClick={() => onCreateCampaign(campaign)}>
+            Creer et voir la sequence &rarr;
+          </button>
+          <button className="chat-action-btn ghost" onClick={onModify}>
+            Modifier
+          </button>
         </div>
-      ))
-    : null;
-
-  return (
-    <div className="chat-action-card">
-      <div className="chat-action-title">Campagne prete : {escapeHtml(campaign.name)}</div>
-      <div className="chat-action-params">{params}</div>
-      {steps && <div className="chat-action-sequence">{steps}</div>}
-      <div className="chat-action-buttons">
-        <button className="chat-action-btn primary" onClick={() => onCreateCampaign(campaign)}>
-          Creer et voir la sequence &rarr;
-        </button>
-        <button className="chat-action-btn ghost" onClick={onModify}>
-          Modifier
-        </button>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Update campaign card
+  if (action === 'update_campaign') {
+    const changes = metadata.changes || {};
+    const changeList = Object.entries(changes).map(([k, v]) => `${k}: ${v}`);
+    return (
+      <div className="chat-action-card">
+        <div className="chat-action-title">Modifier : {escapeHtml(metadata.campaignName || '')}</div>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '8px 0' }}>
+          {changeList.map((c, i) => <div key={i}>{escapeHtml(c)}</div>)}
+        </div>
+        <div className="chat-action-buttons">
+          <button className="chat-action-btn primary" onClick={() => onActionExecute && onActionExecute(metadata)}>
+            Appliquer les modifications
+          </button>
+          <button className="chat-action-btn ghost" onClick={onModify}>
+            Modifier
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Analyze campaign card
+  if (action === 'analyze_campaign') {
+    return (
+      <div className="chat-action-card">
+        <div className="chat-action-title">Analyser : {escapeHtml(metadata.campaignName || '')}</div>
+        <div className="chat-action-buttons">
+          <button className="chat-action-btn primary" onClick={() => onActionExecute && onActionExecute(metadata)}>
+            Lancer l'analyse
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Regenerate touchpoints card
+  if (action === 'regenerate_touchpoints') {
+    return (
+      <div className="chat-action-card">
+        <div className="chat-action-title">Regenerer : {escapeHtml(metadata.campaignName || '')}</div>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '8px 0' }}>
+          Touchpoints : {(metadata.steps || []).join(', ')}
+        </div>
+        <div className="chat-action-buttons">
+          <button className="chat-action-btn primary" onClick={() => onActionExecute && onActionExecute(metadata)}>
+            Regenerer les touchpoints
+          </button>
+          <button className="chat-action-btn ghost" onClick={onModify}>
+            Modifier
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show diagnostic card
+  if (action === 'show_diagnostic') {
+    return (
+      <div className="chat-action-card">
+        <div className="chat-action-title">Diagnostic : {escapeHtml(metadata.campaignName || '')}</div>
+        <div className="chat-action-buttons">
+          <button className="chat-action-btn primary" onClick={() => onActionExecute && onActionExecute(metadata)}>
+            Voir le diagnostic complet
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function TypingIndicator() {
@@ -173,7 +251,7 @@ function TypingIndicator() {
   );
 }
 
-function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSendMessage }) {
+function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSendMessage, onActionExecute }) {
   const avatar = role === 'assistant' ? 'b' : '~';
   const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
@@ -186,7 +264,7 @@ function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSen
     formattedContent = escapeHtml(formattedContent);
   }
 
-  const hasActionCard = metadata && metadata.action === 'create_campaign' && metadata.campaign;
+  const hasActionCard = metadata && metadata.action;
 
   return (
     <div
@@ -201,9 +279,10 @@ function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSen
         />
         {hasActionCard && (
           <ActionCard
-            campaign={metadata.campaign}
+            metadata={metadata}
             onCreateCampaign={onCreateCampaign}
             onModify={() => onSendMessage('Peux-tu ajuster cette campagne ?')}
+            onActionExecute={onActionExecute}
           />
         )}
         <div className="chat-msg-time">{timeStr}</div>
@@ -212,7 +291,7 @@ function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSen
   );
 }
 
-function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage }) {
+function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage, onActionExecute }) {
   const [displayedContent, setDisplayedContent] = useState('');
   const [showAction, setShowAction] = useState(false);
   const contentRef = useRef(content);
@@ -244,7 +323,7 @@ function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage }
   }, [content]);
 
   const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const hasActionCard = metadata && metadata.action === 'create_campaign' && metadata.campaign;
+  const hasActionCard = metadata && metadata.action;
 
   return (
     <div className="chat-msg assistant" style={{ animation: 'chatFadeIn 0.25s ease' }}>
@@ -256,9 +335,10 @@ function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage }
         />
         {showAction && hasActionCard && (
           <ActionCard
-            campaign={metadata.campaign}
+            metadata={metadata}
             onCreateCampaign={onCreateCampaign}
             onModify={() => onSendMessage('Peux-tu ajuster cette campagne ?')}
+            onActionExecute={onActionExecute}
           />
         )}
         <div className="chat-msg-time">{timeStr}</div>
@@ -438,8 +518,20 @@ export default function ChatPage() {
 
   /* ─── Get context suggestions ─── */
   const getSuggestions = useCallback((metadata) => {
-    if (metadata && metadata.action === 'create_campaign') {
+    if (!metadata || !metadata.action) {
+      return ['Creer une campagne', 'Voir mes stats', 'Optimiser mes sequences'];
+    }
+    if (metadata.action === 'create_campaign') {
       return ['Modifier les parametres', 'Ajouter un touchpoint LinkedIn', 'Changer le ton'];
+    }
+    if (metadata.action === 'update_campaign') {
+      return ['Voir la campagne', 'Lancer une analyse', 'Autre modification'];
+    }
+    if (metadata.action === 'analyze_campaign' || metadata.action === 'show_diagnostic') {
+      return ['Regenerer les touchpoints faibles', 'Comparer avec les autres campagnes', 'Proposer des optimisations'];
+    }
+    if (metadata.action === 'regenerate_touchpoints') {
+      return ['Voir les nouvelles versions', 'Deployer les modifications', 'Modifier l\'approche'];
     }
     return ['Creer une campagne', 'Voir mes stats', 'Optimiser mes sequences'];
   }, []);
@@ -670,6 +762,36 @@ export default function ChatPage() {
     if (inputRef.current) inputRef.current.focus();
   }, [sending, inputValue, attachedFiles, currentThreadId, backendAvailable, loadThreads, scrollToBottom]);
 
+  /* ─── Execute structured action from chat ─── */
+  const executeAction = useCallback((metadata) => {
+    const action = metadata?.action;
+    if (!action) return;
+
+    if (action === 'update_campaign') {
+      const campName = metadata.campaignName || '';
+      const changes = metadata.changes || {};
+      const changeDesc = Object.entries(changes).map(([k, v]) => `${k}: ${v}`).join(', ');
+      sendMessage(`Applique les modifications sur "${campName}" : ${changeDesc}`);
+      return;
+    }
+
+    if (action === 'analyze_campaign') {
+      sendMessage(`Lance l'analyse de performance de la campagne "${metadata.campaignName || ''}"`);
+      return;
+    }
+
+    if (action === 'regenerate_touchpoints') {
+      const steps = (metadata.steps || []).join(', ');
+      sendMessage(`Regenere les touchpoints ${steps} de la campagne "${metadata.campaignName || ''}"`);
+      return;
+    }
+
+    if (action === 'show_diagnostic') {
+      sendMessage(`Montre le diagnostic complet de la campagne "${metadata.campaignName || ''}"`);
+      return;
+    }
+  }, [sendMessage]);
+
   /* ─── Action button starters ─── */
   const startAction = useCallback((action) => {
     const text = ACTION_PROMPTS[action];
@@ -840,6 +962,7 @@ export default function ChatPage() {
                   animate={msg.animate}
                   onCreateCampaign={createCampaignFromChat}
                   onSendMessage={sendMessage}
+                  onActionExecute={executeAction}
                 />
               ))}
 
@@ -850,6 +973,7 @@ export default function ChatPage() {
                   metadata={streamingMsg.metadata}
                   onCreateCampaign={createCampaignFromChat}
                   onSendMessage={sendMessage}
+                  onActionExecute={executeAction}
                 />
               )}
 

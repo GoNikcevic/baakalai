@@ -108,11 +108,65 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       }
     }
 
+    // --- Campaigns with real-time stats ---
     const campaigns = await db.campaigns.list({ userId: req.user.id });
     if (campaigns.length > 0) {
-      contextParts.push(`CAMPAGNES EXISTANTES:\n${campaigns.map(c => `"${c.name}" (${c.status}, ${c.channel})`).join(', ')}`);
+      const campaignLines = campaigns.map(c => {
+        const parts = [`"${c.name}" (${c.status}, ${c.channel})`];
+        if (c.nb_prospects) parts.push(`${c.nb_prospects} prospects`);
+        if (c.open_rate != null) parts.push(`ouverture: ${c.open_rate}%`);
+        if (c.reply_rate != null) parts.push(`réponse: ${c.reply_rate}%`);
+        if (c.accept_rate_lk != null) parts.push(`acceptation LK: ${c.accept_rate_lk}%`);
+        if (c.interested) parts.push(`${c.interested} intéressés`);
+        if (c.meetings) parts.push(`${c.meetings} RDV`);
+        if (c.iteration > 1) parts.push(`iteration ${c.iteration}`);
+        if (c.sector) parts.push(`secteur: ${c.sector}`);
+        if (c.position) parts.push(`cible: ${c.position}`);
+        return `- ${parts.join(' · ')}`;
+      });
+      contextParts.push(`CAMPAGNES (${campaigns.length}):\n${campaignLines.join('\n')}`);
     } else {
       contextParts.push('Aucune campagne créée pour le moment.');
+    }
+
+    // --- Memory patterns (cross-campaign learnings) ---
+    const patterns = await db.memoryPatterns.list({});
+    if (patterns.length > 0) {
+      const patternLines = patterns.slice(0, 10).map(p =>
+        `- [${p.confidence}] ${p.pattern} (catégorie: ${p.category})`
+      );
+      contextParts.push(`MEMORY PATTERNS (ce que l'IA a appris):\n${patternLines.join('\n')}`);
+    }
+
+    // --- Recent diagnostics ---
+    const allDiagnostics = await db.diagnostics.listAll();
+    if (allDiagnostics.length > 0) {
+      const recentDiags = allDiagnostics.slice(0, 3);
+      const diagLines = [];
+      for (const d of recentDiags) {
+        const camp = campaigns.find(c => c.id === d.campaign_id);
+        const campName = camp ? camp.name : 'Campagne inconnue';
+        const priorities = d.priorities && d.priorities.length > 0
+          ? ` | Priorités: ${d.priorities.join('; ')}`
+          : '';
+        diagLines.push(`- ${campName} (${d.date_analyse}): ${(d.diagnostic || '').slice(0, 200)}...${priorities}`);
+      }
+      contextParts.push(`DIAGNOSTICS RÉCENTS:\n${diagLines.join('\n')}`);
+    }
+
+    // --- Recent optimization history ---
+    const recentVersionLines = [];
+    for (const camp of campaigns.slice(0, 5)) {
+      const versions = await db.versions.listByCampaign(camp.id);
+      if (versions.length > 0) {
+        const latest = versions[0];
+        recentVersionLines.push(
+          `- "${camp.name}" v${latest.version}: ${latest.hypotheses || 'N/A'} → ${latest.result}`
+        );
+      }
+    }
+    if (recentVersionLines.length > 0) {
+      contextParts.push(`OPTIMISATIONS RÉCENTES:\n${recentVersionLines.join('\n')}`);
     }
 
     const context = contextParts.join('\n\n');
