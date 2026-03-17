@@ -91,7 +91,12 @@ app.use('/api/crm', requireAuth, crmRouter);
 // SPA catch-all — serve React index.html for non-API routes
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/landing/')) return next();
-  res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
+  const indexPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      res.status(503).json({ error: 'Frontend not built yet. Run: cd frontend && npm run build' });
+    }
+  });
 });
 
 // Error handling
