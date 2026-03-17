@@ -13,6 +13,7 @@ const notionSync = require('../../api/notion-sync');
 const claude = require('../../api/claude');
 const db = require('../../db');
 const regenerate = require('./regenerate');
+const { notifyUser, notifyStatsRefresh } = require('../../socket');
 
 const MIN_PROSPECTS = 50;
 const MIN_AGE_DAYS = 7;
@@ -62,6 +63,15 @@ async function run() {
       notionSync.syncCampaign(campaign.id).catch((err) =>
         console.warn(`[collect-stats] Notion sync failed for ${campaign.name}:`, err.message)
       );
+
+      // Notify user in real-time if connected
+      if (campaign.user_id) {
+        notifyStatsRefresh(campaign.user_id, {
+          campaignId: campaign.id,
+          campaignName: campaign.name,
+          stats: metrics,
+        });
+      }
 
       let analyzed = false;
       if (shouldAnalyze(lc, metrics)) {

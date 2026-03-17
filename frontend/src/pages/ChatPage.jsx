@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/useApp';
+import { useSocket } from '../context/SocketContext';
 import api from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 
@@ -451,6 +452,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
 
 export default function ChatPage() {
   const { backendAvailable, setCampaigns, campaigns, user } = useApp();
+  const { socket } = useSocket();
 
   // Local state
   const [threads, setThreads] = useState([]);
@@ -465,6 +467,29 @@ export default function ChatPage() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const messagesContainerRef = useRef(null);
+
+  /* ─── Socket: join/leave thread rooms + receive messages ─── */
+  useEffect(() => {
+    if (!socket || !currentThreadId) return;
+
+    socket.emit('chat:join', currentThreadId);
+
+    const onMessage = (msg) => {
+      // Avoid duplicating messages we already added from our own POST response
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, { ...msg, animate: true }];
+      });
+      scrollToBottom();
+    };
+
+    socket.on('chat:message', onMessage);
+
+    return () => {
+      socket.emit('chat:leave', currentThreadId);
+      socket.off('chat:message', onMessage);
+    };
+  }, [socket, currentThreadId, scrollToBottom]);
 
   /* ─── Scroll to bottom ─── */
   const scrollToBottom = useCallback(() => {

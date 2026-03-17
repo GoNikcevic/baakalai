@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { logout } from '../services/auth';
+import { disconnect as disconnectSocket } from '../services/socket';
+import { useSocketEvents } from '../hooks/useSocketEvents';
 import CampaignCreatorModal from './CampaignCreatorModal';
 
 /* ─── Sidebar nav items (mirrors vanilla app structure) ─── */
@@ -91,7 +93,11 @@ export default function Layout() {
   const { user, setUser } = useApp();
   const [showCreatorModal, setShowCreatorModal] = useState(false);
 
+  // Wire socket events to app state + notifications
+  useSocketEvents();
+
   async function handleLogout() {
+    disconnectSocket();
     await logout();
     setUser(null);
   }

@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const claude = require('../api/claude');
+const { emitToThread } = require('../socket');
 
 const router = Router();
 
@@ -185,16 +186,18 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       await db.chatThreads.updateTitle(thread.id, title);
     }
 
-    res.json({
-      message: {
-        id: saved.id,
-        role: 'assistant',
-        content: aiResponse.content,
-        metadata,
-        created_at: new Date().toISOString(),
-      },
-      usage: aiResponse.usage,
-    });
+    const responseMsg = {
+      id: saved.id,
+      role: 'assistant',
+      content: aiResponse.content,
+      metadata,
+      created_at: new Date().toISOString(),
+    };
+
+    // Emit to all clients watching this thread (real-time)
+    emitToThread(thread.id, 'chat:message', responseMsg);
+
+    res.json({ message: responseMsg, usage: aiResponse.usage });
   } catch (err) {
     next(err);
   }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useApp } from './context/useApp'
 import { isLoggedIn, validateToken } from './services/auth'
+import { SocketProvider } from './context/SocketContext'
 import AuthGate from './components/AuthGate'
 import OnboardingWizard from './components/OnboardingWizard'
 import Layout from './components/Layout'
@@ -60,18 +61,20 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/dashboard/:section" element={<DashboardPage />} />
-        <Route path="/copyeditor" element={<CopyEditorPage />} />
-        <Route path="/recos" element={<RecosPage />} />
-        <Route path="/profil" element={<ProfilePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/" element={<Navigate to="/chat" replace />} />
-        <Route path="*" element={<Navigate to="/chat" replace />} />
-      </Route>
-    </Routes>
+    <SocketProvider isAuthenticated={authed}>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard/:section" element={<DashboardPage />} />
+          <Route path="/copyeditor" element={<CopyEditorPage />} />
+          <Route path="/recos" element={<RecosPage />} />
+          <Route path="/profil" element={<ProfilePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="*" element={<Navigate to="/chat" replace />} />
+        </Route>
+      </Routes>
+    </SocketProvider>
   )
 }

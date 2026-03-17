@@ -1,9 +1,11 @@
+const http = require('http');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { config, validateConfig } = require('./config');
 const errorHandler = require('./middleware/error-handler');
 const { requireAuth } = require('./middleware/auth');
+const socketServer = require('./socket');
 
 const authRouter = require('./routes/auth');
 const campaignsRouter = require('./routes/campaigns');
@@ -102,9 +104,14 @@ app.get('*', (req, res, next) => {
 // Error handling
 app.use(errorHandler);
 
-app.listen(config.port, '0.0.0.0', () => {
+// Create HTTP server and attach Socket.io
+const server = http.createServer(app);
+socketServer.init(server, allowedOrigins);
+
+server.listen(config.port, '0.0.0.0', () => {
   console.log(`\n🚀 Bakal backend running on http://0.0.0.0:${config.port}`);
-  console.log(`   Health check: http://localhost:${config.port}/api/health\n`);
+  console.log(`   Health check: http://localhost:${config.port}/api/health`);
+  console.log(`   Socket.io:    ws://localhost:${config.port}\n`);
   validateConfig([
     'lemlist.apiKey',
     'notion.token',

@@ -2,6 +2,7 @@ const { Router } = require('express');
 const db = require('../db');
 const lemlist = require('../api/lemlist');
 const notionSync = require('../api/notion-sync');
+const { notifyCampaignUpdate, notifyUser } = require('../socket');
 
 const router = Router();
 
@@ -65,6 +66,7 @@ router.post('/', async (req, res, next) => {
     }
 
     notionSync.syncCampaign(campaign.id).catch(console.error);
+    notifyCampaignUpdate(req.user.id, campaign);
     res.status(201).json(campaign);
   } catch (err) {
     next(err);
@@ -84,6 +86,7 @@ router.patch('/:id', async (req, res, next) => {
     if (!updated) return res.status(404).json({ error: 'No changes' });
 
     notionSync.syncCampaign(updated.id).catch(console.error);
+    notifyCampaignUpdate(req.user.id, updated);
     res.json(updated);
   } catch (err) {
     next(err);
@@ -135,6 +138,7 @@ router.post('/:id/sync-stats', async (req, res, next) => {
     });
 
     notionSync.syncCampaign(campaign.id).catch(console.error);
+    notifyUser(req.user.id, 'stats:refreshed', { campaignId: campaign.id, stats });
     res.json({ stats, synced: true });
   } catch (err) {
     next(err);
