@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { logout } from '../services/auth';
+import CampaignCreatorModal from './CampaignCreatorModal';
 
 /* ─── Sidebar nav items (mirrors vanilla app structure) ─── */
 const NAV_ITEMS = [
@@ -186,6 +187,11 @@ export default function Layout() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Campaign creator modal */}
+      {showCreatorModal && (
+        <CampaignCreatorModal onClose={() => setShowCreatorModal(false)} />
+      )}
     </div>
   );
 }

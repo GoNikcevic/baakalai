@@ -8,7 +8,7 @@ import ActiveCampaignDetail from '../components/campaigns/ActiveCampaignDetail';
 import PrepCampaignDetail from '../components/campaigns/PrepCampaignDetail';
 
 export default function CampaignDetail({ campaignId, onBack }) {
-  const { campaigns } = useApp();
+  const { campaigns, setCampaigns } = useApp();
   const campaign = campaigns[campaignId];
 
   if (!campaign) {
@@ -23,8 +23,8 @@ export default function CampaignDetail({ campaignId, onBack }) {
   }
 
   if (campaign.status === 'prep') {
-    return <PrepCampaignDetail campaign={campaign} onBack={onBack} />;
+    return <PrepCampaignDetail campaign={campaign} onBack={onBack} setCampaigns={setCampaigns} />;
   }
 
-  return <ActiveCampaignDetail campaign={campaign} onBack={onBack} />;
+  return <ActiveCampaignDetail campaign={campaign} onBack={onBack} setCampaigns={setCampaigns} />;
 }

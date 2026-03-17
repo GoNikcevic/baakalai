@@ -6,11 +6,13 @@ import { useState, useMemo } from 'react';
 import SequenceStep from './SequenceStep';
 import ABTestPanel from './ABTestPanel';
 import { DiagBlock, InfoRow } from './shared';
+import api from '../../services/api-client';
 
-export default function ActiveCampaignDetail({ campaign: c, onBack }) {
+export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns }) {
   const [paused, setPaused] = useState(false);
   const [showABPanel, setShowABPanel] = useState(false);
   const [abLaunched, setAbLaunched] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const isLinkedin = c.channel === 'linkedin';
   const iterColor = c.iteration >= 3 ? 'var(--success)' : 'var(--warning)';
@@ -87,6 +89,25 @@ export default function ActiveCampaignDetail({ campaign: c, onBack }) {
     setTimeout(() => setShowABPanel(false), 3000);
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(`Supprimer la campagne "${c.name}" ? Cette action est irreversible.`)) return;
+    setDeleting(true);
+    try {
+      const backendId = c._backendId || c.id;
+      await api.request('/campaigns/' + backendId, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Failed to delete campaign on backend:', err.message);
+    }
+    if (setCampaigns) {
+      setCampaigns((prev) => {
+        const next = { ...prev };
+        delete next[c.id];
+        return next;
+      });
+    }
+    onBack();
+  };
+
   /* ── Volume bar ── */
   const volumePct = c.volume?.planned > 0 ? Math.round((c.volume.sent / c.volume.planned) * 100) : 0;
   const barColor = isLinkedin ? 'var(--purple)' : 'var(--accent)';
@@ -145,6 +166,14 @@ export default function ActiveCampaignDetail({ campaign: c, onBack }) {
             onClick={handleLaunchAB}
           >
             🧬 Lancer un test A/B
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: '12px', padding: '8px 14px', color: 'var(--danger)' }}
+            onClick={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? '...' : '🗑 Supprimer'}
           </button>
         </div>
       </div>

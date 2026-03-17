@@ -79,11 +79,6 @@
   bakal-landing-page-light.html     # Landing page — light theme
   bakal-prequalification.html       # Eligibility / prequalification form
 
-/app/
-  bakal-saas-mockup.html            # SaaS dashboard mockup
-  campaigns-detail.js               # Campaign detail views module
-  copy-editor.js                    # Copy & sequences editor module
-
 /workflows/
   01-stats-collection.json          # N8N — Daily stats from Lemlist → PostgreSQL → Claude analysis
   02-regeneration-deployment.json   # N8N — Claude regeneration → Lemlist A/B deployment

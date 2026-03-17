@@ -7,6 +7,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
 import CampaignsList from './CampaignsList';
+import AnalyticsSectionFull from './AnalyticsSection';
 import VarGenerator from '../components/VarGenerator';
 import { ProgressCard, CumulativeValueBanner, BenchmarkBadge } from '../components/RetentionBiases';
 import PerformanceChart from '../components/charts/PerformanceChart';
@@ -100,7 +101,7 @@ export default function DashboardPage({ section, onNavigateCampaign }) {
 
       {currentTab === 'reports' && <ReportsSection isEmpty={isEmpty} reports={reports} />}
 
-      {currentTab === 'analytics' && <AnalyticsSection isEmpty={isEmpty} />}
+      {currentTab === 'analytics' && <AnalyticsSectionFull onNavigate={(tab) => setTab(tab)} />}
 
       {currentTab === 'campaigns' && (
         <CampaignsList onNavigateCampaign={onNavigateCampaign} />
@@ -582,43 +583,6 @@ function ReportsSection({ isEmpty, reports }) {
             </div>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-
-/* ═══════════════════════════════════════════════════
-   Analytics Section
-   ═══════════════════════════════════════════════════ */
-
-function AnalyticsSection({ isEmpty }) {
-  if (isEmpty) {
-    return (
-      <div id="section-analytics">
-        <div className="empty-state">
-          <div className="empty-state-icon">📊</div>
-          <div className="empty-state-title">Analytics non disponible</div>
-          <div className="empty-state-desc">
-            Les analytics detailles apparaitront apres le lancement de votre
-            premiere campagne.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div id="section-analytics">
-      <div
-        style={{
-          fontSize: '13px',
-          color: 'var(--text-muted)',
-          textAlign: 'center',
-          padding: '48px 0',
-        }}
-      >
-        Le module analytics sera rendu ici.
       </div>
     </div>
   );
