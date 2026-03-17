@@ -10,9 +10,9 @@ WORKDIR /app
 COPY backend/package.json backend/package-lock.json* ./backend/
 RUN cd backend && npm ci --omit=dev
 
-# Install frontend deps and build
+# Install frontend deps (include dev for vite) and build
 COPY frontend/package.json frontend/package-lock.json* ./frontend/
-RUN cd frontend && npm ci
+RUN cd frontend && npm ci --include=dev
 COPY frontend/ ./frontend/
 RUN cd frontend && npm run build
 
