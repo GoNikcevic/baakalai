@@ -11,26 +11,24 @@ import { disconnect as disconnectSocket } from '../services/socket';
 import { useSocketEvents } from '../hooks/useSocketEvents';
 import CampaignCreatorModal from './CampaignCreatorModal';
 
-/* ─── Sidebar nav items (mirrors vanilla app structure) ─── */
+/* ─── Sidebar nav items ─── */
 const NAV_ITEMS = [
-  { label: 'Assistant',           to: '/chat',                 icon: 'chat' },
-  { label: 'Dashboard',           to: '/dashboard',            icon: 'dashboard',  end: true },
-  { label: 'Campagnes',           to: '/dashboard/campaigns',  icon: 'campaigns' },
-  { label: 'Copy & Séquences', to: '/copyeditor',         icon: 'copy' },
-  { label: 'Recommandations',     to: '/recos',                icon: 'recos' },
-  { label: 'Rapports',            to: '/dashboard/reports',    icon: 'reports' },
-  { label: 'Refinement',          to: '/dashboard/refinement', icon: 'refinement' },
-  { label: 'Profil',              to: '/profil',               icon: 'profil' },
-  { label: 'Paramètres',     to: '/settings',             icon: 'settings' },
+  { label: 'Assistant',           to: '/chat',         icon: 'chat' },
+  { label: 'Dashboard',           to: '/dashboard',    icon: 'dashboard',  end: true },
+  { label: 'Campagnes',           to: '/campaigns',    icon: 'campaigns' },
+  { label: 'Copy & S\u00e9quences', to: '/copyeditor', icon: 'copy' },
+  { label: 'Performance',         to: '/performance',  icon: 'reports' },
+  { label: 'Profil',              to: '/profil',       icon: 'profil' },
+  { label: 'Param\u00e8tres',     to: '/settings',     icon: 'settings' },
 ];
 
 /* ─── Mobile bottom nav (subset) ─── */
 const MOBILE_NAV = [
-  { label: 'Chat',      to: '/chat',       icon: 'chat' },
-  { label: 'Dashboard', to: '/dashboard',  icon: 'dashboard' },
-  { label: 'Copy',      to: '/copyeditor', icon: 'copy' },
-  { label: 'Recos',     to: '/recos',      icon: 'recos' },
-  { label: 'Config',    to: '/settings',   icon: 'settings' },
+  { label: 'Chat',        to: '/chat',        icon: 'chat' },
+  { label: 'Dashboard',   to: '/dashboard',   icon: 'dashboard' },
+  { label: 'Campagnes',   to: '/campaigns',   icon: 'campaigns' },
+  { label: 'Performance', to: '/performance', icon: 'reports' },
+  { label: 'Config',      to: '/settings',    icon: 'settings' },
 ];
 
 /* ─── Simple SVG icon map ─── */

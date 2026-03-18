@@ -9,7 +9,9 @@ import Layout from './components/Layout'
 
 const ChatPage = lazy(() => import('./pages/ChatPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const CampaignsList = lazy(() => import('./pages/CampaignsList'))
 const CopyEditorPage = lazy(() => import('./pages/CopyEditorPage'))
+const PerformancePage = lazy(() => import('./pages/PerformancePage'))
 const RecosPage = lazy(() => import('./pages/RecosPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
@@ -84,8 +86,9 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/dashboard/:section" element={<DashboardPage />} />
+            <Route path="/campaigns" element={<CampaignsList />} />
             <Route path="/copyeditor" element={<CopyEditorPage />} />
+            <Route path="/performance" element={<PerformancePage />} />
             <Route path="/recos" element={<RecosPage />} />
             <Route path="/profil" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />

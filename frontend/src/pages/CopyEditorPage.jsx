@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useApp } from '../context/useApp';
 import api, { exportCampaignCsv } from '../services/api-client';
 import VariableManager from '../components/VariableManager';
+import VarGenerator from '../components/VarGenerator';
 import { sanitizeHtml } from '../services/sanitize';
 
 /* ─── Fallback data ─── */
@@ -715,6 +716,7 @@ export default function CopyEditorPage() {
   const [regenAllMessage, setRegenAllMessage] = useState('');
   const [varRegistry, setVarRegistry] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [showVarGenerator, setShowVarGenerator] = useState(false);
 
   /* ─── Select campaign ─── */
   const selectCampaign = useCallback((key) => {
@@ -1121,6 +1123,30 @@ export default function CopyEditorPage() {
             onTouchpointUpdate={handleTouchpointUpdate}
           />
         ))}
+
+        {/* VarGenerator — collapsible refinement tool */}
+        <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: '13px', padding: '8px 14px', width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            onClick={() => setShowVarGenerator(!showVarGenerator)}
+          >
+            <span>{'\u{1F9EC}'} Refinement A/B — Generateur de variables</span>
+            <span style={{ fontSize: '11px' }}>{showVarGenerator ? '\u25B2' : '\u25BC'}</span>
+          </button>
+          {showVarGenerator && (
+            <div style={{ marginTop: '12px' }}>
+              <VarGenerator
+                onAcceptVariable={(key, varData) => {
+                  console.log('Variable accepted:', key, varData);
+                }}
+                onAcceptAll={(scenarioKey, chain) => {
+                  console.log('All variables accepted for scenario:', scenarioKey, chain.length, 'variables');
+                }}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Bottom bar */}
         <div className="editor-bottom-bar">
