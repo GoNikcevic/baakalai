@@ -247,7 +247,7 @@ body {
 
 /* ═══════════ MAIN ═══════════ */
 .mobile-nav { display: none; }
-.main { margin-left: 240px; padding: 28px 32px; min-height: 100vh; box-sizing: border-box; }
+.main { margin-left: 240px; padding: 28px 32px; height: 100vh; box-sizing: border-box; overflow-y: auto; }
 
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
