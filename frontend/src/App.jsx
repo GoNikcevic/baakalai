@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useApp } from './context/useApp'
 import { isLoggedIn, validateToken } from './services/auth'
@@ -6,12 +6,13 @@ import { SocketProvider } from './context/SocketContext'
 import AuthGate from './components/AuthGate'
 import OnboardingWizard from './components/OnboardingWizard'
 import Layout from './components/Layout'
-import ChatPage from './pages/ChatPage'
-import DashboardPage from './pages/DashboardPage'
-import CopyEditorPage from './pages/CopyEditorPage'
-import RecosPage from './pages/RecosPage'
-import ProfilePage from './pages/ProfilePage'
-import SettingsPage from './pages/SettingsPage'
+
+const ChatPage = lazy(() => import('./pages/ChatPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const CopyEditorPage = lazy(() => import('./pages/CopyEditorPage'))
+const RecosPage = lazy(() => import('./pages/RecosPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
 export default function App() {
   const { initData } = useApp()
@@ -67,21 +68,32 @@ export default function App() {
     return <OnboardingWizard onComplete={handleOnboardingComplete} />
   }
 
+  const fallback = (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: '100%', color: 'var(--text-muted)', fontFamily: 'var(--font)',
+    }}>
+      Chargement...
+    </div>
+  )
+
   return (
     <SocketProvider isAuthenticated={authed}>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/dashboard/:section" element={<DashboardPage />} />
-          <Route path="/copyeditor" element={<CopyEditorPage />} />
-          <Route path="/recos" element={<RecosPage />} />
-          <Route path="/profil" element={<ProfilePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/" element={<Navigate to="/chat" replace />} />
-          <Route path="*" element={<Navigate to="/chat" replace />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={fallback}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard/:section" element={<DashboardPage />} />
+            <Route path="/copyeditor" element={<CopyEditorPage />} />
+            <Route path="/recos" element={<RecosPage />} />
+            <Route path="/profil" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/" element={<Navigate to="/chat" replace />} />
+            <Route path="*" element={<Navigate to="/chat" replace />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </SocketProvider>
   )
 }
