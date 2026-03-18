@@ -988,7 +988,7 @@ export default function ChatPage() {
   const inlineSuggestions = lastAssistantMsg ? getSuggestions(lastAssistantMsg.metadata) : [];
 
   return (
-    <div className="chat-page" style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div className="chat-page">
       {/* ─── Sidebar: Thread List ─── */}
       <div className="chat-sidebar">
         <div className="chat-sidebar-header">
