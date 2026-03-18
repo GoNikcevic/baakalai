@@ -33,10 +33,19 @@ const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'];
 
+// Auto-allow Railway public domain so the served frontend can reach the API
+if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+  const railwayOrigin = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  if (!allowedOrigins.includes(railwayOrigin)) {
+    allowedOrigins.push(railwayOrigin);
+  }
+}
+
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    console.error(`[${new Date().toISOString()}] Origin ${origin} not allowed by CORS. Allowed: ${allowedOrigins.join(', ')}`);
     callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
