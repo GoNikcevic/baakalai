@@ -20,6 +20,13 @@ export default function App() {
     localStorage.getItem('bakal_onboarding_complete') === 'true'
   )
 
+  // Re-initialize data after onboarding completes
+  // (initial initData may have run before onboarding was done)
+  function handleOnboardingComplete() {
+    setOnboarded(true)
+    initData()
+  }
+
   useEffect(() => {
     async function checkAuth() {
       if (isLoggedIn()) {
@@ -57,7 +64,7 @@ export default function App() {
   }
 
   if (!onboarded) {
-    return <OnboardingWizard onComplete={() => setOnboarded(true)} />
+    return <OnboardingWizard onComplete={handleOnboardingComplete} />
   }
 
   return (
