@@ -196,7 +196,8 @@ body {
 .dd-sep { height: 1px; background: var(--border); margin: 4px 0; }
 
 /* ═══════════ MAIN ═══════════ */
-.main { margin-left: 240px; padding: 28px 32px; }
+.mobile-nav { display: none; }
+.main { margin-left: 240px; padding: 28px 32px; height: 100vh; box-sizing: border-box; overflow: auto; }
 
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -1646,7 +1647,7 @@ body {
 }
 
 /* ═══════════ CHAT PAGE ═══════════ */
-.chat-page { display:flex; height:calc(100vh - 24px); gap:0; }
+.chat-page { display:flex; height:calc(100vh - 56px); gap:0; }
 
 /* ── Thread sidebar ── */
 .chat-threads {
