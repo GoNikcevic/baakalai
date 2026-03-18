@@ -468,6 +468,15 @@ export default function ChatPage() {
   const inputRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
+  /* ─── Scroll to bottom ─── */
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      }
+    }, 50);
+  }, []);
+
   /* ─── Socket: join/leave thread rooms + receive messages ─── */
   useEffect(() => {
     if (!socket || !currentThreadId) return;
@@ -490,15 +499,6 @@ export default function ChatPage() {
       socket.off('chat:message', onMessage);
     };
   }, [socket, currentThreadId, scrollToBottom]);
-
-  /* ─── Scroll to bottom ─── */
-  const scrollToBottom = useCallback(() => {
-    setTimeout(() => {
-      if (messagesContainerRef.current) {
-        messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-      }
-    }, 50);
-  }, []);
 
   /* ─── Load threads ─── */
   const loadThreads = useCallback(async () => {
