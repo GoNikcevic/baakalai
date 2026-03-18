@@ -468,6 +468,13 @@ export default function ChatPage() {
   const inputRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
+  /* ─── File attachments state (must be before sendMessage which references them) ─── */
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const fileInputRef = useRef(null);
+  const dragCounterRef = useRef(0);
+
   /* ─── Scroll to bottom ─── */
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -879,11 +886,6 @@ export default function ChatPage() {
   }, [sendMessage]);
 
   /* ─── File attachments (drag & drop + file picker) ─── */
-  const [attachedFiles, setAttachedFiles] = useState([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadingFiles, setUploadingFiles] = useState(false);
-  const fileInputRef = useRef(null);
-  const dragCounterRef = useRef(0);
 
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
