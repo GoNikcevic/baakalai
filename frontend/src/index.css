@@ -96,13 +96,13 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .brand-icon {
-  width: 28px; height: 28px;
+  width: 32px; height: 32px;
   background: var(--text-primary);
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 13px; color: var(--bg-primary);
 }
-.brand-text { font-weight: 600; font-size: 16px; letter-spacing: -0.3px; }
+.brand-text { font-weight: 600; font-size: 18px; letter-spacing: -0.3px; }
 .brand-suffix { color: var(--text-muted); font-weight: 400; }
 
 /* ── Sidebar CTA button ── */
@@ -160,7 +160,7 @@ body {
 .nav-item {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 10px; border-radius: var(--radius-sm);
-  color: var(--text-secondary); font-size: 13px; font-weight: 400;
+  color: var(--text-secondary); font-size: 14px; font-weight: 400;
   cursor: pointer; transition: all var(--transition);
   margin-bottom: 2px; text-decoration: none;
 }
@@ -247,7 +247,7 @@ body {
 
 /* ═══════════ MAIN ═══════════ */
 .mobile-nav { display: none; }
-.main { margin-left: 240px; padding: 28px 32px; }
+.main { margin-left: 240px; padding: 28px 32px; min-height: 100vh; box-sizing: border-box; }
 
 .page-header {
   display: flex; align-items: center; justify-content: space-between;

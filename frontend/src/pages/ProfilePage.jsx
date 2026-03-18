@@ -4,9 +4,9 @@
    Company info, value prop, personas, targets, communication style.
    =============================================================================== */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/useApp';
-import { request } from '../services/api-client';
+import { request, uploadFiles } from '../services/api-client';
 
 /* ─── Default empty profile ─── */
 
@@ -39,6 +39,13 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(EMPTY_PROFILE);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error' | null
+
+  /* ─── File upload state ─── */
+  const [files, setFiles] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const dragCounterRef = useRef(0);
 
   /* ─── Load profile on mount ─── */
 
@@ -125,6 +132,57 @@ export default function ProfilePage() {
   const handleChange = useCallback((field, value) => {
     setProfile(prev => ({ ...prev, [field]: value }));
   }, []);
+
+  /* ─── File upload handlers ─── */
+
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault(); e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes('Files')) setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault(); e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e) => { e.preventDefault(); e.stopPropagation(); }, []);
+
+  const addFiles = useCallback((newFiles) => {
+    const MAX = 20 * 1024 * 1024;
+    const valid = Array.from(newFiles).filter(f => f.size <= MAX);
+    if (valid.length > 0) setFiles(prev => [...prev, ...valid]);
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault(); e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+    if (e.dataTransfer.files?.length > 0) addFiles(e.dataTransfer.files);
+  }, [addFiles]);
+
+  const handleUpload = useCallback(async () => {
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      await uploadFiles(files);
+      setFiles([]);
+    } catch (err) {
+      console.warn('Upload failed:', err.message);
+    }
+    setUploading(false);
+  }, [files]);
+
+  const removeFile = useCallback((i) => {
+    setFiles(prev => prev.filter((_, idx) => idx !== i));
+  }, []);
+
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' o';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' Ko';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+  };
 
   /* ─── Render helpers ─── */
 
@@ -279,6 +337,73 @@ export default function ProfilePage() {
           placeholder: 'Phrases ou tournures que vous utilisez souvent et souhaitez conserver...',
           rows: 2,
         })}
+      </div>
+
+      {/* Documents */}
+      <div className="card">
+        <div className="card-title">Documents entreprise</div>
+        <div className="page-subtitle" style={{ marginBottom: 16 }}>
+          Briefs, guidelines, personas PDF, exemples de campagnes — Claude les utilisera pour personnaliser vos sequences.
+        </div>
+        <div
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          style={{
+            border: `2px dashed ${isDragging ? 'var(--blue)' : 'var(--border)'}`,
+            borderRadius: 12,
+            padding: '32px 20px',
+            textAlign: 'center',
+            background: isDragging ? 'rgba(96,165,250,0.06)' : 'var(--bg-elevated)',
+            transition: 'all 0.2s',
+            cursor: 'pointer',
+          }}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".csv,.xlsx,.xls,.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
+            style={{ display: 'none' }}
+            onChange={(e) => { if (e.target.files?.length > 0) { addFiles(e.target.files); e.target.value = ''; } }}
+          />
+          <div style={{ fontSize: 28, marginBottom: 8 }}>+</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
+            {isDragging ? 'Deposez vos fichiers ici' : 'Glissez vos fichiers ici ou cliquez pour parcourir'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            PDF, DOCX, CSV, Excel, images — max 20 Mo par fichier
+          </div>
+        </div>
+
+        {files.length > 0 && (
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {files.map((f, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 12px', background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)', borderRadius: 8, fontSize: 13,
+              }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{formatSize(f.size)}</span>
+                <button onClick={() => removeFile(i)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', fontSize: 14, padding: '0 4px',
+                }}>x</button>
+              </div>
+            ))}
+            <button
+              className="btn btn-primary"
+              onClick={handleUpload}
+              disabled={uploading}
+              style={{ alignSelf: 'flex-start', marginTop: 8 }}
+            >
+              {uploading ? 'Upload en cours...' : `Envoyer ${files.length} fichier${files.length > 1 ? 's' : ''}`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
