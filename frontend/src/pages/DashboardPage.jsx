@@ -83,6 +83,7 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
   if (isEmpty) {
     return (
       <div id="section-overview">
+        <ProgressCard />
         <WelcomeBanner onCreateCampaign={onCreateCampaign} />
         <EmptyKpis />
         <EmptyOverviewGrid onCreateCampaign={onCreateCampaign} />
