@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useState, useMemo, useCallback } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useParams } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import CampaignsList from './CampaignsList';
 import AnalyticsSectionFull from './AnalyticsSection';
@@ -32,13 +32,14 @@ const KPI_LABELS = {
   stops: '🚫 Stops',
 };
 
-export default function DashboardPage({ section, onNavigateCampaign }) {
+export default function DashboardPage({ onNavigateCampaign }) {
+  const { section } = useParams();
   const { campaigns, globalKpis, opportunities, recommendations, reports, chartData } = useApp();
   const { setShowCreatorModal } = useOutletContext() || {};
   const openCreator = useCallback(() => setShowCreatorModal?.(true), [setShowCreatorModal]);
   const [tab, setTab] = useState(section || 'overview');
 
-  // Sync tab when `section` prop changes — derive from props directly
+  // Sync tab when URL section changes
   const currentTab = section || tab;
 
   const campaignsList = useMemo(() => Object.values(campaigns), [campaigns]);
