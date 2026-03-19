@@ -445,6 +445,34 @@ router.post('/score-leads', async (req, res, next) => {
   }
 });
 
+// POST /api/ai/export-scores-crm
+router.post('/export-scores-crm', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { exportScoresToHubSpot } = require('../lib/crm-export');
+    const opps = await db.opportunities.listByUser(userId, 100, 0);
+    const result = await exportScoresToHubSpot(userId, opps);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/ai/export-scores-csv
+router.get('/export-scores-csv', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { exportScoresToCSV } = require('../lib/crm-export');
+    const opps = await db.opportunities.listByUser(userId, 100, 0);
+    const csv = await exportScoresToCSV(opps);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="bakal-scores.csv"');
+    res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- Helpers ---
 
 function extractPriorities(diagnostic) {

@@ -488,6 +488,25 @@ export async function scoreLeads() {
   return request('/ai/score-leads', { method: 'POST' });
 }
 
+/** Export scores to CRM (HubSpot) */
+export async function exportScoresToCRM() {
+  return request('/ai/export-scores-crm', { method: 'POST' });
+}
+
+/** Download scores as CSV */
+export function downloadScoresCSV() {
+  const token = getToken();
+  fetch(BASE + '/ai/export-scores-csv', { headers: { Authorization: 'Bearer ' + token } })
+    .then(r => r.blob())
+    .then(blob => {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'bakal-scores.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+}
+
 /** Consolidate cross-campaign memory */
 export async function consolidateMemory(dryRun = false) {
   const qs = dryRun ? '?dry_run=true' : '';
@@ -682,6 +701,8 @@ const BakalAPI = {
   exportCampaignCsv,
   exportReportPdf,
   scoreLeads,
+  exportScoresToCRM,
+  downloadScoresCSV,
   campaignToBackend,
   sequenceToBackend,
   transformCampaign,
