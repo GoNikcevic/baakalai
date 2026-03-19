@@ -12,7 +12,7 @@ import { ProgressCard, CumulativeValueBanner, BenchmarkBadge } from '../componen
 import PerformanceChart from '../components/charts/PerformanceChart';
 import { sanitizeHtml } from '../services/sanitize';
 import ScoreBadge from '../components/ScoreBadge';
-import { scoreLeads } from '../services/api-client';
+import { scoreLeads, exportScoresToCRM, downloadScoresCSV } from '../services/api-client';
 
 const KPI_LABELS = {
   contacts: '\u{1F4E4} Contacts atteints',
@@ -101,6 +101,7 @@ export default function DashboardPage() {
 
 function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recommendations, chartData, onCreateCampaign, setOpportunities }) {
   const [scoring, setScoring] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const handleScoreLeads = useCallback(async () => {
     setScoring(true);
@@ -116,6 +117,21 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
       setScoring(false);
     }
   }, [setOpportunities]);
+
+  const handleExportCSV = useCallback(() => {
+    downloadScoresCSV();
+  }, []);
+
+  const handleExportCRM = useCallback(async () => {
+    setExporting(true);
+    try {
+      await exportScoresToCRM();
+    } catch (err) {
+      console.error('CRM export error:', err);
+    } finally {
+      setExporting(false);
+    }
+  }, []);
   if (isEmpty) {
     return (
       <div id="section-overview">
@@ -182,14 +198,31 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
         <div className="card">
           <div className="card-header">
             <div className="card-title">{'\u{1F525}'} Opportunités récentes</div>
-            <button
-              className="btn btn-ghost"
-              style={{ padding: '6px 12px', fontSize: '12px' }}
-              onClick={handleScoreLeads}
-              disabled={scoring}
-            >
-              {scoring ? 'Scoring...' : 'Scorer les leads'}
-            </button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                className="btn btn-ghost"
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+                onClick={handleExportCSV}
+              >
+                Exporter CSV
+              </button>
+              <button
+                className="btn btn-ghost"
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+                onClick={handleExportCRM}
+                disabled={exporting}
+              >
+                {exporting ? 'Export...' : 'Exporter vers CRM'}
+              </button>
+              <button
+                className="btn btn-ghost"
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+                onClick={handleScoreLeads}
+                disabled={scoring}
+              >
+                {scoring ? 'Scoring...' : 'Scorer les leads'}
+              </button>
+            </div>
           </div>
           <div className="card-body" style={{ padding: '16px 24px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

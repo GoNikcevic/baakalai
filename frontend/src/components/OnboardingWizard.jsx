@@ -116,6 +116,26 @@ export default function OnboardingWizard({ onComplete }) {
       body: JSON.stringify(profile),
     }).catch(() => {/* ignore */});
 
+    // Trigger auto-sync in background if keys were provided
+    if (lemlistKey) {
+      fetch('/api/settings/keys/sync-lemlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }).catch(() => {});
+    }
+    if (crmKey && crmProvider) {
+      fetch('/api/settings/keys/sync-crm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }).catch(() => {});
+    }
+
     localStorage.setItem('bakal_onboarding_complete', 'true');
     if (onComplete) onComplete();
   }
