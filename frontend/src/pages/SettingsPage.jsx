@@ -6,7 +6,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getKeys, saveKeys, testKeys, syncLemlist } from '../services/api-client';
+import { getKeys, saveKeys, testKeys, syncLemlist, syncCRM } from '../services/api-client';
 import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
 
@@ -119,6 +119,7 @@ export default function SettingsPage() {
     }
   }, [showExtended]);
   const [syncStatus, setSyncStatus] = useState(null);
+  const [crmSyncStatus, setCrmSyncStatus] = useState(null);
   const { socket } = useSocket();
   const { showToast: notifyToast } = useNotifications();
   const [preferences, setPreferences] = useState(() => {
@@ -168,6 +169,32 @@ export default function SettingsPage() {
     return () => socket.off('lemlist:sync', onSync);
   }, [socket, notifyToast]);
 
+  /* ─── Socket listener for CRM sync progress ─── */
+
+  useEffect(() => {
+    if (!socket) return;
+    const onCrmSync = (data) => {
+      setCrmSyncStatus(data);
+      if (data.status === 'done') {
+        notifyToast({
+          type: 'success',
+          title: 'Analyse CRM',
+          message: data.message,
+          duration: 5000,
+        });
+      } else if (data.status === 'error') {
+        notifyToast({
+          type: 'danger',
+          title: 'Erreur CRM',
+          message: data.message,
+          duration: 5000,
+        });
+      }
+    };
+    socket.on('crm:sync', onCrmSync);
+    return () => socket.off('crm:sync', onCrmSync);
+  }, [socket, notifyToast]);
+
   /* ─── Lemlist sync handler ─── */
 
   async function handleSyncLemlist() {
@@ -176,6 +203,17 @@ export default function SettingsPage() {
       await syncLemlist();
     } catch (err) {
       setSyncStatus({ status: 'error', progress: 0, message: err.message });
+    }
+  }
+
+  /* ─── CRM sync handler ─── */
+
+  async function handleSyncCRM() {
+    setCrmSyncStatus({ status: 'starting', progress: 0, message: 'Lancement...' });
+    try {
+      await syncCRM();
+    } catch (err) {
+      setCrmSyncStatus({ status: 'error', progress: 0, message: err.message });
     }
   }
 
@@ -487,6 +525,49 @@ export default function SettingsPage() {
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               {syncStatus.message || ''}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* CRM Sync */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div className="card-title">Analyse CRM</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              Synchronise vos deals CRM et analyse les patterns de conversion avec Claude
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleSyncCRM}
+            disabled={crmSyncStatus && crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error'}
+          >
+            {crmSyncStatus && crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error'
+              ? 'Synchronisation...'
+              : 'Synchroniser CRM'}
+          </button>
+        </div>
+        {crmSyncStatus && (
+          <div className="card-body" style={{ paddingTop: 0 }}>
+            <div style={{ marginBottom: 8 }}>
+              <div style={{
+                height: 6, borderRadius: 3, background: 'var(--bg-elevated)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', borderRadius: 3,
+                  width: `${crmSyncStatus.progress || 0}%`,
+                  background: crmSyncStatus.status === 'error' ? 'var(--danger, #e74c3c)'
+                    : crmSyncStatus.status === 'done' ? 'var(--success, #00d68f)'
+                    : 'var(--blue, #6366f1)',
+                  transition: 'width 0.4s ease, background 0.3s ease',
+                }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {crmSyncStatus.message || ''}
             </div>
           </div>
         )}

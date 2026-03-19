@@ -551,6 +551,11 @@ export async function syncLemlist() {
   return request('/settings/keys/sync-lemlist', { method: 'POST' });
 }
 
+/** Trigger background CRM sync and analysis */
+export async function syncCRM() {
+  return request('/settings/keys/sync-crm', { method: 'POST' });
+}
+
 /** Test API key connectivity */
 export async function testKeys() {
   return request('/settings/keys/test', { method: 'POST' });
@@ -667,6 +672,7 @@ const BakalAPI = {
   getKeys,
   saveKeys,
   syncLemlist,
+  syncCRM,
   testKeys,
   uploadFiles,
   fetchVariables,

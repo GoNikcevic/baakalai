@@ -325,6 +325,7 @@ ${context ? `\nContexte actuel de l'utilisateur :\n${context}` : ''}`;
 }
 
 module.exports = {
+  callClaude,
   generateSequence,
   generateTouchpoint,
   analyzeCampaign,

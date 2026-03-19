@@ -152,6 +152,23 @@ router.post('/keys/sync-lemlist', async (req, res, next) => {
   }
 });
 
+// POST /api/settings/keys/sync-crm — trigger background CRM analysis
+router.post('/keys/sync-crm', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { syncCRM } = require('../lib/crm-sync');
+
+    // Run in background — don't await
+    syncCRM(userId).catch(err => {
+      console.error('[sync-crm] Background error:', err.message);
+    });
+
+    res.json({ status: 'started', message: 'Analyse CRM en cours...' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function validateKeyFormat(field, value) {
   if (value.length < 8) return { valid: false, error: 'Key too short (minimum 8 characters)' };
   if (field === 'notionToken' && !value.startsWith('ntn_') && !value.startsWith('secret_')) {
