@@ -115,7 +115,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (showExtended && extendedRef.current) {
-      setExtendedHeight(extendedRef.current.scrollHeight);
+      // Measure after render with rAF to get correct scrollHeight
+      requestAnimationFrame(() => {
+        if (extendedRef.current) {
+          setExtendedHeight(extendedRef.current.scrollHeight);
+        }
+      });
     }
   }, [showExtended]);
   const [syncStatus, setSyncStatus] = useState(null);
@@ -399,7 +404,14 @@ export default function SettingsPage() {
                     fontSize: 11, padding: '4px 10px',
                     ...(crmProvider === opt.value ? { background: 'var(--accent-glow)', borderColor: 'var(--blue)' } : {}),
                   }}
-                  onClick={() => { setCrmProvider(opt.value); localStorage.setItem('bakal-crm-provider', opt.value); }}
+                  onClick={() => {
+                    setCrmProvider(opt.value);
+                    localStorage.setItem('bakal-crm-provider', opt.value);
+                    // Auto-open input for this CRM
+                    const field = opt.value + 'Key';
+                    setEditing(prev => ({ ...prev, [field]: true }));
+                    setDrafts(prev => ({ ...prev, [field]: '' }));
+                  }}
                 >
                   {opt.label}
                 </button>
@@ -587,7 +599,7 @@ export default function SettingsPage() {
           </span>
         </div>
         <div ref={extendedRef} style={{
-          maxHeight: showExtended ? extendedHeight + 'px' : '0',
+          maxHeight: showExtended ? (extendedHeight || 3000) + 'px' : '0',
           overflow: 'hidden',
           transition: showExtended
             ? 'max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-out'
