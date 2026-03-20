@@ -112,7 +112,7 @@ export default function Layout() {
         <NavLink to="/dashboard" className="sidebar-brand" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="brand-icon">b</div>
           <span className="brand-text">
-            bakal<span className="brand-suffix">.ai</span>
+            baakal<span className="brand-suffix">.ai</span>
           </span>
         </NavLink>
 

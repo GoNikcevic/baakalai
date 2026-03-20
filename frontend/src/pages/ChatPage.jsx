@@ -50,7 +50,7 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 const ONBOARDING_SUGGESTIONS = [
-  'Comment fonctionne Bakal ?',
+  'Comment fonctionne Baakal ?',
   'Quel secteur cibler en premier ?',
   'Aide-moi à définir mon ICP',
 ];
@@ -66,7 +66,7 @@ const ACTION_PROMPTS = {
   optimize: 'Je veux optimiser une de mes campagnes existantes qui sous-performe. Quelles campagnes puis-je améliorer ?',
   analyze: 'Peux-tu analyser les performances de mes campagnes actives et me donner un diagnostic ?',
   setup_profile: 'Je viens de m\'inscrire. Aide-moi à configurer mon profil entreprise pour personnaliser mes campagnes.',
-  explore: 'Explique-moi les fonctionnalités de Bakal et comment tirer le meilleur parti de la plateforme.',
+  explore: 'Explique-moi les fonctionnalités de Baakal et comment tirer le meilleur parti de la plateforme.',
 };
 
 /* ─── Sub-components ─── */
@@ -379,7 +379,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
   const { userName, campaignCount, hasProfile, activeCampaigns, topCampaign } = userState || {};
 
   // Contextual greeting based on user state
-  let title = 'Assistant Bakal';
+  let title = 'Assistant Baakal';
   let subtitle = 'Je peux vous aider à créer des campagnes, optimiser vos séquences et analyser vos performances.';
   let actions = [
     { key: 'create', label: 'Créer une campagne' },
@@ -389,7 +389,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
 
   if (!hasProfile && campaignCount === 0) {
     // Brand new user — onboarding
-    title = userName ? `Bienvenue ${userName} !` : 'Bienvenue sur Bakal !';
+    title = userName ? `Bienvenue ${userName} !` : 'Bienvenue sur Baakal !';
     subtitle = 'Commencez par configurer votre profil entreprise, puis créez votre première campagne de prospection. Je vous guide étape par étape.';
     actions = [
       { key: 'setup_profile', label: 'Configurer mon profil' },

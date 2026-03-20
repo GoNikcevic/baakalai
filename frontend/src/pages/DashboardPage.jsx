@@ -439,7 +439,7 @@ function WelcomeBanner({ onCreateCampaign }) {
           <div className="onboarding-step-number">4</div>
           <div className="onboarding-step-title">Lancez et optimisez</div>
           <div className="onboarding-step-desc">
-            Bakal analyse les performances et optimise automatiquement vos
+            Baakal analyse les performances et optimise automatiquement vos
             messages.
           </div>
         </div>

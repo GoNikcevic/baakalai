@@ -186,7 +186,7 @@ export default function AuthGate({ onAuth }) {
           <div style={styles.brandRow}>
             <div style={styles.brandIcon}>b</div>
             <span style={styles.brandText}>
-              bakal<span style={styles.brandSuffix}>.ai</span>
+              baakal<span style={styles.brandSuffix}>.ai</span>
             </span>
           </div>
           <p style={styles.subtitle}>

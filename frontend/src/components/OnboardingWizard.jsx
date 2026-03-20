@@ -17,7 +17,7 @@ const TOTAL_STEPS = 5;
 /* ─── Step config ─── */
 
 const STEP_META = [
-  { title: 'Bienvenue sur Bakal', desc: 'Quelques informations pour personnaliser votre expérience.' },
+  { title: 'Bienvenue sur Baakal', desc: 'Quelques informations pour personnaliser votre expérience.' },
   { title: 'Connexion aux outils', desc: 'Connectez vos outils principaux. Vous pourrez en ajouter d\'autres plus tard.' },
   { title: 'Votre cible', desc: 'Aidez Claude à comprendre qui vous cherchez à atteindre.' },
   { title: 'Style de communication', desc: 'Définissez le ton de vos campagnes.' },
@@ -369,7 +369,7 @@ export default function OnboardingWizard({ onComplete }) {
             </div>
             <div className="wizard-complete-title">Tout est prêt !</div>
             <div className="wizard-complete-desc">
-              Votre espace Bakal est configuré. Vous pouvez maintenant créer votre première campagne.
+              Votre espace Baakal est configuré. Vous pouvez maintenant créer votre première campagne.
             </div>
             <div className="wizard-checklist">
               <div className="wizard-check-item">
