@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const db = require('../db');
+const { uploadFile, deleteFile, isS3 } = require('../lib/storage');
 
 const router = express.Router();
 
@@ -90,13 +91,23 @@ router.post('/upload', upload.array('files', 20), async (req, res, next) => {
     const results = [];
     for (const file of req.files) {
       const parsedText = await parseFile(file.path, file.mimetype);
+
+      // Upload to S3 if configured, otherwise keep local
+      const storageKey = file.filename;
+      if (isS3) {
+        const buffer = fs.readFileSync(file.path);
+        await uploadFile(storageKey, buffer, file.mimetype);
+        // Remove local temp file after successful S3 upload
+        try { fs.unlinkSync(file.path); } catch {}
+      }
+
       const doc = await db.documents.create({
         userId: req.user.id,
         filename: file.filename,
         originalName: file.originalname,
         mimeType: file.mimetype,
         fileSize: file.size,
-        filePath: file.path,
+        filePath: isS3 ? `s3://${storageKey}` : file.path,
         parsedText,
       });
       results.push({
@@ -132,7 +143,13 @@ router.delete('/:id', async (req, res, next) => {
     if (doc.user_id !== req.user.id) return res.status(403).json({ error: 'Access denied' });
 
     try {
-      if (fs.existsSync(doc.file_path)) fs.unlinkSync(doc.file_path);
+      if (doc.file_path && doc.file_path.startsWith('s3://')) {
+        // Delete from S3
+        const key = doc.file_path.replace('s3://', '');
+        await deleteFile(key);
+      } else if (doc.file_path && fs.existsSync(doc.file_path)) {
+        fs.unlinkSync(doc.file_path);
+      }
     } catch (err) {
       console.error('File delete error:', err.message);
     }

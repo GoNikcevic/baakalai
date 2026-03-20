@@ -1,6 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { config } = require('../config');
 const prompts = require('./prompts');
+const { withRetry } = require('../lib/retry');
 
 let client;
 let clientKeyHash;
@@ -58,12 +59,12 @@ function wrapApiError(err) {
 async function callClaude(systemPrompt, userContent, maxTokens = 4000) {
   let response;
   try {
-    response = await getClient().messages.create({
+    response = await withRetry(() => getClient().messages.create({
       model: config.claude.model,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
-    });
+    }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
     throw wrapApiError(err);
   }
@@ -189,12 +190,12 @@ async function generateIcebreaker(params) {
   const systemPrompt = prompts.icebreakerExecutionPrompt(params);
   let response;
   try {
-    response = await getClient().messages.create({
+    response = await withRetry(() => getClient().messages.create({
       model: config.claude.model,
       max_tokens: 300,
       system: systemPrompt,
       messages: [{ role: 'user', content: 'Génère l\'icebreaker.' }],
-    });
+    }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
     throw wrapApiError(err);
   }
@@ -308,12 +309,12 @@ ${context ? `\nContexte actuel de l'utilisateur :\n${context}` : ''}`;
 
   let response;
   try {
-    response = await getClient().messages.create({
+    response = await withRetry(() => getClient().messages.create({
       model: config.claude.model,
       max_tokens: 3000,
       system: systemPrompt,
       messages,
-    });
+    }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
     throw wrapApiError(err);
   }

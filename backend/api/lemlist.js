@@ -1,27 +1,30 @@
 const { config } = require('../config');
+const { withRetry } = require('../lib/retry');
 
 const BASE_URL = config.lemlist.baseUrl;
 
 async function lemlistFetch(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
-  const res = await fetch(url, {
-    ...options,
-    // Lemlist uses API key as basic auth password
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${Buffer.from(`:${config.lemlist.apiKey}`).toString('base64')}`,
-      ...options.headers,
-    },
-  });
+  return withRetry(async () => {
+    const res = await fetch(url, {
+      ...options,
+      // Lemlist uses API key as basic auth password
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${Buffer.from(`:${config.lemlist.apiKey}`).toString('base64')}`,
+        ...options.headers,
+      },
+    });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw Object.assign(
-      new Error(`Lemlist API ${res.status}: ${body}`),
-      { status: res.status }
-    );
-  }
-  return res.json();
+    if (!res.ok) {
+      const body = await res.text();
+      throw Object.assign(
+        new Error(`Lemlist API ${res.status}: ${body}`),
+        { status: res.status }
+      );
+    }
+    return res.json();
+  }, { maxRetries: 2, baseDelay: 1000 });
 }
 
 // --- Campaign endpoints ---
