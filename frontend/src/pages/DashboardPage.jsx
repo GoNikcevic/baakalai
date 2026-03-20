@@ -25,11 +25,10 @@ const KPI_LABELS = {
 
 export default function DashboardPage() {
   const { campaigns, globalKpis, opportunities, recommendations, chartData, setOpportunities } = useApp();
-  const { setShowCreatorModal } = useOutletContext() || {};
+  const { setShowCreatorModal, demoMode } = useOutletContext() || {};
   const openCreator = useCallback(() => setShowCreatorModal?.(true), [setShowCreatorModal]);
-  const [showDemo, setShowDemo] = useState(false);
 
-  const displayData = showDemo ? {
+  const displayData = demoMode ? {
     campaigns: DEMO_DATA.campaigns,
     globalKpis: DEMO_DATA.globalKpis,
     opportunities: DEMO_DATA.opportunities,
@@ -38,7 +37,7 @@ export default function DashboardPage() {
   } : { campaigns, globalKpis, opportunities, recommendations, chartData };
 
   const campaignsList = useMemo(() => Object.values(displayData.campaigns), [displayData.campaigns]);
-  const isEmpty = showDemo ? false : campaignsList.length === 0;
+  const isEmpty = demoMode ? false : campaignsList.length === 0;
   const activeCount = useMemo(
     () => campaignsList.filter((c) => c.status === 'active').length,
     [campaignsList]
@@ -70,13 +69,6 @@ export default function DashboardPage() {
             &nbsp;&nbsp;{subtitle}
           </div>
         </div>
-        <button
-          className={`btn ${showDemo ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => setShowDemo(p => !p)}
-          style={{ fontSize: 12 }}
-        >
-          {showDemo ? 'Donn\u00e9es de d\u00e9mo actives' : 'Voir la d\u00e9mo'}
-        </button>
       </div>
 
       {/* Overview content */}

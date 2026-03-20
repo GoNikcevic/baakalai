@@ -427,8 +427,8 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
     <div className="chat-welcome" id="chatWelcome" style={{ display: 'flex' }}>
       <div className="chat-welcome-inner">
         <div className="chat-welcome-icon">b</div>
-        <h2 className="chat-welcome-title">{title}</h2>
-        <p className="chat-welcome-text">{subtitle}</p>
+        <h2 className="chat-welcome-title" style={{ marginBottom: 12 }}>{title}</h2>
+        <p className="chat-welcome-text" style={{ marginBottom: 16 }}>{subtitle}</p>
         <div className="chat-welcome-suggestions" id="chatWelcomeSuggestions">
           {suggestions.map((s) => (
             <button key={s} className="chat-suggestion" onClick={() => onSuggestionClick(s)}>
@@ -463,6 +463,7 @@ export default function ChatPage() {
   const [streamingMsg, setStreamingMsg] = useState(null);
   const [showTyping, setShowTyping] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(true);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -990,10 +991,33 @@ export default function ChatPage() {
   return (
     <div className="chat-page">
       {/* ─── Sidebar: Thread List ─── */}
-      <div className="chat-sidebar">
+      {!chatSidebarOpen && (
+        <button
+          className="chat-sidebar-toggle"
+          onClick={() => setChatSidebarOpen(true)}
+          style={{ position: 'absolute', left: 8, top: 8, zIndex: 10 }}
+          title="Ouvrir les conversations"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
+      <div className={`chat-sidebar${chatSidebarOpen ? '' : ' collapsed'}`}>
         <div className="chat-sidebar-header">
           <span style={{ fontWeight: 600, fontSize: '14px' }}>Conversations</span>
-          <AiStatusBadge online={backendAvailable} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AiStatusBadge online={backendAvailable} />
+            <button
+              className="chat-sidebar-toggle"
+              onClick={() => setChatSidebarOpen(false)}
+              title="Masquer les conversations"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          </div>
         </div>
         <ThreadList
           threads={threads}

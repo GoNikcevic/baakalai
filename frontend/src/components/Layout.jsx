@@ -90,6 +90,8 @@ function NavIcon({ name }) {
 export default function Layout() {
   const { user, setUser } = useApp();
   const [showCreatorModal, setShowCreatorModal] = useState(false);
+  const [demoMode, setDemoMode] = useState(() => localStorage.getItem('bakal_demo_mode') === 'true');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Wire socket events to app state + notifications
   useSocketEvents();
@@ -105,7 +107,7 @@ export default function Layout() {
   return (
     <div className="app-shell">
       {/* ═══ Sidebar ═══ */}
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
         {/* Brand */}
         <NavLink to="/dashboard" className="sidebar-brand" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="brand-icon">b</div>
@@ -138,6 +140,39 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        {/* Demo mode toggle */}
+        <button
+          onClick={() => { setDemoMode(p => { const next = !p; localStorage.setItem('bakal_demo_mode', String(next)); return next; }); }}
+          style={{
+            padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+            background: demoMode ? 'var(--blue)' : 'var(--bg-elevated)',
+            color: demoMode ? 'white' : 'var(--text-muted)',
+            border: '1px solid var(--border)', cursor: 'pointer',
+            transition: 'all 0.2s', marginBottom: 12, width: '100%',
+            textAlign: 'center',
+          }}
+        >
+          {demoMode ? '\u25cf D\u00e9mo active' : 'Voir la d\u00e9mo'}
+        </button>
+
+        {/* Sidebar collapse toggle */}
+        <button
+          onClick={() => setSidebarCollapsed(p => !p)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', padding: '8px', width: '100%',
+            display: 'flex', justifyContent: 'center', marginTop: 8,
+          }}
+          title={sidebarCollapsed ? 'Ouvrir la sidebar' : 'R\u00e9duire la sidebar'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {sidebarCollapsed
+              ? <polyline points="9 18 15 12 9 6" />
+              : <polyline points="15 18 9 12 15 6" />
+            }
+          </svg>
+        </button>
 
         {/* Sidebar bottom — user section */}
         {user && (
@@ -172,8 +207,8 @@ export default function Layout() {
       </aside>
 
       {/* ═══ Main content area ═══ */}
-      <main className="main">
-        <Outlet context={{ showCreatorModal, setShowCreatorModal }} />
+      <main className="main" style={sidebarCollapsed ? { marginLeft: 60 } : undefined}>
+        <Outlet context={{ showCreatorModal, setShowCreatorModal, demoMode }} />
       </main>
 
       {/* ═══ Mobile bottom nav ═══ */}
