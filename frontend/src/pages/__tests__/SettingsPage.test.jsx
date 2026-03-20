@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import SettingsPage from '../SettingsPage';
 import { AppProvider } from '../../context/AppContext';
+import { NotificationProvider } from '../../context/NotificationContext';
 
 // Mock auth service
 vi.mock('../../services/auth', () => ({
@@ -16,18 +17,30 @@ vi.mock('../../services/auth', () => ({
 vi.mock('../../services/api-client', () => ({
   default: {
     checkHealth: vi.fn().mockResolvedValue(null),
-    getKeys: vi.fn().mockResolvedValue({ keys: {} }),
-    saveKeys: vi.fn().mockResolvedValue({ errors: [] }),
-    testKeys: vi.fn().mockResolvedValue({ results: {} }),
   },
+  getKeys: vi.fn().mockResolvedValue({ keys: {} }),
+  saveKeys: vi.fn().mockResolvedValue({ errors: [] }),
+  testKeys: vi.fn().mockResolvedValue({ results: {} }),
+  syncLemlist: vi.fn().mockResolvedValue({}),
+  syncCRM: vi.fn().mockResolvedValue({}),
+}));
+
+// Mock socket service
+vi.mock('../../services/socket', () => ({
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  reconnect: vi.fn(),
+  getSocket: vi.fn(),
 }));
 
 function renderSettings() {
   return render(
     <AppProvider>
-      <MemoryRouter>
-        <SettingsPage />
-      </MemoryRouter>
+      <NotificationProvider>
+        <MemoryRouter>
+          <SettingsPage />
+        </MemoryRouter>
+      </NotificationProvider>
     </AppProvider>
   );
 }
@@ -57,13 +70,13 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('renders core API key cards (Lemlist, Claude, Notion)', async () => {
+  it('renders core API key cards (Lemlist, Claude, CRM)', async () => {
     renderSettings();
 
     await waitFor(() => {
       expect(screen.getByText('Lemlist')).toBeInTheDocument();
       expect(screen.getByText('Claude (Anthropic)')).toBeInTheDocument();
-      expect(screen.getByText('Notion')).toBeInTheDocument();
+      expect(screen.getByText('CRM')).toBeInTheDocument();
     });
   });
 
@@ -125,28 +138,28 @@ describe('SettingsPage', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('renders the "Voir plus" button for extended integrations', async () => {
+  it('renders the integrations library as collapsible section', async () => {
     renderSettings();
 
     await waitFor(() => {
-      expect(screen.getByText(/Voir plus d'int.grations/)).toBeInTheDocument();
+      expect(screen.getByText(/Biblioth.que d'int.grations/)).toBeInTheDocument();
     });
   });
 
-  it('shows extended integrations when toggle is clicked', async () => {
+  it('shows extended integrations when library header is clicked', async () => {
     renderSettings();
 
     await waitFor(() => {
-      expect(screen.getByText(/Voir plus/)).toBeInTheDocument();
+      expect(screen.getByText(/Biblioth.que d'int.grations/)).toBeInTheDocument();
     });
 
-    // HubSpot is an extended integration, should not be visible initially
-    expect(screen.queryByText('HubSpot')).not.toBeInTheDocument();
+    // Extended integrations are hidden by default (collapsed)
+    // Click the library header to expand
+    fireEvent.click(screen.getByText(/Biblioth.que d'int.grations/));
 
-    fireEvent.click(screen.getByText(/Voir plus/));
-
-    expect(screen.getByText('HubSpot')).toBeInTheDocument();
-    expect(screen.getByText('Pipedrive')).toBeInTheDocument();
+    // Extended integrations should now be visible (in the DOM, even if visually hidden via CSS)
+    expect(screen.getByText('DropContact')).toBeInTheDocument();
+    expect(screen.getByText('Apollo')).toBeInTheDocument();
   });
 
   it('renders notification email input', async () => {

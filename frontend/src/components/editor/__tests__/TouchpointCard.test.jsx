@@ -141,7 +141,7 @@ describe('TouchpointCard', () => {
 
     fireEvent.click(screen.getByText('Appliquer'));
 
-    expect(screen.getByText(/Suggestion appliquee/)).toBeInTheDocument();
+    expect(screen.getByText(/Suggestion appliqu.e/)).toBeInTheDocument();
     expect(screen.queryByText('Appliquer')).not.toBeInTheDocument();
   });
 

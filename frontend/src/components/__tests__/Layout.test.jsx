@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import Layout from '../Layout';
 import { AppProvider } from '../../context/AppContext';
+import { NotificationProvider } from '../../context/NotificationContext';
 
 // Mock auth service so AppProvider doesn't hit localStorage issues
 vi.mock('../../services/auth', () => ({
@@ -22,12 +23,27 @@ vi.mock('../../services/api-client', () => ({
   },
 }));
 
+// Mock useSocketEvents to avoid needing full socket infrastructure
+vi.mock('../../hooks/useSocketEvents', () => ({
+  useSocketEvents: () => {},
+}));
+
+// Mock socket service
+vi.mock('../../services/socket', () => ({
+  disconnect: vi.fn(),
+  connect: vi.fn(),
+  reconnect: vi.fn(),
+  getSocket: vi.fn(),
+}));
+
 function renderLayout(initialRoute = '/dashboard') {
   return render(
     <AppProvider>
-      <MemoryRouter initialEntries={[initialRoute]}>
-        <Layout />
-      </MemoryRouter>
+      <NotificationProvider>
+        <MemoryRouter initialEntries={[initialRoute]}>
+          <Layout />
+        </MemoryRouter>
+      </NotificationProvider>
     </AppProvider>
   );
 }
@@ -39,8 +55,8 @@ describe('Layout', () => {
     expect(screen.getByText('Assistant')).toBeInTheDocument();
     // "Dashboard" appears in both sidebar and mobile nav, so use getAllByText
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Campagnes')).toBeInTheDocument();
-    expect(screen.getByText('Recommandations')).toBeInTheDocument();
+    expect(screen.getAllByText('Campagnes').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Performance').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Profil')).toBeInTheDocument();
   });
 
@@ -74,8 +90,10 @@ describe('Layout', () => {
     renderLayout();
 
     expect(screen.getByText('Chat')).toBeInTheDocument();
-    expect(screen.getByText('Copy')).toBeInTheDocument();
-    expect(screen.getByText('Recos')).toBeInTheDocument();
+    // "Campagnes" appears in both sidebar and mobile nav
+    expect(screen.getAllByText('Campagnes').length).toBeGreaterThanOrEqual(2);
+    // "Performance" appears in both sidebar and mobile nav
+    expect(screen.getAllByText('Performance').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Config')).toBeInTheDocument();
   });
 

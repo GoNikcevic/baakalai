@@ -19,17 +19,17 @@ export default class ErrorBoundary extends Component {
       return (
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          height: '100vh', background: '#0c0c0e', color: '#fff', fontFamily: 'system-ui, sans-serif',
+          height: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'system-ui, sans-serif',
           padding: 32, textAlign: 'center',
         }}>
           <h2 style={{ marginBottom: 12 }}>Une erreur est survenue</h2>
-          <p style={{ color: '#888', maxWidth: 500, marginBottom: 20 }}>
+          <p style={{ color: 'var(--text-muted)', maxWidth: 500, marginBottom: 20 }}>
             {this.state.error?.message || 'Erreur inconnue'}
           </p>
           <button
             onClick={() => window.location.reload()}
             style={{
-              background: '#fff', color: '#0c0c0e', border: 'none', borderRadius: 8,
+              background: 'var(--text-primary)', color: 'var(--bg-primary)', border: 'none', borderRadius: 8,
               padding: '10px 24px', cursor: 'pointer', fontWeight: 600,
             }}
           >
