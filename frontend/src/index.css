@@ -2339,15 +2339,15 @@ body {
 /* ═══════════ COLLAPSIBLE MAIN SIDEBAR ═══════════ */
 .sidebar.collapsed { width: 60px; padding: 12px 6px; }
 .sidebar.collapsed .brand-text,
-.sidebar.collapsed .nav-item span,
-.sidebar.collapsed .sidebar-cta { font-size: 0; }
+.sidebar.collapsed .nav-label { display: none; }
+.sidebar.collapsed .sidebar-cta { font-size: 0; padding: 10px; justify-content: center; }
 .sidebar.collapsed .sidebar-cta::before { content: '+'; font-size: 18px; font-weight: 700; }
-.sidebar.collapsed .sidebar-brand { justify-content: center; }
+.sidebar.collapsed .sidebar-brand { justify-content: center; padding-bottom: 12px; }
 .sidebar.collapsed .nav-item { justify-content: center; padding: 10px; }
+.sidebar.collapsed .nav-item svg { width: 20px; height: 20px; }
 .sidebar.collapsed .sidebar-user-info,
 .sidebar.collapsed .sidebar-logout-btn { display: none; }
 .sidebar.collapsed .sidebar-user-section { justify-content: center; }
-.sidebar.collapsed + .main { margin-left: 60px; }
 
 /* ═══════════ COLLAPSIBLE CHAT SIDEBAR ═══════════ */
 .chat-sidebar.collapsed { width: 0; overflow: hidden; border-right: none; padding: 0; }
