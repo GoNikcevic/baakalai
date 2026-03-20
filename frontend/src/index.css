@@ -295,7 +295,7 @@ body {
 
 /* ═══════════ KPI CARDS ═══════════ */
 .kpi-grid {
-  display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
   margin-bottom: 28px;
 }
 .kpi-card {
