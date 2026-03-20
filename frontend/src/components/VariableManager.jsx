@@ -73,7 +73,7 @@ function Toast({ message, onDone }) {
       className="var-toast"
       style={{
         position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-        background: 'var(--success)', color: '#fff', fontSize: 13, fontWeight: 600,
+        background: 'var(--success)', color: 'var(--text-on-color)', fontSize: 13, fontWeight: 600,
         padding: '10px 24px', borderRadius: 8, boxShadow: 'var(--shadow)', zIndex: 1001,
         transition: 'opacity 0.3s, transform 0.3s',
         opacity: visible ? 1 : 0,
