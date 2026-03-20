@@ -162,11 +162,13 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
       <CumulativeValueBanner />
       <BenchmarkBadge />
 
-      {/* Section grid */}
-      <div className="section-grid">
-        {/* Retention: Progress / AI capital card */}
+      {/* Progress card — full width */}
+      <div style={{ marginBottom: 16 }}>
         <ProgressCard />
+      </div>
 
+      {/* Section grid — 2x2 */}
+      <div className="section-grid">
         {/* Campaigns table */}
         <div className="card">
           <div className="card-header">
@@ -197,31 +199,11 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
         {/* Opportunities */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">{'\u{1F525}'} Opportunités récentes</div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                className="btn btn-ghost"
-                style={{ padding: '6px 12px', fontSize: '12px' }}
-                onClick={handleExportCSV}
-              >
-                Exporter CSV
-              </button>
-              <button
-                className="btn btn-ghost"
-                style={{ padding: '6px 12px', fontSize: '12px' }}
-                onClick={handleExportCRM}
-                disabled={exporting}
-              >
-                {exporting ? 'Export...' : 'Exporter vers CRM'}
-              </button>
-              <button
-                className="btn btn-ghost"
-                style={{ padding: '6px 12px', fontSize: '12px' }}
-                onClick={handleScoreLeads}
-                disabled={scoring}
-              >
-                {scoring ? 'Scoring...' : 'Scorer les leads'}
-              </button>
+            <div className="card-title">{'\u{1F525}'} Opportunités</div>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleExportCSV}>CSV</button>
+              <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleExportCRM} disabled={exporting}>{exporting ? '...' : 'CRM'}</button>
+              <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleScoreLeads} disabled={scoring}>{scoring ? '...' : 'Scorer'}</button>
             </div>
           </div>
           <div className="card-body" style={{ padding: '16px 24px' }}>
