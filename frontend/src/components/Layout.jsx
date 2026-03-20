@@ -107,12 +107,12 @@ export default function Layout() {
       {/* ═══ Sidebar ═══ */}
       <aside className="sidebar">
         {/* Brand */}
-        <div className="sidebar-brand">
+        <NavLink to="/dashboard" className="sidebar-brand" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="brand-icon">b</div>
           <span className="brand-text">
             bakal<span className="brand-suffix">.ai</span>
           </span>
-        </div>
+        </NavLink>
 
         {/* New campaign button */}
         <button
