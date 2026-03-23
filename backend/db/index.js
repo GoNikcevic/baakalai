@@ -280,6 +280,12 @@ const touchpoints = {
       accept_rate: 'accept_rate', acceptRate: 'accept_rate',
       interested: 'interested',
       sort_order: 'sort_order', sortOrder: 'sort_order',
+      // A/B variant B fields
+      subject_b: 'subject_b', subjectB: 'subject_b',
+      body_b: 'body_b', bodyB: 'body_b',
+      open_rate_b: 'open_rate_b', openRateB: 'open_rate_b',
+      reply_rate_b: 'reply_rate_b', replyRateB: 'reply_rate_b',
+      accept_rate_b: 'accept_rate_b', acceptRateB: 'accept_rate_b',
     };
     const seen = new Set();
     for (const [inputKey, col] of Object.entries(mapping)) {

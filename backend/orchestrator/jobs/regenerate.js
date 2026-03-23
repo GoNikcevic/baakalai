@@ -109,8 +109,11 @@ async function run({ campaignId, metrics, diagnostic } = {}) {
 }
 
 /**
- * Deploy regenerated A/B variants to Lemlist sequences.
- * Maps each regenerated message to its Lemlist step and updates via PATCH.
+ * Deploy regenerated messages as A/B variant B to Lemlist sequences.
+ * Instead of overwriting the original (variant A), sets regenerated content
+ * as variant B. Lemlist handles 50/50 traffic split automatically.
+ *
+ * Also saves B content to our DB touchpoints for tracking.
  */
 async function deployToLemlist(lemlistCampaignId, regeneratedMessages, existingSequence) {
   // Get current Lemlist sequences to find step IDs
@@ -131,7 +134,7 @@ async function deployToLemlist(lemlistCampaignId, regeneratedMessages, existingS
 
   for (const msg of regeneratedMessages) {
     const step = msg.step; // e.g. "E1", "E2", "L1"
-    const variant = msg.variantA || msg; // Primary variant
+    const variant = msg.variantA || msg; // Regenerated content
 
     if (!variant.body && !variant.subject) continue;
 
@@ -144,17 +147,26 @@ async function deployToLemlist(lemlistCampaignId, regeneratedMessages, existingS
       continue;
     }
 
-    // Build update payload
+    // Deploy as variant B (Lemlist A/B testing: subjectB + textB)
     const updateData = {};
-    if (variant.subject) updateData.subject = variant.subject;
-    if (variant.body) updateData.text = variant.body;
+    if (variant.subject) updateData.subjectB = variant.subject;
+    if (variant.body) updateData.textB = variant.body;
 
     try {
       await lemlist.updateSequenceStep(lemlistCampaignId, lemlistStep._id, updateData);
       deployedCount++;
-      console.log(`[regenerate] Deployed ${step} to Lemlist step ${lemlistStep._id}`);
+      console.log(`[regenerate] Deployed ${step} as variant B to Lemlist step ${lemlistStep._id}`);
+
+      // Also save B content in our DB touchpoints
+      const tp = existingSequence.find(t => t.step === step);
+      if (tp) {
+        await db.touchpoints.update(tp.id, {
+          subject_b: variant.subject || null,
+          body_b: variant.body || null,
+        });
+      }
     } catch (err) {
-      console.error(`[regenerate] Failed to deploy ${step} to Lemlist:`, err.message);
+      console.error(`[regenerate] Failed to deploy ${step} as variant B to Lemlist:`, err.message);
     }
   }
 

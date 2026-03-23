@@ -14,6 +14,7 @@ const claude = require('../../api/claude');
 const db = require('../../db');
 const regenerate = require('./regenerate');
 const { notifyUser, notifyStatsRefresh } = require('../../socket');
+const { evaluateABTests } = require('../../lib/ab-testing');
 
 const MIN_PROSPECTS = 50;
 const MIN_AGE_DAYS = 7;
@@ -71,6 +72,18 @@ async function run() {
           campaignName: campaign.name,
           stats: metrics,
         });
+      }
+
+      // Evaluate active A/B tests after stats refresh
+      if (campaign.user_id) {
+        try {
+          const abResult = await evaluateABTests(campaign.id, campaign.user_id);
+          if (abResult) {
+            console.log(`[collect-stats] A/B test concluded for ${campaign.name}: winner=${abResult.winner}, improvement=${abResult.improvement}%`);
+          }
+        } catch (err) {
+          console.error(`[collect-stats] A/B evaluation failed for ${campaign.name}:`, err.message);
+        }
       }
 
       let analyzed = false;

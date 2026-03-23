@@ -372,6 +372,7 @@ router.get('/versions/:campaignId', async (req, res, next) => {
 });
 
 // POST /api/ai/deploy-to-lemlist
+// Now deploys as A/B variant B (regenerate.deployToLemlist saves B fields in DB automatically)
 router.post('/deploy-to-lemlist', async (req, res, next) => {
   try {
     const { campaignId, messages } = req.body;
@@ -389,22 +390,72 @@ router.post('/deploy-to-lemlist', async (req, res, next) => {
     const sequence = await db.touchpoints.listByCampaign(campaignId);
     const deployed = await regenerateJob.deployToLemlist(campaign.lemlist_id, messages, sequence);
 
-    for (const msg of messages) {
-      const variant = msg.variantA || msg;
-      const tp = sequence.find(t => t.step === msg.step);
-      if (tp) {
-        const updates = {};
-        if (variant.subject) updates.subject = variant.subject;
-        if (variant.body) updates.body = variant.body;
-        if (Object.keys(updates).length > 0) {
-          await db.touchpoints.update(tp.id, updates);
-        }
-      }
-    }
+    // deployToLemlist now saves B variant fields in DB, no need to overwrite A here
 
     res.json({
       deployed,
       stepsDeployed: messages.map(m => m.step),
+      abTest: true,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/ab-select-winner — manually select A/B test winner
+router.post('/ab-select-winner', async (req, res, next) => {
+  try {
+    const { campaignId, winner } = req.body;
+
+    if (!campaignId) return res.status(400).json({ error: 'campaignId is required' });
+    if (!winner || !['A', 'B'].includes(winner)) {
+      return res.status(400).json({ error: 'winner must be "A" or "B"' });
+    }
+
+    const { forceSelectWinner } = require('../lib/ab-testing');
+    const result = await forceSelectWinner(campaignId, req.user.id, winner);
+
+    res.json({ ...result, status: 'applied' });
+  } catch (err) {
+    if (err.message.includes('No active A/B test')) {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+// GET /api/ai/ab-status/:campaignId — get current A/B test status
+router.get('/ab-status/:campaignId', async (req, res, next) => {
+  try {
+    const campaignId = req.params.campaignId;
+    const versions = await db.versions.listByCampaign(campaignId);
+    const activeTest = versions.find(v => v.result === 'testing');
+
+    if (!activeTest) return res.json({ active: false });
+
+    const touchpoints = await db.touchpoints.listByCampaign(campaignId);
+    const variants = touchpoints
+      .filter(tp => tp.subject_b || tp.body_b)
+      .map(tp => ({
+        step: tp.step,
+        subjectA: tp.subject,
+        subjectB: tp.subject_b,
+        openRateA: tp.open_rate,
+        openRateB: tp.open_rate_b,
+        replyRateA: tp.reply_rate,
+        replyRateB: tp.reply_rate_b,
+      }));
+
+    const createdAt = new Date(activeTest.created_at || activeTest.date);
+    const daysSinceStart = ((Date.now() - createdAt.getTime()) / 86400000).toFixed(1);
+
+    res.json({
+      active: true,
+      versionId: activeTest.id,
+      version: activeTest.version,
+      daysSinceStart: parseFloat(daysSinceStart),
+      hypotheses: activeTest.hypotheses,
+      variants,
     });
   } catch (err) {
     next(err);
