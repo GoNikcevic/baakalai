@@ -58,70 +58,40 @@ function computeRetentionMetrics(campaigns) {
   };
 }
 
-/* ═══ Progress Card ═══ */
+/* ═══ Progress Card (compact) ═══ */
 
 export function ProgressCard() {
-  const { campaigns } = useApp();
-  const hasProfile = !!localStorage.getItem('bakal_profile');
+  const { campaigns, user } = useApp();
+  const hasProfile = !!(user?.company) || !!localStorage.getItem('bakal_profile');
+  const { steps, percent } = useMemo(() => computeSetupProgress(campaigns, hasProfile), [campaigns, hasProfile]);
 
-  const setup = useMemo(() => computeSetupProgress(campaigns, hasProfile), [campaigns, hasProfile]);
-  const metrics = useMemo(() => computeRetentionMetrics(campaigns), [campaigns]);
-
-  if (setup.percent === 100) {
-    // Setup complete → show AI capital (sunk cost visualization)
-    return (
-      <div className="card retention-card">
-        <div className="card-header">
-          <div className="card-title">Votre capital IA</div>
-        </div>
-        <div className="card-body">
-          <div className="retention-stats-grid">
-            <div className="retention-stat">
-              <div className="retention-stat-value">{metrics.totalProspects.toLocaleString('fr-FR')}</div>
-              <div className="retention-stat-label">Prospects atteints</div>
-            </div>
-            <div className="retention-stat">
-              <div className="retention-stat-value">{metrics.totalOptimizations}</div>
-              <div className="retention-stat-label">Optimisations IA</div>
-            </div>
-            <div className="retention-stat">
-              <div className="retention-stat-value">{metrics.patternsLearned}</div>
-              <div className="retention-stat-label">Patterns appris</div>
-            </div>
-            <div className="retention-stat">
-              <div className="retention-stat-value">{metrics.daysSinceCreation}j</div>
-              <div className="retention-stat-label">D'expérience accumulée</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Setup in progress → show endowed progress
   return (
-    <div className="card retention-card">
-      <div className="card-header">
-        <div className="card-title">Configuration</div>
-        <span className="retention-percent">{setup.percent}%</span>
+    <div className="card" style={{ marginBottom: 16, padding: '16px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Configuration</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: percent === 100 ? 'var(--success)' : 'var(--blue)' }}>{percent}%</span>
       </div>
-      <div className="card-body">
-        <div className="setup-progress-bar">
-          <div className="setup-progress-fill" style={{ width: `${setup.percent}%` }} />
-        </div>
-        <div className="setup-steps">
-          {setup.steps.map(s => (
-            <div className={`progress-step${s.done ? ' done' : ''}`} key={s.id}>
-              <div className="progress-step-check">{s.done ? '✓' : ''}</div>
-              <span>{s.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="setup-hint">
-          {setup.completed < setup.total
-            ? `Encore ${setup.total - setup.completed} étape${setup.total - setup.completed > 1 ? 's' : ''} — votre IA s'améliore à chaque étape`
-            : 'Configuration terminée !'}
-        </div>
+      <div className="setup-progress-bar" style={{ marginBottom: 10 }}>
+        <div className="setup-progress-fill" style={{ width: `${percent}%` }} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {steps.map(s => (
+          <span
+            key={s.id}
+            title={s.label}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 11, color: s.done ? 'var(--success)' : 'var(--text-muted)',
+              padding: '2px 8px', borderRadius: 12,
+              background: s.done ? 'rgba(0,214,143,0.08)' : 'var(--bg-elevated)',
+              border: `1px solid ${s.done ? 'rgba(0,214,143,0.2)' : 'var(--border)'}`,
+              cursor: 'default',
+              transition: 'all 0.2s',
+            }}
+          >
+            {s.done ? '✓' : '○'} {s.label}
+          </span>
+        ))}
       </div>
     </div>
   );

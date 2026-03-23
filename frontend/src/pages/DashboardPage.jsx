@@ -138,7 +138,6 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
     return (
       <div id="section-overview">
         <ProgressCard />
-        <WelcomeBanner onCreateCampaign={onCreateCampaign} />
         <EmptyKpis />
         <EmptyOverviewGrid onCreateCampaign={onCreateCampaign} />
       </div>
@@ -431,7 +430,7 @@ function CampaignTableRow({ campaign: c }) {
 function WelcomeBanner({ onCreateCampaign }) {
   return (
     <div className="welcome-banner">
-      <div className="welcome-title">Bienvenue sur Bakal</div>
+      <div className="welcome-title">Bienvenue sur Baakal</div>
       <div className="welcome-subtitle">
         Votre plateforme de prospection intelligente est prête. Suivez ces étapes
         pour lancer votre première campagne et commencer à générer des RDV
