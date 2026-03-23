@@ -405,8 +405,8 @@ const versions = {
 
   async create(campaignId, data) {
     const result = await query(`
-      INSERT INTO versions (campaign_id, version, date, messages_modified, hypotheses, result)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO versions (campaign_id, version, date, messages_modified, hypotheses, result, rollback_data)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `, [
       campaignId,
@@ -415,6 +415,7 @@ const versions = {
       data.messagesModified || [],
       data.hypotheses || '',
       data.result || 'testing',
+      data.rollbackData || null,
     ]);
     return result.rows[0];
   },
@@ -428,6 +429,7 @@ const versions = {
       messages_modified: 'messages_modified', messagesModified: 'messages_modified',
       hypotheses: 'hypotheses',
       result: 'result',
+      rollback_data: 'rollback_data', rollbackData: 'rollback_data',
     };
     const seen = new Set();
     for (const [inputKey, col] of Object.entries(mapping)) {
@@ -564,8 +566,18 @@ const memoryPatterns = {
     const result = await query('DELETE FROM memory_patterns WHERE id = $1', [id]);
     return { changes: result.rowCount };
   },
+
+  async pruneOld(daysOld = 90) {
+    const result = await query(
+      `DELETE FROM memory_patterns WHERE confidence = 'Faible' AND created_at < NOW() - INTERVAL '1 day' * $1 RETURNING id`,
+      [daysOld]
+    );
+    return result.rows.length;
+  },
 };
 
+// =============================================
+// Stats helpers
 // =============================================
 // Stats helpers
 // =============================================
@@ -743,6 +755,10 @@ const refreshTokens = {
   async deleteByUser(userId) {
     const result = await query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
     return { changes: result.rowCount };
+  },
+
+  async deleteAllByUser(userId) {
+    await query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
   },
 
   async deleteExpired() {

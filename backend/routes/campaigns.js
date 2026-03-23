@@ -3,6 +3,7 @@ const db = require('../db');
 const lemlist = require('../api/lemlist');
 const notionSync = require('../api/notion-sync');
 const { notifyCampaignUpdate, notifyUser } = require('../socket');
+const { sanitizeObject } = require('../lib/sanitize');
 
 const router = Router();
 
@@ -52,7 +53,8 @@ router.get('/:id', async (req, res, next) => {
 // POST /api/campaigns
 router.post('/', async (req, res, next) => {
   try {
-    const campaign = await db.campaigns.create({ ...req.body, userId: req.user.id });
+    const sanitized = sanitizeObject(req.body, ['name', 'client', 'sector', 'position', 'angle', 'zone', 'cta']);
+    const campaign = await db.campaigns.create({ ...sanitized, userId: req.user.id });
 
     if (Array.isArray(req.body.sequence)) {
       for (let i = 0; i < req.body.sequence.length; i++) {

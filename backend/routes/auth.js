@@ -137,13 +137,10 @@ router.post('/refresh', async (req, res, next) => {
 });
 
 // POST /api/auth/logout
-router.post('/logout', async (req, res, next) => {
+router.post('/logout', requireAuth, async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
-    if (refreshToken) {
-      const tokenHash = hashRefreshToken(refreshToken);
-      await db.refreshTokens.deleteByHash(tokenHash);
-    }
+    // Invalidate ALL sessions for this user (not just the current token)
+    await db.refreshTokens.deleteAllByUser(req.user.id);
     res.json({ message: 'Logged out' });
   } catch (err) {
     next(err);

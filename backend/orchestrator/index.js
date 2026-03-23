@@ -12,6 +12,7 @@ const cron = require('node-cron');
 const collectStats = require('./jobs/collect-stats');
 const regenerate = require('./jobs/regenerate');
 const consolidate = require('./jobs/consolidate');
+const db = require('../db');
 
 const isEnabled = () => process.env.ORCHESTRATOR_ENABLED === 'true';
 
@@ -48,7 +49,17 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] Scheduler active — WF1: daily 8:00 AM, WF3: monthly 1st 9:00 AM');
+  // Memory pruning — 1st of each month at 10:00
+  cron.schedule('0 10 1 * *', async () => {
+    try {
+      const pruned = await db.memoryPatterns.pruneOld(90);
+      console.log(`[pruning] Removed ${pruned} old low-confidence patterns`);
+    } catch (err) {
+      console.error('[pruning] Error:', err.message);
+    }
+  });
+
+  console.log('[orchestrator] Scheduler active — WF1: daily 8:00 AM, WF3: monthly 1st 9:00 AM, Pruning: monthly 1st 10:00 AM');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate };

@@ -2,6 +2,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { config } = require('../config');
 const prompts = require('./prompts');
 const { withRetry } = require('../lib/retry');
+const logger = require('../lib/logger');
 
 let client;
 let clientKeyHash;
@@ -66,6 +67,7 @@ async function callClaude(systemPrompt, userContent, maxTokens = 4000) {
       messages: [{ role: 'user', content: userContent }],
     }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
+    logger.error('claude', 'API call failed', { error: err.message });
     throw wrapApiError(err);
   }
 

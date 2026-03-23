@@ -63,11 +63,18 @@ async function run({ campaignId, metrics, diagnostic } = {}) {
     const existingVersions = await db.versions.listByCampaign(campaignId);
     const nextVersion = (existingVersions[0]?.version || 0) + 1;
 
+    // Snapshot current touchpoints for rollback
+    const rollbackData = JSON.stringify(sequence.map((tp) => ({
+      id: tp.id, step: tp.step, subject: tp.subject, body: tp.body,
+      type: tp.type, label: tp.label, sub_type: tp.sub_type, timing: tp.timing,
+    })));
+
     const version = await db.versions.create(campaignId, {
       version: nextVersion,
       messagesModified: regenerationResult.parsed?.messages?.map((m) => m.step) || [],
       hypotheses: regenerationResult.parsed?.summary || regenerationResult.parsed?.hypotheses?.join('; ') || '',
       result: 'testing',
+      rollbackData,
     });
 
     notionSync.syncVersion(version.id, campaignId).catch(console.error);

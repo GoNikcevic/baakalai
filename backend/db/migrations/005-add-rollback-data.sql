@@ -1,0 +1,1 @@
+ALTER TABLE versions ADD COLUMN IF NOT EXISTS rollback_data TEXT;

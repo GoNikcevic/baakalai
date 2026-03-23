@@ -22,6 +22,7 @@ const variablesRouter = require('./routes/variables');
 const exportRouter = require('./routes/export');
 const crmRouter = require('./routes/crm');
 const orchestrator = require('./orchestrator');
+const logger = require('./lib/logger');
 
 const app = express();
 
@@ -130,9 +131,9 @@ const server = http.createServer(app);
 socketServer.init(server, allowedOrigins);
 
 server.listen(config.port, '0.0.0.0', () => {
-  console.log(`\n🚀 Bakal backend running on http://0.0.0.0:${config.port}`);
-  console.log(`   Health check: http://localhost:${config.port}/api/health`);
-  console.log(`   Socket.io:    ws://localhost:${config.port}\n`);
+  logger.info('startup', `Bakal backend running on http://0.0.0.0:${config.port}`);
+  logger.info('startup', `Health check: http://localhost:${config.port}/api/health`);
+  logger.info('startup', `Socket.io: ws://localhost:${config.port}`);
   validateConfig([
     'lemlist.apiKey',
     'notion.token',
@@ -158,7 +159,7 @@ server.listen(config.port, '0.0.0.0', () => {
   async function shutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`\n🛑 ${signal} received — graceful shutdown starting...`);
+    logger.info('shutdown', `${signal} received — graceful shutdown starting...`);
 
     clearInterval(tokenCleanupInterval);
     clearInterval(jobCleanupInterval);
@@ -176,7 +177,7 @@ server.listen(config.port, '0.0.0.0', () => {
         await db.closeDb();
         console.log('   Database pool closed');
       } catch (err) {
-        console.error('   DB close error:', err.message);
+        logger.error('shutdown', 'DB close error', { error: err.message });
       }
 
       console.log('✅ Graceful shutdown complete');

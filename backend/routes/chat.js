@@ -2,6 +2,7 @@ const { Router } = require('express');
 const db = require('../db');
 const claude = require('../api/claude');
 const { emitToThread } = require('../socket');
+const { sanitizeText } = require('../lib/sanitize');
 
 const router = Router();
 
@@ -70,7 +71,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const thread = await db.chatThreads.get(req.params.id);
     if (!thread) return res.status(404).json({ error: 'Thread not found' });
 
-    const { message } = req.body;
+    const message = sanitizeText(req.body.message);
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
     }

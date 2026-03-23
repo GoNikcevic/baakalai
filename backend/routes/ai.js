@@ -5,6 +5,7 @@ const db = require('../db');
 const notionSync = require('../api/notion-sync');
 const dryRun = require('../api/dry-run');
 const regenerateJob = require('../orchestrator/jobs/regenerate');
+const logger = require('../lib/logger');
 
 const router = Router();
 
@@ -468,6 +469,66 @@ router.get('/export-scores-csv', async (req, res, next) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="bakal-scores.csv"');
     res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/rollback/:versionId
+router.post('/rollback/:versionId', async (req, res, next) => {
+  try {
+    const version = await db.versions.get(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    if (!version.rollback_data) {
+      return res.status(400).json({ error: 'No rollback data available for this version' });
+    }
+
+    let rollbackTouchpoints;
+    try {
+      rollbackTouchpoints = JSON.parse(version.rollback_data);
+    } catch {
+      return res.status(500).json({ error: 'Corrupt rollback data' });
+    }
+
+    // Restore touchpoints in DB
+    for (const tp of rollbackTouchpoints) {
+      if (tp.id) {
+        await db.touchpoints.update(tp.id, {
+          subject: tp.subject,
+          body: tp.body,
+        });
+      }
+    }
+
+    // Optionally restore in Lemlist if campaign has lemlist_id
+    const campaign = await db.campaigns.get(version.campaign_id);
+    if (campaign && campaign.lemlist_id) {
+      try {
+        const lemlistSequences = await lemlist.getSequences(campaign.lemlist_id);
+        if (lemlistSequences && Array.isArray(lemlistSequences)) {
+          for (const tp of rollbackTouchpoints) {
+            const stepIndex = parseInt((tp.step || '').replace(/[^\d]/g, ''), 10) - 1;
+            const lemlistStep = lemlistSequences[stepIndex];
+            if (lemlistStep && lemlistStep._id) {
+              const updateData = {};
+              if (tp.subject) updateData.subject = tp.subject;
+              if (tp.body) updateData.text = tp.body;
+              if (Object.keys(updateData).length > 0) {
+                await lemlist.updateSequenceStep(campaign.lemlist_id, lemlistStep._id, updateData);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn('rollback', 'Lemlist rollback failed, DB restored', { error: err.message });
+      }
+    }
+
+    // Mark version as rolled back
+    await db.versions.update(version.id, { result: 'rolled_back' });
+
+    res.json({ ok: true, restoredSteps: rollbackTouchpoints.length });
   } catch (err) {
     next(err);
   }
