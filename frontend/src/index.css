@@ -2589,6 +2589,96 @@ body {
   display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
 }
 
+/* ═══════════ ANIMATIONS ═══════════ */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Page content fade in */
+.dashboard-page, .chat-page, .page-content, #campaigns-list-view {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+/* Cards stagger animation */
+.card {
+  animation: fadeInUp 0.35s ease-out both;
+}
+
+.section-grid > .card:nth-child(1) { animation-delay: 0.05s; }
+.section-grid > .card:nth-child(2) { animation-delay: 0.1s; }
+.section-grid > .card:nth-child(3) { animation-delay: 0.15s; }
+.section-grid > .card:nth-child(4) { animation-delay: 0.2s; }
+
+/* KPI cards stagger */
+.kpi-grid > .kpi-card {
+  animation: fadeInUp 0.3s ease-out both;
+}
+.kpi-grid > .kpi-card:nth-child(1) { animation-delay: 0s; }
+.kpi-grid > .kpi-card:nth-child(2) { animation-delay: 0.05s; }
+.kpi-grid > .kpi-card:nth-child(3) { animation-delay: 0.1s; }
+.kpi-grid > .kpi-card:nth-child(4) { animation-delay: 0.15s; }
+.kpi-grid > .kpi-card:nth-child(5) { animation-delay: 0.2s; }
+.kpi-grid > .kpi-card:nth-child(6) { animation-delay: 0.25s; }
+
+/* Progress bar fill animation */
+.setup-progress-fill {
+  animation: progressFill 0.8s ease-out;
+}
+@keyframes progressFill {
+  from { width: 0; }
+}
+
+/* Button hover micro-interactions */
+.btn {
+  transition: all 0.15s ease;
+}
+.btn:hover {
+  transform: translateY(-1px);
+}
+.btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Card hover lift */
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  transition: all 0.2s ease;
+}
+
+/* KPI card hover */
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* Nav item hover animation */
+.nav-item {
+  transition: all 0.15s ease;
+}
+
+/* Score badge pulse on appear */
+@keyframes scorePulse {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Toast slide in — uses existing toastIn animation */
+/* Modal backdrop — wizard-overlay uses wizardFadeIn, creator-overlay uses fadeIn */
+/* Modal content — wizard-modal uses wizardSlideUp, creator-modal uses slideUp */
+
 /* ═══════════ MOBILE OVERRIDES ═══════════ */
 @media (max-width: 1200px) {
   .retention-stats-grid { grid-template-columns: repeat(2, 1fr); }
