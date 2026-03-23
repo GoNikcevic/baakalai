@@ -122,4 +122,29 @@ router.patch('/opportunities/:id', async (req, res, next) => {
   }
 });
 
+// POST /api/dashboard/recommendation-feedback
+router.post('/recommendation-feedback', async (req, res, next) => {
+  try {
+    const { patternId, patternText, feedback } = req.body;
+    if (!feedback || !['useful', 'not_useful'].includes(feedback)) {
+      return res.status(400).json({ error: 'Invalid feedback' });
+    }
+    const result = await db.recoFeedback.create(req.user.id, patternId || null, patternText, feedback);
+
+    // If not_useful, lower confidence of the pattern
+    if (feedback === 'not_useful' && patternId) {
+      const pattern = await db.memoryPatterns.get(patternId);
+      if (pattern && pattern.confidence === 'Haute') {
+        await db.memoryPatterns.update(patternId, { confidence: 'Moyenne' });
+      } else if (pattern && pattern.confidence === 'Moyenne') {
+        await db.memoryPatterns.update(patternId, { confidence: 'Faible' });
+      }
+    }
+
+    res.json({ saved: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

@@ -293,14 +293,15 @@ export function patternsToRecommendations(patterns) {
     Faible: 'blue',
   };
   const labelMap = {
-    Haute: '✅ Appliquer — Impact fort',
-    Moyenne: '💡 Tester — Opportunité',
-    Faible: '📊 Insight',
+    Haute: '\u2705 Appliquer \u2014 Impact fort',
+    Moyenne: '\uD83D\uDCA1 Tester \u2014 Opportunit\u00e9',
+    Faible: '\uD83D\uDCCA Insight',
   };
 
   return (patterns || []).slice(0, 5).map((p) => ({
+    patternId: p.id || null,
     level: levelMap[p.confidence] || 'blue',
-    label: labelMap[p.confidence] || '📊 Insight',
+    label: labelMap[p.confidence] || '\uD83D\uDCCA Insight',
     text: p.pattern || '',
   }));
 }
@@ -661,6 +662,26 @@ export async function uploadFiles(files) {
   return res.json();
 }
 
+/** Fetch template library (public, no auth) */
+export async function fetchTemplates() {
+  const data = await request('/templates');
+  return data.templates || [];
+}
+
+/** Fetch a single template with full sequence */
+export async function fetchTemplate(id) {
+  const data = await request('/templates/' + id);
+  return data.template;
+}
+
+/** Send feedback on a recommendation */
+export async function sendRecoFeedback(patternId, patternText, feedback) {
+  return request('/dashboard/recommendation-feedback', {
+    method: 'POST',
+    body: JSON.stringify({ patternId, patternText, feedback }),
+  });
+}
+
 /* ═══ Default export for backwards compat ═══ */
 
 const BakalAPI = {
@@ -714,6 +735,9 @@ const BakalAPI = {
   transformOpportunity,
   transformChartData,
   patternsToRecommendations,
+  fetchTemplates,
+  fetchTemplate,
+  sendRecoFeedback,
 };
 
 export default BakalAPI;

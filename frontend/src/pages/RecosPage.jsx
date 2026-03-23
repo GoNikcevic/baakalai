@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
-import api from '../services/api-client';
+import api, { sendRecoFeedback } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 
 /* ─── Demo recommendation data ─── */
@@ -115,6 +115,7 @@ export default function RecosPage() {
   const [editText, setEditText] = useState('');
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [ratedInsights, setRatedInsights] = useState({});
 
   /* ─── Fetch real diagnostics & memory from backend ─── */
 
@@ -303,6 +304,15 @@ export default function RecosPage() {
     }
     setAnalysisRunning(false);
   }, [backendAvailable, campaigns]);
+
+  const handleInsightFeedback = useCallback(async (idx, insight, feedback) => {
+    setRatedInsights(prev => ({ ...prev, [idx]: feedback }));
+    try {
+      await sendRecoFeedback(null, insight.title + ': ' + insight.text, feedback);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   /* ─── Render helpers ─── */
 
@@ -532,7 +542,27 @@ export default function RecosPage() {
             <div key={i} className="reco-insight-item">
               <div className="reco-insight-item-title">{ins.title}</div>
               <div className="reco-insight-item-text">{ins.text}</div>
-              <div className={`reco-insight-item-confidence ${ins.confidence}`}>{ins.confidenceLabel}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                <div className={`reco-insight-item-confidence ${ins.confidence}`}>{ins.confidenceLabel}</div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {ratedInsights[i] ? (
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Merci</span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleInsightFeedback(i, ins, 'useful')}
+                        style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
+                        title="Utile"
+                      >{'\uD83D\uDC4D'}</button>
+                      <button
+                        onClick={() => handleInsightFeedback(i, ins, 'not_useful')}
+                        style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
+                        title="Pas utile"
+                      >{'\uD83D\uDC4E'}</button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
         </div>

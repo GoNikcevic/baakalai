@@ -1360,6 +1360,27 @@ async function healthCheck() {
   }
 }
 
+// =============================================
+// Recommendation Feedback
+// =============================================
+
+const recoFeedback = {
+  async create(userId, patternId, patternText, feedback) {
+    const result = await query(
+      `INSERT INTO recommendation_feedback (user_id, pattern_id, pattern_text, feedback) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [userId, patternId, patternText, feedback]
+    );
+    return result.rows[0];
+  },
+  async listByUser(userId) {
+    const result = await query(
+      `SELECT * FROM recommendation_feedback WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+      [userId]
+    );
+    return result.rows;
+  },
+};
+
 module.exports = {
   query: rawQuery,
   closeDb,
@@ -1385,4 +1406,5 @@ module.exports = {
   chartData,
   userIntegrations,
   jobQueue,
+  recoFeedback,
 };

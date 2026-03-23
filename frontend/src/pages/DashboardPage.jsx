@@ -12,7 +12,7 @@ import { ProgressCard, CumulativeValueBanner, BenchmarkBadge } from '../componen
 import PerformanceChart from '../components/charts/PerformanceChart';
 import { sanitizeHtml } from '../services/sanitize';
 import ScoreBadge from '../components/ScoreBadge';
-import { scoreLeads, exportScoresToCRM, downloadScoresCSV } from '../services/api-client';
+import { scoreLeads, exportScoresToCRM, downloadScoresCSV, sendRecoFeedback } from '../services/api-client';
 
 const KPI_LABELS = {
   contacts: '\u{1F4E4} Contacts atteints',
@@ -94,6 +94,16 @@ export default function DashboardPage() {
 function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recommendations, chartData, onCreateCampaign, setOpportunities }) {
   const [scoring, setScoring] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [ratedRecos, setRatedRecos] = useState({});
+
+  const handleRecoFeedback = useCallback(async (idx, rec, feedback) => {
+    setRatedRecos(prev => ({ ...prev, [idx]: feedback }));
+    try {
+      await sendRecoFeedback(rec.patternId || null, rec.text || '', feedback);
+    } catch {
+      /* ignore errors silently */
+    }
+  }, []);
 
   const handleScoreLeads = useCallback(async () => {
     setScoring(true);
@@ -242,8 +252,30 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
               {recommendations && recommendations.length > 0 ? (
                 recommendations.map((rec, i) => (
                   <div key={i} className={`alert alert-${rec.level}`} style={{ padding: '12px 16px', borderRadius: '8px', fontSize: '13px' }}>
-                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{rec.label}</div>
-                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(rec.text) }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>{rec.label}</div>
+                        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(rec.text) }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px', marginLeft: '12px', flexShrink: 0 }}>
+                        {ratedRecos[i] ? (
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Merci</span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleRecoFeedback(i, rec, 'useful')}
+                              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
+                              title="Utile"
+                            >{'\uD83D\uDC4D'}</button>
+                            <button
+                              onClick={() => handleRecoFeedback(i, rec, 'not_useful')}
+                              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
+                              title="Pas utile"
+                            >{'\uD83D\uDC4E'}</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))
               ) : (

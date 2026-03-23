@@ -4,9 +4,9 @@
    Mirrors the HTML mockup's campaign creator overlay.
    =============================================================================== */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/useApp';
-import { createCampaign, transformCampaign, campaignToBackend } from '../services/api-client';
+import { createCampaign, transformCampaign, campaignToBackend, fetchTemplates, fetchTemplate } from '../services/api-client';
 
 const SECTORS = [
   'Formation & Education',
@@ -53,8 +53,39 @@ export default function CampaignCreatorModal({ onClose }) {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
 
   const projectsList = Object.values(projects);
+
+  // Load templates on mount
+  useEffect(() => {
+    fetchTemplates()
+      .then(setTemplates)
+      .catch(() => setTemplates([]))
+      .finally(() => setLoadingTemplates(false));
+  }, []);
+
+  const handleSelectTemplate = async (templateId) => {
+    if (!templateId) {
+      setSelectedTemplate(null);
+      return;
+    }
+    try {
+      const tpl = await fetchTemplate(templateId);
+      setSelectedTemplate(tpl);
+      // Pre-fill form with template data
+      const channelMap = { email: 'Email uniquement', linkedin: 'LinkedIn uniquement', multi: 'Email + LinkedIn' };
+      setForm((prev) => ({
+        ...prev,
+        name: prev.name || tpl.name,
+        channel: channelMap[tpl.channel] || prev.channel,
+      }));
+    } catch {
+      setSelectedTemplate(null);
+    }
+  };
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -135,6 +166,46 @@ export default function CampaignCreatorModal({ onClose }) {
           <button className="creator-close" onClick={onClose}>✕</button>
         </div>
         <div className="creator-body">
+          {/* Template selector */}
+          <div style={{ marginBottom: '20px' }}>
+            <label className="form-label" style={{ marginBottom: '8px', display: 'block', fontWeight: 600 }}>Partir d'un template</label>
+            {loadingTemplates ? (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Chargement des templates...</div>
+            ) : templates.length > 0 ? (
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  className={`btn ${!selectedTemplate ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px' }}
+                  onClick={() => handleSelectTemplate(null)}
+                >
+                  Vierge
+                </button>
+                {templates.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    className={`btn ${selectedTemplate?.id === tpl.id ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px' }}
+                    onClick={() => handleSelectTemplate(tpl.id)}
+                  >
+                    {tpl.name}
+                    <span style={{ marginLeft: '6px', opacity: 0.6, fontSize: '11px' }}>{tpl.touchpointCount} msgs</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {selectedTemplate && (
+              <div style={{ marginTop: '8px', padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }}>
+                <div style={{ fontWeight: 600, marginBottom: '4px' }}>{selectedTemplate.name}</div>
+                <div style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>{selectedTemplate.description}</div>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {selectedTemplate.tags?.map((tag) => (
+                    <span key={tag} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(99,102,241,0.1)', color: 'var(--accent)' }}>{tag}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="form-grid">
             {/* Project */}
             <div className="form-group full">
