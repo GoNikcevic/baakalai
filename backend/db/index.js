@@ -583,7 +583,31 @@ const memoryPatterns = {
 };
 
 // =============================================
-// Stats helpers
+// Templates
+// =============================================
+
+const templates = {
+  async list() {
+    const result = await query('SELECT * FROM templates ORDER BY popularity DESC, created_at DESC');
+    return result.rows;
+  },
+  async get(id) {
+    const result = await query('SELECT * FROM templates WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+  async create(data) {
+    const result = await query(
+      `INSERT INTO templates (name, sector, channel, description, tags, popularity, source, source_campaign_id, sequence)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [data.name, data.sector, data.channel || 'email', data.description, data.tags || [], data.popularity || 0, data.source || 'static', data.sourceCampaignId || null, JSON.stringify(data.sequence)]
+    );
+    return result.rows[0];
+  },
+  async incrementPopularity(id) {
+    await query('UPDATE templates SET popularity = popularity + 1 WHERE id = $1', [id]);
+  },
+};
+
 // =============================================
 // Stats helpers
 // =============================================
@@ -1407,4 +1431,5 @@ module.exports = {
   userIntegrations,
   jobQueue,
   recoFeedback,
+  templates,
 };

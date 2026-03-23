@@ -59,7 +59,19 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] Scheduler active — WF1: daily 8:00 AM, WF3: monthly 1st 9:00 AM, Pruning: monthly 1st 10:00 AM');
+  // Template generation — 1st of each month at 11:00 (runs after consolidation + pruning)
+  cron.schedule('0 11 1 * *', async () => {
+    console.log('[orchestrator] Running monthly template generation...');
+    const { runTemplateGeneration } = require('../lib/template-generator');
+    try {
+      const tplResult = await runTemplateGeneration();
+      console.log(`[templates] Generated ${tplResult.community} community + ${tplResult.ai} AI templates`);
+    } catch (err) {
+      console.error('[templates] Error:', err.message);
+    }
+  });
+
+  console.log('[orchestrator] Scheduler active — WF1: daily 8:00 AM, WF3: monthly 1st 9:00 AM, Pruning: monthly 1st 10:00 AM, Templates: monthly 1st 11:00 AM');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate };

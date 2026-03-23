@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const db = require('../db');
 
-// Templates are static for v1 — no DB needed
+// Static templates as fallback
 const TEMPLATES = [
   {
     id: 'daf-finance',
@@ -74,19 +75,50 @@ const TEMPLATES = [
   },
 ];
 
-router.get('/', (req, res) => {
-  // Return templates without full sequence for listing
-  const list = TEMPLATES.map(({ sequence, ...t }) => ({
-    ...t,
-    touchpointCount: sequence.length,
-  }));
-  res.json({ templates: list });
+// GET / — returns DB templates + static fallback merged
+router.get('/', async (req, res) => {
+  try {
+    const dbTemplates = await db.templates.list();
+    // Merge: DB templates first, then static ones that aren't duplicated
+    const dbIds = new Set(dbTemplates.map(t => t.id));
+    const staticFiltered = TEMPLATES.filter(t => !dbIds.has(t.id));
+    const all = [...dbTemplates.map(t => ({
+      ...t,
+      sequence: typeof t.sequence === 'string' ? JSON.parse(t.sequence) : t.sequence,
+      touchpointCount: (typeof t.sequence === 'string' ? JSON.parse(t.sequence) : t.sequence).length,
+    })), ...staticFiltered.map(({ sequence, ...t }) => ({ ...t, touchpointCount: sequence.length }))];
+    res.json({ templates: all });
+  } catch (err) {
+    // Fallback to static if DB fails
+    const list = TEMPLATES.map(({ sequence, ...t }) => ({ ...t, touchpointCount: sequence.length }));
+    res.json({ templates: list });
+  }
 });
 
-router.get('/:id', (req, res) => {
+// GET /:id — checks DB first, then static
+router.get('/:id', async (req, res) => {
+  try {
+    const dbTemplate = await db.templates.get(req.params.id);
+    if (dbTemplate) {
+      dbTemplate.sequence = typeof dbTemplate.sequence === 'string' ? JSON.parse(dbTemplate.sequence) : dbTemplate.sequence;
+      return res.json({ template: dbTemplate });
+    }
+  } catch (err) {
+    // Fall through to static lookup
+  }
   const template = TEMPLATES.find(t => t.id === req.params.id);
   if (!template) return res.status(404).json({ error: 'Template not found' });
   res.json({ template });
+});
+
+// POST /use/:id — increment popularity when user selects a template
+router.post('/use/:id', async (req, res) => {
+  try {
+    await db.templates.incrementPopularity(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to track template usage' });
+  }
 });
 
 module.exports = router;
