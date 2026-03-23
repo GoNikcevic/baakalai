@@ -9,6 +9,7 @@ import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
+import Confetti from '../components/Confetti';
 
 /* ─── Helpers ─── */
 
@@ -492,6 +493,7 @@ export default function ChatPage() {
   const [showTyping, setShowTyping] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [chatSidebarOpen, setChatSidebarOpen] = useState(true);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -712,6 +714,8 @@ export default function ChatPage() {
             animate: true,
           },
         ]);
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
         scrollToBottom();
       } catch (err) {
         setMessages((prev) => [
@@ -1018,6 +1022,8 @@ export default function ChatPage() {
   const inlineSuggestions = lastAssistantMsg ? getSuggestions(lastAssistantMsg.metadata) : [];
 
   return (
+    <>
+    <Confetti trigger={showConfetti} />
     <div className="chat-page">
       {/* ─── Sidebar: Thread List ─── */}
       {!chatSidebarOpen && (
@@ -1249,5 +1255,6 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

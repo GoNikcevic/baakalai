@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/useApp';
 import { createCampaign, transformCampaign, campaignToBackend, fetchTemplates, fetchTemplate } from '../services/api-client';
+import Confetti from './Confetti';
 
 const SECTORS = [
   'Formation & Education',
@@ -56,6 +57,7 @@ export default function CampaignCreatorModal({ onClose }) {
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const projectsList = Object.values(projects);
 
@@ -150,7 +152,11 @@ export default function CampaignCreatorModal({ onClose }) {
         setCampaigns((prev) => ({ ...prev, [localId]: localCampaign }));
       }
 
-      onClose();
+      setShowConfetti(true);
+      setTimeout(() => {
+        setShowConfetti(false);
+        onClose();
+      }, 1500);
     } catch (err) {
       setError(err.message || 'Erreur lors de la création.');
     } finally {
@@ -160,6 +166,7 @@ export default function CampaignCreatorModal({ onClose }) {
 
   return (
     <div className="creator-overlay show" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <Confetti trigger={showConfetti} />
       <div className="creator-modal">
         <div className="creator-header">
           <h2>Nouvelle campagne</h2>

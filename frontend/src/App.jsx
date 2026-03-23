@@ -6,6 +6,7 @@ import { SocketProvider } from './context/SocketContext'
 import AuthGate from './components/AuthGate'
 import OnboardingWizard from './components/OnboardingWizard'
 import Layout from './components/Layout'
+import { DashboardSkeleton } from './components/Skeleton'
 
 const ChatPage = lazy(() => import('./pages/ChatPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -71,11 +72,8 @@ export default function App() {
   }
 
   const fallback = (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100%', color: 'var(--text-muted)', fontFamily: 'var(--font)',
-    }}>
-      Chargement...
+    <div style={{ marginLeft: 240, padding: '28px 32px' }}>
+      <DashboardSkeleton />
     </div>
   )
 

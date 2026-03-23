@@ -12,6 +12,7 @@ import { ProgressCard, CumulativeValueBanner, BenchmarkBadge } from '../componen
 import PerformanceChart from '../components/charts/PerformanceChart';
 import { sanitizeHtml } from '../services/sanitize';
 import ScoreBadge from '../components/ScoreBadge';
+import AnimatedCounter from '../components/AnimatedCounter';
 import { scoreLeads, exportScoresToCRM, downloadScoresCSV, sendRecoFeedback } from '../services/api-client';
 
 const KPI_LABELS = {
@@ -151,7 +152,9 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
         {Object.entries(globalKpis).map(([key, k]) => (
           <div className="kpi-card" key={key}>
             <div className="kpi-label">{KPI_LABELS[key] || key}</div>
-            <div className="kpi-value">{k.value}</div>
+            <div className="kpi-value">
+              <AnimatedCounter value={k.value} />
+            </div>
             <div className={`kpi-trend ${k.direction === 'up' ? 'up' : ''}`}>
               {k.trend}
             </div>
