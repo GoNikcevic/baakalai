@@ -36,6 +36,39 @@ export default function App() {
     initData()
   }
 
+  // Handle Google OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('auth') === 'google') {
+      const token = params.get('token')
+      const refreshToken = params.get('refreshToken')
+      const userStr = params.get('user')
+
+      if (token && userStr) {
+        try {
+          const user = JSON.parse(decodeURIComponent(userStr))
+          // Save session
+          localStorage.setItem('bakal_token', token)
+          if (refreshToken) localStorage.setItem('bakal_refresh_token', refreshToken)
+          localStorage.setItem('bakal_user', JSON.stringify(user))
+
+          // Clean URL
+          window.history.replaceState({}, '', '/')
+
+          // Set authed
+          setAuthed(true)
+        } catch (err) {
+          console.error('[google-auth] Parse error:', err)
+        }
+      }
+
+      // Clean URL even on error
+      if (params.get('error')) {
+        window.history.replaceState({}, '', '/')
+      }
+    }
+  }, [])
+
   useEffect(() => {
     async function checkAuth() {
       if (isLoggedIn()) {
