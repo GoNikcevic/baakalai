@@ -67,6 +67,7 @@ const ACTION_PROMPTS = {
   analyze: 'Peux-tu analyser les performances de mes campagnes actives et me donner un diagnostic ?',
   setup_profile: 'Je viens de m\'inscrire. Aide-moi à configurer mon profil entreprise pour personnaliser mes campagnes.',
   explore: 'Explique-moi les fonctionnalités de Baakal et comment tirer le meilleur parti de la plateforme.',
+  create_from_insights: 'Tu as analysé mes campagnes précédentes et identifié des patterns qui fonctionnent. Crée-moi une nouvelle campagne optimisée en t\'appuyant sur ces insights et la mémoire cross-campagne. Propose-moi le meilleur angle, ton et séquence basés sur ce qui a marché.',
 };
 
 /* ─── Sub-components ─── */
@@ -376,7 +377,7 @@ function InlineSuggestions({ suggestions, onSend }) {
 }
 
 function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) {
-  const { userName, campaignCount, hasProfile, activeCampaigns, topCampaign } = userState || {};
+  const { userName, campaignCount, hasProfile, activeCampaigns, topCampaign, insights } = userState || {};
 
   // Contextual greeting based on user state
   let title = 'Assistant Baakal';
@@ -388,7 +389,6 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
   ];
 
   if (!hasProfile && campaignCount === 0) {
-    // Brand new user — onboarding
     title = userName ? `Bienvenue ${userName} !` : 'Bienvenue sur Baakal !';
     subtitle = 'Commencez par configurer votre profil entreprise, puis créez votre première campagne de prospection. Je vous guide étape par étape.';
     actions = [
@@ -396,7 +396,6 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
       { key: 'create', label: 'Créer ma première campagne' },
     ];
   } else if (hasProfile && campaignCount === 0) {
-    // Profile done but no campaigns yet
     title = userName ? `Prêt à prospecter, ${userName} ?` : 'Prêt à prospecter ?';
     subtitle = 'Votre profil est configuré. Créez votre première campagne et je génère vos séquences personnalisées.';
     actions = [
@@ -404,7 +403,6 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
       { key: 'explore', label: 'Explorer les fonctionnalités' },
     ];
   } else if (campaignCount > 0 && activeCampaigns === 0) {
-    // Has campaigns but none active
     title = userName ? `Bon retour, ${userName} !` : 'Bon retour !';
     subtitle = `Vous avez ${campaignCount} campagne${campaignCount > 1 ? 's' : ''} en préparation. Lancez-en une ou créez-en une nouvelle.`;
     actions = [
@@ -412,7 +410,6 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
       { key: 'analyze', label: 'Voir mes campagnes' },
     ];
   } else if (activeCampaigns > 0) {
-    // Active campaigns — show stats context
     title = userName ? `Bonjour ${userName} !` : 'Bonjour !';
     const topInfo = topCampaign ? ` "${topCampaign.name}" a un taux d'ouverture de ${topCampaign.openRate || '—'}%.` : '';
     subtitle = `${activeCampaigns} campagne${activeCampaigns > 1 ? 's' : ''} active${activeCampaigns > 1 ? 's' : ''}.${topInfo} Que puis-je faire pour vous ?`;
@@ -423,12 +420,43 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
     ];
   }
 
+  // Show top insights from memory analysis
+  const topInsights = (insights || []).filter(r => r.level === 'success').slice(0, 2);
+
   return (
     <div className="chat-welcome" id="chatWelcome" style={{ display: 'flex' }}>
       <div className="chat-welcome-inner">
         <div className="chat-welcome-icon">b</div>
         <h2 className="chat-welcome-title" style={{ marginBottom: 12 }}>{title}</h2>
         <p className="chat-welcome-text" style={{ marginBottom: 16 }}>{subtitle}</p>
+
+        {/* Memory insights — shown when patterns exist */}
+        {topInsights.length > 0 && (
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 12, padding: '14px 18px', marginBottom: 16,
+            textAlign: 'left', maxWidth: 520, width: '100%',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--success)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              🧠 Insights de vos campagnes
+            </div>
+            {topInsights.map((insight, i) => (
+              <div key={i} style={{
+                fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5,
+                padding: '6px 0',
+                borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+              }} dangerouslySetInnerHTML={{ __html: insight.text }} />
+            ))}
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 12, marginTop: 10, padding: '6px 14px' }}
+              onClick={() => onAction('create_from_insights')}
+            >
+              Créer une campagne basée sur ces insights
+            </button>
+          </div>
+        )}
+
         <div className="chat-welcome-suggestions" id="chatWelcomeSuggestions">
           {suggestions.map((s) => (
             <button key={s} className="chat-suggestion" onClick={() => onSuggestionClick(s)}>
@@ -451,7 +479,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
 /* ═══ Main Component ═══ */
 
 export default function ChatPage() {
-  const { backendAvailable, setCampaigns, campaigns, user } = useApp();
+  const { backendAvailable, setCampaigns, campaigns, user, recommendations } = useApp();
   const { socket } = useSocket();
 
   // Local state
@@ -980,6 +1008,7 @@ export default function ChatPage() {
     hasProfile: !!(user?.company),
     activeCampaigns: activeCampaignsList.length,
     topCampaign: topCampaign ? { name: topCampaign.name, openRate: topCampaign.kpis?.openRate } : null,
+    insights: recommendations || [],
   };
 
   /* ─── Compute last assistant metadata for suggestions ─── */
