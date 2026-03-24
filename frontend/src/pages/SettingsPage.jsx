@@ -14,7 +14,6 @@ import { useSocket } from '../context/SocketContext';
 
 const CORE_KEYS = [
   { field: 'lemlistKey', label: 'Lemlist', desc: 'Campagnes email et LinkedIn, séquences multi-canal', placeholder: 'Votre clé API Lemlist', required: true, color: '#6C5CE7', icon: 'L' },
-  { field: 'claudeKey', label: 'Claude (Anthropic)', desc: 'Génération de copy IA, analyse de performance, optimisation', placeholder: 'sk-ant-...', required: true, color: '#D97706', icon: 'C' },
   { field: 'crmKey', label: 'CRM', desc: 'Synchronisation contacts et deals', placeholder: 'Votre clé API CRM', required: true, color: '#FF6B35', icon: 'R',
     crmSelector: true, crmOptions: [
       { value: 'hubspot', label: 'HubSpot', placeholder: 'pat-...' },

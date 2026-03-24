@@ -36,7 +36,6 @@ export default function OnboardingWizard({ onComplete }) {
 
   // Step 2 — Keys
   const [lemlistKey, setLemlistKey] = useState('');
-  const [claudeKey, setClaudeKey] = useState('');
   const [crmProvider, setCrmProvider] = useState('');
   const [crmKey, setCrmKey] = useState('');
   const [keySaveStatus, setKeySaveStatus] = useState(null); // 'saved' | 'error' | null
@@ -66,7 +65,6 @@ export default function OnboardingWizard({ onComplete }) {
   const handleSaveKeys = useCallback(async () => {
     const keysToSave = {};
     if (lemlistKey.trim()) keysToSave.lemlistKey = lemlistKey.trim();
-    if (claudeKey.trim()) keysToSave.claudeKey = claudeKey.trim();
     if (crmKey.trim() && crmProvider) {
       // Map provider to backend field name
       const crmFieldMap = { hubspot: 'hubspotKey', pipedrive: 'pipedriveKey', salesforce: 'salesforceKey', folk: 'folkKey' };
@@ -90,7 +88,7 @@ export default function OnboardingWizard({ onComplete }) {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lemlistKey, claudeKey, crmKey, crmProvider]);
+  }, [lemlistKey, crmKey, crmProvider]);
 
   /* ─── Save profile + complete ─── */
 
@@ -216,26 +214,6 @@ export default function OnboardingWizard({ onComplete }) {
                     onChange={e => setLemlistKey(e.target.value)}
                   />
                   <div className="wizard-key-hint">Trouvable dans Lemlist → Settings → Integrations</div>
-                </div>
-              </div>
-              <div className="wizard-key-row">
-                <div className="wizard-key-icon">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                </div>
-                <div className="wizard-key-input">
-                  <div className="wizard-key-label">Claude API Key (Anthropic)</div>
-                  <input
-                    className="form-input"
-                    type="password"
-                    placeholder="sk-ant-..."
-                    value={claudeKey}
-                    onChange={e => setClaudeKey(e.target.value)}
-                  />
-                  <div className="wizard-key-hint">Trouvable sur console.anthropic.com → API Keys</div>
                 </div>
               </div>
               <div className="wizard-key-row">
@@ -377,8 +355,8 @@ export default function OnboardingWizard({ onComplete }) {
                 <span>Profil entreprise {company ? `— ${company}` : '(à compléter plus tard)'}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{lemlistKey || claudeKey ? '✅' : '⬜'}</span>
-                <span>Clés API {lemlistKey && claudeKey ? '— Lemlist + Claude' : lemlistKey ? '— Lemlist' : claudeKey ? '— Claude' : '(à configurer dans Paramètres)'}</span>
+                <span className="wizard-check-icon">{lemlistKey ? '✅' : '⬜'}</span>
+                <span>Lemlist {lemlistKey ? '— Connecté' : '(à configurer dans Paramètres)'}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{crmKey && crmProvider ? '✅' : '⬜'}</span>
