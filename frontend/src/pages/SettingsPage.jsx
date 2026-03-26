@@ -6,6 +6,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { getKeys, saveKeys, testKeys, syncLemlist, syncCRM } from '../services/api-client';
 import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
@@ -431,7 +432,12 @@ export default function SettingsPage() {
       {/* Integrations — 2-column grid */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title">Intégrations</div>
+          <div className="card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            Intégrations
+            <Link to="/integrations" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              En savoir plus →
+            </Link>
+          </div>
         </div>
         <div className="card-body">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>

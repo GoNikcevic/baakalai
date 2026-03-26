@@ -17,6 +17,7 @@ const PerformancePage = lazy(() => import('./pages/PerformancePage'))
 const RecosPage = lazy(() => import('./pages/RecosPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
 
 // Public routes accessible without authentication
 const PUBLIC_PATHS = ['/reset-password']
@@ -145,6 +146,7 @@ export default function App() {
             <Route path="/recos" element={<RecosPage />} />
             <Route path="/profil" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/integrations" element={<IntegrationsPage />} />
             <Route path="/" element={<Navigate to="/chat" replace />} />
             <Route path="*" element={<Navigate to="/chat" replace />} />
           </Route>
