@@ -12,58 +12,39 @@ import { useSocket } from '../context/SocketContext';
 
 /* ─── Unified tool list organized by category ─── */
 
-const TOOL_CATEGORIES = [
-  {
-    label: 'Outreach',
-    description: 'Votre outil principal d\'envoi de campagnes',
-    keys: [
-      { field: 'lemlistKey', label: 'Lemlist', desc: 'Campagnes email et LinkedIn, séquences multi-canal', placeholder: 'Votre clé API Lemlist', color: '#6C5CE7', icon: 'L' },
-      { field: 'apolloKey', label: 'Apollo', desc: 'Base B2B + séquences email automatisées', placeholder: 'Votre clé API Apollo', color: '#6C5CE7', icon: 'A' },
-      { field: 'instantlyKey', label: 'Instantly', desc: 'Cold email à grande échelle', placeholder: 'Votre clé API Instantly', color: '#0984E3', icon: 'In' },
-      { field: 'lgmKey', label: 'La Growth Machine', desc: 'Séquences multi-canal automatisées', placeholder: 'Votre clé API LGM', color: '#6C5CE7', icon: 'LG' },
-      { field: 'waalaxyKey', label: 'Waalaxy', desc: 'Automatisation LinkedIn + email', placeholder: 'Votre clé API Waalaxy', color: '#A29BFE', icon: 'W' },
-    ],
-  },
-  {
-    label: 'CRM',
-    description: 'Synchronisation contacts et deals',
-    keys: [
-      { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM complet + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H' },
-      { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise + reporting avancé', placeholder: 'Votre clé API Salesforce', color: '#00A1E0', icon: 'S' },
-      { field: 'pipedriveKey', label: 'Pipedrive', desc: 'CRM visuel orienté vente', placeholder: 'Votre clé API Pipedrive', color: '#017737', icon: 'P' },
-    ],
-  },
-  {
-    label: 'Enrichissement',
-    keys: [
-      { field: 'dropcontactKey', label: 'DropContact', desc: 'Enrichissement email et téléphone', placeholder: 'Votre clé API DropContact', color: '#00B894', icon: 'D' },
-      { field: 'hunterKey', label: 'Hunter', desc: 'Recherche et vérification d\'emails', placeholder: 'Votre clé API Hunter', color: '#FF7675', icon: 'H' },
-      { field: 'kasprKey', label: 'Kaspr', desc: 'Données LinkedIn en temps réel', placeholder: 'Votre clé API Kaspr', color: '#0984E3', icon: 'K' },
-      { field: 'lushaKey', label: 'Lusha', desc: 'Coordonnées professionnelles', placeholder: 'Votre clé API Lusha', color: '#00CEC9', icon: 'Lu' },
-      { field: 'snovKey', label: 'Snov.io', desc: 'Email finder et drip campaigns', placeholder: 'Votre clé API Snov', color: '#E17055', icon: 'S' },
-    ],
-  },
-  {
-    label: 'LinkedIn / Scraping',
-    keys: [
-      { field: 'phantombusterKey', label: 'PhantomBuster', desc: 'Scraping et automatisation web', placeholder: 'Votre clé API PhantomBuster', color: '#636E72', icon: 'PB' },
-      { field: 'captaindataKey', label: 'Captain Data', desc: 'Extraction de données multi-sources', placeholder: 'Votre clé API CaptainData', color: '#0984E3', icon: 'CD' },
-    ],
-  },
-  {
-    label: 'Calendrier',
-    keys: [
-      { field: 'calendlyKey', label: 'Calendly', desc: 'Planification de RDV automatisée', placeholder: 'Votre clé API Calendly', color: '#0069FF', icon: 'Ca' },
-      { field: 'calcomKey', label: 'Cal.com', desc: 'Alternative open-source à Calendly', placeholder: 'Votre clé API Cal.com', color: '#292929', icon: 'Cl' },
-    ],
-  },
-  {
-    label: 'Délivrabilité',
-    keys: [
-      { field: 'mailreachKey', label: 'MailReach', desc: 'Warm-up et monitoring inbox', placeholder: 'Votre clé API MailReach', color: '#E17055', icon: 'MR' },
-      { field: 'warmboxKey', label: 'Warmbox', desc: 'Préchauffage email automatisé', placeholder: 'Votre clé API Warmbox', color: '#FDCB6E', icon: 'Wb' },
-    ],
-  },
+/* Main tools: Outreach + CRM in one block */
+const MAIN_TOOLS = [
+  { field: 'lemlistKey', label: 'Lemlist', desc: 'Campagnes email et LinkedIn, séquences multi-canal', placeholder: 'Votre clé API Lemlist', color: '#6C5CE7', icon: 'L', category: 'Outreach' },
+  { field: 'apolloKey', label: 'Apollo', desc: 'Base B2B + séquences email automatisées', placeholder: 'Votre clé API Apollo', color: '#6C5CE7', icon: 'A', category: 'Outreach' },
+  { field: 'instantlyKey', label: 'Instantly', desc: 'Cold email à grande échelle', placeholder: 'Votre clé API Instantly', color: '#0984E3', icon: 'In', category: 'Outreach' },
+  { field: 'lgmKey', label: 'La Growth Machine', desc: 'Séquences multi-canal automatisées', placeholder: 'Votre clé API LGM', color: '#6C5CE7', icon: 'LG', category: 'Outreach' },
+  { field: 'waalaxyKey', label: 'Waalaxy', desc: 'Automatisation LinkedIn + email', placeholder: 'Votre clé API Waalaxy', color: '#A29BFE', icon: 'W', category: 'Outreach' },
+  { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM complet + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM' },
+  { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise + reporting avancé', placeholder: 'Votre clé API Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM' },
+  { field: 'pipedriveKey', label: 'Pipedrive', desc: 'CRM visuel orienté vente', placeholder: 'Votre clé API Pipedrive', color: '#017737', icon: 'P', category: 'CRM' },
+];
+
+/* Extended tools in dropdown */
+const EXTENDED_TOOLS = [
+  { label: 'Enrichissement', keys: [
+    { field: 'dropcontactKey', label: 'DropContact', desc: 'Enrichissement email et téléphone', placeholder: 'Votre clé API DropContact', color: '#00B894', icon: 'D' },
+    { field: 'hunterKey', label: 'Hunter', desc: 'Recherche et vérification d\'emails', placeholder: 'Votre clé API Hunter', color: '#FF7675', icon: 'H' },
+    { field: 'kasprKey', label: 'Kaspr', desc: 'Données LinkedIn en temps réel', placeholder: 'Votre clé API Kaspr', color: '#0984E3', icon: 'K' },
+    { field: 'lushaKey', label: 'Lusha', desc: 'Coordonnées professionnelles', placeholder: 'Votre clé API Lusha', color: '#00CEC9', icon: 'Lu' },
+    { field: 'snovKey', label: 'Snov.io', desc: 'Email finder et drip campaigns', placeholder: 'Votre clé API Snov', color: '#E17055', icon: 'S' },
+  ]},
+  { label: 'LinkedIn / Scraping', keys: [
+    { field: 'phantombusterKey', label: 'PhantomBuster', desc: 'Scraping et automatisation web', placeholder: 'Votre clé API PhantomBuster', color: '#636E72', icon: 'PB' },
+    { field: 'captaindataKey', label: 'Captain Data', desc: 'Extraction de données multi-sources', placeholder: 'Votre clé API CaptainData', color: '#0984E3', icon: 'CD' },
+  ]},
+  { label: 'Calendrier', keys: [
+    { field: 'calendlyKey', label: 'Calendly', desc: 'Planification de RDV automatisée', placeholder: 'Votre clé API Calendly', color: '#0069FF', icon: 'Ca' },
+    { field: 'calcomKey', label: 'Cal.com', desc: 'Alternative open-source à Calendly', placeholder: 'Votre clé API Cal.com', color: '#292929', icon: 'Cl' },
+  ]},
+  { label: 'Délivrabilité', keys: [
+    { field: 'mailreachKey', label: 'MailReach', desc: 'Warm-up et monitoring inbox', placeholder: 'Votre clé API MailReach', color: '#E17055', icon: 'MR' },
+    { field: 'warmboxKey', label: 'Warmbox', desc: 'Préchauffage email automatisé', placeholder: 'Votre clé API Warmbox', color: '#FDCB6E', icon: 'Wb' },
+  ]},
 ];
 
 const DEFAULT_PREFERENCES = {
@@ -329,7 +310,8 @@ export default function SettingsPage() {
 
   /* ─── Count configured keys ─── */
 
-  const allKeyDefs = TOOL_CATEGORIES.flatMap(g => g.keys);
+  const allKeyDefs = [...MAIN_TOOLS, ...EXTENDED_TOOLS.flatMap(g => g.keys)];
+  const [showMore, setShowMore] = useState(false);
   const configuredCount = Object.values(keyStatus).filter(k => k.configured).length;
   const totalCount = Object.keys(keyStatus).length || allKeyDefs.length;
 
@@ -443,20 +425,68 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Tool categories — flat unified list */}
-      {TOOL_CATEGORIES.map(cat => (
-        <div className="card" key={cat.label} style={{ marginBottom: 16 }}>
-          <div className="card-header">
-            <div>
-              <div className="card-title">{cat.label}</div>
-              {cat.description && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{cat.description}</div>}
-            </div>
-          </div>
-          <div className="card-body" style={{ padding: 0 }}>
-            {cat.keys.map(keyDef => renderKeyRow(keyDef, keyStatus[keyDef.field]?.configured))}
-          </div>
+      {/* Outreach + CRM — single block */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">Outreach & CRM</div>
         </div>
-      ))}
+        <div className="card-body" style={{ padding: 0 }}>
+          {MAIN_TOOLS.map((keyDef, i) => {
+            const prevCat = i > 0 ? MAIN_TOOLS[i - 1].category : null;
+            return (
+              <div key={keyDef.field}>
+                {keyDef.category !== prevCat && (
+                  <div style={{
+                    fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                    letterSpacing: '0.5px', color: 'var(--text-muted)',
+                    padding: '10px 20px 4px',
+                    borderTop: prevCat ? '1px solid var(--border)' : 'none',
+                  }}>
+                    {keyDef.category}
+                  </div>
+                )}
+                {renderKeyRow(keyDef, keyStatus[keyDef.field]?.configured)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Extended tools — collapsible */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setShowMore(p => !p)}>
+          <div className="card-title">Plus d'intégrations</div>
+          <span style={{
+            fontSize: 12, color: 'var(--text-muted)',
+            transition: 'transform 0.3s ease',
+            transform: showMore ? 'rotate(180deg)' : 'rotate(0deg)',
+            display: 'inline-block',
+          }}>
+            {showMore ? '\u25B2' : '\u25BC'}
+          </span>
+        </div>
+        <div style={{
+          maxHeight: showMore ? 2000 : 0,
+          overflow: 'hidden',
+          transition: showMore
+            ? 'max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-out'
+            : 'max-height 0.35s cubic-bezier(0.4, 0, 0.6, 1), opacity 0.2s ease-in',
+          opacity: showMore ? 1 : 0,
+        }}>
+          {EXTENDED_TOOLS.map(group => (
+            <div key={group.label}>
+              <div style={{
+                fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                letterSpacing: '0.5px', color: 'var(--text-muted)',
+                padding: '10px 20px 4px', borderTop: '1px solid var(--border)',
+              }}>
+                {group.label}
+              </div>
+              {group.keys.map(keyDef => renderKeyRow(keyDef, keyStatus[keyDef.field]?.configured))}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Lemlist Sync */}
       <div className="card" style={{ marginBottom: 16 }}>
