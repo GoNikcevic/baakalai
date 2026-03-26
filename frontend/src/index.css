@@ -1788,6 +1788,10 @@ body {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   justify-content: center; padding: 40px; text-align: center; gap: 28px;
 }
+.chat-welcome-inner {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; max-width: 600px; width: 100%;
+}
 .chat-welcome-icon {
   width: 52px; height: 52px; border-radius: 50%;
   background: var(--bg-card); border: 1.5px solid var(--border-light);
