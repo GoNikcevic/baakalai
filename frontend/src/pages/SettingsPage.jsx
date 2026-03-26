@@ -513,42 +513,51 @@ export default function SettingsPage() {
               );
             })}
           </div>
-        </div>
-      </div>
 
-      {/* Extended tools — collapsible */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setShowMore(p => !p)}>
-          <div className="card-title">Plus d'intégrations</div>
-          <span style={{
-            fontSize: 12, color: 'var(--text-muted)',
-            transition: 'transform 0.3s ease',
-            transform: showMore ? 'rotate(180deg)' : 'rotate(0deg)',
-            display: 'inline-block',
+          {/* Voir plus — inside the same card */}
+          <div
+            style={{
+              padding: '12px 20px', cursor: 'pointer',
+              borderTop: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              fontSize: 13, color: 'var(--text-muted)', fontWeight: 500,
+              transition: 'color 0.15s',
+            }}
+            onClick={() => setShowMore(p => !p)}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            {showMore ? 'Voir moins' : 'Voir plus d\'intégrations'}
+            <span style={{
+              transition: 'transform 0.3s ease',
+              transform: showMore ? 'rotate(180deg)' : 'rotate(0deg)',
+              display: 'inline-block', fontSize: 10,
+            }}>
+              {'\u25BC'}
+            </span>
+          </div>
+
+          <div style={{
+            maxHeight: showMore ? 2000 : 0,
+            overflow: 'hidden',
+            transition: showMore
+              ? 'max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-out'
+              : 'max-height 0.35s cubic-bezier(0.4, 0, 0.6, 1), opacity 0.2s ease-in',
+            opacity: showMore ? 1 : 0,
           }}>
-            {showMore ? '\u25B2' : '\u25BC'}
-          </span>
-        </div>
-        <div style={{
-          maxHeight: showMore ? 2000 : 0,
-          overflow: 'hidden',
-          transition: showMore
-            ? 'max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-out'
-            : 'max-height 0.35s cubic-bezier(0.4, 0, 0.6, 1), opacity 0.2s ease-in',
-          opacity: showMore ? 1 : 0,
-        }}>
-          {EXTENDED_TOOLS.map(group => (
-            <div key={group.label}>
-              <div style={{
-                fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-                letterSpacing: '0.5px', color: 'var(--text-muted)',
-                padding: '10px 20px 4px', borderTop: '1px solid var(--border)',
-              }}>
-                {group.label}
+            {EXTENDED_TOOLS.map(group => (
+              <div key={group.label}>
+                <div style={{
+                  fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                  letterSpacing: '0.5px', color: 'var(--text-muted)',
+                  padding: '10px 20px 4px', borderTop: '1px solid var(--border)',
+                }}>
+                  {group.label}
+                </div>
+                {group.keys.map(keyDef => renderKeyRow(keyDef, keyStatus[keyDef.field]?.configured))}
               </div>
-              {group.keys.map(keyDef => renderKeyRow(keyDef, keyStatus[keyDef.field]?.configured))}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
       </div>
