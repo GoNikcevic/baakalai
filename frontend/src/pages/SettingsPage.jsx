@@ -425,30 +425,91 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Outreach + CRM — single block */}
+      {/* Integrations — 3-column grid */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title">Outreach & CRM</div>
+          <div className="card-title">Intégrations</div>
         </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {MAIN_TOOLS.map((keyDef, i) => {
-            const prevCat = i > 0 ? MAIN_TOOLS[i - 1].category : null;
-            return (
-              <div key={keyDef.field}>
-                {keyDef.category !== prevCat && (
+        <div className="card-body">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+            {MAIN_TOOLS.map(tool => {
+              const isConnected = keyStatus[tool.field]?.configured;
+              const isEditing = editing[tool.field];
+              return (
+                <div key={tool.field} style={{
+                  padding: '16px', borderRadius: 12,
+                  border: `1.5px solid ${isConnected ? 'var(--success)' : 'var(--border)'}`,
+                  background: isConnected ? 'rgba(0,214,143,0.04)' : 'var(--bg-elevated)',
+                  cursor: isEditing ? 'default' : 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onClick={() => { if (!isEditing && !isConnected) startEdit(tool.field); }}
+                >
+                  {/* Icon */}
                   <div style={{
-                    fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-                    letterSpacing: '0.5px', color: 'var(--text-muted)',
-                    padding: '10px 20px 4px',
-                    borderTop: prevCat ? '1px solid var(--border)' : 'none',
+                    width: 36, height: 36, borderRadius: 10,
+                    background: tool.color + '18',
+                    border: `1px solid ${tool.color}30`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, fontWeight: 700, color: tool.color,
+                    marginBottom: 10,
                   }}>
-                    {keyDef.category}
+                    {tool.icon}
                   </div>
-                )}
-                {renderKeyRow(keyDef, keyStatus[keyDef.field]?.configured)}
-              </div>
-            );
-          })}
+
+                  {/* Name + desc */}
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{tool.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4, marginBottom: 8 }}>{tool.desc}</div>
+
+                  {/* Status / Actions */}
+                  {isConnected && !isEditing && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>✓ Connecté</span>
+                      <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }}
+                        onClick={(e) => { e.stopPropagation(); startEdit(tool.field); }}>Modifier</button>
+                    </div>
+                  )}
+
+                  {!isConnected && !isEditing && (
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', width: '100%' }}
+                      onClick={(e) => { e.stopPropagation(); startEdit(tool.field); }}>
+                      Configurer
+                    </button>
+                  )}
+
+                  {/* Inline edit */}
+                  {isEditing && (
+                    <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                      <input
+                        className="form-input"
+                        type="password"
+                        placeholder={tool.placeholder}
+                        value={drafts[tool.field] || ''}
+                        onChange={e => setDrafts(prev => ({ ...prev, [tool.field]: e.target.value }))}
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveField(tool.field);
+                          if (e.key === 'Escape') cancelEdit(tool.field);
+                        }}
+                        style={{ fontSize: 12, padding: '6px 10px', marginBottom: 6, width: '100%' }}
+                      />
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
+                          onClick={() => saveField(tool.field)}
+                          disabled={saving || !(drafts[tool.field] || '').trim()}>Sauver</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
+                          onClick={() => cancelEdit(tool.field)}>✕</button>
+                      </div>
+                      {isConnected && (
+                        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, color: 'var(--danger)', width: '100%' }}
+                          onClick={() => removeField(tool.field)} disabled={saving}>Supprimer</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -492,9 +553,9 @@ export default function SettingsPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div className="card-title">Analyse Lemlist</div>
+            <div className="card-title">Analyse Outreach</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-              Synchronise vos campagnes Lemlist et analyse les patterns de performance avec Claude
+              Synchronise vos campagnes et analyse les patterns de performance avec Claude
             </div>
           </div>
           <button
