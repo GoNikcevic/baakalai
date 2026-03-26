@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useMemo, useCallback, useState, useEffect } from 'react';
-import { useOutletContext, Link } from 'react-router-dom';
+import { useOutletContext, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
 import { DEMO_DATA } from '../data/demo-data';
@@ -28,7 +28,8 @@ const KPI_LABELS = {
 export default function DashboardPage() {
   const { campaigns, globalKpis, opportunities, recommendations, chartData, setOpportunities } = useApp();
   const { setShowCreatorModal, demoMode } = useOutletContext() || {};
-  const openCreator = useCallback(() => setShowCreatorModal?.(true), [setShowCreatorModal]);
+  const navigate = useNavigate();
+  const openCreator = useCallback(() => navigate('/chat'), [navigate]);
   const { socket } = useSocket();
   const [syncStatus, setSyncStatus] = useState(null);
 

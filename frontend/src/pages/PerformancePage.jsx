@@ -4,7 +4,7 @@
    =============================================================================== */
 
 import { useState, useMemo, useCallback } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import AnalyticsSection from './AnalyticsSection';
 import { exportCampaignsCsv, exportReportPdf } from '../services/api-client';
@@ -12,8 +12,8 @@ import { sanitizeHtml } from '../services/sanitize';
 
 export default function PerformancePage() {
   const { campaigns, reports } = useApp();
-  const { setShowCreatorModal } = useOutletContext() || {};
-  const openCreator = useCallback(() => setShowCreatorModal?.(true), [setShowCreatorModal]);
+  const navigate = useNavigate();
+  const openCreator = useCallback(() => navigate('/chat'), [navigate]);
 
   const campaignsList = useMemo(() => Object.values(campaigns), [campaigns]);
   const isEmpty = campaignsList.length === 0;
@@ -59,7 +59,7 @@ function ReportsSection({ isEmpty, reports, onCreateCampaign }) {
             Lancez votre première campagne pour recevoir votre premier bilan de
             performance.
           </div>
-          <button className="btn btn-primary" onClick={onCreateCampaign}>
+          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
             Créer ma première campagne
           </button>
         </div>

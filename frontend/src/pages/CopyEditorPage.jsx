@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import api, { exportCampaignCsv } from '../services/api-client';
 import VariableManager from '../components/VariableManager';
@@ -679,7 +679,8 @@ function ParamsPanel({ params, onClose }) {
 
 export default function CopyEditorPage() {
   const { campaigns, backendAvailable, setCampaigns } = useApp();
-  const { demoMode, setShowCreatorModal } = useOutletContext?.() || {};
+  const { demoMode } = useOutletContext?.() || {};
+  const navigate = useNavigate();
 
   // Derive base editor data from campaigns context
   const baseEditorData = useMemo(() => {
@@ -1028,7 +1029,7 @@ export default function CopyEditorPage() {
           <div className="empty-state-desc">
             Créez votre première campagne pour commencer à éditer vos séquences et touchpoints.
           </div>
-          <button className="btn btn-primary" onClick={() => setShowCreatorModal?.(true)}>
+          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
             Créer ma première campagne
           </button>
         </div>
