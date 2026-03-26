@@ -2,7 +2,7 @@
    BAKAL — Onboarding Wizard (React)
    Multi-step wizard shown on first login. Steps:
    1. Welcome + company basics
-   2. Core API keys (Lemlist, Claude)
+   2. Core API keys (Outreach tool selector + CRM)
    3. Target & persona
    4. Communication style
    5. Done — recap
@@ -24,6 +24,16 @@ const STEP_META = [
   { title: 'Tout est prêt !', desc: '' },
 ];
 
+/* ─── Outreach options ─── */
+
+const OUTREACH_OPTIONS = [
+  { value: 'lemlist', label: 'Lemlist', field: 'lemlistKey', placeholder: 'Votre clé API Lemlist' },
+  { value: 'apollo', label: 'Apollo', field: 'apolloKey', placeholder: 'Votre clé API Apollo' },
+  { value: 'instantly', label: 'Instantly', field: 'instantlyKey', placeholder: 'Votre clé API Instantly' },
+  { value: 'lgm', label: 'La Growth Machine', field: 'lgmKey', placeholder: 'Votre clé API LGM' },
+  { value: 'waalaxy', label: 'Waalaxy', field: 'waalaxyKey', placeholder: 'Votre clé API Waalaxy' },
+];
+
 export default function OnboardingWizard({ onComplete }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -35,7 +45,8 @@ export default function OnboardingWizard({ onComplete }) {
   const [teamSize, setTeamSize] = useState('');
 
   // Step 2 — Keys
-  const [lemlistKey, setLemlistKey] = useState('');
+  const [outreachProvider, setOutreachProvider] = useState('');
+  const [outreachKey, setOutreachKey] = useState('');
   const [crmProvider, setCrmProvider] = useState('');
   const [crmKey, setCrmKey] = useState('');
   const [keySaveStatus, setKeySaveStatus] = useState(null); // 'saved' | 'error' | null
@@ -64,10 +75,12 @@ export default function OnboardingWizard({ onComplete }) {
 
   const handleSaveKeys = useCallback(async () => {
     const keysToSave = {};
-    if (lemlistKey.trim()) keysToSave.lemlistKey = lemlistKey.trim();
+    if (outreachKey.trim() && outreachProvider) {
+      const outreach = OUTREACH_OPTIONS.find(o => o.value === outreachProvider);
+      if (outreach) keysToSave[outreach.field] = outreachKey.trim();
+    }
     if (crmKey.trim() && crmProvider) {
-      // Map provider to backend field name
-      const crmFieldMap = { hubspot: 'hubspotKey', pipedrive: 'pipedriveKey', salesforce: 'salesforceKey', folk: 'folkKey' };
+      const crmFieldMap = { hubspot: 'hubspotKey', pipedrive: 'pipedriveKey', salesforce: 'salesforceKey' };
       const field = crmFieldMap[crmProvider];
       if (field) keysToSave[field] = crmKey.trim();
     }
@@ -88,7 +101,7 @@ export default function OnboardingWizard({ onComplete }) {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lemlistKey, crmKey, crmProvider]);
+  }, [outreachKey, outreachProvider, crmKey, crmProvider]);
 
   /* ─── Save profile + complete ─── */
 
@@ -115,7 +128,8 @@ export default function OnboardingWizard({ onComplete }) {
     }).catch(() => {/* ignore */});
 
     // Trigger auto-sync in background if keys were provided
-    if (lemlistKey) {
+    if (outreachKey && outreachProvider === 'lemlist') {
+      // Only trigger lemlist sync if they chose Lemlist
       fetch('/api/settings/keys/sync-lemlist', {
         method: 'POST',
         headers: {
@@ -137,6 +151,11 @@ export default function OnboardingWizard({ onComplete }) {
     localStorage.setItem('bakal_onboarding_complete', 'true');
     if (onComplete) onComplete();
   }
+
+  /* ─── Derive outreach label for checklist ─── */
+
+  const selectedOutreach = OUTREACH_OPTIONS.find(o => o.value === outreachProvider);
+  const outreachLabel = selectedOutreach ? selectedOutreach.label : 'Outreach';
 
   /* ─── Step dots ─── */
 
@@ -205,15 +224,25 @@ export default function OnboardingWizard({ onComplete }) {
                   </svg>
                 </div>
                 <div className="wizard-key-input">
-                  <div className="wizard-key-label">Lemlist API Key</div>
-                  <input
-                    className="form-input"
-                    type="password"
-                    placeholder="Votre clé API Lemlist"
-                    value={lemlistKey}
-                    onChange={e => setLemlistKey(e.target.value)}
-                  />
-                  <div className="wizard-key-hint">Trouvable dans Lemlist → Settings → Integrations</div>
+                  <div className="wizard-key-label">Outil d'outreach</div>
+                  <select className="form-input" value={outreachProvider} onChange={e => { setOutreachProvider(e.target.value); setOutreachKey(''); }} style={{ marginBottom: 8 }}>
+                    <option value="">-- Sélectionner votre outil --</option>
+                    {OUTREACH_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  {outreachProvider && (
+                    <>
+                      <input
+                        className="form-input"
+                        type="password"
+                        placeholder={OUTREACH_OPTIONS.find(o => o.value === outreachProvider)?.placeholder}
+                        value={outreachKey}
+                        onChange={e => setOutreachKey(e.target.value)}
+                      />
+                      <div className="wizard-key-hint">
+                        Trouvable dans {outreachProvider === 'lemlist' ? 'Lemlist \u2192 Settings \u2192 Integrations' : `${selectedOutreach?.label || outreachProvider} \u2192 Settings \u2192 API`}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="wizard-key-row">
@@ -230,14 +259,13 @@ export default function OnboardingWizard({ onComplete }) {
                   <select
                     className="form-input"
                     value={crmProvider}
-                    onChange={e => setCrmProvider(e.target.value)}
+                    onChange={e => { setCrmProvider(e.target.value); setCrmKey(''); }}
                     style={{ marginBottom: 8 }}
                   >
                     <option value="">-- Sélectionner votre CRM --</option>
                     <option value="hubspot">HubSpot</option>
                     <option value="pipedrive">Pipedrive</option>
                     <option value="salesforce">Salesforce</option>
-                    <option value="folk">Folk</option>
                   </select>
                   {crmProvider && (
                     <>
@@ -249,10 +277,9 @@ export default function OnboardingWizard({ onComplete }) {
                         onChange={e => setCrmKey(e.target.value)}
                       />
                       <div className="wizard-key-hint">
-                        {crmProvider === 'hubspot' && 'Trouvable dans HubSpot → Settings → Integrations → Private Apps'}
-                        {crmProvider === 'pipedrive' && 'Trouvable dans Pipedrive → Settings → Personal preferences → API'}
-                        {crmProvider === 'salesforce' && 'Trouvable dans Salesforce → Setup → Apps → Connected Apps'}
-                        {crmProvider === 'folk' && 'Trouvable dans Folk → Settings → API'}
+                        {crmProvider === 'hubspot' && 'Trouvable dans HubSpot \u2192 Settings \u2192 Integrations \u2192 Private Apps'}
+                        {crmProvider === 'pipedrive' && 'Trouvable dans Pipedrive \u2192 Settings \u2192 Personal preferences \u2192 API'}
+                        {crmProvider === 'salesforce' && 'Trouvable dans Salesforce \u2192 Setup \u2192 Apps \u2192 Connected Apps'}
                       </div>
                     </>
                   )}
@@ -351,24 +378,24 @@ export default function OnboardingWizard({ onComplete }) {
             </div>
             <div className="wizard-checklist">
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{company ? '✅' : '⬜'}</span>
-                <span>Profil entreprise {company ? `— ${company}` : '(à compléter plus tard)'}</span>
+                <span className="wizard-check-icon">{company ? '\u2705' : '\u2B1C'}</span>
+                <span>Profil entreprise {company ? `\u2014 ${company}` : '(à compléter plus tard)'}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{lemlistKey ? '✅' : '⬜'}</span>
-                <span>Lemlist {lemlistKey ? '— Connecté' : '(à configurer dans Paramètres)'}</span>
+                <span className="wizard-check-icon">{outreachKey && outreachProvider ? '\u2705' : '\u2B1C'}</span>
+                <span>{outreachLabel} {outreachKey && outreachProvider ? '\u2014 Connecté' : '(à configurer dans Paramètres)'}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{crmKey && crmProvider ? '✅' : '⬜'}</span>
-                <span>CRM {crmKey && crmProvider ? `— ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : '(optionnel — configurable dans Paramètres)'}</span>
+                <span className="wizard-check-icon">{crmKey && crmProvider ? '\u2705' : '\u2B1C'}</span>
+                <span>CRM {crmKey && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : '(optionnel \u2014 configurable dans Paramètres)'}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{targetSectors || personaPrimary ? '✅' : '⬜'}</span>
-                <span>Ciblage {targetSectors ? `— ${targetSectors}` : '(à compléter plus tard)'}</span>
+                <span className="wizard-check-icon">{targetSectors || personaPrimary ? '\u2705' : '\u2B1C'}</span>
+                <span>Ciblage {targetSectors ? `\u2014 ${targetSectors}` : '(à compléter plus tard)'}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">✅</span>
-                <span>Style — {tone}, {formality}</span>
+                <span className="wizard-check-icon">{'\u2705'}</span>
+                <span>Style \u2014 {tone}, {formality}</span>
               </div>
             </div>
           </>

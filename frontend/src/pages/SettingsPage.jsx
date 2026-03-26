@@ -5,42 +5,42 @@
    Backend: routes/settings.js (GET/POST /api/settings/keys, POST /keys/test)
    =============================================================================== */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getKeys, saveKeys, testKeys, syncLemlist, syncCRM } from '../services/api-client';
 import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
 
-/* ─── Key definitions grouped by category ─── */
+/* ─── Unified tool list organized by category ─── */
 
-const CORE_KEYS = [
-  { field: 'lemlistKey', label: 'Lemlist', desc: 'Campagnes email et LinkedIn, séquences multi-canal', placeholder: 'Votre clé API Lemlist', required: true, color: '#6C5CE7', icon: 'L' },
-  { field: 'crmKey', label: 'CRM', desc: 'Synchronisation contacts et deals', placeholder: 'Votre clé API CRM', required: true, color: '#FF6B35', icon: 'R',
-    crmSelector: true, crmOptions: [
-      { value: 'hubspot', label: 'HubSpot', placeholder: 'pat-...' },
-      { value: 'salesforce', label: 'Salesforce', placeholder: 'Votre clé API Salesforce' },
-      { value: 'pipedrive', label: 'Pipedrive', placeholder: 'Votre clé API Pipedrive' },
+const TOOL_CATEGORIES = [
+  {
+    label: 'Outreach',
+    description: 'Votre outil principal d\'envoi de campagnes',
+    keys: [
+      { field: 'lemlistKey', label: 'Lemlist', desc: 'Campagnes email et LinkedIn, séquences multi-canal', placeholder: 'Votre clé API Lemlist', color: '#6C5CE7', icon: 'L' },
+      { field: 'apolloKey', label: 'Apollo', desc: 'Base B2B + séquences email automatisées', placeholder: 'Votre clé API Apollo', color: '#6C5CE7', icon: 'A' },
+      { field: 'instantlyKey', label: 'Instantly', desc: 'Cold email à grande échelle', placeholder: 'Votre clé API Instantly', color: '#0984E3', icon: 'In' },
+      { field: 'lgmKey', label: 'La Growth Machine', desc: 'Séquences multi-canal automatisées', placeholder: 'Votre clé API LGM', color: '#6C5CE7', icon: 'LG' },
+      { field: 'waalaxyKey', label: 'Waalaxy', desc: 'Automatisation LinkedIn + email', placeholder: 'Votre clé API Waalaxy', color: '#A29BFE', icon: 'W' },
     ],
   },
-];
-
-const EXTENDED_GROUPS = [
+  {
+    label: 'CRM',
+    description: 'Synchronisation contacts et deals',
+    keys: [
+      { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM complet + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H' },
+      { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise + reporting avancé', placeholder: 'Votre clé API Salesforce', color: '#00A1E0', icon: 'S' },
+      { field: 'pipedriveKey', label: 'Pipedrive', desc: 'CRM visuel orienté vente', placeholder: 'Votre clé API Pipedrive', color: '#017737', icon: 'P' },
+    ],
+  },
   {
     label: 'Enrichissement',
     keys: [
       { field: 'dropcontactKey', label: 'DropContact', desc: 'Enrichissement email et téléphone', placeholder: 'Votre clé API DropContact', color: '#00B894', icon: 'D' },
-      { field: 'apolloKey', label: 'Apollo', desc: 'Base de données B2B et enrichissement', placeholder: 'Votre clé API Apollo', color: '#6C5CE7', icon: 'A' },
       { field: 'hunterKey', label: 'Hunter', desc: 'Recherche et vérification d\'emails', placeholder: 'Votre clé API Hunter', color: '#FF7675', icon: 'H' },
       { field: 'kasprKey', label: 'Kaspr', desc: 'Données LinkedIn en temps réel', placeholder: 'Votre clé API Kaspr', color: '#0984E3', icon: 'K' },
       { field: 'lushaKey', label: 'Lusha', desc: 'Coordonnées professionnelles', placeholder: 'Votre clé API Lusha', color: '#00CEC9', icon: 'Lu' },
       { field: 'snovKey', label: 'Snov.io', desc: 'Email finder et drip campaigns', placeholder: 'Votre clé API Snov', color: '#E17055', icon: 'S' },
-    ],
-  },
-  {
-    label: 'Outreach',
-    keys: [
-      { field: 'instantlyKey', label: 'Instantly', desc: 'Cold email à grande échelle', placeholder: 'Votre clé API Instantly', color: '#0984E3', icon: 'In' },
-      { field: 'lgmKey', label: 'La Growth Machine', desc: 'Séquences multi-canal automatisées', placeholder: 'Votre clé API LGM', color: '#6C5CE7', icon: 'LG' },
-      { field: 'waalaxyKey', label: 'Waalaxy', desc: 'Automatisation LinkedIn + email', placeholder: 'Votre clé API Waalaxy', color: '#A29BFE', icon: 'W' },
     ],
   },
   {
@@ -105,23 +105,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState({});
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [showExtended, setShowExtended] = useState(false);
-  const [crmProvider, setCrmProvider] = useState(() => {
-    return localStorage.getItem('bakal-crm-provider') || '';
-  });
-  const extendedRef = useRef(null);
-  const [extendedHeight, setExtendedHeight] = useState(0);
 
-  useEffect(() => {
-    if (showExtended && extendedRef.current) {
-      // Measure after render with rAF to get correct scrollHeight
-      requestAnimationFrame(() => {
-        if (extendedRef.current) {
-          setExtendedHeight(extendedRef.current.scrollHeight);
-        }
-      });
-    }
-  }, [showExtended]);
   const [syncStatus, setSyncStatus] = useState(null);
   const [crmSyncStatus, setCrmSyncStatus] = useState(null);
   const { socket } = useSocket();
@@ -345,29 +329,27 @@ export default function SettingsPage() {
 
   /* ─── Count configured keys ─── */
 
-  const allKeyDefs = [
-    ...CORE_KEYS,
-    ...EXTENDED_GROUPS.flatMap(g => g.keys),
-  ];
+  const allKeyDefs = TOOL_CATEGORIES.flatMap(g => g.keys);
   const configuredCount = Object.values(keyStatus).filter(k => k.configured).length;
   const totalCount = Object.keys(keyStatus).length || allKeyDefs.length;
 
+  /* ─── Detect connected CRM ─── */
+
+  const crmFields = ['hubspotKey', 'salesforceKey', 'pipedriveKey'];
+  const connectedCrm = crmFields.find(f => keyStatus[f]?.configured);
+
   /* ─── Render key row ─── */
 
-  function renderKeyRow(keyDef) {
-    const actualField = keyDef.crmSelector
-      ? (crmProvider ? crmProvider + 'Key' : keyDef.field)
-      : keyDef.field;
-    const info = keyStatus[actualField] || {};
-    const isEditing = editing[actualField];
-    const test = testStatus[actualField];
-    const selectedCrm = keyDef.crmSelector ? keyDef.crmOptions?.find(o => o.value === crmProvider) : null;
-    const placeholder = selectedCrm?.placeholder || keyDef.placeholder;
+  function renderKeyRow(keyDef, isConnected) {
+    const info = keyStatus[keyDef.field] || {};
+    const isEditing = editing[keyDef.field];
+    const test = testStatus[keyDef.field];
 
     return (
       <div className="settings-key-row" key={keyDef.field} style={{
         display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 20px',
         borderBottom: '1px solid var(--border)', transition: 'background 0.15s',
+        borderLeft: isConnected ? '3px solid var(--success)' : '3px solid transparent',
       }}>
         {/* Icon */}
         <div style={{
@@ -385,37 +367,10 @@ export default function SettingsPage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
             <span style={{ fontWeight: 600, fontSize: 14 }}>{keyDef.label}</span>
-            {keyDef.required && <span className="settings-required">requis</span>}
             {test && <StatusBadge status={test} />}
           </div>
           {keyDef.desc && (
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, lineHeight: 1.4 }}>{keyDef.desc}</div>
-          )}
-
-          {/* CRM selector */}
-          {keyDef.crmSelector && (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-              {keyDef.crmOptions.map(opt => (
-                <button
-                  key={opt.value}
-                  className={`btn btn-ghost btn-sm${crmProvider === opt.value ? ' active' : ''}`}
-                  style={{
-                    fontSize: 11, padding: '4px 10px',
-                    ...(crmProvider === opt.value ? { background: 'var(--accent-glow)', borderColor: 'var(--blue)' } : {}),
-                  }}
-                  onClick={() => {
-                    setCrmProvider(opt.value);
-                    localStorage.setItem('bakal-crm-provider', opt.value);
-                    // Auto-open input for this CRM
-                    const field = opt.value + 'Key';
-                    setEditing(prev => ({ ...prev, [field]: true }));
-                    setDrafts(prev => ({ ...prev, [field]: '' }));
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
           )}
 
           {info.configured && !isEditing && (
@@ -427,19 +382,19 @@ export default function SettingsPage() {
               <input
                 className="form-input"
                 type="password"
-                placeholder={placeholder}
-                value={drafts[actualField] || ''}
-                onChange={e => setDrafts(prev => ({ ...prev, [actualField]: e.target.value }))}
+                placeholder={keyDef.placeholder}
+                value={drafts[keyDef.field] || ''}
+                onChange={e => setDrafts(prev => ({ ...prev, [keyDef.field]: e.target.value }))}
                 autoFocus
                 onKeyDown={e => {
-                  if (e.key === 'Enter') saveField(actualField);
-                  if (e.key === 'Escape') cancelEdit(actualField);
+                  if (e.key === 'Enter') saveField(keyDef.field);
+                  if (e.key === 'Escape') cancelEdit(keyDef.field);
                 }}
                 style={{ flex: 1, fontSize: 13, padding: '8px 12px' }}
               />
-              <button className="btn btn-primary btn-sm" onClick={() => saveField(actualField)}
-                disabled={saving || !(drafts[actualField] || '').trim()}>Sauver</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => cancelEdit(actualField)}>Annuler</button>
+              <button className="btn btn-primary btn-sm" onClick={() => saveField(keyDef.field)}
+                disabled={saving || !(drafts[keyDef.field] || '').trim()}>Sauver</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => cancelEdit(keyDef.field)}>Annuler</button>
             </div>
           )}
         </div>
@@ -447,12 +402,12 @@ export default function SettingsPage() {
         {/* Actions */}
         {!isEditing && (
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => startEdit(actualField)}>
+            <button className="btn btn-ghost btn-sm" onClick={() => startEdit(keyDef.field)}>
               {info.configured ? 'Modifier' : 'Configurer'}
             </button>
             {info.configured && (
               <button className="btn btn-ghost btn-sm settings-btn-danger"
-                onClick={() => removeField(actualField)} disabled={saving}>Supprimer</button>
+                onClick={() => removeField(keyDef.field)} disabled={saving}>Supprimer</button>
             )}
           </div>
         )}
@@ -488,15 +443,20 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Core integrations */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">Core</div>
+      {/* Tool categories — flat unified list */}
+      {TOOL_CATEGORIES.map(cat => (
+        <div className="card" key={cat.label} style={{ marginBottom: 16 }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">{cat.label}</div>
+              {cat.description && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{cat.description}</div>}
+            </div>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {cat.keys.map(keyDef => renderKeyRow(keyDef, keyStatus[keyDef.field]?.configured))}
+          </div>
         </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {CORE_KEYS.map(renderKeyRow)}
-        </div>
-      </div>
+      ))}
 
       {/* Lemlist Sync */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -547,7 +507,9 @@ export default function SettingsPage() {
           <div>
             <div className="card-title">Analyse CRM</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-              Synchronise vos deals CRM et analyse les patterns de conversion avec Claude
+              {connectedCrm
+                ? `Synchronise vos deals ${connectedCrm.replace('Key', '')} et analyse les patterns de conversion avec Claude`
+                : 'Synchronise vos deals CRM et analyse les patterns de conversion avec Claude'}
             </div>
           </div>
           <button
@@ -582,42 +544,6 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Integrations library */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setShowExtended(p => !p)}>
-          <div className="card-title">Bibliothèque d'intégrations</div>
-          <span style={{
-            fontSize: 12, color: 'var(--text-muted)',
-            transition: 'transform 0.3s ease',
-            transform: showExtended ? 'rotate(180deg)' : 'rotate(0deg)',
-            display: 'inline-block',
-          }}>
-            {showExtended ? '\u25B2' : '\u25BC'}
-          </span>
-        </div>
-        <div ref={extendedRef} style={{
-          maxHeight: showExtended ? (extendedHeight || 3000) + 'px' : '0',
-          overflow: 'hidden',
-          transition: showExtended
-            ? 'max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease-out'
-            : 'max-height 0.35s cubic-bezier(0.4, 0, 0.6, 1), opacity 0.2s ease-in',
-          opacity: showExtended ? 1 : 0,
-        }}>
-          {EXTENDED_GROUPS.map(group => (
-            <div key={group.label}>
-              <div style={{
-                fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
-                letterSpacing: '0.5px', color: 'var(--text-muted)',
-                padding: '14px 20px 6px', borderTop: '1px solid var(--border)',
-              }}>
-                {group.label}
-              </div>
-              {group.keys.map(renderKeyRow)}
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Preferences */}
