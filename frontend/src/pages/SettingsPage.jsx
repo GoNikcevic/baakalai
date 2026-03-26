@@ -431,7 +431,7 @@ export default function SettingsPage() {
           <div className="card-title">Intégrations</div>
         </div>
         <div className="card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {MAIN_TOOLS.map(tool => {
               const isConnected = keyStatus[tool.field]?.configured;
               const isEditing = editing[tool.field];
