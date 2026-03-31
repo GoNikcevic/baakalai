@@ -106,6 +106,11 @@ function initSchema() {
       accept_rate REAL,
       interested INTEGER DEFAULT 0,
       sort_order INTEGER DEFAULT 0,
+      parent_step_id TEXT,
+      condition_type TEXT,
+      condition_value TEXT,
+      branch_label TEXT,
+      is_root INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

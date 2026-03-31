@@ -3371,3 +3371,25 @@ body {
   .crm-conversion-labels { min-width: 120px; }
   .crm-breakdown-label { min-width: 100px; }
 }
+
+/* ── Sequence Tree (conditional branches) ── */
+.seq-tree { display: flex; flex-direction: column; gap: 0; }
+.seq-tree-branch { position: relative; }
+.seq-tree-branch + .seq-tree-branch { margin-top: 4px; }
+.seq-tree-condition {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; margin: 8px 0 4px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  border-left: 2px solid var(--border);
+}
+.seq-tree-condition-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.seq-tree-condition-label { white-space: nowrap; }
+.seq-tree-children {
+  border-left: 2px dashed var(--border);
+  margin-left: 16px; padding-left: 8px;
+}
+.seq-tree-children .seq-tree-children {
+  border-left-style: dotted;
+}

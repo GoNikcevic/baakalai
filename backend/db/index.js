@@ -247,8 +247,9 @@ const touchpoints = {
   async create(campaignId, data) {
     const result = await query(`
       INSERT INTO touchpoints (campaign_id, step, type, label, sub_type, timing,
-        subject, body, max_chars, sort_order)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        subject, body, max_chars, sort_order,
+        parent_step_id, condition_type, condition_value, branch_label, is_root)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `, [
       campaignId,
@@ -261,6 +262,11 @@ const touchpoints = {
       data.body || '',
       data.maxChars || null,
       data.sortOrder || 0,
+      data.parentStepId || null,
+      data.conditionType || null,
+      data.conditionValue || null,
+      data.branchLabel || null,
+      data.isRoot !== undefined ? data.isRoot : true,
     ]);
     return result.rows[0];
   },
@@ -280,6 +286,12 @@ const touchpoints = {
       accept_rate: 'accept_rate', acceptRate: 'accept_rate',
       interested: 'interested',
       sort_order: 'sort_order', sortOrder: 'sort_order',
+      // Conditional/branching fields
+      parent_step_id: 'parent_step_id', parentStepId: 'parent_step_id',
+      condition_type: 'condition_type', conditionType: 'condition_type',
+      condition_value: 'condition_value', conditionValue: 'condition_value',
+      branch_label: 'branch_label', branchLabel: 'branch_label',
+      is_root: 'is_root', isRoot: 'is_root',
       // A/B variant B fields
       subject_b: 'subject_b', subjectB: 'subject_b',
       body_b: 'body_b', bodyB: 'body_b',
@@ -299,6 +311,22 @@ const touchpoints = {
     sets.push('updated_at = now()');
     values.push(id);
     await query(`UPDATE touchpoints SET ${sets.join(', ')} WHERE id = $${i}`, values);
+  },
+
+  async listTreeByCampaign(campaignId) {
+    const result = await query(
+      'SELECT * FROM touchpoints WHERE campaign_id = $1 ORDER BY sort_order',
+      [campaignId]
+    );
+    const all = result.rows;
+    // Build tree: root steps have is_root=true or parent_step_id=null
+    const roots = all.filter(t => !t.parent_step_id);
+    function attachChildren(node) {
+      node.children = all.filter(t => t.parent_step_id === node.id);
+      node.children.forEach(attachChildren);
+      return node;
+    }
+    return roots.map(attachChildren);
   },
 
   async deleteByCampaign(campaignId) {

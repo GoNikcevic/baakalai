@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════ */
 
 import { useState, useMemo } from 'react';
-import SequenceStep from './SequenceStep';
+import SequenceTree from './SequenceTree';
 import ABTestPanel from './ABTestPanel';
 import DiagnosticPanel from './DiagnosticPanel';
 import VersionDiff from './VersionDiff';
@@ -221,9 +221,7 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
           </div>
         </div>
         <div className="sequence-steps">
-          {(c.sequence || []).map((step) => (
-            <SequenceStep key={step.id} step={step} faded={false} />
-          ))}
+          <SequenceTree sequence={c.sequence} />
         </div>
       </div>
 

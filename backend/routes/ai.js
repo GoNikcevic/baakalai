@@ -47,6 +47,37 @@ async function enrichWithProfile(params, userId) {
   return params;
 }
 
+/**
+ * Save a tree of touchpoints recursively.
+ * Each node may have .children[] which are also saved with parent_step_id set.
+ */
+async function saveTouchpointTree(campaignId, nodes, parentId = null, startSort = 0) {
+  let sortOrder = startSort;
+  for (const node of nodes) {
+    const saved = await db.touchpoints.create(campaignId, {
+      step: node.step,
+      type: node.type,
+      label: node.label || '',
+      subType: node.subType || '',
+      timing: node.timing || '',
+      subject: node.subject || null,
+      body: node.body || '',
+      maxChars: node.type === 'linkedin' && node.step?.startsWith('L') ? 300 : null,
+      sortOrder,
+      parentStepId: parentId,
+      conditionType: node.conditionType || null,
+      conditionValue: node.conditionValue || null,
+      branchLabel: node.branchLabel || null,
+      isRoot: !parentId,
+    });
+    sortOrder++;
+    if (node.children && node.children.length > 0) {
+      sortOrder = await saveTouchpointTree(campaignId, node.children, saved.id, sortOrder);
+    }
+  }
+  return sortOrder;
+}
+
 // POST /api/ai/generate-sequence
 router.post('/generate-sequence', async (req, res, next) => {
   try {
@@ -62,19 +93,25 @@ router.post('/generate-sequence', async (req, res, next) => {
 
     if (params.campaignId && result.parsed?.sequence) {
       await db.touchpoints.deleteByCampaign(params.campaignId);
-      for (let i = 0; i < result.parsed.sequence.length; i++) {
-        const tp = result.parsed.sequence[i];
-        await db.touchpoints.create(params.campaignId, {
-          step: tp.step,
-          type: tp.type,
-          label: tp.label,
-          subType: tp.subType,
-          timing: tp.timing,
-          subject: tp.subject,
-          body: tp.body,
-          maxChars: tp.maxChars || (tp.step.startsWith('L') && tp.step.includes('1') ? 300 : null),
-          sortOrder: i,
-        });
+      // Check if any node has children (conditional branches)
+      const hasTree = result.parsed.sequence.some(tp => tp.children && tp.children.length > 0);
+      if (hasTree) {
+        await saveTouchpointTree(params.campaignId, result.parsed.sequence);
+      } else {
+        for (let i = 0; i < result.parsed.sequence.length; i++) {
+          const tp = result.parsed.sequence[i];
+          await db.touchpoints.create(params.campaignId, {
+            step: tp.step,
+            type: tp.type,
+            label: tp.label,
+            subType: tp.subType,
+            timing: tp.timing,
+            subject: tp.subject,
+            body: tp.body,
+            maxChars: tp.maxChars || (tp.step.startsWith('L') && tp.step.includes('1') ? 300 : null),
+            sortOrder: i,
+          });
+        }
       }
     }
 

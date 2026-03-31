@@ -133,7 +133,31 @@ Chaque touchpoint doit suivre un rôle précis dans la séquence :
       "subject": "Ligne d'objet variante A",
       "subjectB": "Ligne d'objet variante B",
       "body": "Corps du message avec {{variables}}",
-      "bodyB": "Variante B du corps (optionnel, si l'angle est différent)"
+      "bodyB": "Variante B du corps (optionnel, si l'angle est différent)",
+      "children": [
+        {
+          "step": "E2a",
+          "type": "email",
+          "label": "Relance si ouvert",
+          "timing": "J+3",
+          "conditionType": "opened",
+          "branchLabel": "Si ouvert",
+          "subject": "...",
+          "body": "...",
+          "children": []
+        },
+        {
+          "step": "E2b",
+          "type": "email",
+          "label": "Nouvel objet si pas ouvert",
+          "timing": "J+3",
+          "conditionType": "not_opened",
+          "branchLabel": "Si pas ouvert",
+          "subject": "...",
+          "body": "...",
+          "children": []
+        }
+      ]
     }
   ],
   "strategy": "Explication en 2-3 phrases de la stratégie globale de la séquence",
@@ -142,7 +166,29 @@ Chaque touchpoint doit suivre un rôle précis dans la séquence :
     "Hypothèse 2 : ..."
   ]
 }
-\`\`\``;
+\`\`\`
+
+## Séquences conditionnelles (optionnel)
+
+Si le canal est "multi" ou si le nombre de touchpoints >= 5, tu PEUX proposer des branches conditionnelles.
+Utilise la propriété "children" avec "conditionType" et "branchLabel" pour créer des embranchements.
+
+Conditions disponibles :
+- "opened" / "not_opened" — basé sur l'ouverture de l'email
+- "replied" / "not_replied" — basé sur la réponse
+- "clicked" / "not_clicked" — basé sur le clic d'un lien
+- "accepted" / "not_accepted" — basé sur l'acceptation LinkedIn
+
+Exemples de scénarios avec branches :
+1. Email → SI ouvert → relance douce / SI PAS ouvert → nouvel objet
+2. LinkedIn connexion → SI accepté → message / SI PAS accepté → email
+3. Email initial → SI répondu → FIN / SI PAS répondu → Email relance → LinkedIn
+
+Règles pour les branches :
+- Maximum 2 branches par noeud (un noeud a au plus 2 enfants)
+- Maximum 3 niveaux de profondeur
+- Chaque branche DOIT avoir un branchLabel en français
+- Les séquences linéaires (sans branche) restent VALIDES — ne rajoute PAS children si la séquence est simple`;
 }
 
 // =============================================
@@ -406,6 +452,11 @@ ${touchpointStats || 'Aucune stat par touchpoint disponible'}
 | Acceptation LinkedIn | >30% | 15-30% | <15% |
 | Réponse LinkedIn | >10% | 5-10% | <5% |
 
+## Séquences conditionnelles
+Si la séquence contient des branches conditionnelles (touchpoints avec parent_step_id et condition_type), analyse la performance de CHAQUE branche séparément.
+Indique quelle condition/branche performe le mieux et pourquoi.
+Les priorités de régénération doivent spécifier le step ET la branche concernée (ex: "E2a — branche Si ouvert").
+
 ## Ta mission
 
 Fournis un diagnostic structuré en JSON :
@@ -488,6 +539,15 @@ ${memorySection}
 - Formalité : ${clientParams.formality || 'Vous'}
 - Longueur : ${clientParams.length || 'Standard'}
 - Secteur : ${clientParams.sector || 'Non spécifié'}
+
+## Séquences conditionnelles
+Si les messages originaux contiennent des branches conditionnelles (propriété "children"), préserve la structure arborescente.
+Tu peux proposer de :
+- Modifier le contenu d'une branche spécifique
+- Réorganiser les conditions (ex: changer "Si ouvert" en "Si répondu")
+- Ajouter une nouvelle branche si la structure le justifie
+- Supprimer une branche sous-performante
+Le format de sortie doit conserver la structure "children" si elle existe dans l'original.
 
 ## Règles impératives
 1. Préserve les variables Lemlist : {{firstName}}, {{lastName}}, {{companyName}}, {{jobTitle}}
