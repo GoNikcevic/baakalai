@@ -18,6 +18,8 @@ const NAV_ITEMS = [
   { label: 'Campagnes',           to: '/campaigns',    icon: 'campaigns' },
   { label: 'Copy & S\u00e9quences', to: '/copyeditor', icon: 'copy' },
   { label: 'Performance',         to: '/performance',  icon: 'reports' },
+  { label: 'M\u00e9moire IA',     to: '/memory',       icon: 'memory' },
+  { label: 'CRM Analytics',       to: '/crm-analytics', icon: 'crm' },
   { label: 'Profil',              to: '/profil',       icon: 'profil' },
   { label: 'Param\u00e8tres',     to: '/settings',     icon: 'settings' },
 ];
@@ -75,6 +77,18 @@ function NavIcon({ name }) {
     profil: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+      </svg>
+    ),
+    memory: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
+        <line x1="9" y1="21" x2="15" y2="21" />
+      </svg>
+    ),
+    crm: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" />
+        <line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" />
       </svg>
     ),
     settings: (

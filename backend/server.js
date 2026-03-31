@@ -21,6 +21,7 @@ const projectsRouter = require('./routes/projects');
 const variablesRouter = require('./routes/variables');
 const exportRouter = require('./routes/export');
 const crmRouter = require('./routes/crm');
+const analyticsRouter = require('./routes/analytics');
 const orchestrator = require('./orchestrator');
 const logger = require('./lib/logger');
 
@@ -111,6 +112,7 @@ app.use('/api/projects', requireAuth, projectsRouter);
 app.use('/api/variables', requireAuth, variablesRouter);
 app.use('/api/export', requireAuth, exportRouter);
 app.use('/api/crm', requireAuth, crmRouter);
+app.use('/api/analytics', requireAuth, analyticsRouter);
 app.use('/api/templates', require('./routes/templates'));
 
 // SPA catch-all — serve React index.html for non-API routes

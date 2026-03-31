@@ -5,6 +5,8 @@
 import { useState, useMemo } from 'react';
 import SequenceStep from './SequenceStep';
 import ABTestPanel from './ABTestPanel';
+import DiagnosticPanel from './DiagnosticPanel';
+import VersionDiff from './VersionDiff';
 import { DiagBlock, InfoRow } from './shared';
 import api from '../../services/api-client';
 
@@ -226,37 +228,7 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
       </div>
 
       {/* Diagnostics */}
-      {(c.diagnostics || []).length > 0 && (
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '24px',
-            marginBottom: '24px',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '15px',
-              fontWeight: 600,
-              marginBottom: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            🤖 Diagnostic par étape — Claude
-          </div>
-          <div
-            style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-          >
-            {c.diagnostics.map((d, i) => (
-              <DiagBlock key={i} color={d.level} title={d.title} text={d.text} />
-            ))}
-          </div>
-        </div>
-      )}
+      <DiagnosticPanel campaignId={c._backendId || c.id} sequence={c.sequence} />
 
       {/* History + Info grid */}
       <div
@@ -264,40 +236,7 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
         style={{ gridTemplateColumns: '1fr 1fr' }}
       >
         {/* History */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">📜 Historique des modifications</div>
-          </div>
-          <div className="card-body">
-            <div className="mod-history">
-              {(c.history || []).map((h, i) => (
-                <div className="mod-item" key={i}>
-                  <div className="mod-version">{h.version}</div>
-                  <div className="mod-content">
-                    <div className="mod-title">{h.title}</div>
-                    <div className="mod-desc">{h.desc}</div>
-                    <div className={`mod-result ${h.result}`}>
-                      {h.resultText}
-                    </div>
-                  </div>
-                  <div className="mod-date">{h.date}</div>
-                </div>
-              ))}
-              {(c.history || []).length === 0 && (
-                <div
-                  style={{
-                    fontSize: '13px',
-                    color: 'var(--text-muted)',
-                    padding: '16px 0',
-                    textAlign: 'center',
-                  }}
-                >
-                  Aucune modification enregistrée.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <VersionDiff campaignId={c._backendId || c.id} sequence={c.sequence} />
 
         {/* Info panel */}
         <div className="card">
