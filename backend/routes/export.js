@@ -185,4 +185,99 @@ router.get('/report/pdf', async (req, res, next) => {
   }
 });
 
+// GET /api/export/opportunities/csv — export all opportunities with scores
+router.get('/opportunities/csv', async (req, res, next) => {
+  try {
+    const opps = await db.opportunities.list(req.user.id);
+    const headers = [
+      'Nom', 'Titre', 'Entreprise', 'Taille', 'Statut',
+      'Score', 'Engagement', 'Fit', 'Campagne', 'Date creation',
+    ];
+
+    const rows = opps.map(o => {
+      const breakdown = typeof o.score_breakdown === 'string'
+        ? JSON.parse(o.score_breakdown || '{}')
+        : (o.score_breakdown || {});
+      return [
+        o.name, o.title || '', o.company || '', o.company_size || '', o.status,
+        o.score || 0, breakdown.engagement || 0, breakdown.fit || 0,
+        o.campaign_name || '', o.created_at || '',
+      ];
+    });
+
+    const csvLines = [headers.map(escapeCsv).join(',')];
+    for (const row of rows) {
+      csvLines.push(row.map(escapeCsv).join(','));
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="bakal-opportunities.csv"');
+    res.send('\uFEFF' + csvLines.join('\n'));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/export/crm-report/pdf — CRM analytics PDF report
+router.get('/crm-report/pdf', async (req, res, next) => {
+  try {
+    const campaigns = await db.campaigns.list({ userId: req.user.id });
+    const opps = await db.opportunities.list(req.user.id);
+    const kpis = await db.dashboardKpis(req.user.id);
+
+    // Pipeline breakdown
+    const stages = {};
+    for (const o of opps) {
+      stages[o.status] = (stages[o.status] || 0) + 1;
+    }
+
+    // Per-campaign attribution
+    const campaignMap = {};
+    for (const c of campaigns) {
+      campaignMap[c.id] = { name: c.name, channel: c.channel, prospects: c.nb_prospects || 0, meetings: c.meetings || 0, interested: c.interested || 0 };
+    }
+
+    const stageLabels = { new: 'Nouveau', interested: 'Intéressé', meeting: 'RDV', negotiation: 'Négociation', won: 'Gagné', lost: 'Perdu' };
+    const stageRows = Object.entries(stages).map(([k, v]) => `<tr><td>${esc(stageLabels[k] || k)}</td><td>${v}</td></tr>`).join('');
+    const campRows = campaigns.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.channel)}</td><td>${c.nb_prospects || 0}</td><td>${c.interested || 0}</td><td>${c.meetings || 0}</td></tr>`).join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>CRM Report — Bakal</title>
+<style>
+body { font-family: 'Segoe UI', sans-serif; margin: 40px; color: #1a1a2e; }
+h1 { font-size: 22px; margin-bottom: 4px; }
+h2 { font-size: 16px; margin-top: 32px; margin-bottom: 12px; color: #333; }
+.subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
+.kpi-grid { display: flex; gap: 16px; margin-bottom: 32px; }
+.kpi { background: #f8f9fa; border-radius: 8px; padding: 16px 20px; flex: 1; }
+.kpi-value { font-size: 24px; font-weight: 700; }
+.kpi-label { font-size: 11px; color: #666; margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 24px; }
+th { text-align: left; padding: 8px 12px; background: #f0f0f5; border-bottom: 2px solid #ddd; font-size: 11px; text-transform: uppercase; color: #555; }
+td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+.footer { margin-top: 40px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 12px; }
+@media print { body { margin: 20px; } }
+</style></head><body>
+<h1>Rapport CRM — Bakal</h1>
+<div class="subtitle">Généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-value">${opps.length}</div><div class="kpi-label">Opportunités totales</div></div>
+  <div class="kpi"><div class="kpi-value">${stages.won || 0}</div><div class="kpi-label">Deals gagnés</div></div>
+  <div class="kpi"><div class="kpi-value">${stages.meeting || 0}</div><div class="kpi-label">En RDV</div></div>
+  <div class="kpi"><div class="kpi-value">${kpis.total_meetings || 0}</div><div class="kpi-label">RDV obtenus (total)</div></div>
+</div>
+<h2>Pipeline par étape</h2>
+<table><thead><tr><th>Étape</th><th>Nombre</th></tr></thead><tbody>${stageRows}</tbody></table>
+<h2>Attribution par campagne</h2>
+<table><thead><tr><th>Campagne</th><th>Canal</th><th>Prospects</th><th>Intéressés</th><th>RDV</th></tr></thead><tbody>${campRows}</tbody></table>
+<div class="footer">Bakal — Rapport CRM généré automatiquement. Données au ${new Date().toLocaleDateString('fr-FR')}.</div>
+</body></html>`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

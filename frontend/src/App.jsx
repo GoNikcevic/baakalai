@@ -15,9 +15,11 @@ const CampaignsList = lazy(() => import('./pages/CampaignsList'))
 const CopyEditorPage = lazy(() => import('./pages/CopyEditorPage'))
 const PerformancePage = lazy(() => import('./pages/PerformancePage'))
 const RecosPage = lazy(() => import('./pages/RecosPage'))
+const MemoryExplorerPage = lazy(() => import('./pages/MemoryExplorerPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
+const CRMAnalyticsPage = lazy(() => import('./pages/CRMAnalyticsPage'))
 
 // Public routes accessible without authentication
 const PUBLIC_PATHS = ['/reset-password']
@@ -144,9 +146,11 @@ export default function App() {
             <Route path="/copyeditor" element={<CopyEditorPage />} />
             <Route path="/performance" element={<PerformancePage />} />
             <Route path="/recos" element={<RecosPage />} />
+            <Route path="/memory" element={<MemoryExplorerPage />} />
             <Route path="/profil" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/integrations" element={<IntegrationsPage />} />
+            <Route path="/crm-analytics" element={<CRMAnalyticsPage />} />
             <Route path="/" element={<Navigate to="/chat" replace />} />
             <Route path="*" element={<Navigate to="/chat" replace />} />
           </Route>

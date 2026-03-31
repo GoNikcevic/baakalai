@@ -268,7 +268,7 @@ function TypingIndicator() {
   );
 }
 
-function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSendMessage, onActionExecute }) {
+function ChatMessage({ role, content, metadata, animate, isLast, onCreateCampaign, onSendMessage, onActionExecute }) {
   const avatar = role === 'assistant' ? 'b' : '~';
   const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
@@ -282,6 +282,8 @@ function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSen
   }
 
   const hasActionCard = metadata && metadata.action;
+  const quickReplies = metadata?.quick_replies;
+  const showQuickReplies = isLast && quickReplies && quickReplies.length > 0;
 
   return (
     <div
@@ -301,6 +303,9 @@ function ChatMessage({ role, content, metadata, animate, onCreateCampaign, onSen
             onModify={() => onSendMessage('Peux-tu ajuster cette campagne ?')}
             onActionExecute={onActionExecute}
           />
+        )}
+        {showQuickReplies && (
+          <QuickReplies replies={quickReplies} onSend={onSendMessage} />
         )}
         <div className="chat-msg-time">{timeStr}</div>
       </div>
@@ -358,8 +363,37 @@ function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage, 
             onActionExecute={onActionExecute}
           />
         )}
+        {showAction && metadata?.quick_replies?.length > 0 && (
+          <QuickReplies replies={metadata.quick_replies} onSend={onSendMessage} />
+        )}
         <div className="chat-msg-time">{timeStr}</div>
       </div>
+    </div>
+  );
+}
+
+function QuickReplies({ replies, onSend, disabled }) {
+  if (!replies || replies.length === 0) return null;
+  return (
+    <div className="chat-quick-replies">
+      {replies.map((r, i) => {
+        const type = r.type || 'option';
+        return (
+          <button
+            key={i}
+            className={`chat-quick-reply ${type}`}
+            onClick={() => !disabled && onSend(r.value || r.label)}
+            disabled={disabled}
+          >
+            {type === 'confirm' && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+            {escapeHtml(r.label)}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1113,13 +1147,14 @@ export default function ChatPage() {
             style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
           >
             <div className="chat-messages-inner" id="chatMessagesInner" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {messages.map((msg) => (
+              {messages.map((msg, idx) => (
                 <ChatMessage
                   key={msg.id}
                   role={msg.role}
                   content={msg.content}
                   metadata={msg.metadata}
                   animate={msg.animate}
+                  isLast={idx === messages.length - 1 && msg.role === 'assistant'}
                   onCreateCampaign={createCampaignFromChat}
                   onSendMessage={sendMessage}
                   onActionExecute={executeAction}

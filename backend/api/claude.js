@@ -307,6 +307,25 @@ Afficher le diagnostic détaillé :
 
 Tu peux inclure UN SEUL bloc JSON par réponse. Le texte autour du JSON sert d'explication pour l'utilisateur.
 
+RÉPONSES RAPIDES (quick_replies) :
+Quand tu poses une question à l'utilisateur avec des choix clairs, ajoute un champ "quick_replies" dans ton JSON pour afficher des boutons cliquables.
+Chaque quick_reply a un "label" (texte du bouton) et un "value" (le message envoyé quand l'utilisateur clique).
+Tu peux aussi inclure un "type" optionnel : "confirm" (bouton principal vert), "option" (bouton choix standard), ou "dismiss" (bouton secondaire gris).
+
+Exemples de quick_replies SEULS (sans action) :
+{ "quick_replies": [{ "label": "Email", "value": "Email", "type": "option" }, { "label": "LinkedIn", "value": "LinkedIn", "type": "option" }, { "label": "Multi-canal", "value": "Multi-canal", "type": "option" }] }
+
+{ "quick_replies": [{ "label": "Oui, on lance", "value": "Oui, je confirme", "type": "confirm" }, { "label": "Non, je veux modifier", "value": "Non, je veux modifier", "type": "dismiss" }] }
+
+Les quick_replies peuvent aussi être combinés avec une action :
+{ "action": "create_campaign", "campaign": { ... }, "quick_replies": [{ "label": "Créer cette campagne", "value": "Oui, crée cette campagne", "type": "confirm" }, { "label": "Modifier", "value": "Je veux modifier quelques paramètres", "type": "dismiss" }] }
+
+Utilise les quick_replies quand :
+- Tu poses une question avec 2-5 choix clairs (canal, ton, secteur, confirmation...)
+- Tu demandes une confirmation oui/non
+- Tu proposes des options à l'utilisateur
+N'utilise PAS les quick_replies pour les questions ouvertes où l'utilisateur doit écrire librement.
+
 ${context ? `\nContexte actuel de l'utilisateur :\n${context}` : ''}`;
 
   let response;
