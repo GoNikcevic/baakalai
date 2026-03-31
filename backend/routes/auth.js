@@ -300,15 +300,16 @@ router.get('/google/callback', async (req, res) => {
     if (!userRes.ok) throw new Error('User info failed');
     const googleUser = await userRes.json();
 
-    // Find or create user
-    let dbUser = await db.users.getByEmail(googleUser.email);
+    // Find or create user (normalize email to prevent duplicates)
+    const normalizedEmail = googleUser.email.toLowerCase().trim();
+    let dbUser = await db.users.getByEmail(normalizedEmail);
 
     if (!dbUser) {
       // Create new user (no password needed for OAuth)
       dbUser = await db.users.create({
-        email: googleUser.email,
+        email: normalizedEmail,
         passwordHash: 'GOOGLE_OAUTH',
-        name: googleUser.name || googleUser.email.split('@')[0],
+        name: googleUser.name || normalizedEmail.split('@')[0],
         company: null,
         role: 'client',
       });
