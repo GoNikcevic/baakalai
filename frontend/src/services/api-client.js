@@ -484,6 +484,14 @@ export async function generateVariables(params, dryRun = false) {
   });
 }
 
+/** Deploy a generated sequence to an outreach tool (Apollo, Instantly, Smartlead) */
+export async function deployToOutreach(provider, campaignName, touchpoints) {
+  return request('/ai/deploy-to-outreach', {
+    method: 'POST',
+    body: JSON.stringify({ provider, campaignName, touchpoints }),
+  });
+}
+
 /** Score leads */
 export async function scoreLeads() {
   return request('/ai/score-leads', { method: 'POST' });
@@ -730,6 +738,7 @@ const BakalAPI = {
   exportCampaignsCsv,
   exportCampaignCsv,
   exportReportPdf,
+  deployToOutreach,
   scoreLeads,
   exportScoresToCRM,
   downloadScoresCSV,

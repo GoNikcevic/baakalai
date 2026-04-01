@@ -499,6 +499,21 @@ router.get('/ab-status/:campaignId', async (req, res, next) => {
   }
 });
 
+// POST /api/ai/deploy-to-outreach
+router.post('/deploy-to-outreach', async (req, res, next) => {
+  try {
+    const { provider, campaignName, touchpoints } = req.body;
+    if (!provider || !campaignName || !touchpoints) {
+      return res.status(400).json({ error: 'provider, campaignName, and touchpoints required' });
+    }
+    const { deployToOutreach } = require('../lib/outreach-deploy');
+    const result = await deployToOutreach(req.user.id, provider, campaignName, touchpoints);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/ai/score-leads
 router.post('/score-leads', async (req, res, next) => {
   try {
