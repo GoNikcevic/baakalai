@@ -14,13 +14,14 @@ const isS3 = !!(process.env.S3_BUCKET && process.env.S3_REGION && S3Client);
 let s3Client = null;
 if (isS3) {
   s3Client = new S3Client({
-    region: process.env.S3_REGION,
-    endpoint: process.env.S3_ENDPOINT || undefined, // For Cloudflare R2 or MinIO
+    region: process.env.S3_REGION || 'auto',
+    endpoint: process.env.S3_ENDPOINT || undefined,
     credentials: {
       accessKeyId: process.env.S3_ACCESS_KEY_ID,
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
     },
-    forcePathStyle: !!process.env.S3_ENDPOINT, // Required for R2/MinIO
+    forcePathStyle: true, // Required for R2/MinIO — always use path-style
+    tls: true,
   });
 }
 
