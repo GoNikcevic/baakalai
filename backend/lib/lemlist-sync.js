@@ -62,16 +62,23 @@ async function syncAndAnalyze(userId) {
     // Step 2: Fetch stats for each campaign (with progress)
     const allStats = [];
     for (let i = 0; i < campaigns.length; i++) {
+      const camp = campaigns[i];
       try {
-        const rawExport = await lemlistFetchWithKey(`/campaigns/${campaigns[i]._id}/export`, apiKey);
+        const rawExport = await lemlistFetchWithKey(`/campaigns/${camp._id}/export`, apiKey);
         const transformed = lemlist.transformCampaignStats(rawExport);
         allStats.push({
-          name: campaigns[i].name,
-          id: campaigns[i]._id,
+          name: camp.name,
+          id: camp._id,
           ...transformed,
         });
       } catch (err) {
-        console.warn(`[lemlist-sync] Failed to fetch stats for campaign ${campaigns[i].name}:`, err.message);
+        console.warn(`[lemlist-sync] Stats fetch failed for "${camp.name}":`, err.message);
+        // Still include campaign with basic info even if stats fail
+        allStats.push({
+          name: camp.name,
+          id: camp._id,
+          contacts: 0, openRate: 0, replyRate: 0, acceptRate: 0, interested: 0, meetings: 0,
+        });
       }
 
       const progress = 10 + Math.round(((i + 1) / campaigns.length) * 40);
