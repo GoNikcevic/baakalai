@@ -9,20 +9,29 @@ try {
   // S3 SDK not installed — local storage only
 }
 
-const isS3 = !!(process.env.S3_BUCKET && process.env.S3_REGION && S3Client);
+const s3Endpoint = process.env.S3_ENDPOINT;
+const s3Bucket = process.env.S3_BUCKET;
+const s3Region = process.env.S3_REGION || 'auto';
+const s3AccessKey = process.env.S3_ACCESS_KEY_ID;
+const s3Secret = process.env.S3_SECRET_ACCESS_KEY;
+const isS3 = !!(s3Bucket && s3AccessKey && s3Secret && S3Client);
+
+console.log('[storage] S3 config:', { isS3, bucket: s3Bucket, region: s3Region, endpoint: s3Endpoint ? s3Endpoint.slice(0, 30) + '...' : 'none', hasKey: !!s3AccessKey, hasSecret: !!s3Secret });
 
 let s3Client = null;
 if (isS3) {
-  s3Client = new S3Client({
-    region: process.env.S3_REGION || 'auto',
-    endpoint: process.env.S3_ENDPOINT || undefined,
+  const clientConfig = {
+    region: s3Region,
     credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      accessKeyId: s3AccessKey,
+      secretAccessKey: s3Secret,
     },
-    forcePathStyle: true, // Required for R2/MinIO — always use path-style
-    tls: true,
-  });
+    forcePathStyle: true,
+  };
+  if (s3Endpoint) {
+    clientConfig.endpoint = s3Endpoint;
+  }
+  s3Client = new S3Client(clientConfig);
 }
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
