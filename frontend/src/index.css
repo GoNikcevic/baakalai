@@ -3265,22 +3265,23 @@ body {
 .crm-section { display: flex; flex-direction: column; gap: 20px; }
 
 .crm-kpi-row {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  display: grid; grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 .crm-kpi-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 16px; text-align: center;
+  overflow: hidden;
 }
 .crm-kpi-value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
 .crm-kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-.crm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.crm-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.crm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; overflow: hidden; }
+.crm-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; overflow: hidden; }
 
 /* Conversion rows */
 .crm-conversion-row { display: flex; align-items: center; gap: 12px; }
-.crm-conversion-labels { display: flex; align-items: center; min-width: 160px; font-size: 13px; font-weight: 500; }
+.crm-conversion-labels { display: flex; align-items: center; min-width: 140px; font-size: 13px; font-weight: 500; flex-shrink: 0; }
 .crm-conversion-bar-track { flex: 1; height: 8px; background: var(--bg-elevated); border-radius: 4px; overflow: hidden; }
 .crm-conversion-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
 .crm-conversion-rate { min-width: 48px; text-align: right; font-size: 14px; font-weight: 700; }
@@ -3365,7 +3366,12 @@ body {
 .crm-alert-text { flex: 1; font-size: 13px; color: var(--text-secondary); }
 .crm-alert-count { font-size: 14px; font-weight: 700; color: var(--text-primary); }
 
+@media (max-width: 900px) {
+  .crm-kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .crm-grid-3 { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 768px) {
+  .crm-kpi-row { grid-template-columns: repeat(2, 1fr); }
   .crm-grid-2, .crm-grid-3 { grid-template-columns: 1fr; }
   .crm-tabs { overflow-x: auto; flex-wrap: nowrap; }
   .crm-conversion-labels { min-width: 120px; }
