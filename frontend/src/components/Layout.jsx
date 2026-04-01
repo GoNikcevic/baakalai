@@ -114,6 +114,7 @@ export default function Layout() {
     disconnectSocket();
     await logout();
     setUser(null);
+    window.location.href = '/';
   }
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
