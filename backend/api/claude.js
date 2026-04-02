@@ -305,6 +305,11 @@ Régénérer des touchpoints spécifiques :
 Afficher le diagnostic détaillé :
 { "action": "show_diagnostic", "campaignName": "Nom exact de la campagne" }
 
+Rechercher des prospects via Apollo :
+{ "action": "search_prospects", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris", "Île-de-France"], "companySizes": ["11-50", "51-200"], "limit": 25 }
+
+Si l'utilisateur cherche des prospects ou veut construire une liste, propose-lui de rechercher via Apollo en précisant les critères (titre, secteur, taille, zone). Si tu identifies les critères, génère une action "search_prospects" avec les paramètres.
+
 Tu peux inclure UN SEUL bloc JSON par réponse. Le texte autour du JSON sert d'explication pour l'utilisateur.
 
 RÉPONSES RAPIDES (quick_replies) :
@@ -391,6 +396,11 @@ Régénérer des touchpoints spécifiques :
 
 Afficher le diagnostic détaillé :
 { "action": "show_diagnostic", "campaignName": "Nom exact de la campagne" }
+
+Rechercher des prospects via Apollo :
+{ "action": "search_prospects", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris", "Île-de-France"], "companySizes": ["11-50", "51-200"], "limit": 25 }
+
+Si l'utilisateur cherche des prospects ou veut construire une liste, propose-lui de rechercher via Apollo en précisant les critères (titre, secteur, taille, zone). Si tu identifies les critères, génère une action "search_prospects" avec les paramètres.
 
 Tu peux inclure UN SEUL bloc JSON par réponse. Le texte autour du JSON sert d'explication pour l'utilisateur.
 

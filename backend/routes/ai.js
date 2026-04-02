@@ -637,6 +637,30 @@ router.post('/rollback/:versionId', async (req, res, next) => {
   }
 });
 
+// POST /api/ai/search-prospects — search contacts via Apollo
+router.post('/search-prospects', async (req, res, next) => {
+  try {
+    const { searchContacts } = require('../lib/apollo-enrichment');
+    const contacts = await searchContacts(req.user.id, req.body);
+    res.json({ contacts, count: contacts.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/enrich-contact — enrich a single contact by email
+router.post('/enrich-contact', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    const { enrichContact } = require('../lib/apollo-enrichment');
+    const contact = await enrichContact(req.user.id, email);
+    res.json({ contact });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- Helpers ---
 
 function extractPriorities(diagnostic) {

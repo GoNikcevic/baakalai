@@ -678,6 +678,22 @@ export async function uploadFiles(files) {
   return res.json();
 }
 
+/** Search prospects via Apollo */
+export async function searchProspects(criteria) {
+  return request('/ai/search-prospects', {
+    method: 'POST',
+    body: JSON.stringify(criteria),
+  });
+}
+
+/** Enrich a single contact by email via Apollo */
+export async function enrichContact(email) {
+  return request('/ai/enrich-contact', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 /** Fetch template library (public, no auth) */
 export async function fetchTemplates() {
   const data = await request('/templates');
@@ -756,6 +772,8 @@ const BakalAPI = {
   fetchTemplates,
   fetchTemplate,
   sendRecoFeedback,
+  searchProspects,
+  enrichContact,
 };
 
 export default BakalAPI;
