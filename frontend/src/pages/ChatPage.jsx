@@ -699,6 +699,11 @@ export default function ChatPage() {
 
   /* ─── Get context suggestions ─── */
   const getSuggestions = useCallback((metadata) => {
+    // Use Claude-generated quick replies if available
+    if (metadata?.quick_replies && metadata.quick_replies.length > 0) {
+      return metadata.quick_replies.map(qr => typeof qr === 'string' ? qr : (qr.value || qr.label || qr));
+    }
+    // Fallback to action-based suggestions
     if (!metadata || !metadata.action) {
       return ['Créer une campagne', 'Voir mes stats', 'Optimiser mes séquences'];
     }
