@@ -56,26 +56,34 @@ router.post('/auto-fill', async (req, res, next) => {
       .slice(0, 10000);
 
     const result = await callClaude(
-      `Tu es un expert en analyse d'entreprise B2B. À partir des documents fournis, extrais les informations suivantes pour remplir un profil de prospection.
+      `Tu es un consultant senior en business development B2B avec 15 ans d'expérience en stratégie outbound. Tu analyses les documents d'une entreprise pour construire le profil de prospection le plus percutant possible.
 
-Retourne un JSON avec UNIQUEMENT les champs que tu peux identifier avec confiance. Ne fabrique rien — si une info n'est pas dans les documents, ne l'inclus pas.
+Ton approche :
+1. ANALYSE EN PROFONDEUR les documents — ne te contente pas de résumer, COMPRENDS le business model, le positionnement, et les avantages compétitifs
+2. IDENTIFIE les pain points des CLIENTS de cette entreprise (pas de l'entreprise elle-même) — pourquoi un prospect aurait besoin de leurs services
+3. FORMULE la proposition de valeur comme un pitch de 2 phrases qui donne envie d'en savoir plus — pas une description Wikipedia
+4. ANTICIPE les objections qu'un prospect pourrait avoir (prix, alternatives, timing, changement de process)
+5. DÉFINIS les personas avec leur titre exact, leurs responsabilités, et surtout leurs FRUSTRATIONS quotidiennes que l'entreprise peut résoudre
+6. RECOMMANDE les secteurs et tailles d'entreprise où l'offre aura le plus d'impact — sois spécifique, pas générique
+
+Retourne un JSON. Sois précis, actionnable, et opinionné — comme un consultant qui facture 500€/h :
 
 {
-  "company": "Nom de l'entreprise",
-  "sector": "Secteur d'activité",
-  "description": "Description courte de l'activité (2-3 phrases)",
-  "value_prop": "Proposition de valeur principale",
-  "social_proof": "Clients notables, références, certifications",
-  "pain_points": "Problèmes que résolvent leurs clients",
-  "objections": "Objections potentielles des prospects",
-  "persona_primary": "Persona principal (poste, responsabilités, défis)",
-  "persona_secondary": "Persona secondaire",
-  "target_sectors": "Secteurs cibles (séparés par des virgules)",
-  "target_size": "Taille d'entreprise cible",
-  "target_zones": "Zones géographiques cibles"
+  "company": "Nom exact de l'entreprise",
+  "sector": "Secteur principal (ex: Biotech / Diagnostics, pas juste 'Santé')",
+  "description": "Description business percutante (2-3 phrases, pas corporate)",
+  "value_prop": "Proposition de valeur formulée comme un pitch de vente (2 phrases max, chiffrée si possible)",
+  "social_proof": "Clients notables, partenariats, certifications, prix — tout ce qui crédibilise",
+  "pain_points": "Les 3-4 frustrations principales des PROSPECTS cibles que l'entreprise résout",
+  "objections": "Les 3-4 objections qu'un prospect pourrait avoir et comment les contrer",
+  "persona_primary": "Titre exact + responsabilités + frustration #1 que l'entreprise résout",
+  "persona_secondary": "Deuxième décideur/influenceur dans le cycle d'achat",
+  "target_sectors": "Secteurs spécifiques où l'offre a le plus d'impact (séparés par virgules)",
+  "target_size": "Taille d'entreprise idéale avec justification (ex: 'PME 50-500 car...')",
+  "target_zones": "Zones géographiques prioritaires"
 }`,
       docText,
-      3000
+      4000
     );
 
     if (result.parsed) {
