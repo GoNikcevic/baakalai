@@ -490,6 +490,22 @@ export default function ProfilePage() {
                     <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
                       {new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
                     </span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await request('/documents/' + doc.id, { method: 'DELETE' });
+                          setUploadedDocs(prev => prev.filter(d => d.id !== doc.id));
+                        } catch {}
+                      }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-muted)', fontSize: 13, padding: '0 4px',
+                        transition: 'color 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                      title="Supprimer"
+                    >×</button>
                   </div>
                 ))}
               </div>
