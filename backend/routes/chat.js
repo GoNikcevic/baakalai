@@ -258,7 +258,7 @@ router.post('/threads/:id/create-campaign', async (req, res, next) => {
       formality: 'Vous',
       length: 'Standard',
       cta: data.cta || null,
-      startDate: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+      startDate: new Date().toISOString().split('T')[0],
       planned: data.planned || 100,
       userId: req.user.id,
     });
