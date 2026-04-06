@@ -132,7 +132,7 @@ export default function MemoryExplorerPage() {
     return (
       <div className="memory-page">
         <div className="memory-page-header">
-          <div className="memory-page-title">M\u00e9moire IA</div>
+          <div className="memory-page-title">Mémoire IA</div>
           <div className="memory-page-subtitle">Chargement...</div>
         </div>
       </div>
@@ -143,7 +143,7 @@ export default function MemoryExplorerPage() {
     <div className="memory-page">
       {/* Header */}
       <div className="memory-page-header">
-        <div className="memory-page-title">M\u00e9moire IA</div>
+        <div className="memory-page-title">Mémoire IA</div>
         <div className="memory-page-subtitle">
           Patterns cross-campagne appris par l'IA
         </div>
@@ -161,7 +161,7 @@ export default function MemoryExplorerPage() {
         </div>
         <div className="memory-stat-card">
           <div className="memory-stat-value" style={{ color: 'var(--blue)' }}>{stats.categories}</div>
-          <div className="memory-stat-label">Cat\u00e9gories uniques</div>
+          <div className="memory-stat-label">Catégories uniques</div>
         </div>
         <div className="memory-stat-card">
           <div className="memory-stat-value" style={{ color: 'var(--purple)' }}>{stats.sectors}</div>
@@ -234,11 +234,11 @@ export default function MemoryExplorerPage() {
               <line x1="10" y1="24" x2="14" y2="24" />
             </svg>
           </div>
-          <div className="memory-empty-title">Aucun pattern trouv\u00e9</div>
+          <div className="memory-empty-title">Aucun pattern trouvé</div>
           <div className="memory-empty-text">
             {patterns.length === 0
-              ? "L'IA n'a pas encore d\u00e9tect\u00e9 de patterns. Lancez des campagnes pour alimenter la m\u00e9moire."
-              : 'Aucun r\u00e9sultat ne correspond aux filtres s\u00e9lectionn\u00e9s.'
+              ? "L'IA n'a pas encore détecté de patterns. Lancez des campagnes pour alimenter la mémoire."
+              : 'Aucun résultat ne correspond aux filtres sélectionnés.'
             }
           </div>
         </div>
@@ -299,7 +299,7 @@ export default function MemoryExplorerPage() {
                     className="memory-data-toggle"
                     onClick={() => toggleData(p.id)}
                   >
-                    {expandedData[p.id] ? 'Masquer' : 'D\u00e9tails'}
+                    {expandedData[p.id] ? 'Masquer' : 'Détails'}
                     <svg
                       width="12"
                       height="12"
