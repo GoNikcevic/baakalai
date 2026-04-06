@@ -1057,7 +1057,7 @@ export default function ChatPage() {
           {
             id: Date.now(),
             role: 'assistant',
-            content: `Campagne **"${campaignData.name}"** créée avec succès ! Vous pouvez la retrouver dans l'éditeur de séquences.`,
+            content: `Campagne **"${campaignData.name}"** créée avec succès ! Tu peux la retrouver dans **Campagnes** — clique dessus pour voir les séquences, ajouter des prospects et la lancer vers Lemlist.`,
             metadata: null,
             animate: true,
           },
