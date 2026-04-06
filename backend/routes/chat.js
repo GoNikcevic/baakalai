@@ -256,6 +256,19 @@ router.post('/threads/:id/create-campaign', async (req, res, next) => {
       return res.status(400).json({ error: 'Campaign data required' });
     }
 
+    // Idempotency guard: prevent creating an exact duplicate within the last 60s
+    // (handles double-click + re-fire during streaming)
+    const recent = await db.campaigns.list({ userId: req.user.id, limit: 5 });
+    const sixtyAgo = Date.now() - 60_000;
+    const dupe = recent.find(c =>
+      c.name === data.name &&
+      new Date(c.created_at).getTime() > sixtyAgo
+    );
+    if (dupe) {
+      console.warn(`[chat] Skipping duplicate campaign creation: "${data.name}"`);
+      return res.status(200).json({ campaign: dupe, duplicate: true });
+    }
+
     const campaign = await db.campaigns.create({
       name: data.name,
       client: data.client || 'Mon entreprise',
@@ -271,7 +284,7 @@ router.post('/threads/:id/create-campaign', async (req, res, next) => {
       length: 'Standard',
       cta: data.cta || null,
       startDate: new Date().toISOString().split('T')[0],
-      planned: data.planned || 100,
+      planned: data.planned || 0,
       userId: req.user.id,
     });
 

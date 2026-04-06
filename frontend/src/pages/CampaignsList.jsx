@@ -371,13 +371,14 @@ function CampaignRow({ campaign: c, onClick }) {
 
   const dateLabel = isPrep ? 'Créée' : 'Lancée';
 
+  // Show actual prospect count from DB first, then sent, then planned (last resort)
   const audienceCount =
-    c.volume?.sent > 0
-      ? c.volume.sent
-      : c.volume?.planned > 0
-        ? c.volume.planned
-        : c.kpis?.contacts > 0
-          ? c.kpis.contacts
+    c.kpis?.contacts > 0
+      ? c.kpis.contacts
+      : c.volume?.sent > 0
+        ? c.volume.sent
+        : c.volume?.planned > 0
+          ? c.volume.planned
           : 0;
 
   return (

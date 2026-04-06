@@ -131,38 +131,7 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
 
   // Create campaign card
   if (action === 'create_campaign' && metadata.campaign) {
-    const campaign = metadata.campaign;
-    const params = [campaign.sector, campaign.position, campaign.size, campaign.channel, campaign.angle, campaign.zone]
-      .filter(Boolean)
-      .map((p) => (
-        <span key={p} className="chat-action-param">{escapeHtml(p)}</span>
-      ));
-
-    const steps = campaign.sequence && campaign.sequence.length > 0
-      ? campaign.sequence.map((s) => (
-          <div key={s.step} className="chat-action-step">
-            <div className={`chat-action-step-dot ${s.type}`}></div>
-            <span>{escapeHtml(s.step)} &mdash; {escapeHtml(s.label || s.type)}</span>
-            <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{escapeHtml(s.timing || '')}</span>
-          </div>
-        ))
-      : null;
-
-    return (
-      <div className="chat-action-card">
-        <div className="chat-action-title">Campagne prête : {escapeHtml(campaign.name)}</div>
-        <div className="chat-action-params">{params}</div>
-        {steps && <div className="chat-action-sequence">{steps}</div>}
-        <div className="chat-action-buttons">
-          <button className="chat-action-btn primary" onClick={() => onCreateCampaign(campaign)}>
-            Créer et voir la séquence &rarr;
-          </button>
-          <button className="chat-action-btn ghost" onClick={onModify}>
-            Modifier
-          </button>
-        </div>
-      </div>
-    );
+    return <CreateCampaignCard campaign={metadata.campaign} onCreateCampaign={onCreateCampaign} onModify={onModify} />;
   }
 
   // Update campaign card
@@ -270,6 +239,60 @@ function ChooseSourceCard({ metadata, onActionExecute }) {
             {s.name}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function CreateCampaignCard({ campaign, onCreateCampaign, onModify }) {
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState(false);
+
+  const params = [campaign.sector, campaign.position, campaign.size, campaign.channel, campaign.angle, campaign.zone]
+    .filter(Boolean)
+    .map((p) => (
+      <span key={p} className="chat-action-param">{escapeHtml(p)}</span>
+    ));
+
+  const steps = campaign.sequence && campaign.sequence.length > 0
+    ? campaign.sequence.map((s) => (
+        <div key={s.step} className="chat-action-step">
+          <div className={`chat-action-step-dot ${s.type}`}></div>
+          <span>{escapeHtml(s.step)} &mdash; {escapeHtml(s.label || s.type)}</span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{escapeHtml(s.timing || '')}</span>
+        </div>
+      ))
+    : null;
+
+  const handleCreate = async () => {
+    if (creating || created) return;
+    setCreating(true);
+    try {
+      await onCreateCampaign(campaign);
+      setCreated(true);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="chat-action-card">
+      <div className="chat-action-title">Campagne prête : {escapeHtml(campaign.name)}</div>
+      <div className="chat-action-params">{params}</div>
+      {steps && <div className="chat-action-sequence">{steps}</div>}
+      <div className="chat-action-buttons">
+        <button
+          className="chat-action-btn primary"
+          onClick={handleCreate}
+          disabled={creating || created}
+        >
+          {created ? '✅ Campagne créée' : creating ? '⏳ Création...' : 'Créer et voir la séquence →'}
+        </button>
+        {!created && (
+          <button className="chat-action-btn ghost" onClick={onModify} disabled={creating}>
+            Modifier
+          </button>
+        )}
       </div>
     </div>
   );
