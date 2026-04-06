@@ -22,11 +22,12 @@ router.get('/lemlist/list', async (_req, res, next) => {
 // GET /api/campaigns — with batch touchpoint loading (no N+1)
 router.get('/', async (req, res, next) => {
   try {
-    const { status, channel, limit, offset } = req.query;
+    const { status, channel, limit, offset, includeArchived } = req.query;
     const campaigns = await db.campaigns.listWithTouchpoints({
       status,
       channel,
       userId: req.user.id,
+      includeArchived: includeArchived === 'true' || status === 'archived',
       limit: Math.min(parseInt(limit, 10) || 50, 200),
       offset: parseInt(offset, 10) || 0,
     });

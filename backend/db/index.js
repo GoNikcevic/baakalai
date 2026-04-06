@@ -56,6 +56,9 @@ const campaigns = {
     if (filter.status) {
       conditions.push(`status = $${i++}`);
       params.push(filter.status);
+    } else if (!filter.includeArchived) {
+      // Exclude archived by default unless explicitly asked
+      conditions.push(`(status IS NULL OR status != 'archived')`);
     }
     if (filter.channel) {
       conditions.push(`channel = $${i++}`);

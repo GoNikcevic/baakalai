@@ -91,21 +91,23 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
     setTimeout(() => setShowABPanel(false), 3000);
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm(`Supprimer la campagne "${c.name}" ? Cette action est irreversible.`)) return;
+  const handleArchive = async () => {
+    if (!window.confirm(`Archiver la campagne "${c.name}" ? Elle sortira de la liste principale mais reste consultable via le filtre "Archivées".`)) return;
     setDeleting(true);
     try {
       const backendId = c._backendId || c.id;
-      await api.request('/campaigns/' + backendId, { method: 'DELETE' });
+      await api.request('/campaigns/' + backendId, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'archived' }),
+      });
     } catch (err) {
-      console.warn('Failed to delete campaign on backend:', err.message);
+      console.warn('Failed to archive campaign on backend:', err.message);
     }
     if (setCampaigns) {
-      setCampaigns((prev) => {
-        const next = { ...prev };
-        delete next[c.id];
-        return next;
-      });
+      setCampaigns((prev) => ({
+        ...prev,
+        [c.id]: { ...prev[c.id], status: 'archived' },
+      }));
     }
     onBack();
   };
@@ -171,11 +173,11 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
           </button>
           <button
             className="btn btn-ghost"
-            style={{ fontSize: '12px', padding: '8px 14px', color: 'var(--danger)' }}
-            onClick={handleDelete}
+            style={{ fontSize: '12px', padding: '8px 14px', color: 'var(--text-muted)' }}
+            onClick={handleArchive}
             disabled={deleting}
           >
-            {deleting ? '...' : '🗑 Supprimer'}
+            {deleting ? '...' : '📦 Archiver'}
           </button>
         </div>
       </div>

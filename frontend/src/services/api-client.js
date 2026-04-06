@@ -323,7 +323,7 @@ export async function checkHealth() {
 
 /** Fetch all campaigns and transform into BAKAL format */
 export async function fetchAllCampaigns() {
-  const data = await request('/campaigns');
+  const data = await request('/campaigns?includeArchived=true');
   const result = {};
   for (const c of data.campaigns) {
     const transformed = transformCampaign(c, c.sequence, c.diagnostics, c.history);

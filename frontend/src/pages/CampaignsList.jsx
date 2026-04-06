@@ -13,6 +13,7 @@ const FILTERS = [
   { key: '', label: 'Toutes' },
   { key: 'active', label: 'Active' },
   { key: 'prep', label: 'En préparation' },
+  { key: 'archived', label: 'Archivées' },
 ];
 
 export default function CampaignsList({ onNavigateCampaign }) {
@@ -35,6 +36,11 @@ export default function CampaignsList({ onNavigateCampaign }) {
       list = list.filter((c) => c.status === 'active');
     } else if (filter === 'prep') {
       list = list.filter((c) => c.status === 'prep');
+    } else if (filter === 'archived') {
+      list = list.filter((c) => c.status === 'archived');
+    } else {
+      // Default "Toutes" : exclude archived
+      list = list.filter((c) => c.status !== 'archived');
     }
     return list;
   }, [campaignsList, filter]);
@@ -325,6 +331,8 @@ function CampaignRow({ campaign: c, onClick }) {
         <span className="pulse-dot" style={{ width: 6, height: 6 }}></span>{' '}
         Active
       </span>
+    ) : c.status === 'archived' ? (
+      <span className="status-badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>📦 Archivée</span>
     ) : (
       <span className="status-badge status-prep">⏳ Préparation</span>
     );

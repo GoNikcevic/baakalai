@@ -16,6 +16,28 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
   const [recoApplied, setRecoApplied] = useState(false);
   const [recoDismissed, setRecoDismissed] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
+  const handleArchive = async () => {
+    if (!window.confirm(`Archiver la campagne "${c.name}" ? Elle sortira de la liste principale mais reste consultable via le filtre "Archivées".`)) return;
+    setArchiving(true);
+    try {
+      const backendId = c._backendId || c.id;
+      await api.request('/campaigns/' + backendId, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'archived' }),
+      });
+    } catch (err) {
+      console.warn('Failed to archive campaign:', err.message);
+    }
+    if (setCampaigns) {
+      setCampaigns((prev) => ({
+        ...prev,
+        [c.id]: { ...prev[c.id], status: 'archived' },
+      }));
+    }
+    onBack();
+  };
 
   /* ── Tags ── */
   const tags = [
@@ -110,6 +132,14 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             onClick={() => setShowEditPanel((prev) => !prev)}
           >
             ✏️ Modifier
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: '12px', padding: '8px 14px', color: 'var(--text-muted)' }}
+            onClick={handleArchive}
+            disabled={archiving}
+          >
+            {archiving ? '...' : '📦 Archiver'}
           </button>
           <button
             className="btn btn-success"
