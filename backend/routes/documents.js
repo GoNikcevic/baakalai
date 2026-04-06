@@ -116,9 +116,17 @@ router.post('/upload', upload.array('files', 20), async (req, res, next) => {
     for (const file of req.files) {
       // Step 1: Parse file FIRST (while temp file still exists)
       let parsedText = null;
+      let parseError = null;
       try {
         parsedText = await parseFile(file.path, file.mimetype);
+        if (!parsedText) {
+          parseError = 'empty result';
+          console.warn(`[documents] Empty parse result for ${file.originalname} (${file.mimetype})`);
+        } else {
+          console.log(`[documents] Parsed ${file.originalname}: ${parsedText.length} chars`);
+        }
       } catch (err) {
+        parseError = err.message;
         console.error(`[documents] Parse error for ${file.originalname}:`, err.message);
       }
 
@@ -149,6 +157,7 @@ router.post('/upload', upload.array('files', 20), async (req, res, next) => {
         mimeType: file.mimetype,
         fileSize: file.size,
         parsed: !!parsedText,
+        parseError,
       });
     }
 

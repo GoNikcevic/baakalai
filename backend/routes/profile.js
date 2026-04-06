@@ -44,14 +44,31 @@ router.post('/auto-fill', async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // Get parsed text from uploaded documents
-    const allDocs = await db.documents.getParsedTextByUser(userId, 10);
-    if (!allDocs || allDocs.length === 0) {
-      return res.status(400).json({ error: 'Aucun document uploadé' });
+    // List ALL documents first to distinguish "no docs" vs "docs exist but parsing failed"
+    const allUserDocs = await db.documents.listByUser(userId);
+    if (!allUserDocs || allUserDocs.length === 0) {
+      return res.status(400).json({ error: 'Aucun document uploadé. Uploadez votre présentation entreprise d\'abord.' });
     }
-    const docs = allDocs.filter(d => d.doc_type === 'company');
+
+    // Get parsed text from uploaded documents
+    const parsedDocs = await db.documents.getParsedTextByUser(userId, 20);
+    if (!parsedDocs || parsedDocs.length === 0) {
+      const names = allUserDocs.map(d => d.original_name).join(', ');
+      return res.status(400).json({
+        error: `Vos documents (${names}) n'ont pas pu être analysés. Le parsing a échoué — essayez de re-uploader en PDF ou TXT.`,
+      });
+    }
+
+    // Prefer company-tagged docs, fallback to any doc with parsed text
+    let docs = parsedDocs.filter(d => d.doc_type === 'company');
     if (docs.length === 0) {
-      return res.status(400).json({ error: 'Aucun document de type "Présentation entreprise" trouvé. Taggez vos documents avant d\'auto-remplir.' });
+      // Fallback: use any doc that isn't explicitly a prospect list
+      docs = parsedDocs.filter(d => d.doc_type !== 'prospects');
+    }
+    if (docs.length === 0) {
+      return res.status(400).json({
+        error: 'Aucun document exploitable trouvé. Taggez au moins un document comme "Présentation entreprise".',
+      });
     }
 
     const docText = docs
