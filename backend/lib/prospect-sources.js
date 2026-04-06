@@ -17,8 +17,8 @@ const PROVIDER_REGISTRY = {
   lemlist: {
     name: 'Lemlist',
     label: 'Lemlist',
-    canSearch: false,
-    note: "Lemlist est un outil d'exécution de campagnes. Pour générer une liste, connecte Apollo.",
+    canSearch: true,
+    note: 'Base Lemlist Leads — 600M contacts, recherche par titre, secteur, taille, pays',
   },
   instantly: {
     name: 'Instantly',
@@ -88,6 +88,14 @@ async function searchProspects(userId, source, criteria) {
   if (source === 'apollo') {
     const { searchContacts } = require('./apollo-enrichment');
     return searchContacts(userId, criteria);
+  }
+
+  if (source === 'lemlist') {
+    const { getUserKey } = require('../config');
+    const { searchPeopleDatabase } = require('../api/lemlist');
+    const apiKey = await getUserKey(userId, 'lemlist');
+    if (!apiKey) throw new Error('Lemlist non configuré');
+    return searchPeopleDatabase(apiKey, criteria);
   }
 
   throw new Error(`Dispatch manquant pour le provider : ${source}`);

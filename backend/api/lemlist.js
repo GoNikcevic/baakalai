@@ -57,6 +57,103 @@ function parseDelayFromTiming(timing) {
   return match ? parseInt(match[1], 10) : 0;
 }
 
+// --- Lemlist Leads Database (600M contacts) ---
+
+/**
+ * Fetch the list of available filter IDs from Lemlist's people database.
+ * Cached for 1h to avoid repeated calls.
+ */
+let _filtersCache = { data: null, expiresAt: 0 };
+async function getDatabaseFilters(apiKey) {
+  if (_filtersCache.data && Date.now() < _filtersCache.expiresAt) {
+    return _filtersCache.data;
+  }
+  const filters = await lemlistFetch('/database/filters', {}, apiKey);
+  _filtersCache = { data: filters, expiresAt: Date.now() + 3600 * 1000 };
+  return filters;
+}
+
+/**
+ * Map our generic criteria to Lemlist filter objects.
+ * Tries common filterId names and falls back gracefully.
+ */
+function buildLemlistFilters(criteria, availableFilters) {
+  const filters = [];
+  const available = new Set(
+    (availableFilters || [])
+      .filter(f => !f.mode || f.mode.includes('leads'))
+      .map(f => f.filterId)
+  );
+
+  // Pick the first matching filterId from candidates
+  const pick = (candidates) => candidates.find(c => available.has(c));
+
+  if (criteria.titles && criteria.titles.length > 0) {
+    const fid = pick(['title', 'job_title', 'jobTitle', 'position']);
+    if (fid) filters.push({ filterId: fid, in: criteria.titles, out: [] });
+  }
+
+  if (criteria.sectors && criteria.sectors.length > 0) {
+    const fid = pick(['industry', 'sector', 'company_industry']);
+    if (fid) filters.push({ filterId: fid, in: criteria.sectors, out: [] });
+  }
+
+  if (criteria.locations && criteria.locations.length > 0) {
+    const fid = pick(['country', 'location', 'city', 'region']);
+    if (fid) filters.push({ filterId: fid, in: criteria.locations, out: [] });
+  }
+
+  if (criteria.companySizes && criteria.companySizes.length > 0) {
+    const fid = pick(['company_size', 'company_employees_number', 'employees', 'size']);
+    if (fid) filters.push({ filterId: fid, in: criteria.companySizes, out: [] });
+  }
+
+  return filters;
+}
+
+/**
+ * Search Lemlist's 600M contacts database.
+ * Uses POST /database/people with dynamic filter discovery.
+ */
+async function searchPeopleDatabase(apiKey, criteria) {
+  const availableFilters = await getDatabaseFilters(apiKey);
+  const filters = buildLemlistFilters(criteria, availableFilters);
+
+  if (filters.length === 0) {
+    throw new Error('Aucun critère reconnu pour la recherche Lemlist. Précise au moins un titre, secteur ou localisation.');
+  }
+
+  const body = {
+    filters,
+    page: 1,
+    size: Math.min(criteria.limit || 25, 100),
+  };
+
+  const result = await lemlistFetch('/database/people', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }, apiKey);
+
+  // Transform Lemlist results into Baakal's contact format
+  const contacts = (result.results || []).map(p => ({
+    id: String(p.lead_id || p.id || Math.random()),
+    firstName: (p.full_name || '').split(' ')[0] || '',
+    lastName: (p.full_name || '').split(' ').slice(1).join(' ') || '',
+    name: p.full_name || '',
+    email: p.email || null,
+    phone: p.phone || null,
+    title: p.title || '',
+    company: p.company || '',
+    companySize: p.company_size || null,
+    sector: p.industry || p.department || '',
+    location: p.location || '',
+    linkedinUrl: p.linkedin_url || null,
+    source: 'lemlist',
+  }));
+
+  return contacts;
+}
+
 async function addLead(campaignId, lead, apiKey) {
   // Lemlist v1: POST /campaigns/{id}/leads/{email}
   const email = lead.email;
@@ -250,6 +347,8 @@ module.exports = {
   createCampaign,
   addSequenceStep,
   addLead,
+  searchPeopleDatabase,
+  getDatabaseFilters,
   transformCampaignStats,
   transformStepStats,
   transformWorkflowToTree,
