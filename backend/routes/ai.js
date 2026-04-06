@@ -637,12 +637,45 @@ router.post('/rollback/:versionId', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/search-prospects — search contacts via Apollo
+// GET /api/ai/prospect-sources — list configured outreach tools with search capability
+router.get('/prospect-sources', async (req, res, next) => {
+  try {
+    const { listUserSources } = require('../lib/prospect-sources');
+    const sources = await listUserSources(req.user.id);
+    res.json({ sources });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/search-prospects — search contacts via chosen provider (default: apollo)
 router.post('/search-prospects', async (req, res, next) => {
   try {
-    const { searchContacts } = require('../lib/apollo-enrichment');
-    const contacts = await searchContacts(req.user.id, req.body);
-    res.json({ contacts, count: contacts.length });
+    const { searchProspects, listSearchableSources } = require('../lib/prospect-sources');
+    const { source, ...criteria } = req.body;
+
+    let chosenSource = source;
+    if (!chosenSource) {
+      // Auto-pick: if exactly one searchable source is configured, use it
+      const searchable = await listSearchableSources(req.user.id);
+      if (searchable.length === 0) {
+        return res.status(400).json({
+          error: 'Aucun outil de recherche de prospects configuré. Connecte Apollo dans Intégrations.',
+          code: 'NO_SOURCE',
+        });
+      }
+      if (searchable.length > 1) {
+        return res.status(400).json({
+          error: 'Plusieurs outils disponibles — précise lequel utiliser.',
+          code: 'MULTIPLE_SOURCES',
+          sources: searchable.map(s => ({ provider: s.provider, name: s.name })),
+        });
+      }
+      chosenSource = searchable[0].provider;
+    }
+
+    const contacts = await searchProspects(req.user.id, chosenSource, criteria);
+    res.json({ contacts, count: contacts.length, source: chosenSource });
   } catch (err) {
     next(err);
   }

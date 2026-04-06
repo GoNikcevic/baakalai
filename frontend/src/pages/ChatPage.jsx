@@ -235,12 +235,44 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
     );
   }
 
-  // Search prospects (Apollo) card
+  // Search prospects card (dispatches to chosen source)
   if (action === 'search_prospects') {
     return <ProspectSearchCard metadata={metadata} onActionExecute={onActionExecute} />;
   }
 
+  // Choose prospect source card (when multiple outreach tools configured)
+  if (action === 'choose_prospect_source') {
+    return <ChooseSourceCard metadata={metadata} onActionExecute={onActionExecute} />;
+  }
+
   return null;
+}
+
+function ChooseSourceCard({ metadata, onActionExecute }) {
+  const sources = metadata.sources || [];
+  return (
+    <div className="chat-action-card">
+      <div className="chat-action-title">🎯 Quel outil utiliser pour générer la liste ?</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
+        Tu as plusieurs outils d'outreach connectés. Lequel doit générer la liste de prospects ?
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {sources.map(s => (
+          <button
+            key={s.provider}
+            className="chat-action-btn primary"
+            onClick={() => onActionExecute && onActionExecute({
+              action: 'search_prospects',
+              source: s.provider,
+              ...(metadata.pending_criteria || {}),
+            })}
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ProspectSearchCard({ metadata, onActionExecute }) {
@@ -263,6 +295,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
     setError(null);
     try {
       const data = await api.searchProspects({
+        source: metadata.source,
         titles: metadata.titles || [],
         sectors: metadata.sectors || [],
         locations: metadata.locations || [],
@@ -304,9 +337,13 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
     setSaving(false);
   };
 
+  const sourceLabel = metadata.source
+    ? metadata.source.charAt(0).toUpperCase() + metadata.source.slice(1)
+    : 'Apollo';
+
   return (
     <div className="chat-action-card">
-      <div className="chat-action-title">🎯 Recherche de prospects (Apollo)</div>
+      <div className="chat-action-title">🎯 Recherche de prospects ({sourceLabel})</div>
       <div className="chat-action-params">
         {criteriaSummary.map((s, i) => (
           <span key={i} className="chat-action-param">{escapeHtml(s)}</span>
@@ -1145,7 +1182,24 @@ export default function ChatPage() {
       sendMessage(`Montre le diagnostic complet de la campagne "${metadata.campaignName || ''}"`);
       return;
     }
-  }, [sendMessage]);
+
+    if (action === 'search_prospects') {
+      // Injected from ChooseSourceCard: render a new message with the search card
+      const sourceName = (metadata.source || '').replace(/^./, c => c.toUpperCase());
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: 'assistant',
+          content: `Parfait, j'utilise **${sourceName}** pour la recherche.`,
+          metadata: { action: 'search_prospects', ...metadata },
+          animate: true,
+        },
+      ]);
+      scrollToBottom();
+      return;
+    }
+  }, [sendMessage, scrollToBottom]);
 
   /* ─── Action button starters ─── */
   const startAction = useCallback((action) => {

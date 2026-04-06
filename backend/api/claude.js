@@ -403,10 +403,19 @@ Régénérer des touchpoints spécifiques :
 Afficher le diagnostic détaillé :
 { "action": "show_diagnostic", "campaignName": "Nom exact de la campagne" }
 
-Rechercher des prospects via Apollo :
-{ "action": "search_prospects", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris", "Île-de-France"], "companySizes": ["11-50", "51-200"], "limit": 25 }
+Rechercher des prospects via un outil d'outreach :
+{ "action": "search_prospects", "source": "apollo", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris", "Île-de-France"], "companySizes": ["11-50", "51-200"], "limit": 25 }
 
-IMPORTANT pour search_prospects : si l'utilisateur demande de "générer une liste de prospects", "trouver des contacts", "me proposer des prospects", etc., tu dois IMMÉDIATEMENT générer une action "search_prospects" en utilisant les critères du PROFIL ENTREPRISE (target_sectors, persona_primary, target_size, target_zones). Ne demande PAS à l'utilisateur de re-préciser ces critères s'ils sont dans son profil. Propose juste la recherche avec les bons paramètres et explique brièvement pourquoi tu as choisi ces critères. Les tailles valides pour companySizes sont : "1-10", "11-50", "51-200", "201-500", "501-1000", "1001+".
+Demander à l'utilisateur de choisir une source (quand plusieurs outils sont disponibles) :
+{ "action": "choose_prospect_source", "sources": [{"provider": "apollo", "name": "Apollo"}, {"provider": "lemlist", "name": "Lemlist"}], "pending_criteria": { "titles": ["DAF"], "sectors": ["SaaS"], "companySizes": ["11-50"], "locations": ["Paris"], "limit": 25 } }
+
+RÈGLES search_prospects (TRÈS IMPORTANT) :
+1. Consulte OUTILS OUTREACH CONFIGURÉS dans le contexte. Seuls les outils marqués "✅ peut générer des listes de prospects" peuvent être utilisés comme source.
+2. Si 0 outil avec search : NE génère PAS d'action search_prospects. Explique à l'utilisateur qu'il doit connecter un outil de recherche (Apollo par exemple) dans la page Intégrations.
+3. Si 1 seul outil avec search : génère directement l'action search_prospects avec "source" = ce provider (ex: "apollo").
+4. Si 2+ outils avec search : génère une action "choose_prospect_source" avec la liste des providers disponibles et les critères déjà identifiés dans "pending_criteria". N'exécute pas la recherche tant que l'utilisateur n'a pas choisi.
+5. Utilise TOUJOURS les critères du PROFIL ENTREPRISE (target_sectors, persona_primary, target_size, target_zones) sans redemander à l'utilisateur.
+6. Les tailles valides pour companySizes sont : "1-10", "11-50", "51-200", "201-500", "501-1000", "1001+".
 
 Tu peux inclure UN SEUL bloc JSON par réponse. Le texte autour du JSON sert d'explication pour l'utilisateur.
 

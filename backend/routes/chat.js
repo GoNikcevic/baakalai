@@ -86,11 +86,13 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const claudeMessages = history.map(m => ({ role: m.role, content: m.content }));
 
     // Build bounded context — all queries in parallel
-    const [profile, docs, campaigns, patterns] = await Promise.all([
+    const { listUserSources } = require('../lib/prospect-sources');
+    const [profile, docs, campaigns, patterns, prospectSources] = await Promise.all([
       db.profiles.get(req.user.id),
       db.documents.getParsedTextByUser(req.user.id, 5),
       db.campaigns.list({ userId: req.user.id, limit: MAX_CAMPAIGNS_IN_CONTEXT }),
       db.memoryPatterns.list({ limit: MAX_PATTERNS_IN_CONTEXT }),
+      listUserSources(req.user.id),
     ]);
 
     const contextParts = [];
@@ -147,6 +149,16 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       contextParts.push(`CAMPAGNES (${campaigns.length}):\n${campaignLines.join('\n')}`);
     } else {
       contextParts.push('Aucune campagne créée pour le moment.');
+    }
+
+    // Outreach / prospect sources configured by user
+    if (prospectSources && prospectSources.length > 0) {
+      const lines = prospectSources.map(s =>
+        `- ${s.name} (${s.provider}) — ${s.canSearch ? '✅ peut générer des listes de prospects' : '❌ ne peut pas générer de listes (exécution seule)'}`
+      );
+      contextParts.push(`OUTILS OUTREACH CONFIGURÉS:\n${lines.join('\n')}`);
+    } else {
+      contextParts.push("OUTILS OUTREACH CONFIGURÉS: Aucun outil configuré pour l'instant.");
     }
 
     // Memory patterns (already bounded by limit in query)
