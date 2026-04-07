@@ -20,7 +20,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
   const { campaigns, projects } = useApp();
   const navigate = useNavigate();
 
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('active');
   const [sortByReply, setSortByReply] = useState(false);
   const [sortAsc, setSortAsc] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState({});
