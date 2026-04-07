@@ -5,7 +5,7 @@
    Ported from CopyEditorPage.jsx (single-campaign features).
    ═══════════════════════════════════════════════════ */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../../../context/useApp';
 import api from '../../../services/api-client';
 import { sanitizeHtml } from '../../../services/sanitize';
@@ -47,11 +47,10 @@ function CharCounter({ bodyRef, maxChars = 300 }) {
     setCount(text.length);
   }, [bodyRef]);
 
-  // Recompute on mount + on every input
-  useState(() => {
-    setTimeout(recompute, 0);
-    return null;
-  });
+  // Recompute once on mount, after the editable div is in the DOM
+  useEffect(() => {
+    recompute();
+  }, [recompute]);
 
   const color = count > maxChars ? 'var(--danger)' : count > maxChars - 50 ? 'var(--warning)' : 'var(--text-muted)';
   return (
