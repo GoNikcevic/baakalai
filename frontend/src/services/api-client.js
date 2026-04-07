@@ -708,6 +708,24 @@ export async function launchCampaignToLemlist(campaignId) {
   return request(`/campaigns/${campaignId}/launch-lemlist`, { method: 'POST' });
 }
 
+/** Get Lemlist credit balance */
+export async function getLemlistCredits() {
+  return request('/ai/lemlist-credits');
+}
+
+/** Start email reveal enrichment for a batch of leads. Returns { jobId, total, dispatched } */
+export async function revealEmails(source, leads) {
+  return request('/ai/reveal-emails', {
+    method: 'POST',
+    body: JSON.stringify({ source, leads }),
+  });
+}
+
+/** Poll the status of an email reveal job */
+export async function pollRevealEmails(jobId) {
+  return request(`/ai/reveal-emails/${jobId}`);
+}
+
 /** Enrich a single contact by email via Apollo */
 export async function enrichContact(email) {
   return request('/ai/enrich-contact', {
@@ -799,6 +817,9 @@ const BakalAPI = {
   addProspectsToCampaign,
   listCampaignProspects,
   launchCampaignToLemlist,
+  getLemlistCredits,
+  revealEmails,
+  pollRevealEmails,
 };
 
 export default BakalAPI;

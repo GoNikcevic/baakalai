@@ -179,6 +179,71 @@ async function searchPeopleDatabase(apiKey, criteria) {
   return contacts;
 }
 
+// --- Credits & Enrichment ---
+
+async function getTeamCredits(apiKey) {
+  return lemlistFetch('/team/credits', {}, apiKey);
+}
+
+/**
+ * Bulk enrichment — POST /api/v2/enrichments/bulk
+ * items: array of { input: {firstName, lastName, companyName, linkedinUrl, ...}, metadata: anything }
+ * Returns: array of { id, metadata } (success) or { error, metadata } (failure)
+ */
+async function bulkEnrichLeads(apiKey, items) {
+  const body = items.map(item => ({
+    input: item.input,
+    enrichmentRequests: ['find_email'],
+    metadata: item.metadata,
+  }));
+  // Uses /v2 prefix
+  const url = `${BASE_URL.replace(/\/api$/, '')}/api/v2/enrichments/bulk`;
+  return withRetry(async () => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${Buffer.from(`:${apiKey}`).toString('base64')}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw Object.assign(new Error(`Lemlist bulk enrich ${res.status}: ${text}`), { status: res.status });
+    }
+    return res.json();
+  }, { maxRetries: 2, baseDelay: 1000 });
+}
+
+/**
+ * Get enrichment result — GET /api/enrich/{id}
+ * Returns: 202 if still pending, 200 with data.email.email if done
+ */
+async function getEnrichmentResult(apiKey, enrichId) {
+  const url = `${BASE_URL}/enrich/${enrichId}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`:${apiKey}`).toString('base64')}`,
+    },
+  });
+  if (res.status === 202) {
+    return { status: 'pending', enrichId };
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Lemlist enrich result ${res.status}: ${text}`);
+  }
+  const data = await res.json();
+  const emailObj = data?.data?.email || null;
+  return {
+    status: 'done',
+    enrichId,
+    email: emailObj && !emailObj.notFound ? emailObj.email : null,
+    notFound: !!(emailObj && emailObj.notFound),
+    raw: data,
+  };
+}
+
 async function addLead(campaignId, lead, apiKey) {
   // Lemlist v1: POST /campaigns/{id}/leads/{email}
   const email = lead.email;
@@ -374,6 +439,9 @@ module.exports = {
   addLead,
   searchPeopleDatabase,
   getDatabaseFilters,
+  getTeamCredits,
+  bulkEnrichLeads,
+  getEnrichmentResult,
   transformCampaignStats,
   transformStepStats,
   transformWorkflowToTree,

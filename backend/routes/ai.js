@@ -648,6 +648,147 @@ router.get('/prospect-sources', async (req, res, next) => {
   }
 });
 
+// GET /api/ai/lemlist-credits — return user's Lemlist credit balance
+router.get('/lemlist-credits', async (req, res, next) => {
+  try {
+    const { getUserKey } = require('../config');
+    const { getTeamCredits } = require('../api/lemlist');
+    const apiKey = await getUserKey(req.user.id, 'lemlist');
+    if (!apiKey) return res.json({ credits: null, configured: false });
+    const data = await getTeamCredits(apiKey);
+    res.json({
+      credits: data?.credits ?? data?.details?.remaining?.total ?? null,
+      details: data?.details || null,
+      configured: true,
+    });
+  } catch (err) {
+    console.warn('[lemlist-credits] failed:', err.message);
+    res.json({ credits: null, configured: true, error: err.message });
+  }
+});
+
+// --- Email reveal jobs (in-memory with 1h TTL) ---
+const _revealJobs = new Map();
+const REVEAL_JOB_TTL = 3600 * 1000;
+
+function pruneOldRevealJobs() {
+  const now = Date.now();
+  for (const [id, job] of _revealJobs) {
+    if (now - job.createdAt > REVEAL_JOB_TTL) _revealJobs.delete(id);
+  }
+}
+
+// POST /api/ai/reveal-emails
+// Body: { source, leads: [{id, firstName, lastName, company, linkedinUrl}] }
+router.post('/reveal-emails', async (req, res, next) => {
+  try {
+    pruneOldRevealJobs();
+    const { source, leads } = req.body;
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ error: 'leads array required' });
+    }
+    if (source && source !== 'lemlist') {
+      return res.status(400).json({ error: `Reveal not yet supported for source: ${source}` });
+    }
+
+    const { getUserKey } = require('../config');
+    const { bulkEnrichLeads } = require('../api/lemlist');
+    const apiKey = await getUserKey(req.user.id, 'lemlist');
+    if (!apiKey) return res.status(400).json({ error: 'Lemlist non configuré' });
+
+    const items = leads.map(l => ({
+      input: {
+        firstName: l.firstName || '',
+        lastName: l.lastName || '',
+        companyName: l.company || l.companyName || '',
+        linkedinUrl: l.linkedinUrl || undefined,
+      },
+      metadata: { leadId: l.id },
+    }));
+
+    const enrichmentResults = await bulkEnrichLeads(apiKey, items);
+
+    const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const enrichMap = {};
+    enrichmentResults.forEach((r, idx) => {
+      const leadId = leads[idx].id;
+      enrichMap[leadId] = r.id || null;
+    });
+
+    _revealJobs.set(jobId, {
+      userId: req.user.id,
+      enrichMap,
+      leads,
+      createdAt: Date.now(),
+      results: {},
+    });
+
+    res.json({
+      jobId,
+      total: leads.length,
+      dispatched: Object.values(enrichMap).filter(Boolean).length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/ai/reveal-emails/:jobId — poll enrichment results
+router.get('/reveal-emails/:jobId', async (req, res, next) => {
+  try {
+    const job = _revealJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found or expired' });
+    if (job.userId !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+
+    const { getUserKey } = require('../config');
+    const { getEnrichmentResult } = require('../api/lemlist');
+    const apiKey = await getUserKey(req.user.id, 'lemlist');
+    if (!apiKey) return res.status(400).json({ error: 'Lemlist non configuré' });
+
+    const checks = [];
+    for (const lead of job.leads) {
+      if (job.results[lead.id]) continue;
+      const enrichId = job.enrichMap[lead.id];
+      if (!enrichId) {
+        job.results[lead.id] = { status: 'error', email: null };
+        continue;
+      }
+      checks.push(
+        getEnrichmentResult(apiKey, enrichId)
+          .then(r => {
+            if (r.status === 'done') {
+              job.results[lead.id] = {
+                status: r.email ? 'verified' : 'not_found',
+                email: r.email || null,
+              };
+            }
+          })
+          .catch(err => {
+            console.warn(`[reveal-emails] poll failed for ${enrichId}:`, err.message);
+            job.results[lead.id] = { status: 'error', email: null, error: err.message };
+          })
+      );
+    }
+    await Promise.all(checks);
+
+    const done = Object.keys(job.results).length;
+    const total = job.leads.length;
+    res.json({
+      jobId: req.params.jobId,
+      status: done >= total ? 'done' : 'pending',
+      done,
+      total,
+      results: job.leads.map(l => ({
+        id: l.id,
+        name: l.name,
+        ...(job.results[l.id] || { status: 'pending', email: null }),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/ai/search-prospects — search contacts via chosen provider (default: apollo)
 router.post('/search-prospects', async (req, res, next) => {
   try {
