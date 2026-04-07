@@ -249,13 +249,36 @@ const touchpoints = {
   },
 
   async create(campaignId, data) {
-    // Normalize legacy "linkedin" type — infer from step prefix
-    let type = data.type;
-    if (type === 'linkedin') {
-      const stepStr = String(data.step || '').toUpperCase();
-      if (stepStr.startsWith('LV')) type = 'linkedin_visit';
-      else if (stepStr.startsWith('LI') || stepStr === 'L1') type = 'linkedin_invite';
-      else type = 'linkedin_message';
+    // Normalize type — Claude or upstream callers may emit camelCase, shorthand,
+    // or legacy generic "linkedin". Coerce everything to one of the 5 valid CHECK values.
+    const ALLOWED_TYPES = ['email', 'linkedin', 'linkedin_visit', 'linkedin_invite', 'linkedin_message'];
+    const rawType = String(data.type || '').trim();
+    const normalized = rawType.toLowerCase().replace(/[\s-]+/g, '_');
+    const stepStr = String(data.step || '').toUpperCase();
+
+    const inferLinkedinFromStep = () => {
+      if (stepStr.startsWith('LV')) return 'linkedin_visit';
+      if (stepStr.startsWith('LM')) return 'linkedin_message';
+      if (stepStr.startsWith('LI') || stepStr === 'L1') return 'linkedin_invite';
+      return 'linkedin_message';
+    };
+
+    let type;
+    if (normalized === 'email' || normalized === 'mail' || stepStr.startsWith('E')) {
+      type = 'email';
+    } else if (normalized === 'linkedin_visit' || normalized === 'linkedinvisit' || normalized === 'visit' || normalized === 'profile_visit' || normalized === 'profilevisit') {
+      type = 'linkedin_visit';
+    } else if (normalized === 'linkedin_invite' || normalized === 'linkedininvite' || normalized === 'invite' || normalized === 'linkedin_connection' || normalized === 'linkedinconnection' || normalized === 'connection' || normalized === 'connect' || normalized === 'linkedin_note' || normalized === 'note') {
+      type = 'linkedin_invite';
+    } else if (normalized === 'linkedin_message' || normalized === 'linkedinmessage' || normalized === 'linkedinsendmessage' || normalized === 'linkedin_send_message' || normalized === 'message' || normalized === 'linkedin_msg' || normalized === 'msg') {
+      type = 'linkedin_message';
+    } else if (normalized === 'linkedin' || normalized.startsWith('linkedin')) {
+      type = inferLinkedinFromStep();
+    } else if (ALLOWED_TYPES.includes(normalized)) {
+      type = normalized;
+    } else {
+      console.warn(`[touchpoints] Unknown type "${rawType}" for step "${data.step}" — defaulting to email`);
+      type = 'email';
     }
 
     // Enforce 300-char limit on connection invites + null subject
