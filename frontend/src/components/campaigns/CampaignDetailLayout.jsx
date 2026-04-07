@@ -51,7 +51,10 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
         body: JSON.stringify({ status: 'archived' }),
       });
     } catch (err) {
-      console.warn('Failed to archive campaign:', err.message);
+      console.error('Failed to archive campaign:', err);
+      window.alert(`Impossible d'archiver la campagne : ${err.message || 'erreur inconnue'}`);
+      setArchiving(false);
+      return;
     }
     if (setCampaigns) {
       setCampaigns((prev) => ({
