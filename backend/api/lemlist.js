@@ -38,11 +38,14 @@ async function createCampaign(name, apiKey) {
 }
 
 // Map Baakal touchpoint types → Lemlist API step types
+// Per official Lemlist docs (developer.lemlist.com), valid enum values:
+// email, manual, phone, api, linkedinVisit, linkedinInvite, linkedinSend,
+// sendToAnotherCampaign, conditional, whatsappMessage
 const LEMLIST_STEP_TYPE_MAP = {
   email: 'email',
   linkedin_visit: 'linkedinVisit',
   linkedin_invite: 'linkedinInvite',
-  linkedin_message: 'linkedinSendMessage',
+  linkedin_message: 'linkedinSend',
   // Legacy fallback
   linkedin: 'linkedinInvite',
 };
@@ -51,24 +54,27 @@ async function addSequenceStep(campaignId, step, apiKey) {
   const lemlistType = LEMLIST_STEP_TYPE_MAP[step.type] || 'email';
 
   // Truncate connection invites to 300 chars as a safety net
-  let text = step.body || '';
-  if (lemlistType === 'linkedinInvite' && text.length > 300) {
-    text = text.slice(0, 300);
-  }
-  if (lemlistType === 'linkedinVisit') {
-    text = ''; // visits have no body
+  let messageText = step.body || '';
+  if (lemlistType === 'linkedinInvite' && messageText.length > 300) {
+    messageText = messageText.slice(0, 300);
   }
 
+  // Build payload by type — linkedinVisit has no message, email needs a subject
   const body = {
     type: lemlistType,
-    text,
     delay: typeof step.delay === 'number' ? step.delay : parseDelayFromTiming(step.timing),
   };
 
-  // Subject only for emails
-  if (lemlistType === 'email' && step.subject) {
-    body.subject = step.subject;
+  if (lemlistType === 'email') {
+    if (step.subject) body.subject = step.subject;
+    // Send both field names to cover v1 (text) and v2 (message) API shapes
+    body.message = messageText;
+    body.text = messageText;
+  } else if (lemlistType === 'linkedinInvite' || lemlistType === 'linkedinSend') {
+    body.message = messageText;
+    body.text = messageText;
   }
+  // linkedinVisit: no message/subject, just type + delay
 
   return lemlistFetch(`/campaigns/${campaignId}/sequences`, {
     method: 'POST',
