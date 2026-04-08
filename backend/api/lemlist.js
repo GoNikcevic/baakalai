@@ -4,7 +4,12 @@ const { withRetry } = require('../lib/retry');
 const BASE_URL = config.lemlist.baseUrl;
 
 async function lemlistFetch(endpoint, options = {}, apiKey = null) {
-  const url = `${BASE_URL}${endpoint}`;
+  // Endpoints starting with "/v2/" hit the v2 API (e.g. /api/v2/...)
+  // All other endpoints keep the legacy /api/... prefix.
+  const rootUrl = BASE_URL.replace(/\/api$/, '');
+  const url = endpoint.startsWith('/v2/')
+    ? `${rootUrl}/api${endpoint}`
+    : `${BASE_URL}${endpoint}`;
   const key = apiKey || config.lemlist.apiKey;
   return withRetry(async () => {
     const res = await fetch(url, {
@@ -20,8 +25,8 @@ async function lemlistFetch(endpoint, options = {}, apiKey = null) {
     if (!res.ok) {
       const body = await res.text();
       throw Object.assign(
-        new Error(`Lemlist API ${res.status}: ${body}`),
-        { status: res.status }
+        new Error(`Lemlist API ${res.status} on ${endpoint}: ${body || '(empty body)'}`),
+        { status: res.status, endpoint }
       );
     }
     return res.json();
@@ -99,7 +104,7 @@ async function getDatabaseFilters(apiKey) {
   if (_filtersCache.data && Date.now() < _filtersCache.expiresAt) {
     return _filtersCache.data;
   }
-  const filters = await lemlistFetch('/database/filters', {}, apiKey);
+  const filters = await lemlistFetch('/v2/database/filters', {}, apiKey);
   _filtersCache = { data: filters, expiresAt: Date.now() + 3600 * 1000 };
   return filters;
 }
@@ -160,7 +165,7 @@ async function searchPeopleDatabase(apiKey, criteria) {
     size: Math.min(criteria.limit || 25, 100),
   };
 
-  const result = await lemlistFetch('/database/people', {
+  const result = await lemlistFetch('/v2/database/people', {
     method: 'POST',
     body: JSON.stringify(body),
   }, apiKey);
