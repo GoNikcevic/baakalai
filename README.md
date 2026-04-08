@@ -1,4 +1,4 @@
-# Bakal
+# Baakalai
 
 B2B prospecting automation service combining multi-channel outreach (Email + LinkedIn), AI-generated personalized copy, and automated performance optimization.
 
