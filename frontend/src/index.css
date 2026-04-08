@@ -253,7 +253,7 @@ body {
 
 /* ═══════════ MAIN ═══════════ */
 .mobile-nav { display: none; }
-.main { margin-left: 240px; padding: 28px 32px; height: 100vh; box-sizing: border-box; overflow-y: auto; transition: margin-left 0.2s ease; }
+.main { margin-left: 240px; padding: 32px 40px; height: 100vh; box-sizing: border-box; overflow-y: auto; transition: margin-left 0.2s ease; }
 
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -334,6 +334,8 @@ body {
   justify-content: space-between; border-bottom: 1px solid var(--border);
 }
 .card-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+/* Fallback padding when .card-title is placed directly inside .card without a .card-header wrapper */
+.card > .card-title { padding: 16px 20px 12px; }
 .card-body { padding: 20px; }
 
 /* ═══════════ CAMPAIGNS TABLE ═══════════ */
@@ -3278,8 +3280,8 @@ body {
 .crm-kpi-value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
 .crm-kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-.crm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; overflow: hidden; }
-.crm-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; overflow: hidden; }
+.crm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.crm-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 
 /* Conversion rows */
 .crm-conversion-row { display: flex; align-items: center; gap: 12px; }

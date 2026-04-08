@@ -94,7 +94,7 @@ describe('SettingsPage', () => {
       expect(screen.getByText(/Limite quotidienne Lemlist/)).toBeInTheDocument();
       expect(screen.getByText(/Fen.tre d'envoi/)).toBeInTheDocument();
       expect(screen.getByText(/Jours d'envoi/)).toBeInTheDocument();
-      expect(screen.getByText(/Mod.le IA/)).toBeInTheDocument();
+      expect(screen.getByText(/Mod.le Claude/)).toBeInTheDocument();
     });
   });
 

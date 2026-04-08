@@ -745,15 +745,15 @@ export default function SettingsPage() {
               </select>
             </div>
             <div className="settings-pref-row">
-              <label className="settings-pref-label">Modèle IA</label>
+              <label className="settings-pref-label">Modèle Claude</label>
               <select
                 className="form-input"
                 value={preferences.claudeModel}
                 onChange={e => updatePreference('claudeModel', e.target.value)}
               >
-                <option value="claude-3-sonnet">Baakal Standard</option>
-                <option value="claude-3-opus">Baakal Pro</option>
-                <option value="claude-3-haiku">Baakal Lite</option>
+                <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                <option value="claude-3-opus">Claude 3 Opus</option>
+                <option value="claude-3-haiku">Claude 3 Haiku</option>
               </select>
             </div>
           </div>
