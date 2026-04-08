@@ -1,0 +1,38 @@
+name: Release Notes
+
+on:
+  schedule:
+    # 08:00 UTC every Mon/Wed/Fri — ~10h Paris in summer, ~9h Paris in winter.
+    # Rhythm is ~48h between runs, close to the target cadence.
+    - cron: '0 8 * * 1,3,5'
+  workflow_dispatch:
+    inputs:
+      lookback_hours:
+        description: "Number of hours to look back (default: 48)"
+        required: false
+        default: '48'
+
+jobs:
+  generate:
+    name: Generate and publish release note
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate and publish release note to Notion
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || '48' }}
+        run: node scripts/release-notes.js
