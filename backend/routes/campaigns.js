@@ -627,7 +627,23 @@ router.post('/:id/launch-lemlist', async (req, res, next) => {
       }
     }
 
-    // 4) Flip campaign to active
+    // 4) Start the Lemlist campaign (idempotent — no-op if already running)
+    //    We only start if at least one sequence step and one lead were pushed,
+    //    otherwise Lemlist would start an empty campaign with nothing to send.
+    let started = false;
+    let startError = null;
+    const someStepsPushed = sequenceResults.some(r => r.ok);
+    if (someStepsPushed && leadResults.pushed > 0) {
+      try {
+        await lemlist.startCampaign(lemlistCampaignId, apiKey);
+        started = true;
+      } catch (err) {
+        startError = err.message;
+        logger.warn('launch-lemlist', `Auto-start failed (campaign stays in draft): ${err.message}`);
+      }
+    }
+
+    // 5) Flip Baakalai campaign to active
     await db.campaigns.update(campaign.id, {
       status: 'active',
       start_date: new Date().toISOString().split('T')[0],
@@ -643,6 +659,8 @@ router.post('/:id/launch-lemlist', async (req, res, next) => {
       lemlistCampaignId,
       sequenceSteps: sequenceResults,
       leads: leadResults,
+      started,
+      startError,
       campaign: updated,
     });
   } catch (err) {

@@ -53,6 +53,17 @@ async function createCampaign(name, apiKey) {
   }, apiKey);
 }
 
+/**
+ * Start (or resume) a Lemlist campaign. Idempotent — if the campaign is
+ * already running, Lemlist's API simply does nothing.
+ * POST /api/campaigns/:id/start
+ */
+async function startCampaign(campaignId, apiKey) {
+  return lemlistFetch(`/campaigns/${campaignId}/start`, {
+    method: 'POST',
+  }, apiKey);
+}
+
 // Map Baakal touchpoint types → Lemlist API step types
 // Per official Lemlist docs (developer.lemlist.com), valid enum values:
 // email, manual, phone, api, linkedinVisit, linkedinInvite, linkedinSend,
@@ -469,6 +480,7 @@ module.exports = {
   updateSequenceStep,
   getWorkflow,
   createCampaign,
+  startCampaign,
   addSequenceStep,
   addLead,
   searchPeopleDatabase,

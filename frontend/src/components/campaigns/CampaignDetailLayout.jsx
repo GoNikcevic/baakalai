@@ -101,10 +101,18 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
           kpis: { contacts: result.leads?.pushed || 0, openRate: 0, replyRate: 0, interested: 0, meetings: 0, stops: 0 },
         },
       }));
+      const stepsOk = (result.sequenceSteps || []).filter(s => s.ok).length;
+      const stepsTotal = (result.sequenceSteps || []).length;
+      const baseDesc = `${result.leads?.pushed || 0} prospects ajoutés · ${stepsOk}/${stepsTotal} étapes créées`;
+      const statusLine = result.started
+        ? ' · ✅ Campagne démarrée automatiquement'
+        : result.startError
+          ? ` · ⚠️ Démarrage auto échoué (${result.startError}) — démarre manuellement depuis Lemlist`
+          : ' · ℹ️ Campagne en draft sur Lemlist (pas de leads/étapes à envoyer)';
       setLaunchAlert({
         type: 'success',
         title: '🚀 Campagne déployée vers Lemlist',
-        desc: `${result.leads?.pushed || 0} prospects ajoutés · ${(result.sequenceSteps || []).filter(s => s.ok).length}/${(result.sequenceSteps || []).length} étapes créées`,
+        desc: baseDesc + statusLine,
       });
     } catch (err) {
       setLaunchAlert({
