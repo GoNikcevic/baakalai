@@ -109,7 +109,7 @@ function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew }) {
               className={`chat-thread-item${active}`}
               onClick={() => onSelect(t.id)}
             >
-              <span className="thread-title">{escapeHtml(t.title)}</span>
+              <span className="thread-title">{t.title}</span>
               <span className="thread-date">{dateStr}</span>
               <button
                 className="chat-thread-delete"
@@ -140,9 +140,9 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
     const changeList = Object.entries(changes).map(([k, v]) => `${k}: ${v}`);
     return (
       <div className="chat-action-card">
-        <div className="chat-action-title">Modifier : {escapeHtml(metadata.campaignName || '')}</div>
+        <div className="chat-action-title">Modifier : {metadata.campaignName || ''}</div>
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '8px 0' }}>
-          {changeList.map((c, i) => <div key={i}>{escapeHtml(c)}</div>)}
+          {changeList.map((c, i) => <div key={i}>{c}</div>)}
         </div>
         <div className="chat-action-buttons">
           <button className="chat-action-btn primary" onClick={() => onActionExecute && onActionExecute(metadata)}>
@@ -160,7 +160,7 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
   if (action === 'analyze_campaign') {
     return (
       <div className="chat-action-card">
-        <div className="chat-action-title">Analyser : {escapeHtml(metadata.campaignName || '')}</div>
+        <div className="chat-action-title">Analyser : {metadata.campaignName || ''}</div>
         <div className="chat-action-buttons">
           <button className="chat-action-btn primary" onClick={() => onActionExecute && onActionExecute(metadata)}>
             Lancer l'analyse
@@ -174,7 +174,7 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
   if (action === 'regenerate_touchpoints') {
     return (
       <div className="chat-action-card">
-        <div className="chat-action-title">Régénérer : {escapeHtml(metadata.campaignName || '')}</div>
+        <div className="chat-action-title">Régénérer : {metadata.campaignName || ''}</div>
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '8px 0' }}>
           Touchpoints : {(metadata.steps || []).join(', ')}
         </div>
@@ -194,7 +194,7 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
   if (action === 'show_diagnostic') {
     return (
       <div className="chat-action-card">
-        <div className="chat-action-title">Diagnostic : {escapeHtml(metadata.campaignName || '')}</div>
+        <div className="chat-action-title">Diagnostic : {metadata.campaignName || ''}</div>
         <div className="chat-action-buttons">
           <button className="chat-action-btn primary" onClick={() => onActionExecute && onActionExecute(metadata)}>
             Voir le diagnostic complet
@@ -318,7 +318,7 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
       <div className="chat-action-title">📋 Ajouter une liste de prospects</div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 10px' }}>
         {contacts.length} contact{contacts.length > 1 ? 's' : ''} détecté{contacts.length > 1 ? 's' : ''}
-        {metadata.campaignName && <> · destination : <strong>{escapeHtml(metadata.campaignName)}</strong></>}
+        {metadata.campaignName && <> · destination : <strong>{metadata.campaignName}</strong></>}
       </div>
 
       {contacts.length === 0 && (
@@ -387,7 +387,7 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
                   disabled={saving}
                   style={{ textAlign: 'left', padding: '10px 12px' }}
                 >
-                  <div style={{ fontWeight: 600, fontSize: 12 }}>{escapeHtml(c.name)}</div>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>{c.name}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                     {[c.sector, c.size].filter(Boolean).join(' · ')}
                   </div>
@@ -435,15 +435,15 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify }) {
   const params = [campaign.sector, campaign.position, campaign.size, campaign.channel, campaign.angle, campaign.zone]
     .filter(Boolean)
     .map((p) => (
-      <span key={p} className="chat-action-param">{escapeHtml(p)}</span>
+      <span key={p} className="chat-action-param">{p}</span>
     ));
 
   const steps = campaign.sequence && campaign.sequence.length > 0
     ? campaign.sequence.map((s) => (
         <div key={s.step} className="chat-action-step">
           <div className={`chat-action-step-dot ${s.type}`}></div>
-          <span>{escapeHtml(s.step)} &mdash; {escapeHtml(s.label || s.type)}</span>
-          <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{escapeHtml(s.timing || '')}</span>
+          <span>{s.step} &mdash; {s.label || s.type}</span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>{s.timing || ''}</span>
         </div>
       ))
     : null;
@@ -461,7 +461,7 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify }) {
 
   return (
     <div className="chat-action-card">
-      <div className="chat-action-title">Campagne prête : {escapeHtml(campaign.name)}</div>
+      <div className="chat-action-title">Campagne prête : {campaign.name}</div>
       <div className="chat-action-params">{params}</div>
       {steps && <div className="chat-action-sequence">{steps}</div>}
       <div className="chat-action-buttons">
@@ -577,7 +577,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
       <div className="chat-action-title">🎯 Recherche de prospects ({sourceLabel})</div>
       <div className="chat-action-params">
         {criteriaSummary.map((s, i) => (
-          <span key={i} className="chat-action-param">{escapeHtml(s)}</span>
+          <span key={i} className="chat-action-param">{s}</span>
         ))}
       </div>
 
@@ -890,7 +890,7 @@ function QuickReplies({ replies, onSend, disabled }) {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
-            {escapeHtml(r.label)}
+            {r.label}
           </button>
         );
       })}
@@ -904,7 +904,7 @@ function InlineSuggestions({ suggestions, onSend }) {
     <div className="chat-inline-suggestions">
       {suggestions.map((s) => (
         <button key={s} className="chat-inline-chip" onClick={() => onSend(s)}>
-          {escapeHtml(s)}
+          {s}
         </button>
       ))}
     </div>
