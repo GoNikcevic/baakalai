@@ -78,16 +78,29 @@ export async function register(name, email, password, company) {
     if (!ct.includes('application/json')) throw new Error('offline');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Registration failed');
-    setSession(data.token, data.refreshToken, data.user);
-    return data.user;
+    // NOTE: on ne stocke pas la session ici — l'utilisateur doit
+    // d'abord confirmer son email via le lien reçu, puis se connecter.
+    return { email: data.user.email, name: data.user.name };
   } catch (err) {
     if (err.message === 'offline' || err.name === 'TypeError') {
+      // Offline demo mode — garder l'auto-login pour ne pas bloquer la démo locale
       const demoUser = { name, email, role: 'demo' };
       setSession('demo-token', null, demoUser);
-      return demoUser;
+      return { email, name, _demo: true };
     }
     throw err;
   }
+}
+
+export async function resendVerification(email) {
+  const res = await fetch('/api/auth/resend-verification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Erreur réseau');
+  return data;
 }
 
 /**

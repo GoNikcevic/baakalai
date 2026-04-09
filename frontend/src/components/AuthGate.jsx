@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useRef } from 'react';
-import { login, register } from '../services/auth';
+import { login, register, resendVerification } from '../services/auth';
 
 /* ─── Inline styles matching the vanilla app's auth overlay ─── */
 const styles = {
@@ -134,6 +134,14 @@ export default function AuthGate({ onAuth }) {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
 
+  // Check-email screen (post-registration, before verification)
+  const [registeredEmail, setRegisteredEmail] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendMessage, setResendMessage] = useState('');
+
+  // Verified banner (user just clicked the email link → redirected here)
+  const [verifiedBanner, setVerifiedBanner] = useState(false);
+
   // Form fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -142,6 +150,19 @@ export default function AuthGate({ onAuth }) {
 
   const firstInputRef = useRef(null);
 
+  // Detect ?verified=true or ?error=invalid_token in the URL after email link click
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === 'true') {
+      setVerifiedBanner(true);
+      // Clean the URL so the banner doesn't reappear on refresh
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('error') === 'invalid_token') {
+      setError('Lien de vérification invalide ou expiré. Demande un nouveau lien ci-dessous.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   // Focus the first input whenever mode changes
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -149,6 +170,25 @@ export default function AuthGate({ onAuth }) {
     }, 100);
     return () => clearTimeout(timer);
   }, [isRegister]);
+
+  // Resend cooldown ticker
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  async function handleResendVerification() {
+    if (resendCooldown > 0 || !registeredEmail) return;
+    setResendMessage('');
+    try {
+      await resendVerification(registeredEmail);
+      setResendMessage('Email renvoyé — vérifie ta boîte de réception (et les spams).');
+      setResendCooldown(30);
+    } catch (err) {
+      setResendMessage(err.message || 'Erreur lors de l\'envoi');
+    }
+  }
 
   function toggleMode(e) {
     e.preventDefault();
@@ -184,17 +224,23 @@ export default function AuthGate({ onAuth }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setVerifiedBanner(false);
     setLoading(true);
 
     try {
-      let user;
       if (isRegister) {
-        user = await register(name, email, password, company);
+        const result = await register(name, email, password, company);
+        // Offline/demo mode → register() still auto-logs in, onAuth directly
+        if (result._demo) {
+          if (onAuth) onAuth(result);
+          return;
+        }
+        // Normal flow → show "check your email" screen, do NOT auto-login
+        setRegisteredEmail(result.email);
       } else {
-        user = await login(email, password);
+        const user = await login(email, password);
+        if (onAuth) onAuth(user);
       }
-      // Notify parent of successful authentication
-      if (onAuth) onAuth(user);
     } catch (err) {
       setError(err.message || 'Une erreur est survenue');
     } finally {
@@ -218,8 +264,80 @@ export default function AuthGate({ onAuth }) {
           </p>
         </div>
 
-        {/* ─── Forgot password flow ─── */}
-        {showForgot ? (
+        {/* ─── Check-email screen (post-registration) ─── */}
+        {registeredEmail ? (
+          <div>
+            <div style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: 20,
+              marginBottom: 16,
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📬</div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
+                Vérifie ta boîte de réception
+              </h3>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 4 }}>
+                On vient d'envoyer un lien de confirmation à&nbsp;:
+              </p>
+              <p style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600, marginBottom: 12 }}>
+                {registeredEmail}
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Clique sur le lien dans l'email pour activer ton compte Baakalai, puis reviens ici pour te connecter.
+              </p>
+            </div>
+
+            {resendMessage && (
+              <div style={{
+                fontSize: 12,
+                color: resendMessage.startsWith('Email renvoyé') ? 'var(--success, #16a34a)' : 'var(--danger)',
+                marginBottom: 12,
+                textAlign: 'center',
+              }}>
+                {resendMessage}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resendCooldown > 0}
+              style={{
+                ...styles.submitBtn,
+                marginBottom: 10,
+                ...(resendCooldown > 0 ? styles.submitBtnDisabled : {}),
+                background: 'var(--bg-card)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {resendCooldown > 0
+                ? `Renvoyer dans ${resendCooldown}s`
+                : 'Je n\'ai rien reçu — Renvoyer l\'email'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setRegisteredEmail(null);
+                setResendMessage('');
+                setResendCooldown(0);
+                setIsRegister(false);
+                setName('');
+                setPassword('');
+                setCompany('');
+              }}
+              style={styles.submitBtn}
+            >
+              Retour à la connexion
+            </button>
+          </div>
+        ) :
+        /* ─── Forgot password flow ─── */
+        showForgot ? (
           <div>
             {forgotSent ? (
               <div>
@@ -307,6 +425,24 @@ export default function AuthGate({ onAuth }) {
 
           <div style={{ textAlign: 'center', margin: '12px 0', fontSize: 12, color: 'var(--text-muted)' }}>ou</div>
         </div>
+
+        {verifiedBanner && !isRegister && (
+          <div style={{
+            background: 'rgba(22, 163, 74, 0.1)',
+            border: '1px solid rgba(22, 163, 74, 0.3)',
+            color: 'var(--success, #16a34a)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '10px 14px',
+            marginBottom: 16,
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <span>✅</span>
+            <span>Email vérifié. Tu peux maintenant te connecter.</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} autoComplete="on">
           {/* Name (register only) */}
