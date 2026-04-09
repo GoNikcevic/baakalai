@@ -5,6 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api-client';
@@ -429,8 +430,10 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
 }
 
 function CreateCampaignCard({ campaign, onCreateCampaign, onModify }) {
+  const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
+  const [createdId, setCreatedId] = useState(null);
 
   const params = [campaign.sector, campaign.position, campaign.size, campaign.channel, campaign.angle, campaign.zone]
     .filter(Boolean)
@@ -452,11 +455,16 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify }) {
     if (creating || created) return;
     setCreating(true);
     try {
-      await onCreateCampaign(campaign);
+      const result = await onCreateCampaign(campaign);
       setCreated(true);
+      if (result && result.id) setCreatedId(String(result.id));
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleViewCampaign = () => {
+    if (createdId) navigate('/campaigns/' + createdId);
   };
 
   return (
@@ -465,16 +473,26 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify }) {
       <div className="chat-action-params">{params}</div>
       {steps && <div className="chat-action-sequence">{steps}</div>}
       <div className="chat-action-buttons">
-        <button
-          className="chat-action-btn primary"
-          onClick={handleCreate}
-          disabled={creating || created}
-        >
-          {created ? '✅ Campagne créée' : creating ? '⏳ Création...' : 'Créer et voir la séquence →'}
-        </button>
-        {!created && (
-          <button className="chat-action-btn ghost" onClick={onModify} disabled={creating}>
-            Modifier
+        {!created ? (
+          <>
+            <button
+              className="chat-action-btn primary"
+              onClick={handleCreate}
+              disabled={creating}
+            >
+              {creating ? '⏳ Création...' : 'Créer la campagne'}
+            </button>
+            <button className="chat-action-btn ghost" onClick={onModify} disabled={creating}>
+              Modifier
+            </button>
+          </>
+        ) : (
+          <button
+            className="chat-action-btn primary"
+            onClick={handleViewCampaign}
+            disabled={!createdId}
+          >
+            ✅ Campagne créée · Voir la campagne →
           </button>
         )}
       </div>
@@ -1289,7 +1307,7 @@ export default function ChatPage() {
           {
             id: Date.now(),
             role: 'assistant',
-            content: `Campagne **"${campaignData.name}"** créée avec succès ! Tu peux la retrouver dans **Campagnes** — clique dessus pour voir les séquences, ajouter des prospects et la lancer vers Lemlist.`,
+            content: `Campagne **"${campaignData.name}"** créée avec succès ! Clique sur **Voir la campagne** ci-dessus pour ajouter des prospects et lancer la séquence vers Lemlist.`,
             metadata: null,
             animate: true,
           },
@@ -1297,6 +1315,10 @@ export default function ChatPage() {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 3000);
         scrollToBottom();
+
+        // Return the created campaign ID so the CreateCampaignCard can
+        // show a "Voir la campagne" shortcut button.
+        return { id: result.campaign.id };
       } catch (err) {
         setMessages((prev) => [
           ...prev,

@@ -238,6 +238,35 @@ function mapCompanySizes(values) {
  * Returns { filters, diagnostics } so callers can surface which criteria
  * were actually applied vs dropped.
  */
+/**
+ * Normalize a list of text criterion values:
+ *   - Split any value that contains " / " or " | " into multiple values
+ *     (Claude sometimes concatenates sectors or titles like
+ *     "Biocarburants / Énergies renouvelables" into a single string,
+ *     which makes keyword matching too narrow)
+ *   - Trim whitespace
+ *   - Drop empty values and duplicates (case-insensitive)
+ */
+function normalizeTextValues(values) {
+  if (!Array.isArray(values)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of values) {
+    if (!raw) continue;
+    const parts = String(raw)
+      .split(/\s*[/|]\s*/) // split on slash or pipe surrounded by optional spaces
+      .map(s => s.trim())
+      .filter(Boolean);
+    for (const p of parts) {
+      const key = p.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
 function buildLemlistFilters(criteria, availableFilters) {
   const filters = [];
   const diagnostics = {
@@ -256,11 +285,20 @@ function buildLemlistFilters(criteria, availableFilters) {
   const pick = (candidates) => candidates.find(c => available.has(c));
 
   const tryAdd = (criterion, values, candidates) => {
-    if (!values || values.length === 0) return;
+    // Normalize (split concatenated values on "/" or "|", dedupe) before
+    // looking up the filter. This fixes cases where Claude or the user
+    // joined multiple values with a slash into a single string.
+    const normalized = normalizeTextValues(values);
+    if (normalized.length === 0) return;
     const fid = pick(candidates);
     if (fid) {
-      filters.push({ filterId: fid, in: values, out: [] });
-      diagnostics.applied.push({ criterion, filterId: fid, values });
+      filters.push({ filterId: fid, in: normalized, out: [] });
+      diagnostics.applied.push({
+        criterion,
+        filterId: fid,
+        values: normalized,
+        ...(JSON.stringify(normalized) !== JSON.stringify(values || []) ? { rawValues: values } : {}),
+      });
     } else {
       diagnostics.dropped.push({
         criterion,
