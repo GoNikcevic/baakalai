@@ -40,7 +40,17 @@ async function lemlistFetch(endpoint, options = {}, apiKey = null) {
         { status: res.status, endpoint }
       );
     }
-    return res.json();
+    // Handle empty 2xx responses (e.g. 204 No Content) gracefully —
+    // some endpoints return an empty body on success.
+    if (res.status === 204) return {};
+    const text = await res.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      // Body is non-empty but not JSON (rare) — return raw text under `_raw`
+      return { _raw: text };
+    }
   }, { maxRetries: 2, baseDelay: 1000 });
 }
 
@@ -57,10 +67,14 @@ async function createCampaign(name, apiKey) {
  * Start (or resume) a Lemlist campaign. Idempotent — if the campaign is
  * already running, Lemlist's API simply does nothing.
  * POST /api/campaigns/:id/start
+ *
+ * We send an empty JSON body to be compatible with parsers that reject
+ * POST requests with Content-Type: application/json and no body.
  */
 async function startCampaign(campaignId, apiKey) {
   return lemlistFetch(`/campaigns/${campaignId}/start`, {
     method: 'POST',
+    body: JSON.stringify({}),
   }, apiKey);
 }
 
