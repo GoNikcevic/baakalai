@@ -222,10 +222,15 @@ function buildLemlistFilters(criteria, availableFilters) {
   tryAdd('titles', criteria.titles,
     ['currentTitle', 'currentTitleWithExactMatch', 'pastTitle']);
 
-  // Sectors → currentCompanySubIndustry is the closest to "industry".
-  // If the schema drifts, keywordInCompany is the flexible free-text fallback.
+  // Sectors → keywordInCompany first, because currentCompanySubIndustry
+  // expects LinkedIn's English taxonomy ("Hospital & Health Care",
+  // "Medical Devices", etc.) and silently returns 0 results when given
+  // French values like "Hôpitaux" / "Santé". keywordInCompany is a
+  // free-text match on company name + description and works in any
+  // language — much more forgiving for our use case where Claude
+  // generates sector criteria from French campaign context.
   tryAdd('sectors', criteria.sectors,
-    ['currentCompanySubIndustry', 'currentCompanyMarket', 'department', 'keywordInCompany']);
+    ['keywordInCompany', 'currentCompanySubIndustry', 'currentCompanyMarket', 'department']);
 
   // Locations → country is the primary (matches country names like "France").
   // For cities we rely on Lemlist's fuzzy location filter.
