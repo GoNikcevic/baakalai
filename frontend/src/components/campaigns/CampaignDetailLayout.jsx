@@ -13,6 +13,14 @@ import PerformanceTab from './tabs/PerformanceTab';
 import HistoryTab from './tabs/HistoryTab';
 import ABTestTab from './tabs/ABTestTab';
 import OptimizeCampaignModal from './OptimizeCampaignModal';
+import LoadingOverlay from '../shared/LoadingOverlay';
+
+const LEMLIST_LAUNCH_STEPS = [
+  'Création de la campagne sur Lemlist…',
+  'Déploiement des séquences email & LinkedIn…',
+  'Ajout des prospects dans la liste…',
+  'Activation de la campagne…',
+];
 
 export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns }) {
   const isPrep = c.status === 'prep';
@@ -113,6 +121,12 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
 
   return (
     <div className="campaign-detail">
+      <LoadingOverlay
+        show={launching}
+        title="🚀 Déploiement vers Lemlist"
+        steps={LEMLIST_LAUNCH_STEPS}
+      />
+
       {/* Back button */}
       <button className="campaign-detail-back" onClick={onBack}>
         ← Retour aux campagnes

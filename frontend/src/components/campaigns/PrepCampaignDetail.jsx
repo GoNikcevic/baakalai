@@ -9,6 +9,14 @@ import ProspectGenerator from './ProspectGenerator';
 import { InfoRow, CheckItem } from './shared';
 import api from '../../services/api-client';
 import { sanitizeHtml } from '../../services/sanitize';
+import LoadingOverlay from '../shared/LoadingOverlay';
+
+const LEMLIST_LAUNCH_STEPS = [
+  'Création de la campagne sur Lemlist…',
+  'Déploiement des séquences email & LinkedIn…',
+  'Ajout des prospects dans la liste…',
+  'Activation de la campagne…',
+];
 
 export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }) {
   const [showEditPanel, setShowEditPanel] = useState(false);
@@ -99,6 +107,12 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
 
   return (
     <div className="campaign-detail">
+      <LoadingOverlay
+        show={launching}
+        title="🚀 Déploiement vers Lemlist"
+        steps={LEMLIST_LAUNCH_STEPS}
+      />
+
       {/* Back button */}
       <button className="campaign-detail-back" onClick={onBack}>
         ← Retour aux campagnes
