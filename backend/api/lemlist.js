@@ -232,10 +232,13 @@ function buildLemlistFilters(criteria, availableFilters) {
   tryAdd('sectors', criteria.sectors,
     ['keywordInCompany', 'currentCompanySubIndustry', 'currentCompanyMarket', 'department']);
 
-  // Locations → country is the primary (matches country names like "France").
-  // For cities we rely on Lemlist's fuzzy location filter.
+  // Locations → `location` first because it's a free-text filter that
+  // accepts cities, regions AND countries ("Paris", "Île-de-France",
+  // "France" all work). `country` is strict (country names only) and
+  // returns 0 if given a city, so putting it first silently broke
+  // city-level searches. `region` is a last-resort fallback.
   tryAdd('locations', criteria.locations,
-    ['country', 'location', 'region']);
+    ['location', 'country', 'region']);
 
   // Company size → currentCompanyHeadcount, but Lemlist expects LinkedIn's
   // numeric ID format ("1", "11", "51", "201", "501", "1001", ...) not our
