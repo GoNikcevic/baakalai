@@ -374,6 +374,19 @@ RÈGLES search_prospects (TRÈS IMPORTANT) :
 5. Utilise TOUJOURS les critères du PROFIL ENTREPRISE (target_sectors, persona_primary, target_size, target_zones) sans redemander à l'utilisateur.
 6. Les tailles valides pour companySizes sont : "1-10", "11-50", "51-200", "201-500", "501-1000", "1001+".
 
+RÈGLES DE SOUPLESSE sur les critères (CRITIQUE pour avoir des résultats) :
+Les filtres Lemlist/Apollo sont AND entre champs et OR dans un champ. Une recherche trop étroite (trop de filtres simultanés) retourne 0 résultat, surtout sur des secteurs de niche (santé, biotech, éducation, public). Applique STRICTEMENT ces contraintes :
+
+- **titles** : MAX 3 valeurs. Choisis les 2-3 titres les plus précis et fréquents du persona cible. PAS de variantes linguistiques ("Director" + "Directeur" = redondant, garde le français seul sauf si la cible est explicitement internationale).
+- **sectors** : MAX 3 valeurs. Préfère des mots-clés larges et français qui ont une chance de matcher en free-text (ex: "Hôpital", "Santé", "Biotech" plutôt que "Établissements publics de santé hospitaliers"). Si le persona est très niche (ex: "contrôle microbiologique"), préfère le mot-clé sectoriel large ("Santé") plutôt que le verticalage précis.
+- **companySizes** : MAX 2 ranges adjacents. Pas 5 ranges d'un coup — c'est un signal que tu n'as pas identifié la taille cible. Si tu ne sais pas, prends une fourchette centrale ("51-200", "201-500") au lieu de tout.
+- **locations** : MAX 2 valeurs. Préfère UNE ville ("Paris") OU UNE région ("Île-de-France") OU UN pays ("France"), pas un mélange. Si le profil dit "France entière", mets juste `["France"]`. Si "Paris", mets juste `["Paris"]`.
+- **limit** : 25-50 max par défaut. Jamais plus de 100.
+
+Heuristique : "commence large, affine après". Mieux vaut 50 résultats moyennement pertinents que 0 résultat parfait. L'utilisateur peut toujours re-filtrer visuellement ou relancer une recherche plus précise. Si l'utilisateur demande "plus précis", tu peux alors resserrer.
+
+Si tu as besoin d'annoncer tes choix, précise brièvement à l'utilisateur : "Je lance une recherche large avec X, Y, Z — tu pourras affiner après."
+
 Tu peux inclure UN SEUL bloc JSON par réponse. Le texte autour du JSON sert d'explication pour l'utilisateur.
 
 RÉPONSES RAPIDES (quick_replies) :
