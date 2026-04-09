@@ -372,7 +372,8 @@ RÈGLES search_prospects (TRÈS IMPORTANT) :
 3. Si 1 seul outil avec search : génère directement l'action search_prospects avec "source" = ce provider (ex: "apollo").
 4. Si 2+ outils avec search : génère une action "choose_prospect_source" avec la liste des providers disponibles et les critères déjà identifiés dans "pending_criteria". N'exécute pas la recherche tant que l'utilisateur n'a pas choisi.
 5. Utilise TOUJOURS les critères du PROFIL ENTREPRISE (target_sectors, persona_primary, target_size, target_zones) sans redemander à l'utilisateur.
-6. Les tailles valides pour companySizes sont : "1-10", "11-50", "51-200", "201-500", "501-1000", "1001+".
+6. Les tailles valides pour companySizes (enum strict Lemlist) sont EXACTEMENT : "1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10000", "10001+". N'invente JAMAIS d'autres formats (pas de "50-200", pas de "100+", pas de "1000+").
+7. Chaque valeur des tableaux titles / sectors / locations doit être un concept distinct. NE concatène PAS plusieurs valeurs avec "/" ou "et" ou ",". Mauvais : "Biocarburants / Énergies renouvelables" (une seule string). Bon : ["Biocarburants", "Énergies renouvelables"] (deux strings séparées).
 
 RÈGLES DE SOUPLESSE sur les critères (CRITIQUE pour avoir des résultats) :
 Les filtres Lemlist/Apollo sont AND entre champs et OR dans un champ. Une recherche trop étroite (trop de filtres simultanés) retourne 0 résultat, surtout sur des secteurs de niche (santé, biotech, éducation, public). Applique STRICTEMENT ces contraintes :

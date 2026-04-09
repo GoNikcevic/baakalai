@@ -179,33 +179,52 @@ async function getDatabaseFilters(apiKey) {
 }
 
 /**
- * Map our "X-Y" company size buckets to Lemlist's LinkedIn-style headcount
- * IDs. Lemlist's currentCompanyHeadcount filter accepts these string IDs:
- *   "1"     → 1-10 employees
- *   "11"    → 11-50
- *   "51"    → 51-200
- *   "201"   → 201-500
- *   "501"   → 501-1000
- *   "1001"  → 1001-5000
- *   "5001"  → 5001-10000
- *   "10001" → 10001+
- * Unrecognized inputs are passed through unchanged (Lemlist will reject
- * them but at least we surface the raw value in diagnostics).
+ * Normalize company-size buckets to the exact values Lemlist's
+ * currentCompanyHeadcount `select` filter accepts.
+ *
+ * Confirmed via the runtime Filter diagnostics log (Railway, 2026-04-09):
+ *   ["1-10", "11-50", "51-200", "201-500", "501-1000",
+ *    "1001-5000", "5001-10000", "10001+"]
+ *
+ * Our internal format already matches these strings for every bounded
+ * range, so the mapping is mostly a pass-through. The one special case
+ * is our legacy "1001+" bucket, which we expand into the 3 large Lemlist
+ * buckets so a user targeting "1000+ employees" actually matches every
+ * company above that threshold.
+ *
+ * An EARLIER VERSION of this function wrongly converted "201-500" → "201"
+ * assuming Lemlist used LinkedIn-style numeric IDs. That assumption was
+ * wrong and killed every chat/standalone search (the filter was accepted
+ * but returned 0 hits because "201" isn't a valid enum value). The new
+ * diagnostics log (usedSchema[].values) made the real format obvious.
  */
-const COMPANY_SIZE_TO_LEMLIST = {
-  '1-10': '1',
-  '11-50': '11',
-  '51-200': '51',
-  '201-500': '201',
-  '501-1000': '501',
-  '1001-5000': '1001',
-  '1001+': '1001',
-  '5001-10000': '5001',
-  '10001+': '10001',
-};
+const LEMLIST_COMPANY_SIZES = [
+  '1-10', '11-50', '51-200', '201-500', '501-1000',
+  '1001-5000', '5001-10000', '10001+',
+];
 
 function mapCompanySizes(values) {
-  return (values || []).map(v => COMPANY_SIZE_TO_LEMLIST[String(v).trim()] || v);
+  const out = [];
+  const add = (v) => { if (!out.includes(v)) out.push(v); };
+  for (const raw of values || []) {
+    const key = String(raw).trim();
+    if (LEMLIST_COMPANY_SIZES.includes(key)) {
+      add(key);
+      continue;
+    }
+    // Legacy aliases we might still receive from Claude or old frontend code
+    if (key === '1001+' || key === '1000+' || key === '1001') {
+      add('1001-5000');
+      add('5001-10000');
+      add('10001+');
+      continue;
+    }
+    if (key === '1-10 employees' || key === '1-10 salariés') { add('1-10'); continue; }
+    // Unknown format — pass through so Lemlist can error (or match if the
+    // string happens to be valid). Better than silently dropping.
+    add(key);
+  }
+  return out;
 }
 
 /**
