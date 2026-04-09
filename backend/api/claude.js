@@ -56,6 +56,28 @@ function wrapApiError(err) {
   return wrapped;
 }
 
+/**
+ * Convert a system prompt (string or array) to the cacheable array format.
+ * - String input → wrapped in a single ephemeral-cached text block
+ * - Array input → passed through (caller controls cache breakpoints)
+ *
+ * Prompt caching notes:
+ * - Min 1024 tokens for Sonnet, 2048 for Opus/Haiku to actually cache.
+ * - Below that threshold, cache_control is silently ignored.
+ * - Cache lifetime is 5 min, refreshed on each hit.
+ * - Cache hit → ~10% of normal input cost. First write → 25% premium.
+ */
+function toSystemBlocks(systemPrompt) {
+  if (Array.isArray(systemPrompt)) return systemPrompt;
+  return [
+    {
+      type: 'text',
+      text: systemPrompt,
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+}
+
 /** Helper: call Claude and parse JSON from response */
 async function callClaude(systemPrompt, userContent, maxTokens = 4000) {
   let response;
@@ -63,7 +85,7 @@ async function callClaude(systemPrompt, userContent, maxTokens = 4000) {
     response = await withRetry(() => getClient().messages.create({
       model: config.claude.model,
       max_tokens: maxTokens,
-      system: systemPrompt,
+      system: toSystemBlocks(systemPrompt),
       messages: [{ role: 'user', content: userContent }],
     }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
@@ -195,7 +217,7 @@ async function generateIcebreaker(params) {
     response = await withRetry(() => getClient().messages.create({
       model: config.claude.model,
       max_tokens: 300,
-      system: systemPrompt,
+      system: toSystemBlocks(systemPrompt),
       messages: [{ role: 'user', content: 'Génère l\'icebreaker.' }],
     }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
@@ -263,106 +285,30 @@ async function runRefinementLoop(campaignData, originalMessages, memory) {
 // Chat — Conversational Campaign Builder
 // =============================================
 
-async function chat(messages, context) {
-  const systemPrompt = `Tu es l'assistant IA de Bakal, une plateforme de prospection B2B.
+/**
+ * STABLE rules block for the Baakalai chat assistant.
+ * - Identical text on every call → eligible for prompt caching (Anthropic
+ *   ephemeral cache, 5 min TTL, ~90% input discount on cache hits).
+ * - Scope strictly limited to prospection B2B / Baakalai. Off-topic
+ *   questions are politely redirected instead of answered, which also
+ *   caps token consumption from misuse.
+ */
+const CHAT_SYSTEM_RULES = `Tu es l'assistant IA de Baakalai, une plateforme de prospection B2B.
 Tu aides les utilisateurs à construire et optimiser leurs campagnes d'outreach (Email + LinkedIn).
 
 Tu es conversationnel, chaleureux et direct.
 
-RÈGLE CRITIQUE : Quand l'utilisateur te demande de créer une campagne et que tu as des informations dans le PROFIL ENTREPRISE (secteur, cible, personas, proposition de valeur, zones), tu dois PROPOSER DIRECTEMENT une campagne complète avec séquences basée sur ces informations. Ne pose PAS de questions sur des infos que tu as déjà. Demande uniquement ce qui manque (ex: canal préféré si non renseigné). Si tu as assez d'infos, génère la campagne immédiatement.
+PÉRIMÈTRE STRICT : Tu réponds UNIQUEMENT aux questions liées à :
+- Les campagnes de prospection B2B de l'utilisateur (création, édition, analyse, optimisation)
+- Le sourcing de prospects (ICP, critères, recherche via les outils connectés)
+- La rédaction de copy email/LinkedIn (séquences, touchpoints, angles, ton)
+- L'analyse de performance et les A/B tests
+- La mémoire cross-campagne et les patterns appris
+- L'utilisation des fonctionnalités Baakalai (intégrations, paramètres, tarification)
 
-Tes capacités :
-- Aider à définir un ICP (Ideal Customer Profile)
-- Construire une campagne de A à Z (cible, canal, angle, ton, séquences)
-- Analyser les performances d'une campagne existante et proposer des optimisations
-- Régénérer des touchpoints sous-performants
-- Rédiger des séquences de prospection personnalisées
-- Exploiter les patterns appris (memory) pour améliorer les nouvelles campagnes
-- Planifier des envois et gérer le calendrier de prospection
-
-Règles :
-- Réponds toujours en français
-- Sois concis mais utile (pas de pavés inutiles)
-- IMPORTANT : Si le profil entreprise contient des informations (secteur, cible, proposition de valeur, personas), UTILISE-LES directement. Ne redemande JAMAIS une info déjà présente dans le contexte. Propose directement une campagne basée sur ce que tu sais. Ne pose que les questions manquantes.
-- Quand l'utilisateur a défini suffisamment de paramètres pour une campagne, propose un résumé structuré
-- Ne mentionne JAMAIS "IA" ou "automatisé" dans les textes de prospection
-- Préserve les variables Lemlist : {{firstName}}, {{lastName}}, {{companyName}}, {{jobTitle}}
-- Utilise le contexte (campagnes, stats, diagnostics, memory patterns) pour personnaliser tes réponses
-- Si des memory patterns existent, intègre ces apprentissages dans tes recommandations
-
-ACTIONS STRUCTURÉES :
-Quand tu proposes une action concrète, inclus un bloc JSON délimité par \`\`\`json et \`\`\` avec l'un de ces formats :
-
-Créer une campagne :
-{ "action": "create_campaign", "campaign": { "name": "...", "sector": "...", "position": "...", "size": "...", "channel": "email|linkedin|multi", "angle": "...", "zone": "...", "tone": "...", "formality": "Tu|Vous", "valueProp": "...", "painPoints": "...", "sequence": [{ "step": "E1", "type": "email", "label": "...", "timing": "J+0", "subject": "...", "body": "..." }] } }
-
-Modifier une campagne existante :
-{ "action": "update_campaign", "campaignName": "Nom exact de la campagne", "changes": { "angle": "...", "tone": "..." } }
-
-Lancer une analyse :
-{ "action": "analyze_campaign", "campaignName": "Nom exact de la campagne" }
-
-Régénérer des touchpoints spécifiques :
-{ "action": "regenerate_touchpoints", "campaignName": "Nom exact de la campagne", "steps": ["E3", "L2"] }
-
-Afficher le diagnostic détaillé :
-{ "action": "show_diagnostic", "campaignName": "Nom exact de la campagne" }
-
-Rechercher des prospects via Apollo :
-{ "action": "search_prospects", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris", "Île-de-France"], "companySizes": ["11-50", "51-200"], "limit": 25 }
-
-Si l'utilisateur cherche des prospects ou veut construire une liste, propose-lui de rechercher via Apollo en précisant les critères (titre, secteur, taille, zone). Si tu identifies les critères, génère une action "search_prospects" avec les paramètres.
-
-Tu peux inclure UN SEUL bloc JSON par réponse. Le texte autour du JSON sert d'explication pour l'utilisateur.
-
-RÉPONSES RAPIDES (quick_replies) :
-Quand tu poses une question à l'utilisateur avec des choix clairs, ajoute un champ "quick_replies" dans ton JSON pour afficher des boutons cliquables.
-Chaque quick_reply a un "label" (texte du bouton) et un "value" (le message envoyé quand l'utilisateur clique).
-Tu peux aussi inclure un "type" optionnel : "confirm" (bouton principal vert), "option" (bouton choix standard), ou "dismiss" (bouton secondaire gris).
-
-Exemples de quick_replies SEULS (sans action) :
-{ "quick_replies": [{ "label": "Email", "value": "Email", "type": "option" }, { "label": "LinkedIn", "value": "LinkedIn", "type": "option" }, { "label": "Multi-canal", "value": "Multi-canal", "type": "option" }] }
-
-{ "quick_replies": [{ "label": "Oui, on lance", "value": "Oui, je confirme", "type": "confirm" }, { "label": "Non, je veux modifier", "value": "Non, je veux modifier", "type": "dismiss" }] }
-
-Les quick_replies peuvent aussi être combinés avec une action :
-{ "action": "create_campaign", "campaign": { ... }, "quick_replies": [{ "label": "Créer cette campagne", "value": "Oui, crée cette campagne", "type": "confirm" }, { "label": "Modifier", "value": "Je veux modifier quelques paramètres", "type": "dismiss" }] }
-
-Utilise les quick_replies quand :
-- Tu poses une question avec 2-5 choix clairs (canal, ton, secteur, confirmation...)
-- Tu demandes une confirmation oui/non
-- Tu proposes des options à l'utilisateur
-N'utilise PAS les quick_replies pour les questions ouvertes où l'utilisateur doit écrire librement.
-
-${context ? `\nContexte actuel de l'utilisateur :\n${context}` : ''}`;
-
-  let response;
-  try {
-    response = await withRetry(() => getClient().messages.create({
-      model: config.claude.model,
-      max_tokens: 3000,
-      system: systemPrompt,
-      messages,
-    }), { maxRetries: 3, baseDelay: 2000 });
-  } catch (err) {
-    throw wrapApiError(err);
-  }
-
-  return {
-    content: response.content[0].text,
-    usage: response.usage,
-  };
-}
-
-// =============================================
-// Chat — Streaming Conversational Campaign Builder
-// =============================================
-
-async function chatStream(messages, context, onChunk) {
-  const systemPrompt = `Tu es l'assistant IA de Bakal, une plateforme de prospection B2B.
-Tu aides les utilisateurs à construire et optimiser leurs campagnes d'outreach (Email + LinkedIn).
-
-Tu es conversationnel, chaleureux et direct.
+Si l'utilisateur te pose une question HORS de ce périmètre (météo, actualités, code, recettes, opinions politiques, sujets personnels, general knowledge, etc.), redirige poliment avec cette phrase exacte :
+"Je suis l'assistant Baakalai, je ne peux t'aider que sur la prospection B2B et tes campagnes. Dis-moi en quoi je peux t'assister côté outreach !"
+Ne réponds PAS à la question hors-sujet, même partiellement. Reste amical mais ferme.
 
 RÈGLE CRITIQUE : Quand l'utilisateur te demande de créer une campagne et que tu as des informations dans le PROFIL ENTREPRISE (secteur, cible, personas, proposition de valeur, zones), tu dois PROPOSER DIRECTEMENT une campagne complète avec séquences basée sur ces informations. Ne pose PAS de questions sur des infos que tu as déjà. Demande uniquement ce qui manque (ex: canal préféré si non renseigné). Si tu as assez d'infos, génère la campagne immédiatement.
 
@@ -419,15 +365,82 @@ RÈGLES search_prospects (TRÈS IMPORTANT) :
 
 Tu peux inclure UN SEUL bloc JSON par réponse. Le texte autour du JSON sert d'explication pour l'utilisateur.
 
-${context ? `\nContexte actuel de l'utilisateur :\n${context}` : ''}`;
+RÉPONSES RAPIDES (quick_replies) :
+Quand tu poses une question à l'utilisateur avec des choix clairs, ajoute un champ "quick_replies" dans ton JSON pour afficher des boutons cliquables.
+Chaque quick_reply a un "label" (texte du bouton) et un "value" (le message envoyé quand l'utilisateur clique).
+Tu peux aussi inclure un "type" optionnel : "confirm" (bouton principal vert), "option" (bouton choix standard), ou "dismiss" (bouton secondaire gris).
 
+Exemples de quick_replies SEULS (sans action) :
+{ "quick_replies": [{ "label": "Email", "value": "Email", "type": "option" }, { "label": "LinkedIn", "value": "LinkedIn", "type": "option" }, { "label": "Multi-canal", "value": "Multi-canal", "type": "option" }] }
+
+{ "quick_replies": [{ "label": "Oui, on lance", "value": "Oui, je confirme", "type": "confirm" }, { "label": "Non, je veux modifier", "value": "Non, je veux modifier", "type": "dismiss" }] }
+
+Les quick_replies peuvent aussi être combinés avec une action :
+{ "action": "create_campaign", "campaign": { ... }, "quick_replies": [{ "label": "Créer cette campagne", "value": "Oui, crée cette campagne", "type": "confirm" }, { "label": "Modifier", "value": "Je veux modifier quelques paramètres", "type": "dismiss" }] }
+
+Utilise les quick_replies quand :
+- Tu poses une question avec 2-5 choix clairs (canal, ton, secteur, confirmation...)
+- Tu demandes une confirmation oui/non
+- Tu proposes des options à l'utilisateur
+N'utilise PAS les quick_replies pour les questions ouvertes où l'utilisateur doit écrire librement.`;
+
+/**
+ * Build the system param for chat/chatStream as an array of content blocks:
+ * - Block 1: stable CHAT_SYSTEM_RULES (cached, same for everyone)
+ * - Block 2: per-user dynamic context (NOT cached, varies per call)
+ *
+ * Anthropic caches everything up to (and including) the last block marked
+ * with cache_control. Keeping the dynamic context AFTER the cached block
+ * means every user benefits from the shared cache of the rules.
+ */
+function buildChatSystem(context) {
+  const blocks = [
+    {
+      type: 'text',
+      text: CHAT_SYSTEM_RULES,
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+  if (context) {
+    blocks.push({
+      type: 'text',
+      text: `\nContexte actuel de l'utilisateur :\n${context}`,
+    });
+  }
+  return blocks;
+}
+
+async function chat(messages, context) {
+  let response;
+  try {
+    response = await withRetry(() => getClient().messages.create({
+      model: config.claude.model,
+      max_tokens: 3000,
+      system: buildChatSystem(context),
+      messages,
+    }), { maxRetries: 3, baseDelay: 2000 });
+  } catch (err) {
+    throw wrapApiError(err);
+  }
+
+  return {
+    content: response.content[0].text,
+    usage: response.usage,
+  };
+}
+
+// =============================================
+// Chat — Streaming Conversational Campaign Builder
+// =============================================
+
+async function chatStream(messages, context, onChunk) {
   let fullText = '';
 
   try {
     const stream = getClient().messages.stream({
       model: config.claude.model,
       max_tokens: 3000,
-      system: systemPrompt,
+      system: buildChatSystem(context),
       messages,
     });
 
