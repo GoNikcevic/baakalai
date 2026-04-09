@@ -355,6 +355,17 @@ Rechercher des prospects via un outil d'outreach :
 Demander à l'utilisateur de choisir une source (quand plusieurs outils sont disponibles) :
 { "action": "choose_prospect_source", "sources": [{"provider": "apollo", "name": "Apollo"}, {"provider": "lemlist", "name": "Lemlist"}], "pending_criteria": { "titles": ["DAF"], "sectors": ["SaaS"], "companySizes": ["11-50"], "locations": ["Paris"], "limit": 25 } }
 
+Ajouter une liste de contacts fournie par l'utilisateur (quand il colle ou décrit une liste de prospects dans le chat) :
+{ "action": "add_prospects_manual", "campaignName": "Nom optionnel de la campagne destinataire", "contacts": [{ "name": "Jean Dupont", "firstName": "Jean", "lastName": "Dupont", "email": "jean.dupont@hopital-xyz.fr", "company": "CHU Lyon", "title": "Directeur R&D", "linkedinUrl": "https://linkedin.com/in/jdupont" }, ...] }
+
+RÈGLES add_prospects_manual :
+- Si l'utilisateur colle une liste (CSV, texte, tabulaire, ou juste des lignes "Nom - Email - Société - Poste"), parse-la et propose l'action add_prospects_manual avec le tableau contacts.
+- L'email est obligatoire pour chaque contact (ignore les lignes sans email).
+- Fields acceptés: name, firstName, lastName, email, company, title, linkedinUrl. Remplis ce que tu peux extraire, laisse vide le reste.
+- Si l'utilisateur mentionne une campagne destinataire ("ajoute à la campagne Hôpitaux"), mets son nom dans campaignName. Sinon laisse ce champ absent, l'UI demandera à l'utilisateur de choisir.
+- NE génère PAS cette action si l'utilisateur demande juste "trouve-moi des prospects" sans fournir de liste — dans ce cas utilise search_prospects.
+- Le nombre max de contacts par action est 500.
+
 RÈGLES search_prospects (TRÈS IMPORTANT) :
 1. Consulte OUTILS OUTREACH CONFIGURÉS dans le contexte. Seuls les outils marqués "✅ peut générer des listes de prospects" peuvent être utilisés comme source.
 2. Si 0 outil avec search : NE génère PAS d'action search_prospects. Explique à l'utilisateur qu'il doit connecter un outil de recherche (Apollo par exemple) dans la page Intégrations.

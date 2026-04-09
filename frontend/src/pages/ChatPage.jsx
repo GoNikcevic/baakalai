@@ -214,6 +214,11 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
     return <ChooseSourceCard metadata={metadata} onActionExecute={onActionExecute} />;
   }
 
+  // Add manually pasted/CSV prospects (when the user drops a list in chat)
+  if (action === 'add_prospects_manual') {
+    return <AddProspectsManualCard metadata={metadata} onActionExecute={onActionExecute} />;
+  }
+
   return null;
 }
 
@@ -240,6 +245,185 @@ function ChooseSourceCard({ metadata, onActionExecute }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function AddProspectsManualCard({ metadata, onActionExecute }) {
+  const { campaigns } = useApp();
+  const [saving, setSaving] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
+  const [error, setError] = useState(null);
+  const [showCampaignPicker, setShowCampaignPicker] = useState(false);
+
+  // Normalize Claude's raw contacts array into the shape the backend expects.
+  // Dedup by lowercased email. Drop entries without an email.
+  const contacts = (() => {
+    const raw = Array.isArray(metadata.contacts) ? metadata.contacts : [];
+    const seen = new Set();
+    const out = [];
+    for (const c of raw) {
+      const email = (c.email || '').trim();
+      if (!email) continue;
+      const key = email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const name = c.name || [c.firstName, c.lastName].filter(Boolean).join(' ').trim() || '';
+      out.push({
+        id: `chat_${key}`,
+        email,
+        name,
+        firstName: c.firstName || '',
+        lastName: c.lastName || '',
+        company: c.company || '',
+        title: c.title || '',
+        linkedinUrl: c.linkedinUrl || null,
+      });
+    }
+    return out;
+  })();
+
+  const saveToCampaign = async (campaignBackendId) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await api.addProspectsToCampaign(campaignBackendId, contacts);
+      setSavedCount(r.created || 0);
+      setShowCampaignPicker(false);
+    } catch (err) {
+      setError(err.message || 'Sauvegarde échouée');
+    }
+    setSaving(false);
+  };
+
+  const handleSaveClick = () => {
+    if (metadata.campaignId) {
+      saveToCampaign(metadata.campaignId);
+    } else {
+      setShowCampaignPicker(true);
+    }
+  };
+
+  const pickableCampaigns = Object.values(campaigns || {})
+    .filter(c => c.status === 'prep')
+    .map(c => ({
+      id: c._backendId || c.id,
+      name: c.name,
+      sector: c.sector,
+      size: c.size,
+    }));
+
+  return (
+    <div className="chat-action-card">
+      <div className="chat-action-title">📋 Ajouter une liste de prospects</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 10px' }}>
+        {contacts.length} contact{contacts.length > 1 ? 's' : ''} détecté{contacts.length > 1 ? 's' : ''}
+        {metadata.campaignName && <> · destination : <strong>{escapeHtml(metadata.campaignName)}</strong></>}
+      </div>
+
+      {contacts.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--danger, #dc2626)' }}>
+          Aucun contact valide (email manquant). Vérifie que la liste contient bien des emails.
+        </div>
+      )}
+
+      {contacts.length > 0 && (
+        <div style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 6,
+          maxHeight: 220,
+          overflow: 'auto',
+          marginBottom: 10,
+        }}>
+          {contacts.slice(0, 8).map((c, i) => (
+            <div key={c.id} style={{
+              padding: '6px 10px',
+              borderBottom: i < Math.min(7, contacts.length - 1) ? '1px solid var(--border)' : 'none',
+              fontSize: 11,
+              display: 'grid',
+              gridTemplateColumns: '1.3fr 1fr 1.5fr',
+              gap: 8,
+            }}>
+              <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {c.name || '—'}
+              </div>
+              <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {c.title || '—'}
+              </div>
+              <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {c.company || '—'} · {c.email}
+              </div>
+            </div>
+          ))}
+          {contacts.length > 8 && (
+            <div style={{ padding: '6px 10px', fontSize: 10, color: 'var(--text-muted)', textAlign: 'center' }}>
+              + {contacts.length - 8} autres…
+            </div>
+          )}
+        </div>
+      )}
+
+      {savedCount > 0 ? (
+        <div style={{ color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>
+          ✅ {savedCount} prospect{savedCount > 1 ? 's' : ''} ajouté{savedCount > 1 ? 's' : ''} à la campagne
+        </div>
+      ) : showCampaignPicker ? (
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+            Choisis la campagne où ajouter les {contacts.length} prospects :
+          </div>
+          {pickableCampaigns.length === 0 ? (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Aucune campagne en préparation. Crée-en d'abord une.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflow: 'auto' }}>
+              {pickableCampaigns.map(c => (
+                <button
+                  key={c.id}
+                  className="chat-action-btn ghost"
+                  onClick={() => saveToCampaign(c.id)}
+                  disabled={saving}
+                  style={{ textAlign: 'left', padding: '10px 12px' }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>{escapeHtml(c.name)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    {[c.sector, c.size].filter(Boolean).join(' · ')}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            className="chat-action-btn ghost"
+            onClick={() => setShowCampaignPicker(false)}
+            style={{ marginTop: 8, fontSize: 11 }}
+          >
+            Annuler
+          </button>
+        </div>
+      ) : contacts.length > 0 ? (
+        <div className="chat-action-buttons">
+          <button
+            className="chat-action-btn primary"
+            onClick={handleSaveClick}
+            disabled={saving}
+          >
+            {saving
+              ? 'Ajout...'
+              : metadata.campaignId
+                ? `➕ Ajouter ${contacts.length} à la campagne`
+                : `➕ Ajouter ${contacts.length} (choisir une campagne)`}
+          </button>
+        </div>
+      ) : null}
+
+      {error && (
+        <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 8 }}>
+          ⚠️ {error}
+        </div>
+      )}
     </div>
   );
 }
