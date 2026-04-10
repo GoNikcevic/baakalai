@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS memory_patterns (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   pattern         TEXT NOT NULL,
   category        TEXT NOT NULL
-                  CHECK (category IN ('Objets', 'Corps', 'Timing', 'LinkedIn', 'Secteur', 'Cible')),
+                  CHECK (length(trim(category)) > 0),
   data            JSONB,
   confidence      TEXT DEFAULT 'Faible'
                   CHECK (confidence IN ('Haute', 'Moyenne', 'Faible')),
