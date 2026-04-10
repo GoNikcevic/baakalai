@@ -533,6 +533,7 @@ router.post('/:id/prospects', async (req, res, next) => {
           company: c.company || null,
           companySize: c.companySize ? String(c.companySize) : null,
           email: c.email || null,
+          linkedinUrl: c.linkedinUrl || null,
           status: 'new',
         });
         created.push(opp);

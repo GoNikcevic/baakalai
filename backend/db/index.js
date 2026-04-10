@@ -1188,8 +1188,8 @@ const opportunities = {
 
   async create(data) {
     const result = await query(`
-      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, hubspot_contact_id, hubspot_deal_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `, [
       data.userId || null,
@@ -1202,6 +1202,7 @@ const opportunities = {
       data.statusColor || null,
       data.timing || null,
       data.email || null,
+      data.linkedinUrl || null,
       data.hubspotContactId || null,
       data.hubspotDealId || null,
     ]);
@@ -1217,6 +1218,7 @@ const opportunities = {
       company_size: 'company_size', companySize: 'company_size',
       status: 'status', status_color: 'status_color', statusColor: 'status_color',
       timing: 'timing', email: 'email',
+      linkedin_url: 'linkedin_url', linkedinUrl: 'linkedin_url',
       hubspot_contact_id: 'hubspot_contact_id', hubspotContactId: 'hubspot_contact_id',
       hubspot_deal_id: 'hubspot_deal_id', hubspotDealId: 'hubspot_deal_id',
     };
