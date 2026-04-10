@@ -284,11 +284,15 @@ function buildLemlistFilters(criteria, availableFilters) {
   // Pick the first matching filterId from candidates
   const pick = (candidates) => candidates.find(c => available.has(c));
 
-  const tryAdd = (criterion, values, candidates) => {
+  const tryAdd = (criterion, values, candidates, { skipNormalize = false } = {}) => {
     // Normalize (split concatenated values on "/" or "|", dedupe) before
     // looking up the filter. This fixes cases where Claude or the user
     // joined multiple values with a slash into a single string.
-    const normalized = normalizeTextValues(values);
+    // skipNormalize=true for company names where "/" is part of the name
+    // (e.g. "TAO / FULL GRIP / CMB" is one company, not three).
+    const normalized = skipNormalize
+      ? (values || []).map(v => String(v || '').trim()).filter(Boolean)
+      : normalizeTextValues(values);
     if (normalized.length === 0) return;
     const fid = pick(candidates);
     if (fid) {
@@ -311,6 +315,14 @@ function buildLemlistFilters(criteria, availableFilters) {
   // Titles → currentTitle (primary). Fallbacks kept in case of future renames.
   tryAdd('titles', criteria.titles,
     ['currentTitle', 'currentTitleWithExactMatch', 'pastTitle']);
+
+  // Companies → currentCompany (exact or partial match on company name).
+  // Used when the user provides a specific list of target companies
+  // (e.g. from an Excel file) rather than a sector-wide search.
+  // skipNormalize: company names can contain "/" as part of the name
+  // (e.g. "TAO / FULL GRIP / CMB") — we must NOT split on slash.
+  tryAdd('companies', criteria.companies,
+    ['currentCompany', 'currentCompanyByIds'], { skipNormalize: true });
 
   // Sectors → keywordInCompany first, because currentCompanySubIndustry
   // expects LinkedIn's English taxonomy ("Hospital & Health Care",

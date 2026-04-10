@@ -514,6 +514,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
 
   const criteriaSummary = [
     metadata.titles?.join(', '),
+    metadata.companies?.length ? `Entreprises: ${metadata.companies.join(', ')}` : null,
     metadata.sectors?.join(', '),
     metadata.companySizes?.join(', '),
     metadata.locations?.join(', '),
@@ -528,6 +529,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
       const data = await api.searchProspects({
         source: metadata.source,
         titles: metadata.titles || [],
+        companies: metadata.companies || [],
         sectors: metadata.sectors || [],
         locations: metadata.locations || [],
         companySizes: metadata.companySizes || [],
