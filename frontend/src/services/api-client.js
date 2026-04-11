@@ -728,8 +728,11 @@ export async function listCampaignProspects(campaignId) {
 }
 
 /** Launch campaign to Lemlist: create campaign + push sequence + push leads */
-export async function launchCampaignToLemlist(campaignId) {
-  return request(`/campaigns/${campaignId}/launch-lemlist`, { method: 'POST' });
+export async function launchCampaignToLemlist(campaignId, options = {}) {
+  return request(`/campaigns/${campaignId}/launch-lemlist`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  });
 }
 
 /** Get Lemlist credit balance */

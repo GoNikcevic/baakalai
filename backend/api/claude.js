@@ -403,7 +403,7 @@ Afficher le diagnostic détaillé :
 { "action": "show_diagnostic", "campaignName": "Nom exact de la campagne" }
 
 Rechercher des prospects via un outil d'outreach (recherche sectorielle large) :
-{ "action": "search_prospects", "source": "apollo", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris"], "companySizes": ["11-50", "51-200"], "limit": 25 }
+{ "action": "search_prospects", "source": "apollo", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris"], "companySizes": ["11-50", "51-200"], "minConnections": 300, "limit": 25 }
 
 Rechercher des prospects DANS des entreprises spécifiques (quand l'utilisateur fournit une liste de sociétés) :
 { "action": "search_prospects", "source": "lemlist", "titles": ["Directeur R&D", "Directeur Innovation"], "companies": ["De Sangosse", "Koppert France", "Lallemand Plant Care", "ARD"], "locations": ["France"], "limit": 50 }
@@ -454,6 +454,7 @@ Les filtres Lemlist/Apollo sont AND entre champs et OR dans un champ. Une recher
 - **sectors** : MAX 3 valeurs. Préfère des mots-clés larges et français qui ont une chance de matcher en free-text (ex: "Hôpital", "Santé", "Biotech" plutôt que "Établissements publics de santé hospitaliers"). Si le persona est très niche (ex: "contrôle microbiologique"), préfère le mot-clé sectoriel large ("Santé") plutôt que le verticalage précis.
 - **companySizes** : MAX 2 ranges adjacents. Pas 5 ranges d'un coup — c'est un signal que tu n'as pas identifié la taille cible. Si tu ne sais pas, prends une fourchette centrale ("51-200", "201-500") au lieu de tout.
 - **locations** : MAX 2 valeurs. Préfère UNE ville ("Paris") OU UNE région ("Île-de-France") OU UN pays ("France"), pas un mélange. Si le profil dit "France entière", mets juste ["France"]. Si "Paris", mets juste ["Paris"].
+- **minConnections** : optionnel. Si l'utilisateur veut des profils LinkedIn actifs, mets 300. Sinon ne mets pas ce champ. Ne l'ajoute pas systematiquement — seulement si demande explicitement.
 - **limit** : 25-50 max par défaut. Jamais plus de 100.
 
 Heuristique : "commence large, affine après". Mieux vaut 50 résultats moyennement pertinents que 0 résultat parfait. L'utilisateur peut toujours re-filtrer visuellement ou relancer une recherche plus précise. Si l'utilisateur demande "plus précis", tu peux alors resserrer.

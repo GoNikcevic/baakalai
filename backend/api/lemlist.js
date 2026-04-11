@@ -342,6 +342,24 @@ function buildLemlistFilters(criteria, availableFilters) {
   tryAdd('locations', criteria.locations,
     ['location', 'country', 'region']);
 
+  // Min LinkedIn connections — numberOfConnections filter.
+  // Used to target active LinkedIn users (e.g. 300+ connections).
+  if (criteria.minConnections) {
+    const fid = pick(['numberOfConnections']);
+    if (fid) {
+      // numberOfConnections is a range filter with values like "301-500", "501+"
+      // For "300+", we include all ranges above 300
+      const connectionRanges = ['301-500', '501+'];
+      filters.push({ filterId: fid, in: connectionRanges, out: [] });
+      diagnostics.applied.push({
+        criterion: 'minConnections',
+        filterId: fid,
+        values: connectionRanges,
+        rawValues: [criteria.minConnections],
+      });
+    }
+  }
+
   // Company size → currentCompanyHeadcount, but Lemlist expects LinkedIn's
   // numeric ID format ("1", "11", "51", "201", "501", "1001", ...) not our
   // "X-Y" bucket strings. Transform before passing.

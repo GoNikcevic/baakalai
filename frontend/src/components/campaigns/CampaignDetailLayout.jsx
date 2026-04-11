@@ -94,8 +94,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
     onBack();
   };
 
-  /* ── Launch handler (prep only) ── */
-  const handleLaunch = async () => {
+  /* ── Launch handler (prep or batch-next) ── */
+  const handleLaunch = async (options = {}) => {
     if (!c.sequence || c.sequence.length === 0) {
       setLaunchAlert({
         type: 'error',
@@ -104,11 +104,30 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
       });
       return;
     }
+
+    // If > 100 prospects and first launch, ask user about batch mode
+    const prospectCount = c.kpis?.contacts || c.nb_prospects || 0;
+    if (!options.confirmed && !c.batch_mode && prospectCount > 100 && !options.batchMode) {
+      const choice = window.confirm(
+        `Tu as ${prospectCount} prospects. Veux-tu lancer en mode batch ?\n\n` +
+        `• OK = Mode batch : envoie les 100 premiers, A/B test, puis batch suivant\n` +
+        `• Annuler = Tout envoyer d'un coup (${prospectCount} prospects)`
+      );
+      if (choice) {
+        return handleLaunch({ ...options, batchMode: true, confirmed: true });
+      } else {
+        return handleLaunch({ ...options, batchMode: false, confirmed: true });
+      }
+    }
+
     setLaunching(true);
     setLaunchAlert(null);
     const backendId = c._backendId || c.id;
     try {
-      const result = await api.launchCampaignToLemlist(backendId);
+      const result = await api.launchCampaignToLemlist(backendId, {
+        batchMode: options.batchMode || false,
+        batchSize: 100,
+      });
       setCampaigns((prev) => ({
         ...prev,
         [c.id]: {
@@ -126,10 +145,13 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
         : result.startError
           ? ` · ⚠️ Démarrage auto échoué (${result.startError}) — démarre manuellement depuis Lemlist`
           : ' · ℹ️ Campagne en draft sur Lemlist (pas de leads/étapes à envoyer)';
+      const batchLine = result.batch
+        ? ` · 📦 Batch ${result.batch.batch}/${result.batch.totalBatches} (${result.batch.remaining} restants)`
+        : '';
       setLaunchAlert({
         type: 'success',
-        title: '🚀 Campagne déployée vers Lemlist',
-        desc: baseDesc + statusLine,
+        title: result.batch ? `🚀 Batch ${result.batch.batch} déployé vers Lemlist` : '🚀 Campagne déployée vers Lemlist',
+        desc: baseDesc + statusLine + batchLine,
       });
     } catch (err) {
       setLaunchAlert({
@@ -236,6 +258,18 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               disabled={launching}
             >
               {launching ? '⏳ Déploiement Lemlist...' : '🚀 Lancer vers Lemlist'}
+            </button>
+          )}
+          {isActive && c.batch_mode && c.current_batch < c.total_batches && (
+            <button
+              className="btn btn-success"
+              style={{ fontSize: '12px', padding: '8px 14px' }}
+              onClick={() => handleLaunch({ batchMode: true, confirmed: true })}
+              disabled={launching}
+            >
+              {launching
+                ? '⏳ Déploiement...'
+                : `📦 Lancer batch ${(c.current_batch || 0) + 1}/${c.total_batches}`}
             </button>
           )}
           {isPrep && senders.length > 1 && (

@@ -616,9 +616,48 @@ router.post('/:id/launch-lemlist', async (req, res, next) => {
       return res.status(400).json({ error: 'Aucune séquence générée. Générez les messages avant de lancer.' });
     }
 
-    const eligibleProspects = prospects.filter(p => p.email);
-    if (eligibleProspects.length === 0) {
+    const allEligible = prospects.filter(p => p.email);
+    if (allEligible.length === 0) {
       return res.status(400).json({ error: 'Aucun prospect avec email. Ajoutez des prospects avant de lancer.' });
+    }
+
+    // Batch mode: if request asks for batches OR campaign already has batch_mode,
+    // only push a subset of prospects (the current batch).
+    const wantBatch = req.body.batchMode === true || campaign.batch_mode;
+    const batchSize = req.body.batchSize || campaign.batch_size || 100;
+    let eligibleProspects = allEligible;
+    let batchInfo = null;
+
+    if (wantBatch && allEligible.length > batchSize) {
+      const nextBatch = (campaign.current_batch || 0) + 1;
+      const totalBatches = Math.ceil(allEligible.length / batchSize);
+
+      // Assign batch numbers to unassigned prospects
+      const unassigned = allEligible.filter(p => !p.batch_number || p.batch_number === 0);
+      const thisBatchProspects = unassigned.slice(0, batchSize);
+
+      // Mark these prospects with their batch number in DB
+      for (const p of thisBatchProspects) {
+        await db.opportunities.update(p.id, { batch_number: nextBatch });
+      }
+
+      // Update campaign batch tracking
+      await db.campaigns.update(campaign.id, {
+        batch_mode: true,
+        batch_size: batchSize,
+        current_batch: nextBatch,
+        total_batches: totalBatches,
+      });
+
+      eligibleProspects = thisBatchProspects;
+      batchInfo = {
+        batch: nextBatch,
+        totalBatches,
+        batchSize: thisBatchProspects.length,
+        remaining: allEligible.length - (nextBatch * batchSize),
+      };
+
+      logger.info('launch-lemlist', `Batch mode: launching batch ${nextBatch}/${totalBatches} (${thisBatchProspects.length} prospects)`);
     }
 
     let lemlistCampaignId = campaign.lemlist_id;
@@ -719,6 +758,7 @@ router.post('/:id/launch-lemlist', async (req, res, next) => {
       started,
       startError,
       campaign: updated,
+      batch: batchInfo,
     });
   } catch (err) {
     logger.error('launch-lemlist', `Fatal: ${err.message}`);

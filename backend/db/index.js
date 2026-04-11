@@ -208,6 +208,10 @@ const campaigns = {
       project_id: 'project_id', projectId: 'project_id',
       ab_config: 'ab_config', abConfig: 'ab_config',
       last_optimized_at: 'last_optimized_at', lastOptimizedAt: 'last_optimized_at',
+      batch_mode: 'batch_mode', batchMode: 'batch_mode',
+      batch_size: 'batch_size', batchSize: 'batch_size',
+      current_batch: 'current_batch', currentBatch: 'current_batch',
+      total_batches: 'total_batches', totalBatches: 'total_batches',
     };
 
     const seen = new Set();
@@ -1219,6 +1223,7 @@ const opportunities = {
       status: 'status', status_color: 'status_color', statusColor: 'status_color',
       timing: 'timing', email: 'email',
       linkedin_url: 'linkedin_url', linkedinUrl: 'linkedin_url',
+      batch_number: 'batch_number', batchNumber: 'batch_number',
       hubspot_contact_id: 'hubspot_contact_id', hubspotContactId: 'hubspot_contact_id',
       hubspot_deal_id: 'hubspot_deal_id', hubspotDealId: 'hubspot_deal_id',
     };
