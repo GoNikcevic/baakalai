@@ -1,6 +1,49 @@
+# Dependencies
 node_modules/
+
+# Environment variables (secrets)
 .env
+.env.*
+!.env.example
+n8n/.env
+
+# Build output
+dist/
+build/
+
+# Database files
 *.sqlite
 *.db
-n8n/.env
+
+# Secrets & credentials
 client_secret_*.json
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# IDE
+.idea/
+
+# Binary files that shouldn't be in git
+*.pdf
+*.zip
+*.tar.gz
+*.tgz
+
+# Deploy freeze flag (temporary, committed/removed by scripts)
+# .deploy-freeze is intentionally tracked when present
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Temporary logo previews
+landing/logo-preview*.html
