@@ -461,48 +461,58 @@ function CampaignRow({ campaign: c, onClick, onArchive, onDelete, loading }) {
         </div>
         <div className="campaign-row-stat-label">{stat2Label}</div>
       </div>
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
         {c.status !== 'archived' && (
           <button
             onClick={(e) => onArchive(e, c)}
             disabled={!!loading}
-            title="Archiver"
+            title="Archiver cette campagne"
             style={{
-              background: 'none',
+              background: 'var(--bg-elevated, rgba(255,255,255,0.04))',
               border: '1px solid var(--border)',
               borderRadius: 6,
-              cursor: 'pointer',
-              color: 'var(--text-muted)',
-              fontSize: 11,
-              padding: '4px 8px',
-              opacity: loading ? 0.5 : 0.7,
-              transition: 'opacity 0.15s',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              color: 'var(--text-secondary)',
+              fontSize: 12,
+              padding: '6px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              opacity: loading ? 0.5 : 1,
+              transition: 'all 0.15s',
+              whiteSpace: 'nowrap',
             }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = '1'; }}
-            onMouseLeave={e => e.currentTarget.style.opacity = loading ? '0.5' : '0.7'}
+            onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = 'var(--bg-card)'; e.currentTarget.style.borderColor = 'var(--text-muted)'; } }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated, rgba(255,255,255,0.04))'; e.currentTarget.style.borderColor = 'var(--border)'; }}
           >
-            {loading === 'archiving' ? '...' : '📦'}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+            {loading === 'archiving' ? 'Archivage...' : 'Archiver'}
           </button>
         )}
         <button
           onClick={(e) => onDelete(e, c)}
           disabled={!!loading}
-          title="Supprimer"
+          title="Supprimer cette campagne"
           style={{
-            background: 'none',
-            border: '1px solid var(--border)',
+            background: 'transparent',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
             borderRadius: 6,
-            cursor: 'pointer',
+            cursor: loading ? 'not-allowed' : 'pointer',
             color: 'var(--danger, #dc2626)',
-            fontSize: 11,
-            padding: '4px 8px',
-            opacity: loading ? 0.5 : 0.7,
-            transition: 'opacity 0.15s',
+            fontSize: 12,
+            padding: '6px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            opacity: loading ? 0.5 : 0.8,
+            transition: 'all 0.15s',
+            whiteSpace: 'nowrap',
           }}
-          onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = '1'; }}
-          onMouseLeave={e => e.currentTarget.style.opacity = loading ? '0.5' : '0.7'}
+          onMouseEnter={e => { if (!loading) { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; } }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.background = 'transparent'; }}
         >
-          {loading === 'deleting' ? '...' : '🗑'}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          {loading === 'deleting' ? 'Suppression...' : 'Supprimer'}
         </button>
         <div className="campaign-row-arrow">&rarr;</div>
       </div>
