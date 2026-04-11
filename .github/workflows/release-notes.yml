@@ -34,5 +34,6 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_ROADMAP_DB_ID: ${{ secrets.NOTION_ROADMAP_DB_ID }}
           LOOKBACK_HOURS: ${{ github.event.inputs.lookback_hours || '48' }}
         run: node scripts/release-notes.js

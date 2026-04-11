@@ -329,6 +329,140 @@ async function postToNotion(releaseNote) {
   return data.url || `https://www.notion.so/${data.id?.replace(/-/g, '')}`;
 }
 
+// --- Step 4: Auto-update Roadmap ---
+
+const NOTION_ROADMAP_DB_ID = process.env.NOTION_ROADMAP_DB_ID;
+
+async function updateRoadmap(releaseNote) {
+  if (!NOTION_ROADMAP_DB_ID) {
+    console.log('ℹ️ NOTION_ROADMAP_DB_ID not set — skipping roadmap update.');
+    return;
+  }
+
+  console.log('🗺 Updating roadmap...');
+
+  // 1. Query roadmap for non-"Livré" items
+  const queryRes = await fetch(`https://api.notion.com/v1/databases/${NOTION_ROADMAP_DB_ID}/query`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${NOTION_TOKEN}`,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      filter: {
+        property: 'Statut',
+        select: { does_not_equal: 'Livré' },
+      },
+      page_size: 100,
+    }),
+  });
+
+  if (!queryRes.ok) {
+    console.warn('⚠️ Roadmap query failed:', await queryRes.text().catch(() => ''));
+    return;
+  }
+
+  const queryData = await queryRes.json();
+  const roadmapItems = (queryData.results || []).map(page => ({
+    id: page.id,
+    feature: page.properties?.Feature?.title?.[0]?.plain_text || '',
+    status: page.properties?.Statut?.select?.name || '',
+  }));
+
+  if (roadmapItems.length === 0) {
+    console.log('   → All roadmap items already delivered.');
+    return;
+  }
+
+  // 2. Ask Claude to match release note against roadmap items
+  const releaseContent = [
+    ...(releaseNote.sections?.features || []),
+    ...(releaseNote.sections?.fixes || []),
+    ...(releaseNote.sections?.other || []),
+  ].join('\n');
+
+  const matchPrompt = `Compare cette release note avec les items de roadmap non-livrés ci-dessous.
+Retourne UNIQUEMENT un tableau JSON des IDs des items qui ont été livrés dans cette release.
+
+Release note du ${new Date().toISOString().split('T')[0]} :
+${releaseContent}
+
+Commits :
+${commitsList}
+
+Items roadmap non-livrés :
+${roadmapItems.map(i => `- ID: ${i.id} | Feature: ${i.feature}`).join('\n')}
+
+Réponds UNIQUEMENT avec un JSON array d'IDs, ex: ["id1", "id2"]. Si aucun match, réponds [].`;
+
+  const matchRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 500,
+      messages: [{ role: 'user', content: matchPrompt }],
+    }),
+  });
+
+  if (!matchRes.ok) {
+    console.warn('⚠️ Claude match call failed:', matchRes.status);
+    return;
+  }
+
+  const matchData = await matchRes.json();
+  const matchText = matchData.content?.[0]?.text || '[]';
+  let matchedIds;
+  try {
+    const jsonMatch = matchText.match(/\[[\s\S]*\]/);
+    matchedIds = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+  } catch {
+    console.warn('⚠️ Could not parse roadmap match response:', matchText.slice(0, 200));
+    return;
+  }
+
+  if (!Array.isArray(matchedIds) || matchedIds.length === 0) {
+    console.log('   → No roadmap items matched this release.');
+    return;
+  }
+
+  // 3. Update matched items to "Livré"
+  const today = new Date().toISOString().split('T')[0];
+  let updated = 0;
+  for (const pageId of matchedIds) {
+    try {
+      const updateRes = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${NOTION_TOKEN}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          properties: {
+            'Statut': { select: { name: 'Livré' } },
+            'Date livrée': { date: { start: today } },
+            'Release': { rich_text: [{ text: { content: today } }] },
+          },
+        }),
+      });
+      if (updateRes.ok) {
+        const item = roadmapItems.find(i => i.id === pageId);
+        console.log(`   ✅ Marked as Livré: ${item?.feature || pageId}`);
+        updated++;
+      }
+    } catch (err) {
+      console.warn(`   ⚠️ Failed to update ${pageId}: ${err.message}`);
+    }
+  }
+  console.log(`🗺 Roadmap: ${updated}/${matchedIds.length} items marked as Livré.`);
+}
+
 // --- Main ---
 (async () => {
   try {
@@ -345,6 +479,9 @@ async function postToNotion(releaseNote) {
     console.log('📤 Posting to Notion database...');
     const url = await postToNotion(releaseNote);
     console.log(`✅ Release note published: ${url}`);
+
+    // Auto-update roadmap after publishing release note
+    await updateRoadmap(releaseNote);
   } catch (err) {
     console.error('❌ Failed to publish release note:', err.message);
     if (err.stack) console.error(err.stack);
