@@ -738,6 +738,14 @@ export async function pollRevealEmails(jobId) {
   return request(`/ai/reveal-emails/${jobId}`);
 }
 
+/** Deep web search for contacts at specific companies (Brave Search + Claude parsing) */
+export async function webSearchProspects(criteria) {
+  return request('/ai/web-search-prospects', {
+    method: 'POST',
+    body: JSON.stringify(criteria),
+  });
+}
+
 /** Get A/B test category definitions */
 export async function getABCategories() {
   return request('/ai/ab-categories');
@@ -865,6 +873,7 @@ const BakalAPI = {
   launchCampaignToLemlist,
   getLemlistCredits,
   revealEmails,
+  webSearchProspects,
   pollRevealEmails,
   getABCategories,
   getABRecommendations,

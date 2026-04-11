@@ -969,6 +969,36 @@ router.post('/search-prospects', async (req, res, next) => {
   }
 });
 
+// POST /api/ai/web-search-prospects — deep web search for contacts at specific companies
+router.post('/web-search-prospects', async (req, res, next) => {
+  try {
+    const { companies, titles, location, limit } = req.body;
+    if (!Array.isArray(companies) || companies.length === 0) {
+      return res.status(400).json({ error: 'companies array required' });
+    }
+    if (!Array.isArray(titles) || titles.length === 0) {
+      return res.status(400).json({ error: 'titles array required' });
+    }
+    if (companies.length > 50) {
+      return res.status(400).json({ error: 'Max 50 companies per request' });
+    }
+
+    const { searchProspectsWeb } = require('../lib/web-prospect-agent');
+    const result = await searchProspectsWeb(companies, titles, {
+      location: location || 'France',
+    });
+
+    // Trim to limit if specified
+    if (limit && result.contacts.length > limit) {
+      result.contacts = result.contacts.slice(0, limit);
+    }
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/ai/enrich-contact — enrich a single contact by email
 router.post('/enrich-contact', async (req, res, next) => {
   try {

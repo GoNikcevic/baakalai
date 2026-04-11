@@ -414,6 +414,15 @@ Demander à l'utilisateur de choisir une source (quand plusieurs outils sont dis
 Ajouter une liste de contacts fournie par l'utilisateur (quand il colle ou décrit une liste de prospects dans le chat) :
 { "action": "add_prospects_manual", "campaignName": "Nom optionnel de la campagne destinataire", "contacts": [{ "name": "Jean Dupont", "firstName": "Jean", "lastName": "Dupont", "email": "jean.dupont@hopital-xyz.fr", "company": "CHU Lyon", "title": "Directeur R&D", "linkedinUrl": "https://linkedin.com/in/jdupont" }, ...] }
 
+Recherche web approfondie (quand Lemlist retourne peu/pas de resultats pour des entreprises specifiques) :
+{ "action": "web_search_prospects", "companies": ["De Sangosse", "Koppert France", "Lallemand Plant Care"], "titles": ["Directeur R&D", "Directeur Innovation"], "location": "France", "campaignName": "optional" }
+
+REGLES web_search_prospects :
+- Utilise cette action quand une recherche Lemlist (search_prospects) retourne moins de 5 resultats pour une liste d'entreprises specifiques, OU quand l'utilisateur demande explicitement une "recherche web" ou "recherche approfondie".
+- Propose-la automatiquement apres un search_prospects decevant : "Lemlist n'a trouve que X contacts. Je peux lancer une recherche web approfondie sur les Y entreprises sans resultat."
+- NE l'utilise PAS pour des recherches sectorielles larges (pas de company list) — dans ce cas utilise search_prospects.
+- Max 50 entreprises par action.
+
 RÈGLES add_prospects_manual :
 - Si l'utilisateur colle une liste (CSV, texte, tabulaire, ou juste des lignes "Nom - Email - Société - Poste"), parse-la et propose l'action add_prospects_manual avec le tableau contacts.
 - L'email est obligatoire pour chaque contact (ignore les lignes sans email).

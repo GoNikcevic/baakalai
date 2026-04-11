@@ -220,7 +220,223 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
     return <AddProspectsManualCard metadata={metadata} onActionExecute={onActionExecute} />;
   }
 
+  // Deep web search for contacts at specific companies
+  if (action === 'web_search_prospects') {
+    return <WebSearchProspectsCard metadata={metadata} onActionExecute={onActionExecute} />;
+  }
+
   return null;
+}
+
+function WebSearchProspectsCard({ metadata, onActionExecute }) {
+  const { campaigns } = useApp();
+  const [searching, setSearching] = useState(false);
+  const [contacts, setContacts] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [saving, setSaving] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
+  const [error, setError] = useState(null);
+  const [showCampaignPicker, setShowCampaignPicker] = useState(false);
+  const [stats, setStats] = useState(null);
+
+  const companies = metadata.companies || [];
+  const titles = metadata.titles || [];
+
+  const handleSearch = async () => {
+    setSearching(true);
+    setError(null);
+    try {
+      const data = await api.webSearchProspects({
+        companies,
+        titles,
+        location: metadata.location || 'France',
+        limit: metadata.limit || 50,
+      });
+      const list = data.contacts || [];
+      setContacts(list);
+      setSelected(new Set(list.map(c => c.id)));
+      setStats({
+        searched: data.companiesSearched,
+        withResults: data.companiesWithResults,
+        without: data.companiesWithoutResults || [],
+      });
+    } catch (err) {
+      setError(err.message || 'Recherche web echouee');
+    }
+    setSearching(false);
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const saveToCampaign = async (campaignBackendId) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const chosen = (contacts || []).filter(c => selected.has(c.id));
+      const r = await api.addProspectsToCampaign(campaignBackendId, chosen);
+      setSavedCount(r.created || 0);
+      setShowCampaignPicker(false);
+    } catch (err) {
+      setError(err.message || 'Sauvegarde echouee');
+    }
+    setSaving(false);
+  };
+
+  const handleSaveClick = () => {
+    if (metadata.campaignId) saveToCampaign(metadata.campaignId);
+    else setShowCampaignPicker(true);
+  };
+
+  const pickableCampaigns = Object.values(campaigns || {})
+    .filter(c => c.status === 'prep')
+    .map(c => ({ id: c._backendId || c.id, name: c.name }));
+
+  return (
+    <div className="chat-action-card">
+      <div className="chat-action-title">🌐 Recherche web approfondie</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 8px' }}>
+        {companies.length} entreprise{companies.length > 1 ? 's' : ''} :&nbsp;
+        {companies.slice(0, 5).join(', ')}{companies.length > 5 ? `, +${companies.length - 5}...` : ''}
+      </div>
+      <div className="chat-action-params">
+        {titles.map((t, i) => <span key={i} className="chat-action-param">{t}</span>)}
+      </div>
+
+      {!contacts && (
+        <div className="chat-action-buttons" style={{ marginTop: 8 }}>
+          <button
+            className="chat-action-btn primary"
+            onClick={handleSearch}
+            disabled={searching}
+          >
+            {searching
+              ? `Recherche en cours (${companies.length} entreprises)...`
+              : `🔍 Lancer la recherche web (${companies.length} entreprises)`}
+          </button>
+        </div>
+      )}
+
+      {stats && (
+        <div style={{
+          fontSize: 11,
+          color: 'var(--text-muted)',
+          marginTop: 8,
+          padding: '8px 10px',
+          background: 'var(--bg-elevated)',
+          borderRadius: 6,
+          lineHeight: 1.6,
+        }}>
+          {stats.searched} entreprises analysees · {stats.withResults} avec resultats
+          {stats.without.length > 0 && (
+            <span> · Sans resultat : {stats.without.slice(0, 5).join(', ')}{stats.without.length > 5 ? '...' : ''}</span>
+          )}
+        </div>
+      )}
+
+      {contacts && contacts.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+            {contacts.length} contacts trouves · {selected.size} selectionnes
+          </div>
+          <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}>
+            {contacts.map(c => (
+              <div
+                key={c.id}
+                onClick={() => toggleSelect(c.id)}
+                style={{
+                  padding: '8px 10px',
+                  borderBottom: '1px solid var(--border)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  gap: 8,
+                  alignItems: 'center',
+                  background: selected.has(c.id) ? 'var(--bg-elevated)' : 'transparent',
+                }}
+              >
+                <input type="checkbox" checked={selected.has(c.id)} readOnly />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>
+                    {c.name}
+                    {c.linkedinUrl && (
+                      <a
+                        href={c.linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        style={{ marginLeft: 6, fontSize: 10, color: 'var(--blue, #0077b5)' }}
+                      >
+                        LinkedIn
+                      </a>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    {c.title} · {c.company}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {savedCount > 0 ? (
+            <div style={{ color: 'var(--success)', fontSize: 12, marginTop: 8, fontWeight: 600 }}>
+              {savedCount} prospects ajoutes a la campagne
+            </div>
+          ) : showCampaignPicker ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+                Choisis la campagne :
+              </div>
+              {pickableCampaigns.length === 0 ? (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Aucune campagne en preparation.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {pickableCampaigns.map(c => (
+                    <button
+                      key={c.id}
+                      className="chat-action-btn ghost"
+                      onClick={() => saveToCampaign(c.id)}
+                      disabled={saving}
+                      style={{ textAlign: 'left', padding: '8px 12px', fontSize: 12 }}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="chat-action-buttons" style={{ marginTop: 10 }}>
+              <button
+                className="chat-action-btn primary"
+                onClick={handleSaveClick}
+                disabled={saving || selected.size === 0}
+              >
+                {saving ? 'Ajout...' : `+ Ajouter ${selected.size} (choisir campagne)`}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {contacts && contacts.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+          Aucun contact trouve via la recherche web pour ces entreprises.
+        </div>
+      )}
+
+      {error && (
+        <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 8 }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ChooseSourceCard({ metadata, onActionExecute }) {
