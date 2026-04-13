@@ -207,8 +207,12 @@ router.post('/run-orchestrator', async (req, res, next) => {
       const result = await orchestrator.consolidate.run();
       return res.json({ job, result });
     }
+    if (job === 'batch-orchestrator') {
+      const result = await orchestrator.runBatchOrchestrator();
+      return res.json({ job, result });
+    }
 
-    res.status(400).json({ error: 'Invalid job. Use: collect-stats, consolidate' });
+    res.status(400).json({ error: 'Invalid job. Use: collect-stats, consolidate, batch-orchestrator' });
   } catch (err) {
     next(err);
   }

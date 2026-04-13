@@ -12,7 +12,9 @@ const cron = require('node-cron');
 const collectStats = require('./jobs/collect-stats');
 const regenerate = require('./jobs/regenerate');
 const consolidate = require('./jobs/consolidate');
+const { runBatchOrchestrator } = require('./jobs/batch-orchestrator');
 const db = require('../db');
+const logger = require('../lib/logger');
 
 const isEnabled = () => process.env.ORCHESTRATOR_ENABLED === 'true';
 
@@ -71,7 +73,18 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] Scheduler active — WF1: daily 8:00 AM, WF3: monthly 1st 9:00 AM, Pruning: monthly 1st 10:00 AM, Templates: monthly 1st 11:00 AM');
+  // Batch A/B orchestrator — every 12h at 8am and 8pm
+  cron.schedule('0 8,20 * * *', async () => {
+    console.log('[orchestrator] Running batch A/B orchestrator...');
+    try {
+      const result = await runBatchOrchestrator();
+      console.log('[orchestrator] Batch orchestrator complete:', result);
+    } catch (err) {
+      logger.error('orchestrator', 'Batch orchestrator failed', { error: err.message });
+    }
+  });
+
+  console.log('[orchestrator] Scheduler active — WF1: daily 8:00 AM, WF3: monthly 1st 9:00 AM, Pruning: monthly 1st 10:00 AM, Templates: monthly 1st 11:00 AM, Batch A/B: 8:00 AM + 8:00 PM');
 }
 
-module.exports = { start, collectStats, regenerate, consolidate };
+module.exports = { start, collectStats, regenerate, consolidate, runBatchOrchestrator };
