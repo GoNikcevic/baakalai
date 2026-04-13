@@ -1261,7 +1261,10 @@ export default function ChatPage() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamedMessageAdded, setStreamedMessageAdded] = useState(false);
+  // Use a ref (not state) to track if stream already added the message.
+  // State would cause stale-closure bugs: the HTTP callback captures the
+  // old value even after onStreamEnd set it to true. Refs are always current.
+  const streamedMessageAddedRef = useRef(false);
   const [showTyping, setShowTyping] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [chatSidebarOpen, setChatSidebarOpen] = useState(true);
@@ -1336,7 +1339,7 @@ export default function ChatPage() {
         }]);
       }
       setStreamingContent('');
-      setStreamedMessageAdded(true);
+      streamedMessageAddedRef.current = true;
     };
 
     socket.on('chat:stream', onChunk);
@@ -1606,7 +1609,7 @@ export default function ChatPage() {
     setShowWelcome(false);
     setStreamingContent('');
     setIsStreaming(false);
-    setStreamedMessageAdded(false);
+    streamedMessageAddedRef.current = false;
 
     let threadId = currentThreadId;
 
@@ -1650,7 +1653,7 @@ export default function ChatPage() {
         setShowTyping(false);
 
         // HTTP response arrived — only add if stream didn't already add it
-        if (!streamedMessageAdded) {
+        if (!streamedMessageAddedRef.current) {
           const assistantMsg = {
             id: data.message.id || Date.now() + 1,
             role: 'assistant',
@@ -1662,7 +1665,7 @@ export default function ChatPage() {
         }
         setStreamingContent('');
         setIsStreaming(false);
-        setStreamedMessageAdded(false);
+        streamedMessageAddedRef.current = false;
         scrollToBottom();
 
         // Refresh thread list (title may have changed)
