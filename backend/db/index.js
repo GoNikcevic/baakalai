@@ -856,7 +856,7 @@ const users = {
 
   async getById(id) {
     const result = await query(
-      'SELECT id, email, name, company, role, created_at FROM users WHERE id = $1',
+      'SELECT id, email, name, company, role, language, created_at FROM users WHERE id = $1',
       [id]
     );
     return result.rows[0] || null;

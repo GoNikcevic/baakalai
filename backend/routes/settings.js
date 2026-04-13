@@ -324,4 +324,18 @@ async function testKey(field, key) {
   }
 }
 
+// PATCH /api/settings/language — update user's UI language preference
+router.patch('/language', async (req, res, next) => {
+  try {
+    const { language } = req.body;
+    if (!language || !['fr', 'en'].includes(language)) {
+      return res.status(400).json({ error: 'Language must be "fr" or "en"' });
+    }
+    await db.query('UPDATE users SET language = $1 WHERE id = $2', [language, req.user.id]);
+    res.json({ language });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

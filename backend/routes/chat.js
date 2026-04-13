@@ -206,6 +206,17 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       }
     }
 
+    // Detect user language for Claude response language
+    // Language is stored in the users table but not in the JWT, so fetch it
+    let userLang = 'fr';
+    try {
+      const userRow = await db.query('SELECT language FROM users WHERE id = $1', [req.user.id]);
+      userLang = userRow.rows?.[0]?.language || 'fr';
+    } catch { /* default to fr */ }
+    if (userLang === 'en') {
+      contextParts.push('LANGUAGE: The user speaks English. Reply in English. Generate all campaign copy, sequences, and suggestions in English.');
+    }
+
     const context = contextParts.join('\n\n');
     const userId = req.user.id;
     const threadId = thread.id;
