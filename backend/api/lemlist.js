@@ -343,19 +343,38 @@ function buildLemlistFilters(criteria, availableFilters) {
     ['location', 'country', 'region']);
 
   // Min LinkedIn connections — numberOfConnections filter.
-  // Used to target active LinkedIn users (e.g. 300+ connections).
+  // Instead of guessing the format (lesson from companySizes!), we read
+  // the filter's accepted values from the schema and pick dynamically.
   if (criteria.minConnections) {
     const fid = pick(['numberOfConnections']);
     if (fid) {
-      // numberOfConnections is a range filter with values like "301-500", "501+"
-      // For "300+", we include all ranges above 300
-      const connectionRanges = ['301-500', '501+'];
+      const schemaEntry = (availableFilters || []).find(f => f.filterId === 'numberOfConnections');
+      const acceptedValues = schemaEntry?.values || schemaEntry?.options || [];
+      const threshold = parseInt(criteria.minConnections, 10) || 300;
+
+      let connectionRanges;
+      if (acceptedValues.length > 0) {
+        // Use REAL schema values — pick all ranges whose lower bound >= threshold
+        connectionRanges = acceptedValues.filter(v => {
+          const match = String(v).match(/^(\d+)/);
+          return match && parseInt(match[1], 10) >= threshold;
+        });
+        if (connectionRanges.length === 0) {
+          // All values are below threshold — take the top half as best effort
+          connectionRanges = acceptedValues.slice(Math.floor(acceptedValues.length / 2));
+        }
+      } else {
+        // No schema values available — blind fallback (will be visible in logs)
+        connectionRanges = ['501+'];
+      }
+
       filters.push({ filterId: fid, in: connectionRanges, out: [] });
       diagnostics.applied.push({
         criterion: 'minConnections',
         filterId: fid,
         values: connectionRanges,
         rawValues: [criteria.minConnections],
+        schemaValues: acceptedValues.length > 0 ? acceptedValues : 'NOT_AVAILABLE',
       });
     }
   }
