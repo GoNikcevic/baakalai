@@ -11,6 +11,7 @@ import { logout } from '../services/auth';
 import { disconnect as disconnectSocket } from '../services/socket';
 import { useSocketEvents } from '../hooks/useSocketEvents';
 import CampaignCreatorModal from './CampaignCreatorModal';
+import NotificationBell from './NotificationBell';
 
 /* ─── Sidebar nav items (keys reference i18n nav.* keys) ─── */
 const NAV_ITEMS = [
@@ -224,6 +225,18 @@ export default function Layout() {
 
       {/* ═══ Main content area ═══ */}
       <main className="main" style={sidebarCollapsed ? { marginLeft: 60 } : undefined}>
+        {/* Topbar with notification bell */}
+        <div
+          className="main-topbar"
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            padding: '8px 24px 0',
+          }}
+        >
+          <NotificationBell />
+        </div>
         <Outlet context={{ showCreatorModal, setShowCreatorModal, demoMode }} />
       </main>
 

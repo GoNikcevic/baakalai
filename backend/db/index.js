@@ -1549,6 +1549,52 @@ const recoFeedback = {
   },
 };
 
+// =============================================
+// Notifications
+// =============================================
+
+const notifications = {
+  async create(userId, type, title, body, metadata) {
+    const result = await query(
+      `INSERT INTO notifications (user_id, type, title, body, metadata)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [userId, type, title, body || null, metadata ? JSON.stringify(metadata) : '{}']
+    );
+    return result.rows[0];
+  },
+
+  async listByUser(userId, limit = 20, offset = 0) {
+    const result = await query(
+      `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+    return result.rows;
+  },
+
+  async countUnread(userId) {
+    const result = await query(
+      `SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND read = false`,
+      [userId]
+    );
+    return result.rows[0].count;
+  },
+
+  async markRead(id, userId) {
+    const result = await query(
+      `UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [id, userId]
+    );
+    return result.rows[0] || null;
+  },
+
+  async markAllRead(userId) {
+    await query(
+      `UPDATE notifications SET read = true WHERE user_id = $1 AND read = false`,
+      [userId]
+    );
+  },
+};
+
 module.exports = {
   query: rawQuery,
   closeDb,
@@ -1576,4 +1622,5 @@ module.exports = {
   jobQueue,
   recoFeedback,
   templates,
+  notifications,
 };

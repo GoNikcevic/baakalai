@@ -113,6 +113,7 @@ app.use('/api/variables', requireAuth, variablesRouter);
 app.use('/api/export', requireAuth, exportRouter);
 app.use('/api/crm', requireAuth, crmRouter);
 app.use('/api/analytics', requireAuth, analyticsRouter);
+app.use('/api/notifications', requireAuth, require('./routes/notifications'));
 app.use('/api/templates', require('./routes/templates'));
 
 // SPA catch-all — serve React index.html for non-API routes

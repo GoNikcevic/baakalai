@@ -292,6 +292,15 @@
     "replyRate": "Reply rate",
     "meetings": "Meetings booked"
   },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "empty": "No notifications",
+    "justNow": "Just now",
+    "minutesAgo": "{count}min ago",
+    "hoursAgo": "{count}h ago",
+    "daysAgo": "{count}d ago"
+  },
   "onboarding": {
     "title": "Welcome to Baakalai!",
     "subtitle": "Setup {done}/{total}",
