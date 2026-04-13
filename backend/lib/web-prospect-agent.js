@@ -42,21 +42,41 @@ async function searchProspectsWeb(companies, titles, options = {}) {
     const batchResults = await Promise.all(
       batch.map(async (company) => {
         try {
-          // Search 1: LinkedIn profiles at this company
-          const query1 = `${titleQuery} "${company}" site:linkedin.com/in${locationSuffix}`;
-          const linkedinResults = await webSearch(query1, 5);
+          // Multiple search angles to maximize coverage:
+          const queries = [
+            // 1. LinkedIn profiles with exact title match
+            { q: `${titleQuery} "${company}" site:linkedin.com/in`, n: 10 },
+            // 2. LinkedIn profiles with broader company match
+            { q: `"${company}" director R&D innovation site:linkedin.com/in`, n: 5 },
+            // 3. Company team/management page (FR)
+            { q: `"${company}" equipe direction R&D`, n: 5 },
+            // 4. Company team page (EN)
+            { q: `"${company}" team management R&D leadership`, n: 5 },
+            // 5. Press releases / announcements mentioning key people
+            { q: `"${company}" nomme directeur R&D OR innovation OR operations`, n: 5 },
+          ];
 
-          // Search 2: Company team/management page
-          const query2 = `"${company}" direction equipe management${locationSuffix}`;
-          const teamResults = await webSearch(query2, 3);
+          const allResults = [];
+          const seenUrls = new Set();
 
-          const allResults = [...linkedinResults, ...teamResults];
+          for (const { q, n } of queries) {
+            try {
+              const results = await webSearch(q + locationSuffix, n);
+              // Dedupe by URL across queries
+              for (const r of results) {
+                if (!seenUrls.has(r.url)) {
+                  seenUrls.add(r.url);
+                  allResults.push(r);
+                }
+              }
+            } catch (err) {
+              // Individual query failure is non-fatal — continue with others
+              logger.warn('web-prospect-agent', `Query failed for "${company}": ${err.message}`);
+            }
+          }
 
-          logger.info('web-prospect-agent', `"${company}": ${linkedinResults.length} LinkedIn + ${teamResults.length} team results`, {
-            query1,
-            query2,
-            linkedinSample: linkedinResults[0]?.title || '(none)',
-            teamSample: teamResults[0]?.title || '(none)',
+          logger.info('web-prospect-agent', `"${company}": ${allResults.length} unique results from ${queries.length} queries`, {
+            sample: allResults.slice(0, 3).map(r => r.title).join(' | '),
           });
 
           if (allResults.length === 0) {
@@ -127,8 +147,17 @@ async function parseSearchResults(searchResults, company, titles) {
   try {
     const response = await client.messages.create({
       model: PARSE_MODEL,
-      max_tokens: 1000,
-      system: `Tu es un extracteur de contacts professionnels. A partir de snippets de recherche web, extrais les personnes qui travaillent chez "${company}" avec un titre proche de : ${titlesText}. Retourne UNIQUEMENT un tableau JSON (pas de texte autour). Chaque contact : {"name": "Prenom Nom", "firstName": "Prenom", "lastName": "Nom", "title": "Titre exact", "linkedinUrl": "https://linkedin.com/in/..."} . Si le snippet ne contient pas assez d'info pour un contact fiable, ne l'inclus pas. Si aucun contact pertinent, retourne [].`,
+      max_tokens: 2000,
+      system: [
+        'Tu es un extracteur de contacts professionnels expert.',
+        'A partir de snippets de recherche web, extrais TOUTES les personnes identifiables qui travaillent chez "' + company + '" ou une filiale/division de "' + company + '".',
+        'Titres recherches : ' + titlesText + '. Mais inclus aussi les profils proches (VP R&D, Head of Innovation, Chief Scientific Officer, Responsable R&D, etc.).',
+        'Sois EXHAUSTIF : si un snippet mentionne un nom + un poste + cette entreprise, inclus-le meme si le titre ne matche pas exactement.',
+        '',
+        'Pour chaque contact, retourne : {"name": "Prenom Nom", "firstName": "Prenom", "lastName": "Nom", "title": "Titre exact trouve", "linkedinUrl": "https://linkedin.com/in/xxx"}',
+        'Si le linkedinUrl n\'est pas disponible, mets null.',
+        'Retourne UNIQUEMENT un tableau JSON []. Pas de texte autour. Si aucun contact, retourne [].',
+      ].join('\n'),
       messages: [{ role: 'user', content: snippetsText }],
     });
 
