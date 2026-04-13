@@ -802,11 +802,11 @@ export default function SettingsPage() {
         <div className="card-body">
           <div className="settings-pref-row">
             <label className="settings-pref-label">{t('settings.languageDesc')}</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
               <button
                 onClick={() => { setLang('fr'); saveLanguage('fr').catch(() => {}); }}
                 style={{
-                  padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  padding: '8px 20px', borderRadius: 20, fontSize: 13, fontWeight: 600,
                   background: lang === 'fr' ? 'var(--blue)' : 'var(--bg-elevated)',
                   color: lang === 'fr' ? 'white' : 'var(--text-muted)',
                   border: '1px solid var(--border)', cursor: 'pointer',
@@ -818,7 +818,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => { setLang('en'); saveLanguage('en').catch(() => {}); }}
                 style={{
-                  padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  padding: '8px 20px', borderRadius: 20, fontSize: 13, fontWeight: 600,
                   background: lang === 'en' ? 'var(--blue)' : 'var(--bg-elevated)',
                   color: lang === 'en' ? 'white' : 'var(--text-muted)',
                   border: '1px solid var(--border)', cursor: 'pointer',

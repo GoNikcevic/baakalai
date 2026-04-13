@@ -158,7 +158,7 @@ export default function OnboardingChecklist() {
       {/* CTA button */}
       <button
         className="btn btn-primary"
-        style={{ fontSize: 13, padding: '8px 18px', width: '100%' }}
+        style={{ fontSize: 13, padding: '8px 18px', width: 'fit-content' }}
         onClick={() => navigate('/chat')}
       >
         {t('onboarding.continueChat')}
