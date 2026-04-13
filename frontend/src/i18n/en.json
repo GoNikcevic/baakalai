@@ -280,6 +280,18 @@
     "tone": "Default tone",
     "formality": "Formality"
   },
+  "icp": {
+    "title": "ICP Analysis",
+    "subtitle": "Your ideal prospect profile",
+    "topSegments": "Top segments",
+    "worstSegments": "Segments to avoid",
+    "recommendations": "Recommendations",
+    "refreshing": "Analyzing...",
+    "refresh": "Refresh analysis",
+    "notEnoughData": "Not enough data (min. 3 active campaigns)",
+    "replyRate": "Reply rate",
+    "meetings": "Meetings booked"
+  },
   "onboarding": {
     "title": "Welcome to Baakalai!",
     "subtitle": "Setup {done}/{total}",

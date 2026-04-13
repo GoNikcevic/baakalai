@@ -844,6 +844,16 @@ export async function sendRecoFeedback(patternId, patternText, feedback) {
   });
 }
 
+/* ═══ ICP Analysis ═══ */
+
+export async function fetchICPAnalysis() {
+  return request('/api/ai/icp-analysis');
+}
+
+export async function refreshICPAnalysis() {
+  return request('/api/ai/icp-analysis/refresh', { method: 'POST' });
+}
+
 /* ═══ Default export for backwards compat ═══ */
 
 const BakalAPI = {
@@ -918,6 +928,8 @@ const BakalAPI = {
   recordABWinner,
   diagnoseCampaign,
   optimizeCampaign,
+  fetchICPAnalysis,
+  refreshICPAnalysis,
 };
 
 export default BakalAPI;

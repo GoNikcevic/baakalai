@@ -15,6 +15,7 @@ import { sanitizeHtml } from '../services/sanitize';
 import ScoreBadge from '../components/ScoreBadge';
 import AnimatedCounter from '../components/AnimatedCounter';
 import OnboardingChecklist from '../components/OnboardingChecklist';
+import ICPInsightsCard from '../components/ICPInsightsCard';
 import { scoreLeads, exportScoresToCRM, downloadScoresCSV, sendRecoFeedback } from '../services/api-client';
 
 const KPI_LABELS = {
@@ -106,6 +107,9 @@ export default function DashboardPage() {
 
       {/* Onboarding checklist for new users */}
       <OnboardingChecklist />
+
+      {/* ICP Insights — only show if user has >= 3 campaigns */}
+      {campaignsList.length >= 3 && <ICPInsightsCard />}
 
       {/* Overview content */}
       <OverviewSection

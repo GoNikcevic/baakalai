@@ -280,6 +280,27 @@
     "tone": "Ton par défaut",
     "formality": "Formalité"
   },
+  "icp": {
+    "title": "Analyse ICP",
+    "subtitle": "Votre profil de prospect id\u00e9al",
+    "topSegments": "Meilleurs segments",
+    "worstSegments": "Segments \u00e0 \u00e9viter",
+    "recommendations": "Recommandations",
+    "refreshing": "Analyse en cours...",
+    "refresh": "Actualiser l'analyse",
+    "notEnoughData": "Pas assez de donn\u00e9es (min. 3 campagnes actives)",
+    "replyRate": "Taux de r\u00e9ponse",
+    "meetings": "RDV obtenus"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Tout marquer comme lu",
+    "empty": "Aucune notification",
+    "justNow": "À l'instant",
+    "minutesAgo": "Il y a {count}min",
+    "hoursAgo": "Il y a {count}h",
+    "daysAgo": "Il y a {count}j"
+  },
   "onboarding": {
     "title": "Bienvenue sur Baakalai !",
     "subtitle": "Configuration {done}/{total}",

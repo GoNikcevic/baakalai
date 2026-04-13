@@ -6,6 +6,7 @@ const notionSync = require('../api/notion-sync');
 const dryRun = require('../api/dry-run');
 const regenerateJob = require('../orchestrator/jobs/regenerate');
 const logger = require('../lib/logger');
+const icpAgent = require('../lib/icp-agent');
 
 const router = Router();
 
@@ -1059,6 +1060,26 @@ router.post('/enrich-campaign', async (req, res, next) => {
       skipped: result.skipped,
       errors: result.errors,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/ai/icp-analysis — returns the user's ICP analysis (cached or fresh)
+router.get('/icp-analysis', async (req, res, next) => {
+  try {
+    const result = await icpAgent.getICPAnalysis(req.user.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/icp-analysis/refresh — force recompute
+router.post('/icp-analysis/refresh', async (req, res, next) => {
+  try {
+    const result = await icpAgent.analyzeICP(req.user.id);
+    res.json({ ...result, cached: false, analyzedAt: new Date().toISOString() });
   } catch (err) {
     next(err);
   }
