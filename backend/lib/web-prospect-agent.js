@@ -43,18 +43,21 @@ async function searchProspectsWeb(companies, titles, options = {}) {
       batch.map(async (company) => {
         try {
           // Search 1: LinkedIn profiles at this company
-          const linkedinResults = await webSearch(
-            `${titleQuery} "${company}" site:linkedin.com/in${locationSuffix}`,
-            5
-          );
+          const query1 = `${titleQuery} "${company}" site:linkedin.com/in${locationSuffix}`;
+          const linkedinResults = await webSearch(query1, 5);
 
           // Search 2: Company team/management page
-          const teamResults = await webSearch(
-            `"${company}" direction equipe management${locationSuffix}`,
-            3
-          );
+          const query2 = `"${company}" direction equipe management${locationSuffix}`;
+          const teamResults = await webSearch(query2, 3);
 
           const allResults = [...linkedinResults, ...teamResults];
+
+          logger.info('web-prospect-agent', `"${company}": ${linkedinResults.length} LinkedIn + ${teamResults.length} team results`, {
+            query1,
+            query2,
+            linkedinSample: linkedinResults[0]?.title || '(none)',
+            teamSample: teamResults[0]?.title || '(none)',
+          });
 
           if (allResults.length === 0) {
             return { company, contacts: [] };
@@ -62,6 +65,7 @@ async function searchProspectsWeb(companies, titles, options = {}) {
 
           // Parse snippets with Claude Haiku
           const contacts = await parseSearchResults(allResults, company, titles);
+          logger.info('web-prospect-agent', `"${company}": Haiku extracted ${contacts.length} contacts`);
           return { company, contacts };
         } catch (err) {
           logger.warn('web-prospect-agent', `Search failed for "${company}": ${err.message}`);
