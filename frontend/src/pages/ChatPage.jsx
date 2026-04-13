@@ -259,6 +259,7 @@ function WebSearchProspectsCard({ metadata, onActionExecute }) {
         searched: data.companiesSearched,
         withResults: data.companiesWithResults,
         without: data.companiesWithoutResults || [],
+        errors: data.errors || [],
       });
     } catch (err) {
       setError(err.message || 'Recherche web echouee');
@@ -335,6 +336,11 @@ function WebSearchProspectsCard({ metadata, onActionExecute }) {
           {stats.searched} entreprises analysees · {stats.withResults} avec resultats
           {stats.without.length > 0 && (
             <span> · Sans resultat : {stats.without.slice(0, 5).join(', ')}{stats.without.length > 5 ? '...' : ''}</span>
+          )}
+          {stats.errors && stats.errors.length > 0 && (
+            <div style={{ marginTop: 4, color: 'var(--danger, #dc2626)' }}>
+              Erreurs : {stats.errors.map(e => `${e.company}: ${e.error}`).join(' | ')}
+            </div>
           )}
         </div>
       )}

@@ -29,6 +29,7 @@ async function searchProspectsWeb(companies, titles, options = {}) {
   const allContacts = [];
   const companiesWithResults = [];
   const companiesWithoutResults = [];
+  const errors = [];
 
   // Build title query part: "Directeur R&D" OR "Directeur Innovation"
   const titleQuery = titles.slice(0, 3).map(t => `"${t}"`).join(' OR ');
@@ -69,12 +70,13 @@ async function searchProspectsWeb(companies, titles, options = {}) {
       })
     );
 
-    for (const { company, contacts } of batchResults) {
+    for (const { company, contacts, error } of batchResults) {
       if (contacts.length > 0) {
         companiesWithResults.push(company);
         allContacts.push(...contacts.map(c => ({ ...c, company, source: 'web_search' })));
       } else {
         companiesWithoutResults.push(company);
+        if (error) errors.push({ company, error });
       }
     }
 
@@ -98,6 +100,7 @@ async function searchProspectsWeb(companies, titles, options = {}) {
     companiesSearched: companies.length,
     companiesWithResults: companiesWithResults.length,
     companiesWithoutResults,
+    errors,
   };
 }
 
