@@ -29,6 +29,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
   const [showOptimize, setShowOptimize] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [optimizeBanner, setOptimizeBanner] = useState(null);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [pendingLaunchOptions, setPendingLaunchOptions] = useState(null);
   const [enriching, setEnriching] = useState(false);
   const [enrichBanner, setEnrichBanner] = useState(null);
 
@@ -109,17 +111,12 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
       return;
     }
 
-    // If > 100 prospects and first launch, ask user about batch mode
+    // If > 100 prospects and first launch, show batch mode modal
     const prospectCount = c.kpis?.contacts || c.nb_prospects || 0;
     if (!options.confirmed && !c.batch_mode && prospectCount > 100 && !options.batchMode) {
-      const choice = window.confirm(
-        t('campaigns.batchConfirm', { count: prospectCount })
-      );
-      if (choice) {
-        return handleLaunch({ ...options, batchMode: true, confirmed: true });
-      } else {
-        return handleLaunch({ ...options, batchMode: false, confirmed: true });
-      }
+      setPendingLaunchOptions(options);
+      setShowBatchModal(true);
+      return;
     }
 
     setLaunching(true);
@@ -195,6 +192,79 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
 
   return (
     <div className="campaign-detail">
+      {/* Batch mode confirmation modal */}
+      {showBatchModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9997,
+          background: 'rgba(10, 10, 15, 0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'var(--bg-card, #18181b)',
+            border: '1px solid var(--border)',
+            borderRadius: 16,
+            padding: '32px',
+            maxWidth: 440,
+            width: '90%',
+            boxShadow: '0 25px 80px rgba(0,0,0,0.4)',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: 'var(--text-primary)' }}>
+              {t('campaigns.launch')}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
+              {t('campaigns.batchModalDesc', { count: c.kpis?.contacts || c.nb_prospects || 0 }) ||
+                `Tu as ${c.kpis?.contacts || c.nb_prospects || 0} prospects. Comment veux-tu lancer ?`}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                className="btn btn-primary"
+                style={{ padding: '12px 16px', fontSize: 13, borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}
+                onClick={() => {
+                  setShowBatchModal(false);
+                  handleLaunch({ ...pendingLaunchOptions, batchMode: true, confirmed: true });
+                }}
+              >
+                <span style={{ fontSize: 18 }}>📦</span>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontWeight: 600 }}>{t('campaigns.batchModeBtn') || 'Mode batch (recommandé)'}</div>
+                  <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
+                    {t('campaigns.batchModeDesc') || 'Envoie les 100 premiers, A/B test, puis batch suivant'}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                className="btn btn-ghost"
+                style={{ padding: '12px 16px', fontSize: 13, borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border)' }}
+                onClick={() => {
+                  setShowBatchModal(false);
+                  handleLaunch({ ...pendingLaunchOptions, batchMode: false, confirmed: true });
+                }}
+              >
+                <span style={{ fontSize: 18 }}>🚀</span>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontWeight: 600 }}>{t('campaigns.sendAllBtn') || 'Tout envoyer'}</div>
+                  <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
+                    {t('campaigns.sendAllDesc', { count: c.kpis?.contacts || c.nb_prospects || 0 }) ||
+                      `Envoyer les ${c.kpis?.contacts || c.nb_prospects || 0} prospects d'un coup`}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                className="btn btn-ghost"
+                style={{ padding: '8px 16px', fontSize: 12, color: 'var(--text-muted)' }}
+                onClick={() => setShowBatchModal(false)}
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <LoadingOverlay
         show={launching}
         title={`\uD83D\uDE80 ${t('campaigns.deployToLemlist')}`}
