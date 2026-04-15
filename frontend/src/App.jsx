@@ -20,9 +20,10 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
 const CRMAnalyticsPage = lazy(() => import('./pages/CRMAnalyticsPage'))
+const LegalPage = lazy(() => import('./pages/LegalPage'))
 
 // Public routes accessible without authentication
-const PUBLIC_PATHS = ['/reset-password']
+const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy']
 
 export default function App() {
   const { initData } = useApp()
@@ -103,6 +104,9 @@ export default function App() {
       }}>Chargement...</div>}>
         <Routes>
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/legal" element={<LegalPage />} />
+          <Route path="/terms" element={<Navigate to="/legal" replace />} />
+          <Route path="/privacy" element={<Navigate to="/legal#privacy" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

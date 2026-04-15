@@ -576,6 +576,17 @@ export default function AuthGate({ onAuth }) {
         </form>
         </>
         )}
+
+        {/* Legal links */}
+        <div style={{ textAlign: 'center', marginTop: 24, fontSize: 11, color: 'var(--text-muted)' }}>
+          <a href="/legal" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+            {t('legal.terms') || 'CGU'}
+          </a>
+          {' · '}
+          <a href="/legal#privacy" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+            {t('legal.privacy') || 'Privacy'}
+          </a>
+        </div>
       </div>
     </div>
   );

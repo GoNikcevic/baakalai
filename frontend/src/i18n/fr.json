@@ -320,6 +320,12 @@
     "allGood": "Aucun problème détecté",
     "checked": "campagnes vérifiées"
   },
+  "legal": {
+    "terms": "CGU",
+    "privacy": "Confidentialité",
+    "lastUpdated": "Dernière mise à jour : {date}",
+    "backToApp": "Retour à l'application"
+  },
   "onboarding": {
     "title": "Bienvenue sur Baakalai !",
     "subtitle": "Configuration {done}/{total}",

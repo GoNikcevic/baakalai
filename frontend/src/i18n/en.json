@@ -320,6 +320,12 @@
     "hoursAgo": "{count}h ago",
     "daysAgo": "{count}d ago"
   },
+  "legal": {
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "lastUpdated": "Last updated: {date}",
+    "backToApp": "Back to app"
+  },
   "onboarding": {
     "title": "Welcome to Baakalai!",
     "subtitle": "Setup {done}/{total}",
