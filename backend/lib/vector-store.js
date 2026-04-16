@@ -86,21 +86,52 @@ async function deleteBySource(sourceType, sourceId) {
 }
 
 /**
- * Generate an embedding vector from text.
+ * Generate an embedding vector from text via Voyage AI.
  *
- * TODO: integrate with a real embedding API when ready.
- * Options:
- * - Anthropic embeddings (when available)
- * - OpenAI text-embedding-3-small ($0.02/1M tokens)
- * - Supabase built-in pg_embedding
- * - Local model via Ollama
- *
- * For now returns null — the store interface is ready but
- * no vectors are actually generated until this is implemented.
+ * Model: voyage-3 (1024 dimensions, $0.06/1M tokens)
+ * Recommended by Anthropic for Claude-based projects.
+ * API docs: https://docs.voyageai.com/reference/embeddings-api
  */
+const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY;
+const VOYAGE_MODEL = 'voyage-3';
+
 async function generateEmbedding(text) {
-  // Placeholder — replace with real embedding API call
-  return null;
+  if (!VOYAGE_API_KEY) {
+    logger.warn('vector-store', 'VOYAGE_API_KEY not set — skipping embedding');
+    return null;
+  }
+
+  try {
+    const res = await fetch('https://api.voyageai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${VOYAGE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: VOYAGE_MODEL,
+        input: [text.slice(0, 8000)], // Voyage AI max ~32k tokens but truncate for safety
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      logger.warn('vector-store', `Voyage AI ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const embedding = data?.data?.[0]?.embedding;
+    if (!embedding || !Array.isArray(embedding)) {
+      logger.warn('vector-store', 'Voyage AI returned no embedding');
+      return null;
+    }
+
+    return embedding;
+  } catch (err) {
+    logger.warn('vector-store', `Voyage AI error: ${err.message}`);
+    return null;
+  }
 }
 
 module.exports = { storeEmbedding, searchSimilar, deleteBySource, generateEmbedding, ENABLED };
