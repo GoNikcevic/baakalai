@@ -1093,6 +1093,20 @@ router.post('/weekly-report/send', async (req, res, next) => {
   }
 });
 
+// GET /api/ai/memory-search — semantic vector search in memory patterns
+router.get('/memory-search', async (req, res, next) => {
+  try {
+    const q = req.query.q;
+    if (!q) return res.json({ results: [] });
+    const { ENABLED, searchSimilar } = require('../lib/vector-store');
+    if (!ENABLED) return res.json({ results: [], pgvectorEnabled: false });
+    const results = await searchSimilar(req.user.id, q, 10, 'pattern');
+    res.json({ results, pgvectorEnabled: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/ai/deliverability-check — run deliverability check for the current user
 router.get('/deliverability-check', async (req, res, next) => {
   try {
