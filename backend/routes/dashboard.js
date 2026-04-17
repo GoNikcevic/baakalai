@@ -72,7 +72,7 @@ async function syncStatsBackground(userId) {
     }
 
     // Invalidate KPI cache so next load shows fresh data
-    kpiCache.delete(`kpis:${userId}`);
+    kpiCache.invalidate(`kpis:${userId}`);
   } catch (err) {
     console.warn('[dashboard] Background stats sync failed:', err.message);
   }
@@ -108,7 +108,7 @@ router.post('/refresh-stats', async (req, res, next) => {
       }
     }
 
-    kpiCache.delete(`kpis:${req.user.id}`);
+    kpiCache.invalidate(`kpis:${req.user.id}`);
     const kpis = await db.dashboardKpis(req.user.id);
     res.json({ ok: true, kpis, results });
   } catch (err) {
