@@ -2,7 +2,7 @@
    Replies Tab — Shows prospect replies synced from Lemlist
    ═══════════════════════════════════════════════════ */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../../../services/api-client';
 import { useT } from '../../../i18n';
 
@@ -14,6 +14,7 @@ export default function RepliesTab({ campaign }) {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [filter, setFilter] = useState('emailsReplied');
+  const autoSynced = useRef(false);
 
   const backendId = campaign._backendId || campaign.id;
 
@@ -29,7 +30,26 @@ export default function RepliesTab({ campaign }) {
     setLoading(false);
   };
 
-  useEffect(() => { loadActivities(); }, [backendId, filter]);
+  // Auto-sync from Lemlist on first mount, then load activities
+  useEffect(() => {
+    if (!autoSynced.current) {
+      autoSynced.current = true;
+      setSyncing(true);
+      api.request('/stats/sync-activities', { method: 'POST' })
+        .then((result) => {
+          if (result.synced > 0) {
+            setSyncResult({ type: 'success', synced: result.synced });
+          }
+        })
+        .catch(() => {}) // silent on auto-sync failure
+        .finally(() => {
+          setSyncing(false);
+          loadActivities();
+        });
+    } else {
+      loadActivities();
+    }
+  }, [backendId, filter]);
 
   const handleSync = async () => {
     setSyncing(true);

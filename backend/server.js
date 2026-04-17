@@ -107,7 +107,7 @@ app.use('/api/chat', requireAuth, chatLimiter, chatRouter);
 app.use('/api/settings', requireAuth, settingsRouter);
 app.use('/api/documents', requireAuth, documentsRouter);
 app.use('/api/profile', requireAuth, profileRouter);
-app.use('/api/stats', requireAuth, statsLimiter, statsRouter);
+app.use('/api/stats', requireAuth, statsRouter);
 app.use('/api/projects', requireAuth, projectsRouter);
 app.use('/api/variables', requireAuth, variablesRouter);
 app.use('/api/export', requireAuth, exportRouter);

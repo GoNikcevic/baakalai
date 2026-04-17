@@ -4,6 +4,8 @@ const lemlist = require('../api/lemlist');
 const claude = require('../api/claude');
 const { decrypt } = require('../config/crypto');
 
+const { statsLimiter } = require('../middleware/rate-limit');
+
 const router = Router();
 
 // Concurrency limiter for Lemlist API calls
@@ -30,7 +32,7 @@ async function fetchWithRetry(url, options, retries = 3) {
 }
 
 // POST /api/stats/collect — with rate limiting and concurrency control
-router.post('/collect', async (req, res, next) => {
+router.post('/collect', statsLimiter, async (req, res, next) => {
   try {
     const keyRow = await db.userIntegrations.get(req.user.id, 'lemlist');
     if (!keyRow) return res.status(400).json({ error: 'Lemlist API key not configured' });
