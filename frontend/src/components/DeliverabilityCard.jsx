@@ -28,7 +28,8 @@ export default function DeliverabilityCard() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await request('/dashboard/refresh-stats', { method: 'POST' });
+      const syncResult = await request('/dashboard/refresh-stats', { method: 'POST' });
+      console.log('[refresh-stats] Result:', JSON.stringify(syncResult));
       const fresh = await fetchDashboard();
       setGlobalKpis(fresh);
       await load();

@@ -81,9 +81,36 @@ async function syncStatsBackground(userId) {
 // POST /api/dashboard/refresh-stats — Manual refresh of Lemlist stats
 router.post('/refresh-stats', async (req, res, next) => {
   try {
-    await syncStatsBackground(req.user.id);
+    const apiKey = await getUserKey(req.user.id, 'lemlist');
+    if (!apiKey) return res.json({ ok: false, error: 'No Lemlist API key' });
+
+    const campaigns = await db.campaigns.list({ userId: req.user.id });
+    const linked = campaigns.filter(c => c.lemlist_id);
+    const results = [];
+
+    for (const campaign of linked) {
+      try {
+        const rawStats = await lemlist.getCampaignStats(campaign.lemlist_id, apiKey);
+        const stats = lemlist.transformCampaignStats(rawStats);
+        await db.campaigns.update(campaign.id, {
+          nb_prospects: stats.contacts,
+          open_rate: stats.openRate,
+          reply_rate: stats.replyRate,
+          accept_rate_lk: stats.acceptRate,
+          interested: stats.interested,
+          meetings: stats.meetings,
+          stops: stats.stops,
+          last_collected: new Date().toISOString().split('T')[0],
+        });
+        results.push({ campaign: campaign.name, stats, raw: rawStats ? Object.keys(rawStats) : null });
+      } catch (err) {
+        results.push({ campaign: campaign.name, error: err.message });
+      }
+    }
+
+    kpiCache.delete(`kpis:${req.user.id}`);
     const kpis = await db.dashboardKpis(req.user.id);
-    res.json({ ok: true, kpis });
+    res.json({ ok: true, kpis, results });
   } catch (err) {
     next(err);
   }
