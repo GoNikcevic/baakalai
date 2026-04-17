@@ -1648,8 +1648,8 @@ const prospectActivities = {
 
   async upsert(data) {
     const result = await query(`
-      INSERT INTO prospect_activities (user_id, campaign_id, opportunity_id, lemlist_activity_id, type, lead_email, lead_first_name, lead_last_name, company_name, sequence_step, happened_at, content)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO prospect_activities (user_id, campaign_id, opportunity_id, lemlist_activity_id, type, lead_email, lead_first_name, lead_last_name, company_name, sequence_step, happened_at, content, source)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       ON CONFLICT (lemlist_activity_id) DO UPDATE SET content = COALESCE(EXCLUDED.content, prospect_activities.content)
       RETURNING *
     `, [
@@ -1665,6 +1665,7 @@ const prospectActivities = {
       data.sequenceStep || null,
       data.happenedAt || new Date(),
       data.content || null,
+      data.source || 'lemlist',
     ]);
     return result.rows[0] || null;
   },

@@ -69,6 +69,75 @@ async function searchContacts(apiKey, query) {
   });
 }
 
+// --- Activities ---
+
+/**
+ * Fetch emailer touches (activities) for an Apollo campaign.
+ * POST /v1/emailer_campaigns/{id}/emailer_touches with pagination.
+ * Returns individual contact interactions (sent, opened, replied, bounced).
+ */
+async function getEmailerTouches(apiKey, campaignId, { page = 1, perPage = 100 } = {}) {
+  return apolloFetch(apiKey, `/emailer_campaigns/${campaignId}/emailer_touches`, {
+    method: 'POST',
+    body: JSON.stringify({ page, per_page: perPage }),
+  });
+}
+
+/**
+ * Fetch all activities for an Apollo campaign, paginating automatically.
+ * Filters by status type and maps to our standard activity format.
+ */
+async function getAllActivities(apiKey, campaignId) {
+  const all = [];
+  let page = 1;
+  const PER_PAGE = 100;
+
+  while (true) {
+    let data;
+    try {
+      data = await getEmailerTouches(apiKey, campaignId, { page, perPage: PER_PAGE });
+    } catch (err) {
+      // If the touches endpoint doesn't exist, return empty
+      if (err.status === 404 || err.status === 422) break;
+      throw err;
+    }
+
+    const touches = data.emailer_touches || data.contacts || [];
+    if (touches.length === 0) break;
+
+    for (const t of touches) {
+      // Map Apollo touch statuses to activity types
+      const status = (t.status || t.emailer_touch_status || '').toLowerCase();
+      let type = null;
+      if (status.includes('replied') || status.includes('reply')) type = 'emailsReplied';
+      else if (status.includes('opened') || status.includes('open')) type = 'emailsOpened';
+      else if (status.includes('clicked') || status.includes('click')) type = 'emailsClicked';
+      else if (status.includes('bounced') || status.includes('bounce')) type = 'emailsBounced';
+      else if (status.includes('sent')) continue; // skip sent activities
+
+      if (!type) continue;
+
+      all.push({
+        _id: t.id || `apollo_${campaignId}_${t.contact_id || t.email}_${t.created_at || Date.now()}`,
+        type,
+        leadEmail: t.email || t.contact_email || null,
+        leadFirstName: t.first_name || t.contact_first_name || null,
+        leadLastName: t.last_name || t.contact_last_name || null,
+        companyName: t.organization_name || t.company || null,
+        sequenceStep: t.emailer_step_position ?? t.step_number ?? null,
+        createdAt: t.created_at || t.updated_at || null,
+        extractedText: t.body || t.reply_text || t.text || null,
+      });
+    }
+
+    if (touches.length < PER_PAGE) break;
+    page++;
+    if (all.length >= 1000) break;
+  }
+
+  return all;
+}
+
 // --- Data transformation ---
 
 /**
@@ -243,4 +312,6 @@ module.exports = {
   transformCampaignStats,
   transformToTree,
   flattenTree,
+  getEmailerTouches,
+  getAllActivities,
 };

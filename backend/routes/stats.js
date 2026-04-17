@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const lemlist = require('../api/lemlist');
+const apollo = require('../api/apollo');
 const claude = require('../api/claude');
 const { decrypt } = require('../config/crypto');
 
@@ -192,58 +193,106 @@ router.get('/diagnostics/:campaignId', async (req, res, next) => {
   }
 });
 
-// POST /api/stats/sync-activities — Sync Lemlist activities (replies, opens, etc.) for user's campaigns
+// POST /api/stats/sync-activities — Sync activities from Lemlist + Apollo
 router.post('/sync-activities', async (req, res, next) => {
   try {
-    const keyRow = await db.userIntegrations.get(req.user.id, 'lemlist');
-    if (!keyRow) return res.status(400).json({ error: 'Lemlist API key not configured' });
-
-    let apiKey;
-    try { apiKey = decrypt(keyRow.access_token); }
-    catch { return res.status(500).json({ error: 'Could not decrypt Lemlist key' }); }
-
-    // Get user's campaigns that have a lemlist_id
     const campaigns = await db.campaigns.list({ userId: req.user.id });
-    const linked = campaigns.filter(c => c.lemlist_id);
-
-    const types = ['emailsReplied', 'emailsOpened', 'emailsClicked', 'emailsBounced'];
     let totalInserted = 0;
     const errors = [];
 
-    for (const campaign of linked) {
-      for (const type of types) {
-        try {
-          const activities = await lemlist.getAllActivities(campaign.lemlist_id, apiKey, type);
-          if (!activities || activities.length === 0) continue;
+    // --- Lemlist sync ---
+    const lemlistKey = await db.userIntegrations.get(req.user.id, 'lemlist');
+    if (lemlistKey) {
+      let apiKey;
+      try { apiKey = decrypt(lemlistKey.access_token); } catch { apiKey = null; }
 
-          const mapped = activities.map(a => ({
-            userId: req.user.id,
-            campaignId: campaign.id,
-            lemlistActivityId: a._id || `${campaign.lemlist_id}_${type}_${a.leadEmail || a.leadId}_${a.createdAt || Date.now()}`,
-            type,
-            leadEmail: a.leadEmail || a.leadId || null,
-            leadFirstName: a.leadFirstName || null,
-            leadLastName: a.leadLastName || null,
-            companyName: a.companyName || null,
-            sequenceStep: a.sequenceStep ?? a.sequenceStepNumber ?? null,
-            happenedAt: a.createdAt || a.happenedAt || new Date(),
-            content: a.extractedText || a.text || a.replyText || a.body || null,
-          }));
+      if (apiKey) {
+        const linked = campaigns.filter(c => c.lemlist_id);
+        const types = ['emailsReplied', 'emailsOpened', 'emailsClicked', 'emailsBounced'];
 
-          const inserted = await db.prospectActivities.bulkUpsert(mapped);
-          totalInserted += inserted;
-        } catch (err) {
-          errors.push({ campaign: campaign.name, type, error: err.message });
+        for (const campaign of linked) {
+          for (const type of types) {
+            try {
+              const activities = await lemlist.getAllActivities(campaign.lemlist_id, apiKey, type);
+              if (!activities || activities.length === 0) continue;
+
+              const mapped = activities.map(a => ({
+                userId: req.user.id,
+                campaignId: campaign.id,
+                lemlistActivityId: a._id || `${campaign.lemlist_id}_${type}_${a.leadEmail || a.leadId}_${a.createdAt || Date.now()}`,
+                type,
+                leadEmail: a.leadEmail || a.leadId || null,
+                leadFirstName: a.leadFirstName || null,
+                leadLastName: a.leadLastName || null,
+                companyName: a.companyName || null,
+                sequenceStep: a.sequenceStep ?? a.sequenceStepNumber ?? null,
+                happenedAt: a.createdAt || a.happenedAt || new Date(),
+                content: a.extractedText || a.text || a.replyText || a.body || null,
+                source: 'lemlist',
+              }));
+
+              const inserted = await db.prospectActivities.bulkUpsert(mapped);
+              totalInserted += inserted;
+            } catch (err) {
+              errors.push({ source: 'lemlist', campaign: campaign.name, type, error: err.message });
+            }
+          }
+          if (linked.length > 1) await sleep(300);
         }
       }
+    }
 
-      // Small delay between campaigns to respect rate limits
-      if (linked.length > 1) await sleep(300);
+    // --- Apollo sync ---
+    const apolloKey = await db.userIntegrations.get(req.user.id, 'apollo');
+    if (apolloKey) {
+      let apiKey;
+      try { apiKey = decrypt(apolloKey.access_token); } catch { apiKey = null; }
+
+      if (apiKey) {
+        try {
+          const apolloCampaigns = await apollo.listCampaigns(apiKey);
+          const campaignList = apolloCampaigns.emailer_campaigns || apolloCampaigns || [];
+
+          for (const ac of campaignList) {
+            const acId = ac.id || ac._id;
+            // Try to find matching Baakalai campaign, or skip (activities still stored with null campaign_id)
+            const bkCampaign = campaigns.find(c => c.lemlist_id === acId || c.name === ac.name);
+
+            try {
+              const activities = await apollo.getAllActivities(apiKey, acId);
+              if (!activities || activities.length === 0) continue;
+
+              const mapped = activities.map(a => ({
+                userId: req.user.id,
+                campaignId: bkCampaign?.id || null,
+                lemlistActivityId: a._id,
+                type: a.type,
+                leadEmail: a.leadEmail || null,
+                leadFirstName: a.leadFirstName || null,
+                leadLastName: a.leadLastName || null,
+                companyName: a.companyName || null,
+                sequenceStep: a.sequenceStep ?? null,
+                happenedAt: a.createdAt || new Date(),
+                content: a.extractedText || null,
+                source: 'apollo',
+              }));
+
+              const inserted = await db.prospectActivities.bulkUpsert(mapped);
+              totalInserted += inserted;
+            } catch (err) {
+              errors.push({ source: 'apollo', campaign: ac.name, error: err.message });
+            }
+
+            await sleep(300);
+          }
+        } catch (err) {
+          errors.push({ source: 'apollo', error: err.message });
+        }
+      }
     }
 
     res.json({
       synced: totalInserted,
-      campaigns: linked.length,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (err) {

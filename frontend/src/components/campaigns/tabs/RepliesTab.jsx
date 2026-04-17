@@ -169,20 +169,37 @@ function ActivityCard({ activity: a, typeColors, typeLabels, t }) {
           </div>
         </div>
 
-        {/* Type badge */}
-        <span
-          style={{
-            fontSize: 11,
-            padding: '3px 10px',
-            borderRadius: 6,
-            background: `${color}15`,
-            color: color,
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {typeLabels[a.type] || a.type}
-        </span>
+        {/* Source + Type badges */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+          {a.source && a.source !== 'lemlist' && (
+            <span
+              style={{
+                fontSize: 10,
+                padding: '2px 8px',
+                borderRadius: 6,
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-muted)',
+                fontWeight: 600,
+                textTransform: 'capitalize',
+              }}
+            >
+              {a.source}
+            </span>
+          )}
+          <span
+            style={{
+              fontSize: 11,
+              padding: '3px 10px',
+              borderRadius: 6,
+              background: `${color}15`,
+              color: color,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {typeLabels[a.type] || a.type}
+          </span>
+        </div>
 
         {/* Timestamp */}
         {happenedAt && (
