@@ -219,7 +219,7 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'scoring' && tabData && <ScoringSection data={tabData} />}
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
-      {!loading && activeTab === 'health' && tabData && <HealthSection data={tabData} />}
+      {!loading && activeTab === 'health' && <CRMHealthSection />}
     </div>
   );
 }
@@ -539,69 +539,218 @@ function ChannelsSection({ data }) {
   );
 }
 
-/* ═══ Health Section ═══ */
+/* ═══ CRM Health Section — Live Data Cleaning ═══ */
 
-function HealthSection({ data }) {
-  const breakdown = data.breakdown || {};
+const ISSUE_CONFIG = {
+  duplicate_email: { icon: '\uD83D\uDD04', label: 'Doublons (email)', severity: 'high', color: 'var(--danger)' },
+  duplicate_name: { icon: '\uD83D\uDC65', label: 'Doublons (nom+entreprise)', severity: 'medium', color: 'var(--warning)' },
+  missing_email: { icon: '\uD83D\uDCE7', label: 'Email manquant', severity: 'high', color: 'var(--danger)' },
+  missing_name: { icon: '\uD83D\uDC64', label: 'Nom manquant', severity: 'medium', color: 'var(--warning)' },
+  missing_company: { icon: '\uD83C\uDFE2', label: 'Entreprise manquante', severity: 'low', color: 'var(--text-muted)' },
+  invalid_email: { icon: '\u26A0\uFE0F', label: 'Email invalide', severity: 'high', color: 'var(--danger)' },
+  inactive: { icon: '\uD83D\uDCA4', label: 'Contacts inactifs (6+ mois)', severity: 'low', color: 'var(--text-muted)' },
+  format_name_caps: { icon: 'Aa', label: 'Noms en MAJUSCULES', severity: 'low', color: 'var(--blue)' },
+};
 
-  return (
-    <div className="crm-section">
-      <div className="crm-grid-2">
-        {/* Health gauge */}
+function CRMHealthSection() {
+  const [report, setReport] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [fixing, setFixing] = useState(null);
+  const [fixResults, setFixResults] = useState(null);
+  const [provider] = useState('pipedrive');
+
+  const handleScan = useCallback(async () => {
+    setScanning(true);
+    setReport(null);
+    setFixResults(null);
+    try {
+      const result = await api.request(`/crm/scan/${provider}`, { method: 'POST' });
+      setReport(result);
+    } catch (err) {
+      setReport({ error: err.message });
+    }
+    setScanning(false);
+  }, [provider]);
+
+  // Auto-scan on mount
+  useEffect(() => { handleScan(); }, []);
+
+  const handleFix = useCallback(async (issue) => {
+    setFixing(issue.type);
+    try {
+      let fixes = [];
+      if (issue.type === 'format_name_caps') {
+        fixes = [{ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts }];
+      } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'archive') {
+        fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
+      } else if (issue.suggestedAction === 'merge' && issue.contacts.length >= 2) {
+        fixes = [{ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) }];
+      }
+      if (fixes.length > 0) {
+        const result = await api.request(`/crm/clean/${provider}`, {
+          method: 'POST',
+          body: JSON.stringify({ reportId: report?.reportId, fixes }),
+        });
+        setFixResults(prev => ({ ...(prev || {}), [issue.type]: result }));
+        // Re-scan after fix
+        setTimeout(handleScan, 1000);
+      }
+    } catch (err) {
+      setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
+    }
+    setFixing(null);
+  }, [provider, report, handleScan]);
+
+  if (scanning) {
+    return (
+      <div className="crm-section" style={{ textAlign: 'center', padding: 60 }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>{'\uD83D\uDD0D'}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>Scan CRM en cours...</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Analyse des contacts Pipedrive</div>
+      </div>
+    );
+  }
+
+  if (report?.error) {
+    return (
+      <div className="crm-section">
         <div className="card">
-          <div className="card-title">Score de santé CRM</div>
-          <div className="card-body" style={{ display: 'flex', justifyContent: 'center' }}>
-            <HealthGauge score={data.score || 0} label={data.label || '—'} />
-          </div>
-        </div>
-
-        {/* Breakdown */}
-        <div className="card">
-          <div className="card-title">Détail du score</div>
-          <div className="card-body">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[
-                { key: 'pipelineVelocity', label: 'Vélocité du pipeline' },
-                { key: 'leadQuality', label: 'Qualité des leads' },
-                { key: 'followupRate', label: 'Taux de suivi' },
-                { key: 'conversionHealth', label: 'Santé des conversions' },
-              ].map(item => {
-                const val = breakdown[item.key] || 0;
-                const color = val > 70 ? 'var(--success)' : val > 50 ? 'var(--warning)' : 'var(--danger)';
-                return (
-                  <div key={item.key} className="crm-breakdown-row">
-                    <span className="crm-breakdown-label">{item.label}</span>
-                    <div className="crm-breakdown-bar-track">
-                      <div className="crm-breakdown-bar-fill" style={{ width: `${val}%`, background: color }} />
-                    </div>
-                    <span className="crm-breakdown-value" style={{ color }}>{val}</span>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="card-body" style={{ textAlign: 'center', padding: 40 }}>
+            <div style={{ fontSize: 14, color: 'var(--danger)' }}>{report.error}</div>
+            <button className="btn btn-primary" style={{ marginTop: 16, fontSize: 12 }} onClick={handleScan}>
+              Réessayer
+            </button>
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Alerts */}
-      {(data.alerts || []).length > 0 && (
-        <div className="card" style={{ marginTop: 20 }}>
-          <div className="card-title">Alertes</div>
+  if (!report) return null;
+
+  const scoreColor = report.score >= 80 ? 'var(--success)' : report.score >= 50 ? 'var(--warning)' : 'var(--danger)';
+  const scoreLabel = report.score >= 80 ? 'Excellent' : report.score >= 50 ? 'Bon' : report.score < 30 ? 'Critique' : 'À améliorer';
+  const summary = report.summary || {};
+
+  return (
+    <div className="crm-section">
+      {/* Score + Summary */}
+      <div className="crm-grid-2">
+        <div className="card">
+          <div className="card-title">Score de santé CRM</div>
+          <div className="card-body" style={{ display: 'flex', justifyContent: 'center' }}>
+            <HealthGauge score={report.score} label={scoreLabel} />
+          </div>
+          <div style={{ textAlign: 'center', padding: '0 16px 16px', fontSize: 12, color: 'var(--text-muted)' }}>
+            {report.totalContacts} contacts analysés
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Résumé</div>
           <div className="card-body">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {data.alerts.map((a, i) => (
-                <div key={i} className={`crm-alert ${a.severity}`}>
-                  <span className="crm-alert-icon">
-                    {a.severity === 'danger' ? '!' : a.severity === 'warning' ? '!' : 'i'}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[
+                { label: 'Doublons email', value: summary.duplicateEmails || 0, color: 'var(--danger)' },
+                { label: 'Doublons nom', value: summary.duplicateNames || 0, color: 'var(--warning)' },
+                { label: 'Emails manquants', value: summary.missingEmails || 0, color: 'var(--danger)' },
+                { label: 'Emails invalides', value: summary.invalidEmails || 0, color: 'var(--danger)' },
+                { label: 'Contacts inactifs', value: summary.inactive || 0, color: 'var(--text-muted)' },
+                { label: 'Problèmes de format', value: summary.formatIssues || 0, color: 'var(--blue)' },
+              ].map(item => (
+                <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13 }}>{item.label}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: item.value > 0 ? item.color : 'var(--success)' }}>
+                    {item.value}
                   </span>
-                  <span className="crm-alert-text">{a.message}</span>
-                  <span className="crm-alert-count">{a.count}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Issues list with action buttons */}
+      {(report.issues || []).length > 0 && (
+        <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {report.issues.map((issue, i) => {
+            const config = ISSUE_CONFIG[issue.type] || { icon: '?', label: issue.type, color: 'var(--text-muted)' };
+            const count = issue.count || issue.contacts?.length || 0;
+            const fixResult = fixResults?.[issue.type];
+            const isFixing = fixing === issue.type;
+
+            return (
+              <div key={i} className="card" style={{ borderLeft: `3px solid ${config.color}` }}>
+                <div className="card-body" style={{ padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>
+                        {config.icon} {config.label}
+                        <span style={{ fontSize: 12, color: config.color, marginLeft: 8 }}>{count} contact{count > 1 ? 's' : ''}</span>
+                      </div>
+                      {/* Preview of affected contacts */}
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                        {(issue.contacts || []).slice(0, 3).map(c => c.name || c.email || '?').join(', ')}
+                        {count > 3 && ` +${count - 3} autres`}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {fixResult && !fixResult.error && (
+                        <span style={{ fontSize: 11, color: 'var(--success)' }}>
+                          {'\u2705'} {fixResult.applied} corrigé{fixResult.applied > 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {fixResult?.error && (
+                        <span style={{ fontSize: 11, color: 'var(--danger)' }}>{fixResult.error}</span>
+                      )}
+                      {issue.suggestedAction && !fixResult && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{
+                            fontSize: 11,
+                            padding: '4px 12px',
+                            border: `1px solid ${config.color}`,
+                            color: config.color,
+                          }}
+                          disabled={isFixing}
+                          onClick={() => handleFix(issue)}
+                        >
+                          {isFixing ? '\u23F3...' :
+                            issue.suggestedAction === 'merge' ? 'Fusionner' :
+                            issue.suggestedAction === 'auto_fix' ? 'Corriger' :
+                            issue.suggestedAction === 'enrich' ? 'Enrichir' :
+                            issue.suggestedAction === 'archive' ? 'Archiver' :
+                            issue.suggestedAction === 'fix' ? 'Corriger' :
+                            'Voir'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
+
+      {(report.issues || []).length === 0 && (
+        <div className="card" style={{ marginTop: 20, textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\u2705'}</div>
+          <div style={{ fontSize: 14, color: 'var(--success)', fontWeight: 600 }}>CRM propre — aucun problème détecté</div>
+        </div>
+      )}
+
+      {/* Rescan button */}
+      <div style={{ textAlign: 'center', marginTop: 20 }}>
+        <button
+          className="btn btn-ghost"
+          style={{ fontSize: 12, padding: '8px 20px', color: 'var(--text-muted)' }}
+          onClick={handleScan}
+        >
+          {'\uD83D\uDD04'} Relancer le scan
+        </button>
+      </div>
     </div>
   );
 }
