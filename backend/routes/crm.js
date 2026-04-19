@@ -578,6 +578,41 @@ router.get('/pipedrive/stages/:pipelineId', async (req, res, next) => {
   }
 });
 
+// GET /api/crm/client/:id — Get full client detail (opportunity + nurture emails + CRM activities)
+router.get('/client/:id', async (req, res, next) => {
+  try {
+    const opp = await db.opportunities.get(req.params.id);
+    if (!opp) return res.status(404).json({ error: 'Client not found' });
+
+    // Get nurture emails for this contact
+    const emails = await db.query(
+      `SELECT id, subject, body, status, sent_at, trigger_id, created_at
+       FROM nurture_emails WHERE opportunity_id = $1 OR to_email = $2
+       ORDER BY created_at DESC LIMIT 20`,
+      [opp.id, opp.email]
+    );
+
+    // Get Pipedrive activities if connected
+    let crmActivities = [];
+    if (opp.crm_provider === 'pipedrive' && opp.crm_contact_id) {
+      try {
+        const token = await getUserCrmToken(req.user.id, 'pipedrive');
+        if (token) {
+          crmActivities = await pipedrive.getActivities(token, parseInt(opp.crm_contact_id, 10));
+        }
+      } catch { /* ignore */ }
+    }
+
+    res.json({
+      client: opp,
+      emails: emails.rows,
+      crmActivities,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Helper: get CRM token for any provider
 async function getUserCrmToken(userId, provider) {
   const { getUserKey } = require('../config');
