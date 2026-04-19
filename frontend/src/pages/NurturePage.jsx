@@ -13,21 +13,24 @@ const TRIGGER_TYPES = [
 ];
 
 export default function NurturePage() {
-  const [activeTab, setActiveTab] = useState('triggers');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [triggers, setTriggers] = useState([]);
   const [emails, setEmails] = useState([]);
+  const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [triggersData, emailsData] = await Promise.all([
+      const [triggersData, emailsData, metricsData] = await Promise.all([
         request('/nurture/triggers'),
         request('/nurture/emails?limit=50'),
+        request('/dashboard/activation').catch(() => null),
       ]);
       setTriggers(triggersData.triggers || []);
       setEmails(emailsData.emails || []);
+      setMetrics(metricsData);
     } catch (err) {
       console.error('Failed to load nurture data:', err);
     }
@@ -37,6 +40,7 @@ export default function NurturePage() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const tabs = [
+    { key: 'dashboard', label: 'Vue d\'ensemble', count: null },
     { key: 'triggers', label: 'Triggers', count: triggers.length },
     { key: 'pending', label: 'En attente', count: emails.filter(e => e.status === 'pending').length },
     { key: 'sent', label: 'Envoy\u00E9s', count: emails.filter(e => e.status === 'sent').length },
@@ -97,6 +101,7 @@ export default function NurturePage() {
 
       {loading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Chargement...</div>}
 
+      {!loading && activeTab === 'dashboard' && <ActivationDashboard metrics={metrics} />}
       {!loading && activeTab === 'triggers' && (
         <TriggersSection triggers={triggers} onRefresh={loadData} showCreate={showCreate} setShowCreate={setShowCreate} />
       )}
@@ -372,6 +377,118 @@ function EmailsSection({ emails, type, onRefresh }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ═══ Activation Dashboard ═══ */
+
+const SEGMENT_CONFIG = [
+  { key: 'active', label: 'Actifs', color: 'var(--success)', icon: '\u2705' },
+  { key: 'won', label: 'Gagn\u00E9s', color: 'var(--purple)', icon: '\uD83C\uDFC6' },
+  { key: 'stagnant', label: 'Stagnants', color: 'var(--warning)', icon: '\u23F0' },
+  { key: 'churnRisk', label: 'Risque churn', color: 'var(--danger)', icon: '\u26A0\uFE0F' },
+];
+
+function ActivationDashboard({ metrics }) {
+  if (!metrics) {
+    return (
+      <div style={{ textAlign: 'center', padding: 50, color: 'var(--text-muted)', fontSize: 13 }}>
+        Connectez Pipedrive et importez vos contacts pour voir les m{'\u00E9'}triques d'activation.
+      </div>
+    );
+  }
+
+  const { segments, topStagnant, topChurnRisk, emailsLast30d, triggers } = metrics;
+
+  return (
+    <div>
+      {/* Segment KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        {SEGMENT_CONFIG.map(seg => (
+          <div key={seg.key} style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+            padding: '16px 20px', borderTop: `3px solid ${seg.color}`,
+          }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{seg.icon} {seg.label}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: seg.color }}>{segments[seg.key] || 0}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+        <div className="card">
+          <div className="card-header"><div className="card-title">{'\u23F0'} Deals stagnants</div></div>
+          <div className="card-body">
+            {(topStagnant || []).length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>Aucun deal stagnant</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {topStagnant.map(c => (
+                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{c.name}</span>
+                      {c.company && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>@ {c.company}</span>}
+                    </div>
+                    <span style={{ color: 'var(--warning)', fontSize: 11 }}>{c.daysSinceUpdate}j</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><div className="card-title">{'\u26A0\uFE0F'} Risque de churn</div></div>
+          <div className="card-body">
+            {(topChurnRisk || []).length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>Aucun risque</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {topChurnRisk.map(c => (
+                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{c.name}</span>
+                      {c.company && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>@ {c.company}</span>}
+                    </div>
+                    <span style={{ color: 'var(--danger)', fontSize: 11 }}>{c.daysSinceUpdate}j</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="card">
+          <div className="card-header"><div className="card-title">{'\u2709\uFE0F'} Emails (30j)</div></div>
+          <div className="card-body">
+            <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+              {[
+                { label: 'Envoy\u00E9s', value: emailsLast30d?.sent || 0, color: 'var(--success)' },
+                { label: 'En attente', value: emailsLast30d?.pending || 0, color: 'var(--warning)' },
+                { label: '\u00C9chou\u00E9s', value: emailsLast30d?.failed || 0, color: 'var(--danger)' },
+              ].map(s => (
+                <div key={s.label} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><div className="card-title">{'\u26A1'} Triggers actifs</div></div>
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)' }}>{triggers?.active || 0}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>sur {triggers?.total || 0}</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

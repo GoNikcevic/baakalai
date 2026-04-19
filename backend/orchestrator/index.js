@@ -115,7 +115,20 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] Scheduler active — Stats: 8AM, Nurture: 9AM, Consolidation: monthly, Batch A/B: 8AM+8PM, Deliverability: 8AM');
+  // CRM bidirectional sync — daily at 9:30 AM (after nurture at 9:00)
+  cron.schedule('30 9 * * *', async () => {
+    try {
+      const { runAllSync } = require('../lib/crm-bidirectional-sync');
+      const results = await runAllSync();
+      if (results.length > 0) {
+        console.log('[orchestrator] CRM sync complete:', JSON.stringify(results));
+      }
+    } catch (err) {
+      logger.error('orchestrator', 'CRM sync failed: ' + err.message);
+    }
+  });
+
+  console.log('[orchestrator] Scheduler active — Stats: 8AM, Nurture: 9AM, CRM sync: 9:30AM, Batch A/B: 8AM+8PM');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate, runBatchOrchestrator };

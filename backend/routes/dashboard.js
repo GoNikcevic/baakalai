@@ -234,4 +234,58 @@ router.post('/recommendation-feedback', async (req, res, next) => {
   }
 });
 
+// GET /api/dashboard/activation — Activation/retention metrics
+router.get('/activation', async (req, res, next) => {
+  try {
+    const opps = await db.opportunities.listByUser(req.user.id, 500, 0);
+    const now = Date.now();
+    const DAY = 86400000;
+
+    // Segment clients
+    const won = opps.filter(o => o.status === 'won');
+    const active = opps.filter(o => {
+      const age = now - new Date(o.updated_at || o.created_at).getTime();
+      return age < 90 * DAY && o.status !== 'lost';
+    });
+    const stagnant = opps.filter(o => {
+      const age = now - new Date(o.updated_at || o.created_at).getTime();
+      return age >= 30 * DAY && age < 90 * DAY && o.status !== 'won' && o.status !== 'lost';
+    });
+    const churnRisk = opps.filter(o => {
+      const age = now - new Date(o.updated_at || o.created_at).getTime();
+      return age >= 90 * DAY && o.status !== 'lost';
+    });
+
+    // Recent nurture emails
+    const recentEmails = await db.query(
+      `SELECT status, COUNT(*) as count FROM nurture_emails WHERE user_id = $1 AND created_at > now() - interval '30 days' GROUP BY status`,
+      [req.user.id]
+    );
+    const emailStats = {};
+    for (const row of recentEmails.rows) emailStats[row.status] = parseInt(row.count, 10);
+
+    // Triggers summary
+    const triggers = await db.query(
+      `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE enabled) as active FROM nurture_triggers WHERE user_id = $1`,
+      [req.user.id]
+    );
+
+    res.json({
+      segments: {
+        total: opps.length,
+        won: won.length,
+        active: active.length,
+        stagnant: stagnant.length,
+        churnRisk: churnRisk.length,
+      },
+      topStagnant: stagnant.slice(0, 5).map(o => ({ id: o.id, name: o.name, company: o.company, email: o.email, daysSinceUpdate: Math.round((now - new Date(o.updated_at || o.created_at).getTime()) / DAY) })),
+      topChurnRisk: churnRisk.slice(0, 5).map(o => ({ id: o.id, name: o.name, company: o.company, email: o.email, daysSinceUpdate: Math.round((now - new Date(o.updated_at || o.created_at).getTime()) / DAY) })),
+      emailsLast30d: emailStats,
+      triggers: { total: parseInt(triggers.rows[0]?.total || 0, 10), active: parseInt(triggers.rows[0]?.active || 0, 10) },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
