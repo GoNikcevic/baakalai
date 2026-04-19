@@ -98,7 +98,7 @@ export default function EmailAccountSettings() {
         <div>
           <div className="card-title">Email sortant</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-            Connectez votre email pour envoyer des emails d'{'\u00E9'}levage personnalis{'\u00E9'}s
+            Connectez votre email pour envoyer des emails d'activation personnalis{'\u00E9'}s
           </div>
         </div>
         {!showForm && (
@@ -248,7 +248,7 @@ export default function EmailAccountSettings() {
         {/* Empty state */}
         {!loading && accounts.length === 0 && !showForm && (
           <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>
-            Aucun email configur{'\u00E9'}. Ajoutez votre compte pour envoyer des emails d'{'\u00E9'}levage.
+            Aucun email configur{'\u00E9'}. Ajoutez votre compte pour envoyer des emails d'activation.
           </div>
         )}
       </div>

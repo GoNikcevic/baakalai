@@ -46,7 +46,7 @@ export default function NurturePage() {
     <div className="dashboard-page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{'\u00C9'}levage</h1>
+          <h1 className="page-title">Activation</h1>
           <div className="page-subtitle">
             Automatisez vos emails de suivi client
           </div>
@@ -229,7 +229,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
         }}>
           <div style={{ fontSize: 28, marginBottom: 12 }}>{'\u26A1'}</div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-            Aucun trigger configur{'\u00E9'}. Cr{'\u00E9'}ez votre premier trigger pour automatiser vos emails d'{'\u00E9'}levage.
+            Aucun trigger configur{'\u00E9'}. Cr{'\u00E9'}ez votre premier trigger pour automatiser vos emails d'activation.
           </div>
         </div>
       ) : (
