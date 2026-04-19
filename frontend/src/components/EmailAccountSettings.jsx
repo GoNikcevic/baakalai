@@ -6,10 +6,54 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 
 const PRESETS = [
-  { label: 'Gmail', host: 'smtp.gmail.com', port: 587, help: 'Utilisez un mot de passe d\'application (pas votre mot de passe Gmail)' },
-  { label: 'Outlook / O365', host: 'smtp.office365.com', port: 587, help: 'Mot de passe de votre compte Microsoft' },
-  { label: 'OVH', host: 'ssl0.ovh.net', port: 587, help: 'Mot de passe de votre boite OVH' },
-  { label: 'Autre SMTP', host: '', port: 587, help: 'Entrez les paramètres de votre serveur SMTP' },
+  {
+    label: 'Gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    help: 'Mot de passe d\'application requis (pas votre mot de passe Gmail habituel)',
+    steps: [
+      'Allez sur myaccount.google.com/apppasswords',
+      'Connectez-vous avec votre compte Google',
+      'S\u00E9lectionnez "Autre" et nommez-le "Baakalai"',
+      'Copiez le mot de passe g\u00E9n\u00E9r\u00E9 (16 caract\u00E8res) et collez-le ci-dessous',
+    ],
+    note: 'La double authentification doit \u00EAtre activ\u00E9e sur votre compte Google.',
+  },
+  {
+    label: 'Outlook / O365',
+    host: 'smtp.office365.com',
+    port: 587,
+    help: 'Utilisez votre mot de passe Microsoft ou un mot de passe d\'application',
+    steps: [
+      'Utilisez votre email Outlook/Microsoft complet',
+      'Si la double auth est activ\u00E9e : cr\u00E9ez un mot de passe d\'app sur account.microsoft.com',
+      'Sinon : utilisez votre mot de passe habituel',
+    ],
+    note: null,
+  },
+  {
+    label: 'OVH',
+    host: 'ssl0.ovh.net',
+    port: 587,
+    help: 'Mot de passe de votre boite email OVH',
+    steps: [
+      'Utilisez l\'adresse email compl\u00E8te (ex: contact@votredomaine.com)',
+      'Le mot de passe est celui de votre boite email OVH',
+    ],
+    note: null,
+  },
+  {
+    label: 'Autre SMTP',
+    host: '',
+    port: 587,
+    help: 'Param\u00E8tres fournis par votre h\u00E9bergeur email',
+    steps: [
+      'Renseignez le serveur SMTP (ex: mail.votredomaine.com)',
+      'Le port est g\u00E9n\u00E9ralement 587 (TLS) ou 465 (SSL)',
+      'Utilisez vos identifiants de connexion email',
+    ],
+    note: null,
+  },
 ];
 
 export default function EmailAccountSettings() {
@@ -183,9 +227,26 @@ export default function EmailAccountSettings() {
               ))}
             </div>
 
-            {/* Help text */}
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
-              {PRESETS[selectedPreset].help}
+            {/* Step-by-step guide */}
+            <div style={{
+              fontSize: 12, color: 'var(--text-secondary)',
+              background: 'var(--bg-elevated)', borderRadius: 8,
+              padding: '12px 14px', marginBottom: 14,
+              lineHeight: 1.7,
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+                {PRESETS[selectedPreset].help}
+              </div>
+              <ol style={{ margin: 0, paddingLeft: 18 }}>
+                {PRESETS[selectedPreset].steps.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+              {PRESETS[selectedPreset].note && (
+                <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 8 }}>
+                  {'\u26A0\uFE0F'} {PRESETS[selectedPreset].note}
+                </div>
+              )}
             </div>
 
             {/* Fields */}
