@@ -401,4 +401,133 @@ router.post('/threads/:id/create-campaign', async (req, res, next) => {
   }
 });
 
+// ═══════════════════════════════════════════════════
+//  CRM / Activation actions from chat
+// ═══════════════════════════════════════════════════
+
+// POST /api/chat/threads/:id/send-email — Send personal email from chat
+router.post('/threads/:id/send-email', async (req, res, next) => {
+  try {
+    const { sendNurtureEmail } = require('../lib/email-outbound');
+    const { to, toName, subject, body } = req.body;
+    if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, body required' });
+
+    // Find matching opportunity
+    const opp = await db.opportunities.findByEmail(req.user.id, to);
+
+    const result = await sendNurtureEmail(req.user.id, {
+      to, toName, subject, body,
+      opportunityId: opp?.id || null,
+    });
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/chat/threads/:id/scan-crm — Trigger CRM health scan
+router.post('/threads/:id/scan-crm', async (req, res, next) => {
+  try {
+    const crmCleaning = require('../lib/crm-cleaning-agent');
+    const { provider } = req.body;
+    const report = await crmCleaning.scanCRM(req.user.id, provider || 'pipedrive');
+
+    await db.crmCleaningReports.create({
+      userId: req.user.id,
+      provider: provider || 'pipedrive',
+      score: report.score,
+      totalContacts: report.totalContacts,
+      summary: report.summary,
+      issues: report.issues,
+    });
+
+    res.json(report);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/chat/threads/:id/run-nurture — Run nurture triggers
+router.post('/threads/:id/run-nurture', async (req, res, next) => {
+  try {
+    const { runNurtureEngine } = require('../lib/nurture-engine');
+    const result = await runNurtureEngine(req.user.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/chat/threads/:id/import-crm — Import contacts from CRM
+router.post('/threads/:id/import-crm', async (req, res, next) => {
+  try {
+    const { getUserKey } = require('../config');
+    const pipedrive = require('../api/pipedrive');
+    const { provider } = req.body;
+
+    if (provider !== 'pipedrive') return res.status(400).json({ error: `Import not supported for ${provider}` });
+
+    const token = await getUserKey(req.user.id, provider);
+    if (!token) return res.status(400).json({ error: `${provider} not connected` });
+
+    const persons = await pipedrive.listAllPersons(token);
+    let imported = 0, skipped = 0;
+
+    for (const raw of (persons || [])) {
+      const email = Array.isArray(raw.email)
+        ? (raw.email.find(e => e.primary)?.value || raw.email[0]?.value || null)
+        : (raw.email || null);
+      if (!email) { skipped++; continue; }
+      const existing = await db.opportunities.findByEmail(req.user.id, email);
+      if (existing) { skipped++; continue; }
+      await db.opportunities.create({
+        userId: req.user.id,
+        name: raw.name || 'Unknown',
+        email,
+        title: raw.job_title || null,
+        company: raw.org_name || raw.org_id?.name || null,
+        status: 'imported',
+        crmProvider: 'pipedrive',
+        crmContactId: String(raw.id),
+      });
+      imported++;
+    }
+
+    res.json({ imported, skipped });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/chat/threads/:id/list-clients — List clients with filter
+router.post('/threads/:id/list-clients', async (req, res, next) => {
+  try {
+    const { filter, days } = req.body;
+    const opps = await db.opportunities.listByUser(req.user.id, 100, 0);
+
+    let filtered = opps;
+    if (filter === 'won') {
+      filtered = opps.filter(o => o.status === 'won');
+    } else if (filter === 'stagnant') {
+      const threshold = Date.now() - (days || 30) * 86400000;
+      filtered = opps.filter(o => new Date(o.updated_at || o.created_at).getTime() < threshold);
+    } else if (filter === 'inactive') {
+      const threshold = Date.now() - (days || 60) * 86400000;
+      filtered = opps.filter(o => new Date(o.updated_at || o.created_at).getTime() < threshold);
+    }
+
+    res.json({
+      clients: filtered.map(o => ({
+        id: o.id, name: o.name, email: o.email, company: o.company,
+        title: o.title, status: o.status, score: o.score,
+        lastUpdate: o.updated_at || o.created_at,
+      })),
+      total: filtered.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

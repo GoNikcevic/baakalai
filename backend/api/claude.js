@@ -440,6 +440,36 @@ RÈGLES add_prospects_manual :
 - NE génère PAS cette action si l'utilisateur demande juste "trouve-moi des prospects" sans fournir de liste — dans ce cas utilise search_prospects.
 - Le nombre max de contacts par action est 500.
 
+Envoyer un email personnel à un contact (activation/suivi client) :
+{ "action": "send_email", "to": "email@example.com", "toName": "Jean Dupont", "subject": "Objet de l'email", "body": "Contenu de l'email en texte simple" }
+
+Scanner le CRM pour détecter les problèmes de données :
+{ "action": "scan_crm", "provider": "pipedrive" }
+
+Relancer les deals stagnants (contacts avec deals inactifs depuis X jours) :
+{ "action": "run_nurture", "triggerType": "deal_stagnant", "days": 30 }
+
+Relancer les contacts inactifs :
+{ "action": "run_nurture", "triggerType": "inactive_contact", "days": 60 }
+
+Importer les contacts depuis le CRM :
+{ "action": "import_crm", "provider": "pipedrive" }
+
+Lister les clients avec un filtre :
+{ "action": "list_clients", "filter": "won|stagnant|inactive", "days": 30 }
+
+RÈGLES send_email :
+- Utilise cette action quand l'utilisateur demande d'envoyer un email à un contact spécifique ("envoie un email à Jean Dupont", "relance Marie chez Sanofi").
+- L'email DOIT avoir l'air personnel, PAS marketing. Texte simple, 3-6 lignes, pas de HTML.
+- Génère l'objet et le contenu en fonction du contexte (dernier échange, deal en cours, etc.).
+- Si l'email du contact n'est pas connu, demande-le ou propose de chercher dans le CRM.
+
+RÈGLES scan_crm / run_nurture / import_crm :
+- scan_crm : quand l'utilisateur demande "nettoie mon CRM", "vérifie mes données", "doublons".
+- run_nurture : quand l'utilisateur demande "relance les deals stagnants", "réengage les contacts inactifs", "envoie un suivi".
+- import_crm : quand l'utilisateur demande "importe mes contacts Pipedrive", "synchronise le CRM".
+- list_clients : quand l'utilisateur demande "montre-moi les deals stagnants", "quels clients n'ont pas été contactés".
+
 RÈGLES search_prospects (TRÈS IMPORTANT) :
 1. Consulte OUTILS OUTREACH CONFIGURÉS dans le contexte. Seuls les outils marqués "✅ peut générer des listes de prospects" peuvent être utilisés comme source.
 2. Si 0 outil avec search : NE génère PAS d'action search_prospects. Explique à l'utilisateur qu'il doit connecter un outil de recherche (Apollo par exemple) dans la page Intégrations.

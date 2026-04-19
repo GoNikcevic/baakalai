@@ -226,6 +226,23 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute }) {
     return <WebSearchProspectsCard metadata={metadata} onActionExecute={onActionExecute} />;
   }
 
+  // CRM / Activation actions
+  if (action === 'send_email') {
+    return <SendEmailCard metadata={metadata} />;
+  }
+  if (action === 'scan_crm') {
+    return <CrmActionCard metadata={metadata} actionType="scan_crm" label="Scanner le CRM" icon={'\uD83D\uDD0D'} />;
+  }
+  if (action === 'run_nurture') {
+    return <CrmActionCard metadata={metadata} actionType="run_nurture" label="Lancer l'activation" icon={'\u26A1'} />;
+  }
+  if (action === 'import_crm') {
+    return <CrmActionCard metadata={metadata} actionType="import_crm" label="Importer depuis le CRM" icon={'\u2B07\uFE0F'} />;
+  }
+  if (action === 'list_clients') {
+    return <ListClientsCard metadata={metadata} />;
+  }
+
   return null;
 }
 
@@ -720,6 +737,174 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify }) {
           >
             {'\u2705'} {t('chat.viewCampaign')}
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ CRM / Activation Action Cards ═══ */
+
+function SendEmailCard({ metadata }) {
+  const [status, setStatus] = useState('ready'); // ready, sending, sent, error
+  const [error, setError] = useState(null);
+
+  const handleSend = async () => {
+    setStatus('sending');
+    try {
+      await request('/nurture/send', {
+        method: 'POST',
+        body: JSON.stringify({
+          to: metadata.to,
+          toName: metadata.toName,
+          subject: metadata.subject,
+          body: metadata.body,
+        }),
+      });
+      setStatus('sent');
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+      padding: 16, marginTop: 8,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+        {'\u2709\uFE0F'} Email {'\u2192'} {metadata.toName || metadata.to}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+        <strong>Objet :</strong> {metadata.subject}
+      </div>
+      <div style={{
+        fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap',
+        background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 12px',
+        maxHeight: 120, overflow: 'hidden', marginBottom: 10, lineHeight: 1.5,
+      }}>
+        {metadata.body}
+      </div>
+      {status === 'ready' && (
+        <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleSend}>
+          Envoyer
+        </button>
+      )}
+      {status === 'sending' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} Envoi...</span>}
+      {status === 'sent' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} Email envoy{'\u00E9'} !</span>}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {error}</span>}
+    </div>
+  );
+}
+
+function CrmActionCard({ metadata, actionType, label, icon }) {
+  const [status, setStatus] = useState('ready');
+  const [result, setResult] = useState(null);
+
+  const handleRun = async () => {
+    setStatus('running');
+    try {
+      let endpoint;
+      let body = {};
+      if (actionType === 'scan_crm') {
+        endpoint = '/crm/scan/' + (metadata.provider || 'pipedrive');
+        body = {};
+      } else if (actionType === 'run_nurture') {
+        endpoint = '/nurture/run';
+        body = {};
+      } else if (actionType === 'import_crm') {
+        endpoint = '/crm/import/' + (metadata.provider || 'pipedrive');
+        body = {};
+      }
+      const res = await request(endpoint, { method: 'POST', body: JSON.stringify(body) });
+      setResult(res);
+      setStatus('done');
+    } catch (err) {
+      setResult({ error: err.message });
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+      padding: 16, marginTop: 8,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+        {icon} {label}
+      </div>
+      {status === 'ready' && (
+        <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleRun}>
+          Ex{'\u00E9'}cuter
+        </button>
+      )}
+      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} En cours...</span>}
+      {status === 'done' && (
+        <div style={{ fontSize: 12, color: 'var(--success)' }}>
+          {'\u2705'} Termin{'\u00E9'}
+          {result?.score != null && ` — Score CRM : ${result.score}/100`}
+          {result?.imported != null && ` — ${result.imported} contact(s) import\u00E9(s)`}
+          {result?.sent != null && ` — ${result.sent} email(s) envoy\u00E9(s), ${result.queued || 0} en attente`}
+          {result?.triggered != null && ` — ${result.triggered} trigger(s), ${result.sent || 0} envoy\u00E9(s), ${result.queued || 0} en attente`}
+        </div>
+      )}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
+    </div>
+  );
+}
+
+function ListClientsCard({ metadata }) {
+  const [clients, setClients] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    request('/dashboard/opportunities')
+      .then(data => {
+        let opps = data.opportunities || [];
+        if (metadata.filter === 'won') opps = opps.filter(o => o.status === 'won');
+        else if (metadata.filter === 'stagnant' || metadata.filter === 'inactive') {
+          const days = metadata.days || 30;
+          const threshold = Date.now() - days * 86400000;
+          opps = opps.filter(o => new Date(o.updated_at || o.created_at).getTime() < threshold);
+        }
+        setClients(opps);
+      })
+      .catch(() => setClients([]))
+      .finally(() => setLoading(false));
+  }, [metadata.filter, metadata.days]);
+
+  if (loading) return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>{'\u23F3'} Chargement...</div>;
+  if (!clients || clients.length === 0) {
+    return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>Aucun client trouv{'\u00E9'} avec ce filtre.</div>;
+  }
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+      padding: 16, marginTop: 8,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+        {'\uD83D\uDC65'} {clients.length} client(s) trouv{'\u00E9'}(s)
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+        {clients.slice(0, 10).map(c => (
+          <div key={c.id} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '6px 10px', borderRadius: 6, background: 'var(--bg-elevated)', fontSize: 12,
+          }}>
+            <div>
+              <span style={{ fontWeight: 600 }}>{c.name}</span>
+              {c.company && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>@ {c.company}</span>}
+            </div>
+            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{c.email}</span>
+          </div>
+        ))}
+        {clients.length > 10 && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+            +{clients.length - 10} autres
+          </div>
         )}
       </div>
     </div>
