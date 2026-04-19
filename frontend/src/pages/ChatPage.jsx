@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
-import api from '../services/api-client';
+import api, { request } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 import Confetti from '../components/Confetti';
 import { useT } from '../i18n';

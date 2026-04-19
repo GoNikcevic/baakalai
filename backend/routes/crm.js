@@ -583,6 +583,7 @@ router.get('/client/:id', async (req, res, next) => {
   try {
     const opp = await db.opportunities.get(req.params.id);
     if (!opp) return res.status(404).json({ error: 'Client not found' });
+    if (opp.user_id !== req.user.id) return res.status(403).json({ error: 'Access denied' });
 
     // Get nurture emails for this contact
     const emails = await db.query(
