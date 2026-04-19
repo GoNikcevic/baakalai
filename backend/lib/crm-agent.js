@@ -217,6 +217,13 @@ async function stepNurture(userId, token, report) {
         case 'deal_won':
           matched = opps.filter(o => o.status === 'won');
           break;
+        case 'deal_lost':
+          matched = opps.filter(o => {
+            if (o.status !== 'lost') return false;
+            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+            return age >= days && age < days + 7; // window of 7 days after loss
+          });
+          break;
         case 'deal_stagnant':
           matched = opps.filter(o => {
             if (o.status === 'won' || o.status === 'lost') return false;
@@ -228,6 +235,35 @@ async function stepNurture(userId, token, report) {
           matched = opps.filter(o => {
             const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
             return age >= days && o.status !== 'lost';
+          });
+          break;
+        case 'onboarding_check':
+          matched = opps.filter(o => {
+            if (o.status !== 'won') return false;
+            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+            return age >= days && age < days + 3; // window of 3 days
+          });
+          break;
+        case 'renewal_reminder':
+          // For now, same as stagnant but only for won deals
+          matched = opps.filter(o => {
+            if (o.status !== 'won') return false;
+            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+            return age >= days;
+          });
+          break;
+        case 'upsell_opportunity':
+          matched = opps.filter(o => {
+            if (o.status !== 'won') return false;
+            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+            return age >= days;
+          });
+          break;
+        case 'feedback_request':
+          matched = opps.filter(o => {
+            if (o.status !== 'won') return false;
+            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+            return age >= days && age < days + 7;
           });
           break;
       }

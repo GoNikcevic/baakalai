@@ -7,9 +7,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 
 const TRIGGER_TYPES = [
-  { value: 'deal_won', label: 'Deal gagn\u00E9', desc: 'Envoyer un email quand un deal passe en "gagn\u00E9"', icon: '\uD83C\uDF89' },
-  { value: 'deal_stagnant', label: 'Deal stagnant', desc: 'Relancer quand un deal est inactif depuis X jours', icon: '\u23F0' },
-  { value: 'inactive_contact', label: 'Contact inactif', desc: 'R\u00E9engager un contact sans activit\u00E9 depuis X jours', icon: '\uD83D\uDCA4' },
+  { value: 'deal_won', label: 'Deal gagn\u00E9', desc: 'Email de bienvenue / onboarding quand un deal est gagn\u00E9', icon: '\uD83C\uDF89', defaultDays: 1, defaultName: 'Bienvenue nouveau client' },
+  { value: 'deal_stagnant', label: 'Deal stagnant', desc: 'Relancer quand un deal est inactif depuis X jours', icon: '\u23F0', defaultDays: 30, defaultName: 'Relance deals stagnants' },
+  { value: 'inactive_contact', label: 'Contact inactif', desc: 'R\u00E9engager un contact sans activit\u00E9 depuis X jours', icon: '\uD83D\uDCA4', defaultDays: 60, defaultName: 'R\u00E9activation contacts inactifs' },
+  { value: 'deal_lost', label: 'Deal perdu', desc: 'Email de suivi apr\u00E8s un deal perdu (win-back)', icon: '\uD83D\uDC94', defaultDays: 14, defaultName: 'Win-back deals perdus' },
+  { value: 'onboarding_check', label: 'Check onboarding', desc: 'V\u00E9rifier la prise en main X jours apr\u00E8s signature', icon: '\uD83D\uDE80', defaultDays: 7, defaultName: 'Suivi onboarding J+7' },
+  { value: 'renewal_reminder', label: 'Renouvellement', desc: 'Rappel X jours avant la date de renouvellement', icon: '\uD83D\uDD14', defaultDays: 30, defaultName: 'Rappel renouvellement' },
+  { value: 'upsell_opportunity', label: 'Opportunit\u00E9 upsell', desc: 'Proposer un upgrade aux clients actifs depuis X jours', icon: '\u2B06\uFE0F', defaultDays: 90, defaultName: 'Proposition upsell' },
+  { value: 'feedback_request', label: 'Demande de feedback', desc: 'Demander un retour d\'exp\u00E9rience apr\u00E8s X jours', icon: '\u2B50', defaultDays: 30, defaultName: 'Demande de t\u00E9moignage' },
 ];
 
 export default function NurturePage() {
@@ -187,7 +192,15 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <select
                   value={form.triggerType}
-                  onChange={e => setForm(p => ({ ...p, triggerType: e.target.value }))}
+                  onChange={e => {
+                    const tt = TRIGGER_TYPES.find(t => t.value === e.target.value);
+                    setForm(p => ({
+                      ...p,
+                      triggerType: e.target.value,
+                      name: p.name || tt?.defaultName || '',
+                      days: tt?.defaultDays || p.days,
+                    }));
+                  }}
                   className="form-input"
                   style={{ flex: 1, fontSize: 13, padding: '8px 12px' }}
                 >
