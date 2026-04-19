@@ -429,31 +429,20 @@ router.post('/threads/:id/send-email', async (req, res, next) => {
 // POST /api/chat/threads/:id/scan-crm — Trigger CRM health scan
 router.post('/threads/:id/scan-crm', async (req, res, next) => {
   try {
-    const crmCleaning = require('../lib/crm-cleaning-agent');
-    const { provider } = req.body;
-    const report = await crmCleaning.scanCRM(req.user.id, provider || 'pipedrive');
-
-    await db.crmCleaningReports.create({
-      userId: req.user.id,
-      provider: provider || 'pipedrive',
-      score: report.score,
-      totalContacts: report.totalContacts,
-      summary: report.summary,
-      issues: report.issues,
-    });
-
+    const { runAgent } = require('../lib/crm-agent');
+    const report = await runAgent(req.user.id, { trigger: 'chat' });
     res.json(report);
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/chat/threads/:id/run-nurture — Run nurture triggers
+// POST /api/chat/threads/:id/run-nurture — Run nurture via CRM agent
 router.post('/threads/:id/run-nurture', async (req, res, next) => {
   try {
-    const { runNurtureEngine } = require('../lib/nurture-engine');
-    const result = await runNurtureEngine(req.user.id);
-    res.json(result);
+    const { runAgent } = require('../lib/crm-agent');
+    const report = await runAgent(req.user.id, { trigger: 'chat' });
+    res.json(report);
   } catch (err) {
     next(err);
   }

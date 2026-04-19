@@ -104,31 +104,25 @@ function start() {
     }
   });
 
-  // Nurture engine — daily at 9:00 AM (after stats collection at 8:00)
+  // CRM Agent — daily at 9:00 AM (after stats collection at 8:00)
+  // Replaces separate nurture + sync + cleaning crons with a single intelligent agent
   cron.schedule('0 9 * * *', async () => {
     try {
-      const { runAllNurture } = require('../lib/nurture-engine');
-      const results = await runAllNurture();
-      console.log('[orchestrator] Nurture engine complete:', JSON.stringify(results.map(r => ({ userId: r.userId, sent: r.sent, queued: r.queued }))));
+      const { runAllAgents } = require('../lib/crm-agent');
+      const results = await runAllAgents();
+      const summary = results.map(r => ({
+        userId: r.userId,
+        sync: `+${r.sync?.imported || 0}`,
+        nurture: `${r.nurture?.sent || 0} sent / ${r.nurture?.queued || 0} queued`,
+        alerts: r.alerts?.length || 0,
+      }));
+      console.log('[orchestrator] CRM Agent complete:', JSON.stringify(summary));
     } catch (err) {
-      logger.error('orchestrator', 'Nurture engine failed: ' + err.message);
+      logger.error('orchestrator', 'CRM Agent failed: ' + err.message);
     }
   });
 
-  // CRM bidirectional sync — daily at 9:30 AM (after nurture at 9:00)
-  cron.schedule('30 9 * * *', async () => {
-    try {
-      const { runAllSync } = require('../lib/crm-bidirectional-sync');
-      const results = await runAllSync();
-      if (results.length > 0) {
-        console.log('[orchestrator] CRM sync complete:', JSON.stringify(results));
-      }
-    } catch (err) {
-      logger.error('orchestrator', 'CRM sync failed: ' + err.message);
-    }
-  });
-
-  console.log('[orchestrator] Scheduler active — Stats: 8AM, Nurture: 9AM, CRM sync: 9:30AM, Batch A/B: 8AM+8PM');
+  console.log('[orchestrator] Scheduler active — Stats: 8AM, CRM Agent: 9AM, Batch A/B: 8AM+8PM');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate, runBatchOrchestrator };

@@ -264,11 +264,12 @@ router.post('/emails/:id/cancel', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/run — Run nurture engine for current user
+// POST /api/nurture/run — Run CRM agent (sync + clean + nurture)
 router.post('/run', async (req, res, next) => {
   try {
-    const result = await runNurtureEngine(req.user.id);
-    res.json(result);
+    const { runAgent } = require('../lib/crm-agent');
+    const report = await runAgent(req.user.id, { trigger: 'manual' });
+    res.json(report);
   } catch (err) {
     next(err);
   }
