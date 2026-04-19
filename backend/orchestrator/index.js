@@ -104,7 +104,18 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] Scheduler active — WF1: daily 8:00 AM, WF3: monthly 1st 9:00 AM, Pruning: monthly 1st 10:00 AM, Templates: monthly 1st 11:00 AM, Batch A/B: 8:00 AM + 8:00 PM, Deliverability: daily 10:00 AM');
+  // Nurture engine — daily at 9:00 AM (after stats collection at 8:00)
+  cron.schedule('0 9 * * *', async () => {
+    try {
+      const { runAllNurture } = require('../lib/nurture-engine');
+      const results = await runAllNurture();
+      console.log('[orchestrator] Nurture engine complete:', JSON.stringify(results.map(r => ({ userId: r.userId, sent: r.sent, queued: r.queued }))));
+    } catch (err) {
+      logger.error('orchestrator', 'Nurture engine failed: ' + err.message);
+    }
+  });
+
+  console.log('[orchestrator] Scheduler active — Stats: 8AM, Nurture: 9AM, Consolidation: monthly, Batch A/B: 8AM+8PM, Deliverability: 8AM');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate, runBatchOrchestrator };

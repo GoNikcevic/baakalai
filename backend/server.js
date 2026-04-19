@@ -115,6 +115,7 @@ app.use('/api/crm', requireAuth, crmRouter);
 app.use('/api/analytics', requireAuth, analyticsRouter);
 app.use('/api/notifications', requireAuth, require('./routes/notifications'));
 app.use('/api/templates', require('./routes/templates'));
+app.use('/api/nurture', requireAuth, require('./routes/nurture'));
 
 // SPA catch-all — serve React index.html for non-API routes
 app.get('*', (req, res, next) => {
