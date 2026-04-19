@@ -74,7 +74,7 @@ export default function NurturePage() {
           <button
             className="btn btn-primary"
             style={{ fontSize: 12, padding: '6px 14px' }}
-            onClick={() => setShowCreate(true)}
+            onClick={() => { setActiveTab('triggers'); setShowCreate(true); }}
           >
             + Nouveau trigger
           </button>
