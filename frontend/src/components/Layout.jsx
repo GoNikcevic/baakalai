@@ -140,10 +140,8 @@ export default function Layout() {
       <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
         {/* Brand */}
         <NavLink to="/dashboard" className="sidebar-brand" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div className="brand-icon">b</div>
-          <span className="brand-text">
-            baakal<span className="brand-suffix">.ai</span>
-          </span>
+          <span className="mark"></span>
+          <span className="brand-text">baakalai</span>
         </NavLink>
 
         {/* New campaign button */}

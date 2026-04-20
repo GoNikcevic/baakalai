@@ -341,7 +341,7 @@ export default function MemoryExplorerPage() {
       {undoPattern && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#18181b', color: '#fff', padding: '12px 20px',
+          background: 'var(--ink)', color: 'var(--paper)', padding: '12px 20px',
           borderRadius: 10, fontSize: 13, display: 'flex', alignItems: 'center', gap: 14,
           boxShadow: '0 8px 30px rgba(0,0,0,0.3)', zIndex: 9999,
           animation: 'fadeInUp 0.25s ease',
@@ -350,7 +350,7 @@ export default function MemoryExplorerPage() {
           <button
             onClick={handleUndo}
             style={{
-              background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
+              background: 'rgba(255,255,255,0.15)', border: 'none', color: 'var(--paper)',
               padding: '4px 12px', borderRadius: 6, cursor: 'pointer',
               fontSize: 12, fontWeight: 600,
             }}
@@ -359,7 +359,7 @@ export default function MemoryExplorerPage() {
           </button>
           <div style={{
             position: 'absolute', bottom: 0, left: 0, height: 3, borderRadius: '0 0 10px 10px',
-            background: 'var(--blue, #2AB7CA)',
+            background: 'var(--primary)',
             animation: 'shrinkBar 5s linear forwards',
           }} />
         </div>

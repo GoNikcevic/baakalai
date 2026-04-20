@@ -205,7 +205,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <div style={{
-            background: 'var(--bg-card, #18181b)',
+            background: 'var(--bg-card, var(--ink))',
             border: '1px solid var(--border)',
             borderRadius: 16,
             padding: '32px',

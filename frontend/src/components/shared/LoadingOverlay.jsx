@@ -46,8 +46,8 @@ export default function LoadingOverlay({ show, title, steps = [], stepInterval =
     >
       <div
         style={{
-          background: 'var(--bg-card, #18181b)',
-          border: '1px solid var(--border, rgba(255,255,255,0.08))',
+          background: 'var(--paper)',
+          border: '1px solid var(--border)',
           borderRadius: 16,
           padding: '40px 48px',
           display: 'flex',
@@ -55,39 +55,31 @@ export default function LoadingOverlay({ show, title, steps = [], stepInterval =
           alignItems: 'center',
           gap: 24,
           maxWidth: 420,
-          boxShadow: '0 25px 80px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
-        {/* Spinner: 3 chevrons echoing the Baakalai logo */}
-        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" aria-hidden="true">
-          <polyline
-            points="18,14 38,36 18,58"
-            stroke="#2AB7CA"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            style={{ animation: 'baakalai-pulse 1.4s ease-in-out 0s infinite' }}
-          />
-          <polyline
-            points="30,14 50,36 30,58"
-            stroke="#FED766"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            style={{ animation: 'baakalai-pulse 1.4s ease-in-out 0.2s infinite' }}
-          />
-          <polyline
-            points="42,14 62,36 42,58"
-            stroke="#FE4A49"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            style={{ animation: 'baakalai-pulse 1.4s ease-in-out 0.4s infinite' }}
-          />
-        </svg>
+        {/* Spinner: pulsing mark */}
+        <div style={{
+          width: 48, height: 48,
+          background: 'var(--ink)',
+          borderRadius: 12,
+          position: 'relative',
+          overflow: 'hidden',
+          animation: 'baakalai-pulse 1.4s ease-in-out infinite',
+        }}>
+          <div style={{
+            position: 'absolute',
+            inset: '8px 8px 20px 8px',
+            background: 'var(--primary)',
+            borderRadius: 4,
+          }} />
+          <div style={{
+            position: 'absolute',
+            left: 8, right: 8, bottom: 8, height: 6,
+            background: 'var(--lavender)',
+            borderRadius: 2,
+          }} />
+        </div>
 
         {/* Title */}
         <div

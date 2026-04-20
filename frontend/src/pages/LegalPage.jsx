@@ -29,12 +29,8 @@ export default function LegalPage() {
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <div style={{
-            width: 32, height: 32, background: '#18181b', color: 'white',
-            borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: 16,
-          }}>b</div>
-          <span style={{ fontSize: 18, fontWeight: 600 }}>baakal.ai</span>
+          <span className="mark" style={{ width: 22, height: 22, borderRadius: 6 }}></span>
+          <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.025em' }}>baakalai</span>
         </div>
         <button
           onClick={() => navigate('/')}
@@ -60,7 +56,7 @@ export default function LegalPage() {
               color: tab === t.key ? 'var(--text-primary, #1a1a1a)' : 'var(--text-muted, #9ca3af)',
               background: 'none',
               border: 'none',
-              borderBottom: tab === t.key ? '2px solid #18181b' : '2px solid transparent',
+              borderBottom: tab === t.key ? '2px solid var(--ink)' : '2px solid transparent',
               marginBottom: -2,
               cursor: 'pointer',
             }}
