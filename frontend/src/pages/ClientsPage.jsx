@@ -30,17 +30,31 @@ export default function ClientsPage() {
   const [search, setSearch] = useState('');
   const [stages, setStages] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [connectedCrm, setConnectedCrm] = useState(null); // 'pipedrive', 'hubspot', 'odoo', etc.
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [oppsData, pipelinesData] = await Promise.all([
+      // Detect connected CRM
+      const providersData = await request('/crm/providers').catch(() => ({ providers: [] }));
+      const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+      const connected = (providersData.providers || []).find(p => crmProviders.includes(p.provider) && p.connected);
+      setConnectedCrm(connected?.provider || null);
+
+      const [oppsData] = await Promise.all([
         request('/dashboard/opportunities').catch(() => ({ opportunities: [] })),
-        request('/crm/pipedrive/pipelines').catch(() => ({ pipelines: [] })),
       ]);
       setClients(oppsData.opportunities || []);
-      if (pipelinesData.pipelines?.length > 0) {
-        const stagesData = await request(`/crm/pipedrive/stages/${pipelinesData.pipelines[0].id}`).catch(() => ({ stages: [] }));
+
+      // Load pipeline stages for connected CRM
+      if (connected?.provider === 'pipedrive') {
+        const pipelinesData = await request('/crm/pipedrive/pipelines').catch(() => ({ pipelines: [] }));
+        if (pipelinesData.pipelines?.length > 0) {
+          const stagesData = await request(`/crm/pipedrive/stages/${pipelinesData.pipelines[0].id}`).catch(() => ({ stages: [] }));
+          setStages(stagesData.stages || []);
+        }
+      } else if (connected?.provider === 'odoo') {
+        const stagesData = await request('/crm/odoo/stages').catch(() => ({ stages: [] }));
         setStages(stagesData.stages || []);
       }
     } catch { /* ignore */ }
@@ -49,11 +63,16 @@ export default function ClientsPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const crmLabel = connectedCrm
+    ? connectedCrm.charAt(0).toUpperCase() + connectedCrm.slice(1)
+    : 'CRM';
+
   const handleImport = useCallback(async () => {
+    if (!connectedCrm) return;
     setImporting(true);
     setImportResult(null);
     try {
-      const result = await request('/crm/import/pipedrive', { method: 'POST' });
+      const result = await request(`/crm/import/${connectedCrm}`, { method: 'POST' });
       setImportResult(result);
       await loadData();
     } catch (err) {
@@ -94,14 +113,24 @@ export default function ClientsPage() {
             {clients.length} contact{clients.length !== 1 ? 's' : ''} dans votre CRM
           </div>
         </div>
-        <button
-          className="btn btn-primary"
-          style={{ fontSize: 12, padding: '8px 16px' }}
-          onClick={handleImport}
-          disabled={importing}
-        >
-          {importing ? '\u23F3 Import...' : '\u2B07\uFE0F Importer depuis Pipedrive'}
-        </button>
+        {connectedCrm ? (
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 12, padding: '8px 16px' }}
+            onClick={handleImport}
+            disabled={importing}
+          >
+            {importing ? '\u23F3 Import...' : `Importer depuis ${crmLabel}`}
+          </button>
+        ) : (
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: 12, padding: '8px 16px' }}
+            onClick={() => window.location.href = '/settings'}
+          >
+            Connecter un CRM
+          </button>
+        )}
       </div>
 
       {importResult && (
