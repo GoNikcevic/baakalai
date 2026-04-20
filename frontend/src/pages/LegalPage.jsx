@@ -23,7 +23,7 @@ export default function LegalPage() {
       maxWidth: 800,
       margin: '0 auto',
       padding: '40px 24px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: 'var(--font-sans)',
       color: 'var(--text-primary, #1a1a1a)',
     }}>
       {/* Header */}

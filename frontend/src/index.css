@@ -295,7 +295,7 @@ body {
   position: absolute; bottom: 58px; left: 0; right: 0;
   background: var(--bg-card); border: 1px solid var(--border-light);
   border-radius: var(--radius); padding: 5px 0; display: none;
-  box-shadow: 0 -12px 32px rgba(0,0,0,0.4); z-index: 50;
+  box-shadow: 0 -12px 32px rgba(10,10,10,0.2); z-index: 50;
 }
 .user-dropdown.open { display: block; animation: dropUp 0.16s ease; }
 @keyframes dropUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -569,14 +569,14 @@ body {
 /* ═══════════ CAMPAIGN CREATOR ═══════════ */
 .creator-overlay {
   display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.5); backdrop-filter: blur(12px);
+  background: rgba(10,10,10,0.3); backdrop-filter: blur(12px);
   z-index: 200; align-items: center; justify-content: center;
 }
 .creator-overlay.show { display: flex; }
 .creator-modal {
   background: var(--bg-secondary); border: 1px solid var(--border);
   border-radius: var(--radius-lg); width: 680px; max-height: 85vh;
-  overflow-y: auto; box-shadow: 0 16px 64px rgba(0,0,0,0.4);
+  overflow-y: auto; box-shadow: 0 16px 64px rgba(10,10,10,0.2);
   animation: slideUp 0.2s ease;
 }
 @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -924,7 +924,7 @@ body {
   margin-bottom: 10px;
 }
 .vargen-formula-input-tag {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px; color: var(--blue); background: var(--blue-bg);
   padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(51,154,240,0.2);
 }
@@ -1474,7 +1474,7 @@ body {
 /* Custom variable modal */
 .var-modal-overlay {
   display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+  background: rgba(10,10,10,0.3); backdrop-filter: blur(8px);
   z-index: 1000; align-items: center; justify-content: center;
 }
 .var-modal-overlay.show { display: flex; }
@@ -2168,7 +2168,7 @@ body {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px 18px;
   display: flex; align-items: flex-start; gap: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 32px rgba(10,10,10,0.15);
   animation: toastIn 0.3s ease;
   pointer-events: auto; min-width: 300px;
   transition: all 0.3s ease;
@@ -2230,7 +2230,7 @@ body {
   display: none; position: absolute; top: calc(100% + 8px); right: 0;
   width: 360px; max-height: 400px; overflow-y: auto;
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  border-radius: var(--radius-lg); box-shadow: 0 16px 48px rgba(10,10,10,0.2);
   z-index: 500;
 }
 .notif-panel.open { display: block; animation: fadeIn 0.2s ease; }
@@ -2420,7 +2420,7 @@ body {
 .wizard-modal {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 20px; width: 580px; max-width: 95vw; max-height: 90vh;
-  overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  overflow-y: auto; box-shadow: 0 24px 64px rgba(10,10,10,0.2);
   animation: wizardSlideUp 0.4s ease;
 }
 @keyframes wizardSlideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }

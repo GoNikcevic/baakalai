@@ -311,7 +311,7 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
                   content={
                     <span
                       style={{
-                        fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-mono)",
                         fontSize: '12px',
                         background: 'var(--bg-elevated)',
                         padding: '2px 8px',
