@@ -44,11 +44,21 @@ export default function NurturePage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Group sent emails by trigger to form "campaigns"
+  const sentEmails = emails.filter(e => e.status === 'sent');
+  const campaignsByTrigger = {};
+  for (const e of sentEmails) {
+    const key = e.trigger_id || 'manual';
+    if (!campaignsByTrigger[key]) campaignsByTrigger[key] = { trigger: e.trigger_name || 'Envoi manuel', emails: [] };
+    campaignsByTrigger[key].emails.push(e);
+  }
+
   const tabs = [
     { key: 'dashboard', label: 'Vue d\'ensemble', count: null },
+    { key: 'campaigns', label: 'Campagnes', count: Object.keys(campaignsByTrigger).length },
     { key: 'triggers', label: 'Triggers', count: triggers.length },
     { key: 'pending', label: 'En attente', count: emails.filter(e => e.status === 'pending').length },
-    { key: 'sent', label: 'Envoy\u00E9s', count: emails.filter(e => e.status === 'sent').length },
+    { key: 'sent', label: 'Envoy\u00E9s', count: sentEmails.length },
   ];
 
   return (
@@ -107,6 +117,7 @@ export default function NurturePage() {
       {loading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Chargement...</div>}
 
       {!loading && activeTab === 'dashboard' && <ActivationDashboard metrics={metrics} />}
+      {!loading && activeTab === 'campaigns' && <CampaignsSection campaigns={campaignsByTrigger} />}
       {!loading && activeTab === 'triggers' && (
         <TriggersSection triggers={triggers} onRefresh={loadData} showCreate={showCreate} setShowCreate={setShowCreate} />
       )}
@@ -502,6 +513,108 @@ function ActivationDashboard({ metrics }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ═══ Campaigns Section ═══ */
+
+function CampaignsSection({ campaigns }) {
+  const [expanded, setExpanded] = useState(null);
+  const keys = Object.keys(campaigns);
+
+  if (keys.length === 0) {
+    return (
+      <div style={{
+        textAlign: 'center', padding: 50,
+        background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+      }}>
+        <div style={{ fontSize: 28, marginBottom: 12 }}>{'\u2709\uFE0F'}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+          Aucune campagne d'activation envoy{'\u00E9'}e. Configurez un trigger ou envoyez un email depuis le chat.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {keys.map(key => {
+        const campaign = campaigns[key];
+        const emailList = campaign.emails || [];
+        const isOpen = expanded === key;
+
+        // Compute campaign stats
+        const total = emailList.length;
+        const uniqueContacts = new Set(emailList.map(e => e.to_email)).size;
+        const firstSent = emailList.length > 0
+          ? new Date(emailList[emailList.length - 1].sent_at || emailList[emailList.length - 1].created_at)
+          : null;
+        const lastSent = emailList.length > 0
+          ? new Date(emailList[0].sent_at || emailList[0].created_at)
+          : null;
+
+        return (
+          <div key={key} className="card" style={{ borderLeft: '3px solid var(--primary)' }}>
+            {/* Campaign header */}
+            <div
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+              onClick={() => setExpanded(isOpen ? null : key)}
+            >
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{campaign.trigger}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {total} email{total > 1 ? 's' : ''} envoy{'\u00E9'}{total > 1 ? 's' : ''}
+                  {' \u00B7 '}{uniqueContacts} contact{uniqueContacts > 1 ? 's' : ''}
+                  {firstSent && ` \u00B7 ${firstSent.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} \u2192 ${lastSent.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`}
+                </div>
+              </div>
+              <span style={{ fontSize: 16, color: 'var(--text-muted)', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
+                {'\u203A'}
+              </span>
+            </div>
+
+            {/* Expanded: email list */}
+            {isOpen && (
+              <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {emailList.slice(0, 20).map(e => (
+                    <div key={e.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '8px 12px', borderRadius: 8, background: 'var(--paper-2)',
+                      fontSize: 12,
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 600 }}>{e.to_name || e.to_email}</span>
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{e.subject}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                        {e.analyzed_at ? (
+                          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--success-soft)', color: 'var(--success)' }}>
+                            Analys{'\u00E9'}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--paper-3)', color: 'var(--grey-500)' }}>
+                            En attente
+                          </span>
+                        )}
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {e.sent_at ? new Date(e.sent_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {emailList.length > 20 && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+                      +{emailList.length - 20} autres
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
