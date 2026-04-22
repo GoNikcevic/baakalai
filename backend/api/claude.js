@@ -412,13 +412,13 @@ Afficher le diagnostic détaillé :
 { "action": "show_diagnostic", "campaignName": "Nom exact de la campagne" }
 
 Rechercher des prospects via un outil d'outreach (recherche sectorielle large) :
-{ "action": "search_prospects", "source": "apollo", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris"], "companySizes": ["11-50", "51-200"], "minConnections": 300, "limit": 25 }
+{ "action": "search_prospects", "source": "apollo", "titles": ["DAF", "Directeur Financier"], "sectors": ["SaaS", "Fintech"], "locations": ["Paris"], "companySizes": ["11-50", "51-200"], "minConnections": 300, "limit": 100 }
 
 Rechercher des prospects DANS des entreprises spécifiques (quand l'utilisateur fournit une liste de sociétés) :
 { "action": "search_prospects", "source": "lemlist", "titles": ["Directeur R&D", "Directeur Innovation"], "companies": ["De Sangosse", "Koppert France", "Lallemand Plant Care", "ARD"], "locations": ["France"], "limit": 50 }
 
 Demander à l'utilisateur de choisir une source (quand plusieurs outils sont disponibles) :
-{ "action": "choose_prospect_source", "sources": [{"provider": "apollo", "name": "Apollo"}, {"provider": "lemlist", "name": "Lemlist"}], "pending_criteria": { "titles": ["DAF"], "sectors": ["SaaS"], "companySizes": ["11-50"], "locations": ["Paris"], "limit": 25 } }
+{ "action": "choose_prospect_source", "sources": [{"provider": "apollo", "name": "Apollo"}, {"provider": "lemlist", "name": "Lemlist"}], "pending_criteria": { "titles": ["DAF"], "sectors": ["SaaS"], "companySizes": ["11-50"], "locations": ["Paris"], "limit": 100 } }
 
 Ajouter une liste de contacts fournie par l'utilisateur (quand il colle ou décrit une liste de prospects dans le chat) :
 { "action": "add_prospects_manual", "campaignName": "Nom optionnel de la campagne destinataire", "contacts": [{ "name": "Jean Dupont", "firstName": "Jean", "lastName": "Dupont", "email": "jean.dupont@hopital-xyz.fr", "company": "CHU Lyon", "title": "Directeur R&D", "linkedinUrl": "https://linkedin.com/in/jdupont" }, ...] }
@@ -494,7 +494,7 @@ Les filtres Lemlist/Apollo sont AND entre champs et OR dans un champ. Une recher
 - **companySizes** : MAX 2 ranges adjacents. Pas 5 ranges d'un coup — c'est un signal que tu n'as pas identifié la taille cible. Si tu ne sais pas, prends une fourchette centrale ("51-200", "201-500") au lieu de tout.
 - **locations** : MAX 2 valeurs. Préfère UNE ville ("Paris") OU UNE région ("Île-de-France") OU UN pays ("France"), pas un mélange. Si le profil dit "France entière", mets juste ["France"]. Si "Paris", mets juste ["Paris"].
 - **minConnections** : optionnel. Si l'utilisateur veut des profils LinkedIn actifs, mets 300. Sinon ne mets pas ce champ. Ne l'ajoute pas systematiquement — seulement si demande explicitement.
-- **limit** : 25-50 max par défaut. Jamais plus de 100.
+- **limit** : 100 par d\u00E9faut. Maximum 200 par requ\u00EAte.
 
 Heuristique : "commence large, affine après". Mieux vaut 50 résultats moyennement pertinents que 0 résultat parfait. L'utilisateur peut toujours re-filtrer visuellement ou relancer une recherche plus précise. Si l'utilisateur demande "plus précis", tu peux alors resserrer.
 

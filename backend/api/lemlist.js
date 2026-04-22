@@ -642,7 +642,7 @@ async function searchPeopleDatabase(apiKey, criteria) {
       })),
       dropped: diagnostics.dropped.map(d => d.criterion),
       usedSchema,
-      bodySent: { filters, page: 1, size: Math.min(criteria.limit || 25, 100) },
+      bodySent: { filters, page: 1, size: Math.min(criteria.limit || 100, 200) },
     });
   } catch { /* logger optional */ }
 
@@ -659,7 +659,7 @@ async function searchPeopleDatabase(apiKey, criteria) {
   const body = {
     filters,
     page: 1,
-    size: Math.min(criteria.limit || 25, 100),
+    size: Math.min(criteria.limit || 100, 200),
   };
 
   const result = await lemlistFetch('/database/people', {

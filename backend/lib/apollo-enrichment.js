@@ -12,7 +12,7 @@ async function searchContacts(userId, criteria) {
   const apiKey = await getUserKey(userId, 'apollo');
   if (!apiKey) throw new Error('Apollo API key not configured');
 
-  const { titles, sectors, locations, companySizes, limit = 25 } = criteria;
+  const { titles, sectors, locations, companySizes, limit = 100 } = criteria;
 
   // Build Apollo search payload
   const payload = {
