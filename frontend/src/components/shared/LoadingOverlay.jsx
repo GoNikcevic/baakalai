@@ -58,28 +58,16 @@ export default function LoadingOverlay({ show, title, steps = [], stepInterval =
           boxShadow: 'var(--shadow-lg)',
         }}
       >
-        {/* Spinner: pulsing mark */}
-        <div style={{
-          width: 48, height: 48,
-          background: 'var(--ink)',
-          borderRadius: 12,
-          position: 'relative',
-          overflow: 'hidden',
-          animation: 'baakalai-pulse 1.4s ease-in-out infinite',
-        }}>
-          <div style={{
-            position: 'absolute',
-            inset: '8px 8px 20px 8px',
-            background: 'var(--primary)',
-            borderRadius: 4,
-          }} />
-          <div style={{
-            position: 'absolute',
-            left: 8, right: 8, bottom: 8, height: 6,
-            background: 'var(--lavender)',
-            borderRadius: 2,
-          }} />
-        </div>
+        {/* Spinner: animated hub + satellites logo */}
+        <svg width="64" height="64" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style={{ animation: 'baakalai-pulse 1.4s ease-in-out infinite' }}>
+          <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round" style={{ animation: 'baakalai-line 1.4s ease-in-out 0s infinite' }} />
+          <line x1="50" y1="50" x2="82" y2="30" stroke="#9A84EB" strokeWidth="5" strokeLinecap="round" style={{ animation: 'baakalai-line 1.4s ease-in-out 0.2s infinite' }} />
+          <line x1="50" y1="50" x2="30" y2="80" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round" style={{ animation: 'baakalai-line 1.4s ease-in-out 0.4s infinite' }} />
+          <circle cx="22" cy="26" r="7" fill="#C4B5FD" style={{ animation: 'baakalai-node 1.4s ease-in-out 0s infinite' }} />
+          <circle cx="82" cy="30" r="8" fill="#9A84EB" style={{ animation: 'baakalai-node 1.4s ease-in-out 0.2s infinite' }} />
+          <circle cx="30" cy="80" r="7" fill="#C4B5FD" style={{ animation: 'baakalai-node 1.4s ease-in-out 0.4s infinite' }} />
+          <circle cx="50" cy="50" r="13" fill="#6E57FA" />
+        </svg>
 
         {/* Title */}
         <div
@@ -114,8 +102,16 @@ export default function LoadingOverlay({ show, title, steps = [], stepInterval =
       {/* Keyframes injected once via a <style> tag */}
       <style>{`
         @keyframes baakalai-pulse {
-          0%, 100% { opacity: 0.3; transform: translateY(0); }
-          50% { opacity: 1; transform: translateY(-3px); }
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.08); }
+        }
+        @keyframes baakalai-node {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 1; }
+        }
+        @keyframes baakalai-line {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.8; }
         }
         @keyframes baakalai-fade-in {
           from { opacity: 0; transform: translateY(4px); }

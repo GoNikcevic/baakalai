@@ -139,7 +139,15 @@ export default function Layout() {
       <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
         {/* Brand */}
         <NavLink to="/dashboard" className="sidebar-brand" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <span className="mark"></span>
+          <svg className="brand-logo" width="22" height="22" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round"/>
+            <line x1="50" y1="50" x2="82" y2="30" stroke="#9A84EB" strokeWidth="5" strokeLinecap="round"/>
+            <line x1="50" y1="50" x2="30" y2="80" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round"/>
+            <circle cx="22" cy="26" r="7" fill="#C4B5FD"/>
+            <circle cx="82" cy="30" r="8" fill="#9A84EB"/>
+            <circle cx="30" cy="80" r="7" fill="#C4B5FD"/>
+            <circle cx="50" cy="50" r="13" fill="#6E57FA"/>
+          </svg>
           <span className="brand-text">baakalai</span>
         </NavLink>
 

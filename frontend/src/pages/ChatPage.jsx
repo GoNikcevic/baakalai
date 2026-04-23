@@ -1419,7 +1419,15 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
   return (
     <div className="chat-welcome" id="chatWelcome" style={{ display: 'flex' }}>
       <div className="chat-welcome-inner">
-        <span className="mark" style={{ width: 36, height: 36, borderRadius: 10, marginBottom: 16 }}></span>
+        <svg width="36" height="36" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style={{ marginBottom: 16 }}>
+          <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round"/>
+          <line x1="50" y1="50" x2="82" y2="30" stroke="#9A84EB" strokeWidth="5" strokeLinecap="round"/>
+          <line x1="50" y1="50" x2="30" y2="80" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round"/>
+          <circle cx="22" cy="26" r="7" fill="#C4B5FD"/>
+          <circle cx="82" cy="30" r="8" fill="#9A84EB"/>
+          <circle cx="30" cy="80" r="7" fill="#C4B5FD"/>
+          <circle cx="50" cy="50" r="13" fill="#6E57FA"/>
+        </svg>
         <h2 className="chat-welcome-title" style={{ marginBottom: 8 }}>{title}</h2>
         <p className="chat-welcome-text" style={{ marginBottom: 24 }}>{subtitle}</p>
 
