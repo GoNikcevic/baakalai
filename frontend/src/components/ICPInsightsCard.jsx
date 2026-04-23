@@ -22,8 +22,8 @@ export default function ICPInsightsCard() {
       setError(null);
       const res = await request('/ai/icp-analysis');
       setData(res);
-    } catch (err) {
-      setError(err.message || 'Error');
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -45,6 +45,9 @@ export default function ICPInsightsCard() {
       setRefreshing(false);
     }
   }, []);
+
+  // Hide on error (not enough campaigns, API unavailable, etc.)
+  if (error) return null;
 
   // Still loading initial data
   if (loading) {
