@@ -324,16 +324,27 @@ router.post('/preview', async (req, res, next) => {
 
       if (matched.length === 0) continue;
 
-      // Generate ONE sample email for preview
+      // Generate ONE sample email for preview (with memory patterns)
       const sample = matched[0];
       const template = trigger.email_template || {};
       let sampleEmail = null;
       try {
+        // Load memory patterns for better email generation
+        let patternsCtx = '';
+        try {
+          const patterns = await db.memoryPatterns.list({ confidence: 'Haute', limit: 3 });
+          if (patterns.length > 0) {
+            patternsCtx = '\n\nPATTERNS QUI FONCTIONNENT :\n' +
+              patterns.map(p => `- ${p.pattern}`).join('\n') +
+              '\nInspire-toi de ces patterns pour le ton et l\'angle.';
+          }
+        } catch { /* optional */ }
+
         const prompt = `G\u00E9n\u00E8re un email personnel pour :
 - ${sample.name} (${sample.title || ''}) chez ${sample.company || ''}
 - Trigger : ${trigger.trigger_type} \u2014 ${trigger.name}
 - Ton : ${template.tone || 'professionnel mais chaleureux'}
-- Max 6 lignes, texte simple
+- Max 6 lignes, texte simple${patternsCtx}
 Retourne un JSON : { "subject": "...", "body": "..." }`;
 
         const result = await claude.callClaude('Retourne uniquement du JSON valide.', prompt, 500);

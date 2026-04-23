@@ -324,11 +324,40 @@ async function stepNurture(userId, token, report) {
 
 async function generateNurtureEmail(trigger, opp) {
   const template = trigger.email_template || {};
+
+  // Load relevant memory patterns to inform email generation
+  let patternsContext = '';
+  try {
+    const patterns = await db.memoryPatterns.list({ confidence: 'Haute', limit: 5 });
+    const mediumPatterns = await db.memoryPatterns.list({ confidence: 'Moyenne', limit: 3 });
+    const allPatterns = [...patterns, ...mediumPatterns];
+    if (allPatterns.length > 0) {
+      patternsContext = `\n\nPATTERNS QUI FONCTIONNENT (m\u00E9moire cross-campagne) :\n` +
+        allPatterns.map(p => `- [${p.confidence}] ${p.pattern} (cat\u00E9gorie: ${p.category})`).join('\n') +
+        `\nUtilise ces patterns pour informer le ton, l'angle et la structure de l'email. Ne les copie pas mot pour mot.`;
+    }
+  } catch { /* patterns optional */ }
+
+  // Load trigger effectiveness if available
+  let effectivenessContext = '';
+  const conditions = trigger.conditions || {};
+  const effectiveness = conditions._effectiveness;
+  if (effectiveness && effectiveness.total >= 3) {
+    effectivenessContext = `\n\nEFFICACIT\u00C9 DE CE TRIGGER : ${effectiveness.successRate}% de r\u00E9ponses positives sur ${effectiveness.total} envois.`;
+    if (effectiveness.successRate < 30) {
+      effectivenessContext += ` Le taux est faible \u2014 essaie un angle diff\u00E9rent de ce qui a \u00E9t\u00E9 fait pr\u00E9c\u00E9demment.`;
+    } else if (effectiveness.successRate >= 60) {
+      effectivenessContext += ` Le taux est bon \u2014 garde un ton similaire aux emails pr\u00E9c\u00E9dents.`;
+    }
+  }
+
   const prompt = `G\u00E9n\u00E8re un email personnel (PAS marketing) pour :
 - ${opp.name} (${opp.title || ''}) chez ${opp.company || ''}
 - Trigger : ${trigger.trigger_type} \u2014 ${trigger.name}
 - Ton : ${template.tone || 'professionnel mais chaleureux'}
 - Max 6 lignes, texte simple
+- L'email doit sembler \u00E9crit par un humain, pas g\u00E9n\u00E9r\u00E9${patternsContext}${effectivenessContext}
+
 Retourne un JSON : { "subject": "...", "body": "..." }`;
 
   try {
