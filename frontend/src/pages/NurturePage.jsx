@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
+import { useT } from '../i18n';
 
 const TRIGGER_TYPES = [
   { value: 'deal_won', label: 'Deal gagn\u00E9', desc: 'Email de bienvenue / onboarding quand un deal est gagn\u00E9', icon: '\uD83C\uDF89', defaultDays: 1, defaultName: 'Bienvenue nouveau client' },
@@ -18,6 +19,7 @@ const TRIGGER_TYPES = [
 ];
 
 export default function NurturePage() {
+  const t = useT();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [triggers, setTriggers] = useState([]);
   const [emails, setEmails] = useState([]);
@@ -57,20 +59,20 @@ export default function NurturePage() {
   }
 
   const tabs = [
-    { key: 'dashboard', label: 'Vue d\'ensemble', count: null },
-    { key: 'campaigns', label: 'Campagnes', count: Object.keys(campaignsByTrigger).length },
-    { key: 'triggers', label: 'Triggers', count: triggers.length },
-    { key: 'pending', label: 'En attente', count: emails.filter(e => e.status === 'pending').length },
-    { key: 'sent', label: 'Envoy\u00E9s', count: sentEmails.length },
+    { key: 'dashboard', label: t('activation.overview'), count: null },
+    { key: 'campaigns', label: t('activation.campaigns'), count: Object.keys(campaignsByTrigger).length },
+    { key: 'triggers', label: t('activation.triggers'), count: triggers.length },
+    { key: 'pending', label: t('activation.pending'), count: emails.filter(e => e.status === 'pending').length },
+    { key: 'sent', label: t('activation.sent'), count: sentEmails.length },
   ];
 
   return (
     <div className="dashboard-page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Activation</h1>
+          <h1 className="page-title">{t('activation.title')}</h1>
           <div className="page-subtitle">
-            Automatisez vos emails de suivi client
+            {t('activation.subtitle')}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -89,14 +91,14 @@ export default function NurturePage() {
               setPreviewing(false);
             }}
           >
-            {previewing ? '\u23F3 Analyse...' : '\uD83D\uDD0D Pr\u00E9visualiser'}
+            {previewing ? `\u23F3 ${t('activation.previewing')}` : `\uD83D\uDD0D ${t('activation.preview')}`}
           </button>
           <button
             className="btn btn-primary"
             style={{ fontSize: 12, padding: '6px 14px' }}
             onClick={() => { setActiveTab('triggers'); setShowCreate(true); }}
           >
-            + Nouveau trigger
+            {t('activation.newTrigger')}
           </button>
         </div>
       </div>

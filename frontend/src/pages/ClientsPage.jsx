@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import api, { request } from '../services/api-client';
+import { useT } from '../i18n';
 
 const STAGE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
@@ -30,7 +31,8 @@ export default function ClientsPage() {
   const [search, setSearch] = useState('');
   const [stages, setStages] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [connectedCrm, setConnectedCrm] = useState(null); // 'pipedrive', 'hubspot', 'odoo', etc.
+  const [connectedCrm, setConnectedCrm] = useState(null);
+  const t = useT();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -108,9 +110,9 @@ export default function ClientsPage() {
     <div className="dashboard-page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Clients</h1>
+          <h1 className="page-title">{t('clients.title')}</h1>
           <div className="page-subtitle">
-            {clients.length} contact{clients.length !== 1 ? 's' : ''} dans votre CRM
+            {t('clients.contactsInCrm', { count: clients.length })}
           </div>
         </div>
         {connectedCrm ? (
@@ -120,7 +122,7 @@ export default function ClientsPage() {
             onClick={handleImport}
             disabled={importing}
           >
-            {importing ? '\u23F3 Import...' : `Importer depuis ${crmLabel}`}
+            {importing ? `\u23F3 ${t('clients.importing')}` : t('clients.importFrom', { crm: crmLabel })}
           </button>
         ) : (
           <button
@@ -128,7 +130,7 @@ export default function ClientsPage() {
             style={{ fontSize: 12, padding: '8px 16px' }}
             onClick={() => window.location.href = '/settings'}
           >
-            Connecter un CRM
+            {t('clients.connectCrm')}
           </button>
         )}
       </div>
