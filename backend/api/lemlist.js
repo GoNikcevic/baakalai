@@ -939,8 +939,11 @@ function transformCampaignStats(raw) {
     const reached = raw.nbLeadsReached || raw.delivered || 0;
 
     if (sent > 0) {
-      stats.openRate = Math.round(((raw.nbLeadsOpened || raw.opened || 0) / reached || sent) * 100) || 0;
-      stats.replyRate = Math.round(((raw.nbLeadsAnswered || raw.replied || 0) / reached || sent) * 100) || 0;
+      const base = reached || sent; // prefer nbLeadsReached, fallback to messagesSent
+      const opens = raw.nbLeadsOpened || raw.opened || 0;
+      const replies = raw.nbLeadsAnswered || raw.replied || 0;
+      stats.openRate = base > 0 ? Math.round((opens / base) * 100) : 0;
+      stats.replyRate = base > 0 ? Math.round((replies / base) * 100) : 0;
       stats.stops = raw.nbLeadsUnsubscribed
         ? Math.round((raw.nbLeadsUnsubscribed / stats.contacts) * 100)
         : null;
