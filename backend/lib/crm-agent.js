@@ -518,6 +518,154 @@ async function generateCrmPatterns(userId, opps) {
       }
     }
   }
+
+  // Pattern 5: Best send timing (day of week analysis from nurture emails)
+  try {
+    const sentEmails = await db.query(
+      `SELECT EXTRACT(DOW FROM sent_at) as dow, COUNT(*) as total,
+              COUNT(*) FILTER (WHERE analyzed_at IS NOT NULL) as analyzed
+       FROM nurture_emails WHERE user_id = $1 AND status = 'sent' AND sent_at IS NOT NULL
+       GROUP BY EXTRACT(DOW FROM sent_at) HAVING COUNT(*) >= 3
+       ORDER BY COUNT(*) DESC`,
+      [userId]
+    );
+    if (sentEmails.rows.length >= 2) {
+      const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+      const bestDay = sentEmails.rows[0];
+      const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+      const hasTiming = existing.some(p => p.pattern.includes('jour le plus actif'));
+      if (!hasTiming) {
+        await db.memoryPatterns.create({
+          pattern: `Le ${dayNames[bestDay.dow]} est le jour le plus actif pour les emails d'activation (${bestDay.total} envois)`,
+          category: 'Timing',
+          data: JSON.stringify({ source: 'timing_analysis', dayStats: sentEmails.rows }),
+          confidence: parseInt(bestDay.total, 10) >= 20 ? 'Haute' : 'Moyenne',
+          sectors: [], targets: [],
+        });
+      }
+    }
+  } catch { /* optional */ }
+
+  // Pattern 6: Email subject line analysis (questions vs statements)
+  try {
+    const subjects = await db.query(
+      `SELECT subject, analyzed_at FROM nurture_emails
+       WHERE user_id = $1 AND status = 'sent' AND subject IS NOT NULL`,
+      [userId]
+    );
+    if (subjects.rows.length >= 10) {
+      const questions = subjects.rows.filter(s => s.subject.includes('?'));
+      const statements = subjects.rows.filter(s => !s.subject.includes('?'));
+      const qAnalyzed = questions.filter(s => s.analyzed_at).length;
+      const sAnalyzed = statements.filter(s => s.analyzed_at).length;
+      const qRate = questions.length > 0 ? Math.round((qAnalyzed / questions.length) * 100) : 0;
+      const sRate = statements.length > 0 ? Math.round((sAnalyzed / statements.length) * 100) : 0;
+
+      if (questions.length >= 3 && statements.length >= 3 && Math.abs(qRate - sRate) >= 15) {
+        const existing = await db.memoryPatterns.list({ category: 'Objets', limit: 50 });
+        const hasSubject = existing.some(p => p.pattern.includes('objets avec question'));
+        if (!hasSubject) {
+          const better = qRate > sRate ? 'avec question' : 'affirmatifs';
+          await db.memoryPatterns.create({
+            pattern: `Les objets ${better} g\u00E9n\u00E8rent plus d'engagement (${Math.max(qRate, sRate)}% vs ${Math.min(qRate, sRate)}%)`,
+            category: 'Objets',
+            data: JSON.stringify({ source: 'subject_analysis', questions: questions.length, statements: statements.length, qRate, sRate }),
+            confidence: subjects.rows.length >= 30 ? 'Haute' : 'Moyenne',
+            sectors: [], targets: [],
+          });
+        }
+      }
+    }
+  } catch { /* optional */ }
+
+  // Pattern 7: Email body length correlation
+  try {
+    const emails = await db.query(
+      `SELECT LENGTH(body) as len, analyzed_at FROM nurture_emails
+       WHERE user_id = $1 AND status = 'sent' AND body IS NOT NULL`,
+      [userId]
+    );
+    if (emails.rows.length >= 10) {
+      const short = emails.rows.filter(e => e.len < 300);
+      const long = emails.rows.filter(e => e.len >= 300);
+      const shortResponse = short.filter(e => e.analyzed_at).length;
+      const longResponse = long.filter(e => e.analyzed_at).length;
+
+      if (short.length >= 3 && long.length >= 3) {
+        const shortRate = Math.round((shortResponse / short.length) * 100);
+        const longRate = Math.round((longResponse / long.length) * 100);
+        if (Math.abs(shortRate - longRate) >= 15) {
+          const existing = await db.memoryPatterns.list({ category: 'Corps', limit: 50 });
+          const hasLength = existing.some(p => p.pattern.includes('emails courts') || p.pattern.includes('emails longs'));
+          if (!hasLength) {
+            const better = shortRate > longRate ? 'courts (<300 car.)' : 'longs (300+ car.)';
+            await db.memoryPatterns.create({
+              pattern: `Les emails ${better} obtiennent plus de r\u00E9ponses (${Math.max(shortRate, longRate)}% vs ${Math.min(shortRate, longRate)}%)`,
+              category: 'Corps',
+              data: JSON.stringify({ source: 'length_analysis', shortCount: short.length, longCount: long.length, shortRate, longRate }),
+              confidence: emails.rows.length >= 30 ? 'Haute' : 'Moyenne',
+              sectors: [], targets: [],
+            });
+          }
+        }
+      }
+    }
+  } catch { /* optional */ }
+
+  // Pattern 8: Best responding job title/function
+  try {
+    const responded = await db.query(
+      `SELECT o.title, COUNT(*) as count FROM nurture_emails ne
+       JOIN opportunities o ON o.id = ne.opportunity_id
+       WHERE ne.user_id = $1 AND ne.analyzed_at IS NOT NULL AND o.title IS NOT NULL AND o.title != ''
+       GROUP BY o.title HAVING COUNT(*) >= 2
+       ORDER BY COUNT(*) DESC LIMIT 1`,
+      [userId]
+    );
+    if (responded.rows.length > 0) {
+      const topTitle = responded.rows[0];
+      const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+      const hasTitle = existing.some(p => p.pattern.includes('fonction qui r\u00E9pond le mieux'));
+      if (!hasTitle) {
+        await db.memoryPatterns.create({
+          pattern: `La fonction qui r\u00E9pond le mieux aux emails d'activation : ${topTitle.title} (${topTitle.count} r\u00E9ponses)`,
+          category: 'Cible',
+          data: JSON.stringify({ source: 'title_analysis', title: topTitle.title, count: parseInt(topTitle.count, 10) }),
+          confidence: parseInt(topTitle.count, 10) >= 10 ? 'Haute' : 'Moyenne',
+          sectors: [], targets: [],
+        });
+      }
+    }
+  } catch { /* optional */ }
+
+  // Pattern 9: Multi-touch effectiveness (how many touches before response)
+  try {
+    const touchCounts = await db.query(
+      `SELECT ne.opportunity_id, COUNT(*) as touches,
+              bool_or(ne.analyzed_at IS NOT NULL) as got_response
+       FROM nurture_emails ne
+       WHERE ne.user_id = $1 AND ne.status = 'sent' AND ne.opportunity_id IS NOT NULL
+       GROUP BY ne.opportunity_id HAVING COUNT(*) >= 2`,
+      [userId]
+    );
+    if (touchCounts.rows.length >= 5) {
+      const withResponse = touchCounts.rows.filter(r => r.got_response);
+      if (withResponse.length >= 3) {
+        const avgTouches = Math.round(withResponse.reduce((s, r) => s + parseInt(r.touches, 10), 0) / withResponse.length * 10) / 10;
+        const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+        const hasTouch = existing.some(p => p.pattern.includes('touches avant r\u00E9ponse'));
+        if (!hasTouch) {
+          await db.memoryPatterns.create({
+            pattern: `En moyenne ${avgTouches} touches avant d'obtenir une r\u00E9ponse (sur ${withResponse.length} contacts)`,
+            category: 'Timing',
+            data: JSON.stringify({ source: 'multitouch_analysis', avgTouches, sampleSize: withResponse.length }),
+            confidence: withResponse.length >= 10 ? 'Haute' : 'Moyenne',
+            sectors: [], targets: [],
+          });
+        }
+      }
+    }
+  } catch { /* optional */ }
 }
 
 // ── Run for all users ──
