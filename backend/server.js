@@ -43,6 +43,11 @@ if (process.env.RAILWAY_PUBLIC_DOMAIN) {
   }
 }
 
+// Always allow app.baakal.ai and baakal.ai
+for (const d of ['https://app.baakal.ai', 'https://baakal.ai']) {
+  if (!allowedOrigins.includes(d)) allowedOrigins.push(d);
+}
+
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
