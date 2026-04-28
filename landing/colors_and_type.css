@@ -1,0 +1,65 @@
+/* ============================================================
+   BAAKALAI DESIGN TOKENS — Colors & Typography
+   Shared between marketing site and app.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap');
+
+:root {
+  /* Font stacks */
+  --font-sans: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Menlo, monospace;
+
+  /* Base: paper & ink */
+  --paper:          #FAFAF9;
+  --paper-2:        #F2F2F0;
+  --paper-3:        #E8E8E5;
+  --ink:            #0A0A0A;
+  --ink-2:          #1E1E1D;
+
+  /* Grey scale */
+  --grey-900:       #262625;
+  --grey-700:       #525251;
+  --grey-500:       #7A7A78;
+  --grey-400:       #A1A19F;
+  --grey-300:       #C8C8C5;
+  --grey-200:       #DEDEDB;
+  --grey-100:       #EDEDEA;
+
+  /* Borders */
+  --border:         #E4E4E0;
+  --border-strong:  #D0D0CC;
+
+  /* Primary accent: Purple */
+  --primary:        #6E57FA;
+  --primary-deep:   #4E3ED1;
+  --primary-soft:   #EBE6FF;
+  --primary-softer: #F5F2FF;
+  --primary-on-dark:#A998FF;
+
+  /* Secondary accent: Lavender */
+  --lavender:       #C4B5FD;
+  --lavender-soft:  #E6DEFF;
+  --lavender-softer:#F2EEFF;
+  --lavender-deep:  #9A84EB;
+
+  /* Semantic */
+  --success:        #16A34A;
+  --success-soft:   #DCFCE7;
+  --warning:        #D97706;
+  --warning-soft:   #FEF3C7;
+  --danger:         #DC2626;
+  --danger-soft:    #FEE2E2;
+
+  /* Shadows */
+  --shadow-sm:      0 1px 2px rgba(10,10,10,0.04);
+  --shadow-md:      0 4px 12px -2px rgba(10,10,10,0.08);
+  --shadow-lg:      0 20px 40px -20px rgba(10,10,10,0.12), 0 40px 80px -40px rgba(10,10,10,0.06);
+
+  /* Border radius */
+  --r-sm: 4px; --r-md: 6px; --r-lg: 10px; --r-xl: 14px; --r-2xl: 16px; --r-full: 999px;
+
+  /* Spacing */
+  --s-0: 0; --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px;
+}
