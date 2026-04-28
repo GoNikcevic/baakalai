@@ -1233,8 +1233,10 @@ const opportunities = {
       crm_contact_id: 'crm_contact_id', crmContactId: 'crm_contact_id',
       crm_deal_id: 'crm_deal_id', crmDealId: 'crm_deal_id',
       personalization: 'personalization',
+      churn_score: 'churn_score', churnScore: 'churn_score',
+      churn_factors: 'churn_factors', churnFactors: 'churn_factors',
     };
-    const jsonbCols = new Set(['personalization']);
+    const jsonbCols = new Set(['personalization', 'churn_factors']);
     const seen = new Set();
     for (const [inputKey, col] of Object.entries(mapping)) {
       if (data[inputKey] !== undefined && !seen.has(col)) {

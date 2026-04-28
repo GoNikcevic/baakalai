@@ -72,7 +72,25 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       report.errors.push(`Responses: ${err.message}`);
     }
 
-    // ── Step 5: AI Analysis (if significant changes) ──
+    // ── Step 5: Churn Scoring ──
+    try {
+      const { scoreAllForUser } = require('./churn-scoring');
+      let deals = [];
+      try { deals = await pipedrive.getDeals(token, 500); } catch { /* ok */ }
+      const churnReport = await scoreAllForUser(userId, { deals });
+      report.churn = churnReport;
+      if (churnReport.atRisk > 0) {
+        report.alerts.push({
+          type: 'churn_risk',
+          severity: churnReport.atRisk >= 5 ? 'high' : 'warning',
+          message: `${churnReport.atRisk} contact(s) à risque de churn (score >= 50)`,
+        });
+      }
+    } catch (err) {
+      report.errors.push(`Churn: ${err.message}`);
+    }
+
+    // ── Step 6: AI Analysis (if significant changes) ──
     if (report.sync.imported > 0 || report.alerts.length > 0 || trigger === 'manual') {
       await stepAnalysis(userId, report);
     }
@@ -373,7 +391,7 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
   };
 }
 
-// ── Step 4: AI Analysis ──
+// ── Step 6: AI Analysis ──
 
 async function stepAnalysis(userId, report) {
   try {
@@ -381,22 +399,8 @@ async function stepAnalysis(userId, report) {
     const hasChanges = sync.imported > 0 || nurture.sent > 0 || nurture.queued > 0;
     if (!hasChanges && alerts.length === 0) return;
 
-    // Detect churn risk and add alerts
+    // Churn risk alerts now handled by Step 5 (churn-scoring engine)
     const opps = await db.opportunities.listByUser(userId, 500, 0);
-    const now = Date.now();
-    const churnRisk = opps.filter(o => {
-      const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-      return age >= 90 && o.status !== 'lost';
-    });
-
-    if (churnRisk.length > 0) {
-      report.alerts.push({
-        type: 'churn_risk',
-        severity: 'high',
-        message: `${churnRisk.length} contact(s) sans activit\u00E9 depuis 90+ jours`,
-        contacts: churnRisk.slice(0, 5).map(o => o.name),
-      });
-    }
 
     // New contacts alert
     if (sync.imported > 0) {

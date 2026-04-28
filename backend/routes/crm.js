@@ -710,6 +710,56 @@ router.get('/client/:id', async (req, res, next) => {
   }
 });
 
+// =============================================
+// POST /api/crm/churn/score — Run churn scoring for current user
+// =============================================
+router.post('/churn/score', async (req, res, next) => {
+  try {
+    const { scoreAllForUser } = require('../lib/churn-scoring');
+    const { getUserKey } = require('../config');
+
+    // Try to get deals from CRM for better scoring
+    let deals = [];
+    const token = await getUserKey(req.user.id, 'pipedrive');
+    if (token) {
+      try {
+        deals = await pipedrive.getDeals(token, 500);
+      } catch { /* scoring works without deals */ }
+    }
+
+    const result = await scoreAllForUser(req.user.id, { deals });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// =============================================
+// GET /api/crm/churn/summary — Get churn risk summary
+// =============================================
+router.get('/churn/summary', async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT
+        COUNT(*) FILTER (WHERE churn_score >= 76) AS critical,
+        COUNT(*) FILTER (WHERE churn_score >= 51 AND churn_score < 76) AS high,
+        COUNT(*) FILTER (WHERE churn_score >= 26 AND churn_score < 51) AS medium,
+        COUNT(*) FILTER (WHERE churn_score < 26 OR churn_score IS NULL) AS low,
+        COUNT(*) FILTER (WHERE churn_score IS NOT NULL) AS scored,
+        ROUND(AVG(churn_score) FILTER (WHERE churn_score IS NOT NULL)) AS avg_score
+      FROM opportunities WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const row = result.rows[0] || {};
+    res.json({
+      critical: parseInt(row.critical) || 0,
+      high: parseInt(row.high) || 0,
+      medium: parseInt(row.medium) || 0,
+      low: parseInt(row.low) || 0,
+      scored: parseInt(row.scored) || 0,
+      avgScore: parseInt(row.avg_score) || 0,
+    });
+  } catch (err) { next(err); }
+});
+
 // Helper: get CRM token for any provider
 async function getUserCrmToken(userId, provider) {
   const { getUserKey } = require('../config');

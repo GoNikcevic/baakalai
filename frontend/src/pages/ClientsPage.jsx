@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
-import api, { request } from '../services/api-client';
+import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 
 const STAGE_COLORS = [
@@ -32,6 +32,8 @@ export default function ClientsPage() {
   const [stages, setStages] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [connectedCrm, setConnectedCrm] = useState(null);
+  const [churnSummary, setChurnSummary] = useState(null);
+  const [scoringChurn, setScoringChurn] = useState(false);
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -63,6 +65,8 @@ export default function ClientsPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
+    // Load churn summary
+    getChurnSummary().then(setChurnSummary).catch(() => {});
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -86,7 +90,8 @@ export default function ClientsPage() {
   }, [loadData]);
 
   const filtered = clients.filter(c => {
-    if (filter !== 'all' && c.status !== filter) return false;
+    if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
+    else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (search) {
       const q = search.toLowerCase();
       return (c.name || '').toLowerCase().includes(q)
@@ -94,6 +99,9 @@ export default function ClientsPage() {
         || (c.email || '').toLowerCase().includes(q);
     }
     return true;
+  }).sort((a, b) => {
+    if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
+    return 0;
   });
 
   const statusCounts = {};
@@ -105,7 +113,8 @@ export default function ClientsPage() {
     { key: 'new', label: STATUS_LABELS.new, count: statusCounts.new || 0 },
     { key: 'interested', label: STATUS_LABELS.interested, count: statusCounts.interested || 0 },
     { key: 'meeting', label: STATUS_LABELS.meeting, count: statusCounts.meeting || 0 },
-    { key: 'won', label: 'Gagn\u00e9s', count: statusCounts.won || 0 },
+    { key: 'won', label: lang === 'en' ? 'Won' : 'Gagn\u00e9s', count: statusCounts.won || 0 },
+    { key: 'churn_risk', label: lang === 'en' ? 'Churn risk' : 'Risque churn', count: clients.filter(c => c.churn_score >= 50).length },
   ].filter(t => t.key === 'all' || t.count > 0);
 
   return (
@@ -153,6 +162,81 @@ export default function ClientsPage() {
           <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setImportResult(null)}>{'\u2715'}</button>
         </div>
       )}
+
+      {/* Churn risk summary */}
+      {churnSummary && churnSummary.scored > 0 && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          {[
+            { label: lang === 'en' ? 'Critical' : 'Critique', count: churnSummary.critical, color: 'var(--danger)' },
+            { label: lang === 'en' ? 'High' : 'Haut', count: churnSummary.high, color: 'var(--warning)' },
+            { label: lang === 'en' ? 'Medium' : 'Moyen', count: churnSummary.medium, color: '#D97706' },
+            { label: lang === 'en' ? 'Low' : 'Bas', count: churnSummary.low, color: 'var(--success)' },
+          ].map(b => (
+            <div key={b.label} style={{
+              flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderLeft: `3px solid ${b.color}`, borderRadius: 8, padding: '10px 14px',
+            }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: b.color }}>{b.count}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{b.label}</div>
+            </div>
+          ))}
+          <div style={{
+            flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+          }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{churnSummary.avgScore}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lang === 'en' ? 'Avg score' : 'Score moyen'}</div>
+          </div>
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: 11, padding: '8px 14px', alignSelf: 'center' }}
+            disabled={scoringChurn}
+            onClick={async () => {
+              setScoringChurn(true);
+              try {
+                await runChurnScoring();
+                const summary = await getChurnSummary();
+                setChurnSummary(summary);
+                await loadData();
+              } catch { /* ignore */ }
+              setScoringChurn(false);
+            }}
+          >
+            {scoringChurn ? (lang === 'en' ? 'Scoring...' : 'Calcul...') : (lang === 'en' ? 'Rescore' : 'Recalculer')}
+          </button>
+        </div>
+      )}
+
+      {!churnSummary || churnSummary.scored === 0 ? (
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
+          padding: '16px 20px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{lang === 'en' ? 'Churn Prediction' : 'Pr\u00e9diction de churn'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {lang === 'en' ? 'Score your contacts to detect churn risk' : 'Scorez vos contacts pour d\u00e9tecter les risques de churn'}
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 12, padding: '8px 16px' }}
+            disabled={scoringChurn}
+            onClick={async () => {
+              setScoringChurn(true);
+              try {
+                await runChurnScoring();
+                const summary = await getChurnSummary();
+                setChurnSummary(summary);
+                await loadData();
+              } catch { /* ignore */ }
+              setScoringChurn(false);
+            }}
+          >
+            {scoringChurn ? (lang === 'en' ? 'Scoring...' : 'Calcul...') : (lang === 'en' ? 'Run churn scoring' : 'Lancer le scoring churn')}
+          </button>
+        </div>
+      ) : null}
 
       {/* Pipeline stages */}
       {stages.length > 0 && (
@@ -219,7 +303,7 @@ export default function ClientsPage() {
                 const isSelected = selectedClient?.id === c.id;
                 return (
                   <div key={c.id} onClick={() => setSelectedClient(c)} style={{
-                    display: 'grid', gridTemplateColumns: selectedClient ? '2fr 1fr 80px' : '2fr 1.5fr 1fr 1fr 80px',
+                    display: 'grid', gridTemplateColumns: selectedClient ? '2fr 1fr 80px' : '2fr 1.2fr 1fr 60px 80px',
                     padding: '10px 14px', background: isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
                     border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
                     borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
@@ -236,8 +320,23 @@ export default function ClientsPage() {
                       </span>
                     )}
                     {!selectedClient && (
-                      <div style={{ fontSize: 13, fontWeight: 700, color: c.score >= 70 ? 'var(--success)' : c.score >= 40 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                        {c.score != null ? `${c.score}/100` : '\u2014'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {c.churn_score != null ? (
+                          <>
+                            <div style={{
+                              width: 8, height: 8, borderRadius: '50%',
+                              background: c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)',
+                            }} />
+                            <span style={{
+                              fontSize: 12, fontWeight: 600,
+                              color: c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)',
+                            }}>
+                              {c.churn_score}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{'\u2014'}</span>
+                        )}
                       </div>
                     )}
                     <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600 }}>
@@ -337,6 +436,16 @@ function ClientDetailPanel({ client, onClose }) {
             Score : {client.score}/100
           </span>
         )}
+        {client.churn_score != null && (
+          <span style={{
+            fontSize: 12, padding: '4px 14px', borderRadius: 8,
+            background: client.churn_score >= 76 ? 'var(--danger-soft)' : client.churn_score >= 51 ? 'var(--warning-soft)' : client.churn_score >= 26 ? '#FEF3C7' : 'var(--success-soft)',
+            color: client.churn_score >= 76 ? 'var(--danger)' : client.churn_score >= 51 ? 'var(--warning)' : client.churn_score >= 26 ? '#D97706' : 'var(--success)',
+            fontWeight: 700,
+          }}>
+            Churn : {client.churn_score}/100
+          </span>
+        )}
         {client.crm_provider && (
           <span style={{
             fontSize: 11, padding: '4px 10px', borderRadius: 8,
@@ -346,6 +455,24 @@ function ClientDetailPanel({ client, onClose }) {
           </span>
         )}
       </div>
+
+      {/* Churn factors */}
+      {client.churn_factors && client.churn_factors.length > 0 && (
+        <div style={{
+          background: client.churn_score >= 50 ? 'rgba(220,38,38,0.04)' : 'var(--bg-elevated)',
+          border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+            {lang === 'en' ? 'Churn risk factors' : 'Facteurs de risque churn'}
+          </div>
+          {client.churn_factors.map((f, i) => (
+            <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+              <span>{f.detail}</span>
+              <span style={{ fontWeight: 600, color: f.weight >= 15 ? 'var(--danger)' : 'var(--warning)' }}>+{f.weight}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Quick actions */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>

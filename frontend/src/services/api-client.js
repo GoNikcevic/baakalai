@@ -518,6 +518,16 @@ export async function exportScoresToCRM() {
   return request('/ai/export-scores-crm', { method: 'POST' });
 }
 
+/** Run churn scoring */
+export async function runChurnScoring() {
+  return request('/crm/churn/score', { method: 'POST' });
+}
+
+/** Get churn summary */
+export async function getChurnSummary() {
+  return request('/crm/churn/summary');
+}
+
 /** Download scores as CSV */
 export function downloadScoresCSV() {
   const token = getToken();
