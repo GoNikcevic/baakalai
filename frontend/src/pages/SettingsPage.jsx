@@ -13,6 +13,7 @@ import { useSocket } from '../context/SocketContext';
 import { useI18n } from '../i18n';
 import EmailAccountSettings from '../components/EmailAccountSettings';
 import TeamSettings from '../components/TeamSettings';
+import ProductLinesSettings from '../components/ProductLinesSettings';
 
 /* ─── Unified tool list organized by category ─── */
 
@@ -743,6 +744,9 @@ export default function SettingsPage() {
 
       {/* Team */}
       <TeamSettings />
+
+      {/* Product Lines */}
+      <ProductLinesSettings />
 
       {/* Email sortant */}
       <EmailAccountSettings />

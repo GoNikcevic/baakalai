@@ -843,6 +843,36 @@ router.post('/product-lines/:id/assign', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/crm/product-lines/:id/unassign — Remove contacts from a product line
+router.post('/product-lines/:id/unassign', async (req, res, next) => {
+  try {
+    const { opportunityIds } = req.body;
+    if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
+      return res.status(400).json({ error: 'opportunityIds array required' });
+    }
+    for (const oppId of opportunityIds) {
+      await db.query(
+        `DELETE FROM opportunity_product_lines WHERE opportunity_id = $1 AND product_line_id = $2`,
+        [oppId, req.params.id]
+      );
+    }
+    res.json({ removed: opportunityIds.length });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/client/:id/product-lines — Get product lines for a contact
+router.get('/client/:id/product-lines', async (req, res, next) => {
+  try {
+    const result = await db.query(`
+      SELECT pl.* FROM product_lines pl
+      JOIN opportunity_product_lines opl ON opl.product_line_id = pl.id
+      WHERE opl.opportunity_id = $1
+      ORDER BY pl.name
+    `, [req.params.id]);
+    res.json({ productLines: result.rows });
+  } catch (err) { next(err); }
+});
+
 // Helper: get CRM token for any provider
 async function getUserCrmToken(userId, provider) {
   const { getUserKey } = require('../config');
