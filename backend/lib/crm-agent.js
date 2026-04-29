@@ -23,6 +23,7 @@ const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const { notifyUser } = require('../socket');
+const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
 const logger = require('./logger');
 
 const DAY_MS = 86400000;
@@ -43,8 +44,15 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     errors: [],
   };
 
-  const crmProvider = 'pipedrive'; // TODO: detect from user integrations
-  const token = await getUserKey(userId, crmProvider);
+  // Detect connected CRM provider
+  let crmProvider = 'pipedrive';
+  let token = await getUserKey(userId, 'pipedrive');
+  if (!token) {
+    for (const p of ['hubspot', 'salesforce', 'odoo']) {
+      token = await getUserKey(userId, p);
+      if (token) { crmProvider = p; break; }
+    }
+  }
   if (!token) {
     report.errors.push('No CRM connected');
     return report;
@@ -133,27 +141,10 @@ async function stepSync(userId, token, report, event) {
       if (o.email) existingByEmail.set(o.email.toLowerCase(), o);
     }
 
-    // Build Pipedrive user ID → Baakalai user mapping for owner sync
-    let pdUserMap = new Map(); // pipedrive user id → { email, baakalaiUserId }
+    // Build CRM owner map (works for any provider)
+    let ownerMap = new Map();
     try {
-      const pdUsers = await pipedrive.getUsers(token);
-      // Get team members to match by email
-      const teamResult = await db.query(
-        `SELECT tm.user_id, u.email FROM team_members tm
-         JOIN users u ON u.id = tm.user_id
-         WHERE tm.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)`,
-        [userId]
-      );
-      const teamByEmail = new Map();
-      for (const tm of teamResult.rows) {
-        teamByEmail.set(tm.email.toLowerCase(), tm.user_id);
-      }
-      for (const pdu of pdUsers) {
-        pdUserMap.set(String(pdu.id), {
-          email: pdu.email,
-          baakalaiUserId: teamByEmail.get(pdu.email?.toLowerCase()) || null,
-        });
-      }
+      ownerMap = await buildOwnerMap(crmProvider, token, userId);
     } catch { /* owner mapping is optional */ }
 
     for (const raw of (persons || [])) {
@@ -162,9 +153,8 @@ async function stepSync(userId, token, report, event) {
         : (raw.email || null);
       if (!email) continue;
 
-      // Resolve owner
-      const crmOwnerId = raw.owner_id?.id ? String(raw.owner_id.id) : (raw.owner_id ? String(raw.owner_id) : null);
-      const ownerInfo = crmOwnerId ? pdUserMap.get(crmOwnerId) : null;
+      // Resolve owner (unified across all CRM providers)
+      const { crmOwnerId, ownerEmail, ownerId } = resolveOwner(crmProvider, raw, ownerMap);
 
       const existing = existingByEmail.get(email.toLowerCase());
 
@@ -179,8 +169,8 @@ async function stepSync(userId, token, report, event) {
           crmProvider: 'pipedrive',
           crmContactId: String(raw.id),
           crmOwnerId,
-          ownerEmail: ownerInfo?.email || null,
-          ownerId: ownerInfo?.baakalaiUserId || null,
+          ownerEmail,
+          ownerId,
         });
         report.sync.imported++;
       } else {
@@ -194,8 +184,8 @@ async function stepSync(userId, token, report, event) {
         // Sync owner
         if (crmOwnerId && crmOwnerId !== existing.crm_owner_id) {
           updates.crm_owner_id = crmOwnerId;
-          if (ownerInfo?.email) updates.owner_email = ownerInfo.email;
-          if (ownerInfo?.baakalaiUserId) updates.owner_id = ownerInfo.baakalaiUserId;
+          if (ownerEmail) updates.owner_email = ownerEmail;
+          if (ownerId) updates.owner_id = ownerId;
         }
 
         if (Object.keys(updates).length > 0) {
