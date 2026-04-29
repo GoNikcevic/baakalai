@@ -760,6 +760,89 @@ router.get('/churn/summary', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// =============================================
+// GET /api/crm/team-owners — List team members with their contact counts
+// =============================================
+router.get('/team-owners', async (req, res, next) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        u.id, u.name, u.email, tm.role,
+        COUNT(o.id) AS contact_count
+      FROM team_members tm
+      JOIN users u ON u.id = tm.user_id
+      LEFT JOIN opportunities o ON o.owner_id = tm.user_id
+      WHERE tm.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)
+      GROUP BY u.id, u.name, u.email, tm.role
+      ORDER BY contact_count DESC
+    `, [req.user.id]);
+    res.json({ owners: result.rows });
+  } catch (err) { next(err); }
+});
+
+// =============================================
+// Product Lines (verticals / multi-product support)
+// =============================================
+
+// GET /api/crm/product-lines — List product lines for the team
+router.get('/product-lines', async (req, res, next) => {
+  try {
+    const result = await db.query(`
+      SELECT pl.*, COUNT(opl.opportunity_id) AS contact_count
+      FROM product_lines pl
+      LEFT JOIN opportunity_product_lines opl ON opl.product_line_id = pl.id
+      WHERE pl.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)
+      GROUP BY pl.id
+      ORDER BY pl.name
+    `, [req.user.id]);
+    res.json({ productLines: result.rows });
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/product-lines — Create a product line
+router.post('/product-lines', async (req, res, next) => {
+  try {
+    const { name, description, icon } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const teamResult = await db.query(
+      `SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1`, [req.user.id]
+    );
+    const teamId = teamResult.rows[0]?.team_id;
+    if (!teamId) return res.status(400).json({ error: 'No team found' });
+
+    const result = await db.query(
+      `INSERT INTO product_lines (team_id, name, description, icon) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [teamId, name, description || null, icon || null]
+    );
+    res.json({ productLine: result.rows[0] });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/crm/product-lines/:id
+router.delete('/product-lines/:id', async (req, res, next) => {
+  try {
+    await db.query(`DELETE FROM product_lines WHERE id = $1`, [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/product-lines/:id/assign — Assign contacts to a product line
+router.post('/product-lines/:id/assign', async (req, res, next) => {
+  try {
+    const { opportunityIds } = req.body;
+    if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
+      return res.status(400).json({ error: 'opportunityIds array required' });
+    }
+    for (const oppId of opportunityIds) {
+      await db.query(
+        `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [oppId, req.params.id]
+      );
+    }
+    res.json({ assigned: opportunityIds.length });
+  } catch (err) { next(err); }
+});
+
 // Helper: get CRM token for any provider
 async function getUserCrmToken(userId, provider) {
   const { getUserKey } = require('../config');

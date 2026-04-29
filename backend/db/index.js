@@ -1192,8 +1192,8 @@ const opportunities = {
 
   async create(data) {
     const result = await query(`
-      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `, [
       data.userId || null,
@@ -1212,6 +1212,9 @@ const opportunities = {
       data.crmProvider || data.crm_provider || null,
       data.crmContactId || data.crm_contact_id || null,
       data.crmDealId || data.crm_deal_id || null,
+      data.ownerId || data.owner_id || null,
+      data.ownerEmail || data.owner_email || null,
+      data.crmOwnerId || data.crm_owner_id || null,
     ]);
     return result.rows[0];
   },
@@ -1235,6 +1238,9 @@ const opportunities = {
       personalization: 'personalization',
       churn_score: 'churn_score', churnScore: 'churn_score',
       churn_factors: 'churn_factors', churnFactors: 'churn_factors',
+      owner_id: 'owner_id', ownerId: 'owner_id',
+      owner_email: 'owner_email', ownerEmail: 'owner_email',
+      crm_owner_id: 'crm_owner_id', crmOwnerId: 'crm_owner_id',
     };
     const jsonbCols = new Set(['personalization', 'churn_factors']);
     const seen = new Set();

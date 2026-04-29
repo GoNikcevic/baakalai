@@ -133,11 +133,38 @@ async function stepSync(userId, token, report, event) {
       if (o.email) existingByEmail.set(o.email.toLowerCase(), o);
     }
 
+    // Build Pipedrive user ID → Baakalai user mapping for owner sync
+    let pdUserMap = new Map(); // pipedrive user id → { email, baakalaiUserId }
+    try {
+      const pdUsers = await pipedrive.getUsers(token);
+      // Get team members to match by email
+      const teamResult = await db.query(
+        `SELECT tm.user_id, u.email FROM team_members tm
+         JOIN users u ON u.id = tm.user_id
+         WHERE tm.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)`,
+        [userId]
+      );
+      const teamByEmail = new Map();
+      for (const tm of teamResult.rows) {
+        teamByEmail.set(tm.email.toLowerCase(), tm.user_id);
+      }
+      for (const pdu of pdUsers) {
+        pdUserMap.set(String(pdu.id), {
+          email: pdu.email,
+          baakalaiUserId: teamByEmail.get(pdu.email?.toLowerCase()) || null,
+        });
+      }
+    } catch { /* owner mapping is optional */ }
+
     for (const raw of (persons || [])) {
       const email = Array.isArray(raw.email)
         ? (raw.email.find(e => e.primary)?.value || raw.email[0]?.value || null)
         : (raw.email || null);
       if (!email) continue;
+
+      // Resolve owner
+      const crmOwnerId = raw.owner_id?.id ? String(raw.owner_id.id) : (raw.owner_id ? String(raw.owner_id) : null);
+      const ownerInfo = crmOwnerId ? pdUserMap.get(crmOwnerId) : null;
 
       const existing = existingByEmail.get(email.toLowerCase());
 
@@ -151,6 +178,9 @@ async function stepSync(userId, token, report, event) {
           status: 'imported',
           crmProvider: 'pipedrive',
           crmContactId: String(raw.id),
+          crmOwnerId,
+          ownerEmail: ownerInfo?.email || null,
+          ownerId: ownerInfo?.baakalaiUserId || null,
         });
         report.sync.imported++;
       } else {
@@ -161,6 +191,12 @@ async function stepSync(userId, token, report, event) {
         const company = raw.org_name || raw.org_id?.name || '';
         if (company && company !== existing.company) updates.company = company;
         if (!existing.crm_contact_id) updates.crm_contact_id = String(raw.id);
+        // Sync owner
+        if (crmOwnerId && crmOwnerId !== existing.crm_owner_id) {
+          updates.crm_owner_id = crmOwnerId;
+          if (ownerInfo?.email) updates.owner_email = ownerInfo.email;
+          if (ownerInfo?.baakalaiUserId) updates.owner_id = ownerInfo.baakalaiUserId;
+        }
 
         if (Object.keys(updates).length > 0) {
           await db.opportunities.update(existing.id, updates);

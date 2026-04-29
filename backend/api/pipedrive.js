@@ -220,6 +220,18 @@ async function createNote(apiToken, data) {
   });
 }
 
+// ── Users (Pipedrive team members) ──
+
+async function getUsers(apiToken) {
+  const data = await pdFetch(apiToken, '/users');
+  return (data || []).map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    active: u.active_flag,
+  }));
+}
+
 // ── Helpers ──
 
 function mapOpportunityToPerson(opp) {
@@ -249,5 +261,6 @@ module.exports = {
   updateDeal,
   getDeals,
   createNote,
+  getUsers,
   mapOpportunityToPerson,
 };

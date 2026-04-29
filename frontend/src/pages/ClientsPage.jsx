@@ -34,6 +34,8 @@ export default function ClientsPage() {
   const [connectedCrm, setConnectedCrm] = useState(null);
   const [churnSummary, setChurnSummary] = useState(null);
   const [scoringChurn, setScoringChurn] = useState(false);
+  const [owners, setOwners] = useState([]);
+  const [ownerFilter, setOwnerFilter] = useState('all');
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -65,8 +67,9 @@ export default function ClientsPage() {
       }
     } catch { /* ignore */ }
     setLoading(false);
-    // Load churn summary
+    // Load churn summary + team owners
     getChurnSummary().then(setChurnSummary).catch(() => {});
+    request('/crm/team-owners').then(d => setOwners(d.owners || [])).catch(() => {});
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -92,6 +95,7 @@ export default function ClientsPage() {
   const filtered = clients.filter(c => {
     if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
+    if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return (c.name || '').toLowerCase().includes(q)
@@ -259,13 +263,28 @@ export default function ClientsPage() {
       {/* Search + filter */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
         <input
-          type="text" placeholder="Rechercher..." value={search}
+          type="text" placeholder={lang === 'en' ? 'Search...' : 'Rechercher...'} value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
             flex: 1, padding: '8px 14px', border: '1px solid var(--border)',
             borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13,
           }}
         />
+        {owners.length > 1 && (
+          <select
+            value={ownerFilter}
+            onChange={e => setOwnerFilter(e.target.value)}
+            style={{
+              padding: '8px 12px', border: '1px solid var(--border)',
+              borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12,
+            }}
+          >
+            <option value="all">{lang === 'en' ? 'All reps' : 'Tous les commerciaux'}</option>
+            {owners.map(o => (
+              <option key={o.id} value={o.id}>{o.name} ({o.contact_count})</option>
+            ))}
+          </select>
+        )}
         <div style={{ display: 'flex', gap: 4 }}>
           {statusTabs.map(tab => (
             <button key={tab.key} onClick={() => setFilter(tab.key)} style={{
@@ -303,7 +322,7 @@ export default function ClientsPage() {
                 const isSelected = selectedClient?.id === c.id;
                 return (
                   <div key={c.id} onClick={() => setSelectedClient(c)} style={{
-                    display: 'grid', gridTemplateColumns: selectedClient ? '2fr 1fr 80px' : '2fr 1.2fr 1fr 60px 80px',
+                    display: 'grid', gridTemplateColumns: selectedClient ? '2fr 1fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px 80px' : '2fr 1.2fr 1fr 60px 80px'),
                     padding: '10px 14px', background: isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
                     border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
                     borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
@@ -318,6 +337,11 @@ export default function ClientsPage() {
                       <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, width: 'fit-content' }}>
                         {STATUS_LABELS[c.status] || c.status || '\u2014'}
                       </span>
+                    )}
+                    {!selectedClient && owners.length > 1 && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.owner_email ? c.owner_email.split('@')[0] : '\u2014'}
+                      </div>
                     )}
                     {!selectedClient && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -444,6 +468,14 @@ function ClientDetailPanel({ client, onClose }) {
             fontWeight: 700,
           }}>
             Churn : {client.churn_score}/100
+          </span>
+        )}
+        {client.owner_email && (
+          <span style={{
+            fontSize: 11, padding: '4px 10px', borderRadius: 8,
+            background: 'var(--bg-elevated)', color: 'var(--text-muted)',
+          }}>
+            {lang === 'en' ? 'Owner' : 'Commercial'}: {client.owner_email.split('@')[0]}
           </span>
         )}
         {client.crm_provider && (
