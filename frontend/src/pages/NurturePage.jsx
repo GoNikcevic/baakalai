@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
-import { useT } from '../i18n';
+import { useT, useI18n } from '../i18n';
 
 const TRIGGER_TYPES = [
   { value: 'deal_won', label: 'Deal gagn\u00E9', desc: 'Email de bienvenue / onboarding quand un deal est gagn\u00E9', icon: '\uD83C\uDF89', defaultDays: 1, defaultName: 'Bienvenue nouveau client' },
@@ -20,6 +20,7 @@ const TRIGGER_TYPES = [
 
 export default function NurturePage() {
   const t = useT();
+  const { lang } = useI18n();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [triggers, setTriggers] = useState([]);
   const [emails, setEmails] = useState([]);
@@ -64,6 +65,7 @@ export default function NurturePage() {
     { key: 'triggers', label: t('activation.triggers'), count: triggers.length },
     { key: 'pending', label: t('activation.pending'), count: emails.filter(e => e.status === 'pending').length },
     { key: 'sent', label: t('activation.sent'), count: sentEmails.length },
+    { key: 'team', label: lang === 'en' ? 'Team Campaigns' : 'Campagnes \u00E9quipe', count: null },
   ];
 
   return (
@@ -225,6 +227,7 @@ export default function NurturePage() {
       {!loading && activeTab === 'sent' && (
         <EmailsSection emails={emails.filter(e => e.status === 'sent')} type="sent" onRefresh={loadData} />
       )}
+      {!loading && activeTab === 'team' && <TeamCampaignsSection lang={lang} />}
     </div>
   );
 }
@@ -717,6 +720,309 @@ function CampaignsSection({ campaigns }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ═══ Team Campaigns Section ═══ */
+
+function TeamCampaignsSection({ lang }) {
+  const en = lang === 'en';
+  const [campaigns, setCampaigns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [owners, setOwners] = useState([]);
+  const [productLines, setProductLines] = useState([]);
+  const [previewing, setPreviewing] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [launching, setLaunching] = useState(null);
+
+  const [form, setForm] = useState({
+    name: '',
+    targetOwners: [],
+    targetProductLines: [],
+    emailPrompt: '',
+    emailTone: 'professional',
+  });
+
+  const load = useCallback(async () => {
+    try {
+      const [campData, ownerData, plData] = await Promise.all([
+        request('/team-campaigns'),
+        request('/crm/team-owners').catch(() => ({ owners: [] })),
+        request('/crm/product-lines').catch(() => ({ productLines: [] })),
+      ]);
+      setCampaigns(campData.campaigns || []);
+      setOwners(ownerData.owners || []);
+      setProductLines(plData.productLines || []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) return;
+    try {
+      await request('/team-campaigns', {
+        method: 'POST',
+        body: JSON.stringify(form),
+      });
+      setForm({ name: '', targetOwners: [], targetProductLines: [], emailPrompt: '', emailTone: 'professional' });
+      setShowCreate(false);
+      await load();
+    } catch { /* ignore */ }
+  };
+
+  const handlePreview = async (id) => {
+    setPreviewing(id);
+    setPreviewData(null);
+    try {
+      const data = await request(`/team-campaigns/${id}/preview`, { method: 'POST' });
+      setPreviewData(data);
+    } catch { /* ignore */ }
+    setPreviewing(null);
+  };
+
+  const handleLaunch = async (id) => {
+    if (!window.confirm(en ? 'Launch this campaign? Emails will be sent from each rep\'s inbox.' : 'Lancer cette campagne ? Les emails seront envoy\u00E9s depuis la bo\u00EEte de chaque commercial.')) return;
+    setLaunching(id);
+    try {
+      await request(`/team-campaigns/${id}/launch`, { method: 'POST' });
+      await load();
+    } catch { /* ignore */ }
+    setLaunching(null);
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>...</div>;
+
+  const STATUS_COLORS = {
+    draft: 'var(--text-muted)', preview: 'var(--blue)', running: 'var(--warning)',
+    completed: 'var(--success)', cancelled: 'var(--danger)',
+  };
+  const STATUS_LABELS = en
+    ? { draft: 'Draft', preview: 'Preview', running: 'Running', completed: 'Completed', cancelled: 'Cancelled' }
+    : { draft: 'Brouillon', preview: 'Aper\u00E7u', running: 'En cours', completed: 'Termin\u00E9e', cancelled: 'Annul\u00E9e' };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          {en ? 'Launch email campaigns sent from each sales rep\'s inbox' : 'Lancez des campagnes email envoy\u00E9es depuis la bo\u00EEte de chaque commercial'}
+        </div>
+        <button className="btn btn-primary" style={{ fontSize: 12, padding: '8px 16px' }} onClick={() => setShowCreate(true)}>
+          {en ? '+ New campaign' : '+ Nouvelle campagne'}
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+          padding: 20, marginBottom: 16,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
+            {en ? 'New team campaign' : 'Nouvelle campagne \u00E9quipe'}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <input
+              type="text" placeholder={en ? 'Campaign name' : 'Nom de la campagne'}
+              value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              className="form-input" style={{ fontSize: 13, padding: '8px 12px' }}
+            />
+
+            {/* Target owners */}
+            {owners.length > 1 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {en ? 'Sales reps (empty = all)' : 'Commerciaux (vide = tous)'}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {owners.map(o => (
+                    <button key={o.id} onClick={() => {
+                      setForm(p => ({
+                        ...p,
+                        targetOwners: p.targetOwners.includes(o.id)
+                          ? p.targetOwners.filter(id => id !== o.id)
+                          : [...p.targetOwners, o.id],
+                      }));
+                    }} style={{
+                      padding: '4px 12px', fontSize: 11, borderRadius: 8,
+                      border: `1px solid ${form.targetOwners.includes(o.id) ? 'var(--accent)' : 'var(--border)'}`,
+                      background: form.targetOwners.includes(o.id) ? 'rgba(110,87,250,0.1)' : 'transparent',
+                      color: form.targetOwners.includes(o.id) ? 'var(--accent)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                    }}>
+                      {o.name} ({o.contact_count})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Target product lines */}
+            {productLines.length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {en ? 'Product lines (empty = all)' : 'Lignes de produits (vide = toutes)'}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {productLines.map(pl => (
+                    <button key={pl.id} onClick={() => {
+                      setForm(p => ({
+                        ...p,
+                        targetProductLines: p.targetProductLines.includes(pl.id)
+                          ? p.targetProductLines.filter(id => id !== pl.id)
+                          : [...p.targetProductLines, pl.id],
+                      }));
+                    }} style={{
+                      padding: '4px 12px', fontSize: 11, borderRadius: 8,
+                      border: `1px solid ${form.targetProductLines.includes(pl.id) ? 'var(--accent)' : 'var(--border)'}`,
+                      background: form.targetProductLines.includes(pl.id) ? 'rgba(110,87,250,0.1)' : 'transparent',
+                      color: form.targetProductLines.includes(pl.id) ? 'var(--accent)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                    }}>
+                      {pl.icon || '\uD83D\uDCE6'} {pl.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Email prompt */}
+            <textarea
+              placeholder={en ? 'Email instructions for AI (e.g., "Follow up on Q2 proposal, mention the cybersecurity offer")' : 'Instructions pour l\'IA (ex: "Relance sur la proposition Q2, mentionner l\'offre cybers\u00E9curit\u00E9")'}
+              value={form.emailPrompt} onChange={e => setForm(p => ({ ...p, emailPrompt: e.target.value }))}
+              className="form-input"
+              style={{ fontSize: 13, padding: '8px 12px', minHeight: 80, resize: 'vertical' }}
+            />
+
+            {/* Tone */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['professional', 'casual', 'direct', 'warm'].map(tone => (
+                <button key={tone} onClick={() => setForm(p => ({ ...p, emailTone: tone }))} style={{
+                  padding: '4px 12px', fontSize: 11, borderRadius: 8,
+                  border: `1px solid ${form.emailTone === tone ? 'var(--accent)' : 'var(--border)'}`,
+                  background: form.emailTone === tone ? 'rgba(110,87,250,0.1)' : 'transparent',
+                  color: form.emailTone === tone ? 'var(--accent)' : 'var(--text-muted)',
+                  cursor: 'pointer', textTransform: 'capitalize',
+                }}>
+                  {tone}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowCreate(false)}>
+                {en ? 'Cancel' : 'Annuler'}
+              </button>
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px' }}
+                onClick={handleCreate} disabled={!form.name.trim()}>
+                {en ? 'Create campaign' : 'Cr\u00E9er la campagne'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Campaign list */}
+      {campaigns.length === 0 && !showCreate && (
+        <div style={{
+          textAlign: 'center', padding: 50, background: 'var(--bg-card)',
+          border: '1px solid var(--border)', borderRadius: 12,
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 12 }}>{'\uD83D\uDCE8'}</div>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+            {en ? 'No team campaigns yet' : 'Aucune campagne \u00E9quipe'}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {campaigns.map(c => {
+          const color = STATUS_COLORS[c.status] || 'var(--text-muted)';
+          return (
+            <div key={c.id} style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
+              padding: '14px 18px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {en ? 'by' : 'par'} {c.created_by_name} {'\u00B7'} {new Date(c.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' })}
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 11, padding: '3px 10px', borderRadius: 6,
+                  background: `${color}15`, color, fontWeight: 600,
+                }}>
+                  {STATUS_LABELS[c.status] || c.status}
+                </span>
+              </div>
+
+              {/* Stats */}
+              {c.total_contacts > 0 && (
+                <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12 }}>
+                  <span>{c.total_contacts} contacts</span>
+                  {c.sent_count > 0 && <span style={{ color: 'var(--success)' }}>{c.sent_count} {en ? 'sent' : 'envoy\u00E9s'}</span>}
+                  {c.failed_count > 0 && <span style={{ color: 'var(--danger)' }}>{c.failed_count} {en ? 'failed' : '\u00E9chec'}</span>}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                {c.status === 'draft' && (
+                  <>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 12px' }}
+                      onClick={() => handlePreview(c.id)} disabled={previewing === c.id}>
+                      {previewing === c.id ? '...' : (en ? 'Preview' : 'Aper\u00E7u')}
+                    </button>
+                    <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }}
+                      onClick={() => handleLaunch(c.id)} disabled={launching === c.id}>
+                      {launching === c.id ? '...' : (en ? 'Launch' : 'Lancer')}
+                    </button>
+                  </>
+                )}
+                {c.status === 'completed' && (
+                  <span style={{ fontSize: 11, color: 'var(--success)' }}>
+                    {'\u2705'} {en ? 'Completed' : 'Termin\u00E9e'}
+                  </span>
+                )}
+              </div>
+
+              {/* Preview results */}
+              {previewData && previewing === null && (
+                <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+                    {en ? `${previewData.totalContacts} contacts targeted` : `${previewData.totalContacts} contacts cibl\u00E9s`}
+                  </div>
+                  {(previewData.previews || []).map((p, i) => (
+                    <div key={i} style={{
+                      padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                      marginBottom: 6,
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>
+                        {p.ownerEmail || (en ? 'Unassigned' : 'Non assign\u00E9')} ({p.contactCount} contacts)
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {p.contacts.map(c => c.name).join(', ')}{p.contactCount > 5 ? '...' : ''}
+                      </div>
+                      {p.sampleEmail && (
+                        <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6, fontSize: 12 }}>
+                          <div style={{ fontWeight: 600 }}>{p.sampleEmail.subject}</div>
+                          <div style={{ color: 'var(--text-secondary)', marginTop: 4, whiteSpace: 'pre-wrap' }}>{p.sampleEmail.body}</div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

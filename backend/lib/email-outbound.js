@@ -227,14 +227,14 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
  * Send a nurture email + log it + create Pipedrive activity.
  */
 async function sendNurtureEmail(userId, {
-  triggerId, opportunityId, to, toName, subject, body, crmProvider = 'pipedrive',
+  triggerId, opportunityId, to, toName, subject, body, crmProvider = 'pipedrive', teamCampaignId,
 }) {
   // 1. Create the email record as pending
   const emailRecord = await db.query(`
-    INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+    INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, team_campaign_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
     RETURNING *
-  `, [userId, triggerId || null, opportunityId || null, to, toName || null, subject, body]);
+  `, [userId, triggerId || null, opportunityId || null, to, toName || null, subject, body, teamCampaignId || null]);
   const nurture = emailRecord.rows[0];
 
   // 2. Send the email
