@@ -74,6 +74,76 @@ function getTransport(account) {
 }
 
 /**
+ * Refresh OAuth token if expired. Updates DB and returns fresh token.
+ */
+async function refreshTokenIfNeeded(account) {
+  if (!account.token_expiry || !account.refresh_token) return account;
+
+  const expiresAt = new Date(account.token_expiry).getTime();
+  // Refresh 5 minutes before expiry
+  if (expiresAt > Date.now() + 300000) return account;
+
+  const { encrypt, decrypt: dec } = require('../config/crypto');
+  const refreshToken = dec(account.refresh_token);
+
+  let tokenUrl, params;
+
+  if (account.provider === 'gmail') {
+    tokenUrl = 'https://oauth2.googleapis.com/token';
+    params = {
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    };
+  } else if (account.provider === 'microsoft') {
+    tokenUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+    params = {
+      client_id: process.env.MICROSOFT_CLIENT_ID,
+      client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+      scope: 'https://outlook.office365.com/SMTP.Send offline_access',
+    };
+  } else {
+    return account;
+  }
+
+  try {
+    const res = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(params),
+    });
+
+    if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+    const tokens = await res.json();
+
+    const newExpiry = tokens.expires_in
+      ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+      : null;
+
+    await db.query(
+      `UPDATE email_accounts SET access_token = $1, token_expiry = $2, status = 'active', updated_at = now() WHERE id = $3`,
+      [encrypt(tokens.access_token), newExpiry, account.id]
+    );
+
+    // Clear transport cache so new token is used
+    _transportCache.delete(account.id);
+
+    logger.info('email-outbound', `Refreshed ${account.provider} token for ${account.email_address}`);
+    return { ...account, access_token: encrypt(tokens.access_token), token_expiry: newExpiry };
+  } catch (err) {
+    logger.error('email-outbound', `Token refresh failed for ${account.email_address}: ${err.message}`);
+    await db.query(
+      `UPDATE email_accounts SET status = 'expired', updated_at = now() WHERE id = $1`,
+      [account.id]
+    );
+    throw new Error(`OAuth token expired for ${account.email_address}. Please reconnect.`);
+  }
+}
+
+/**
  * Decrypt sensitive fields of an email account row.
  */
 function decryptAccount(account) {
@@ -107,9 +177,18 @@ async function getDefaultAccount(userId) {
  * @returns {{ success, messageId, error }}
  */
 async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo }) {
-  const account = await getDefaultAccount(userId);
+  let account = await getDefaultAccount(userId);
   if (!account) {
     return { success: false, error: 'No email account configured. Connect Gmail or SMTP in Settings.' };
+  }
+
+  // Refresh OAuth token if needed
+  if (account.provider === 'gmail' || account.provider === 'microsoft') {
+    try {
+      account = await refreshTokenIfNeeded(account);
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   }
 
   const decrypted = decryptAccount(account);

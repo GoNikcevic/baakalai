@@ -104,6 +104,11 @@ app.get('/api/health', async (_req, res) => {
 // Auth routes (public)
 app.use('/api/auth', authRouter);
 
+// OAuth email callbacks (public — user returns from Google/Microsoft redirect, no auth needed)
+const { gmailCallback, microsoftCallback } = require('./routes/nurture');
+app.get('/api/nurture/email-accounts/callback/gmail', gmailCallback);
+app.get('/api/nurture/email-accounts/callback/microsoft', microsoftCallback);
+
 // Team context — inject req.team + req.teamRole on every authenticated request
 const { teamContext } = require('./middleware/team-context');
 app.use('/api', requireAuth, teamContext);

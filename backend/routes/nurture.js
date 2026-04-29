@@ -29,6 +29,10 @@ const logger = require('../lib/logger');
 
 const router = Router();
 
+const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : 'http://localhost:5173');
+
 // ═══════════════════════════════════════════════════
 //  Email Accounts
 // ═══════════════════════════════════════════════════
@@ -372,6 +376,188 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
   }
 });
 
+// ═══════════════════════════════════════════════════
+//  OAuth Email Connection (Gmail + Microsoft)
+// ═══════════════════════════════════════════════════
+
+// Temporary state store for OAuth flows (maps state → userId)
+const _oauthStates = new Map();
+
+// GET /api/nurture/email-accounts/connect/gmail — Start Gmail OAuth flow
+router.get('/email-accounts/connect/gmail', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) return res.status(500).json({ error: 'Google OAuth not configured' });
+
+  const state = require('crypto').randomBytes(16).toString('hex');
+  _oauthStates.set(state, { userId: req.user.id, provider: 'gmail', expiresAt: Date.now() + 600000 });
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/gmail',
+    response_type: 'code',
+    scope: 'https://mail.google.com/ email profile',
+    access_type: 'offline',
+    prompt: 'consent',
+    state,
+  });
+
+  res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+});
+
+// GET /api/nurture/email-accounts/callback/gmail — Gmail OAuth callback
+async function gmailCallback(req, res) {
+  const { code, state } = req.query;
+  const oauthData = _oauthStates.get(state);
+
+  if (!oauthData || oauthData.expiresAt < Date.now()) {
+    return res.redirect(APP_URL + '/settings?email_error=invalid_state');
+  }
+  _oauthStates.delete(state);
+
+  try {
+    // Exchange code for tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/gmail',
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenRes.ok) throw new Error('Token exchange failed');
+    const tokens = await tokenRes.json();
+
+    // Get user email from Google
+    const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    if (!userRes.ok) throw new Error('Failed to get user info');
+    const googleUser = await userRes.json();
+
+    // Store in email_accounts with encrypted tokens
+    const encryptedAccess = encrypt(tokens.access_token);
+    const encryptedRefresh = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
+    const expiry = tokens.expires_in
+      ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+      : null;
+
+    // Upsert: if email already exists for this user, update tokens
+    const existing = await db.query(
+      `SELECT id FROM email_accounts WHERE user_id = $1 AND email_address = $2`,
+      [oauthData.userId, googleUser.email]
+    );
+
+    if (existing.rows.length > 0) {
+      await db.query(
+        `UPDATE email_accounts SET access_token = $1, refresh_token = $2, token_expiry = $3, status = 'active', updated_at = now() WHERE id = $4`,
+        [encryptedAccess, encryptedRefresh, expiry, existing.rows[0].id]
+      );
+    } else {
+      await db.query(`
+        INSERT INTO email_accounts (user_id, provider, email_address, access_token, refresh_token, token_expiry, status)
+        VALUES ($1, 'gmail', $2, $3, $4, $5, 'active')
+      `, [oauthData.userId, googleUser.email, encryptedAccess, encryptedRefresh, expiry]);
+    }
+
+    logger.info('email-oauth', `Gmail connected for user ${oauthData.userId}: ${googleUser.email}`);
+    res.redirect(APP_URL + '/settings?email_connected=gmail');
+  } catch (err) {
+    logger.error('email-oauth', `Gmail OAuth failed: ${err.message}`);
+    res.redirect(APP_URL + '/settings?email_error=gmail_failed');
+  }
+}
+
+// GET /api/nurture/email-accounts/connect/microsoft — Start Microsoft OAuth flow
+router.get('/email-accounts/connect/microsoft', (req, res) => {
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  if (!clientId) return res.status(500).json({ error: 'Microsoft OAuth not configured' });
+
+  const state = require('crypto').randomBytes(16).toString('hex');
+  _oauthStates.set(state, { userId: req.user.id, provider: 'microsoft', expiresAt: Date.now() + 600000 });
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/microsoft',
+    response_type: 'code',
+    scope: 'https://outlook.office365.com/SMTP.Send offline_access email openid profile',
+    response_mode: 'query',
+    state,
+  });
+
+  res.json({ url: `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}` });
+});
+
+// GET /api/nurture/email-accounts/callback/microsoft — Microsoft OAuth callback
+async function microsoftCallback(req, res) {
+  const { code, state } = req.query;
+  const oauthData = _oauthStates.get(state);
+
+  if (!oauthData || oauthData.expiresAt < Date.now()) {
+    return res.redirect(APP_URL + '/settings?email_error=invalid_state');
+  }
+  _oauthStates.delete(state);
+
+  try {
+    // Exchange code for tokens
+    const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.MICROSOFT_CLIENT_ID,
+        client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+        redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/microsoft',
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    if (!tokenRes.ok) throw new Error('Token exchange failed');
+    const tokens = await tokenRes.json();
+
+    // Get user email from Microsoft Graph
+    const userRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    if (!userRes.ok) throw new Error('Failed to get user info');
+    const msUser = await userRes.json();
+    const email = msUser.mail || msUser.userPrincipalName;
+
+    // Store encrypted tokens
+    const encryptedAccess = encrypt(tokens.access_token);
+    const encryptedRefresh = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
+    const expiry = tokens.expires_in
+      ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+      : null;
+
+    const existing = await db.query(
+      `SELECT id FROM email_accounts WHERE user_id = $1 AND email_address = $2`,
+      [oauthData.userId, email]
+    );
+
+    if (existing.rows.length > 0) {
+      await db.query(
+        `UPDATE email_accounts SET access_token = $1, refresh_token = $2, token_expiry = $3, status = 'active', updated_at = now() WHERE id = $4`,
+        [encryptedAccess, encryptedRefresh, expiry, existing.rows[0].id]
+      );
+    } else {
+      await db.query(`
+        INSERT INTO email_accounts (user_id, provider, email_address, access_token, refresh_token, token_expiry, status)
+        VALUES ($1, 'microsoft', $2, $3, $4, $5, 'active')
+      `, [oauthData.userId, email, encryptedAccess, encryptedRefresh, expiry]);
+    }
+
+    logger.info('email-oauth', `Microsoft connected for user ${oauthData.userId}: ${email}`);
+    res.redirect(APP_URL + '/settings?email_connected=microsoft');
+  } catch (err) {
+    logger.error('email-oauth', `Microsoft OAuth failed: ${err.message}`);
+    res.redirect(APP_URL + '/settings?email_error=microsoft_failed');
+  }
+}
+
 // POST /api/nurture/send — Send a one-off personal email (from chat or UI)
 router.post('/send', async (req, res, next) => {
   try {
@@ -395,3 +581,6 @@ router.post('/send', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.gmailCallback = gmailCallback;
+module.exports.microsoftCallback = microsoftCallback;
+module.exports._oauthStates = _oauthStates;

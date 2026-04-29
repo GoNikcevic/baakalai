@@ -56,6 +56,8 @@ export default function EmailAccountSettings() {
   const [saving, setSaving] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState(0);
 
+  const [connectingOAuth, setConnectingOAuth] = useState(null);
+
   const [form, setForm] = useState({
     emailAddress: '',
     smtpHost: 'smtp.gmail.com',
@@ -73,6 +75,30 @@ export default function EmailAccountSettings() {
   }, []);
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
+
+  // Check URL params for OAuth callback result
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('email_connected')) {
+      setTestResult({ success: true, message: `${params.get('email_connected')} ${lang === 'en' ? 'connected successfully!' : 'connect\u00E9 avec succ\u00E8s !'}` });
+      loadAccounts();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('email_error')) {
+      setTestResult({ success: false, error: lang === 'en' ? 'Connection failed. Please try again.' : '\u00C9chec de connexion. Veuillez r\u00E9essayer.' });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const handleOAuthConnect = async (provider) => {
+    setConnectingOAuth(provider);
+    try {
+      const data = await request(`/nurture/email-accounts/connect/${provider}`);
+      if (data.url) window.location.href = data.url;
+    } catch (err) {
+      setTestResult({ success: false, error: err.message });
+      setConnectingOAuth(null);
+    }
+  };
 
   const handlePreset = (idx) => {
     setSelectedPreset(idx);
@@ -136,17 +162,71 @@ export default function EmailAccountSettings() {
             {t('emailAccount.subtitle')}
           </div>
         </div>
-        {!showForm && (
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowForm(true)}
-          >
-            {t('emailAccount.add')}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {!showForm && accounts.length > 0 && (
+            <>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                onClick={() => handleOAuthConnect('gmail')}
+                disabled={!!connectingOAuth}
+              >
+                + Gmail
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                onClick={() => handleOAuthConnect('microsoft')}
+                disabled={!!connectingOAuth}
+              >
+                + Outlook
+              </button>
+            </>
+          )}
+          {!showForm && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setShowForm(true)}
+            >
+              {t('emailAccount.add')} (SMTP)
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="card-body">
+        {/* OAuth connect buttons */}
+        {accounts.length === 0 && !showForm && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              {lang === 'en' ? 'Connect with one click:' : 'Connecter en un clic :'}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-outline"
+                style={{ flex: 1, padding: '10px 16px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                onClick={() => handleOAuthConnect('gmail')}
+                disabled={!!connectingOAuth}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                {connectingOAuth === 'gmail' ? '...' : 'Gmail'}
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ flex: 1, padding: '10px 16px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                onClick={() => handleOAuthConnect('microsoft')}
+                disabled={!!connectingOAuth}
+              >
+                <svg width="16" height="16" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+                {connectingOAuth === 'microsoft' ? '...' : 'Outlook / O365'}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
+              {lang === 'en' ? 'or configure SMTP manually below' : 'ou configurer SMTP manuellement ci-dessous'}
+            </div>
+          </div>
+        )}
+
         {/* Existing accounts */}
         {accounts.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: showForm ? 16 : 0 }}>
@@ -160,10 +240,20 @@ export default function EmailAccountSettings() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{acc.email_address}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {acc.smtp_host}:{acc.smtp_port} {'\u00B7'} {acc.status === 'active' ? `\u2705 ${t('emailAccount.active')}` : `\u26A0\uFE0F ${t('emailAccount.expired')}`}
+                    {acc.provider === 'gmail' ? 'Gmail OAuth' : acc.provider === 'microsoft' ? 'Microsoft OAuth' : `${acc.smtp_host}:${acc.smtp_port}`}
+                    {' \u00B7 '}{acc.status === 'active' ? `\u2705 ${t('emailAccount.active')}` : `\u26A0\uFE0F ${t('emailAccount.expired')}`}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
+                  {acc.status === 'expired' && (acc.provider === 'gmail' || acc.provider === 'microsoft') && (
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: 10, padding: '4px 10px' }}
+                      onClick={() => handleOAuthConnect(acc.provider)}
+                    >
+                      {lang === 'en' ? 'Reconnect' : 'Reconnecter'}
+                    </button>
+                  )}
                   <button
                     className="btn btn-ghost"
                     style={{ fontSize: 10, padding: '4px 10px' }}
