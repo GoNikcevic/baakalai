@@ -131,12 +131,28 @@ router.get('/memory', async (req, res, next) => {
 });
 
 // GET /api/dashboard/opportunities (paginated)
+// Non-admin team members only see contacts they own
 router.get('/opportunities', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
     const offset = parseInt(req.query.offset, 10) || 0;
-    const opportunities = await db.opportunities.listByUser(req.user.id, limit, offset);
-    res.json({ opportunities });
+
+    // Filter by owner for non-admin team members
+    const isAdmin = !req.teamRole || req.teamRole === 'admin';
+    if (isAdmin) {
+      const opportunities = await db.opportunities.listByUser(req.user.id, limit, offset);
+      res.json({ opportunities });
+    } else {
+      // Non-admin: only show contacts owned by this user
+      const result = await db.query(
+        `SELECT * FROM opportunities
+         WHERE (user_id = $1 OR owner_id = $1)
+         AND (owner_id = $1 OR owner_id IS NULL)
+         ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+        [req.user.id, limit, offset]
+      );
+      res.json({ opportunities: result.rows });
+    }
   } catch (err) {
     next(err);
   }

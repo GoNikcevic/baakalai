@@ -175,7 +175,19 @@ router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const user = await db.users.getById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user });
+
+    // Enrich with team info
+    let teamRole = null;
+    let teamName = null;
+    try {
+      const team = await db.teams.getByUser(req.user.id);
+      if (team) {
+        teamRole = team.role;
+        teamName = team.name;
+      }
+    } catch { /* no team */ }
+
+    res.json({ user: { ...user, teamRole, teamName } });
   } catch (err) {
     next(err);
   }

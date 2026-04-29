@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
+import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 
 const TRIGGER_TYPES = [
@@ -21,6 +22,8 @@ const TRIGGER_TYPES = [
 export default function NurturePage() {
   const t = useT();
   const { lang } = useI18n();
+  const user = getUser();
+  const isAdmin = !user?.teamRole || user.teamRole === 'admin';
   const [activeTab, setActiveTab] = useState('dashboard');
   const [triggers, setTriggers] = useState([]);
   const [emails, setEmails] = useState([]);
@@ -65,8 +68,8 @@ export default function NurturePage() {
     { key: 'triggers', label: t('activation.triggers'), count: triggers.length },
     { key: 'pending', label: t('activation.pending'), count: emails.filter(e => e.status === 'pending').length },
     { key: 'sent', label: t('activation.sent'), count: sentEmails.length },
-    { key: 'team', label: lang === 'en' ? 'Team Campaigns' : 'Campagnes \u00E9quipe', count: null },
-  ];
+    isAdmin ? { key: 'team', label: lang === 'en' ? 'Team Campaigns' : 'Campagnes \u00E9quipe', count: null } : null,
+  ].filter(Boolean);
 
   return (
     <div className="dashboard-page">

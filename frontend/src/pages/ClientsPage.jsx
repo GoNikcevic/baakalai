@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
+import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 
 const STAGE_COLORS = [
@@ -39,6 +40,8 @@ export default function ClientsPage() {
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
+  const user = getUser();
+  const isAdmin = !user?.teamRole || user.teamRole === 'admin';
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -130,7 +133,7 @@ export default function ClientsPage() {
             {t('clients.contactsInCrm', { count: clients.length })}
           </div>
         </div>
-        {connectedCrm ? (
+        {isAdmin && (connectedCrm ? (
           <button
             className="btn btn-primary"
             style={{ fontSize: 12, padding: '8px 16px' }}
@@ -147,7 +150,7 @@ export default function ClientsPage() {
           >
             {t('clients.connectCrm')}
           </button>
-        )}
+        ))}
       </div>
 
       {importResult && (
@@ -270,7 +273,7 @@ export default function ClientsPage() {
             borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13,
           }}
         />
-        {owners.length > 1 && (
+        {isAdmin && owners.length > 1 && (
           <select
             value={ownerFilter}
             onChange={e => setOwnerFilter(e.target.value)}

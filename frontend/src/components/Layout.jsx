@@ -7,23 +7,24 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
-import { logout } from '../services/auth';
+import { logout, getUser } from '../services/auth';
 import { disconnect as disconnectSocket } from '../services/socket';
 import { useSocketEvents } from '../hooks/useSocketEvents';
 import CampaignCreatorModal from './CampaignCreatorModal';
 import NotificationBell from './NotificationBell';
 
 /* ─── Sidebar nav items (keys reference i18n nav.* keys) ─── */
+// adminOnly: only visible to admins and solo users
 const NAV_ITEMS = [
   { i18nKey: 'nav.assistant',    to: '/chat',          icon: 'chat' },
   { i18nKey: 'nav.dashboard',    to: '/dashboard',     icon: 'dashboard',  end: true },
-  { i18nKey: 'nav.campaigns',    to: '/campaigns',     icon: 'campaigns' },
-  { i18nKey: 'nav.memory',       to: '/memory',        icon: 'memory' },
+  { i18nKey: 'nav.campaigns',    to: '/campaigns',     icon: 'campaigns', adminOnly: true },
+  { i18nKey: 'nav.memory',       to: '/memory',        icon: 'memory', adminOnly: true },
   { i18nKey: 'nav.clients',      to: '/clients',       icon: 'clients' },
   { i18nKey: 'nav.nurture',      to: '/nurture',       icon: 'nurture' },
-  { i18nKey: 'nav.crmAnalytics', to: '/crm-analytics', icon: 'crm' },
+  { i18nKey: 'nav.crmAnalytics', to: '/crm-analytics', icon: 'crm', adminOnly: true },
   { i18nKey: 'nav.profile',      to: '/profil',        icon: 'profil' },
-  { i18nKey: 'nav.settings',     to: '/settings',      icon: 'settings' },
+  { i18nKey: 'nav.settings',     to: '/settings',      icon: 'settings', adminOnly: true },
 ];
 
 /* ─── Mobile bottom nav (subset) ─── */
@@ -151,17 +152,23 @@ export default function Layout() {
           <span className="brand-text">baakalai</span>
         </NavLink>
 
-        {/* New campaign button */}
-        <button
-          className="btn btn-primary sidebar-cta"
-          onClick={() => setShowCreatorModal(true)}
-        >
-          {t('nav.newCampaign')}
-        </button>
+        {/* New campaign button (admin only) */}
+        {(!getUser()?.teamRole || getUser()?.teamRole === 'admin') && (
+          <button
+            className="btn btn-primary sidebar-cta"
+            onClick={() => setShowCreatorModal(true)}
+          >
+            {t('nav.newCampaign')}
+          </button>
+        )}
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter(item => {
+            if (!item.adminOnly) return true;
+            const u = getUser();
+            return !u?.teamRole || u.teamRole === 'admin';
+          }).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
