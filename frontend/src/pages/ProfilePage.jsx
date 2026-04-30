@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/useApp';
 import { request } from '../services/api-client';
+import { useT, useI18n } from '../i18n';
 
 /* ─── Default empty profile ─── */
 
@@ -361,6 +362,9 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Product Lines / Projects */}
+      <ProductLinesSection />
+
       {/* Value Proposition */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><div className="card-title">Proposition de valeur</div></div>
@@ -583,6 +587,231 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ Product Lines Section ═══ */
+
+function ProductLinesSection() {
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [lines, setLines] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState(null); // product line id or 'new'
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: '', icon: '', description: '', targetSectors: '', valueProp: '', painPoints: '' });
+
+  const load = useCallback(async () => {
+    try {
+      const data = await request('/crm/product-lines');
+      const pl = data.productLines || [];
+      setLines(pl);
+      if (pl.length > 0 && !activeTab) setActiveTab(pl[0].id);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // When active tab changes, load the form
+  useEffect(() => {
+    if (activeTab === 'new') {
+      setForm({ name: '', icon: '', description: '', targetSectors: '', valueProp: '', painPoints: '' });
+    } else if (activeTab) {
+      const pl = lines.find(l => l.id === activeTab);
+      if (pl) setForm({
+        name: pl.name || '',
+        icon: pl.icon || '',
+        description: pl.description || '',
+        targetSectors: pl.target_sectors || '',
+        valueProp: pl.value_prop || '',
+        painPoints: pl.pain_points || '',
+      });
+    }
+  }, [activeTab, lines]);
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      if (activeTab === 'new') {
+        const data = await request('/crm/product-lines', {
+          method: 'POST',
+          body: JSON.stringify(form),
+        });
+        await load();
+        setActiveTab(data.productLine?.id || null);
+      } else {
+        await request(`/crm/product-lines/${activeTab}`, {
+          method: 'PATCH',
+          body: JSON.stringify(form),
+        });
+        await load();
+      }
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(en ? `Delete "${name}"?` : `Supprimer "${name}" ?`)) return;
+    try {
+      await request(`/crm/product-lines/${id}`, { method: 'DELETE' });
+      const remaining = lines.filter(l => l.id !== id);
+      setLines(remaining);
+      setActiveTab(remaining.length > 0 ? remaining[0].id : null);
+    } catch { /* ignore */ }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-header">
+        <div className="card-title">{en ? 'Projects / Product Lines' : 'Projets / Lignes de produits'}</div>
+      </div>
+      <div className="card-body">
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+          {en
+            ? 'Define your product lines or business verticals. Each project can have its own targets and value proposition.'
+            : 'D\u00e9finissez vos lignes de produits ou verticales. Chaque projet a ses propres cibles et proposition de valeur.'}
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 8, flexWrap: 'wrap' }}>
+          {lines.map(pl => (
+            <button
+              key={pl.id}
+              onClick={() => setActiveTab(pl.id)}
+              style={{
+                padding: '6px 14px', fontSize: 12, borderRadius: '8px 8px 0 0',
+                border: `1px solid ${activeTab === pl.id ? 'var(--accent)' : 'var(--border)'}`,
+                borderBottom: activeTab === pl.id ? '2px solid var(--accent)' : '1px solid var(--border)',
+                background: activeTab === pl.id ? 'rgba(110,87,250,0.06)' : 'transparent',
+                color: activeTab === pl.id ? 'var(--accent)' : 'var(--text-muted)',
+                fontWeight: activeTab === pl.id ? 600 : 400,
+                cursor: 'pointer',
+              }}
+            >
+              {pl.icon || '\uD83D\uDCE6'} {pl.name}
+            </button>
+          ))}
+          <button
+            onClick={() => setActiveTab('new')}
+            style={{
+              padding: '6px 14px', fontSize: 12, borderRadius: '8px 8px 0 0',
+              border: `1px dashed ${activeTab === 'new' ? 'var(--accent)' : 'var(--border)'}`,
+              background: activeTab === 'new' ? 'rgba(110,87,250,0.06)' : 'transparent',
+              color: activeTab === 'new' ? 'var(--accent)' : 'var(--text-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            + {en ? 'New project' : 'Nouveau projet'}
+          </button>
+        </div>
+
+        {/* Form */}
+        {activeTab && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div className="form-group" style={{ width: 70 }}>
+                <label className="form-label">{en ? 'Icon' : 'Ic\u00f4ne'}</label>
+                <input
+                  className="form-input"
+                  value={form.icon}
+                  onChange={e => setForm(p => ({ ...p, icon: e.target.value }))}
+                  style={{ fontSize: 18, textAlign: 'center', padding: '6px' }}
+                  maxLength={2}
+                  placeholder="\uD83D\uDCE6"
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">{en ? 'Project name' : 'Nom du projet'}</label>
+                <input
+                  className="form-input"
+                  value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder={en ? 'e.g., Cybersecurity Solutions' : 'ex: Solutions Cybers\u00e9curit\u00e9'}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{en ? 'Description' : 'Description'}</label>
+              <textarea
+                className="form-input"
+                rows={2}
+                value={form.description}
+                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                placeholder={en ? 'What does this product line offer?' : 'Que propose cette ligne de produits ?'}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{en ? 'Target sectors' : 'Secteurs cibles'}</label>
+              <input
+                className="form-input"
+                value={form.targetSectors}
+                onChange={e => setForm(p => ({ ...p, targetSectors: e.target.value }))}
+                placeholder={en ? 'e.g., Finance, Healthcare, Telecom' : 'ex: Finance, Sant\u00e9, T\u00e9l\u00e9com'}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{en ? 'Value proposition' : 'Proposition de valeur'}</label>
+              <textarea
+                className="form-input"
+                rows={2}
+                value={form.valueProp}
+                onChange={e => setForm(p => ({ ...p, valueProp: e.target.value }))}
+                placeholder={en ? 'What problem does it solve? What makes it unique?' : 'Quel probl\u00e8me r\u00e9sout-il ? Qu\'est-ce qui le rend unique ?'}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{en ? 'Client pain points' : 'Pain points clients'}</label>
+              <textarea
+                className="form-input"
+                rows={2}
+                value={form.painPoints}
+                onChange={e => setForm(p => ({ ...p, painPoints: e.target.value }))}
+                placeholder={en ? 'What frustrations do your clients face?' : 'Quelles frustrations rencontrent vos clients ?'}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+              <div>
+                {activeTab !== 'new' && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12, color: 'var(--danger)' }}
+                    onClick={() => handleDelete(activeTab, form.name)}
+                  >
+                    {en ? 'Delete project' : 'Supprimer le projet'}
+                  </button>
+                )}
+              </div>
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 12, padding: '8px 20px' }}
+                onClick={handleSave}
+                disabled={saving || !form.name.trim()}
+              >
+                {saving ? '...' : activeTab === 'new' ? (en ? 'Create project' : 'Cr\u00e9er le projet') : (en ? 'Save' : 'Sauvegarder')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {lines.length === 0 && activeTab !== 'new' && (
+          <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>
+            {en
+              ? 'No projects yet. Click "+ New project" to create your first product line.'
+              : 'Aucun projet. Cliquez sur "+ Nouveau projet" pour cr\u00e9er votre premi\u00e8re ligne de produits.'}
+          </div>
+        )}
       </div>
     </div>
   );

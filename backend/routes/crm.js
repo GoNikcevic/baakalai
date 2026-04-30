@@ -802,7 +802,7 @@ router.get('/product-lines', async (req, res, next) => {
 // POST /api/crm/product-lines — Create a product line
 router.post('/product-lines', async (req, res, next) => {
   try {
-    const { name, description, icon } = req.body;
+    const { name, description, icon, targetSectors, valueProp, painPoints } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
     const teamResult = await db.query(
       `SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1`, [req.user.id]
@@ -811,9 +811,31 @@ router.post('/product-lines', async (req, res, next) => {
     if (!teamId) return res.status(400).json({ error: 'No team found' });
 
     const result = await db.query(
-      `INSERT INTO product_lines (team_id, name, description, icon) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [teamId, name, description || null, icon || null]
+      `INSERT INTO product_lines (team_id, name, description, icon, target_sectors, value_prop, pain_points)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [teamId, name, description || null, icon || null, targetSectors || null, valueProp || null, painPoints || null]
     );
+    res.json({ productLine: result.rows[0] });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/crm/product-lines/:id — Update a product line
+router.patch('/product-lines/:id', async (req, res, next) => {
+  try {
+    const { name, description, icon, targetSectors, valueProp, painPoints } = req.body;
+    const result = await db.query(
+      `UPDATE product_lines SET
+        name = COALESCE($1, name),
+        description = COALESCE($2, description),
+        icon = COALESCE($3, icon),
+        target_sectors = COALESCE($4, target_sectors),
+        value_prop = COALESCE($5, value_prop),
+        pain_points = COALESCE($6, pain_points)
+       WHERE id = $7 AND team_id = (SELECT team_id FROM team_members WHERE user_id = $8 LIMIT 1)
+       RETURNING *`,
+      [name, description, icon, targetSectors, valueProp, painPoints, req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json({ productLine: result.rows[0] });
   } catch (err) { next(err); }
 });
