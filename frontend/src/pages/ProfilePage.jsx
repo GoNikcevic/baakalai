@@ -344,10 +344,11 @@ export default function ProfilePage() {
       </div>
 
       {/* Product Lines / Projects — wraps all profile sections */}
-      <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect} />
+      <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect}
+        docProps={{ files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize }} />
 
-      {/* Documents */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      {/* Documents moved inside ProductLinesSection */}
+      {false && <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><div className="card-title">Documents entreprise</div></div>
         <div className="card-body">
           <div className="page-subtitle" style={{ marginBottom: 16 }}>
@@ -495,14 +496,15 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
 
 /* ═══ Product Lines Section ═══ */
 
-function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelect }) {
+function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelect, docProps }) {
+  const { files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize } = docProps || {};
   const { lang } = useI18n();
   const en = lang === 'en';
   const [lines, setLines] = useState([]);
@@ -689,6 +691,68 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
               {renderSelect(en ? 'Default tone' : 'Ton par d\u00e9faut', 'default_tone', ['Pro d\u00e9contract\u00e9', 'Formel', 'Amical', 'Direct', 'Expert'])}
               {renderSelect(en ? 'Formality' : 'Formalit\u00e9', 'default_formality', ['Vous', 'Tu'])}
             </div>
+
+            {/* Documents */}
+            {docProps && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {en ? 'Documents' : 'Documents'}
+                </div>
+                <div
+                  onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}
+                  style={{
+                    border: `2px dashed ${isDragging ? 'var(--blue)' : 'var(--border)'}`,
+                    borderRadius: 10, padding: '20px 16px', textAlign: 'center',
+                    background: isDragging ? 'rgba(96,165,250,0.06)' : 'var(--bg-elevated)',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input ref={fileInputRef} type="file" multiple accept=".csv,.xlsx,.xls,.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
+                    style={{ display: 'none' }}
+                    onChange={(e) => { if (e.target.files?.length > 0) { addFiles(e.target.files); e.target.value = ''; } }} />
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    {isDragging ? (en ? 'Drop files here' : 'D\u00e9posez ici') : (en ? 'Drag files or click to browse' : 'Glissez vos fichiers ou cliquez')}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>PDF, DOCX, CSV, Excel, images</div>
+                </div>
+                {files?.length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {files.map((f, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(f.size)}</span>
+                        <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>x</button>
+                      </div>
+                    ))}
+                    <button className="btn btn-primary" onClick={handleUpload} disabled={uploading} style={{ alignSelf: 'flex-start', marginTop: 4, fontSize: 12 }}>
+                      {uploading ? '...' : `${en ? 'Upload' : 'Envoyer'} ${files.length} ${en ? 'file(s)' : 'fichier(s)'}`}
+                    </button>
+                  </div>
+                )}
+                {uploadSuccess && (
+                  <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 6, background: 'rgba(0,214,143,0.08)', color: 'var(--success)', fontSize: 12 }}>
+                    {uploadSuccess}
+                  </div>
+                )}
+                {uploadedDocs?.length > 0 && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {uploadedDocs.map((doc, i) => (
+                      <div key={doc.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', background: 'var(--bg-elevated)', borderRadius: 5, fontSize: 12 }}>
+                        <span style={{ fontSize: 13 }}>{doc.mime_type?.includes('pdf') ? '📄' : doc.mime_type?.includes('sheet') || doc.mime_type?.includes('excel') ? '📊' : '📎'}</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.original_name}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                        <button onClick={async () => { try { await request('/documents/' + doc.id, { method: 'DELETE' }); setUploadedDocs(prev => prev.filter(d => d.id !== doc.id)); } catch {} }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>×</button>
+                      </div>
+                    ))}
+                    <button className="btn btn-primary" onClick={handleAutoFill} disabled={autoFilling} style={{ marginTop: 6, fontSize: 12 }}>
+                      {autoFilling ? '...' : (en ? 'Auto-fill from documents' : 'Auto-remplir avec les documents')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
