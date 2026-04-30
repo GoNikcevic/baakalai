@@ -2,6 +2,7 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const { config, validateConfig } = require('./config');
 const errorHandler = require('./middleware/error-handler');
 const { requireAuth } = require('./middleware/auth');
@@ -56,6 +57,12 @@ app.use(cors({
     callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
+}));
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // frontend needs inline styles
+  crossOriginEmbedderPolicy: false, // allows loading external fonts/images
 }));
 
 // Limit request body size
@@ -132,7 +139,7 @@ app.use('/api/crm', requireAuth, crmRouter);
 app.use('/api/team-campaigns', requireAuth, require('./routes/team-campaigns'));
 app.use('/api/analytics', requireAuth, analyticsRouter);
 app.use('/api/notifications', requireAuth, require('./routes/notifications'));
-app.use('/api/templates', require('./routes/templates'));
+app.use('/api/templates', requireAuth, require('./routes/templates'));
 app.use('/api/nurture', requireAuth, require('./routes/nurture'));
 
 // SPA catch-all — serve React index.html for non-API routes

@@ -88,5 +88,4 @@ module.exports = {
   verifyToken,
   requireAuth,
   optionalAuth,
-  JWT_SECRET,
 };

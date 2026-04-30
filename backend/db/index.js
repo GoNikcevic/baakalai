@@ -850,7 +850,7 @@ const settings = {
 
 const users = {
   async getByEmail(email) {
-    const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+    const result = await query('SELECT id, email, name, company, role, password_hash, email_verified, language, created_at FROM users WHERE email = $1', [email]);
     return result.rows[0] || null;
   },
 

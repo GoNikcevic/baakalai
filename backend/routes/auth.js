@@ -17,6 +17,9 @@ const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
 
 const router = Router();
 
+// One-time auth code store (Google OAuth → code → token exchange)
+const _oauthCodes = new Map();
+
 // Google OAuth
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -115,6 +118,9 @@ router.post('/login', async (req, res, next) => {
 
     const user = await db.users.getByEmail(email.toLowerCase().trim());
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+
+    // OAuth-only users have no password
+    if (!user.password_hash) return res.status(401).json({ error: 'This account uses Google sign-in. Please log in with Google.' });
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
@@ -345,13 +351,13 @@ router.get('/google/callback', async (req, res) => {
       // Create new user (no password needed for OAuth)
       dbUser = await db.users.create({
         email: normalizedEmail,
-        passwordHash: 'GOOGLE_OAUTH',
+        passwordHash: null,
         name: googleUser.name || normalizedEmail.split('@')[0],
         company: null,
         role: 'client',
       });
-      // Mark as verified immediately
-      await db.query('UPDATE users SET email_verified = true WHERE id = $1', [dbUser.id]);
+      // Mark as verified immediately + clear password for OAuth-only user
+      await db.query('UPDATE users SET email_verified = true, password_hash = NULL WHERE id = $1', [dbUser.id]);
     } else {
       // Existing user — mark as verified if not already
       if (!dbUser.email_verified) {
@@ -359,21 +365,45 @@ router.get('/google/callback', async (req, res) => {
       }
     }
 
-    // Generate JWT tokens (reuse existing logic)
+    // Generate JWT tokens
     const { accessToken, refreshToken } = await issueTokens({
       id: dbUser.id, email: dbUser.email, role: dbUser.role,
     });
 
-    // Redirect to frontend with tokens
-    const userData = encodeURIComponent(JSON.stringify({
-      id: dbUser.id, name: dbUser.name, email: dbUser.email, role: dbUser.role,
-    }));
-    res.redirect(`${APP_URL}/?auth=google&token=${accessToken}&refreshToken=${refreshToken}&user=${userData}`);
+    // Store tokens with a one-time code (not in URL)
+    const authCode = crypto.randomBytes(32).toString('hex');
+    _oauthCodes.set(authCode, {
+      accessToken, refreshToken,
+      user: { id: dbUser.id, name: dbUser.name, email: dbUser.email, role: dbUser.role },
+      expiresAt: Date.now() + 60000, // 1 minute
+    });
+
+    // Redirect with code only (tokens exchanged via POST)
+    res.redirect(`${APP_URL}/?auth=google&code=${authCode}`);
 
   } catch (err) {
     console.error('[google-auth] Error:', err.message);
     res.redirect(APP_URL + '/?error=google_failed');
   }
+});
+
+// POST /api/auth/exchange-code — Exchange one-time auth code for tokens
+router.post('/exchange-code', async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Code required' });
+
+  const data = _oauthCodes.get(code);
+  if (!data || data.expiresAt < Date.now()) {
+    _oauthCodes.delete(code);
+    return res.status(401).json({ error: 'Invalid or expired code' });
+  }
+  _oauthCodes.delete(code);
+
+  res.json({
+    token: data.accessToken,
+    refreshToken: data.refreshToken,
+    user: data.user,
+  });
 });
 
 module.exports = router;

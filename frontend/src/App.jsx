@@ -43,33 +43,32 @@ export default function App() {
     initData()
   }
 
-  // Handle Google OAuth callback
+  // Handle Google OAuth callback — exchange one-time code for tokens
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('auth') === 'google') {
-      const token = params.get('token')
-      const refreshToken = params.get('refreshToken')
-      const userStr = params.get('user')
+      const code = params.get('code')
 
-      if (token && userStr) {
-        try {
-          const user = JSON.parse(decodeURIComponent(userStr))
-          // Save session
-          localStorage.setItem('bakal_token', token)
-          if (refreshToken) localStorage.setItem('bakal_refresh_token', refreshToken)
-          localStorage.setItem('bakal_user', JSON.stringify(user))
-
-          // Clean URL
-          window.history.replaceState({}, '', '/')
-
-          // Set authed
-          setAuthed(true)
-        } catch (err) {
-          console.error('[google-auth] Parse error:', err)
-        }
+      if (code) {
+        fetch('/api/auth/exchange-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        })
+          .then(res => res.ok ? res.json() : Promise.reject(new Error('Code exchange failed')))
+          .then(data => {
+            localStorage.setItem('bakal_token', data.token)
+            if (data.refreshToken) localStorage.setItem('bakal_refresh_token', data.refreshToken)
+            localStorage.setItem('bakal_user', JSON.stringify(data.user))
+            window.history.replaceState({}, '', '/')
+            setAuthed(true)
+          })
+          .catch(err => {
+            console.error('[google-auth] Exchange error:', err)
+            window.history.replaceState({}, '', '/')
+          })
       }
 
-      // Clean URL even on error
       if (params.get('error')) {
         window.history.replaceState({}, '', '/')
       }

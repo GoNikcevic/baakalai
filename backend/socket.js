@@ -73,12 +73,19 @@ function init(httpServer, allowedOrigins) {
     // Join user's private room (for targeted notifications)
     socket.join(`user:${userId}`);
 
-    // ── Chat: join a thread room ──
-    socket.on('chat:join', (threadId) => {
-      // Validate threadId format to prevent room pollution
-      if (typeof threadId === 'string' && threadId.length < 100) {
-        socket.join(`thread:${threadId}`);
-      }
+    // ── Chat: join a thread room (verify ownership) ──
+    socket.on('chat:join', async (threadId) => {
+      if (typeof threadId !== 'string' || threadId.length > 100) return;
+      try {
+        const db = require('./db');
+        const thread = await db.query(
+          'SELECT id FROM chat_threads WHERE id = $1 AND user_id = $2',
+          [threadId, userId]
+        );
+        if (thread.rows.length > 0) {
+          socket.join(`thread:${threadId}`);
+        }
+      } catch { /* deny silently */ }
     });
 
     socket.on('chat:leave', (threadId) => {
