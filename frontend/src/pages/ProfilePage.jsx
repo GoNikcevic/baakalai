@@ -344,7 +344,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Product Lines / Projects — first section */}
-      <ProductLinesSection />
+      <ProductLinesSection profile={profile} />
 
       {/* Company Info */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -594,7 +594,7 @@ export default function ProfilePage() {
 
 /* ═══ Product Lines Section ═══ */
 
-function ProductLinesSection() {
+function ProductLinesSection({ profile }) {
   const { lang } = useI18n();
   const en = lang === 'en';
   const [lines, setLines] = useState([]);
@@ -602,6 +602,7 @@ function ProductLinesSection() {
   const [activeTab, setActiveTab] = useState(null); // product line id or 'new'
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', icon: '', description: '', targetSectors: '', valueProp: '', painPoints: '' });
+  const [autoCreated, setAutoCreated] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -609,9 +610,31 @@ function ProductLinesSection() {
       const pl = data.productLines || [];
       setLines(pl);
       if (pl.length > 0 && !activeTab) setActiveTab(pl[0].id);
+
+      // Auto-create first project from profile if no projects exist
+      if (pl.length === 0 && profile?.company && !autoCreated) {
+        setAutoCreated(true);
+        try {
+          const res = await request('/crm/product-lines', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: profile.company,
+              icon: '🏢',
+              description: profile.description || '',
+              targetSectors: profile.target_sectors || '',
+              valueProp: profile.value_prop || '',
+              painPoints: profile.pain_points || '',
+            }),
+          });
+          if (res.productLine) {
+            setLines([res.productLine]);
+            setActiveTab(res.productLine.id);
+          }
+        } catch { /* ignore - user might not have a team */ }
+      }
     } catch { /* ignore */ }
     setLoading(false);
-  }, []);
+  }, [profile?.company]);
 
   useEffect(() => { load(); }, [load]);
 
