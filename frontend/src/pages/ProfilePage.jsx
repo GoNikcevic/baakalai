@@ -343,6 +343,9 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Product Lines / Projects — first section */}
+      <ProductLinesSection />
+
       {/* Company Info */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><div className="card-title">Informations entreprise</div></div>
@@ -361,9 +364,6 @@ export default function ProfilePage() {
           })}
         </div>
       </div>
-
-      {/* Product Lines / Projects */}
-      <ProductLinesSection />
 
       {/* Value Proposition */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -694,7 +694,7 @@ function ProductLinesSection() {
                 cursor: 'pointer',
               }}
             >
-              {pl.icon || '\uD83D\uDCE6'} {pl.name}
+              {pl.icon || '📦'} {pl.name}
             </button>
           ))}
           <button
@@ -723,7 +723,7 @@ function ProductLinesSection() {
                   onChange={e => setForm(p => ({ ...p, icon: e.target.value }))}
                   style={{ fontSize: 18, textAlign: 'center', padding: '6px' }}
                   maxLength={2}
-                  placeholder="\uD83D\uDCE6"
+                  placeholder="📦"
                 />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
