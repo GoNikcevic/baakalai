@@ -1449,7 +1449,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
                 fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5,
                 padding: '6px 0',
                 borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-              }} dangerouslySetInnerHTML={{ __html: insight.text }} />
+              }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(insight.text) }} />
             ))}
             <button
               className="btn btn-primary"

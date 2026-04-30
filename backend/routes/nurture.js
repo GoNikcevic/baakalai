@@ -382,11 +382,21 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
 
 // Temporary state store for OAuth flows (maps state → userId)
 const _oauthStates = new Map();
+const MAX_OAUTH_STATES = 1000;
+
+// Cleanup expired states every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of _oauthStates) {
+    if (val.expiresAt < now) _oauthStates.delete(key);
+  }
+}, 300000);
 
 // GET /api/nurture/email-accounts/connect/gmail — Start Gmail OAuth flow
 router.get('/email-accounts/connect/gmail', (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return res.status(500).json({ error: 'Google OAuth not configured' });
+  if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
   const state = require('crypto').randomBytes(16).toString('hex');
   _oauthStates.set(state, { userId: req.user.id, provider: 'gmail', expiresAt: Date.now() + 600000 });
@@ -475,6 +485,7 @@ async function gmailCallback(req, res) {
 router.get('/email-accounts/connect/microsoft', (req, res) => {
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   if (!clientId) return res.status(500).json({ error: 'Microsoft OAuth not configured' });
+  if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
   const state = require('crypto').randomBytes(16).toString('hex');
   _oauthStates.set(state, { userId: req.user.id, provider: 'microsoft', expiresAt: Date.now() + 600000 });

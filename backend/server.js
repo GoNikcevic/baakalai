@@ -75,6 +75,7 @@ app.use('/api/', apiLimiter);
 app.get('/supabase-config.js', (_req, res) => {
   const { supabase } = config;
   res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
   res.send(`// Auto-injected Supabase configuration
 window.BAKAL_SUPABASE_URL = ${JSON.stringify(supabase.url)};
 window.BAKAL_SUPABASE_ANON_KEY = ${JSON.stringify(supabase.anonKey)};

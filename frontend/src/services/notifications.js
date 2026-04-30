@@ -25,11 +25,12 @@ export function showToast({ type = 'info', title, message, duration = 5000 }) {
   toast.className = `toast ${type}`;
   toast.id = id;
   toast.style.position = 'relative';
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   toast.innerHTML = `
     <div class="toast-icon ${type}">${iconMap[type]}</div>
     <div class="toast-content">
-      <div class="toast-title">${title}</div>
-      <div class="toast-message">${message}</div>
+      <div class="toast-title">${esc(title)}</div>
+      <div class="toast-message">${esc(message)}</div>
     </div>
     <button class="toast-close" onclick="document.getElementById('${id}')?.remove()">&times;</button>
     ${duration > 0 ? '<div class="toast-progress" style="width:100%;"></div>' : ''}

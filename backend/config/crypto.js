@@ -18,9 +18,10 @@ function getEncryptionKey() {
     }
     console.warn('⚠️  ENCRYPTION_SECRET not set — using insecure fallback. Set it in .env for production.');
     const fallback = 'bakal-default-key-change-me-in-production';
-    return crypto.scryptSync(fallback, 'bakal-salt', 32);
+    return crypto.scryptSync(fallback, 'bakal-dev-salt', 32);
   }
-  return crypto.scryptSync(secret, 'bakal-salt', 32);
+  const salt = process.env.ENCRYPTION_SALT || 'bakal-production-salt-v1';
+  return crypto.scryptSync(secret, salt, 32);
 }
 
 /**

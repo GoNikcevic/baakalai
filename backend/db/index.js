@@ -9,7 +9,7 @@ if (!useSqlite) {
   const { Pool } = require('pg');
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+    ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: process.env.NODE_ENV === 'production' },
     // Scalability: explicit pool sizing for 1000+ users
     max: parseInt(process.env.DB_POOL_MAX, 10) || 20,
     min: parseInt(process.env.DB_POOL_MIN, 10) || 2,

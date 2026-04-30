@@ -73,7 +73,7 @@ router.post('/register', async (req, res, next) => {
 
     const isFirstUser = (await db.users.count()) === 0;
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const user = await db.users.create({
       email: email.toLowerCase().trim(),
       passwordHash,
@@ -274,7 +274,8 @@ router.post('/reset-password', async (req, res, next) => {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ error: 'Token et mot de passe requis' });
 
-    if (password.length < 8) return res.status(400).json({ error: 'Mot de passe trop court (min 8 caractères)' });
+    const passwordError = validatePassword(password);
+    if (passwordError) return res.status(400).json({ error: passwordError });
 
     const result = await db.query(
       'SELECT id FROM users WHERE reset_token = $1 AND reset_expires > NOW()',
@@ -285,7 +286,7 @@ router.post('/reset-password', async (req, res, next) => {
       return res.status(400).json({ error: 'Lien expiré ou invalide' });
     }
 
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     await db.query(
       'UPDATE users SET password_hash = $1, reset_token = NULL, reset_expires = NULL WHERE id = $2',
       [hash, result.rows[0].id]

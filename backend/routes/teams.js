@@ -52,9 +52,16 @@ router.get('/me', async (req, res, next) => {
   }
 });
 
-// GET /api/teams/:id/members
+// GET /api/teams/:id/members (must be a member of the team)
 router.get('/:id/members', async (req, res, next) => {
   try {
+    // Verify requesting user belongs to this team
+    const membership = await db.query(
+      'SELECT 1 FROM team_members WHERE team_id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (membership.rows.length === 0) return res.status(403).json({ error: 'Access denied' });
+
     const members = await db.teams.getMembers(req.params.id);
     res.json({ members });
   } catch (err) {

@@ -78,8 +78,10 @@ async function syncStatsBackground(userId) {
   }
 }
 
-// POST /api/dashboard/refresh-stats — Manual refresh of Lemlist stats
-router.post('/refresh-stats', async (req, res, next) => {
+// POST /api/dashboard/refresh-stats — Manual refresh of Lemlist stats (rate limited)
+const rateLimit = require('express-rate-limit');
+const refreshLimiter = rateLimit({ windowMs: 60000, max: 3, message: { error: 'Too many refresh requests, please wait' } });
+router.post('/refresh-stats', refreshLimiter, async (req, res, next) => {
   try {
     const apiKey = await getUserKey(req.user.id, 'lemlist');
     if (!apiKey) return res.json({ ok: false, error: 'No Lemlist API key' });
@@ -183,7 +185,11 @@ router.get('/chart-data', async (req, res, next) => {
 // POST /api/dashboard/opportunities — Create opportunity (invalidates KPI cache)
 router.post('/opportunities', async (req, res, next) => {
   try {
-    const opportunity = await db.opportunities.create({ ...req.body, userId: req.user.id });
+    const { name, email, company, companySize, title, status, timing, linkedinUrl, campaignId } = req.body;
+    const opportunity = await db.opportunities.create({
+      userId: req.user.id, name, email, company, companySize, title,
+      status: status || 'new', timing, linkedinUrl, campaignId,
+    });
 
     // Invalidate KPI cache for this user
     kpiCache.invalidate(`kpis:${req.user.id}`);
