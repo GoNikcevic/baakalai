@@ -804,11 +804,25 @@ router.post('/product-lines', async (req, res, next) => {
   try {
     const { name, description, icon, targetSectors, valueProp, painPoints } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
-    const teamResult = await db.query(
+    let teamResult = await db.query(
       `SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1`, [req.user.id]
     );
-    const teamId = teamResult.rows[0]?.team_id;
-    if (!teamId) return res.status(400).json({ error: 'No team found' });
+    let teamId = teamResult.rows[0]?.team_id;
+
+    // Auto-create a team for solo users who don't have one yet
+    if (!teamId) {
+      const user = await db.query(`SELECT name, email FROM users WHERE id = $1`, [req.user.id]);
+      const userName = user.rows[0]?.name || user.rows[0]?.email?.split('@')[0] || 'My Team';
+      const team = await db.query(
+        `INSERT INTO teams (name, created_by) VALUES ($1, $2) RETURNING id`,
+        [`${userName}'s Team`, req.user.id]
+      );
+      teamId = team.rows[0].id;
+      await db.query(
+        `INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, 'admin')`,
+        [teamId, req.user.id]
+      );
+    }
 
     const result = await db.query(
       `INSERT INTO product_lines (team_id, name, description, icon, target_sectors, value_prop, pain_points)
