@@ -343,100 +343,8 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Product Lines / Projects — first section */}
-      <ProductLinesSection profile={profile} />
-
-      {/* Company Info */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header"><div className="card-title">Informations entreprise</div></div>
-        <div className="card-body">
-          <div className="form-grid">
-            {renderInput('Nom de l\'entreprise', 'company', { placeholder: 'Ex: FormaPro Consulting' })}
-            {renderInput('Secteur d\'activité', 'sector', { placeholder: 'Ex: Formation professionnelle' })}
-            {renderInput('Site web', 'website', { type: 'url', placeholder: 'https://...' })}
-            {renderSelect('Taille d\'équipe', 'team_size', [
-              '1-5', '6-10', '11-25', '26-50', '51-100', '100+',
-            ])}
-          </div>
-          {renderTextarea('Description de l\'activité', 'description', {
-            placeholder: 'Décrivez brièvement votre activité et vos services principaux...',
-            rows: 3,
-          })}
-        </div>
-      </div>
-
-      {/* Value Proposition */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header"><div className="card-title">Proposition de valeur</div></div>
-        <div className="card-body">
-          {renderTextarea('Proposition de valeur principale', 'value_prop', {
-            placeholder: 'Quel problème résolvez-vous et quelle est votre promesse client ?',
-            rows: 3,
-          })}
-          {renderTextarea('Preuves sociales / Références', 'social_proof', {
-            placeholder: 'Clients notables, chiffres clés, témoignages, certifications...',
-            rows: 3,
-          })}
-          {renderTextarea('Pain points clients', 'pain_points', {
-            placeholder: 'Les frustrations et difficultés principales de vos clients cibles...',
-            rows: 3,
-          })}
-          {renderTextarea('Objections fréquentes', 'objections', {
-            placeholder: 'Les raisons pour lesquelles les prospects hésitent...',
-            rows: 3,
-          })}
-        </div>
-      </div>
-
-      {/* Personas */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header"><div className="card-title">Personas cibles</div></div>
-        <div className="card-body">
-          {renderTextarea('Persona principal', 'persona_primary', {
-            placeholder: 'Décrivez votre interlocuteur idéal : poste, responsabilités, défis quotidiens...',
-            rows: 3,
-          })}
-          {renderTextarea('Persona secondaire', 'persona_secondary', {
-            placeholder: 'Autre profil cible (si applicable)...',
-            rows: 3,
-          })}
-        </div>
-      </div>
-
-      {/* Target */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header"><div className="card-title">Ciblage</div></div>
-        <div className="card-body">
-          <div className="form-grid">
-            {renderInput('Secteurs cibles', 'target_sectors', { placeholder: 'Ex: Finance, RH, Formation' })}
-            {renderInput('Taille d\'entreprise cible', 'target_size', { placeholder: 'Ex: 11-50 salariés' })}
-            {renderInput('Zones géographiques', 'target_zones', { placeholder: 'Ex: Île-de-France, Lyon, France' })}
-          </div>
-        </div>
-      </div>
-
-      {/* Communication Style */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header"><div className="card-title">Style de communication</div></div>
-        <div className="card-body">
-          <div className="form-grid">
-            {renderSelect('Ton par défaut', 'default_tone', [
-              'Pro décontracté', 'Formel', 'Amical', 'Direct', 'Expert',
-            ])}
-            {renderSelect('Formalité', 'default_formality', [
-              'Vous', 'Tu',
-            ])}
-          </div>
-          {renderTextarea('Mots / expressions à éviter', 'avoid_words', {
-            placeholder: 'Ex: "innovant", "synergies", "n\'hésitez pas"...',
-            rows: 2,
-          })}
-          {renderTextarea('Expressions signature', 'signature_phrases', {
-            placeholder: 'Phrases ou tournures que vous utilisez souvent et souhaitez conserver...',
-            rows: 2,
-          })}
-        </div>
-      </div>
+      {/* Product Lines / Projects — wraps all profile sections */}
+      <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect} />
 
       {/* Documents */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -594,12 +502,12 @@ export default function ProfilePage() {
 
 /* ═══ Product Lines Section ═══ */
 
-function ProductLinesSection({ profile }) {
+function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelect }) {
   const { lang } = useI18n();
   const en = lang === 'en';
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(null); // product line id or 'new'
+  const [activeTab, setActiveTab] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', icon: '', description: '', targetSectors: '', valueProp: '', painPoints: '' });
   const [autoCreated, setAutoCreated] = useState(false);
@@ -611,7 +519,6 @@ function ProductLinesSection({ profile }) {
       setLines(pl);
       if (pl.length > 0 && !activeTab) setActiveTab(pl[0].id);
 
-      // Auto-create first project from profile if no projects exist
       if (pl.length === 0 && profile?.company && !autoCreated) {
         setAutoCreated(true);
         try {
@@ -630,7 +537,7 @@ function ProductLinesSection({ profile }) {
             setLines([res.productLine]);
             setActiveTab(res.productLine.id);
           }
-        } catch { /* ignore - user might not have a team */ }
+        } catch { /* ignore */ }
       }
     } catch { /* ignore */ }
     setLoading(false);
@@ -638,19 +545,14 @@ function ProductLinesSection({ profile }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // When active tab changes, load the form
   useEffect(() => {
     if (activeTab === 'new') {
       setForm({ name: '', icon: '', description: '', targetSectors: '', valueProp: '', painPoints: '' });
     } else if (activeTab) {
       const pl = lines.find(l => l.id === activeTab);
       if (pl) setForm({
-        name: pl.name || '',
-        icon: pl.icon || '',
-        description: pl.description || '',
-        targetSectors: pl.target_sectors || '',
-        valueProp: pl.value_prop || '',
-        painPoints: pl.pain_points || '',
+        name: pl.name || '', icon: pl.icon || '', description: pl.description || '',
+        targetSectors: pl.target_sectors || '', valueProp: pl.value_prop || '', painPoints: pl.pain_points || '',
       });
     }
   }, [activeTab, lines]);
@@ -660,17 +562,11 @@ function ProductLinesSection({ profile }) {
     setSaving(true);
     try {
       if (activeTab === 'new') {
-        const data = await request('/crm/product-lines', {
-          method: 'POST',
-          body: JSON.stringify(form),
-        });
+        const data = await request('/crm/product-lines', { method: 'POST', body: JSON.stringify(form) });
         await load();
         setActiveTab(data.productLine?.id || null);
       } else {
-        await request(`/crm/product-lines/${activeTab}`, {
-          method: 'PATCH',
-          body: JSON.stringify(form),
-        });
+        await request(`/crm/product-lines/${activeTab}`, { method: 'PATCH', body: JSON.stringify(form) });
         await load();
       }
     } catch { /* ignore */ }
@@ -689,153 +585,136 @@ function ProductLinesSection({ profile }) {
 
   if (loading) return null;
 
+  const tabStyle = (isActive, isDashed) => ({
+    padding: '8px 18px', fontSize: 13, borderRadius: '10px 10px 0 0',
+    border: `1px ${isDashed ? 'dashed' : 'solid'} ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+    borderBottom: isActive ? '2px solid var(--accent)' : '1px solid transparent',
+    background: isActive ? 'var(--bg-card)' : 'transparent',
+    color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+    fontWeight: isActive ? 600 : 400,
+    cursor: 'pointer',
+  });
+
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-header">
-        <div className="card-title">{en ? 'Projects / Product Lines' : 'Projets / Lignes de produits'}</div>
-      </div>
-      <div className="card-body">
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-          {en
-            ? 'Define your product lines or business verticals. Each project can have its own targets and value proposition.'
-            : 'D\u00e9finissez vos lignes de produits ou verticales. Chaque projet a ses propres cibles et proposition de valeur.'}
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 8, flexWrap: 'wrap' }}>
-          {lines.map(pl => (
-            <button
-              key={pl.id}
-              onClick={() => setActiveTab(pl.id)}
-              style={{
-                padding: '6px 14px', fontSize: 12, borderRadius: '8px 8px 0 0',
-                border: `1px solid ${activeTab === pl.id ? 'var(--accent)' : 'var(--border)'}`,
-                borderBottom: activeTab === pl.id ? '2px solid var(--accent)' : '1px solid var(--border)',
-                background: activeTab === pl.id ? 'rgba(110,87,250,0.06)' : 'transparent',
-                color: activeTab === pl.id ? 'var(--accent)' : 'var(--text-muted)',
-                fontWeight: activeTab === pl.id ? 600 : 400,
-                cursor: 'pointer',
-              }}
-            >
-              {pl.icon || '📦'} {pl.name}
-            </button>
-          ))}
-          <button
-            onClick={() => setActiveTab('new')}
-            style={{
-              padding: '6px 14px', fontSize: 12, borderRadius: '8px 8px 0 0',
-              border: `1px dashed ${activeTab === 'new' ? 'var(--accent)' : 'var(--border)'}`,
-              background: activeTab === 'new' ? 'rgba(110,87,250,0.06)' : 'transparent',
-              color: activeTab === 'new' ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            + {en ? 'New project' : 'Nouveau projet'}
+    <>
+      {/* Project tabs */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: -1 }}>
+        {lines.map(pl => (
+          <button key={pl.id} onClick={() => setActiveTab(pl.id)} style={tabStyle(activeTab === pl.id, false)}>
+            {pl.icon || '📦'} {pl.name}
           </button>
-        </div>
+        ))}
+        <button onClick={() => setActiveTab('new')} style={tabStyle(activeTab === 'new', true)}>
+          + {en ? 'New project' : 'Nouveau projet'}
+        </button>
+      </div>
 
-        {/* Form */}
-        {activeTab && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
+      {/* Active project content */}
+      {activeTab && (
+        <div className="card" style={{ marginBottom: 16, borderTopLeftRadius: 0 }}>
+          <div className="card-body" style={{ paddingTop: 20 }}>
+
+            {/* Project identity */}
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {en ? 'Project identity' : 'Identit\u00e9 du projet'}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <div className="form-group" style={{ width: 70 }}>
                 <label className="form-label">{en ? 'Icon' : 'Ic\u00f4ne'}</label>
-                <input
-                  className="form-input"
-                  value={form.icon}
-                  onChange={e => setForm(p => ({ ...p, icon: e.target.value }))}
-                  style={{ fontSize: 18, textAlign: 'center', padding: '6px' }}
-                  maxLength={2}
-                  placeholder="📦"
-                />
+                <input className="form-input" value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))}
+                  style={{ fontSize: 18, textAlign: 'center', padding: '6px' }} maxLength={2} placeholder="📦" />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">{en ? 'Project name' : 'Nom du projet'}</label>
-                <input
-                  className="form-input"
-                  value={form.name}
-                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder={en ? 'e.g., Cybersecurity Solutions' : 'ex: Solutions Cybers\u00e9curit\u00e9'}
-                />
+                <input className="form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder={en ? 'e.g., Cybersecurity Solutions' : 'ex: Solutions Cybers\u00e9curit\u00e9'} />
               </div>
             </div>
-
-            <div className="form-group">
-              <label className="form-label">{en ? 'Description' : 'Description'}</label>
-              <textarea
-                className="form-input"
-                rows={2}
-                value={form.description}
+            <div className="form-group" style={{ marginBottom: 20 }}>
+              <label className="form-label">Description</label>
+              <textarea className="form-input" rows={3} value={form.description}
                 onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                placeholder={en ? 'What does this product line offer?' : 'Que propose cette ligne de produits ?'}
-              />
+                placeholder={en ? 'Describe this product line and its main services...' : 'D\u00e9crivez cette ligne de produits et ses services principaux...'} />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">{en ? 'Target sectors' : 'Secteurs cibles'}</label>
-              <input
-                className="form-input"
-                value={form.targetSectors}
-                onChange={e => setForm(p => ({ ...p, targetSectors: e.target.value }))}
-                placeholder={en ? 'e.g., Finance, Healthcare, Telecom' : 'ex: Finance, Sant\u00e9, T\u00e9l\u00e9com'}
-              />
+            {/* Value proposition */}
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {en ? 'Value proposition' : 'Proposition de valeur'}
             </div>
-
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: 12 }}>
               <label className="form-label">{en ? 'Value proposition' : 'Proposition de valeur'}</label>
-              <textarea
-                className="form-input"
-                rows={2}
-                value={form.valueProp}
+              <textarea className="form-input" rows={3} value={form.valueProp}
                 onChange={e => setForm(p => ({ ...p, valueProp: e.target.value }))}
-                placeholder={en ? 'What problem does it solve? What makes it unique?' : 'Quel probl\u00e8me r\u00e9sout-il ? Qu\'est-ce qui le rend unique ?'}
-              />
+                placeholder={en ? 'What problem does it solve? What makes it unique?' : 'Quel probl\u00e8me r\u00e9sout-il ? Qu\'est-ce qui le rend unique ?'} />
             </div>
-
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: 20 }}>
               <label className="form-label">{en ? 'Client pain points' : 'Pain points clients'}</label>
-              <textarea
-                className="form-input"
-                rows={2}
-                value={form.painPoints}
+              <textarea className="form-input" rows={3} value={form.painPoints}
                 onChange={e => setForm(p => ({ ...p, painPoints: e.target.value }))}
-                placeholder={en ? 'What frustrations do your clients face?' : 'Quelles frustrations rencontrent vos clients ?'}
-              />
+                placeholder={en ? 'What frustrations do your clients face?' : 'Quelles frustrations rencontrent vos clients ?'} />
             </div>
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+            {/* Targeting */}
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {en ? 'Targeting' : 'Ciblage'}
+            </div>
+            <div className="form-group" style={{ marginBottom: 20 }}>
+              <label className="form-label">{en ? 'Target sectors' : 'Secteurs cibles'}</label>
+              <input className="form-input" value={form.targetSectors}
+                onChange={e => setForm(p => ({ ...p, targetSectors: e.target.value }))}
+                placeholder={en ? 'e.g., Finance, Healthcare, Telecom' : 'ex: Finance, Sant\u00e9, T\u00e9l\u00e9com'} />
+            </div>
+
+            {/* Global profile fields (shared across projects) */}
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {en ? 'Company info (shared)' : 'Informations entreprise (partag\u00e9es)'}
+            </div>
+            <div className="form-grid">
+              {renderInput(en ? 'Company name' : 'Nom de l\'entreprise', 'company', { placeholder: 'Ex: FormaPro Consulting' })}
+              {renderInput(en ? 'Industry' : 'Secteur d\'activit\u00e9', 'sector', { placeholder: 'Ex: Formation professionnelle' })}
+              {renderInput(en ? 'Website' : 'Site web', 'website', { type: 'url', placeholder: 'https://...' })}
+              {renderSelect(en ? 'Team size' : 'Taille d\'\u00e9quipe', 'team_size', ['1-5', '6-10', '11-25', '26-50', '51-100', '100+'])}
+            </div>
+
+            <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {en ? 'Personas & style (shared)' : 'Personas & style (partag\u00e9s)'}
+            </div>
+            {renderTextarea(en ? 'Primary persona' : 'Persona principal', 'persona_primary', {
+              placeholder: en ? 'Describe your ideal contact: role, responsibilities, daily challenges...' : 'D\u00e9crivez votre interlocuteur id\u00e9al : poste, responsabilit\u00e9s, d\u00e9fis quotidiens...', rows: 2,
+            })}
+            {renderTextarea(en ? 'Secondary persona' : 'Persona secondaire', 'persona_secondary', {
+              placeholder: en ? 'Other target profile (if applicable)...' : 'Autre profil cible (si applicable)...', rows: 2,
+            })}
+            <div className="form-grid" style={{ marginTop: 8 }}>
+              {renderSelect(en ? 'Default tone' : 'Ton par d\u00e9faut', 'default_tone', ['Pro d\u00e9contract\u00e9', 'Formel', 'Amical', 'Direct', 'Expert'])}
+              {renderSelect(en ? 'Formality' : 'Formalit\u00e9', 'default_formality', ['Vous', 'Tu'])}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
               <div>
                 {activeTab !== 'new' && (
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 12, color: 'var(--danger)' }}
-                    onClick={() => handleDelete(activeTab, form.name)}
-                  >
+                  <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--danger)' }}
+                    onClick={() => handleDelete(activeTab, form.name)}>
                     {en ? 'Delete project' : 'Supprimer le projet'}
                   </button>
                 )}
               </div>
-              <button
-                className="btn btn-primary"
-                style={{ fontSize: 12, padding: '8px 20px' }}
-                onClick={handleSave}
-                disabled={saving || !form.name.trim()}
-              >
-                {saving ? '...' : activeTab === 'new' ? (en ? 'Create project' : 'Cr\u00e9er le projet') : (en ? 'Save' : 'Sauvegarder')}
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '8px 20px' }}
+                onClick={handleSave} disabled={saving || !form.name.trim()}>
+                {saving ? '...' : activeTab === 'new' ? (en ? 'Create project' : 'Cr\u00e9er le projet') : (en ? 'Save project' : 'Sauvegarder le projet')}
               </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Empty state */}
-        {lines.length === 0 && activeTab !== 'new' && (
-          <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>
-            {en
-              ? 'No projects yet. Click "+ New project" to create your first product line.'
-              : 'Aucun projet. Cliquez sur "+ Nouveau projet" pour cr\u00e9er votre premi\u00e8re ligne de produits.'}
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Empty state */}
+      {lines.length === 0 && activeTab !== 'new' && (
+        <div className="card" style={{ marginBottom: 16, textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
+          {en ? 'No projects yet. Click "+ New project" to get started.' : 'Aucun projet. Cliquez sur "+ Nouveau projet" pour commencer.'}
+        </div>
+      )}
+    </>
   );
 }
