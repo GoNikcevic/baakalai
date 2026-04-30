@@ -486,6 +486,7 @@ function CampaignTableRow({ campaign: c }) {
    ═══════════════════════════════════════════════════ */
 
 function WelcomeBanner({ onCreateCampaign }) {
+  const t = useT();
   return (
     <div className="welcome-banner">
       <div className="welcome-title">{t('dashboard.welcomeTitle')}</div>
