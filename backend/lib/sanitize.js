@@ -1,15 +1,20 @@
 /**
- * Strip HTML tags and dangerous content from user input strings
+ * Sanitize user input strings using DOMPurify (server-side).
+ */
+
+const DOMPurify = require('isomorphic-dompurify');
+
+/**
+ * Strip all HTML tags from a string.
  */
 function sanitizeText(str) {
   if (!str || typeof str !== 'string') return str;
-  return str
-    .replace(/<[^>]*>/g, '') // Strip HTML tags
-    .replace(/javascript:/gi, '') // Strip JS protocol
-    .replace(/on\w+\s*=/gi, '') // Strip event handlers
-    .trim();
+  return DOMPurify.sanitize(str, { ALLOWED_TAGS: [] }).trim();
 }
 
+/**
+ * Sanitize specific string fields on an object.
+ */
 function sanitizeObject(obj, fields) {
   if (!obj || typeof obj !== 'object') return obj;
   const result = { ...obj };
