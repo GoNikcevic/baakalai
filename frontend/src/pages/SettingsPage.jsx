@@ -14,6 +14,7 @@ import { useI18n } from '../i18n';
 import EmailAccountSettings from '../components/EmailAccountSettings';
 import TeamSettings from '../components/TeamSettings';
 import ProductLinesSettings from '../components/ProductLinesSettings';
+import FieldMappingSettings from '../components/FieldMappingSettings';
 
 /* ─── Unified tool list organized by category ─── */
 
@@ -747,6 +748,9 @@ export default function SettingsPage() {
 
       {/* Product Lines */}
       <ProductLinesSettings />
+
+      {/* CRM Field Mapping */}
+      <FieldMappingSettings />
 
       {/* Email sortant */}
       <EmailAccountSettings />

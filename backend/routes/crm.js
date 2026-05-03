@@ -914,6 +914,69 @@ router.get('/client/:id/product-lines', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// =============================================
+// CRM Field Mappings
+// =============================================
+
+// GET /api/crm/fields/:provider — Fetch available CRM fields
+router.get('/fields/:provider', async (req, res, next) => {
+  try {
+    const { fetchCrmFields } = require('../lib/crm-field-mapper');
+    const { getUserKey } = require('../config');
+    const provider = req.params.provider;
+    let credentials = await getUserKey(req.user.id, provider);
+    if (!credentials) return res.status(400).json({ error: `${provider} not connected` });
+
+    // Salesforce needs instanceUrl + accessToken
+    if (provider === 'salesforce') {
+      const integration = await db.query(
+        `SELECT access_token, instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
+        [req.user.id]
+      );
+      if (!integration.rows[0]) return res.status(400).json({ error: 'Salesforce not connected' });
+      const { decrypt } = require('../config/crypto');
+      credentials = {
+        accessToken: decrypt(integration.rows[0].access_token),
+        instanceUrl: integration.rows[0].instance_url,
+      };
+    }
+
+    const fields = await fetchCrmFields(provider, credentials);
+    res.json({ fields });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/mappings — Get saved field mappings
+router.get('/mappings', async (req, res, next) => {
+  try {
+    const { getMappings } = require('../lib/crm-field-mapper');
+    const mappings = await getMappings(req.user.id);
+    res.json({ mappings });
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/mappings — Save a field mapping
+router.post('/mappings', async (req, res, next) => {
+  try {
+    const { saveMapping } = require('../lib/crm-field-mapper');
+    const { crmProvider, crmField, crmFieldName, baakalaiField, mappingValues } = req.body;
+    if (!crmProvider || !crmField || !baakalaiField) {
+      return res.status(400).json({ error: 'crmProvider, crmField, and baakalaiField are required' });
+    }
+    const id = await saveMapping(req.user.id, { crmProvider, crmField, crmFieldName, baakalaiField, mappingValues });
+    res.json({ id });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/crm/mappings/:id — Delete a mapping
+router.delete('/mappings/:id', async (req, res, next) => {
+  try {
+    const { deleteMapping } = require('../lib/crm-field-mapper');
+    await deleteMapping(req.user.id, req.params.id);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // Helper: get CRM token for any provider
 async function getUserCrmToken(userId, provider) {
   const { getUserKey } = require('../config');

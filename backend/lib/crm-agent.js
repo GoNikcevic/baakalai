@@ -24,6 +24,7 @@ const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const { notifyUser } = require('../socket');
 const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
+const { applyMappings } = require('./crm-field-mapper');
 const logger = require('./logger');
 
 const DAY_MS = 86400000;
@@ -192,6 +193,22 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           await db.opportunities.update(existing.id, updates);
           report.sync.updated++;
         }
+
+        // Apply field mappings (product lines, etc.)
+        try {
+          const mapped = await applyMappings(userId, crmProvider, raw);
+          if (mapped.productLineIds.length > 0) {
+            for (const plId of mapped.productLineIds) {
+              await db.query(
+                `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                [existing.id, plId]
+              );
+            }
+          }
+          if (mapped.customFields.status && mapped.customFields.status !== existing.status) {
+            await db.opportunities.update(existing.id, { status: mapped.customFields.status });
+          }
+        } catch { /* mapping is optional */ }
       }
     }
   } catch (err) {
