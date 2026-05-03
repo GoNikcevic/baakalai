@@ -121,4 +121,23 @@ router.post('/use/:id', async (req, res) => {
   }
 });
 
+// POST /generate — Generate templates for specific sectors (on-demand)
+router.post('/generate', async (req, res) => {
+  try {
+    const { sectors } = req.body;
+    const { generateForSectors, TARGET_SECTORS } = require('../lib/template-agent');
+    const targetSectors = Array.isArray(sectors) && sectors.length > 0 ? sectors : TARGET_SECTORS;
+    const report = await generateForSectors(targetSectors);
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /sectors — List available sectors for template generation
+router.get('/sectors', (_req, res) => {
+  const { TARGET_SECTORS } = require('../lib/template-agent');
+  res.json({ sectors: TARGET_SECTORS });
+});
+
 module.exports = router;

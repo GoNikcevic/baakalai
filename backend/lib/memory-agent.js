@@ -98,6 +98,19 @@ async function runMemoryAgent() {
     report.errors.push({ step: 'templates', error: err.message });
   }
 
+  // ── Step 4: Sector template agent ──
+  // Generate/update templates based on memory patterns + campaign performance
+  try {
+    const { runTemplateAgent } = require('./template-agent');
+    const templateReport = await runTemplateAgent();
+    report.sectorTemplates = templateReport;
+    if (templateReport.generated > 0 || templateReport.updated > 0) {
+      logger.info('memory-agent', `Sector templates: ${templateReport.generated} new, ${templateReport.updated} updated`);
+    }
+  } catch (err) {
+    report.errors.push({ step: 'sector-templates', error: err.message });
+  }
+
   report.duration = Date.now() - startTime;
   logger.info('memory-agent', `Complete in ${report.duration}ms — skipped: ${report.skipped.length}, errors: ${report.errors.length}`);
 
