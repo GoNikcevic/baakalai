@@ -558,7 +558,7 @@ function CRMHealthSection() {
   const en = lang === 'en';
   const ISSUE_CONFIG = getIssueConfig(en);
   const [report, setReport] = useState(null);
-  const [scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(true);
   const [fixing, setFixing] = useState(null);
   const [fixResults, setFixResults] = useState(null);
   const [provider] = useState('pipedrive');

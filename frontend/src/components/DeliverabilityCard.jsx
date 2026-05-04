@@ -42,7 +42,17 @@ export default function DeliverabilityCard() {
     setRefreshing(false);
   }, [setGlobalKpis, setCampaigns]);
 
-  if (loading) return null;
+  if (loading) return (
+    <div className="card" style={{ marginBottom: 16, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--bg-elevated)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+        <div>
+          <div style={{ width: 120, height: 14, borderRadius: 4, background: 'var(--bg-elevated)', marginBottom: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
+          <div style={{ width: 80, height: 10, borderRadius: 4, background: 'var(--bg-elevated)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+        </div>
+      </div>
+    </div>
+  );
   if (error) return null;
   if (!data || data.checks?.campaigns === 0) return null;
 

@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
+import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 
@@ -209,7 +210,7 @@ export default function ClientsPage() {
                 const summary = await getChurnSummary();
                 setChurnSummary(summary);
                 await loadData();
-              } catch { /* ignore */ }
+              } catch { showToast({ type: 'error', title: 'Erreur', message: 'Churn scoring failed' }); }
               setScoringChurn(false);
             }}
           >
@@ -240,7 +241,7 @@ export default function ClientsPage() {
                 const summary = await getChurnSummary();
                 setChurnSummary(summary);
                 await loadData();
-              } catch { /* ignore */ }
+              } catch { showToast({ type: 'error', title: 'Erreur', message: 'Churn scoring failed' }); }
               setScoringChurn(false);
             }}
           >
@@ -608,7 +609,7 @@ function ProductLineTags({ clientId, lang }) {
         body: JSON.stringify({ opportunityIds: [clientId] }),
       });
       setAssigned(prev => [...prev, allLines.find(l => l.id === plId)].filter(Boolean));
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Failed to assign product line' }); }
   };
 
   const handleRemove = async (plId) => {
@@ -618,7 +619,7 @@ function ProductLineTags({ clientId, lang }) {
         body: JSON.stringify({ opportunityIds: [clientId] }),
       });
       setAssigned(prev => prev.filter(p => p.id !== plId));
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Failed to remove product line' }); }
   };
 
   if (allLines.length === 0) return null;

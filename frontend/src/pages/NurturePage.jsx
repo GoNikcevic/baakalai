@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { getUser } from '../services/auth';
+import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 
 const TRIGGER_TYPES = [
@@ -278,7 +279,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
         body: JSON.stringify({ enabled: !enabled }),
       });
       onRefresh();
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Failed to update trigger' }); }
   };
 
   const handleDelete = async (id) => {
@@ -286,7 +287,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
     try {
       await request(`/nurture/triggers/${id}`, { method: 'DELETE' });
       onRefresh();
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Operation failed' }); }
   };
 
   return (
@@ -430,7 +431,7 @@ function EmailsSection({ emails, type, onRefresh }) {
     try {
       await request(`/nurture/emails/${id}/cancel`, { method: 'POST' });
       onRefresh();
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Operation failed' }); }
   };
 
   if (emails.length === 0) {
@@ -775,7 +776,7 @@ function TeamCampaignsSection({ lang }) {
       setForm({ name: '', targetOwners: [], targetProductLines: [], emailPrompt: '', emailTone: 'professional' });
       setShowCreate(false);
       await load();
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Failed to create campaign' }); }
   };
 
   const handlePreview = async (id) => {
@@ -785,7 +786,7 @@ function TeamCampaignsSection({ lang }) {
     try {
       const data = await request(`/team-campaigns/${id}/preview`, { method: 'POST' });
       setPreviewData(data);
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Preview failed' }); }
     setPreviewing(null);
   };
 
@@ -795,7 +796,7 @@ function TeamCampaignsSection({ lang }) {
     try {
       await request(`/team-campaigns/${id}/launch`, { method: 'POST' });
       await load();
-    } catch { /* ignore */ }
+    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Launch failed' }); }
     setLaunching(null);
   };
 

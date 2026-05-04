@@ -571,7 +571,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
         await request(`/crm/product-lines/${activeTab}`, { method: 'PATCH', body: JSON.stringify(form) });
         await load();
       }
-    } catch { /* ignore */ }
+    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: 'Erreur', message: 'Failed to save project' })); }
     setSaving(false);
   };
 
@@ -582,7 +582,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
       const remaining = lines.filter(l => l.id !== id);
       setLines(remaining);
       setActiveTab(remaining.length > 0 ? remaining[0].id : null);
-    } catch { /* ignore */ }
+    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: 'Erreur', message: 'Failed to delete project' })); }
   };
 
   if (loading) return null;
