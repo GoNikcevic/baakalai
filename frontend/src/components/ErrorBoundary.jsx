@@ -12,6 +12,17 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary]', error, info.componentStack);
+
+    // Auto-reload once on stale chunk errors (happens after deploy)
+    const isChunkError = error?.message?.includes('dynamically imported module')
+      || error?.message?.includes('Failed to fetch')
+      || error?.message?.includes('Loading chunk');
+    const hasReloaded = sessionStorage.getItem('chunk_reload');
+
+    if (isChunkError && !hasReloaded) {
+      sessionStorage.setItem('chunk_reload', '1');
+      window.location.reload();
+    }
   }
 
   render() {
