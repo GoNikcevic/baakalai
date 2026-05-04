@@ -97,10 +97,16 @@ export default function MemoryExplorerPage() {
     catch { return dateStr; }
   }
 
-  const handleApply = useCallback((pattern) => {
-    const msg = t('memory.applyMsg') + pattern.pattern;
-    navigate('/chat', { state: { prefillMessage: msg } });
-  }, [navigate, t]);
+  const [applyingId, setApplyingId] = useState(null);
+
+  const handleApply = useCallback(async (pattern) => {
+    setApplyingId(pattern.id);
+    try {
+      const result = await request(`/ai/memory/${pattern.id}/toggle-apply`, { method: 'POST' });
+      setPatterns(prev => prev.map(p => p.id === pattern.id ? { ...p, applied: result.applied } : p));
+    } catch { /* ignore */ }
+    setTimeout(() => setApplyingId(null), 600);
+  }, []);
 
   const [undoPattern, setUndoPattern] = useState(null);
   const undoTimerRef = useRef(null);
@@ -302,11 +308,21 @@ export default function MemoryExplorerPage() {
                 )}
                 <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
                   <button
-                    className="btn btn-primary"
-                    style={{ fontSize: 11, padding: '6px 14px', borderRadius: 8 }}
+                    className={p.applied ? 'btn btn-ghost' : 'btn btn-primary'}
+                    style={{
+                      fontSize: 11, padding: '6px 14px', borderRadius: 8,
+                      transition: 'all 0.3s ease',
+                      ...(p.applied ? {
+                        border: '1px solid var(--success)',
+                        color: 'var(--success)',
+                        background: 'rgba(0,214,143,0.06)',
+                      } : {}),
+                      ...(applyingId === p.id ? { transform: 'scale(0.95)' } : {}),
+                    }}
                     onClick={() => handleApply(p)}
+                    disabled={applyingId === p.id}
                   >
-                    {t('memory.applyPattern')}
+                    {applyingId === p.id ? '...' : p.applied ? '\u2705 Actif' : t('memory.applyPattern')}
                   </button>
                   <button
                     className="btn btn-ghost"

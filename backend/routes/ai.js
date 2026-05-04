@@ -374,6 +374,18 @@ router.post('/consolidate-memory', async (req, res, next) => {
   }
 });
 
+// POST /api/ai/memory/:id/toggle-apply — toggle pattern applied status
+router.post('/memory/:id/toggle-apply', async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `UPDATE memory_patterns SET applied = NOT COALESCE(applied, false) WHERE id = $1 RETURNING id, applied`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Pattern not found' });
+    res.json({ id: result.rows[0].id, applied: result.rows[0].applied });
+  } catch (err) { next(err); }
+});
+
 // DELETE /api/ai/memory/:id — delete a single memory pattern
 router.delete('/memory/:id', async (req, res, next) => {
   try {

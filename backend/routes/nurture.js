@@ -336,11 +336,11 @@ router.post('/preview', async (req, res, next) => {
         // Load memory patterns for better email generation
         let patternsCtx = '';
         try {
-          const patterns = await db.memoryPatterns.list({ confidence: 'Haute', limit: 3 });
+          const patterns = await db.memoryPatterns.listForPrompt(8);
           if (patterns.length > 0) {
             patternsCtx = '\n\nPATTERNS QUI FONCTIONNENT :\n' +
-              patterns.map(p => `- ${p.pattern}`).join('\n') +
-              '\nInspire-toi de ces patterns pour le ton et l\'angle.';
+              patterns.map(p => `- ${p.applied ? '[APPROUV\u00c9]' : ''} ${p.pattern}`).join('\n') +
+              '\nApplique en priorit\u00e9 les patterns APPROUV\u00c9S.';
           }
         } catch { /* optional */ }
 

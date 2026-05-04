@@ -35,8 +35,8 @@ async function runTemplateAgent({ sectors = null, force = false } = {}) {
   const report = { generated: 0, updated: 0, skipped: 0, errors: [] };
 
   try {
-    // 1. Load memory patterns (high confidence)
-    const patterns = await db.memoryPatterns.list({ confidence: 'Haute', limit: 50 });
+    // 1. Load memory patterns (user-applied + high confidence)
+    const patterns = await db.memoryPatterns.listForPrompt(30);
 
     // 2. Load campaign stats for sector analysis
     const campaigns = await db.query(`

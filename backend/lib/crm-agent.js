@@ -386,16 +386,14 @@ async function stepNurture(userId, token, report) {
 async function generateNurtureEmail(trigger, opp) {
   const template = trigger.email_template || {};
 
-  // Load relevant memory patterns to inform email generation
+  // Load relevant memory patterns (user-applied + high confidence)
   let patternsContext = '';
   try {
-    const patterns = await db.memoryPatterns.list({ confidence: 'Haute', limit: 5 });
-    const mediumPatterns = await db.memoryPatterns.list({ confidence: 'Moyenne', limit: 3 });
-    const allPatterns = [...patterns, ...mediumPatterns];
+    const allPatterns = await db.memoryPatterns.listForPrompt(10);
     if (allPatterns.length > 0) {
       patternsContext = `\n\nPATTERNS QUI FONCTIONNENT (m\u00E9moire cross-campagne) :\n` +
-        allPatterns.map(p => `- [${p.confidence}] ${p.pattern} (cat\u00E9gorie: ${p.category})`).join('\n') +
-        `\nUtilise ces patterns pour informer le ton, l'angle et la structure de l'email. Ne les copie pas mot pour mot.`;
+        allPatterns.map(p => `- ${p.applied ? '[APPROUV\u00c9]' : `[${p.confidence}]`} ${p.pattern}`).join('\n') +
+        `\nApplique en priorit\u00e9 les patterns APPROUV\u00c9S. Utilise-les pour le ton, l'angle et la structure. Ne copie pas mot pour mot.`;
     }
   } catch { /* patterns optional */ }
 

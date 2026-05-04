@@ -690,9 +690,20 @@ const memoryPatterns = {
   },
 
   /**
-   * Replace an existing pattern by source identifier, or create a new one.
-   * Prevents pattern explosion from agents that run repeatedly.
+   * Get patterns that should be injected into email generation prompts.
+   * Priority: user-applied patterns first, then high-confidence patterns.
    */
+  async listForPrompt(limit = 15) {
+    const result = await query(
+      `SELECT * FROM memory_patterns
+       WHERE applied = true OR confidence = 'Haute'
+       ORDER BY applied DESC, date_discovered DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return result.rows;
+  },
+
   /**
    * Replace an existing pattern with the same category + similar pattern text,
    * or create a new one. Prevents pattern explosion from repeated agent runs.
