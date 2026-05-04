@@ -6,6 +6,185 @@
   <title>baakalai — orchestre ta prospection et tes clients avec l'IA</title>
   <link rel="icon" href="assets/favicon.svg">
   <link rel="stylesheet" href="site.css">
+  <style>
+    /* Hero stage fix — give the aspect-ratio box an explicit width */
+    .hero-stage { width: 100%; }
+
+    /* ─── Hero mockup (variant D) ──────────────────────── */
+    .hero-mockup-wrap {
+      position: relative;
+      aspect-ratio: auto;
+      max-width: 560px;
+      margin-left: auto;
+    }
+    .hero-mockup-wrap .browser-frame {
+      position: relative;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 14px 44px rgba(10,10,10,0.08);
+      display: flex;
+      flex-direction: column;
+      aspect-ratio: 1 / 1;
+    }
+    .hero-mockup-wrap .browser-chrome {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 14px;
+      background: var(--paper-2);
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-mockup-wrap .browser-chrome .dots { display:flex; gap:6px; }
+    .hero-mockup-wrap .browser-chrome .dots span {
+      width: 11px; height: 11px; border-radius: 50%;
+    }
+    .hero-mockup-wrap .browser-chrome .dots span:nth-child(1) { background: #FF5F57; }
+    .hero-mockup-wrap .browser-chrome .dots span:nth-child(2) { background: #FEBC2E; }
+    .hero-mockup-wrap .browser-chrome .dots span:nth-child(3) { background: #28C840; }
+    .hero-mockup-wrap .browser-chrome .url {
+      flex: 1;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--grey-700);
+      text-align: center;
+    }
+    .hero-mockup-wrap .browser-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 22px 22px 60px;
+      background: var(--paper-2);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-mockup-wrap .chat-bubble {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      max-width: 88%;
+    }
+    .hero-mockup-wrap .chat-bubble.me { flex-direction: row-reverse; align-self: flex-end; }
+    .hero-mockup-wrap .chat-bubble .avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      flex-shrink: 0; display:flex; align-items:center; justify-content:center;
+      font-size: 11px; font-weight: 600;
+    }
+    .hero-mockup-wrap .chat-bubble.them .avatar { background: var(--lavender); color: var(--ink); }
+    .hero-mockup-wrap .chat-bubble.me .avatar { background: var(--primary); color: var(--paper); }
+    .hero-mockup-wrap .chat-bubble .msg {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 11px 14px;
+      font-size: 13.5px;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+    .hero-mockup-wrap .chat-bubble.me .msg {
+      background: var(--primary);
+      color: var(--paper);
+      border-color: transparent;
+    }
+    .hero-mockup-wrap .typing {
+      display: inline-block;
+      width: 4px; height: 13px;
+      background: currentColor;
+      vertical-align: text-bottom;
+      animation: caret 1s steps(2) infinite;
+      margin-left: 2px;
+    }
+    @keyframes caret { 50% { opacity: 0; } }
+    .hero-mockup-wrap .play-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, rgba(20,18,30,0) 35%, rgba(20,18,30,0.45) 100%);
+      pointer-events: none;
+    }
+    .hero-mockup-wrap .play-btn {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.96);
+      box-shadow: 0 10px 28px rgba(10,10,10,0.22);
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: auto;
+      cursor: pointer;
+      transition: transform 220ms;
+    }
+    .hero-mockup-wrap .play-btn:hover { transform: scale(1.06); }
+    .hero-mockup-wrap .play-btn::after {
+      content: "";
+      width: 0; height: 0;
+      border-left: 20px solid var(--primary);
+      border-top: 13px solid transparent;
+      border-bottom: 13px solid transparent;
+      margin-left: 5px;
+    }
+    .hero-mockup-wrap .video-meta {
+      position: absolute;
+      bottom: 16px; left: 16px;
+      display: flex; gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.05em;
+      color: rgba(255,255,255,0.96);
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    .hero-mockup-wrap .video-meta .pill {
+      background: rgba(0,0,0,0.5);
+      padding: 5px 9px;
+      border-radius: 4px;
+    }
+    .hero-mockup-wrap .badge-live {
+      position: absolute;
+      top: -12px; right: 18px;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      padding: 6px 11px;
+      border-radius: 4px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hero-mockup-wrap .badge-live .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #16A34A;
+      box-shadow: 0 0 0 0 rgba(22,163,74,0.5);
+      animation: liveDot 2s ease-in-out infinite;
+    }
+    @keyframes liveDot {
+      0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.5); }
+      50% { box-shadow: 0 0 0 6px rgba(22,163,74,0); }
+    }
+    .hero-mockup-wrap .powered-by {
+      position: absolute;
+      bottom: 14px; right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--grey-500);
+      z-index: 4;
+    }
+  </style>
 </head>
 <body>
 
@@ -18,7 +197,7 @@
     <div class="links">
       <a href="#how" data-i18n="nav.how">Comment ça marche</a>
       <a href="#prospection" data-i18n="nav.features">Fonctionnalités</a>
-      <a href="#pricing" data-i18n="nav.pricing">Tarifs</a>
+      <a href="#beta" data-i18n="nav.pricing">Beta</a>
       <a href="#faq" data-i18n="nav.faq">FAQ</a>
       <a href="#blog" data-i18n="nav.blog">Blog</a>
     </div>
@@ -28,7 +207,7 @@
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
       <a href="https://app.baakal.ai" class="btn btn-ghost" style="padding:8px 14px;font-size:13px;" data-i18n="nav.signin">Se connecter</a>
-      <a href="#book" class="btn btn-primary" style="padding:9px 16px;font-size:13px;" data-i18n="nav.book">Réserver une démo</a>
+      <a href="#book" class="btn btn-primary" style="padding:9px 16px;font-size:13px;" data-i18n="nav.book">Rejoindre la beta</a>
     </div>
   </nav>
 
@@ -54,29 +233,41 @@
           <span data-i18n="hero.tag_1">75 $/utilisateur/mois</span>
           <span style="color:var(--border-strong)">·</span>
           <span data-i18n="hero.tag_2">Setup en 12 minutes</span>
-          <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_3">Pipedrive · HubSpot · Odoo</span>
         </div>
       </div>
 
-      <!-- Animated Synapse stage -->
-      <div class="hero-stage">
-        <div class="ring-bg"></div>
-        <div class="orbit"></div>
-        <div class="orbit-2"></div>
-        <div class="mark-wrap">
-          <svg class="synapse-anim" viewBox="0 0 100 100">
-            <line class="signal" x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" stroke-width="2" stroke-linecap="round"/>
-            <line class="signal" x1="50" y1="50" x2="82" y2="30" stroke="#9A84EB" stroke-width="2" stroke-linecap="round" style="animation-delay:-1.3s;"/>
-            <line class="signal" x1="50" y1="50" x2="30" y2="80" stroke="#C4B5FD" stroke-width="2" stroke-linecap="round" style="animation-delay:-2.6s;"/>
-            <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" stroke-width="5" stroke-linecap="round" opacity="0.35"/>
-            <line x1="50" y1="50" x2="82" y2="30" stroke="#9A84EB" stroke-width="5" stroke-linecap="round" opacity="0.35"/>
-            <line x1="50" y1="50" x2="30" y2="80" stroke="#C4B5FD" stroke-width="5" stroke-linecap="round" opacity="0.35"/>
-            <circle class="sat-1" cx="22" cy="26" r="7" fill="#C4B5FD"/>
-            <circle class="sat-2" cx="82" cy="30" r="8" fill="#9A84EB"/>
-            <circle class="sat-3" cx="30" cy="80" r="7" fill="#C4B5FD"/>
-            <circle class="hub" cx="50" cy="50" r="13" fill="#6E57FA"/>
-          </svg>
+      <!-- Hero mockup (variant D — platform mockup) -->
+      <div class="hero-stage hero-mockup-wrap">
+        <div class="badge-live"><span class="dot"></span><span data-i18n="hero.beta_badge">BETA TEST · ACCÈS LIMITÉ</span></div>
+        <div class="browser-frame">
+          <div class="browser-chrome">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div class="url">app.baakal.ai/synapse</div>
+          </div>
+          <div class="browser-body">
+            <div class="chat-bubble them">
+              <div class="avatar">YO</div>
+              <div class="msg">Cible : DAF cabinets compta 50–200 employés en France. Trigger : levée Q4. Objectif : 10 RDV/semaine.</div>
+            </div>
+            <div class="chat-bubble me" id="hero-reply">
+              <div class="avatar">
+                <svg width="14" height="14" viewBox="0 0 100 100"><circle cx="50" cy="50" r="22" fill="#FAFAF9"/></svg>
+              </div>
+              <div class="msg"><span id="hero-typed"></span><span class="typing"></span></div>
+            </div>
+            <div class="powered-by">
+              <svg width="16" height="16" viewBox="0 0 120 120">
+                <line x1="60" y1="60" x2="14" y2="22" stroke="#C4B5FD" stroke-width="2"/>
+                <line x1="60" y1="60" x2="104" y2="24" stroke="#9A84EB" stroke-width="2"/>
+                <line x1="60" y1="60" x2="24" y2="104" stroke="#C4B5FD" stroke-width="2"/>
+                <circle cx="14" cy="22" r="6" fill="#C4B5FD"/>
+                <circle cx="104" cy="24" r="7" fill="#9A84EB"/>
+                <circle cx="24" cy="104" r="6" fill="#C4B5FD"/>
+                <circle cx="60" cy="60" r="11" fill="#6E57FA"/>
+              </svg>
+              <span>Powered by Synapse</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -90,10 +281,15 @@
         <span class="name">Pipedrive</span>
         <span class="name">HubSpot</span>
         <span class="name">Odoo</span>
+        <span class="name">Salesforce</span>
         <span class="name">Lemlist</span>
         <span class="name">Apollo</span>
-        <span class="name">Slack</span>
+        <span class="name">Smartlead</span>
         <span class="name">LinkedIn</span>
+        <span class="name">Gmail</span>
+        <span class="name">Outlook</span>
+        <span class="name">Calendly</span>
+        <span class="name">Zapier</span>
       </div>
     </div>
   </div>
@@ -221,19 +417,19 @@
     </div>
   </section>
 
-  <!-- ──────── PRICING ──────── -->
-  <section class="section" id="pricing">
+  <!-- ──────── BETA PROGRAM ──────── -->
+  <section class="section" id="beta">
     <div class="container">
-      <div style="max-width:680px;">
-        <span class="eyebrow" data-i18n="pricing.eyebrow">TARIFS</span>
+      <div style="max-width:720px;">
+        <span class="eyebrow" data-i18n="pricing.eyebrow">PROGRAMME BETA — EN COURS</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="pricing.title_a">Un prix. </span><em class="accent" data-i18n="pricing.title_em">Toutes les fonctionnalités</em><span data-i18n="pricing.title_b">.</span>
+          <span data-i18n="pricing.title_a">On teste baakalai </span><em class="accent" data-i18n="pricing.title_em">avec une poignée d'équipes</em><span data-i18n="pricing.title_b">.</span>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="pricing.sub">
-          Pas de freemium déguisé, pas de "contactez-nous" pour les vraies features. baakalai = 75 $/utilisateur/mois, ce que tu vois est ce que tu obtiens.
+          Pas de plans, pas de prix public — pour l'instant. On ouvre la beta à un petit groupe d'équipes commerciales pour refine le produit avec elles. Les beta testers gardent un tarif préférentiel à la sortie publique.
         </p>
       </div>
-      <div class="pricing-grid" id="pricing-grid"></div>
+      <div class="beta-grid" id="beta-grid"></div>
     </div>
   </section>
 
@@ -241,17 +437,27 @@
   <section class="section dark" id="book">
     <div class="container booking">
       <div>
-        <span class="eyebrow" data-i18n="book.eyebrow">RÉSERVE TON CRÉNEAU</span>
+        <span class="eyebrow" data-i18n="book.eyebrow">CANDIDATER À LA BETA</span>
         <h2 class="h-section" style="margin-top:18px; color:var(--paper);">
-          <span data-i18n="book.title_a">Vingt minutes pour voir si </span><em class="accent" data-i18n="book.title_em">ça matche</em><span data-i18n="book.title_b">.</span>
+          <span data-i18n="book.title_a">Vingt minutes pour voir si </span><em class="accent" data-i18n="book.title_em">on peut t'embarquer</em><span data-i18n="book.title_b">.</span>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="book.sub">
-          On te montre une démo personnalisée sur tes données. Si baakalai ne correspond pas à ton cas, on te le dit franchement — pas de pitch déguisé.
+          On prend 20 minutes ensemble pour comprendre ton cas. Si baakalai colle, on t'ouvre un accès beta dans la semaine. Sinon, on te le dit franchement — pas de pitch déguisé.
         </p>
         <ul class="feature-list" id="book-points" style="margin-top:32px;"></ul>
       </div>
       <div class="booking-iframe">
-        <iframe src="https://calendar.google.com/calendar/appointments/schedules/AcZssZ3rSiCfLGBNOgotcPE9gIgs31x90NJPRD9kPOcSV0gcr0VCjM5b5vSpknyMGyxsz8gPhVzJRBjE?gv=true" style="border:0;border-radius:12px;background:var(--paper);" width="100%" height="600" frameborder="0"></iframe>
+        <!-- Cal.com placeholder embed; replace src with real calendar URL -->
+        <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px;background:var(--paper);color:var(--ink);">
+          <img src="assets/synapse-mark.svg" width="56" height="56" alt="" style="margin-bottom:24px;">
+          <div style="font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--grey-500);margin-bottom:12px;">CAL.COM EMBED · PLACEHOLDER</div>
+          <div style="font-weight:500;font-size:24px;letter-spacing:-0.024em;margin-bottom:14px;">cal.com/baakalai</div>
+          <p style="font-size:14px;line-height:1.5;color:var(--grey-700);max-width:380px;margin-bottom:28px;">Replace the iframe src in <code style="font-family:var(--font-mono);background:var(--paper-2);padding:2px 6px;border-radius:4px;font-size:12.5px;">site/index.html</code> with your Cal.com or Calendly link to enable the live calendar.</p>
+          <a href="https://cal.com/baakalai" class="btn btn-primary">Open cal.com/baakalai →</a>
+        </div>
+        <!-- Once a real link is available, swap the placeholder above with:
+        <iframe src="https://cal.com/baakalai/intro" allow="camera; microphone; autoplay; encrypted-media"></iframe>
+        -->
       </div>
     </div>
   </section>
@@ -292,7 +498,7 @@
       <div class="footer-grid">
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-            <img src="../assets/synapse-mark-on-dark.svg" width="28" height="28" alt="">
+            <img src="assets/synapse-mark-on-dark.svg" width="28" height="28" alt="">
             <span style="font-weight:600;font-size:18px;letter-spacing:-0.022em;color:var(--paper);">baakalai</span>
           </div>
           <p style="font-size:14.5px;line-height:1.6;max-width:340px;" data-i18n="footer.blurb">L'IA qui orchestre ta prospection ET tes clients. Lowercase, on insiste.</p>
@@ -304,7 +510,7 @@
             <li><a href="#prospection" data-i18n="footer.links.prosp">Prospection</a></li>
             <li><a href="#activation" data-i18n="footer.links.crm">Activation client</a></li>
             <li><a href="#synapse" data-i18n="footer.links.synapse">Synapse</a></li>
-            <li><a href="#pricing" data-i18n="footer.links.pricing">Tarifs</a></li>
+            <li><a href="#beta" data-i18n="footer.links.pricing">Beta</a></li>
           </ul>
         </div>
         <div>
@@ -333,6 +539,41 @@
   </footer>
 
   <script src="i18n.js"></script>
+  <script>
+    // ─── Hero mockup typing loop ─────────────────────────
+    (function () {
+      const target = document.getElementById('hero-typed');
+      if (!target) return;
+      const lines = {
+        fr: "Compris. Je génère 3 variantes — un cold email court, un long, et une approche LinkedIn-first. Je déploie sur Lemlist quand tu valides.",
+        en: "Got it. Generating 3 variants — a short cold email, a long one, and a LinkedIn-first approach. I'll deploy to Lemlist as soon as you confirm."
+      };
+      let i = 0, mode = 'typing', timer;
+      function tick() {
+        const lang = (localStorage.getItem('baakalai-lang') || 'fr');
+        const text = lines[lang] || lines.fr;
+        if (mode === 'typing') {
+          if (i < text.length) {
+            i = Math.min(text.length, i + 2);
+            target.textContent = text.slice(0, i);
+            timer = setTimeout(tick, 28);
+          } else {
+            mode = 'pause';
+            timer = setTimeout(tick, 4500);
+          }
+        } else if (mode === 'pause') {
+          mode = 'reset';
+          target.textContent = '';
+          i = 0;
+          timer = setTimeout(tick, 700);
+        } else {
+          mode = 'typing';
+          tick();
+        }
+      }
+      tick();
+    })();
+  </script>
   <script>
     // ─── i18n engine ─────────────────────────────────────
     const STORE_KEY = 'baakalai-lang';
@@ -391,26 +632,23 @@
         </div>
       `).join('');
 
-      // Pricing
+      // Beta program
       const check = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-      const renderPriceCard = (p, featured = false) => `
-        <div class="price-card ${featured ? 'featured' : ''} reveal">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div class="tier">${p.tier}</div>
-            ${p.tag ? `<span style="font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;background:var(--lavender);color:var(--ink);padding:4px 10px;border-radius:999px;">${p.tag}</span>` : ''}
+      document.getElementById('beta-grid').innerHTML = `
+        <div class="beta-card reveal">
+          <div class="beta-card-head">
+            <span class="beta-tag">CE QU'ON OFFRE AUX BETA TESTERS</span>
           </div>
-          <div class="name">${p.name}</div>
-          <div class="amount">
-            <span class="num">$${p.price}</span>
-            <span class="suffix">${p.suffix}</span>
+          <ul class="feats">${d.pricing.perks.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
+        </div>
+        <div class="beta-card reveal">
+          <div class="beta-card-head">
+            <span class="beta-tag">CE QU'ON ATTEND DE TOI</span>
           </div>
-          <p class="blurb">${p.blurb}</p>
-          <ul class="feats">${p.feats.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
-          <a href="#book" class="btn ${featured ? 'btn-accent' : 'btn-primary'}" style="width:100%;justify-content:center;">${p.cta}</a>
+          <ul class="feats">${d.pricing.expect.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
+          <a href="#book" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:24px;">${d.pricing.cta}</a>
         </div>
       `;
-      document.getElementById('pricing-grid').innerHTML =
-        renderPriceCard(d.pricing.solo, false) + renderPriceCard(d.pricing.team, true);
 
       // Booking points
       document.getElementById('book-points').innerHTML = d.book.points.map(p => `<li>${p}</li>`).join('');
