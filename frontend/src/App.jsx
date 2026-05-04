@@ -8,22 +8,33 @@ import OnboardingWizard from './components/OnboardingWizard'
 import Layout from './components/Layout'
 import { DashboardSkeleton } from './components/Skeleton'
 
-const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
-const ChatPage = lazy(() => import('./pages/ChatPage'))
-const DashboardPage = lazy(() => import('./pages/DashboardPage'))
-const CampaignsList = lazy(() => import('./pages/CampaignsList'))
-const CampaignDetailRoute = lazy(() => import('./pages/CampaignDetailRoute'))
-const PerformancePage = lazy(() => import('./pages/PerformancePage'))
-const RecosPage = lazy(() => import('./pages/RecosPage'))
-const MemoryExplorerPage = lazy(() => import('./pages/MemoryExplorerPage'))
-const ProfilePage = lazy(() => import('./pages/ProfilePage'))
-const SettingsPage = lazy(() => import('./pages/SettingsPage'))
-const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
-const CRMAnalyticsPage = lazy(() => import('./pages/CRMAnalyticsPage'))
-const ClientsPage = lazy(() => import('./pages/ClientsPage'))
-const NurturePage = lazy(() => import('./pages/NurturePage'))
-const JoinTeamPage = lazy(() => import('./pages/JoinTeamPage'))
-const LegalPage = lazy(() => import('./pages/LegalPage'))
+// Auto-reload on stale chunk (after deploy, old chunk hashes don't exist)
+function lazyRetry(importFn) {
+  return lazy(() => importFn().catch(() => {
+    if (!sessionStorage.getItem('chunk_reload')) {
+      sessionStorage.setItem('chunk_reload', '1')
+      window.location.reload()
+    }
+    return importFn() // retry once after potential reload
+  }))
+}
+
+const ResetPasswordPage = lazyRetry(() => import('./pages/ResetPasswordPage'))
+const ChatPage = lazyRetry(() => import('./pages/ChatPage'))
+const DashboardPage = lazyRetry(() => import('./pages/DashboardPage'))
+const CampaignsList = lazyRetry(() => import('./pages/CampaignsList'))
+const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'))
+const PerformancePage = lazyRetry(() => import('./pages/PerformancePage'))
+const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
+const MemoryExplorerPage = lazyRetry(() => import('./pages/MemoryExplorerPage'))
+const ProfilePage = lazyRetry(() => import('./pages/ProfilePage'))
+const SettingsPage = lazyRetry(() => import('./pages/SettingsPage'))
+const IntegrationsPage = lazyRetry(() => import('./pages/IntegrationsPage'))
+const CRMAnalyticsPage = lazyRetry(() => import('./pages/CRMAnalyticsPage'))
+const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
+const NurturePage = lazyRetry(() => import('./pages/NurturePage'))
+const JoinTeamPage = lazyRetry(() => import('./pages/JoinTeamPage'))
+const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
 
 // Public routes accessible without authentication
 const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy']
