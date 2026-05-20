@@ -385,15 +385,16 @@
     "backToApp": "Retour à l'application"
   },
   "onboarding": {
-    "title": "Bienvenue sur Baakalai !",
-    "subtitle": "Configuration {done}/{total}",
-    "profileFilled": "Profil entreprise complété",
-    "lemlistConnected": "Lemlist connecté",
-    "firstCampaign": "Première campagne créée",
-    "prospectsAdded": "Prospects ajoutés",
-    "firstLaunch": "Première campagne lancée",
+    "title": "Premiers pas avec Baakalai",
+    "subtitle": "{done}/{total} étapes complétées",
+    "accountCreated": "Compte créé",
+    "crmConnected": "Connecter un CRM (Pipedrive, HubSpot ou Salesforce)",
+    "emailConnected": "Connecter un email (Gmail ou Outlook)",
+    "contactsImported": "Importer des contacts",
+    "firstCampaign": "Créer une première campagne",
+    "firstLaunch": "Lancer une campagne",
     "continueChat": "Continuer la configuration dans le chat →",
-    "allDone": "Tout est prêt ! Tu peux commencer à prospecter."
+    "allDone": "Tout est prêt ! Vous pouvez commencer à prospecter."
   },
   "replies": {
     "title": "Activités Prospects",

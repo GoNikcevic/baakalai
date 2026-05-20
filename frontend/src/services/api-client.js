@@ -766,6 +766,14 @@ export async function launchCampaignToLemlist(campaignId, options = {}) {
   });
 }
 
+/** Launch campaign to Salesforce: create SF campaign + push contacts as members */
+export async function launchCampaignToSalesforce(campaignId, options = {}) {
+  return request(`/campaigns/${campaignId}/launch-salesforce`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  });
+}
+
 /** Get Lemlist credit balance */
 export async function getLemlistCredits() {
   return request('/ai/lemlist-credits');
@@ -942,6 +950,7 @@ const BakalAPI = {
   addProspectsToCampaign,
   listCampaignProspects,
   launchCampaignToLemlist,
+  launchCampaignToSalesforce,
   getLemlistCredits,
   revealEmails,
   webSearchProspects,

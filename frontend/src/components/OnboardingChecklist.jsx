@@ -1,7 +1,8 @@
 /* ===============================================================================
    BAKAL — Onboarding Checklist Component
-   Shows a progress card on the dashboard for new users.
-   Points them to the chat for conversational onboarding.
+   Shows a progress card on the dashboard for new users (beta testers).
+   6-step guided tour to first campaign launch in <30 min.
+   Complements the OnboardingWizard (wizard = initial setup, checklist = ongoing guide).
    =============================================================================== */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -10,66 +11,82 @@ import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
 
-/**
- * OnboardingChecklist — renders a small card/banner for new users.
- * Checks: profile filled, Lemlist connected, first campaign, prospects added, first launch.
- * Disappears once all 5 steps are done.
- */
+const STEP_CONFIG = [
+  { key: 'accountCreated', route: null },
+  { key: 'crmConnected', route: '/integrations' },
+  { key: 'emailConnected', route: '/integrations' },
+  { key: 'contactsImported', route: '/clients' },
+  { key: 'firstCampaign', route: '/chat' },
+  { key: 'firstLaunch', route: '/campaigns' },
+];
+
 export default function OnboardingChecklist() {
   const t = useT();
   const navigate = useNavigate();
-  const { campaigns } = useApp();
+  const { campaigns, opportunities } = useApp();
 
-  const [userProfile, setUserProfile] = useState(null);
   const [keys, setKeys] = useState(null);
+  const [emailAccounts, setEmailAccounts] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState(() =>
+    localStorage.getItem('bakal_checklist_dismissed') === 'true'
+  );
 
-  // Fetch user profile + integration keys on mount
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [profileRes, keysRes] = await Promise.all([
-          request('/profile'),
+        const [keysRes, emailRes] = await Promise.all([
           request('/settings/keys'),
+          request('/nurture/email-accounts').catch(() => ({ accounts: [] })),
         ]);
         if (!cancelled) {
-          setUserProfile(profileRes.profile || null);
           setKeys(keysRes.keys || keysRes);
+          setEmailAccounts(emailRes.accounts || []);
         }
-      } catch {
-        // Silently ignore — checklist just won't show
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      } catch { /* checklist won't show */ }
+      finally { if (!cancelled) setLoading(false); }
     }
     load();
     return () => { cancelled = true; };
   }, []);
 
-  // Compute checklist steps
   const campaignsList = useMemo(() => Object.values(campaigns || {}), [campaigns]);
+  const contactsList = useMemo(() => Object.values(opportunities || {}), [opportunities]);
 
   const steps = useMemo(() => {
     if (loading) return null;
 
-    const profileFilled = !!(userProfile && userProfile.company && (userProfile.sector || userProfile.description));
-    const lemlistConnected = !!(keys && keys.lemlistKey && keys.lemlistKey.configured);
+    // 1. Account created — always true if they see this
+    const accountCreated = true;
+
+    // 2. CRM connected — any of Pipedrive/HubSpot/Salesforce/Odoo configured
+    const crmConnected = !!(keys && (
+      (keys.pipedriveKey && keys.pipedriveKey.configured) ||
+      (keys.hubspotKey && keys.hubspotKey.configured) ||
+      (keys.salesforceKey && keys.salesforceKey.configured) ||
+      (keys.odooUrl && keys.odooUrl.configured)
+    ));
+
+    // 3. Email connected — any email account (SMTP/OAuth)
+    const emailConnected = !!(emailAccounts && emailAccounts.length > 0);
+
+    // 4. Contacts imported — at least one contact/opportunity exists
+    const contactsImported = contactsList.length > 0;
+
+    // 5. First campaign created
     const firstCampaign = campaignsList.length > 0;
-    const prospectsAdded = campaignsList.some(c => (c.nbProspects || c.nb_prospects || 0) > 0);
+
+    // 6. First campaign launched
     const firstLaunch = campaignsList.some(c => c.status === 'active');
 
-    return [
-      { key: 'profileFilled', done: profileFilled },
-      { key: 'lemlistConnected', done: lemlistConnected },
-      { key: 'firstCampaign', done: firstCampaign },
-      { key: 'prospectsAdded', done: prospectsAdded },
-      { key: 'firstLaunch', done: firstLaunch },
-    ];
-  }, [loading, userProfile, keys, campaignsList]);
+    return STEP_CONFIG.map((cfg, i) => ({
+      ...cfg,
+      done: [accountCreated, crmConnected, emailConnected, contactsImported, firstCampaign, firstLaunch][i],
+    }));
+  }, [loading, keys, emailAccounts, contactsList, campaignsList]);
 
-  // Don't render while loading, if data failed, or if all steps are done
-  if (loading || !steps) return null;
+  if (loading || !steps || dismissed) return null;
   const doneCount = steps.filter(s => s.done).length;
   const total = steps.length;
   if (doneCount === total) return null;
@@ -93,26 +110,39 @@ export default function OnboardingChecklist() {
             {t('onboarding.subtitle', { done: doneCount, total })}
           </div>
         </div>
-        {/* Progress ring */}
-        <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
-          <svg width="44" height="44" viewBox="0 0 44 44">
-            <circle cx="22" cy="22" r="18" fill="none" stroke="var(--border, #e5e7eb)" strokeWidth="3" />
-            <circle
-              cx="22" cy="22" r="18" fill="none"
-              stroke="var(--blue, #3b82f6)" strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray={`${(doneCount / total) * 113.1} 113.1`}
-              transform="rotate(-90 22 22)"
-              style={{ transition: 'stroke-dasharray 0.5s ease' }}
-            />
-          </svg>
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontWeight: 700, color: 'var(--blue, #3b82f6)',
-          }}>
-            {doneCount}/{total}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Progress ring */}
+          <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
+            <svg width="44" height="44" viewBox="0 0 44 44">
+              <circle cx="22" cy="22" r="18" fill="none" stroke="var(--border, #e5e7eb)" strokeWidth="3" />
+              <circle
+                cx="22" cy="22" r="18" fill="none"
+                stroke="var(--blue, #3b82f6)" strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray={`${(doneCount / total) * 113.1} 113.1`}
+                transform="rotate(-90 22 22)"
+                style={{ transition: 'stroke-dasharray 0.5s ease' }}
+              />
+            </svg>
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, color: 'var(--blue, #3b82f6)',
+            }}>
+              {doneCount}/{total}
+            </div>
           </div>
+          {/* Dismiss button */}
+          <button
+            onClick={() => { setDismissed(true); localStorage.setItem('bakal_checklist_dismissed', 'true'); }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 16, color: 'var(--text-muted)', padding: 4,
+            }}
+            title="Dismiss"
+          >
+            ✕
+          </button>
         </div>
       </div>
 
@@ -133,12 +163,17 @@ export default function OnboardingChecklist() {
       {/* Checklist items */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
         {steps.map((step) => (
-          <div key={step.key} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            fontSize: 13,
-            color: step.done ? 'var(--success, #22c55e)' : 'var(--text)',
-            opacity: step.done ? 0.7 : 1,
-          }}>
+          <div
+            key={step.key}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              fontSize: 13,
+              color: step.done ? 'var(--success, #22c55e)' : 'var(--text)',
+              opacity: step.done ? 0.7 : 1,
+              cursor: !step.done && step.route ? 'pointer' : 'default',
+            }}
+            onClick={() => { if (!step.done && step.route) navigate(step.route); }}
+          >
             <span style={{
               width: 20, height: 20, borderRadius: 6,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -148,18 +183,24 @@ export default function OnboardingChecklist() {
             }}>
               {step.done ? '\u2713' : ' '}
             </span>
-            <span style={{ textDecoration: step.done ? 'line-through' : 'none' }}>
+            <span style={{ textDecoration: step.done ? 'line-through' : 'none', flex: 1 }}>
               {t(`onboarding.${step.key}`)}
             </span>
+            {!step.done && step.route && (
+              <span style={{ fontSize: 11, color: 'var(--blue, #3b82f6)', fontWeight: 600 }}>→</span>
+            )}
           </div>
         ))}
       </div>
 
-      {/* CTA button */}
+      {/* CTA */}
       <button
         className="btn btn-primary"
         style={{ fontSize: 13, padding: '8px 18px', width: 'fit-content' }}
-        onClick={() => navigate('/chat')}
+        onClick={() => {
+          const nextStep = steps.find(s => !s.done && s.route);
+          navigate(nextStep ? nextStep.route : '/chat');
+        }}
       >
         {t('onboarding.continueChat')}
       </button>

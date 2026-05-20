@@ -23,6 +23,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
   const [recoApplied, setRecoApplied] = useState(false);
   const [recoDismissed, setRecoDismissed] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [launchingSF, setLaunchingSF] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
   const handleArchive = async () => {
@@ -112,6 +113,41 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
     setLaunching(false);
   };
 
+  /* ── Salesforce deploy handler ── */
+  const handleLaunchSalesforce = async () => {
+    if (!c.sequence || c.sequence.length === 0) {
+      setLaunchAlert({
+        type: 'error',
+        title: en ? 'Cannot deploy — missing sequences' : 'Impossible de deployer — sequences manquantes',
+        desc: en ? 'Generate sequences first via Baakalai.' : "Generez d'abord les sequences via Baakalai.",
+      });
+      return;
+    }
+
+    setLaunchingSF(true);
+    setLaunchAlert(null);
+    const backendId = c._backendId || c.id;
+
+    try {
+      const result = await api.launchCampaignToSalesforce(backendId);
+
+      setLaunchAlert({
+        type: 'success',
+        title: en ? 'Campaign deployed to Salesforce' : 'Campagne deployee vers Salesforce',
+        desc: en
+          ? `${result.pushed || 0} contacts pushed, ${result.skipped || 0} skipped${result.errors ? `, ${result.errors} errors` : ''}`
+          : `${result.pushed || 0} contacts pousses, ${result.skipped || 0} ignores${result.errors ? `, ${result.errors} erreurs` : ''}`,
+      });
+    } catch (err) {
+      setLaunchAlert({
+        type: 'error',
+        title: en ? 'Salesforce deploy failed' : 'Echec du deploiement Salesforce',
+        desc: err.message || (en ? 'Check your Salesforce connection in Integrations.' : 'Verifiez votre connexion Salesforce dans Integrations.'),
+      });
+    }
+    setLaunchingSF(false);
+  };
+
   return (
     <div className="campaign-detail">
       <LoadingOverlay
@@ -169,6 +205,14 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             disabled={launching}
           >
             {launching ? (en ? '⏳ Deploying to Lemlist...' : '⏳ Déploiement Lemlist...') : (en ? '🚀 Launch to Lemlist' : '🚀 Lancer vers Lemlist')}
+          </button>
+          <button
+            className="btn"
+            style={{ fontSize: '12px', padding: '8px 14px', background: '#00A1E0', color: '#fff', border: 'none' }}
+            onClick={handleLaunchSalesforce}
+            disabled={launchingSF}
+          >
+            {launchingSF ? (en ? '⏳ Deploying to Salesforce...' : '⏳ Déploiement Salesforce...') : (en ? 'Deploy to Salesforce' : 'Déployer vers Salesforce')}
           </button>
         </div>
       </div>
