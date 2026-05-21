@@ -1006,13 +1006,13 @@ const settings = {
 
 const users = {
   async getByEmail(email) {
-    const result = await query('SELECT id, email, name, company, role, password_hash, email_verified, language, created_at FROM users WHERE email = $1', [email]);
+    const result = await query('SELECT id, email, name, company, role, password_hash, email_verified, language, onboarding_complete, created_at FROM users WHERE email = $1', [email]);
     return result.rows[0] || null;
   },
 
   async getById(id) {
     const result = await query(
-      'SELECT id, email, name, company, role, language, created_at FROM users WHERE id = $1',
+      'SELECT id, email, name, company, role, language, onboarding_complete, created_at FROM users WHERE id = $1',
       [id]
     );
     return result.rows[0] || null;

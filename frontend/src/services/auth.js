@@ -39,6 +39,9 @@ export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem('bakal_onboarding_complete');
+  localStorage.removeItem('bakal_checklist_dismissed');
+  localStorage.removeItem('bakal_profile');
 }
 
 export function isLoggedIn() {
@@ -57,6 +60,12 @@ export async function login(email, password) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
     setSession(data.token, data.refreshToken, data.user);
+    // Sync onboarding flag from server
+    if (data.user.onboarding_complete) {
+      localStorage.setItem('bakal_onboarding_complete', 'true');
+    } else {
+      localStorage.removeItem('bakal_onboarding_complete');
+    }
     return data.user;
   } catch (err) {
     throw err;
@@ -168,6 +177,12 @@ export async function validateToken() {
     if (res.ok) {
       const data = await res.json();
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      // Sync onboarding flag from server (authoritative source)
+      if (data.user.onboarding_complete) {
+        localStorage.setItem('bakal_onboarding_complete', 'true');
+      } else {
+        localStorage.removeItem('bakal_onboarding_complete');
+      }
       return true;
     }
     // Token expired — try refresh
@@ -186,6 +201,11 @@ export async function validateToken() {
     }
     const data2 = await res2.json();
     localStorage.setItem(USER_KEY, JSON.stringify(data2.user));
+    if (data2.user.onboarding_complete) {
+      localStorage.setItem('bakal_onboarding_complete', 'true');
+    } else {
+      localStorage.removeItem('bakal_onboarding_complete');
+    }
     return true;
   } catch {
     return false;

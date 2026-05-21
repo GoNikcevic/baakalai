@@ -46,15 +46,14 @@ export default function App() {
   const { initData } = useApp()
   const location = useLocation()
   const [authed, setAuthed] = useState(null) // null = checking, true/false
-  const [onboarded, setOnboarded] = useState(() =>
-    localStorage.getItem('bakal_onboarding_complete') === 'true'
-  )
+  const [onboarded, setOnboarded] = useState(null) // null = checking, true/false
   const [authError, setAuthError] = useState(null)
 
   // Re-initialize data after onboarding completes
   // (initial initData may have run before onboarding was done)
   function handleOnboardingComplete() {
     setOnboarded(true)
+    localStorage.setItem('bakal_onboarding_complete', 'true')
     initData()
   }
 
@@ -75,8 +74,14 @@ export default function App() {
             localStorage.setItem('bakal_token', data.token)
             if (data.refreshToken) localStorage.setItem('bakal_refresh_token', data.refreshToken)
             localStorage.setItem('bakal_user', JSON.stringify(data.user))
+            if (data.user.onboarding_complete) {
+              localStorage.setItem('bakal_onboarding_complete', 'true')
+            } else {
+              localStorage.removeItem('bakal_onboarding_complete')
+            }
             window.history.replaceState({}, '', '/')
             setAuthed(true)
+            setOnboarded(!!data.user.onboarding_complete)
           })
           .catch(err => {
             console.error('[google-auth] Exchange error:', err)
@@ -98,10 +103,13 @@ export default function App() {
         const valid = await validateToken()
         if (valid) {
           setAuthed(true)
+          // onboarding flag was synced to localStorage by validateToken
+          setOnboarded(localStorage.getItem('bakal_onboarding_complete') === 'true')
           return
         }
       }
       setAuthed(false)
+      setOnboarded(false)
     }
     checkAuth()
   }, [])
@@ -132,7 +140,7 @@ export default function App() {
     )
   }
 
-  if (authed === null) {
+  if (authed === null || (authed && onboarded === null)) {
     return (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -145,7 +153,10 @@ export default function App() {
   }
 
   if (!authed) {
-    return <AuthGate onAuth={() => setAuthed(true)} error={authError} />
+    return <AuthGate onAuth={() => {
+      setAuthed(true)
+      setOnboarded(localStorage.getItem('bakal_onboarding_complete') === 'true')
+    }} error={authError} />
   }
 
   if (!onboarded) {

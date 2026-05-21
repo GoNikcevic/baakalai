@@ -174,7 +174,7 @@ router.post('/register', async (req, res, next) => {
     res.status(201).json({
       token: accessToken,
       refreshToken, // kept for backward compat (Chrome extension)
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, onboarding_complete: false },
     });
   } catch (err) {
     next(err);
@@ -204,7 +204,7 @@ router.post('/login', async (req, res, next) => {
     res.json({
       token: accessToken,
       refreshToken, // kept for backward compat (Chrome extension)
-      user: { id: user.id, email: user.email, name: user.name, company: user.company, role: user.role },
+      user: { id: user.id, email: user.email, name: user.name, company: user.company, role: user.role, onboarding_complete: !!user.onboarding_complete },
     });
   } catch (err) {
     next(err);
@@ -268,7 +268,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
       }
     } catch { /* no team */ }
 
-    res.json({ user: { ...user, teamRole, teamName } });
+    res.json({ user: { ...user, onboarding_complete: !!user.onboarding_complete, teamRole, teamName } });
   } catch (err) {
     next(err);
   }
@@ -450,7 +450,7 @@ router.get('/google/callback', async (req, res) => {
     const authCode = crypto.randomBytes(32).toString('hex');
     _oauthCodes.set(authCode, {
       accessToken, refreshToken,
-      user: { id: dbUser.id, name: dbUser.name, email: dbUser.email, role: dbUser.role },
+      user: { id: dbUser.id, name: dbUser.name, email: dbUser.email, role: dbUser.role, onboarding_complete: !!dbUser.onboarding_complete },
       expiresAt: Date.now() + 60000, // 1 minute
     });
 
@@ -517,6 +517,16 @@ router.delete('/account', requireAuth, async (req, res, next) => {
 
     console.log(`[account-deletion] User ${userId} account deleted (GDPR/CCPA erasure)`);
     res.json({ success: true, message: 'Account and all associated data have been permanently deleted.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/onboarding-complete — Mark onboarding as done
+router.post('/onboarding-complete', requireAuth, async (req, res, next) => {
+  try {
+    await db.query('UPDATE users SET onboarding_complete = true WHERE id = $1', [req.user.id]);
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

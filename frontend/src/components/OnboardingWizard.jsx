@@ -283,6 +283,16 @@ export default function OnboardingWizard({ onComplete }) {
       }).catch(() => {});
     }
 
+    // Mark onboarding complete on backend (authoritative)
+    const token = localStorage.getItem('bakal_token');
+    fetch('/api/auth/onboarding-complete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }).catch(() => {});
+
     localStorage.setItem('bakal_onboarding_complete', 'true');
     if (onComplete) onComplete();
   }
@@ -639,6 +649,11 @@ export default function OnboardingWizard({ onComplete }) {
 
           {step < TOTAL_STEPS - 1 && (
             <div className="wizard-skip" onClick={() => {
+              const tkn = localStorage.getItem('bakal_token');
+              fetch('/api/auth/onboarding-complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
+              }).catch(() => {});
               localStorage.setItem('bakal_onboarding_complete', 'true');
               if (onComplete) onComplete();
             }}>
