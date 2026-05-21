@@ -76,6 +76,37 @@ function start() {
   });
 
   // ═══════════════════════════════════════════════════
+  // Strategic Agents (fast) — Daily 9:30 AM
+  // Deal Coach + Upsell + Copy Optimizer (benefit from daily runs)
+  // Heavy agents (ICP, Win/Loss, Competitor, Timing) stay weekly in Memory Agent
+  // ═══════════════════════════════════════════════════
+  cron.schedule('30 9 * * *', async () => {
+    console.log('[agent:strategic-daily] Starting fast strategic agents...');
+    try {
+      const { runOne } = require('../lib/agents/strategic-orchestrator');
+      const db = require('../db');
+      const users = await db.query('SELECT id FROM users WHERE onboarding_complete = true');
+
+      for (const row of users.rows) {
+        const userId = row.id;
+        const results = {};
+        for (const agent of ['deal_coach', 'upsell', 'copy_optimizer']) {
+          try {
+            results[agent] = await runOne(userId, agent);
+          } catch (err) {
+            results[agent] = { error: err.message };
+          }
+        }
+        const coached = results.deal_coach?.coached || 0;
+        const upsells = results.upsell?.opportunities?.length || 0;
+        console.log(`[agent:strategic-daily] user:${userId.slice(0, 8)} deal_coach:${coached} upsell:${upsells}`);
+      }
+    } catch (err) {
+      logger.error('orchestrator', 'Strategic daily agents failed: ' + err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
   // Lifecycle Emails — Daily 10:00 AM
   // Onboarding sequences + retention re-engagement
   // ═══════════════════════════════════════════════════
@@ -121,12 +152,13 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] 4 agents + lifecycle scheduled:');
-  console.log('  Prospection: daily 8AM + evening batch 8PM');
-  console.log('  CRM:         daily 9AM');
-  console.log('  Lifecycle:   daily 10AM');
-  console.log('  Memory:      Sunday 10AM');
-  console.log('  Reporting:   Monday 9AM');
+  console.log('[orchestrator] 5 agents + lifecycle scheduled:');
+  console.log('  Prospection:      daily 8AM + evening batch 8PM');
+  console.log('  CRM:              daily 9AM');
+  console.log('  Strategic (fast): daily 9:30AM (deal_coach, upsell, copy_optimizer)');
+  console.log('  Lifecycle:        daily 10AM');
+  console.log('  Memory:           Sunday 10AM (+ heavy strategic agents)');
+  console.log('  Reporting:        Monday 9AM');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate, runBatchOrchestrator };
