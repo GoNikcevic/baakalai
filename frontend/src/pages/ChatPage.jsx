@@ -263,6 +263,9 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute, onP
   if (action === 'import_crm') {
     return <CrmActionCard metadata={metadata} actionType="import_crm" label={en ? 'Import from CRM' : 'Importer depuis le CRM'} icon={'\u2B07\uFE0F'} />;
   }
+  if (action === 'clean_crm') {
+    return <CrmActionCard metadata={metadata} actionType="clean_crm" label={en ? 'Clean CRM data' : 'Nettoyer le CRM'} icon={'\uD83E\uDDF9'} />;
+  }
   if (action === 'list_clients') {
     return <ListClientsCard metadata={metadata} />;
   }
@@ -859,6 +862,8 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
       } else if (actionType === 'import_crm') {
         endpoint = '/crm/import/' + (metadata.provider || 'pipedrive');
         body = {};
+      } else if (actionType === 'clean_crm') {
+        endpoint = '/crm/first-diagnostic';
       }
       const res = await request(endpoint, { method: 'POST', body: JSON.stringify(body) });
       setResult(res);
@@ -886,10 +891,13 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
       {status === 'done' && (
         <div style={{ fontSize: 12, color: 'var(--success)' }}>
           {'\u2705'} {en ? 'Done' : 'Termin\u00E9'}
-          {result?.score != null && ` — ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
+          {result?.score != null && !result?.health && ` — ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
           {result?.imported != null && ` — ${result.imported} ${en ? 'contact(s) imported' : 'contact(s) import\u00E9(s)'}`}
           {result?.sent != null && ` — ${result.sent} ${en ? 'email(s) sent' : 'email(s) envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
           {result?.triggered != null && ` — ${result.triggered} trigger(s), ${result.sent || 0} ${en ? 'sent' : 'envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
+          {result?.health?.score != null && ` — ${en ? 'Health' : 'Sant\u00E9'}: ${result.health.score}/100`}
+          {result?.contacts?.total != null && ` — ${result.contacts.total} contacts`}
+          {result?.health?.issues?.length > 0 && ` — ${result.health.issues.length} ${en ? 'issue(s)' : 'probl\u00E8me(s)'}`}
         </div>
       )}
       {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}

@@ -447,6 +447,9 @@ Envoyer un email personnel à un contact (activation/suivi client) :
 Scanner le CRM pour détecter les problèmes de données :
 { "action": "scan_crm", "provider": "pipedrive" }
 
+Nettoyer automatiquement le CRM (corrige les doublons, noms en majuscules, emails invalides) :
+{ "action": "clean_crm" }
+
 Relancer les deals stagnants (contacts avec deals inactifs depuis X jours) :
 { "action": "run_nurture", "triggerType": "deal_stagnant", "days": 30 }
 
@@ -476,8 +479,9 @@ RÈGLES send_newsletter :
 - Génère un résumé du contenu proposé AVANT d'envoyer. Demande confirmation.
 - Si Informz n'est pas connecté, dis-le et redirige vers Settings.
 
-RÈGLES scan_crm / run_nurture / import_crm :
-- scan_crm : quand l'utilisateur demande "nettoie mon CRM", "vérifie mes données", "doublons".
+RÈGLES scan_crm / clean_crm / run_nurture / import_crm :
+- scan_crm : quand l'utilisateur demande "vérifie mes données", "quel est l'état de mon CRM", "diagnostic CRM".
+- clean_crm : quand l'utilisateur demande "nettoie mon CRM", "corrige les doublons", "fix les données", "supprime les emails invalides". Exécute auto-fix des problèmes safe (doublons email, majuscules, emails invalides). Rapporte le résultat.
 - run_nurture : quand l'utilisateur demande "relance les deals stagnants", "réengage les contacts inactifs", "envoie un suivi".
 - import_crm : quand l'utilisateur demande "importe mes contacts Pipedrive", "synchronise le CRM".
 - list_clients : quand l'utilisateur demande "montre-moi les deals stagnants", "quels clients n'ont pas été contactés".

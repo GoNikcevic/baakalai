@@ -440,6 +440,56 @@ router.post('/threads/:id/scan-crm', async (req, res, next) => {
   }
 });
 
+// POST /api/chat/threads/:id/clean-crm — Auto-fix CRM issues
+router.post('/threads/:id/clean-crm', async (req, res, next) => {
+  try {
+    const { getUserKey } = require('../config');
+    const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
+
+    // Detect connected CRM
+    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+    let provider = null;
+    for (const p of providers) {
+      const key = await getUserKey(req.user.id, p);
+      if (key) { provider = p; break; }
+    }
+    if (!provider) return res.json({ error: 'No CRM connected', applied: 0 });
+
+    // Scan first
+    const scan = await scanCRM(req.user.id, provider);
+    if (!scan.issues || scan.issues.length === 0) {
+      return res.json({ score: scan.score, applied: 0, message: 'No issues found' });
+    }
+
+    // Auto-fix safe issues (format + duplicates + invalid emails)
+    const safeFixes = [];
+    for (const issue of scan.issues) {
+      if (issue.type === 'format_name_caps' && issue.contacts?.length > 0) {
+        safeFixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
+      } else if (issue.type === 'duplicate_email' && issue.suggestedAction === 'merge' && issue.contacts?.length >= 2) {
+        safeFixes.push({ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) });
+      } else if (issue.type === 'invalid_email' && issue.contacts?.length > 0) {
+        safeFixes.push({ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) });
+      }
+    }
+
+    let fixResult = { applied: 0, skipped: 0, errors: [] };
+    if (safeFixes.length > 0) {
+      fixResult = await applyFixes(req.user.id, provider, safeFixes);
+    }
+
+    res.json({
+      score: scan.score,
+      totalIssues: scan.issues.length,
+      autoFixed: fixResult.applied,
+      remainingManual: scan.issues.length - safeFixes.length,
+      issues: scan.issues.map(i => ({ type: i.type, count: i.count, suggestedAction: i.suggestedAction })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/chat/threads/:id/run-nurture — Run nurture via CRM agent
 router.post('/threads/:id/run-nurture', async (req, res, next) => {
   try {
