@@ -1115,6 +1115,102 @@ router.delete('/mappings/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// =============================================
+// POST /api/crm/first-diagnostic — Run full CRM diagnostic after first import
+// Returns: health scan + deal coach + churn summary + quick stats
+// =============================================
+router.post('/first-diagnostic', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Auto-detect connected CRM
+    const { getUserKey } = require('../config');
+    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+    let connectedProvider = null;
+    for (const p of providers) {
+      const key = await getUserKey(userId, p);
+      if (key) { connectedProvider = p; break; }
+    }
+
+    // Load contacts
+    const opps = await db.opportunities.listByUser(userId, 500);
+
+    // Run scan + churn + deal coach in parallel
+    const [scanResult, churnResult, dealCoachResult] = await Promise.all([
+      // 1. CRM Health Scan
+      connectedProvider
+        ? require('../lib/crm-cleaning-agent').scanCRM(userId, connectedProvider).catch(err => ({ score: null, error: err.message }))
+        : Promise.resolve({ score: null, skipped: true }),
+
+      // 2. Churn scoring
+      require('../lib/churn-scoring').scoreAllForUser(userId).catch(err => ({ error: err.message })),
+
+      // 3. Deal Coach (top stagnant deals)
+      opps.length >= 3
+        ? require('../lib/agents/deal-coach').run(userId).catch(err => ({ suggestions: [], error: err.message }))
+        : Promise.resolve({ suggestions: [], skipped: true }),
+    ]);
+
+    // 4. Quick stats from imported contacts
+    const totalContacts = opps.length;
+    const statusCounts = {};
+    const companyCounts = {};
+    let withEmail = 0;
+    let withCompany = 0;
+
+    for (const o of opps) {
+      statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+      if (o.email) withEmail++;
+      if (o.company) {
+        withCompany++;
+        companyCounts[o.company] = (companyCounts[o.company] || 0) + 1;
+      }
+    }
+
+    const topCompanies = Object.entries(companyCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count }));
+
+    // 5. Churn summary
+    let churnSummary = { critical: 0, high: 0, medium: 0, low: 0 };
+    if (!churnResult?.error) {
+      const freshOpps = await db.opportunities.listByUser(userId, 500);
+      for (const o of freshOpps) {
+        const s = o.churn_score || 0;
+        if (s >= 76) churnSummary.critical++;
+        else if (s >= 51) churnSummary.high++;
+        else if (s >= 26) churnSummary.medium++;
+        else churnSummary.low++;
+      }
+    }
+
+    res.json({
+      provider: connectedProvider,
+      contacts: {
+        total: totalContacts,
+        withEmail,
+        withCompany,
+        byStatus: statusCounts,
+        topCompanies,
+      },
+      health: scanResult?.error ? null : {
+        score: scanResult.score,
+        totalContacts: scanResult.totalContacts,
+        issues: (scanResult.issues || []).slice(0, 8),
+        summary: scanResult.summary,
+      },
+      churn: churnSummary,
+      dealCoach: {
+        suggestions: (dealCoachResult.suggestions || []).slice(0, 5),
+        coached: dealCoachResult.coached || 0,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Helper: get CRM token for any provider
 async function getUserCrmToken(userId, provider) {
   const { getUserKey } = require('../config');

@@ -9,6 +9,7 @@ import api, { request, runChurnScoring, getChurnSummary } from '../services/api-
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
+import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
 
 const STAGE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
@@ -38,6 +39,7 @@ export default function ClientsPage() {
   const [scoringChurn, setScoringChurn] = useState(false);
   const [owners, setOwners] = useState([]);
   const [ownerFilter, setOwnerFilter] = useState('all');
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -85,17 +87,22 @@ export default function ClientsPage() {
 
   const handleImport = useCallback(async () => {
     if (!connectedCrm) return;
+    const hadClientsBefore = clients.length > 0;
     setImporting(true);
     setImportResult(null);
     try {
       const result = await request(`/crm/import/${connectedCrm}`, { method: 'POST' });
       setImportResult(result);
       await loadData();
+      // Show diagnostic report on first import (new contacts imported + never seen before)
+      if (result.imported > 0 && !hadClientsBefore && localStorage.getItem('bakal_diagnostic_seen') !== 'true') {
+        setShowDiagnostic(true);
+      }
     } catch (err) {
       setImportResult({ error: err.message });
     }
     setImporting(false);
-  }, [loadData, connectedCrm]);
+  }, [loadData, connectedCrm, clients.length]);
 
   const filtered = useMemo(() => clients.filter(c => {
     if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
@@ -131,6 +138,9 @@ export default function ClientsPage() {
 
   return (
     <div className="dashboard-page">
+      {showDiagnostic && (
+        <CRMDiagnosticReport onClose={() => setShowDiagnostic(false)} />
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">{t('clients.title')}</h1>
