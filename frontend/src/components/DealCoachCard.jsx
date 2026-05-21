@@ -5,6 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 
@@ -27,18 +28,33 @@ export default function DealCoachCard() {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  const navigate = useNavigate();
   const [suggestions, setSuggestions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [sending, setSending] = useState(null);
   const [dismissed, setDismissed] = useState(() =>
     localStorage.getItem('bakal_dealcoach_dismissed') === 'true'
   );
 
-  const loadSuggestions = useCallback(async () => {
+  const loadSuggestions = useCallback(async (forceRefresh = false) => {
+    // Cache for 30 min to avoid re-running the agent on every dashboard visit
+    const CACHE_KEY = 'bakal_dealcoach_cache';
+    const CACHE_TTL = 30 * 60 * 1000;
+    if (!forceRefresh) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+        if (cached && Date.now() - cached.ts < CACHE_TTL) {
+          setSuggestions(cached.data);
+          setLoading(false);
+          return;
+        }
+      } catch { /* ignore */ }
+    }
     try {
       const data = await request('/strategic/run/deal_coach', { method: 'POST' });
-      setSuggestions(data.suggestions || []);
+      const items = data.suggestions || [];
+      setSuggestions(items);
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: items }));
     } catch {
       setSuggestions([]);
     }
@@ -46,29 +62,22 @@ export default function DealCoachCard() {
   }, []);
 
   useEffect(() => {
-    if (!dismissed) loadSuggestions();
+    if (!dismissed) loadSuggestions(false);
     else setLoading(false);
   }, [dismissed, loadSuggestions]);
 
   const handleRefresh = useCallback(async () => {
     setRunning(true);
-    await loadSuggestions();
+    await loadSuggestions(true);
     setRunning(false);
   }, [loadSuggestions]);
 
-  const handleSendEmail = useCallback(async (suggestion) => {
-    setSending(suggestion.contactId);
-    try {
-      // Send via chat action — creates a draft email based on the suggestion
-      await request('/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          message: `Envoie un email de relance \u00e0 ${suggestion.contactName} (${suggestion.company || ''}). Contexte: ${suggestion.reason}. Suggestion: ${suggestion.suggestion}`,
-        }),
-      });
-    } catch { /* ignore */ }
-    setSending(null);
-  }, []);
+  const handleSendEmail = useCallback((suggestion) => {
+    const msg = en
+      ? `Send a follow-up email to ${suggestion.contactName} (${suggestion.company || ''}). Context: ${suggestion.reason}. Suggestion: ${suggestion.suggestion}`
+      : `Envoie un email de relance \u00e0 ${suggestion.contactName} (${suggestion.company || ''}). Contexte: ${suggestion.reason}. Suggestion: ${suggestion.suggestion}`;
+    navigate('/chat', { state: { prefillMessage: msg } });
+  }, [en, navigate]);
 
   if (dismissed || loading) return null;
   if (!suggestions || suggestions.length === 0) return null;
@@ -157,16 +166,7 @@ export default function DealCoachCard() {
 
               {/* Action button */}
               <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {s.action === 'email' || s.action === 'content' || s.action === 'offer' ? (
-                  <button
-                    className="btn btn-primary"
-                    style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}
-                    disabled={sending === s.contactId}
-                    onClick={() => handleSendEmail(s)}
-                  >
-                    {sending === s.contactId ? '...' : (en ? actionCfg.labelEn : actionCfg.labelFr)}
-                  </button>
-                ) : s.action === 'linkedin' ? (
+                {s.action === 'linkedin' ? (
                   <a
                     href={`https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(s.contactName + (s.company ? ' ' + s.company : ''))}`}
                     target="_blank"
@@ -178,12 +178,11 @@ export default function DealCoachCard() {
                   </a>
                 ) : (
                   <button
-                    className="btn btn-ghost"
+                    className={s.action === 'email' || s.action === 'content' || s.action === 'offer' ? 'btn btn-primary' : 'btn btn-ghost'}
                     style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}
                     onClick={() => handleSendEmail(s)}
-                    disabled={sending === s.contactId}
                   >
-                    {sending === s.contactId ? '...' : (en ? actionCfg.labelEn : actionCfg.labelFr)}
+                    {en ? actionCfg.labelEn : actionCfg.labelFr}
                   </button>
                 )}
               </div>

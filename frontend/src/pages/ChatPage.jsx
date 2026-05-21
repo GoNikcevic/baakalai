@@ -863,7 +863,7 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
         endpoint = '/crm/import/' + (metadata.provider || 'pipedrive');
         body = {};
       } else if (actionType === 'clean_crm') {
-        endpoint = '/crm/first-diagnostic';
+        endpoint = '/crm/auto-clean';
       }
       const res = await request(endpoint, { method: 'POST', body: JSON.stringify(body) });
       setResult(res);
@@ -898,6 +898,8 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
           {result?.health?.score != null && ` — ${en ? 'Health' : 'Sant\u00E9'}: ${result.health.score}/100`}
           {result?.contacts?.total != null && ` — ${result.contacts.total} contacts`}
           {result?.health?.issues?.length > 0 && ` — ${result.health.issues.length} ${en ? 'issue(s)' : 'probl\u00E8me(s)'}`}
+          {result?.autoFixed != null && ` — ${result.autoFixed} ${en ? 'fixed' : 'corrig\u00E9(s)'}, ${result.remainingManual || 0} ${en ? 'remaining' : 'restant(s)'}`}
+          {result?.message && ` — ${result.message}`}
         </div>
       )}
       {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}

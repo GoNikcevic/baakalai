@@ -1211,6 +1211,55 @@ router.post('/first-diagnostic', async (req, res, next) => {
   }
 });
 
+// =============================================
+// POST /api/crm/auto-clean — Auto-fix safe CRM issues (no thread required)
+// =============================================
+router.post('/auto-clean', async (req, res, next) => {
+  try {
+    const { getUserKey } = require('../config');
+    const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
+
+    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+    let provider = null;
+    for (const p of providers) {
+      const key = await getUserKey(req.user.id, p);
+      if (key) { provider = p; break; }
+    }
+    if (!provider) return res.json({ error: 'No CRM connected', applied: 0 });
+
+    const scan = await scanCRM(req.user.id, provider);
+    if (!scan.issues || scan.issues.length === 0) {
+      return res.json({ score: scan.score, applied: 0, message: 'No issues found' });
+    }
+
+    const safeFixes = [];
+    for (const issue of scan.issues) {
+      if (issue.type === 'format_name_caps' && issue.contacts?.length > 0) {
+        safeFixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
+      } else if (issue.type === 'duplicate_email' && issue.suggestedAction === 'merge' && issue.contacts?.length >= 2) {
+        safeFixes.push({ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) });
+      } else if (issue.type === 'invalid_email' && issue.contacts?.length > 0) {
+        safeFixes.push({ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) });
+      }
+    }
+
+    let fixResult = { applied: 0, skipped: 0, errors: [] };
+    if (safeFixes.length > 0) {
+      fixResult = await applyFixes(req.user.id, provider, safeFixes);
+    }
+
+    res.json({
+      score: scan.score,
+      totalIssues: scan.issues.length,
+      autoFixed: fixResult.applied,
+      remainingManual: scan.issues.length - safeFixes.length,
+      issues: scan.issues.map(i => ({ type: i.type, count: i.count, suggestedAction: i.suggestedAction })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Helper: get CRM token for any provider
 async function getUserCrmToken(userId, provider) {
   const { getUserKey } = require('../config');
