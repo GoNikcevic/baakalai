@@ -284,7 +284,6 @@ export default function OnboardingWizard({ onComplete }) {
     }
 
     // Mark onboarding complete on backend (authoritative)
-    const token = localStorage.getItem('bakal_token');
     fetch('/api/auth/onboarding-complete', {
       method: 'POST',
       headers: {
