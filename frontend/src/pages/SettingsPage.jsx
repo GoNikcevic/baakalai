@@ -398,8 +398,9 @@ export default function SettingsPage() {
 
   /* ─── Detect connected CRM ─── */
 
-  const crmFields = ['hubspotKey', 'salesforceKey', 'pipedriveKey', 'odooKey', 'notionToken', 'airtableKey'];
-  const connectedCrm = crmFields.find(f => keyStatus[f]?.configured);
+  const crmFieldLabels = { hubspotKey: 'HubSpot', salesforceKey: 'Salesforce', pipedriveKey: 'Pipedrive', odooKey: 'Odoo', notionToken: 'Notion', airtableKey: 'Airtable' };
+  const connectedCrmField = Object.keys(crmFieldLabels).find(f => keyStatus[f]?.configured);
+  const connectedCrmLabel = connectedCrmField ? crmFieldLabels[connectedCrmField] : null;
 
   /* ─── Render key row ─── */
 
@@ -731,11 +732,11 @@ export default function SettingsPage() {
             <div className="card-title">{t('settings.crmSync')}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
               {en
-                ? (connectedCrm
-                  ? `Sync your ${connectedCrm.replace('Key', '')} deals and analyze conversion patterns with Baakal`
+                ? (connectedCrmLabel
+                  ? `Sync your ${connectedCrmLabel} deals and analyze conversion patterns with Baakal`
                   : 'Sync your CRM deals and analyze conversion patterns with Baakal')
-                : (connectedCrm
-                  ? `Synchronise vos deals ${connectedCrm.replace('Key', '')} et analyse les patterns de conversion avec Baakal`
+                : (connectedCrmLabel
+                  ? `Synchronise vos deals ${connectedCrmLabel} et analyse les patterns de conversion avec Baakal`
                   : 'Synchronise vos deals CRM et analyse les patterns de conversion avec Baakal')}
             </div>
           </div>
@@ -1098,8 +1099,11 @@ function MetadataConfig({ provider, en }) {
     if (provider === 'notion') loadOptions();
   }, [provider, loadOptions]);
 
+  const [saveError, setSaveError] = useState(null);
+
   const handleSave = useCallback(async () => {
     setSaved(false);
+    setSaveError(null);
     try {
       const metadata = provider === 'notion'
         ? { database_id: selected }
@@ -1109,8 +1113,10 @@ function MetadataConfig({ provider, en }) {
         body: JSON.stringify({ provider, metadata }),
       });
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch { /* ignore */ }
+      setTimeout(() => setSaved(false), 5000);
+    } catch (err) {
+      setSaveError(err.message || 'Save failed');
+    }
   }, [provider, selected, baseId]);
 
   if (provider === 'notion') {
@@ -1133,12 +1139,16 @@ function MetadataConfig({ provider, en }) {
           </div>
         )}
         {selected && (
-          <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={handleSave}>
-            {saved ? (en ? 'Saved!' : 'Enregistré !') : (en ? 'Save database' : 'Enregistrer la base')}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={handleSave}>
+              {saved ? (en ? 'Saved!' : 'Enregistré !') : (en ? 'Save database' : 'Enregistrer la base')}
+            </button>
+            {saved && <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>{'\u2705'}</span>}
+          </div>
         )}
+        {saveError && <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{saveError}</div>}
         {currentMeta?.database_id && !selected && (
-          <div style={{ fontSize: 11, color: 'var(--success)' }}>{en ? 'Database configured' : 'Base configurée'}</div>
+          <div style={{ fontSize: 11, color: 'var(--success)' }}>{'\u2705'} {en ? 'Database configured' : 'Base configurée'}</div>
         )}
       </div>
     );
