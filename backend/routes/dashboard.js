@@ -136,7 +136,7 @@ router.get('/memory', async (req, res, next) => {
 // Non-admin team members only see contacts they own
 router.get('/opportunities', async (req, res, next) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 500);
     const offset = parseInt(req.query.offset, 10) || 0;
 
     // Filter by owner for non-admin team members

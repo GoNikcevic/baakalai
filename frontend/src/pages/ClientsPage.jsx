@@ -52,7 +52,7 @@ export default function ClientsPage() {
       // Parallel: providers + opportunities + churn + owners
       const [providersData, oppsData, churnData, ownersData] = await Promise.all([
         request('/crm/providers').catch(() => ({ providers: [] })),
-        request('/dashboard/opportunities').catch(() => ({ opportunities: [] })),
+        request('/dashboard/opportunities?limit=500').catch(() => ({ opportunities: [] })),
         getChurnSummary().catch(() => null),
         request('/crm/team-owners').catch(() => ({ owners: [] })),
       ]);
