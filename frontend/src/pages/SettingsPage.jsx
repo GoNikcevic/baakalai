@@ -729,49 +729,93 @@ export default function SettingsPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div className="card-title">{t('settings.crmSync')}</div>
+            <div className="card-title">{en ? 'CRM Analysis' : 'Analyse CRM'}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-              {en
-                ? (connectedCrmLabel
-                  ? `Sync your ${connectedCrmLabel} deals and analyze conversion patterns with Baakal`
-                  : 'Sync your CRM deals and analyze conversion patterns with Baakal')
-                : (connectedCrmLabel
-                  ? `Synchronise vos deals ${connectedCrmLabel} et analyse les patterns de conversion avec Baakal`
-                  : 'Synchronise vos deals CRM et analyse les patterns de conversion avec Baakal')}
+              {connectedCrmLabel
+                ? (en ? `Connected to ${connectedCrmLabel}` : `Connect\u00e9 \u00e0 ${connectedCrmLabel}`)
+                : (en ? 'Connect a CRM above to get started' : 'Connectez un CRM ci-dessus pour commencer')}
             </div>
           </div>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleSyncCRM}
-            disabled={crmSyncStatus && crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error'}
-          >
-            {crmSyncStatus && crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error'
-              ? (en ? 'Syncing...' : 'Synchronisation...')
-              : (en ? 'Sync CRM' : 'Synchroniser CRM')}
-          </button>
+          {connectedCrmLabel && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleSyncCRM}
+              disabled={crmSyncStatus && crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error'}
+            >
+              {crmSyncStatus && crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error'
+                ? (en ? 'Syncing...' : 'Analyse...')
+                : (en ? 'Analyze CRM' : 'Analyser le CRM')}
+            </button>
+          )}
         </div>
-        {crmSyncStatus && (
-          <div className="card-body" style={{ paddingTop: 0 }}>
-            <div style={{ marginBottom: 8 }}>
-              <div style={{
-                height: 6, borderRadius: 3, background: 'var(--bg-elevated)',
-                overflow: 'hidden',
-              }}>
+        <div className="card-body" style={{ paddingTop: connectedCrmLabel ? 0 : undefined }}>
+          {/* Explanation when no sync has been run */}
+          {connectedCrmLabel && !crmSyncStatus && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              {en ? (
+                <>
+                  Click <strong>Analyze CRM</strong> to let baakalai scan your {connectedCrmLabel} data. The AI will:
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: 16 }}>
+                    <li>Identify <strong>conversion patterns</strong> (what wins vs. what loses)</li>
+                    <li>Build your <strong>ideal customer profile</strong> from real data</li>
+                    <li>Detect <strong>stagnant deals</strong> and suggest next actions</li>
+                    <li>Score <strong>churn risk</strong> for each contact</li>
+                    <li>Find <strong>data quality issues</strong> (duplicates, missing emails, formatting)</li>
+                  </ul>
+                </>
+              ) : (
+                <>
+                  Cliquez sur <strong>Analyser le CRM</strong> pour laisser baakalai scanner vos donn\u00e9es {connectedCrmLabel}. L'IA va :
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: 16 }}>
+                    <li>Identifier les <strong>patterns de conversion</strong> (ce qui gagne vs. ce qui perd)</li>
+                    <li>Construire votre <strong>profil client id\u00e9al</strong> depuis vos donn\u00e9es r\u00e9elles</li>
+                    <li>D\u00e9tecter les <strong>deals stagnants</strong> et sugg\u00e9rer des actions</li>
+                    <li>Scorer le <strong>risque de churn</strong> par contact</li>
+                    <li>Trouver les <strong>probl\u00e8mes de qualit\u00e9</strong> (doublons, emails manquants, formatage)</li>
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+          {/* No CRM connected */}
+          {!connectedCrmLabel && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
+              {en
+                ? 'Connect Pipedrive, HubSpot, Salesforce, Odoo, Notion or Airtable above to unlock CRM analysis.'
+                : 'Connectez Pipedrive, HubSpot, Salesforce, Odoo, Notion ou Airtable ci-dessus pour d\u00e9bloquer l\'analyse CRM.'}
+            </div>
+          )}
+          {/* Progress bar during sync */}
+          {crmSyncStatus && (
+            <div style={{ marginTop: connectedCrmLabel && !crmSyncStatus ? 12 : 0 }}>
+              <div style={{ marginBottom: 8 }}>
                 <div style={{
-                  height: '100%', borderRadius: 3,
-                  width: `${crmSyncStatus.progress || 0}%`,
-                  background: crmSyncStatus.status === 'error' ? 'var(--danger, #e74c3c)'
-                    : crmSyncStatus.status === 'done' ? 'var(--success, #00d68f)'
-                    : 'var(--blue, #6366f1)',
-                  transition: 'width 0.4s ease, background 0.3s ease',
-                }} />
+                  height: 6, borderRadius: 3, background: 'var(--bg-elevated)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: 3,
+                    width: `${crmSyncStatus.progress || 0}%`,
+                    background: crmSyncStatus.status === 'error' ? 'var(--danger, #e74c3c)'
+                      : crmSyncStatus.status === 'done' ? 'var(--success, #00d68f)'
+                      : 'var(--blue, #6366f1)',
+                    transition: 'width 0.4s ease, background 0.3s ease',
+                  }} />
+                </div>
               </div>
+              <div style={{ fontSize: 12, color: crmSyncStatus.status === 'done' ? 'var(--success)' : crmSyncStatus.status === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
+                {crmSyncStatus.status === 'done' ? '\u2705 ' : crmSyncStatus.status === 'error' ? '\u274c ' : ''}{crmSyncStatus.message || ''}
+              </div>
+              {crmSyncStatus.status === 'done' && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                  {en
+                    ? 'Patterns saved to AI Memory. View them in the Memory Explorer page.'
+                    : 'Patterns sauvegard\u00e9s dans la M\u00e9moire IA. Consultez-les dans la page M\u00e9moire.'}
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {crmSyncStatus.message || ''}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Team */}
