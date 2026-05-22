@@ -57,7 +57,7 @@ export default function ClientsPage() {
         request('/crm/team-owners').catch(() => ({ owners: [] })),
       ]);
 
-      const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+      const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
       const connected = (providersData.providers || []).find(p => crmProviders.includes(p.provider) && p.connected);
       setConnectedCrm(connected?.provider || null);
       setClients(oppsData.opportunities || []);

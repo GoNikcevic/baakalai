@@ -1181,7 +1181,7 @@ router.post('/first-diagnostic', async (req, res, next) => {
 
     // Auto-detect connected CRM
     const { getUserKey } = require('../config');
-    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
     let connectedProvider = null;
     for (const p of providers) {
       const key = await getUserKey(userId, p);
@@ -1275,7 +1275,7 @@ router.post('/auto-clean', async (req, res, next) => {
     const { getUserKey } = require('../config');
     const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
 
-    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
     let provider = null;
     for (const p of providers) {
       const key = await getUserKey(req.user.id, p);

@@ -398,7 +398,7 @@ export default function SettingsPage() {
 
   /* ─── Detect connected CRM ─── */
 
-  const crmFields = ['hubspotKey', 'salesforceKey', 'pipedriveKey'];
+  const crmFields = ['hubspotKey', 'salesforceKey', 'pipedriveKey', 'odooKey', 'notionToken', 'airtableKey'];
   const connectedCrm = crmFields.find(f => keyStatus[f]?.configured);
 
   /* ─── Render key row ─── */
