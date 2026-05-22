@@ -149,14 +149,25 @@ export default function ClientsPage() {
           </div>
         </div>
         {isAdmin && (connectedCrm ? (
-          <button
-            className="btn btn-primary"
-            style={{ fontSize: 12, padding: '8px 16px' }}
-            onClick={handleImport}
-            disabled={importing}
-          >
-            {importing ? `\u23F3 ${t('clients.importing')}` : t('clients.importFrom', { crm: crmLabel })}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 12, padding: '8px 16px' }}
+              onClick={handleImport}
+              disabled={importing}
+            >
+              {importing ? `\u23F3 ${t('clients.importing')}` : t('clients.importFrom', { crm: crmLabel })}
+            </button>
+            {clients.length > 0 && (
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 12, padding: '8px 16px' }}
+                onClick={() => setShowDiagnostic(true)}
+              >
+                {'\uD83D\uDD0D'} Diagnostic
+              </button>
+            )}
+          </div>
         ) : (
           <button
             className="btn btn-outline"
