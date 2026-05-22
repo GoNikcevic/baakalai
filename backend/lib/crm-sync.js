@@ -23,7 +23,7 @@ async function syncCRM(userId) {
     // Detect CRM provider
     let provider = null;
     let apiKey = null;
-    for (const p of ['hubspot', 'salesforce', 'pipedrive']) {
+    for (const p of ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'notion', 'airtable']) {
       const key = await getUserKey(userId, p);
       if (key) { provider = p; apiKey = key; break; }
     }
@@ -79,6 +79,17 @@ async function syncCRM(userId) {
         amount: d.Amount || 0,
         stage: d.StageName || '',
         closedAt: d.CloseDate || '',
+      }));
+    } else if (provider === 'notion' || provider === 'airtable' || provider === 'odoo') {
+      // For Notion/Airtable/Odoo: use already-imported opportunities as deals
+      const opps = await db.opportunities.listByUser(userId, 200);
+      deals = opps.map(o => ({
+        name: o.name || '',
+        amount: o.deal_value || 0,
+        stage: o.status || '',
+        status: o.status || '',
+        closedAt: o.updated_at || '',
+        company: o.company || '',
       }));
     }
 
