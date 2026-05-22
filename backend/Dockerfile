@@ -14,6 +14,7 @@ RUN cd backend && npm ci --omit=dev
 COPY frontend/package.json frontend/package-lock.json* ./frontend/
 RUN cd frontend && npm ci --include=dev
 COPY frontend/ ./frontend/
+# Build frontend (cache bust: 2026-05-22-v2)
 RUN cd frontend && npm run build
 
 # Copy backend source and landing
