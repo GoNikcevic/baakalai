@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getKeys, saveKeys, testKeys, syncLemlist, syncCRM, syncOutreach, saveLanguage } from '../services/api-client';
+import { getKeys, saveKeys, testKeys, syncLemlist, syncCRM, syncOutreach, saveLanguage, request } from '../services/api-client';
 import { deleteAccount } from '../services/auth';
 import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
@@ -43,6 +43,10 @@ function getMainTools(lang) {
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
       guide: en ? ['URL + database name + login + password'] : ['URL + nom de base + login + mot de passe'] },
+    { field: 'notionToken', label: 'Notion', desc: en ? 'CRM + Docs — import & sync contacts' : 'CRM + Docs — import et sync contacts', placeholder: en ? 'ntn_ or secret_ token' : 'Token ntn_ ou secret_', color: '#000000', icon: 'N', category: 'CRM', hasMetadata: 'notion',
+      guide: en ? ['Go to notion.so/my-integrations', 'Create an internal integration', 'Copy the token (starts with ntn_ or secret_)', 'Share your CRM database with the integration'] : ['Allez dans notion.so/my-integrations', 'Cr\u00e9ez une int\u00e9gration interne', 'Copiez le token (commence par ntn_ ou secret_)', 'Partagez votre base CRM avec l\'int\u00e9gration'], link: 'https://www.notion.so/my-integrations' },
+    { field: 'airtableKey', label: 'Airtable', desc: en ? 'CRM + spreadsheet — import & sync contacts' : 'CRM + tableur — import et sync contacts', placeholder: en ? 'Your Airtable personal access token' : 'Votre personal access token Airtable', color: '#18BFFF', icon: 'At', category: 'CRM', hasMetadata: 'airtable',
+      guide: en ? ['Go to airtable.com/create/tokens', 'Create a personal access token', 'Grant read/write scopes on your base', 'Copy and paste here'] : ['Allez dans airtable.com/create/tokens', 'Cr\u00e9ez un personal access token', 'Accordez les scopes lecture/\u00e9criture sur votre base', 'Copiez et collez ici'], link: 'https://airtable.com/create/tokens' },
   ];
 }
 
@@ -617,6 +621,11 @@ export default function SettingsPage() {
                       )}
                     </div>
                   )}
+
+                  {/* Metadata config for Notion / Airtable (shown when connected) */}
+                  {isConnected && tool.hasMetadata && (
+                    <MetadataConfig provider={tool.hasMetadata} en={en} />
+                  )}
                 </div>
               );
             })}
@@ -1042,6 +1051,141 @@ function DeleteAccountSection({ t, showToast, lang }) {
       </div>
     </div>
   );
+}
+
+/* ═══ Metadata Config (Notion database selector / Airtable base+table) ═══ */
+
+function MetadataConfig({ provider, en }) {
+  const [loading, setLoading] = useState(false);
+  const [options, setOptions] = useState(null);
+  const [selected, setSelected] = useState('');
+  const [baseId, setBaseId] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [currentMeta, setCurrentMeta] = useState(null);
+
+  // Load current metadata on mount
+  useEffect(() => {
+    request('/settings/keys').then(data => {
+      const keys = data.keys || data;
+      const providerKey = provider === 'notion' ? 'notionToken' : 'airtableKey';
+      const info = keys[providerKey];
+      if (info?.metadata) {
+        setCurrentMeta(info.metadata);
+        if (provider === 'notion' && info.metadata.database_id) setSelected(info.metadata.database_id);
+        if (provider === 'airtable') {
+          if (info.metadata.base_id) setBaseId(info.metadata.base_id);
+          if (info.metadata.table_name) setSelected(info.metadata.table_name);
+        }
+      }
+    }).catch(() => {});
+  }, [provider]);
+
+  const loadOptions = useCallback(async () => {
+    setLoading(true);
+    try {
+      if (provider === 'notion') {
+        const data = await request('/crm/notion/databases');
+        setOptions(data.databases || []);
+      } else if (provider === 'airtable' && baseId.trim()) {
+        const data = await request(`/crm/airtable/tables?baseId=${encodeURIComponent(baseId.trim())}`);
+        setOptions(data.tables || []);
+      }
+    } catch { setOptions([]); }
+    setLoading(false);
+  }, [provider, baseId]);
+
+  useEffect(() => {
+    if (provider === 'notion') loadOptions();
+  }, [provider, loadOptions]);
+
+  const handleSave = useCallback(async () => {
+    setSaved(false);
+    try {
+      const metadata = provider === 'notion'
+        ? { database_id: selected }
+        : { base_id: baseId.trim(), table_name: selected };
+      await request('/settings/keys/metadata', {
+        method: 'PATCH',
+        body: JSON.stringify({ provider, metadata }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch { /* ignore */ }
+  }, [provider, selected, baseId]);
+
+  if (provider === 'notion') {
+    return (
+      <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 8, fontSize: 12 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>
+          {en ? 'Select your CRM database' : 'Sélectionnez votre base CRM'}
+        </div>
+        {loading && <span style={{ color: 'var(--text-muted)' }}>{en ? 'Loading databases...' : 'Chargement des bases...'}</span>}
+        {options && options.length > 0 && (
+          <select className="form-input" style={{ fontSize: 12, padding: '6px 8px', width: '100%', marginBottom: 6 }}
+            value={selected} onChange={e => setSelected(e.target.value)}>
+            <option value="">{en ? '— Select a database —' : '— Choisir une base —'}</option>
+            {options.map(db => <option key={db.id} value={db.id}>{db.title}</option>)}
+          </select>
+        )}
+        {options && options.length === 0 && !loading && (
+          <div style={{ color: 'var(--warning)', fontSize: 11 }}>
+            {en ? 'No databases found. Share your Notion database with the integration first.' : 'Aucune base trouvée. Partagez d\'abord votre base Notion avec l\'intégration.'}
+          </div>
+        )}
+        {selected && (
+          <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={handleSave}>
+            {saved ? (en ? 'Saved!' : 'Enregistré !') : (en ? 'Save database' : 'Enregistrer la base')}
+          </button>
+        )}
+        {currentMeta?.database_id && !selected && (
+          <div style={{ fontSize: 11, color: 'var(--success)' }}>{en ? 'Database configured' : 'Base configurée'}</div>
+        )}
+      </div>
+    );
+  }
+
+  if (provider === 'airtable') {
+    return (
+      <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 8, fontSize: 12 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>
+          {en ? 'Configure your Airtable base' : 'Configurez votre base Airtable'}
+        </div>
+        <input className="form-input" style={{ fontSize: 12, padding: '6px 8px', width: '100%', marginBottom: 6 }}
+          placeholder={en ? 'Base ID (appXXXXXXXXXX)' : 'Base ID (appXXXXXXXXXX)'}
+          value={baseId} onChange={e => setBaseId(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && baseId.trim()) loadOptions(); }}
+        />
+        {baseId.trim() && !options && (
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', marginBottom: 6 }}
+            onClick={loadOptions} disabled={loading}>
+            {loading ? '...' : (en ? 'Load tables' : 'Charger les tables')}
+          </button>
+        )}
+        {options && options.length > 0 && (
+          <select className="form-input" style={{ fontSize: 12, padding: '6px 8px', width: '100%', marginBottom: 6 }}
+            value={selected} onChange={e => setSelected(e.target.value)}>
+            <option value="">{en ? '— Select a table —' : '— Choisir une table —'}</option>
+            {options.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+          </select>
+        )}
+        {options && options.length === 0 && !loading && (
+          <div style={{ color: 'var(--warning)', fontSize: 11 }}>
+            {en ? 'No tables found. Check your Base ID.' : 'Aucune table trouvée. Vérifiez le Base ID.'}
+          </div>
+        )}
+        {selected && baseId.trim() && (
+          <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={handleSave}>
+            {saved ? (en ? 'Saved!' : 'Enregistré !') : (en ? 'Save config' : 'Enregistrer')}
+          </button>
+        )}
+        {currentMeta?.base_id && !baseId && (
+          <div style={{ fontSize: 11, color: 'var(--success)' }}>{en ? 'Base configured' : 'Base configurée'}: {currentMeta.base_id} / {currentMeta.table_name}</div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
 }
 
 /* ═══ Odoo Config Form ═══ */

@@ -447,8 +447,8 @@ router.get('/airtable/tables', async (req, res, next) => {
     try { token = decrypt(integration.access_token); } catch { return res.status(400).json({ error: 'Invalid stored Airtable credentials' }); }
 
     const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
-    const baseId = metadata.base_id;
-    if (!baseId) return res.status(400).json({ error: 'Airtable base ID not configured. Update in Settings.' });
+    const baseId = req.query.baseId || metadata.base_id;
+    if (!baseId) return res.status(400).json({ error: 'Airtable base ID not configured. Pass baseId query param or update in Settings.' });
 
     const { tables } = await airtableCrm.listAirtableTables(token, baseId);
     res.json({ tables });
@@ -641,6 +641,62 @@ router.post('/import/:provider', async (req, res, next) => {
             imported++;
           } catch (err) { errors.push({ error: err.message }); }
         }
+      }
+    } else if (provider === 'notion') {
+      const integration = await db.userIntegrations.get(req.user.id, 'notion');
+      if (!integration) return res.status(400).json({ error: 'Notion not connected' });
+      const notionToken = decrypt(integration.access_token);
+      const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+      const databaseId = metadata.database_id;
+      if (!databaseId) return res.status(400).json({ error: 'Notion database not selected. Configure it in Settings.' });
+
+      const contacts = await notionCrm.queryContacts(notionToken, databaseId);
+      for (const raw of contacts) {
+        try {
+          const name = raw.name || raw.company || 'Unknown';
+          const email = raw.email || null;
+          if (!email) { skipped++; continue; }
+          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          if (existing) { skipped++; continue; }
+          await db.opportunities.create({
+            userId: req.user.id,
+            name,
+            email,
+            title: raw.title || null,
+            company: raw.company || null,
+            status: 'imported',
+            crmProvider: 'notion',
+            crmContactId: raw.notionPageId || null,
+          });
+          imported++;
+        } catch (err) { errors.push({ name: raw.name, error: err.message }); }
+      }
+    } else if (provider === 'airtable') {
+      const integration = await db.userIntegrations.get(req.user.id, 'airtable');
+      if (!integration) return res.status(400).json({ error: 'Airtable not connected' });
+      const airtableKey = decrypt(integration.access_token);
+      const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+      if (!metadata.base_id || !metadata.table_name) return res.status(400).json({ error: 'Airtable base/table not configured. Set it in Settings.' });
+
+      const contacts = await airtableCrm.listRecords(airtableKey, metadata.base_id, metadata.table_name);
+      for (const raw of contacts) {
+        try {
+          const email = raw.email || null;
+          if (!email) { skipped++; continue; }
+          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          if (existing) { skipped++; continue; }
+          await db.opportunities.create({
+            userId: req.user.id,
+            name: raw.name || 'Unknown',
+            email,
+            title: raw.title || null,
+            company: raw.company || null,
+            status: 'imported',
+            crmProvider: 'airtable',
+            crmContactId: raw.airtableRecordId || null,
+          });
+          imported++;
+        } catch (err) { errors.push({ name: raw.name, error: err.message }); }
       }
     } else {
       return res.status(400).json({ error: `Import not yet supported for ${provider}` });

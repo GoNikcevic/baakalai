@@ -222,10 +222,71 @@ async function listDatabases(notionToken) {
   }));
 }
 
+/**
+ * Query all pages (contacts) from a Notion database.
+ * Returns normalized contact objects for import.
+ */
+async function queryContacts(notionToken, databaseId) {
+  const notion = new Client({ auth: notionToken });
+  const schema = await discoverSchema(notion, databaseId);
+
+  const contacts = [];
+  let cursor;
+  do {
+    const response = await notion.databases.query({
+      database_id: databaseId,
+      start_cursor: cursor,
+      page_size: 100,
+    });
+
+    for (const page of response.results) {
+      const props = page.properties;
+      const contact = { notionPageId: page.id };
+
+      // Extract each field using the discovered schema
+      for (const [field, meta] of Object.entries(schema)) {
+        const prop = props[meta.key];
+        if (!prop) continue;
+        let val = null;
+        if (meta.type === 'title') {
+          val = (prop.title || []).map(t => t.plain_text).join('');
+        } else if (meta.type === 'rich_text') {
+          val = (prop.rich_text || []).map(t => t.plain_text).join('');
+        } else if (meta.type === 'email') {
+          val = prop.email;
+        } else if (meta.type === 'url') {
+          val = prop.url;
+        } else if (meta.type === 'phone_number') {
+          val = prop.phone_number;
+        } else if (meta.type === 'number') {
+          val = prop.number;
+        } else if (meta.type === 'select') {
+          val = prop.select?.name || null;
+        }
+        contact[field] = val;
+      }
+
+      // Also try to extract email from direct 'Email' property if schema didn't catch it
+      if (!contact.email) {
+        for (const [k, v] of Object.entries(props)) {
+          if (v.type === 'email' && v.email) { contact.email = v.email; break; }
+        }
+      }
+
+      contacts.push(contact);
+    }
+
+    cursor = response.has_more ? response.next_cursor : undefined;
+  } while (cursor);
+
+  return contacts;
+}
+
 module.exports = {
   pushProspectToNotion,
   pushProspectsToNotion,
   listDatabases,
   discoverSchema,
   buildProperties,
+  queryContacts,
 };

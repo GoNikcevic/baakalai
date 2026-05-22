@@ -96,6 +96,28 @@ const CATEGORIES = [
           'Export des scores leads',
         ],
       },
+      {
+        icon: 'N', color: '#000000', name: 'Notion',
+        desc: 'CRM + Documentation',
+        status: 'natif',
+        features: [
+          'Import des contacts depuis une base Notion',
+          'Découverte automatique du schéma (FR/EN)',
+          'Push des prospects vers Notion',
+          'Diagnostic qualité des données',
+        ],
+      },
+      {
+        icon: 'At', color: '#18BFFF', name: 'Airtable',
+        desc: 'CRM + Tableur collaboratif',
+        status: 'natif',
+        features: [
+          'Import des contacts depuis une table Airtable',
+          'Sync bidirectionnel des contacts',
+          'Push par batch (10 records/requête)',
+          'Diagnostic qualité des données',
+        ],
+      },
     ],
   },
   {

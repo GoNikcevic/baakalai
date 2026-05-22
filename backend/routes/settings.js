@@ -17,6 +17,7 @@ const PROVIDER_MAP = {
   salesforceKey: 'salesforce',
   folkKey: 'folk',
   odooKey: 'odoo',
+  airtableKey: 'airtable',
   // ── Enrichment ──
   dropcontactKey: 'dropcontact',
   apolloKey: 'apollo',
@@ -53,7 +54,8 @@ router.get('/keys', async (req, res, next) => {
       if (row) {
         try {
           const plain = decrypt(row.access_token);
-          result[field] = { configured: true, masked: maskKey(plain), updatedAt: row.updated_at };
+          const meta = row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null;
+          result[field] = { configured: true, masked: maskKey(plain), updatedAt: row.updated_at, metadata: meta };
         } catch {
           result[field] = { configured: false, masked: null, updatedAt: null };
         }
@@ -349,11 +351,40 @@ async function testKey(field, key) {
       if (resp.status === 401 || resp.status === 403) return { status: 'invalid', message: 'Invalid API key' };
       return { status: 'error', message: `HTTP ${resp.status}` };
     }
+    if (field === 'airtableKey') {
+      const resp = await fetch('https://api.airtable.com/v0/meta/whoami', { headers: { 'Authorization': `Bearer ${key}` } });
+      if (resp.ok) return { status: 'connected' };
+      if (resp.status === 401 || resp.status === 403) return { status: 'invalid', message: 'Invalid API key' };
+      return { status: 'error', message: `HTTP ${resp.status}` };
+    }
     return { status: 'unknown' };
   } catch (err) {
     return { status: 'error', message: err.message };
   }
 }
+
+// PATCH /api/settings/keys/metadata — update metadata for an integration (e.g., Notion database_id, Airtable base_id)
+router.patch('/keys/metadata', async (req, res, next) => {
+  try {
+    const { provider, metadata } = req.body;
+    if (!provider || !metadata) return res.status(400).json({ error: 'provider and metadata are required' });
+
+    const existing = await db.userIntegrations.get(req.user.id, provider);
+    if (!existing) return res.status(400).json({ error: `${provider} not connected. Save your API key first.` });
+
+    const currentMeta = typeof existing.metadata === 'string' ? JSON.parse(existing.metadata || '{}') : (existing.metadata || {});
+    const merged = { ...currentMeta, ...metadata };
+
+    await db.query(
+      'UPDATE user_integrations SET metadata = $1, updated_at = now() WHERE user_id = $2 AND provider = $3',
+      [JSON.stringify(merged), req.user.id, provider]
+    );
+
+    res.json({ ok: true, metadata: merged });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // PATCH /api/settings/language — update user's UI language preference
 router.patch('/language', async (req, res, next) => {

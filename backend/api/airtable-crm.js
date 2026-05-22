@@ -147,9 +147,36 @@ function mapOpportunityToProspect(opportunity) {
   };
 }
 
+/**
+ * List all records from an Airtable table (paginated).
+ * Returns normalized contact objects for import.
+ */
+async function listRecords(apiKey, baseId, tableName) {
+  const contacts = [];
+  let offset;
+  do {
+    const params = new URLSearchParams({ pageSize: '100' });
+    if (offset) params.set('offset', offset);
+    const url = `${AIRTABLE_BASE_URL}/${encodeURIComponent(baseId)}/${encodeURIComponent(tableName)}?${params}`;
+    const data = await airtableFetch(apiKey, url);
+    for (const rec of (data.records || [])) {
+      const f = rec.fields || {};
+      // Try common field name variants
+      const name = f['Name'] || f['Nom'] || f['Contact'] || f['Full Name'] || f['Nom complet'] || '';
+      const email = f['Email'] || f['E-mail'] || f['email'] || '';
+      const title = f['Title'] || f['Titre'] || f['Job Title'] || f['Poste'] || f['Fonction'] || '';
+      const company = f['Company'] || f['Entreprise'] || f['Organisation'] || f['Société'] || '';
+      contacts.push({ airtableRecordId: rec.id, name, email, title, company });
+    }
+    offset = data.offset;
+  } while (offset);
+  return contacts;
+}
+
 module.exports = {
   pushProspectToAirtable,
   pushProspectsToAirtable,
   listAirtableTables,
+  listRecords,
   mapOpportunityToProspect,
 };
