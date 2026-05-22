@@ -8,7 +8,7 @@ function userKeyGenerator(req) {
 // General API rate limiter (generous for normal endpoints)
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 120, // 120 requests per minute per IP
+  max: 300, // 300 requests per minute per IP
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },

@@ -84,6 +84,33 @@ function getAdapter(provider) {
       };
     }
 
+    case 'notion':
+    case 'airtable':
+    case 'hubspot':
+    case 'salesforce': {
+      // For these providers, scan from already-imported opportunities in Baakalai DB
+      return {
+        async listPersons(_token, userId) {
+          const opps = await db.opportunities.listByUser(userId, 500);
+          return opps;
+        },
+        normalizePerson(raw) {
+          return {
+            id: raw.id,
+            name: raw.name || '',
+            email: raw.email ? raw.email.toLowerCase().trim() : null,
+            phone: raw.phone || null,
+            title: raw.title || '',
+            company: raw.company || '',
+            updatedAt: raw.updated_at || raw.created_at || null,
+            raw,
+          };
+        },
+        async updatePerson() { /* no external CRM update for these — scan only */ },
+        async deletePerson() { /* no external CRM delete for these — scan only */ },
+      };
+    }
+
     default:
       return {
         async listPersons() {
@@ -113,11 +140,14 @@ function isValidEmail(email) {
  * @returns {{ score, totalContacts, issues[], summary }}
  */
 async function scanCRM(userId, provider) {
+  const dbBasedProviders = ['notion', 'airtable', 'hubspot', 'salesforce'];
   const token = await getUserKey(userId, provider);
-  if (!token) throw new Error(`No ${provider} API key configured`);
+  if (!token && !dbBasedProviders.includes(provider)) {
+    throw new Error(`No ${provider} API key configured`);
+  }
 
   const adapter = getAdapter(provider);
-  const rawPersons = await adapter.listPersons(token);
+  const rawPersons = await adapter.listPersons(token, userId);
   const persons = (rawPersons || []).map(adapter.normalizePerson);
 
   const issues = [];
