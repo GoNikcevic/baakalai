@@ -2814,6 +2814,202 @@ body {
 /* Modal backdrop — wizard-overlay uses wizardFadeIn, creator-overlay uses fadeIn */
 /* Modal content — wizard-modal uses wizardSlideUp, creator-modal uses slideUp */
 
+/* ═══════════ GLOW & ENHANCED ANIMATIONS (v6.1) ═══════════ */
+
+/* Card hover lift + glow */
+.card {
+  transition: all 0.3s cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgba(110, 87, 250, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-color: rgba(110, 87, 250, 0.2);
+}
+
+/* KPI card hover glow */
+.kpi-card {
+  transition: all 0.3s cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -8px rgba(110, 87, 250, 0.15);
+  border-color: rgba(110, 87, 250, 0.25);
+  background: var(--paper);
+}
+
+/* Primary button glow */
+.btn-primary {
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 8px rgba(10, 10, 10, 0.15);
+}
+.btn-primary:hover {
+  box-shadow: 0 4px 16px rgba(10, 10, 10, 0.2), 0 0 0 3px rgba(10, 10, 10, 0.05);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 4px rgba(10, 10, 10, 0.15);
+}
+
+/* Accent button glow */
+.btn-accent {
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 12px rgba(110, 87, 250, 0.25);
+}
+.btn-accent:hover {
+  box-shadow: 0 4px 20px rgba(110, 87, 250, 0.35), 0 0 0 3px rgba(110, 87, 250, 0.1);
+  transform: translateY(-1px);
+}
+.btn-accent:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(110, 87, 250, 0.2);
+}
+
+/* Glow border for focused/active inputs */
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(110, 87, 250, 0.1);
+  outline: none;
+}
+
+/* Tab underline slide animation */
+.crm-tab, .tab {
+  position: relative;
+  transition: color 0.2s ease;
+}
+.crm-tab::after, .tab::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  right: 50%;
+  height: 2px;
+  background: var(--primary);
+  transition: all 0.3s cubic-bezier(0.2, 0.6, 0.2, 1);
+  border-radius: 2px;
+}
+.crm-tab.active::after, .tab.active::after {
+  left: 0;
+  right: 0;
+}
+
+/* Stagger animation for list items */
+@keyframes listSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* CRM table rows stagger */
+.crm-table-row {
+  animation: listSlideIn 0.3s ease both;
+}
+.crm-table-row:nth-child(1) { animation-delay: 0.02s; }
+.crm-table-row:nth-child(2) { animation-delay: 0.04s; }
+.crm-table-row:nth-child(3) { animation-delay: 0.06s; }
+.crm-table-row:nth-child(4) { animation-delay: 0.08s; }
+.crm-table-row:nth-child(5) { animation-delay: 0.1s; }
+.crm-table-row:nth-child(n+6) { animation-delay: 0.12s; }
+
+/* Glow pulse for health score gauge */
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(110, 87, 250, 0.2)); }
+  50% { filter: drop-shadow(0 0 12px rgba(110, 87, 250, 0.4)); }
+}
+.crm-health-gauge {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+/* Score badge glow on high scores */
+@keyframes scoreGlow {
+  0%, 100% { box-shadow: 0 0 4px rgba(34, 197, 94, 0.3); }
+  50% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5); }
+}
+
+/* Selected row glow */
+@keyframes selectedGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(110, 87, 250, 0.2); }
+  50% { box-shadow: 0 0 0 2px rgba(110, 87, 250, 0.15), 0 0 12px rgba(110, 87, 250, 0.08); }
+}
+
+/* Shimmer effect for loading states */
+@keyframes glowShimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.glow-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(110, 87, 250, 0.06) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: glowShimmer 2s ease-in-out infinite;
+}
+
+/* Notification badge bounce */
+@keyframes notifBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* Smooth number counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.kpi-value, .crm-kpi-value {
+  animation: countUp 0.5s cubic-bezier(0.2, 0.6, 0.2, 1) both;
+}
+
+/* Modal overlay enhanced */
+@keyframes overlayFadeIn {
+  from { backdrop-filter: blur(0px); background: rgba(0,0,0,0); }
+  to { backdrop-filter: blur(4px); background: rgba(0,0,0,0.5); }
+}
+
+/* Subtle floating animation for hero elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Checkbox tick animation */
+input[type="checkbox"] {
+  accent-color: var(--primary);
+  transition: all 0.15s ease;
+}
+input[type="checkbox"]:checked {
+  animation: scorePulse 0.2s ease;
+}
+
+/* Ghost button hover glow */
+.btn-ghost:hover {
+  background: rgba(110, 87, 250, 0.06);
+}
+
+/* CRM issue card hover */
+.crm-section .card:hover {
+  border-left-width: 3px;
+}
+
+/* Sidebar nav glow on active */
+.nav-item.active {
+  background: linear-gradient(135deg, rgba(110, 87, 250, 0.08) 0%, rgba(196, 181, 253, 0.06) 100%);
+}
+
+/* Toast glow by type */
+.toast-item[data-type="success"] {
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.15);
+}
+.toast-item[data-type="error"] {
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.15);
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ═══════════ MOBILE OVERRIDES ═══════════ */
 @media (max-width: 1200px) {
   .retention-stats-grid { grid-template-columns: repeat(2, 1fr); }
