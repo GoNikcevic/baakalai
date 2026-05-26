@@ -482,7 +482,8 @@
     "emailSent": "Email sent",
     "emailPending": "Pending",
     "noActivity": "No activity for this contact",
-    "importResult": "{imported} imported, {skipped} already present"
+    "importResult": "{imported} imported, {skipped} already present",
+    "merged": "Contacts merged successfully"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring and CRM health",
@@ -536,6 +537,7 @@
     "merge": "Merge",
     "archive": "Archive",
     "review": "Review",
+    "fixAll": "Fix all",
     "haveEmail": "have email",
     "haveCompany": "have company",
     "issue_duplicate_email": "duplicate email",

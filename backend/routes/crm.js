@@ -523,6 +523,54 @@ router.get('/cleaning-reports', async (req, res, next) => {
   }
 });
 
+// POST /api/crm/bulk-update — Update multiple contacts at once
+router.post('/bulk-update', async (req, res, next) => {
+  try {
+    const { ids, update } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+    if (!update || typeof update !== 'object') {
+      return res.status(400).json({ error: 'update object is required' });
+    }
+    // Only allow safe fields
+    const allowed = ['status'];
+    const safeUpdate = {};
+    for (const key of allowed) {
+      if (update[key] !== undefined) safeUpdate[key] = update[key];
+    }
+    if (Object.keys(safeUpdate).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+    const setClauses = Object.keys(safeUpdate).map((k, i) => `${k} = $${i + 3}`);
+    const values = [req.user.id, ids, ...Object.values(safeUpdate)];
+    await db.query(
+      `UPDATE opportunities SET ${setClauses.join(', ')}, updated_at = NOW() WHERE user_id = $1 AND id = ANY($2)`,
+      values
+    );
+    res.json({ updated: ids.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/crm/bulk-delete — Delete multiple contacts
+router.post('/bulk-delete', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+    await db.query(
+      `DELETE FROM opportunities WHERE user_id = $1 AND id = ANY($2)`,
+      [req.user.id, ids]
+    );
+    res.json({ deleted: ids.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/crm/import/:provider — Import contacts/deals FROM CRM INTO Baakalai
 router.post('/import/:provider', async (req, res, next) => {
   try {

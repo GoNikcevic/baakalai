@@ -40,6 +40,8 @@ export default function ClientsPage() {
   const [owners, setOwners] = useState([]);
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkAction, setBulkAction] = useState(null);
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -103,6 +105,71 @@ export default function ClientsPage() {
     }
     setImporting(false);
   }, [loadData, connectedCrm, clients.length]);
+
+  const toggleSelect = useCallback((id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selected.size === filtered.length) setSelected(new Set());
+    else setSelected(new Set(filtered.map(c => c.id)));
+  }, [filtered, selected.size]);
+
+  const handleBulkStatus = useCallback(async (status) => {
+    if (selected.size === 0) return;
+    setBulkAction('status');
+    try {
+      await request('/crm/bulk-update', {
+        method: 'POST',
+        body: JSON.stringify({ ids: [...selected], update: { status } }),
+      });
+      showToast({ type: 'success', title: t('common.success'), message: `${selected.size} contact(s)` });
+      setSelected(new Set());
+      await loadData();
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setBulkAction(null);
+  }, [selected, loadData, t]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selected.size === 0) return;
+    setBulkAction('delete');
+    try {
+      await request('/crm/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids: [...selected] }),
+      });
+      showToast({ type: 'success', title: t('common.success'), message: `${selected.size} contact(s)` });
+      setSelected(new Set());
+      await loadData();
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setBulkAction(null);
+  }, [selected, loadData, t]);
+
+  const handleBulkMerge = useCallback(async () => {
+    if (selected.size < 2) return;
+    setBulkAction('merge');
+    try {
+      const ids = [...selected];
+      await request(`/crm/clean/${connectedCrm || 'notion'}`, {
+        method: 'POST',
+        body: JSON.stringify({ fixes: [{ type: 'manual_merge', action: 'merge', contactIds: ids }] }),
+      });
+      showToast({ type: 'success', title: t('common.success'), message: t('clients.merged') });
+      setSelected(new Set());
+      await loadData();
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setBulkAction(null);
+  }, [selected, connectedCrm, loadData, t]);
 
   const filtered = useMemo(() => clients.filter(c => {
     if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
@@ -328,6 +395,48 @@ export default function ClientsPage() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', marginBottom: 12,
+          background: 'rgba(110,87,250,0.06)', border: '1px solid rgba(110,87,250,0.15)',
+          borderRadius: 10, fontSize: 12,
+        }}>
+          <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
+            {selected.size} {lang === 'en' ? 'selected' : 'sélectionné(s)'}
+          </span>
+          <div style={{ flex: 1 }} />
+          <select
+            style={{
+              padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'var(--bg-card)', color: 'var(--text)', fontSize: 11,
+            }}
+            defaultValue=""
+            onChange={e => { if (e.target.value) handleBulkStatus(e.target.value); e.target.value = ''; }}
+            disabled={!!bulkAction}
+          >
+            <option value="" disabled>{lang === 'en' ? 'Change status...' : 'Changer statut...'}</option>
+            {Object.entries(STATUS_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          {selected.size >= 2 && (
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 12px' }}
+              disabled={!!bulkAction} onClick={handleBulkMerge}>
+              {bulkAction === 'merge' ? '...' : (lang === 'en' ? 'Merge' : 'Fusionner')}
+            </button>
+          )}
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 12px', color: 'var(--danger)' }}
+            disabled={!!bulkAction} onClick={handleBulkDelete}>
+            {bulkAction === 'delete' ? '...' : (lang === 'en' ? 'Delete' : 'Supprimer')}
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 8px', color: 'var(--text-muted)' }}
+            onClick={() => setSelected(new Set())}>
+            {'\u2715'}
+          </button>
+        </div>
+      )}
+
       {/* Main content: list + detail panel */}
       <div style={{ display: 'flex', gap: 16 }}>
         {/* Client list */}
@@ -346,21 +455,40 @@ export default function ClientsPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {/* Select all header */}
+              {!selectedClient && filtered.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', fontSize: 11, color: 'var(--text-muted)' }}>
+                  <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
+                    onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
+                  <span>{lang === 'en' ? 'Select all' : 'Tout s\u00e9lectionner'} ({filtered.length})</span>
+                </div>
+              )}
               {filtered.map(c => {
                 const color = STATUS_COLORS[c.status] || 'var(--text-muted)';
                 const isSelected = selectedClient?.id === c.id;
+                const isChecked = selected.has(c.id);
                 return (
-                  <div key={c.id} onClick={() => setSelectedClient(c)} style={{
-                    display: 'grid', gridTemplateColumns: selectedClient ? '2fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px' : '2fr 1.2fr 1fr 60px'),
-                    padding: '10px 14px', background: isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
-                    border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
-                    borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
-                    transition: 'all 0.15s',
+                  <div key={c.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
                   }}>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{c.name || '\u2014'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.title || c.email || ''}</div>
-                    </div>
+                    {!selectedClient && (
+                      <input type="checkbox" checked={isChecked}
+                        onChange={() => toggleSelect(c.id)}
+                        onClick={e => e.stopPropagation()}
+                        style={{ cursor: 'pointer', flexShrink: 0 }} />
+                    )}
+                    <div onClick={() => setSelectedClient(c)} style={{
+                      flex: 1, display: 'grid',
+                      gridTemplateColumns: selectedClient ? '2fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px' : '2fr 1.2fr 1fr 60px'),
+                      padding: '10px 14px', background: isChecked ? 'rgba(110,87,250,0.06)' : isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
+                      border: `1px solid ${isChecked ? 'rgba(110,87,250,0.2)' : isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                      borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{c.name || '\u2014'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.title || c.email || ''}</div>
+                      </div>
                     {!selectedClient && <div style={{ color: 'var(--text-secondary)' }}>{c.company || '\u2014'}</div>}
                     {!selectedClient && (
                       <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, width: 'fit-content' }}>
@@ -397,6 +525,7 @@ export default function ClientsPage() {
                         )}
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}

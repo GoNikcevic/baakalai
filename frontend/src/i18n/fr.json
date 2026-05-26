@@ -482,7 +482,8 @@
     "emailSent": "Email envoy\u00E9",
     "emailPending": "En attente",
     "noActivity": "Aucune activit\u00E9 pour ce contact",
-    "importResult": "{imported} import\u00E9(s), {skipped} d\u00E9j\u00E0 pr\u00E9sent(s)"
+    "importResult": "{imported} import\u00E9(s), {skipped} d\u00E9j\u00E0 pr\u00E9sent(s)",
+    "merged": "Contacts fusionn\u00E9s avec succ\u00E8s"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring et sant\u00E9 de votre CRM",
@@ -536,6 +537,7 @@
     "merge": "Fusionner",
     "archive": "Archiver",
     "review": "V\u00E9rifier",
+    "fixAll": "Tout corriger",
     "haveEmail": "ont un email",
     "haveCompany": "ont une entreprise",
     "issue_duplicate_email": "email en double",

@@ -46,6 +46,7 @@ export default function CRMDiagnosticReport({ onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [fixing, setFixing] = useState(null);
+  const [fixingAll, setFixingAll] = useState(false);
 
   useEffect(() => {
     request('/crm/first-diagnostic', { method: 'POST' })
@@ -78,6 +79,32 @@ export default function CRMDiagnosticReport({ onClose }) {
     } catch { /* ignore */ }
     setFixing(null);
   }, [data?.provider]);
+
+  const handleFixAll = useCallback(async () => {
+    if (!data?.provider || !health?.issues) return;
+    setFixingAll(true);
+    try {
+      const fixes = [];
+      for (const issue of health.issues) {
+        if (issue.type === 'format_name_caps') {
+          fixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
+        } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'archive') {
+          fixes.push({ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) });
+        } else if ((issue.suggestedAction === 'merge' || issue.suggestedAction === 'review') && issue.contacts?.length >= 2) {
+          fixes.push({ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) });
+        }
+      }
+      if (fixes.length > 0) {
+        await request(`/crm/clean/${data.provider}`, {
+          method: 'POST',
+          body: JSON.stringify({ fixes }),
+        });
+        const fresh = await request('/crm/first-diagnostic', { method: 'POST' });
+        setData(fresh);
+      }
+    } catch { /* ignore */ }
+    setFixingAll(false);
+  }, [data?.provider, health?.issues]);
 
   function handleNav(path) {
     localStorage.setItem('bakal_diagnostic_seen', 'true');
@@ -246,6 +273,18 @@ export default function CRMDiagnosticReport({ onClose }) {
           {/* ── Health issues with fix buttons ── */}
           {health?.issues && health.issues.length > 0 && (
             <div style={styles.section}>
+              {health.issues.filter(i => i.suggestedAction && i.suggestedAction !== 'enrich').length > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 11, padding: '6px 14px' }}
+                    disabled={fixingAll}
+                    onClick={handleFixAll}
+                  >
+                    {fixingAll ? '...' : t('diagnostic.fixAll')}
+                  </button>
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {health.issues.map((issue, i) => {
                   const meta = ISSUE_META[issue.type] || { icon: '\u2022', color: 'var(--text-muted)' };
