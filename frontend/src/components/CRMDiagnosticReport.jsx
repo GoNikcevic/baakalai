@@ -63,7 +63,7 @@ export default function CRMDiagnosticReport({ onClose }) {
         fixes = [{ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts }];
       } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'archive') {
         fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
-      } else if (issue.suggestedAction === 'merge' && issue.contacts?.length >= 2) {
+      } else if ((issue.suggestedAction === 'merge' || issue.suggestedAction === 'review') && issue.contacts?.length >= 2) {
         fixes = [{ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) }];
       }
       if (fixes.length > 0) {
@@ -176,6 +176,27 @@ export default function CRMDiagnosticReport({ onClose }) {
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
                 {contacts.withEmail} {t('diagnostic.withEmail')} &middot; {contacts.withCompany} {t('diagnostic.withCompany')}
               </div>
+              {/* Positive metrics */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                {contacts.total > 0 && contacts.withEmail > 0 && (
+                  <span style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                    background: contacts.withEmail / contacts.total >= 0.8 ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)',
+                    color: contacts.withEmail / contacts.total >= 0.8 ? '#22c55e' : '#f59e0b',
+                  }}>
+                    {Math.round(contacts.withEmail / contacts.total * 100)}% {t('diagnostic.haveEmail')}
+                  </span>
+                )}
+                {contacts.total > 0 && contacts.withCompany > 0 && (
+                  <span style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                    background: contacts.withCompany / contacts.total >= 0.8 ? 'rgba(34,197,94,0.1)' : 'rgba(245,158,11,0.1)',
+                    color: contacts.withCompany / contacts.total >= 0.8 ? '#22c55e' : '#f59e0b',
+                  }}>
+                    {Math.round(contacts.withCompany / contacts.total * 100)}% {t('diagnostic.haveCompany')}
+                  </span>
+                )}
+              </div>
               {/* Status breakdown */}
               {contacts.byStatus && Object.keys(contacts.byStatus).length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
@@ -228,23 +249,35 @@ export default function CRMDiagnosticReport({ onClose }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {health.issues.map((issue, i) => {
                   const meta = ISSUE_META[issue.type] || { icon: '\u2022', color: 'var(--text-muted)' };
-                  const actionLabel = issue.suggestedAction === 'merge' ? t('diagnostic.merge')
+                  const isMergeable = issue.suggestedAction === 'merge'
+                    || (issue.suggestedAction === 'review' && issue.contacts?.length >= 2);
+                  const actionLabel = isMergeable ? t('diagnostic.merge')
                     : issue.suggestedAction === 'archive' || issue.suggestedAction === 'delete' ? t('diagnostic.archive')
+                    : issue.suggestedAction === 'auto_fix' ? t('diagnostic.fix')
                     : t('diagnostic.fix');
+                  const issueLabel = t(`diagnostic.issue_${issue.type}`) || issue.type.replace(/_/g, ' ');
+                  const showAction = issue.suggestedAction && issue.suggestedAction !== 'enrich';
                   return (
                     <div key={i} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       background: 'var(--bg-elevated)', borderRadius: 8, fontSize: 13,
                     }}>
                       <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.icon}</span>
-                      <span style={{ flex: 1, color: 'var(--text)' }}>
-                        <strong style={{ color: meta.color }}>{issue.count}</strong>{' '}
-                        {issue.type.replace(/_/g, ' ')}
+                      <span style={{ flex: 1, color: 'var(--text)', minWidth: 0 }}>
+                        {issue.count != null && (
+                          <strong style={{ color: meta.color }}>{issue.count} </strong>
+                        )}
+                        {issueLabel}
+                        {issue.key && (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 6 }}>
+                            — {issue.key}
+                          </span>
+                        )}
                       </span>
-                      {issue.suggestedAction && issue.suggestedAction !== 'review' && issue.suggestedAction !== 'enrich' && (
+                      {showAction && (
                         <button
                           className="btn btn-ghost"
-                          style={{ fontSize: 11, padding: '4px 10px', color: 'var(--primary)' }}
+                          style={{ fontSize: 11, padding: '4px 10px', color: 'var(--primary)', flexShrink: 0 }}
                           disabled={fixing === issue.type}
                           onClick={() => handleFix(issue)}
                         >

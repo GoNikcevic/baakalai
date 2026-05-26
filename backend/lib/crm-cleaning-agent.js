@@ -167,6 +167,7 @@ async function scanCRM(userId, provider) {
         severity: 'high',
         contacts: group,
         key: email,
+        count: group.length,
         suggestedAction: 'merge',
       });
     }
@@ -180,7 +181,7 @@ async function scanCRM(userId, provider) {
     if (!nameGroups.has(key)) nameGroups.set(key, []);
     nameGroups.get(key).push({ id: p.id, name: p.name, email: p.email, company: p.company });
   }
-  for (const [, group] of nameGroups) {
+  for (const [nameKey, group] of nameGroups) {
     if (group.length > 1) {
       // Skip if already caught by email duplicate
       const emails = group.map(g => g.email).filter(Boolean);
@@ -190,6 +191,8 @@ async function scanCRM(userId, provider) {
           type: 'duplicate_name',
           severity: 'medium',
           contacts: group,
+          key: group[0].name + (group[0].company ? ` @ ${group[0].company}` : ''),
+          count: group.length,
           suggestedAction: 'review',
         });
       }
@@ -274,16 +277,27 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // Compute health score
+  // Compute health score — proportional to contact base size
+  const total = persons.length || 1;
   const dupEmailCount = issues.filter(i => i.type === 'duplicate_email').reduce((s, i) => s + i.contacts.length, 0);
   const dupNameCount = issues.filter(i => i.type === 'duplicate_name').reduce((s, i) => s + i.contacts.length, 0);
+
+  // Each category can deduct up to its max weight (total = 100)
+  // Deductions scale as % of affected contacts vs total
+  const pctDupEmail = dupEmailCount / total;       // weight: 25
+  const pctDupName = dupNameCount / total;          // weight: 10
+  const pctMissingEmail = missingEmail.length / total; // weight: 20
+  const pctInvalidEmail = invalidEmails.length / total; // weight: 20
+  const pctInactive = inactive.length / total;      // weight: 15
+  const pctCaps = allCaps.length / total;           // weight: 10
+
   let score = 100;
-  score -= dupEmailCount * 3;
-  score -= dupNameCount * 1;
-  score -= (missingEmail.length) * 1;
-  score -= (invalidEmails.length) * 2;
-  score -= Math.min(inactive.length, 20) * 0.5;
-  score -= (allCaps.length) * 0.2;
+  score -= Math.min(pctDupEmail * 2, 1) * 25;       // 50%+ duplicates = full 25pt deduction
+  score -= Math.min(pctDupName * 3, 1) * 10;        // 33%+ = full 10pt deduction
+  score -= Math.min(pctMissingEmail * 1.5, 1) * 20; // 67%+ missing = full 20pt deduction
+  score -= Math.min(pctInvalidEmail * 5, 1) * 20;   // 20%+ invalid = full 20pt deduction
+  score -= Math.min(pctInactive * 1.5, 1) * 15;     // 67%+ inactive = full 15pt deduction
+  score -= Math.min(pctCaps * 3, 1) * 10;           // 33%+ caps = full 10pt deduction
   score = Math.max(0, Math.round(score));
 
   const summary = {
