@@ -641,17 +641,18 @@ function CRMHealthSection() {
   const [scanning, setScanning] = useState(true);
   const [fixing, setFixing] = useState(null);
   const [fixResults, setFixResults] = useState(null);
-  const [provider, setProvider] = useState('pipedrive');
+  const [provider, setProvider] = useState(null);
 
   // Auto-detect connected CRM provider
   useEffect(() => {
     api.request('/crm/providers').then(data => {
-      const connected = (data.providers || []).find(p => ['pipedrive', 'hubspot', 'salesforce', 'odoo'].includes(p.provider) && p.connected);
-      if (connected) setProvider(connected.provider);
-    }).catch(() => {});
+      const connected = (data.providers || []).find(p => ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'].includes(p.provider) && p.connected);
+      setProvider(connected ? connected.provider : 'pipedrive');
+    }).catch(() => setProvider('pipedrive'));
   }, []);
 
   const handleScan = useCallback(async () => {
+    if (!provider) return;
     setScanning(true);
     setReport(null);
     setFixResults(null);
@@ -664,8 +665,8 @@ function CRMHealthSection() {
     setScanning(false);
   }, [provider]);
 
-  // Auto-scan on mount
-  useEffect(() => { handleScan(); }, []);
+  // Auto-scan once provider is detected
+  useEffect(() => { if (provider) handleScan(); }, [provider]);
 
   const handleFix = useCallback(async (issue) => {
     setFixing(issue.type);
