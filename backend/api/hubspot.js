@@ -228,6 +228,12 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
   return all;
 }
 
+async function archiveContact(accessToken, contactId) {
+  return hubspotFetch(accessToken, `/crm/v3/objects/contacts/${contactId}`, {
+    method: 'DELETE',
+  });
+}
+
 module.exports = {
   // Contacts
   createContact,
@@ -235,6 +241,7 @@ module.exports = {
   getContact,
   searchContacts,
   listAllContacts,
+  archiveContact,
   // Deals
   createDeal,
   updateDeal,

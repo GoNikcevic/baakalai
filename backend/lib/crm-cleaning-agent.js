@@ -84,9 +84,43 @@ function getAdapter(provider) {
       };
     }
 
+    case 'hubspot': {
+      const hubspot = require('../api/hubspot');
+      return {
+        async listPersons(token) {
+          return hubspot.listAllContacts(token);
+        },
+        normalizePerson(raw) {
+          return {
+            id: raw.id,
+            name: raw.name || '',
+            email: raw.email ? raw.email.toLowerCase().trim() : null,
+            phone: null,
+            title: raw.job_title || '',
+            company: raw.org_name || '',
+            updatedAt: raw.updatedAt || null,
+            raw,
+          };
+        },
+        async updatePerson(token, id, data) {
+          const props = {};
+          if (data.name) {
+            const parts = data.name.split(' ');
+            props.firstname = parts[0] || '';
+            props.lastname = parts.slice(1).join(' ') || '';
+          }
+          if (data.email) props.email = data.email;
+          if (data.company) props.company = data.company;
+          return hubspot.updateContact(token, id, props);
+        },
+        async deletePerson(token, id) {
+          return hubspot.archiveContact(token, id);
+        },
+      };
+    }
+
     case 'notion':
     case 'airtable':
-    case 'hubspot':
     case 'salesforce': {
       // For these providers, scan from already-imported opportunities in Baakalai DB
       return {
@@ -140,7 +174,7 @@ function isValidEmail(email) {
  * @returns {{ score, totalContacts, issues[], summary }}
  */
 async function scanCRM(userId, provider) {
-  const dbBasedProviders = ['notion', 'airtable', 'hubspot', 'salesforce'];
+  const dbBasedProviders = ['notion', 'airtable', 'salesforce'];
   const token = await getUserKey(userId, provider);
   if (!token && !dbBasedProviders.includes(provider)) {
     throw new Error(`No ${provider} API key configured`);
