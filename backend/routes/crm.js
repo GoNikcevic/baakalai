@@ -1172,6 +1172,111 @@ router.delete('/mappings/:id', async (req, res, next) => {
 });
 
 // =============================================
+// Auto-import helper (used by first-diagnostic)
+// =============================================
+async function importContactsForUser(userId, provider) {
+  const token = await getUserCrmToken(userId, provider);
+  if (!token && !['notion', 'airtable'].includes(provider)) return { imported: 0 };
+
+  let contacts = [];
+
+  if (provider === 'pipedrive') {
+    const raw = await pipedrive.listAllPersons(token);
+    contacts = (raw || []).map(r => ({
+      name: r.name || 'Unknown',
+      email: Array.isArray(r.email) ? (r.email.find(e => e.primary)?.value || r.email[0]?.value || null) : (r.email || null),
+      title: r.job_title || null,
+      company: r.org_name || r.org_id?.name || null,
+      crmContactId: String(r.id),
+    }));
+  } else if (provider === 'hubspot') {
+    const raw = await hubspot.listAllContacts(token);
+    contacts = (raw || []).map(r => ({
+      name: r.name || 'Unknown',
+      email: r.email || null,
+      title: r.job_title || null,
+      company: r.org_name || null,
+      crmContactId: String(r.id),
+    }));
+  } else if (provider === 'odoo') {
+    let creds;
+    try { creds = JSON.parse(token); } catch { return { imported: 0 }; }
+    const raw = await odoo.listAllContacts(creds);
+    contacts = (raw || []).map(r => ({
+      name: r.name || 'Unknown',
+      email: r.email || null,
+      title: r.function || null,
+      company: r.company_name || (r.parent_id ? r.parent_id[1] : null),
+      crmContactId: String(r.id),
+    }));
+  } else if (provider === 'salesforce') {
+    const integration = await db.query(
+      `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
+    );
+    const instanceUrl = integration.rows[0]?.instance_url || 'https://login.salesforce.com';
+    const raw = await salesforce.listContacts(instanceUrl, token);
+    contacts = (raw || []).map(r => ({
+      name: r.name || 'Unknown',
+      email: r.email || null,
+      title: r.title || null,
+      company: r.company || null,
+      crmContactId: String(r.id),
+      crmOwnerId: r.ownerId || null,
+    }));
+  } else if (provider === 'notion') {
+    const integration = await db.userIntegrations.get(userId, 'notion');
+    if (!integration) return { imported: 0 };
+    const notionToken = decrypt(integration.access_token);
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    if (!metadata.database_id) return { imported: 0 };
+    const raw = await notionCrm.queryContacts(notionToken, metadata.database_id);
+    contacts = (raw || []).map(r => ({
+      name: r.name || r.company || 'Unknown',
+      email: r.email || null,
+      title: r.title || null,
+      company: r.company || null,
+      crmContactId: r.notionPageId || null,
+    }));
+  } else if (provider === 'airtable') {
+    const integration = await db.userIntegrations.get(userId, 'airtable');
+    if (!integration) return { imported: 0 };
+    const airtableKey = decrypt(integration.access_token);
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    if (!metadata.base_id || !metadata.table_name) return { imported: 0 };
+    const raw = await airtableCrm.listRecords(airtableKey, metadata.base_id, metadata.table_name);
+    contacts = (raw || []).map(r => ({
+      name: r.name || 'Unknown',
+      email: r.email || null,
+      title: r.title || null,
+      company: r.company || null,
+      crmContactId: r.airtableRecordId || null,
+    }));
+  }
+
+  let imported = 0;
+  for (const c of contacts) {
+    if (!c.email) continue;
+    try {
+      const existing = await db.opportunities.findByEmail(userId, c.email);
+      if (existing) continue;
+      await db.opportunities.create({
+        userId,
+        name: c.name,
+        email: c.email,
+        title: c.title,
+        company: c.company,
+        status: 'imported',
+        crmProvider: provider,
+        crmContactId: c.crmContactId,
+        crmOwnerId: c.crmOwnerId || null,
+      });
+      imported++;
+    } catch { /* skip individual failures */ }
+  }
+  return { imported };
+}
+
+// =============================================
 // POST /api/crm/first-diagnostic — Run full CRM diagnostic after first import
 // Returns: health scan + deal coach + churn summary + quick stats
 // =============================================
@@ -1188,8 +1293,16 @@ router.post('/first-diagnostic', async (req, res, next) => {
       if (key) { connectedProvider = p; break; }
     }
 
-    // Load contacts
-    const opps = await db.opportunities.listByUser(userId, 500);
+    // Load contacts — auto-import if DB is empty but CRM is connected
+    let opps = await db.opportunities.listByUser(userId, 500);
+    if (opps.length === 0 && connectedProvider) {
+      try {
+        await importContactsForUser(userId, connectedProvider);
+        opps = await db.opportunities.listByUser(userId, 500);
+      } catch (importErr) {
+        console.error('[first-diagnostic] auto-import failed:', importErr.message);
+      }
+    }
 
     // Run scan + churn + deal coach in parallel
     const [scanResult, churnResult, dealCoachResult] = await Promise.all([
