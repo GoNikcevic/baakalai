@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
 import api from '../services/api-client';
-import { useI18n } from '../i18n';
+import { useI18n, useT } from '../i18n';
 import EngagementChart from '../components/charts/EngagementChart';
 import FunnelChart from '../components/charts/FunnelChart';
 
@@ -64,23 +64,25 @@ function HealthGauge({ score, label }) {
 
 /* ─── Sections ─── */
 
-const TABS = [
+function getTabs(t) { return [
   { key: 'pipeline', label: 'Pipeline' },
   { key: 'attribution', label: 'Attribution' },
   { key: 'scoring', label: 'Lead Scoring' },
-  { key: 'trends', label: 'Tendances' },
-  { key: 'channels', label: 'Canaux' },
+  { key: 'trends', label: t('analytics.trends') },
+  { key: 'channels', label: t('analytics.channels') },
   { key: 'forecast', label: 'Forecast' },
-  { key: 'health', label: 'Santé CRM' },
-];
+  { key: 'health', label: t('analytics.crmHealth') },
+]; }
 
 /* ═══ Main Component ═══ */
 
 export default function CRMAnalyticsPage() {
   const { backendAvailable } = useApp();
+  const t = useT();
   const [activeTab, setActiveTab] = useState('pipeline');
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
+  const TABS = getTabs(t);
 
   const fetchData = useCallback(async (tab) => {
     if (!backendAvailable) {
@@ -111,7 +113,7 @@ export default function CRMAnalyticsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">CRM Analytics</h1>
-          <div className="page-subtitle">Pipeline, attribution, scoring et santé de votre CRM</div>
+          <div className="page-subtitle">{t('analytics.subtitle')}</div>
         </div>
       </div>
 
@@ -158,6 +160,7 @@ export default function CRMAnalyticsPage() {
 /* ═══ Pipeline Section ═══ */
 
 function PipelineSection({ data }) {
+  const t = useT();
   const funnelStages = (data.stages || [])
     .filter(s => s.stage !== 'lost')
     .map(s => ({ label: s.label, value: s.count }));
@@ -168,7 +171,7 @@ function PipelineSection({ data }) {
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">
           <div className="crm-kpi-value">{data.total || 0}</div>
-          <div className="crm-kpi-label">Total opportunités</div>
+          <div className="crm-kpi-label">{t('analytics.totalOpportunities')}</div>
         </div>
         {(data.stages || []).map(s => (
           <div className="crm-kpi-card" key={s.stage}>
@@ -181,7 +184,7 @@ function PipelineSection({ data }) {
       <div className="crm-grid-2">
         {/* Visual funnel */}
         <div className="card">
-          <div className="card-title">Entonnoir du pipeline</div>
+          <div className="card-title">{t('analytics.pipelineFunnel')}</div>
           <div className="card-body">
             <FunnelChart stages={funnelStages} />
           </div>
@@ -189,7 +192,7 @@ function PipelineSection({ data }) {
 
         {/* Conversion rates */}
         <div className="card">
-          <div className="card-title">Taux de conversion entre étapes</div>
+          <div className="card-title">{t('analytics.conversionRates')}</div>
           <div className="card-body">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {(data.conversions || []).map((c, i) => (
@@ -216,6 +219,7 @@ function PipelineSection({ data }) {
 /* ═══ Attribution Section ═══ */
 
 function AttributionSection({ data }) {
+  const t = useT();
   const sorted = useMemo(() =>
     [...(data.campaigns || [])].sort((a, b) => b.conversionRate - a.conversionRate),
     [data.campaigns]
@@ -227,33 +231,33 @@ function AttributionSection({ data }) {
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">
           <div className="crm-kpi-value">{data.totals?.prospects || 0}</div>
-          <div className="crm-kpi-label">Prospects total</div>
+          <div className="crm-kpi-label">{t('analytics.totalProspects')}</div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.totals?.meetings || 0}</div>
-          <div className="crm-kpi-label">RDV obtenus</div>
+          <div className="crm-kpi-label">{t('analytics.meetingsBooked')}</div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--blue)' }}>{data.totals?.interested || 0}</div>
-          <div className="crm-kpi-label">Intéressés</div>
+          <div className="crm-kpi-label">{t('analytics.interested')}</div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>{data.totals?.avgConversion || 0}%</div>
-          <div className="crm-kpi-label">Conversion moy.</div>
+          <div className="crm-kpi-label">{t('analytics.avgConversion')}</div>
         </div>
       </div>
 
       {/* Campaign table */}
       <div className="card">
-        <div className="card-title">ROI par campagne</div>
+        <div className="card-title">{t('analytics.roiByCampaign')}</div>
         <div className="card-body">
           <div className="crm-table">
             <div className="crm-table-header">
-              <span style={{ flex: 2 }}>Campagne</span>
-              <span>Canal</span>
+              <span style={{ flex: 2 }}>{t('analytics.campaign')}</span>
+              <span>{t('analytics.channel')}</span>
               <span>Prospects</span>
-              <span>Intéressés</span>
-              <span>RDV</span>
+              <span>{t('analytics.interested')}</span>
+              <span>{t('analytics.meetings')}</span>
               <span>Conversion</span>
             </div>
             {sorted.map(c => (
@@ -285,6 +289,7 @@ function AttributionSection({ data }) {
 /* ═══ Scoring Section ═══ */
 
 function ScoringSection({ data }) {
+  const t = useT();
   const [filter, setFilter] = useState('all');
 
   const filtered = useMemo(() => {
@@ -301,26 +306,26 @@ function ScoringSection({ data }) {
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">
           <div className="crm-kpi-value">{data.avgScore?.toFixed(1) || '—'}</div>
-          <div className="crm-kpi-label">Score moyen</div>
+          <div className="crm-kpi-label">{t('analytics.avgScore')}</div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.distribution?.high || 0}</div>
-          <div className="crm-kpi-label">Score élevé (70+)</div>
+          <div className="crm-kpi-label">{t('analytics.scoreHigh')}</div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--warning)' }}>{data.distribution?.medium || 0}</div>
-          <div className="crm-kpi-label">Score moyen (40-69)</div>
+          <div className="crm-kpi-label">{t('analytics.scoreMedium')}</div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--danger)' }}>{data.distribution?.low || 0}</div>
-          <div className="crm-kpi-label">Score faible (&lt;40)</div>
+          <div className="crm-kpi-label">{t('analytics.scoreLow')}</div>
         </div>
       </div>
 
       {/* Filter + Table */}
       <div className="card">
         <div className="card-header">
-          <div className="card-title">Scoreboard des leads</div>
+          <div className="card-title">{t('analytics.leadScoreboard')}</div>
           <div style={{ display: 'flex', gap: 6 }}>
             {['all', 'high', 'medium', 'low'].map(f => (
               <button
@@ -328,7 +333,7 @@ function ScoringSection({ data }) {
                 className={`crm-filter-btn${filter === f ? ' active' : ''}`}
                 onClick={() => setFilter(f)}
               >
-                {f === 'all' ? 'Tous' : f === 'high' ? 'Élevé' : f === 'medium' ? 'Moyen' : 'Faible'}
+                {f === 'all' ? t('analytics.all') : f === 'high' ? t('analytics.high') : f === 'medium' ? t('analytics.medium') : t('analytics.low')}
               </button>
             ))}
           </div>
@@ -362,7 +367,7 @@ function ScoringSection({ data }) {
             ))}
             {filtered.length === 0 && (
               <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
-                Aucun lead dans cette catégorie.
+                {t('analytics.noLeads')}
               </div>
             )}
           </div>
@@ -375,6 +380,7 @@ function ScoringSection({ data }) {
 /* ═══ Trends Section ═══ */
 
 function TrendsSection({ data }) {
+  const t = useT();
   const chartData = useMemo(() => {
     if (data.weeks && data.weeks.length > 0) {
       return data.weeks.map(w => ({
@@ -390,13 +396,13 @@ function TrendsSection({ data }) {
   return (
     <div className="crm-section">
       <div className="card">
-        <div className="card-title">Tendances KPI (semaine par semaine)</div>
+        <div className="card-title">{t('analytics.weeklyTrends')}</div>
         <div className="card-body">
           {chartData.length > 0 ? (
             <EngagementChart data={chartData} />
           ) : (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-              Pas assez de données historiques. Les tendances s'afficheront après quelques semaines d'activité.
+              {t('analytics.noTrendsData')}
             </div>
           )}
         </div>
@@ -408,6 +414,7 @@ function TrendsSection({ data }) {
 /* ═══ Channels Section ═══ */
 
 function ChannelsSection({ data }) {
+  const t = useT();
   const channels = data.channels || [];
   const best = data.bestChannel;
 
@@ -416,12 +423,12 @@ function ChannelsSection({ data }) {
       {/* Best channel highlight */}
       {best && (
         <div className="crm-highlight-card" style={{ borderColor: CHANNEL_COLORS[best.channel] }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>Meilleur canal :</span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{t('analytics.bestChannel')}:</span>
           <span className="crm-channel-badge" style={{ background: CHANNEL_COLORS[best.channel], marginLeft: 8 }}>
             {best.channel}
           </span>
           <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>
-            {best.value}% taux de réponse
+            {best.value}% {t('analytics.replyRate')}
           </span>
         </div>
       )}
@@ -433,7 +440,7 @@ function ChannelsSection({ data }) {
               <span className="crm-channel-badge" style={{ background: CHANNEL_COLORS[ch.channel] || 'var(--text-muted)' }}>
                 {ch.channel}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ch.campaigns} campagnes</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ch.campaigns} {t('analytics.campaigns')}</span>
             </div>
             <div className="card-body">
               <div className="crm-channel-stats">
@@ -444,18 +451,18 @@ function ChannelsSection({ data }) {
                 {ch.avgOpenRate != null && (
                   <div className="crm-channel-stat">
                     <div className="crm-channel-stat-value">{ch.avgOpenRate}%</div>
-                    <div className="crm-channel-stat-label">Ouverture</div>
+                    <div className="crm-channel-stat-label">{t('analytics.openRate')}</div>
                   </div>
                 )}
                 {ch.avgAcceptRate != null && (
                   <div className="crm-channel-stat">
                     <div className="crm-channel-stat-value">{ch.avgAcceptRate}%</div>
-                    <div className="crm-channel-stat-label">Acceptation</div>
+                    <div className="crm-channel-stat-label">{t('analytics.acceptRate')}</div>
                   </div>
                 )}
                 <div className="crm-channel-stat">
                   <div className="crm-channel-stat-value">{ch.avgReplyRate}%</div>
-                  <div className="crm-channel-stat-label">Réponse</div>
+                  <div className="crm-channel-stat-label">{t('analytics.replyRate')}</div>
                 </div>
                 <div className="crm-channel-stat">
                   <div className="crm-channel-stat-value" style={{ color: 'var(--success)' }}>{ch.meetings}</div>

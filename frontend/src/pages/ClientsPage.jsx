@@ -189,8 +189,8 @@ export default function ClientsPage() {
         }}>
           <span>
             {importResult.error
-              ? `Erreur : ${importResult.error}`
-              : `${importResult.imported} import\u00e9(s), ${importResult.skipped} d\u00e9j\u00e0 pr\u00e9sent(s)`}
+              ? `${t('common.error')} : ${importResult.error}`
+              : t('clients.importResult', { imported: importResult.imported, skipped: importResult.skipped })}
           </span>
           <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setImportResult(null)}>{'\u2715'}</button>
         </div>
@@ -351,7 +351,7 @@ export default function ClientsPage() {
                 const isSelected = selectedClient?.id === c.id;
                 return (
                   <div key={c.id} onClick={() => setSelectedClient(c)} style={{
-                    display: 'grid', gridTemplateColumns: selectedClient ? '2fr 1fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px 80px' : '2fr 1.2fr 1fr 60px 80px'),
+                    display: 'grid', gridTemplateColumns: selectedClient ? '2fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px' : '2fr 1.2fr 1fr 60px'),
                     padding: '10px 14px', background: isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
                     border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
                     borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
@@ -371,6 +371,11 @@ export default function ClientsPage() {
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {c.owner_email ? c.owner_email.split('@')[0] : '\u2014'}
                       </div>
+                    )}
+                    {selectedClient && (
+                      <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, width: 'fit-content', justifySelf: 'end' }}>
+                        {STATUS_LABELS[c.status] || c.status || '\u2014'}
+                      </span>
                     )}
                     {!selectedClient && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -392,9 +397,6 @@ export default function ClientsPage() {
                         )}
                       </div>
                     )}
-                    <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600 }}>
-                      {STATUS_LABELS[c.status] || '\u2014'}
-                    </span>
                   </div>
                 );
               })}
@@ -440,12 +442,12 @@ function ClientDetailPanel({ client, onClose }) {
         method: 'POST',
         body: JSON.stringify({ to: client.email, toName: client.name, subject, body, opportunityId: client.id }),
       });
-      alert('Email envoy\u00e9 !');
+      showToast({ type: 'success', title: lang === 'en' ? 'Email sent' : 'Email envoy\u00e9', message: client.email });
       // Reload detail
       const data = await request(`/crm/client/${client.id}`);
       setDetail(data);
     } catch (err) {
-      alert('Erreur : ' + err.message);
+      showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: err.message });
     }
     setSending(false);
   };
