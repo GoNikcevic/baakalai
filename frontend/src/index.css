@@ -87,8 +87,8 @@
   --container-lg: 1360px;
 
   /* Font stacks */
-  --font-sans:  'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono:  'Geist Mono', 'SF Mono', Menlo, monospace;
+  --font-sans:  'Satoshi', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:  'IBM Plex Mono', 'SF Mono', Menlo, monospace;
   /* Legacy alias */
   --font:       var(--font-sans);
 
@@ -100,7 +100,7 @@ body {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.55;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
   background: var(--paper);
   color: var(--ink);
   overflow-x: hidden;
