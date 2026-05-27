@@ -523,6 +523,16 @@ router.get('/cleaning-reports', async (req, res, next) => {
   }
 });
 
+// POST /api/crm/enrich — Enrich contacts with missing data via web search
+router.post('/enrich', async (req, res, next) => {
+  try {
+    const { issueType = 'all', contactIds, limit = 20 } = req.body;
+    const { enrichContacts } = require('../lib/enrich-agent');
+    const result = await enrichContacts(req.user.id, issueType, { contactIds, limit: Math.min(limit, 50) });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // POST /api/crm/bulk-update — Update multiple contacts at once
 router.post('/bulk-update', async (req, res, next) => {
   try {

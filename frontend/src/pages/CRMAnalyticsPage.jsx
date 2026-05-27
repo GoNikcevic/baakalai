@@ -679,14 +679,33 @@ function CRMHealthSection() {
   useEffect(() => { if (provider) handleScan(); }, [provider]);
 
   const handleFix = useCallback(async (issue) => {
-    // Navigate actions — open Clients page filtered to affected contacts
-    if (issue.suggestedAction === 'enrich' || issue.suggestedAction === 'review') {
+    // Review action — navigate to Clients page with filter
+    if (issue.suggestedAction === 'review') {
       const ids = (issue.contacts || []).map(c => c.id).filter(Boolean).slice(0, 20);
-      if (ids.length > 0) {
-        navigate(`/clients?highlight=${ids.join(',')}`);
-      } else {
-        navigate('/clients');
+      navigate(ids.length > 0 ? `/clients?highlight=${ids.join(',')}` : '/clients');
+      return;
+    }
+    // Enrich action — call enrich agent
+    if (issue.suggestedAction === 'enrich') {
+      setFixing(issue.type);
+      try {
+        const issueType = issue.type === 'missing_email' ? 'missing_email' : issue.type === 'missing_company' ? 'missing_company' : 'all';
+        const contactIds = (issue.contacts || []).map(c => c.id).filter(Boolean);
+        const result = await api.request('/crm/enrich', {
+          method: 'POST',
+          body: JSON.stringify({ issueType, contactIds, limit: 20 }),
+        });
+        setFixResults(prev => ({ ...(prev || {}), [issue.type]: {
+          applied: result.enriched || 0,
+          message: en
+            ? `${result.enriched} enriched, ${result.notFound} not found (${result.total} processed)`
+            : `${result.enriched} enrichis, ${result.notFound} non trouvés (${result.total} traités)`,
+        }}));
+        if (result.enriched > 0) setTimeout(handleScan, 1500);
+      } catch (err) {
+        setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
       }
+      setFixing(null);
       return;
     }
     // Fix actions — apply via backend
@@ -708,14 +727,13 @@ function CRMHealthSection() {
           body: JSON.stringify({ reportId: report?.reportId, fixes }),
         });
         setFixResults(prev => ({ ...(prev || {}), [issue.type]: result }));
-        // Re-scan after fix
         setTimeout(handleScan, 1000);
       }
     } catch (err) {
       setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
     }
     setFixing(null);
-  }, [provider, report, handleScan, navigate]);
+  }, [provider, report, handleScan, navigate, en]);
 
   if (scanning) {
     return (
@@ -814,7 +832,7 @@ function CRMHealthSection() {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       {fixResult && !fixResult.error && (
                         <span style={{ fontSize: 11, color: 'var(--success)' }}>
-                          {'\u2705'} {fixResult.applied} corrigé{fixResult.applied > 1 ? 's' : ''}
+                          {'\u2705'} {fixResult.message || `${fixResult.applied} corrigé${fixResult.applied > 1 ? 's' : ''}`}
                         </span>
                       )}
                       {fixResult?.error && (
