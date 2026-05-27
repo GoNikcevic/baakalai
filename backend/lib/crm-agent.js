@@ -108,7 +108,16 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     // ── Step 3: Nurture Evaluation ──
     await stepNurture(userId, token, report);
 
-    // ── Step 4: Response Analysis ──
+    // ── Step 3b: LinkedIn Response Sync ──
+    try {
+      const { syncLinkedInResponses } = require('./linkedin-response-sync');
+      const linkedinReport = await syncLinkedInResponses(userId);
+      report.linkedin = linkedinReport;
+    } catch (err) {
+      report.errors.push(`LinkedIn sync: ${err.message}`);
+    }
+
+    // ── Step 4: Response Analysis (email + LinkedIn) ──
     try {
       const { analyzeResponses } = require('./response-analysis-agent');
       const responseReport = await analyzeResponses(userId);

@@ -234,6 +234,76 @@ async function getRecentPosts(cookie, publicId, userId) {
   return posts;
 }
 
+// ── Sync: Sent Invitations (check accepted) ──
+
+/**
+ * Get sent invitations with their status (pending/accepted).
+ * Used to detect connection acceptances for memory/learning.
+ */
+async function getSentInvitations(cookie, { start = 0, count = 100 } = {}) {
+  const data = await voyagerFetch(
+    cookie,
+    `/relationships/sentInvitationViewV5?invitationType=CONNECTION&start=${start}&count=${count}&q=invitationType`
+  );
+
+  const invitations = [];
+  for (const el of (data?.elements || [])) {
+    const invitation = el?.invitation || el;
+    const invitee = invitation?.toMember || invitation?.invitee?.['com.linkedin.voyager.growth.invitation.InviteeProfile'] || {};
+    invitations.push({
+      id: invitation?.entityUrn || el?.entityUrn,
+      sentAt: invitation?.sentTime || el?.sentTime,
+      message: invitation?.message || '',
+      status: el?.invitationState || 'PENDING',
+      toPublicId: invitee?.publicIdentifier || invitee?.profileId || null,
+      toName: `${invitee?.firstName || ''} ${invitee?.lastName || ''}`.trim(),
+      toProfileUrl: invitee?.publicIdentifier ? `https://www.linkedin.com/in/${invitee.publicIdentifier}` : null,
+    });
+  }
+  return invitations;
+}
+
+// ── Sync: Conversation Messages (check replies) ──
+
+/**
+ * Get recent conversations to detect replies to our messages.
+ * Returns conversations with the latest message.
+ */
+async function getConversations(cookie, { count = 20 } = {}) {
+  const data = await voyagerFetch(
+    cookie,
+    `/messaging/conversations?keyVersion=LEGACY_INBOX&q=syncToken&count=${count}`
+  );
+
+  const conversations = [];
+  for (const el of (data?.elements || [])) {
+    const lastMessage = el?.events?.[0] || {};
+    const messageBody = lastMessage?.eventContent?.['com.linkedin.voyager.messaging.event.MessageEvent']?.body
+      || lastMessage?.eventContent?.attributedBody?.text
+      || '';
+    const from = lastMessage?.from?.['com.linkedin.voyager.messaging.MessagingMember']
+      || lastMessage?.from || {};
+    const participants = (el?.participants || []).map(p => {
+      const member = p?.['com.linkedin.voyager.messaging.MessagingMember'] || p;
+      return {
+        publicId: member?.miniProfile?.publicIdentifier || null,
+        name: `${member?.miniProfile?.firstName || ''} ${member?.miniProfile?.lastName || ''}`.trim(),
+      };
+    });
+
+    conversations.push({
+      conversationId: el?.entityUrn,
+      lastMessageAt: lastMessage?.createdAt || el?.lastActivityAt,
+      lastMessageBody: messageBody.slice(0, 1000),
+      lastMessageFromSelf: !!from?.miniProfile?.publicIdentifier && from.miniProfile.publicIdentifier === 'me',
+      participants,
+      unreadCount: el?.unreadCount || 0,
+      read: el?.read ?? true,
+    });
+  }
+  return conversations;
+}
+
 // ── Cookie Validation ──
 
 /**
@@ -266,6 +336,8 @@ module.exports = {
   sendConnectionRequest,
   sendMessage,
   getRecentPosts,
+  getSentInvitations,
+  getConversations,
   testCookie,
   getDailyCounts,
 };

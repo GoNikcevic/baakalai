@@ -115,6 +115,81 @@ async function analyzeResponses(userId) {
     }
   }
 
+  // ── LinkedIn response analysis ──
+  try {
+    const linkedinReplies = await db.query(
+      `SELECT pa.*, o.id as opp_id, o.name as contact_name, o.company, o.status as opp_status
+       FROM prospect_activities pa
+       LEFT JOIN opportunities o ON o.email = pa.lead_email AND o.user_id = pa.user_id
+       WHERE pa.user_id = $1
+         AND pa.type IN ('linkedin_reply', 'linkedin_connect_accepted')
+         AND pa.created_at > now() - interval '14 days'
+         AND NOT EXISTS (
+           SELECT 1 FROM prospect_activities pa2
+           WHERE pa2.user_id = pa.user_id AND pa2.type = 'linkedin_analyzed'
+             AND pa2.content::text LIKE '%' || pa.id::text || '%'
+         )
+       ORDER BY pa.created_at DESC LIMIT 20`,
+      [userId]
+    );
+
+    for (const activity of linkedinReplies.rows) {
+      try {
+        const content = typeof activity.content === 'string' ? JSON.parse(activity.content) : (activity.content || {});
+
+        if (activity.type === 'linkedin_connect_accepted') {
+          // Connection accepted → positive signal
+          report.analyzed++;
+          report.positive++;
+
+          if (activity.opp_id && activity.opp_status === 'imported') {
+            await db.opportunities.update(activity.opp_id, { status: 'interested' });
+          }
+
+          report.actions.push({
+            contact: activity.contact_name || content.name,
+            sentiment: 'positive',
+            action: 'LinkedIn connection accepted',
+            channel: 'linkedin',
+          });
+        } else if (activity.type === 'linkedin_reply' && content.message) {
+          // Message reply → analyze with Claude
+          const analysis = await analyzeWithClaude(
+            { contact_name: activity.contact_name || content.name, company: activity.company, subject: 'LinkedIn message', body: '' },
+            [`[LinkedIn reply] ${content.message}`]
+          );
+
+          report.analyzed++;
+          if (analysis.sentiment === 'positive') report.positive++;
+          else if (analysis.sentiment === 'negative') report.negative++;
+          else report.neutral++;
+
+          if (activity.opp_id && analysis.suggestedStatus) {
+            await db.opportunities.update(activity.opp_id, { status: analysis.suggestedStatus });
+          }
+
+          report.actions.push({
+            contact: activity.contact_name || content.name,
+            sentiment: analysis.sentiment,
+            action: analysis.suggestedAction,
+            channel: 'linkedin',
+          });
+        }
+
+        // Mark as analyzed
+        await db.query(
+          `INSERT INTO prospect_activities (user_id, lead_email, type, content, source, created_at)
+           VALUES ($1, $2, 'linkedin_analyzed', $3, 'response_agent', now())`,
+          [userId, activity.lead_email, JSON.stringify({ activityId: activity.id, type: activity.type })]
+        );
+      } catch (err) {
+        logger.warn('response-agent', `LinkedIn analysis failed for activity ${activity.id}: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    logger.warn('response-agent', `LinkedIn response analysis failed: ${err.message}`);
+  }
+
   // 8. If enough data, create memory pattern
   if (report.analyzed >= 5) {
     await createMemoryPattern(userId, report);
