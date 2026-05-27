@@ -112,6 +112,69 @@ async function run(userId) {
     logger.error('timing-agent', err.message);
   }
 
+  // ── LinkedIn timing analysis ──
+  try {
+    const liData = await db.query(`
+      SELECT pa.created_at AS sent_at,
+             EXTRACT(DOW FROM pa.created_at) AS day_of_week,
+             EXTRACT(HOUR FROM pa.created_at) AS hour_of_day,
+             (SELECT pa2.created_at FROM prospect_activities pa2
+              WHERE pa2.user_id = pa.user_id AND pa2.lead_email = pa.lead_email
+                AND pa2.type IN ('linkedin_connect_accepted', 'linkedin_reply')
+                AND pa2.created_at > pa.created_at
+              ORDER BY pa2.created_at LIMIT 1) AS response_at
+      FROM prospect_activities pa
+      WHERE pa.user_id = $1 AND pa.type IN ('linkedin_connect_sent', 'linkedin_message_sent')
+        AND pa.created_at > now() - interval '60 days'
+      ORDER BY pa.created_at DESC LIMIT 200
+    `, [userId]);
+
+    const liRows = liData.rows;
+    if (liRows.length >= 10) {
+      const withResponse = liRows.filter(r => r.response_at);
+      const noResponse = liRows.filter(r => !r.response_at);
+
+      // Best day of week for LinkedIn
+      if (withResponse.length >= 5) {
+        const dayBuckets = {};
+        for (const r of withResponse) {
+          const d = parseInt(r.day_of_week, 10);
+          dayBuckets[d] = (dayBuckets[d] || 0) + 1;
+        }
+        const bestDay = Object.entries(dayBuckets).sort((a, b) => b[1] - a[1])[0];
+        const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+
+        if (bestDay) {
+          const dayInsight = `LinkedIn : meilleur jour = ${dayNames[bestDay[0]]} (${bestDay[1]}/${withResponse.length} r\u00e9ponses)`;
+          report.recommendations.push(dayInsight);
+
+          await db.memoryPatterns.replaceOrCreate(userId, {
+            pattern: dayInsight,
+            category: 'S\u00e9quence',
+            source: 'timing_agent_linkedin',
+            data: JSON.stringify({ channel: 'linkedin', dayBuckets, sampleSize: liRows.length, responseRate: Math.round((withResponse.length / liRows.length) * 100) }),
+            confidence: withResponse.length >= 15 ? 'Haute' : 'Moyenne',
+          });
+          report.insights++;
+        }
+
+        // Response delay for LinkedIn
+        const delays = withResponse.map(r => {
+          const sent = new Date(r.sent_at).getTime();
+          const resp = new Date(r.response_at).getTime();
+          return Math.round((resp - sent) / 86400000);
+        }).filter(d => d >= 0 && d <= 30);
+
+        if (delays.length > 0) {
+          const avgDelay = Math.round(delays.reduce((a, b) => a + b, 0) / delays.length);
+          report.recommendations.push(`LinkedIn : d\u00e9lai moyen de r\u00e9ponse = ${avgDelay} jour(s)`);
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn('timing-agent', `LinkedIn timing analysis failed: ${err.message}`);
+  }
+
   return report;
 }
 

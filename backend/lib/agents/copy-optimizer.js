@@ -119,6 +119,54 @@ Return JSON:
     logger.error('copy-optimizer', err.message);
   }
 
+  // ── LinkedIn copy analysis ──
+  try {
+    const liActions = await db.query(`
+      SELECT pa.content, pa.type, pa.created_at,
+             (SELECT pa2.type FROM prospect_activities pa2
+              WHERE pa2.user_id = pa.user_id AND pa2.lead_email = pa.lead_email
+                AND pa2.type IN ('linkedin_connect_accepted', 'linkedin_reply')
+                AND pa2.created_at > pa.created_at
+              LIMIT 1) as outcome
+      FROM prospect_activities pa
+      WHERE pa.user_id = $1 AND pa.type IN ('linkedin_connect_sent', 'linkedin_message_sent')
+        AND pa.created_at > now() - interval '60 days'
+      ORDER BY pa.created_at DESC LIMIT 100
+    `, [userId]);
+
+    const liRows = liActions.rows;
+    if (liRows.length >= 10) {
+      const accepted = liRows.filter(r => r.outcome === 'linkedin_connect_accepted' || r.outcome === 'linkedin_reply');
+      const ignored = liRows.filter(r => !r.outcome);
+      const acceptRate = Math.round((accepted.length / liRows.length) * 100);
+
+      // Analyze LinkedIn message lengths
+      const acceptedLens = accepted.map(r => {
+        try { const c = typeof r.content === 'string' ? JSON.parse(r.content) : r.content; return (c.note || c.message || '').length; } catch { return 0; }
+      }).filter(l => l > 0);
+      const ignoredLens = ignored.map(r => {
+        try { const c = typeof r.content === 'string' ? JSON.parse(r.content) : r.content; return (c.note || c.message || '').length; } catch { return 0; }
+      }).filter(l => l > 0);
+
+      if (acceptedLens.length > 0 && ignoredLens.length > 0) {
+        const avgAccepted = Math.round(acceptedLens.reduce((a, b) => a + b, 0) / acceptedLens.length);
+        const avgIgnored = Math.round(ignoredLens.reduce((a, b) => a + b, 0) / ignoredLens.length);
+
+        await db.memoryPatterns.replaceOrCreate(userId, {
+          pattern: `LinkedIn : taux d'acceptation ${acceptRate}%. Longueur optimale ~${avgAccepted} car. (accept\u00e9s) vs ${avgIgnored} car. (ignor\u00e9s)`,
+          category: 'Canal',
+          source: 'copy_optimizer_linkedin',
+          data: JSON.stringify({ acceptRate, avgAcceptedLen: avgAccepted, avgIgnoredLen: avgIgnored, sampleSize: liRows.length }),
+          confidence: liRows.length >= 30 ? 'Haute' : 'Moyenne',
+        });
+        report.insights++;
+        report.optimizations.push(`LinkedIn : longueur optimale ~${avgAccepted} car. (${acceptRate}% taux d'acceptation)`);
+      }
+    }
+  } catch (err) {
+    logger.warn('copy-optimizer', `LinkedIn analysis failed: ${err.message}`);
+  }
+
   return report;
 }
 

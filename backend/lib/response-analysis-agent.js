@@ -334,27 +334,65 @@ async function createMemoryPattern(userId, report) {
     ? Math.round((report.positive / report.analyzed) * 100)
     : 0;
 
-  const pattern = successRate >= 50
-    ? `Les emails d'activation g\u00E9n\u00E8rent ${successRate}% de r\u00E9ponses positives (${report.positive}/${report.analyzed})`
-    : `Les emails d'activation ont un taux de r\u00E9ponse positive de ${successRate}% \u2014 envisager d'ajuster le ton ou le timing`;
+  // Split actions by channel
+  const emailActions = (report.actions || []).filter(a => !a.channel || a.channel === 'email');
+  const linkedinActions = (report.actions || []).filter(a => a.channel === 'linkedin');
 
+  // Email pattern
+  if (emailActions.length >= 3) {
+    const emailPositive = emailActions.filter(a => a.sentiment === 'positive').length;
+    const emailRate = Math.round((emailPositive / emailActions.length) * 100);
+    const emailPattern = emailRate >= 50
+      ? `Les emails d'activation g\u00E9n\u00E8rent ${emailRate}% de r\u00E9ponses positives (${emailPositive}/${emailActions.length})`
+      : `Les emails d'activation ont un taux de r\u00E9ponse positive de ${emailRate}% \u2014 envisager d'ajuster le ton ou le timing`;
+    try {
+      await db.memoryPatterns.replaceOrCreate(userId, {
+        pattern: emailPattern,
+        category: 'Corps',
+        source: 'response_analysis_email',
+        data: JSON.stringify({ source: 'response_analysis', channel: 'email', analyzed: emailActions.length, positive: emailPositive }),
+        confidence: emailActions.length >= 15 ? 'Haute' : emailActions.length >= 8 ? 'Moyenne' : 'Faible',
+      });
+    } catch (err) {
+      logger.warn('response-agent', `Email memory pattern failed: ${err.message}`);
+    }
+  }
+
+  // LinkedIn pattern
+  if (linkedinActions.length >= 3) {
+    const liPositive = linkedinActions.filter(a => a.sentiment === 'positive').length;
+    const liRate = Math.round((liPositive / linkedinActions.length) * 100);
+    const connectAccepted = linkedinActions.filter(a => a.action?.includes('accepted')).length;
+    const liPattern = liRate >= 50
+      ? `LinkedIn : ${liRate}% de r\u00E9ponses positives (${liPositive}/${linkedinActions.length}). ${connectAccepted} connexions accept\u00E9es.`
+      : `LinkedIn : taux de r\u00E9ponse positive ${liRate}%. ${connectAccepted} connexions accept\u00E9es sur ${linkedinActions.length} actions.`;
+    try {
+      await db.memoryPatterns.replaceOrCreate(userId, {
+        pattern: liPattern,
+        category: 'Canal',
+        source: 'response_analysis_linkedin',
+        data: JSON.stringify({ source: 'response_analysis', channel: 'linkedin', analyzed: linkedinActions.length, positive: liPositive, connectsAccepted: connectAccepted }),
+        confidence: linkedinActions.length >= 15 ? 'Haute' : linkedinActions.length >= 8 ? 'Moyenne' : 'Faible',
+      });
+    } catch (err) {
+      logger.warn('response-agent', `LinkedIn memory pattern failed: ${err.message}`);
+    }
+  }
+
+  // Global pattern (backward compat)
+  const pattern = successRate >= 50
+    ? `Activation : ${successRate}% de r\u00E9ponses positives (${report.positive}/${report.analyzed}) — email + LinkedIn`
+    : `Activation : taux de r\u00E9ponse positive de ${successRate}% (${report.positive}/${report.analyzed})`;
   try {
-    await db.memoryPatterns.create({
+    await db.memoryPatterns.replaceOrCreate(userId, {
       pattern,
       category: 'Corps',
-      data: JSON.stringify({
-        source: 'response_analysis',
-        analyzed: report.analyzed,
-        positive: report.positive,
-        negative: report.negative,
-        neutral: report.neutral,
-      }),
+      source: 'response_analysis_global',
+      data: JSON.stringify({ source: 'response_analysis', channel: 'all', analyzed: report.analyzed, positive: report.positive, negative: report.negative, neutral: report.neutral }),
       confidence: report.analyzed >= 20 ? 'Haute' : report.analyzed >= 10 ? 'Moyenne' : 'Faible',
-      sectors: [],
-      targets: [],
     });
   } catch (err) {
-    logger.warn('response-agent', `Memory pattern creation failed: ${err.message}`);
+    logger.warn('response-agent', `Global memory pattern failed: ${err.message}`);
   }
 }
 
