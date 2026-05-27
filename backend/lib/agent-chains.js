@@ -131,7 +131,7 @@ async function getTeamId(userId) {
 
 async function getCrmProvider(userId) {
   const { getUserKey } = require('../config');
-  for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo']) {
+  for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk']) {
     const token = await getUserKey(userId, p);
     if (token) return p;
   }
