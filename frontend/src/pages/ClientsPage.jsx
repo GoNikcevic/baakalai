@@ -5,6 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
@@ -44,6 +45,11 @@ export default function ClientsPage() {
   const [bulkAction, setBulkAction] = useState(null);
   const t = useT();
   const { lang } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightIds = useMemo(() => {
+    const h = searchParams.get('highlight');
+    return h ? new Set(h.split(',')) : null;
+  }, [searchParams]);
   const STATUS_LABELS = getStatusLabels(lang);
   const user = getUser();
   const isAdmin = !user?.teamRole || user.teamRole === 'admin';
@@ -107,6 +113,8 @@ export default function ClientsPage() {
   }, [loadData, connectedCrm, clients.length]);
 
   const filtered = useMemo(() => clients.filter(c => {
+    // If highlight param is set, only show those contacts
+    if (highlightIds) return highlightIds.has(c.id);
     if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
@@ -120,7 +128,7 @@ export default function ClientsPage() {
   }).sort((a, b) => {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
     return 0;
-  }), [clients, filter, ownerFilter, search]);
+  }), [clients, filter, ownerFilter, search, highlightIds]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
@@ -207,6 +215,16 @@ export default function ClientsPage() {
     <div className="dashboard-page">
       {showDiagnostic && (
         <CRMDiagnosticReport onClose={() => setShowDiagnostic(false)} />
+      )}
+      {highlightIds && (
+        <div style={{ padding: '10px 16px', background: 'var(--accent-bg, #f3f0ff)', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 13, color: 'var(--accent, #6E57FA)' }}>
+            {lang === 'en' ? `Showing ${filtered.length} contacts from CRM health scan` : `${filtered.length} contacts du scan CRM affich\u00e9s`}
+          </span>
+          <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setSearchParams({})}>
+            {lang === 'en' ? 'Show all' : 'Voir tout'}
+          </button>
+        </div>
       )}
       <div className="page-header">
         <div>

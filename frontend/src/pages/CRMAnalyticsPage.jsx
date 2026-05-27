@@ -4,6 +4,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import api from '../services/api-client';
 import { useI18n, useT } from '../i18n';
@@ -644,6 +645,7 @@ function getIssueConfig(en) { return {
 function CRMHealthSection() {
   const { lang } = useI18n();
   const en = lang === 'en';
+  const navigate = useNavigate();
   const ISSUE_CONFIG = getIssueConfig(en);
   const [report, setReport] = useState(null);
   const [scanning, setScanning] = useState(true);
@@ -677,6 +679,17 @@ function CRMHealthSection() {
   useEffect(() => { if (provider) handleScan(); }, [provider]);
 
   const handleFix = useCallback(async (issue) => {
+    // Navigate actions — open Clients page filtered to affected contacts
+    if (issue.suggestedAction === 'enrich' || issue.suggestedAction === 'review') {
+      const ids = (issue.contacts || []).map(c => c.id).filter(Boolean).slice(0, 20);
+      if (ids.length > 0) {
+        navigate(`/clients?highlight=${ids.join(',')}`);
+      } else {
+        navigate('/clients');
+      }
+      return;
+    }
+    // Fix actions — apply via backend
     setFixing(issue.type);
     try {
       let fixes = [];
@@ -686,6 +699,8 @@ function CRMHealthSection() {
         fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
       } else if (issue.suggestedAction === 'merge' && issue.contacts.length >= 2) {
         fixes = [{ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) }];
+      } else if (issue.suggestedAction === 'fix' && issue.contacts?.length > 0) {
+        fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
       }
       if (fixes.length > 0) {
         const result = await api.request(`/crm/clean/${provider}`, {
@@ -700,7 +715,7 @@ function CRMHealthSection() {
       setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
     }
     setFixing(null);
-  }, [provider, report, handleScan]);
+  }, [provider, report, handleScan, navigate]);
 
   if (scanning) {
     return (
