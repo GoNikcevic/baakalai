@@ -72,6 +72,7 @@ export default function NurturePage() {
     { key: 'triggers', label: t('activation.triggers'), count: triggers.length },
     { key: 'pending', label: t('activation.pending'), count: emails.filter(e => e.status === 'pending').length },
     { key: 'sent', label: t('activation.sent'), count: sentEmails.length },
+    { key: 'autopilot', label: lang === 'en' ? 'Autopilot' : 'Autopilot', count: null },
     { key: 'ab', label: 'A/B Tests', count: null },
     isAdmin ? { key: 'team', label: lang === 'en' ? 'Team Campaigns' : 'Campagnes \u00E9quipe', count: null } : null,
   ].filter(Boolean);
@@ -235,6 +236,7 @@ export default function NurturePage() {
       {!loading && activeTab === 'sent' && (
         <EmailsSection emails={emails.filter(e => e.status === 'sent')} type="sent" onRefresh={loadData} />
       )}
+      {!loading && activeTab === 'autopilot' && <AutopilotSection lang={lang} />}
       {!loading && activeTab === 'ab' && <ABResultsSection lang={lang} />}
       {!loading && activeTab === 'team' && <TeamCampaignsSection lang={lang} />}
     </div>
@@ -1078,6 +1080,181 @@ function TeamCampaignsSection({ lang }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ═══ Autopilot Section ═══ */
+
+function AutopilotSection({ lang }) {
+  const en = lang === 'en';
+  const [settings, setSettings] = useState(null);
+  const [queue, setQueue] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      request('/crm/autopilot/settings').catch(() => ({ enabled: false })),
+      request('/crm/autopilot/queue').catch(() => ({ queue: [] })),
+    ]).then(([s, q]) => {
+      setSettings(s);
+      setQueue(q.queue || []);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const toggleEnabled = async () => {
+    const next = !settings?.enabled;
+    try {
+      await request('/crm/autopilot/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: next }),
+      });
+      setSettings(prev => ({ ...prev, enabled: next }));
+      showToast({ type: 'success', title: 'Autopilot', message: next ? (en ? 'Enabled' : 'Activé') : (en ? 'Disabled' : 'Désactivé') });
+    } catch (err) {
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+    }
+  };
+
+  const cancelMessage = async (id) => {
+    try {
+      await request(`/crm/autopilot/queue/${id}`, { method: 'DELETE' });
+      setQueue(prev => prev.map(q => q.id === id ? { ...q, status: 'cancelled' } : q));
+    } catch { /* ignore */ }
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{en ? 'Loading...' : 'Chargement...'}</div>;
+
+  const pending = queue.filter(q => q.status === 'pending');
+  const sent = queue.filter(q => q.status === 'sent');
+
+  return (
+    <div>
+      {/* Settings card */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {'\uD83E\uDD16'} {en ? 'Conversation Autopilot' : 'Autopilot de conversation'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                {en
+                  ? 'AI manages replies to your prospects until a meeting is booked. Max 5 turns, 2-4h delay between responses.'
+                  : 'L\'IA gère les réponses à vos prospects jusqu\'à ce qu\'un RDV soit fixé. Max 5 tours, 2-4h entre chaque réponse.'}
+              </div>
+            </div>
+            <button
+              className={`btn ${settings?.enabled ? 'btn-success' : 'btn-outline'}`}
+              style={{ fontSize: 12, padding: '8px 18px', minWidth: 90 }}
+              onClick={toggleEnabled}
+            >
+              {settings?.enabled ? (en ? 'Active' : 'Actif') : (en ? 'Enable' : 'Activer')}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* How it works */}
+      {!settings?.enabled && (
+        <div className="card" style={{ marginBottom: 16, background: 'var(--bg-elevated)' }}>
+          <div className="card-body" style={{ padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{en ? 'How it works' : 'Comment ça marche'}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+              {[
+                en ? '1. A prospect replies to your email or LinkedIn message' : '1. Un prospect répond à votre email ou message LinkedIn',
+                en ? '2. AI analyzes the intent (interested, question, meeting request...)' : '2. L\'IA analyse l\'intent (intéressé, question, demande de RDV...)',
+                en ? '3. AI generates a contextual reply using your conversation history + learned patterns' : '3. L\'IA génère une réponse contextuelle avec l\'historique + les patterns appris',
+                en ? '4. Reply is sent after 2-4 hours (human-like delay)' : '4. La réponse est envoyée après 2-4h (délai naturel)',
+                en ? '5. Conversation continues until a meeting is accepted or max 5 turns' : '5. La conversation continue jusqu\'au RDV accepté ou max 5 tours',
+              ].map((step, i) => (
+                <div key={i} style={{ padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: 6, borderLeft: '2px solid var(--primary)' }}>
+                  {step}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending queue */}
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+            {'\u23F3'} {en ? `${pending.length} pending reply(ies)` : `${pending.length} réponse(s) en attente`}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pending.map(q => {
+              const content = typeof q.content === 'string' ? (() => { try { return JSON.parse(q.content); } catch { return {}; } })() : (q.content || {});
+              return (
+                <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--warning)' }}>
+                  <div className="card-body" style={{ padding: '12px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>
+                          {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.to_name || q.to_email}
+                          {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
+                        </div>
+                        {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, maxHeight: 40, overflow: 'hidden' }}>
+                          {content.body || content.message || ''}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {en ? 'Scheduled:' : 'Planifié :'} {new Date(q.scheduled_at).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }} onClick={() => cancelMessage(q.id)}>
+                        {en ? 'Cancel' : 'Annuler'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Sent history */}
+      {sent.length > 0 && (
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+            {'\u2705'} {en ? `${sent.length} auto-reply(ies) sent` : `${sent.length} réponse(s) auto envoyée(s)`}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sent.slice(0, 20).map(q => {
+              const content = typeof q.content === 'string' ? (() => { try { return JSON.parse(q.content); } catch { return {}; } })() : (q.content || {});
+              return (
+                <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--success)' }}>
+                  <div className="card-body" style={{ padding: '12px 16px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.to_name || q.to_email}
+                      {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
+                    </div>
+                    {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, maxHeight: 40, overflow: 'hidden' }}>
+                      {content.body || content.message || ''}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {settings?.enabled && pending.length === 0 && sent.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83E\uDD16'}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {en ? 'Autopilot is active. Replies will appear here when prospects respond.' : 'L\'autopilot est actif. Les réponses apparaîtront ici quand vos prospects répondront.'}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

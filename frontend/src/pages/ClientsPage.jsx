@@ -702,6 +702,26 @@ function ClientDetailPanel({ client, onClose }) {
         )}
       </div>
 
+      {/* Autopilot toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={client.autopilot_enabled !== false}
+            onChange={async (e) => {
+              try {
+                await request(`/crm/autopilot/contact/${client.id}`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ enabled: e.target.checked }),
+                });
+              } catch { /* ignore */ }
+            }}
+            style={{ cursor: 'pointer' }}
+          />
+          {'\uD83E\uDD16'} {lang === 'en' ? 'Autopilot' : 'Autopilot'}
+        </label>
+      </div>
+
       {/* Product lines */}
       <ProductLineTags clientId={client.id} lang={lang} />
 
