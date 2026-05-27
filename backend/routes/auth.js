@@ -119,9 +119,9 @@ function validatePassword(password) {
   return null;
 }
 
-async function issueTokens(user) {
+async function issueTokens(user, { rememberMe = true } = {}) {
   const accessToken = signAccessToken(user);
-  const refresh = generateRefreshToken();
+  const refresh = generateRefreshToken(rememberMe ? undefined : 1); // 1 day if not remembered, 30 days default
   await db.refreshTokens.create(user.id, refresh.tokenHash, refresh.expiresAt);
   return { accessToken, refreshToken: refresh.token };
 }
@@ -184,7 +184,7 @@ router.post('/register', async (req, res, next) => {
 // POST /api/auth/login
 router.post('/login', async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe = true } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
     const user = await db.users.getByEmail(email.toLowerCase().trim());
@@ -196,9 +196,10 @@ router.post('/login', async (req, res, next) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
 
-    const { accessToken, refreshToken } = await issueTokens({
-      id: user.id, email: user.email, role: user.role,
-    });
+    const { accessToken, refreshToken } = await issueTokens(
+      { id: user.id, email: user.email, role: user.role },
+      { rememberMe },
+    );
 
     setRefreshCookie(res, refreshToken);
     res.json({

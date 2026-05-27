@@ -151,6 +151,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [company, setCompany] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
 
   const firstInputRef = useRef(null);
 
@@ -237,7 +238,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
         // Normal flow → show "check your email" screen, do NOT auto-login
         setRegisteredEmail(result.email);
       } else {
-        const user = await login(email, password);
+        const user = await login(email, password, rememberMe);
         if (onAuth) onAuth(user);
       }
     } catch (err) {
@@ -526,9 +527,18 @@ export default function AuthGate({ onAuth, error: externalError }) {
             />
           </div>
 
-          {/* Forgot password link (login only) */}
+          {/* Remember me + Forgot password (login only) */}
           {!isRegister && (
-            <div style={{ textAlign: 'right', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {t('auth.rememberMe')}
+              </label>
               <button
                 type="button"
                 style={{ ...styles.toggleLink, fontSize: 12, color: 'var(--text-muted)' }}
