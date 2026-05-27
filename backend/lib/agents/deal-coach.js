@@ -64,7 +64,7 @@ Contact: ${deal.name} (${deal.title || 'N/A'}) at ${deal.company || 'N/A'}
 Status: ${deal.status || 'open'}
 Days since last activity: ${daysSinceUpdate}
 Churn risk score: ${deal.churn_score || 'N/A'}/100
-Churn factors: ${deal.churn_factors ? (typeof deal.churn_factors === 'string' ? JSON.parse(deal.churn_factors) : deal.churn_factors).map(f => f.detail).join(', ') : 'N/A'}
+Churn factors: ${(() => { try { const f = typeof deal.churn_factors === 'string' ? JSON.parse(deal.churn_factors) : deal.churn_factors; return Array.isArray(f) ? f.map(x => x.detail).join(', ') : 'N/A'; } catch { return 'N/A'; } })()}
 Emails sent: ${contactEmails.length}
 Last email sentiment: ${contactEmails[0]?.sentiment || 'N/A'}
 
@@ -82,7 +82,7 @@ Suggest ONE specific action. Return JSON:
         let coaching = result.parsed;
         if (!coaching) {
           const m = (result.content || '').match(/\{[\s\S]*"action"[\s\S]*\}/);
-          if (m) coaching = JSON.parse(m[0]);
+          if (m) try { coaching = JSON.parse(m[0]); } catch { /* skip malformed JSON */ }
         }
 
         if (coaching) {

@@ -81,6 +81,7 @@ export default function CRMDiagnosticReport({ onClose }) {
   }, [data?.provider]);
 
   const handleFixAll = useCallback(async () => {
+    const health = data?.health;
     if (!data?.provider || !health?.issues) return;
     setFixingAll(true);
     try {
@@ -104,7 +105,7 @@ export default function CRMDiagnosticReport({ onClose }) {
       }
     } catch { /* ignore */ }
     setFixingAll(false);
-  }, [data?.provider, health?.issues]);
+  }, [data]);
 
   function handleNav(path) {
     localStorage.setItem('bakal_diagnostic_seen', 'true');

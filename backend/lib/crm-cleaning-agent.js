@@ -59,7 +59,8 @@ function getAdapter(provider) {
       const odoo = require('../api/odoo');
       return {
         async listPersons(token) {
-          const creds = JSON.parse(token);
+          let creds;
+          try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
           return odoo.listAllContacts(creds);
         },
         normalizePerson(raw) {
@@ -75,7 +76,8 @@ function getAdapter(provider) {
           };
         },
         async updatePerson(token, id, data) {
-          const creds = JSON.parse(token);
+          let creds;
+          try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
           return odoo.updateContact(creds, id, data);
         },
         async deletePerson() {

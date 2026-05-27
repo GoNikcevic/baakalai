@@ -51,8 +51,9 @@ function scoreOpportunity(opp, { deals = [], activities = [], emails = [] } = {}
 
   if (openDeals.length > 0) {
     const stalestDeal = openDeals.reduce((oldest, d) => {
-      const age = (now - new Date(d.updatedAt || d.update_time || d.created_at).getTime()) / DAY_MS;
-      return age > oldest.age ? { deal: d, age } : oldest;
+      const dateStr = d.updatedAt || d.update_time || d.created_at;
+      const age = dateStr ? (now - new Date(dateStr).getTime()) / DAY_MS : 0;
+      return (age > oldest.age && !isNaN(age)) ? { deal: d, age } : oldest;
     }, { deal: null, age: 0 });
 
     if (stalestDeal.age >= 60) {
@@ -164,13 +165,16 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
   for (const opp of opps) {
     const { score, factors } = scoreOpportunity(opp, { deals, activities: [], emails: allEmails });
 
-    await db.query(
-      `UPDATE opportunities SET churn_score = $1, churn_factors = $2, churn_scored_at = now() WHERE id = $3`,
-      [score, JSON.stringify(factors), opp.id]
-    );
-
-    scored++;
-    if (score >= 50) atRisk++;
+    try {
+      await db.query(
+        `UPDATE opportunities SET churn_score = $1, churn_factors = $2, churn_scored_at = now() WHERE id = $3`,
+        [score, JSON.stringify(factors), opp.id]
+      );
+      scored++;
+      if (score >= 50) atRisk++;
+    } catch (err) {
+      logger.error('churn-scoring', `Failed to update opp ${opp.id}: ${err.message}`);
+    }
   }
 
   logger.info('churn-scoring', `User ${userId}: scored ${scored} contacts, ${atRisk} at risk`);
