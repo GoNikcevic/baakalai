@@ -20,6 +20,8 @@ function getTriggerTypes(lang) {
     { value: 'renewal_reminder', label: en ? 'Renewal' : 'Renouvellement', desc: en ? 'Reminder X days before renewal date' : 'Rappel X jours avant la date de renouvellement', icon: '\uD83D\uDD14', defaultDays: 30, defaultName: en ? 'Renewal reminder' : 'Rappel renouvellement' },
     { value: 'upsell_opportunity', label: en ? 'Upsell opportunity' : 'Opportunit\u00E9 upsell', desc: en ? 'Suggest upgrade to active clients after X days' : 'Proposer un upgrade aux clients actifs depuis X jours', icon: '\u2B06\uFE0F', defaultDays: 90, defaultName: en ? 'Upsell proposal' : 'Proposition upsell' },
     { value: 'feedback_request', label: en ? 'Feedback request' : 'Demande de feedback', desc: en ? 'Ask for feedback after X days' : 'Demander un retour d\'exp\u00E9rience apr\u00E8s X jours', icon: '\u2B50', defaultDays: 30, defaultName: en ? 'Testimonial request' : 'Demande de t\u00E9moignage' },
+    { value: 'newsletter_inactive', label: en ? 'Newsletter inactive' : 'Newsletter inactif', desc: en ? 'Re-engage contacts who never open newsletters (Salesforce/Fonteva)' : 'R\u00E9engager les contacts qui n\'ouvrent pas les newsletters (Salesforce/Fonteva)', icon: '\uD83D\uDCE7', defaultDays: 30, defaultName: en ? 'Newsletter re-engagement' : 'R\u00E9activation newsletter' },
+    { value: 'newsletter_engaged', label: en ? 'Newsletter engaged' : 'Newsletter engag\u00E9', desc: en ? 'Notify sales when contacts actively engage with newsletters (Salesforce/Fonteva)' : 'Alerter le commercial quand un contact engage avec les newsletters (Salesforce/Fonteva)', icon: '\uD83D\uDD25', defaultDays: 30, defaultName: en ? 'Hot newsletter lead' : 'Lead chaud newsletter' },
   ];
 }
 
@@ -74,6 +76,7 @@ export default function NurturePage() {
     { key: 'sent', label: t('activation.sent'), count: sentEmails.length },
     { key: 'autopilot', label: lang === 'en' ? 'Autopilot' : 'Autopilot', count: null },
     { key: 'ab', label: 'A/B Tests', count: null },
+    { key: 'newsletters', label: lang === 'en' ? 'Newsletters' : 'Newsletters', count: null },
     isAdmin ? { key: 'team', label: lang === 'en' ? 'Team Campaigns' : 'Campagnes \u00E9quipe', count: null } : null,
   ].filter(Boolean);
 
@@ -238,6 +241,7 @@ export default function NurturePage() {
       )}
       {!loading && activeTab === 'autopilot' && <AutopilotSection lang={lang} />}
       {!loading && activeTab === 'ab' && <ABResultsSection lang={lang} />}
+      {!loading && activeTab === 'newsletters' && <NewsletterAnalyticsSection lang={lang} />}
       {!loading && activeTab === 'team' && <TeamCampaignsSection lang={lang} />}
     </div>
   );
@@ -1368,6 +1372,158 @@ function ABResultsSection({ lang }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ═══ Newsletter Analytics Section (Salesforce/Fonteva emails) ═══ */
+
+function NewsletterAnalyticsSection({ lang }) {
+  const en = lang === 'en';
+  const [stats, setStats] = useState(null);
+  const [emails, setEmails] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [since, setSince] = useState('LAST_N_DAYS:90');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [statsData, emailsData] = await Promise.all([
+          request(`/crm/salesforce/email-stats?since=${since}`),
+          request(`/crm/salesforce/emails?since=${since}&limit=100`),
+        ]);
+        if (!cancelled) {
+          setStats(statsData);
+          setEmails(emailsData.emails || []);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [since]);
+
+  const EMAIL_STATUS = { '0': en ? 'New' : 'Nouveau', '1': en ? 'Read' : 'Lu', '2': en ? 'Replied' : 'R\u00E9pondu', '3': en ? 'Sent' : 'Envoy\u00E9', '4': en ? 'Forwarded' : 'Transf\u00E9r\u00E9', '5': en ? 'Draft' : 'Brouillon' };
+  const STATUS_COLORS = { '0': '#94A3B8', '1': '#3B82F6', '2': '#16A34A', '3': '#6E57FA', '4': '#F59E0B', '5': '#CBD5E1' };
+
+  if (error) {
+    return (
+      <div className="card" style={{ padding: 30, textAlign: 'center' }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83D\uDCE7'}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 8 }}>
+          {en ? 'Salesforce not connected or EmailMessage not accessible' : 'Salesforce non connect\u00E9 ou EmailMessage non accessible'}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--grey-400)' }}>{error}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>
+          {en ? 'Salesforce / Fonteva Email Analytics' : 'Analytics emails Salesforce / Fonteva'}
+        </div>
+        <select
+          value={since}
+          onChange={e => setSince(e.target.value)}
+          className="form-input"
+          style={{ width: 160, fontSize: 12, padding: '6px 10px' }}
+        >
+          <option value="LAST_N_DAYS:30">{en ? 'Last 30 days' : '30 derniers jours'}</option>
+          <option value="LAST_N_DAYS:90">{en ? 'Last 90 days' : '90 derniers jours'}</option>
+          <option value="LAST_N_DAYS:180">{en ? 'Last 6 months' : '6 derniers mois'}</option>
+          <option value="LAST_N_DAYS:365">{en ? 'Last year' : 'Derni\u00E8re ann\u00E9e'}</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{en ? 'Loading...' : 'Chargement...'}</div>
+      ) : (
+        <>
+          {stats && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 20 }}>
+              {[
+                { label: en ? 'Total' : 'Total', value: stats.total, color: 'var(--text-primary)' },
+                { label: en ? 'Sent' : 'Envoy\u00E9s', value: stats.sent, color: '#6E57FA' },
+                { label: en ? 'Read' : 'Lus', value: stats.read, color: '#3B82F6' },
+                { label: en ? 'Replied' : 'R\u00E9pondus', value: stats.replied, color: '#16A34A' },
+                { label: en ? 'Forwarded' : 'Transf\u00E9r\u00E9s', value: stats.forwarded, color: '#F59E0B' },
+              ].map(s => (
+                <div key={s.label} className="card" style={{ padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {stats && stats.total > 0 && (
+            <div className="card" style={{ padding: '14px 18px', marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{en ? 'Engagement rate' : 'Taux d\'engagement'}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
+                  {Math.round(((stats.read + stats.replied + stats.forwarded) / stats.total) * 100)}%
+                </span>
+              </div>
+              <div style={{ height: 6, background: 'var(--paper-2)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 3,
+                  width: `${Math.round(((stats.read + stats.replied + stats.forwarded) / stats.total) * 100)}%`,
+                  background: 'linear-gradient(90deg, var(--accent), var(--lavender))',
+                }} />
+              </div>
+            </div>
+          )}
+
+          {emails.length > 0 && (
+            <div className="card" style={{ overflow: 'hidden' }}>
+              <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 600 }}>
+                {en ? 'Recent emails' : 'Emails r\u00E9cents'} ({emails.length})
+              </div>
+              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                {emails.map(e => (
+                  <div key={e.id} style={{
+                    padding: '10px 18px', borderBottom: '1px solid var(--border)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.subject || (en ? '(no subject)' : '(sans objet)')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {e.to} &middot; {new Date(e.createdAt).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' })}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: 10, padding: '2px 8px', borderRadius: 'var(--r-full)',
+                      background: `${STATUS_COLORS[e.status] || '#94A3B8'}18`,
+                      color: STATUS_COLORS[e.status] || '#94A3B8',
+                      fontWeight: 600, whiteSpace: 'nowrap',
+                    }}>
+                      {EMAIL_STATUS[e.status] || e.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {emails.length === 0 && !loading && (
+            <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+              <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+                {en ? 'No email messages found in Salesforce for this period' : 'Aucun email trouv\u00E9 dans Salesforce pour cette p\u00E9riode'}
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

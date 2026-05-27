@@ -130,6 +130,76 @@ async function evaluateTriggers(userId) {
         break;
       }
 
+      case 'newsletter_inactive': {
+        // Contacts who received newsletters (via Fonteva/Salesforce) but never opened/replied
+        if (crmProvider !== 'salesforce') break;
+        const sf = require('../api/salesforce');
+        const integration = await db.query(
+          `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
+        );
+        const instanceUrl = integration.rows[0]?.instance_url;
+        if (!instanceUrl) break;
+
+        const days = conditions.days || 30;
+        const since = `LAST_N_DAYS:${days}`;
+        try {
+          const emails = await sf.getEmailMessages(instanceUrl, crmToken, { since, limit: 500 });
+          // Group by recipient — find those with only status 0 (New) or 3 (Sent), never 1 (Read) or 2 (Replied)
+          const byRecipient = {};
+          for (const e of emails) {
+            const to = e.to?.toLowerCase();
+            if (!to) continue;
+            if (!byRecipient[to]) byRecipient[to] = { hasOpened: false, hasSent: false };
+            if (e.status === '0' || e.status === '3') byRecipient[to].hasSent = true;
+            if (e.status === '1' || e.status === '2' || e.status === '4') byRecipient[to].hasOpened = true;
+          }
+          for (const [email, data] of Object.entries(byRecipient)) {
+            if (data.hasSent && !data.hasOpened) {
+              const contact = contacts.find(c => c.email?.toLowerCase() === email);
+              if (contact) matched.push(normalizeContact(contact));
+            }
+          }
+        } catch (err) {
+          logger.warn('nurture-engine', `newsletter_inactive failed: ${err.message}`);
+        }
+        break;
+      }
+
+      case 'newsletter_engaged': {
+        // Contacts who actively engaged with newsletters (replied/forwarded) — notify sales or start sequence
+        if (crmProvider !== 'salesforce') break;
+        const sfE = require('../api/salesforce');
+        const integE = await db.query(
+          `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
+        );
+        const instanceUrlE = integE.rows[0]?.instance_url;
+        if (!instanceUrlE) break;
+
+        const daysE = conditions.days || 30;
+        const minEngagements = conditions.min_engagements || 2;
+        try {
+          const emails = await sfE.getEmailMessages(instanceUrlE, crmToken, { since: `LAST_N_DAYS:${daysE}`, limit: 500 });
+          // Count engagements (read + replied + forwarded) per recipient
+          const engagements = {};
+          for (const e of emails) {
+            const to = e.to?.toLowerCase();
+            if (!to) continue;
+            if (e.status === '1' || e.status === '2' || e.status === '4') {
+              engagements[to] = (engagements[to] || 0) + 1;
+            }
+          }
+          for (const [email, count] of Object.entries(engagements)) {
+            if (count >= minEngagements) {
+              const contact = contacts.find(c => c.email?.toLowerCase() === email);
+              if (contact) matched.push(normalizeContact(contact));
+            }
+          }
+        } catch (err) {
+          logger.warn('nurture-engine', `newsletter_engaged failed: ${err.message}`);
+        }
+        break;
+      }
+
       default:
         break;
     }

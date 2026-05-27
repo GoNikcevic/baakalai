@@ -862,6 +862,66 @@ router.post('/salesforce/campaigns/:id/add-member', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── Salesforce Email Messages (Fonteva / transactional) ──
+
+// GET /api/crm/salesforce/emails — List email messages (Fonteva + SF transactional)
+router.get('/salesforce/emails', async (req, res, next) => {
+  try {
+    const token = await getUserCrmToken(req.user.id, 'salesforce');
+    if (!token) return res.status(400).json({ error: 'Salesforce not connected' });
+    const integration = await db.query(
+      `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [req.user.id]
+    );
+    const instanceUrl = integration.rows[0]?.instance_url;
+    if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
+
+    const sf = require('../api/salesforce');
+    const emails = await sf.getEmailMessages(instanceUrl, token, {
+      contactEmail: req.query.email || undefined,
+      contactId: req.query.contactId || undefined,
+      limit: parseInt(req.query.limit) || 200,
+      since: req.query.since || undefined,
+    });
+    res.json({ emails });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/salesforce/email-stats — Aggregated email stats
+router.get('/salesforce/email-stats', async (req, res, next) => {
+  try {
+    const token = await getUserCrmToken(req.user.id, 'salesforce');
+    if (!token) return res.status(400).json({ error: 'Salesforce not connected' });
+    const integration = await db.query(
+      `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [req.user.id]
+    );
+    const instanceUrl = integration.rows[0]?.instance_url;
+    if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
+
+    const sf = require('../api/salesforce');
+    const stats = await sf.getEmailMessageStats(instanceUrl, token, {
+      since: req.query.since || 'LAST_N_DAYS:90',
+    });
+    res.json(stats);
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/salesforce/contact-emails/:email — Email activity for a specific contact
+router.get('/salesforce/contact-emails/:email', async (req, res, next) => {
+  try {
+    const token = await getUserCrmToken(req.user.id, 'salesforce');
+    if (!token) return res.status(400).json({ error: 'Salesforce not connected' });
+    const integration = await db.query(
+      `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [req.user.id]
+    );
+    const instanceUrl = integration.rows[0]?.instance_url;
+    if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
+
+    const sf = require('../api/salesforce');
+    const emails = await sf.getContactEmailActivity(instanceUrl, token, req.params.email);
+    res.json({ emails });
+  } catch (err) { next(err); }
+});
+
 // ── Odoo-specific routes ──
 
 // GET /api/crm/odoo/stages — List CRM stages

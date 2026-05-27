@@ -322,6 +322,79 @@ async function updateCampaignMemberStatus(instanceUrl, accessToken, memberId, st
   });
 }
 
+// ── Email Messages (Fonteva / Salesforce transactional emails) ──
+
+async function getEmailMessages(instanceUrl, accessToken, { contactId, contactEmail, limit = 200, since } = {}) {
+  let where = '';
+  if (contactId) {
+    where = `WHERE RelatedToId = '${contactId}' OR (ToAddress = (SELECT Email FROM Contact WHERE Id = '${contactId}'))`;
+  } else if (contactEmail) {
+    where = `WHERE ToAddress = '${contactEmail.replace(/'/g, "\\'")}'`;
+  } else {
+    where = 'WHERE CreatedDate > ' + (since || 'LAST_N_DAYS:90');
+  }
+  if (since && contactId) {
+    where += ` AND CreatedDate > ${since}`;
+  }
+
+  const query = `SELECT Id, Subject, Status, ToAddress, FromAddress, CreatedDate, MessageDate,
+    HasAttachment, IsExternallyVisible, TextBody
+    FROM EmailMessage ${where}
+    ORDER BY CreatedDate DESC LIMIT ${limit}`;
+
+  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
+  return (result.records || []).map(e => ({
+    id: e.Id,
+    subject: e.Subject,
+    status: e.Status, // 0=New, 1=Read, 2=Replied, 3=Sent, 4=Forwarded, 5=Draft
+    to: e.ToAddress,
+    from: e.FromAddress,
+    createdAt: e.CreatedDate,
+    messageDate: e.MessageDate,
+    hasAttachment: e.HasAttachment,
+    preview: (e.TextBody || '').slice(0, 200),
+  }));
+}
+
+async function getEmailMessageStats(instanceUrl, accessToken, { since = 'LAST_N_DAYS:90' } = {}) {
+  const query = `SELECT Status, COUNT(Id) total
+    FROM EmailMessage
+    WHERE CreatedDate > ${since}
+    GROUP BY Status`;
+
+  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
+  const stats = { sent: 0, read: 0, replied: 0, forwarded: 0, total: 0 };
+  for (const r of (result.records || [])) {
+    const count = r.total || 0;
+    stats.total += count;
+    // EmailMessage Status: 0=New, 1=Read, 2=Replied, 3=Sent, 4=Forwarded, 5=Draft
+    if (r.Status === '0' || r.Status === '3') stats.sent += count;
+    else if (r.Status === '1') stats.read += count;
+    else if (r.Status === '2') stats.replied += count;
+    else if (r.Status === '4') stats.forwarded += count;
+  }
+  return stats;
+}
+
+async function getContactEmailActivity(instanceUrl, accessToken, contactEmail) {
+  const safe = contactEmail.replace(/'/g, "\\'");
+  const query = `SELECT Id, Subject, Status, CreatedDate, ToAddress, FromAddress
+    FROM EmailMessage
+    WHERE ToAddress = '${safe}' OR FromAddress = '${safe}'
+    ORDER BY CreatedDate DESC LIMIT 50`;
+
+  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
+  return (result.records || []).map(e => ({
+    id: e.Id,
+    subject: e.Subject,
+    status: e.Status,
+    createdAt: e.CreatedDate,
+    to: e.ToAddress,
+    from: e.FromAddress,
+    direction: e.ToAddress?.toLowerCase() === contactEmail.toLowerCase() ? 'inbound' : 'outbound',
+  }));
+}
+
 module.exports = {
   createContact,
   updateContact,
@@ -343,6 +416,9 @@ module.exports = {
   addToCampaign,
   createCampaign,
   updateCampaignMemberStatus,
+  getEmailMessages,
+  getEmailMessageStats,
+  getContactEmailActivity,
   mapStatusToStage,
   mapOpportunityToContact,
 };
