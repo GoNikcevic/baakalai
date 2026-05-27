@@ -106,6 +106,28 @@ export default function ClientsPage() {
     setImporting(false);
   }, [loadData, connectedCrm, clients.length]);
 
+  const filtered = useMemo(() => clients.filter(c => {
+    if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
+    else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
+    if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (c.name || '').toLowerCase().includes(q)
+        || (c.company || '').toLowerCase().includes(q)
+        || (c.email || '').toLowerCase().includes(q);
+    }
+    return true;
+  }).sort((a, b) => {
+    if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
+    return 0;
+  }), [clients, filter, ownerFilter, search]);
+
+  const statusCounts = useMemo(() => {
+    const counts = {};
+    for (const c of clients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
+    return counts;
+  }, [clients]);
+
   const toggleSelect = useCallback((id) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -171,28 +193,6 @@ export default function ClientsPage() {
     setBulkAction(null);
   }, [selected, connectedCrm, loadData, t]);
 
-  const filtered = useMemo(() => clients.filter(c => {
-    if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
-    else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
-    if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (c.name || '').toLowerCase().includes(q)
-        || (c.company || '').toLowerCase().includes(q)
-        || (c.email || '').toLowerCase().includes(q);
-    }
-    return true;
-  }).sort((a, b) => {
-    if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
-    return 0;
-  }), [clients, filter, ownerFilter, search]);
-
-  const statusCounts = useMemo(() => {
-    const counts = {};
-    for (const c of clients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
-    return counts;
-  }, [clients]);
-
   const statusTabs = [
     { key: 'all', label: t('clients.all'), count: clients.length },
     { key: 'imported', label: STATUS_LABELS.imported, count: statusCounts.imported || 0 },
@@ -201,7 +201,7 @@ export default function ClientsPage() {
     { key: 'meeting', label: STATUS_LABELS.meeting, count: statusCounts.meeting || 0 },
     { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
     { key: 'churn_risk', label: t('clients.churnRisk'), count: clients.filter(c => c.churn_score >= 50).length },
-  ].filter(t => t.key === 'all' || t.count > 0);
+  ].filter(tab => tab.key === 'all' || tab.count > 0);
 
   return (
     <div className="dashboard-page">
