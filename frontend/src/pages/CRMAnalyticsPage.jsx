@@ -3,7 +3,7 @@
    Pipeline, Revenue Attribution, Lead Scoring, Trends, Channels, Health Score.
    =============================================================================== */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useApp } from '../context/useApp';
 import api from '../services/api-client';
 import { useI18n, useT } from '../i18n';
@@ -83,23 +83,24 @@ export default function CRMAnalyticsPage() {
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const TABS = getTabs(t);
+  const fetchedRef = useRef(new Set());
 
   const fetchData = useCallback(async (tab) => {
     if (!backendAvailable) {
       setData({});
       return;
     }
-    if (data[tab]) return; // cached
+    if (fetchedRef.current.has(tab)) return; // already fetched
+    fetchedRef.current.add(tab);
     setLoading(true);
     try {
       const result = await api.request('/analytics/' + tab);
       setData(prev => ({ ...prev, [tab]: result }));
     } catch {
-      // Don't fall back to demo — leave the tab empty and let the UI render its empty state
       setData(prev => ({ ...prev, [tab]: null }));
     }
     setLoading(false);
-  }, [backendAvailable, data]);
+  }, [backendAvailable]);
 
   useEffect(() => {
     fetchData(activeTab);
@@ -633,8 +634,8 @@ function getIssueConfig(en) { return {
   duplicate_email: { icon: '\uD83D\uDD04', label: en ? 'Duplicates (email)' : 'Doublons (email)', severity: 'high', color: 'var(--danger)' },
   duplicate_name: { icon: '\uD83D\uDC65', label: en ? 'Duplicates (name+company)' : 'Doublons (nom+entreprise)', severity: 'medium', color: 'var(--warning)' },
   missing_email: { icon: '\uD83D\uDCE7', label: en ? 'Missing email' : 'Email manquant', severity: 'high', color: 'var(--danger)' },
-  missing_name: { icon: '\uD83D\uDC64', label: 'Nom manquant', severity: 'medium', color: 'var(--warning)' },
-  missing_company: { icon: '\uD83C\uDFE2', label: 'Entreprise manquante', severity: 'low', color: 'var(--text-muted)' },
+  missing_name: { icon: '\uD83D\uDC64', label: en ? 'Missing name' : 'Nom manquant', severity: 'medium', color: 'var(--warning)' },
+  missing_company: { icon: '\uD83C\uDFE2', label: en ? 'Missing company' : 'Entreprise manquante', severity: 'low', color: 'var(--text-muted)' },
   invalid_email: { icon: '\u26A0\uFE0F', label: en ? 'Invalid email' : 'Email invalide', severity: 'high', color: 'var(--danger)' },
   inactive: { icon: '\uD83D\uDCA4', label: en ? 'Inactive contacts (6+ months)' : 'Contacts inactifs (6+ mois)', severity: 'low', color: 'var(--text-muted)' },
   format_name_caps: { icon: 'Aa', label: en ? 'Names in ALL CAPS' : 'Noms en MAJUSCULES', severity: 'low', color: 'var(--blue)' },
@@ -706,7 +707,7 @@ function CRMHealthSection() {
       <div className="crm-section" style={{ textAlign: 'center', padding: 60 }}>
         <div style={{ fontSize: 32, marginBottom: 16 }}>{'\uD83D\uDD0D'}</div>
         <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{en ? 'CRM scan in progress...' : 'Scan CRM en cours...'}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{en ? 'Analyzing Pipedrive contacts' : 'Analyse des contacts Pipedrive'}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{en ? `Analyzing ${provider} contacts` : `Analyse des contacts ${provider}`}</div>
       </div>
     );
   }
@@ -729,7 +730,7 @@ function CRMHealthSection() {
   if (!report) return null;
 
   const scoreColor = report.score >= 80 ? 'var(--success)' : report.score >= 50 ? 'var(--warning)' : 'var(--danger)';
-  const scoreLabel = report.score >= 80 ? 'Excellent' : report.score >= 50 ? 'Bon' : report.score < 30 ? 'Critique' : 'À améliorer';
+  const scoreLabel = report.score >= 80 ? 'Excellent' : report.score >= 50 ? (en ? 'Good' : 'Bon') : report.score < 30 ? (en ? 'Critical' : 'Critique') : (en ? 'Needs work' : '\u00C0 am\u00E9liorer');
   const summary = report.summary || {};
 
   return (
@@ -753,10 +754,10 @@ function CRMHealthSection() {
               {[
                 { label: en ? 'Email duplicates' : 'Doublons email', value: summary.duplicateEmails || 0, color: 'var(--danger)' },
                 { label: en ? 'Name duplicates' : 'Doublons nom', value: summary.duplicateNames || 0, color: 'var(--warning)' },
-                { label: 'Emails manquants', value: summary.missingEmails || 0, color: 'var(--danger)' },
-                { label: 'Emails invalides', value: summary.invalidEmails || 0, color: 'var(--danger)' },
+                { label: en ? 'Missing emails' : 'Emails manquants', value: summary.missingEmails || 0, color: 'var(--danger)' },
+                { label: en ? 'Invalid emails' : 'Emails invalides', value: summary.invalidEmails || 0, color: 'var(--danger)' },
                 { label: en ? 'Inactive contacts' : 'Contacts inactifs', value: summary.inactive || 0, color: 'var(--text-muted)' },
-                { label: 'Problèmes de format', value: summary.formatIssues || 0, color: 'var(--blue)' },
+                { label: en ? 'Format issues' : 'Probl\u00e8mes de format', value: summary.formatIssues || 0, color: 'var(--blue)' },
               ].map(item => (
                 <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 13 }}>{item.label}</span>

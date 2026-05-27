@@ -199,8 +199,8 @@ export default function ClientsPage() {
     { key: 'new', label: STATUS_LABELS.new, count: statusCounts.new || 0 },
     { key: 'interested', label: STATUS_LABELS.interested, count: statusCounts.interested || 0 },
     { key: 'meeting', label: STATUS_LABELS.meeting, count: statusCounts.meeting || 0 },
-    { key: 'won', label: lang === 'en' ? 'Won' : 'Gagn\u00e9s', count: statusCounts.won || 0 },
-    { key: 'churn_risk', label: lang === 'en' ? 'Churn risk' : 'Risque churn', count: clients.filter(c => c.churn_score >= 50).length },
+    { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
+    { key: 'churn_risk', label: t('clients.churnRisk'), count: clients.filter(c => c.churn_score >= 50).length },
   ].filter(t => t.key === 'all' || t.count > 0);
 
   return (
@@ -267,10 +267,10 @@ export default function ClientsPage() {
       {churnSummary && churnSummary.scored > 0 && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
           {[
-            { label: lang === 'en' ? 'Critical' : 'Critique', count: churnSummary.critical, color: 'var(--danger)' },
-            { label: lang === 'en' ? 'High' : 'Haut', count: churnSummary.high, color: 'var(--warning)' },
-            { label: lang === 'en' ? 'Medium' : 'Moyen', count: churnSummary.medium, color: '#D97706' },
-            { label: lang === 'en' ? 'Low' : 'Bas', count: churnSummary.low, color: 'var(--success)' },
+            { label: t('clients.critical'), count: churnSummary.critical, color: 'var(--danger)' },
+            { label: t('clients.high'), count: churnSummary.high, color: 'var(--warning)' },
+            { label: t('clients.medium'), count: churnSummary.medium, color: '#D97706' },
+            { label: t('clients.low'), count: churnSummary.low, color: 'var(--success)' },
           ].map(b => (
             <div key={b.label} style={{
               flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -285,7 +285,7 @@ export default function ClientsPage() {
             borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
           }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{churnSummary.avgScore}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lang === 'en' ? 'Avg score' : 'Score moyen'}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('clients.avgScore')}</div>
           </div>
           <button
             className="btn btn-outline"
@@ -302,7 +302,7 @@ export default function ClientsPage() {
               setScoringChurn(false);
             }}
           >
-            {scoringChurn ? (lang === 'en' ? 'Scoring...' : 'Calcul...') : (lang === 'en' ? 'Rescore' : 'Recalculer')}
+            {scoringChurn ? t('clients.scoring') : t('clients.rescore')}
           </button>
         </div>
       )}
@@ -313,9 +313,9 @@ export default function ClientsPage() {
           padding: '16px 20px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{lang === 'en' ? 'Churn Prediction' : 'Pr\u00e9diction de churn'}</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{t('clients.churnPrediction')}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {lang === 'en' ? 'Score your contacts to detect churn risk' : 'Scorez vos contacts pour d\u00e9tecter les risques de churn'}
+              {t('clients.churnPredictionDesc')}
             </div>
           </div>
           <button
@@ -333,7 +333,7 @@ export default function ClientsPage() {
               setScoringChurn(false);
             }}
           >
-            {scoringChurn ? (lang === 'en' ? 'Scoring...' : 'Calcul...') : (lang === 'en' ? 'Run churn scoring' : 'Lancer le scoring churn')}
+            {scoringChurn ? t('clients.scoring') : t('clients.runChurnScoring')}
           </button>
         </div>
       ) : null}
@@ -375,7 +375,7 @@ export default function ClientsPage() {
               borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12,
             }}
           >
-            <option value="all">{lang === 'en' ? 'All reps' : 'Tous les commerciaux'}</option>
+            <option value="all">{t('clients.allReps')}</option>
             {owners.map(o => (
               <option key={o.id} value={o.id}>{o.name} ({o.contact_count})</option>
             ))}
@@ -403,7 +403,7 @@ export default function ClientsPage() {
           borderRadius: 10, fontSize: 12,
         }}>
           <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
-            {selected.size} {lang === 'en' ? 'selected' : 'sélectionné(s)'}
+            {selected.size} {t('clients.selected')}
           </span>
           <div style={{ flex: 1 }} />
           <select
@@ -415,7 +415,7 @@ export default function ClientsPage() {
             onChange={e => { if (e.target.value) handleBulkStatus(e.target.value); e.target.value = ''; }}
             disabled={!!bulkAction}
           >
-            <option value="" disabled>{lang === 'en' ? 'Change status...' : 'Changer statut...'}</option>
+            <option value="" disabled>{t('clients.changeStatus')}</option>
             {Object.entries(STATUS_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
@@ -460,7 +460,7 @@ export default function ClientsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', fontSize: 11, color: 'var(--text-muted)' }}>
                   <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
                     onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
-                  <span>{lang === 'en' ? 'Select all' : 'Tout s\u00e9lectionner'} ({filtered.length})</span>
+                  <span>{t('clients.selectAll')} ({filtered.length})</span>
                 </div>
               )}
               {filtered.map(c => {
@@ -635,7 +635,7 @@ function ClientDetailPanel({ client, onClose }) {
             fontSize: 11, padding: '4px 10px', borderRadius: 8,
             background: 'var(--bg-elevated)', color: 'var(--text-muted)',
           }}>
-            {lang === 'en' ? 'Owner' : 'Commercial'}: {client.owner_email.split('@')[0]}
+            {t('clients.owner')}: {client.owner_email.split('@')[0]}
           </span>
         )}
         {client.crm_provider && (
@@ -655,7 +655,7 @@ function ClientDetailPanel({ client, onClose }) {
           border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 16,
         }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-            {lang === 'en' ? 'Churn risk factors' : 'Facteurs de risque churn'}
+            {t('clients.churnFactors')}
           </div>
           {client.churn_factors.map((f, i) => (
             <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>

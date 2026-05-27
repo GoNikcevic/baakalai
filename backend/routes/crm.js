@@ -668,27 +668,29 @@ router.post('/import/:provider', async (req, res, next) => {
       const res2 = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=500&properties=email,firstname,lastname,jobtitle,company', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res2.ok) {
-        const data = await res2.json();
-        for (const c of (data.results || [])) {
-          try {
-            const email = c.properties?.email;
-            if (!email) { skipped++; continue; }
-            const existing = await db.opportunities.findByEmail(req.user.id, email);
-            if (existing) { skipped++; continue; }
-            await db.opportunities.create({
-              userId: req.user.id,
-              name: `${c.properties?.firstname || ''} ${c.properties?.lastname || ''}`.trim() || 'Unknown',
-              email,
-              title: c.properties?.jobtitle || null,
-              company: c.properties?.company || null,
-              status: 'imported',
-              crmProvider: 'hubspot',
-              crmContactId: String(c.id),
-            });
-            imported++;
-          } catch (err) { errors.push({ error: err.message }); }
-        }
+      if (!res2.ok) {
+        const errBody = await res2.text().catch(() => '');
+        return res.status(502).json({ error: `HubSpot API ${res2.status}: ${errBody.slice(0, 200)}` });
+      }
+      const data = await res2.json();
+      for (const c of (data.results || [])) {
+        try {
+          const email = c.properties?.email;
+          if (!email) { skipped++; continue; }
+          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          if (existing) { skipped++; continue; }
+          await db.opportunities.create({
+            userId: req.user.id,
+            name: `${c.properties?.firstname || ''} ${c.properties?.lastname || ''}`.trim() || 'Unknown',
+            email,
+            title: c.properties?.jobtitle || null,
+            company: c.properties?.company || null,
+            status: 'imported',
+            crmProvider: 'hubspot',
+            crmContactId: String(c.id),
+          });
+          imported++;
+        } catch (err) { errors.push({ error: err.message }); }
       }
     } else if (provider === 'notion') {
       const integration = await db.userIntegrations.get(req.user.id, 'notion');

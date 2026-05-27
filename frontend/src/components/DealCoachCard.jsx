@@ -32,9 +32,12 @@ export default function DealCoachCard() {
   const [suggestions, setSuggestions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [dismissed, setDismissed] = useState(() =>
-    localStorage.getItem('bakal_dealcoach_dismissed') === 'true'
-  );
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      const ts = parseInt(localStorage.getItem('bakal_dealcoach_dismissed') || '0', 10);
+      return ts > 0 && (Date.now() - ts) < 24 * 60 * 60 * 1000; // expires after 24h
+    } catch { return false; }
+  });
 
   const loadSuggestions = useCallback(async (forceRefresh = false) => {
     // Cache for 30 min to avoid re-running the agent on every dashboard visit
@@ -111,7 +114,7 @@ export default function DealCoachCard() {
             {running ? '...' : (en ? 'Refresh' : 'Actualiser')}
           </button>
           <button
-            onClick={() => { setDismissed(true); localStorage.setItem('bakal_dealcoach_dismissed', 'true'); }}
+            onClick={() => { setDismissed(true); localStorage.setItem('bakal_dealcoach_dismissed', String(Date.now())); }}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               fontSize: 14, color: 'var(--text-muted)', padding: 4,
