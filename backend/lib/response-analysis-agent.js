@@ -96,6 +96,24 @@ async function analyzeResponses(userId) {
         [JSON.stringify(analysis), email.id]
       );
 
+      // 5b. Trigger conversation autopilot if applicable
+      try {
+        const { processReply } = require('./conversation-autopilot');
+        const replyText = activityTexts.join('\n');
+        await processReply(userId, {
+          opportunityId: email.opp_id,
+          email: email.to_email,
+          contactName: email.contact_name,
+          company: email.company,
+          replyContent: replyText,
+          intent: analysis.intent,
+          sentiment: analysis.sentiment,
+          channel: 'email',
+        });
+      } catch (err) {
+        logger.warn('response-agent', `Autopilot failed for ${email.contact_name}: ${err.message}`);
+      }
+
       // 6-7. Score trigger + patterns (skip if already scored by real-time learning-signal)
       const alreadyScored = !!email.sentiment;
       if (!alreadyScored) {
@@ -174,6 +192,23 @@ async function analyzeResponses(userId) {
             action: analysis.suggestedAction,
             channel: 'linkedin',
           });
+
+          // Trigger autopilot for LinkedIn reply
+          try {
+            const { processReply } = require('./conversation-autopilot');
+            await processReply(userId, {
+              opportunityId: activity.opp_id,
+              email: activity.lead_email,
+              contactName: activity.contact_name || content.name,
+              company: activity.company,
+              replyContent: content.message,
+              intent: analysis.intent,
+              sentiment: analysis.sentiment,
+              channel: 'linkedin',
+            });
+          } catch (err) {
+            logger.warn('response-agent', `LinkedIn autopilot failed: ${err.message}`);
+          }
         }
 
         // Mark as analyzed

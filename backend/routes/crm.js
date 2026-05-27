@@ -1495,6 +1495,74 @@ async function getUserCrmToken(userId, provider) {
   return getUserKey(userId, provider);
 }
 
+// =============================================
+// Autopilot settings
+// =============================================
+
+// GET /api/crm/autopilot/settings
+router.get('/autopilot/settings', async (req, res, next) => {
+  try {
+    const { getAutopilotSettings } = require('../lib/conversation-autopilot');
+    const settings = await getAutopilotSettings(req.user.id);
+    res.json(settings);
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/crm/autopilot/settings — Enable/disable autopilot
+router.patch('/autopilot/settings', async (req, res, next) => {
+  try {
+    const { enabled, maxTurns, channels } = req.body;
+    const updates = {};
+    if (enabled !== undefined) updates.autopilot_enabled = enabled;
+    if (maxTurns !== undefined) updates.autopilot_max_turns = Math.min(Math.max(maxTurns, 1), 10);
+    if (channels !== undefined) updates.autopilot_channels = channels;
+
+    await db.query(
+      `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
+      [JSON.stringify(updates), req.user.id]
+    );
+    res.json({ ok: true, ...updates });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/crm/autopilot/contact/:id — Enable/disable autopilot per contact
+router.patch('/autopilot/contact/:id', async (req, res, next) => {
+  try {
+    const { enabled } = req.body;
+    await db.query(
+      `UPDATE opportunities SET autopilot_enabled = $1 WHERE id = $2 AND user_id = $3`,
+      [enabled, req.params.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/autopilot/queue — List pending/sent autopilot messages
+router.get('/autopilot/queue', async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT aq.*, o.name as contact_name, o.company
+       FROM autopilot_queue aq
+       LEFT JOIN opportunities o ON o.id = aq.opportunity_id
+       WHERE aq.user_id = $1
+       ORDER BY aq.created_at DESC LIMIT 50`,
+      [req.user.id]
+    );
+    res.json({ queue: result.rows });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/crm/autopilot/queue/:id — Cancel a pending autopilot message
+router.delete('/autopilot/queue/:id', async (req, res, next) => {
+  try {
+    await db.query(
+      `UPDATE autopilot_queue SET status = 'cancelled' WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
 module.exports.syncOpportunityToHubspot = syncOpportunityToHubspot;
 module.exports.getUserHubspotToken = getUserHubspotToken;
