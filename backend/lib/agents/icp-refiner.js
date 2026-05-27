@@ -13,6 +13,7 @@
 const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
+const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 
 async function run(userId) {
   const report = { insights: 0, icp: null, errors: [] };
@@ -73,11 +74,7 @@ Based on actual results, refine the ICP. Return JSON:
 }`;
 
     const result = await claude.callClaude('Return only valid JSON.', prompt, 800, 'icp_refiner');
-    let analysis = result.parsed;
-    if (!analysis) {
-      const m = (result.content || '').match(/\{[\s\S]*"idealSize"[\s\S]*\}/);
-      if (m) analysis = JSON.parse(m[0]);
-    }
+    const analysis = safeParseClaudeJSON(result, 'idealSize');
 
     if (analysis) {
       report.icp = analysis;

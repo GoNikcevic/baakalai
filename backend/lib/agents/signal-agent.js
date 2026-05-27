@@ -19,6 +19,7 @@
 const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
+const { safeParseClaudeArray } = require('../utils/safe-json-parse');
 
 const SIGNAL_QUERIES = {
   funding: (config) => {
@@ -125,22 +126,25 @@ async function run(userId) {
             }
 
             // Insert signal
-            await db.query(`
-              INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
-                company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score)
-              VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13)
-            `, [
-              userId, config.id, signalType,
-              signal.title, signal.description, signal.sourceUrl,
-              signal.companyName, enriched.domain || signal.companyDomain || null,
-              enriched.contactName || signal.contactName || null,
-              enriched.contactTitle || signal.contactTitle || null,
-              enriched.email || null,
-              enriched.linkedinUrl || null,
-              signal.relevance || 50,
-            ]);
-
-            report.detected++;
+            try {
+              await db.query(`
+                INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
+                  company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score)
+                VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13)
+              `, [
+                userId, config.id, signalType,
+                signal.title, signal.description, signal.sourceUrl,
+                signal.companyName, enriched.domain || signal.companyDomain || null,
+                enriched.contactName || signal.contactName || null,
+                enriched.contactTitle || signal.contactTitle || null,
+                enriched.email || null,
+                enriched.linkedinUrl || null,
+                signal.relevance || 50,
+              ]);
+              report.detected++;
+            } catch (insertErr) {
+              logger.warn('signal-agent', `Insert failed for "${signal.title}": ${insertErr.message}`);
+            }
           }
         }
 
@@ -264,11 +268,7 @@ Return empty array [] if nothing is relevant.`;
 
   try {
     const result = await claude.callClaude('Return only valid JSON array.', prompt, 1500, 'signal_extraction');
-    let parsed = result.parsed;
-    if (!parsed) {
-      const match = (result.content || '').match(/\[[\s\S]*\]/);
-      if (match) parsed = JSON.parse(match[0]);
-    }
+    const parsed = safeParseClaudeArray(result);
     return Array.isArray(parsed) ? parsed.filter(s => s.title && s.relevance >= 30) : [];
   } catch {
     return [];

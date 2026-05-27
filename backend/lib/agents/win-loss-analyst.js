@@ -12,6 +12,7 @@
 const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
+const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 
 const DAY_MS = 86400000;
 
@@ -67,11 +68,7 @@ Return JSON:
 }`;
 
     const result = await claude.callClaude('Return only valid JSON.', prompt, 1000, 'win_loss_analysis');
-    let analysis = result.parsed;
-    if (!analysis) {
-      const m = (result.content || '').match(/\{[\s\S]*"patterns"[\s\S]*\}/);
-      if (m) analysis = JSON.parse(m[0]);
-    }
+    const analysis = safeParseClaudeJSON(result, 'patterns');
 
     if (analysis?.patterns) {
       for (const p of analysis.patterns) {

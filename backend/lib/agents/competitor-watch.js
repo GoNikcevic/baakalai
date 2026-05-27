@@ -12,6 +12,7 @@
 const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
+const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 
 async function run(userId) {
   const report = { insights: 0, alerts: [], errors: [] };
@@ -53,11 +54,7 @@ Return JSON:
 }`;
 
     const result = await claude.callClaude('Return only valid JSON.', prompt, 1000, 'competitor_watch');
-    let analysis = result.parsed;
-    if (!analysis) {
-      const m = (result.content || '').match(/\{[\s\S]*"competitors"[\s\S]*\}/);
-      if (m) analysis = JSON.parse(m[0]);
-    }
+    const analysis = safeParseClaudeJSON(result, 'competitors');
 
     if (analysis) {
       // Store as memory patterns

@@ -11,6 +11,7 @@
 const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
+const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 
 const DAY_MS = 86400000;
 
@@ -64,7 +65,7 @@ Contact: ${deal.name} (${deal.title || 'N/A'}) at ${deal.company || 'N/A'}
 Status: ${deal.status || 'open'}
 Days since last activity: ${daysSinceUpdate}
 Churn risk score: ${deal.churn_score || 'N/A'}/100
-Churn factors: ${(() => { try { const f = typeof deal.churn_factors === 'string' ? JSON.parse(deal.churn_factors) : deal.churn_factors; return Array.isArray(f) ? f.map(x => x.detail).join(', ') : 'N/A'; } catch { return 'N/A'; } })()}
+Churn factors: ${formatChurnFactors(deal.churn_factors)}
 Emails sent: ${contactEmails.length}
 Last email sentiment: ${contactEmails[0]?.sentiment || 'N/A'}
 
@@ -79,11 +80,7 @@ Suggest ONE specific action. Return JSON:
 }`;
 
         const result = await claude.callClaude('Return only valid JSON.', prompt, 500, 'deal_coach');
-        let coaching = result.parsed;
-        if (!coaching) {
-          const m = (result.content || '').match(/\{[\s\S]*"action"[\s\S]*\}/);
-          if (m) try { coaching = JSON.parse(m[0]); } catch { /* skip malformed JSON */ }
-        }
+        const coaching = safeParseClaudeJSON(result, 'action');
 
         if (coaching) {
           report.suggestions.push({
@@ -104,6 +101,15 @@ Suggest ONE specific action. Return JSON:
   }
 
   return report;
+}
+
+function formatChurnFactors(raw) {
+  try {
+    const f = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(f) ? f.map(x => x.detail).join(', ') : 'N/A';
+  } catch {
+    return 'N/A';
+  }
 }
 
 module.exports = { run };

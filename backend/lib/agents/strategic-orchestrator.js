@@ -31,21 +31,39 @@ const AGENTS = {
   sequence_analyzer: { name: 'Sequence Analyzer', module: './sequence-analyzer' },
 };
 
+const AGENT_TIMEOUT_MS = 60000; // 60s per agent
+
 /**
- * Run all strategic agents for a user.
+ * Run all strategic agents for a user (parallel with timeout).
  */
 async function runAll(userId) {
   const startTime = Date.now();
-  const results = {};
+  const entries = Object.entries(AGENTS);
 
-  for (const [key, config] of Object.entries(AGENTS)) {
-    try {
-      const agent = require(config.module);
-      results[key] = await agent.run(userId);
+  const settled = await Promise.allSettled(
+    entries.map(([key, config]) => {
+      const run = async () => {
+        const agent = require(config.module);
+        return agent.run(userId);
+      };
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout after ${AGENT_TIMEOUT_MS}ms`)), AGENT_TIMEOUT_MS)
+      );
+      return Promise.race([run(), timeout]).then(
+        result => ({ key, config, result }),
+        err => ({ key, config, result: { errors: [err.message] } })
+      );
+    })
+  );
+
+  const results = {};
+  for (const s of settled) {
+    const { key, config, result } = s.status === 'fulfilled' ? s.value : { key: 'unknown', config: { name: 'unknown' }, result: { errors: [s.reason?.message] } };
+    results[key] = result;
+    if (result.errors?.length) {
+      logger.warn('strategic-orchestrator', `${config.name} failed: ${result.errors.join(', ')}`);
+    } else {
       logger.info('strategic-orchestrator', `${config.name}: done`);
-    } catch (err) {
-      results[key] = { errors: [err.message] };
-      logger.warn('strategic-orchestrator', `${config.name} failed: ${err.message}`);
     }
   }
 

@@ -10,12 +10,18 @@ import { DashboardSkeleton } from './components/Skeleton'
 
 // Auto-reload on stale chunk (after deploy, old chunk hashes don't exist)
 function lazyRetry(importFn) {
-  return lazy(() => importFn().catch(() => {
-    if (!sessionStorage.getItem('chunk_reload')) {
+  return lazy(() => importFn().catch((err) => {
+    const hasReloaded = sessionStorage.getItem('chunk_reload')
+    if (!hasReloaded) {
       sessionStorage.setItem('chunk_reload', '1')
       window.location.reload()
+      // Return a never-resolving promise to prevent React from rendering an error
+      // while the page reloads
+      return new Promise(() => {})
     }
-    return importFn() // retry once after potential reload
+    // Already reloaded once — clear the flag for next deploy and throw
+    sessionStorage.removeItem('chunk_reload')
+    throw err
   }))
 }
 

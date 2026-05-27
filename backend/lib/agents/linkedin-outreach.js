@@ -109,7 +109,13 @@ Return JSON: { "note": "..." }`;
           const m = (result.content || '').match(/"note"\s*:\s*"([^"]+)"/);
           if (m) note = m[1];
         }
-        if (!note) note = `Bonjour ${(signal.contact_name || '').split(' ')[0]}, votre profil a retenu mon attention. Curieux d'échanger.`;
+        if (!note) {
+          const firstName = (signal.contact_name || '').split(' ')[0];
+          const isFrench = /^[A-ZÀ-Ö][a-zà-ö]+(?: [A-ZÀ-Ö][a-zà-ö]+)*$/.test(signal.contact_name || '') && /[àâéèêëïîôùûüÿçœæ]/i.test(signal.contact_name || '');
+          note = isFrench
+            ? `Bonjour ${firstName}, votre profil a retenu mon attention. Curieux d'échanger.`
+            : `Hi ${firstName}, your profile caught my attention. Would love to connect.`;
+        }
 
         // Extract public ID from LinkedIn URL
         const publicId = signal.contact_linkedin.match(/\/in\/([^/?]+)/)?.[1];

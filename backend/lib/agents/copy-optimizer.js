@@ -13,6 +13,7 @@
 const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
+const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 
 async function run(userId) {
   const report = { insights: 0, optimizations: [], errors: [] };
@@ -87,11 +88,7 @@ Return JSON:
 }`;
 
     const result = await claude.callClaude('Return only valid JSON.', prompt, 800, 'copy_optimizer');
-    let analysis = result.parsed;
-    if (!analysis) {
-      const m = (result.content || '').match(/\{[\s\S]*"subjectPatterns"[\s\S]*\}/);
-      if (m) analysis = JSON.parse(m[0]);
-    }
+    const analysis = safeParseClaudeJSON(result, 'subjectPatterns');
 
     if (analysis) {
       if (analysis.subjectPatterns?.length > 0) {

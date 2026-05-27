@@ -61,7 +61,7 @@ async function run(userId) {
 
     for (const client of won) {
       const daysSinceWon = (now - new Date(client.updated_at || client.created_at).getTime()) / DAY_MS;
-      const assignedPLs = assignsByOpp.get(client.id) || [];
+      const assignedPLs = new Set(assignsByOpp.get(client.id) || []);
       const positiveCount = positiveByOpp.get(client.id) || 0;
 
       // Score upsell potential
@@ -77,8 +77,8 @@ async function run(userId) {
       else if (positiveCount === 1) { score += 10; reasons.push('1 interaction positive'); }
 
       // Cross-sell: not assigned to all product lines
-      if (productLines.length > 1 && assignedPLs.length < productLines.length) {
-        const unassigned = productLines.filter(pl => !assignedPLs.includes(pl.id));
+      if (productLines.length > 1 && assignedPLs.size < productLines.length) {
+        const unassigned = productLines.filter(pl => !assignedPLs.has(pl.id));
         score += 15 * unassigned.length;
         reasons.push(`Cross-sell possible : ${unassigned.map(pl => pl.name).join(', ')}`);
       }
