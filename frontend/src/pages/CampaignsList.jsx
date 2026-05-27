@@ -5,16 +5,20 @@
    and filterCampaignsList / sortCampaignsList in pages.js.
    =============================================================================== */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
-import { useT } from '../i18n';
-import api from '../services/api-client';
+import { useT, useI18n } from '../i18n';
+import api, { request } from '../services/api-client';
+import { showToast } from '../services/notifications';
 
 export default function CampaignsList({ onNavigateCampaign }) {
   const { campaigns, projects, setCampaigns } = useApp();
   const navigate = useNavigate();
   const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [view, setView] = useState('campaigns');
   const [actionLoading, setActionLoading] = useState({});
 
   const [filter, setFilter] = useState('active');
@@ -161,6 +165,26 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
   return (
     <div id="campaigns-list-view">
+      {/* View tabs */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
+        {[
+          { key: 'campaigns', label: t('campaigns.title') || 'Campaigns' },
+          { key: 'autopilot', label: en ? 'Autopilot' : 'Autopilot' },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setView(tab.key)} style={{
+            padding: '10px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            color: view === tab.key ? 'var(--text-primary)' : 'var(--text-muted)',
+            background: 'none', border: 'none', borderBottom: view === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
+            transition: 'all 0.2s',
+          }}>
+            {tab.key === 'autopilot' && '\uD83E\uDD16 '}{tab.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'autopilot' && <ProspectionAutopilotSection lang={lang} />}
+
+      {view === 'campaigns' && <>
       {/* Header bar */}
       <div
         style={{
@@ -370,10 +394,182 @@ export default function CampaignsList({ onNavigateCampaign }) {
           </div>
         )}
       </div>
+      </>}
     </div>
   );
 }
 
+/* ═══ Prospection Autopilot Section ═══ */
+
+function ProspectionAutopilotSection({ lang }) {
+  const en = lang === 'en';
+  const [settings, setSettings] = useState(null);
+  const [queue, setQueue] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      request('/crm/autopilot/settings').catch(() => ({ enabled: false })),
+      request('/crm/autopilot/queue').catch(() => ({ queue: [] })),
+    ]).then(([s, q]) => {
+      setSettings(s);
+      setQueue(q.queue || []);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const toggleEnabled = async () => {
+    const next = !settings?.enabled;
+    try {
+      await request('/crm/autopilot/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: next }),
+      });
+      setSettings(prev => ({ ...prev, enabled: next }));
+      showToast({ type: 'success', title: 'Autopilot', message: next ? (en ? 'Enabled' : 'Activé') : (en ? 'Disabled' : 'Désactivé') });
+    } catch (err) {
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+    }
+  };
+
+  const cancelMessage = async (id) => {
+    try {
+      await request(`/crm/autopilot/queue/${id}`, { method: 'DELETE' });
+      setQueue(prev => prev.map(q => q.id === id ? { ...q, status: 'cancelled' } : q));
+    } catch { /* ignore */ }
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{en ? 'Loading...' : 'Chargement...'}</div>;
+
+  const pending = queue.filter(q => q.status === 'pending');
+  const sent = queue.filter(q => q.status === 'sent');
+
+  return (
+    <div>
+      {/* Toggle card */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {'\uD83E\uDD16'} {en ? 'Prospection Autopilot' : 'Autopilot Prospection'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 500 }}>
+                {en
+                  ? 'AI responds to prospect replies from Lemlist/Apollo campaigns. Manages conversations until a meeting is booked (max 5 turns, 2-4h delay).'
+                  : "L'IA répond aux réponses de vos prospects (Lemlist/Apollo). Gère les conversations jusqu'au RDV (max 5 tours, délai 2-4h)."}
+              </div>
+            </div>
+            <button
+              className={`btn ${settings?.enabled ? 'btn-success' : 'btn-outline'}`}
+              style={{ fontSize: 12, padding: '8px 18px', minWidth: 90 }}
+              onClick={toggleEnabled}
+            >
+              {settings?.enabled ? (en ? 'Active' : 'Actif') : (en ? 'Enable' : 'Activer')}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Explainer when disabled */}
+      {!settings?.enabled && (
+        <div className="card" style={{ marginBottom: 16, background: 'var(--bg-elevated)' }}>
+          <div className="card-body" style={{ padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{en ? 'How it works' : 'Comment ça marche'}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+              {[
+                en ? '1. Prospect replies to your Lemlist/Apollo campaign' : '1. Un prospect répond à votre campagne Lemlist/Apollo',
+                en ? '2. AI analyzes intent (interested, question, meeting request...)' : "2. L'IA analyse l'intent (intéressé, question, demande de RDV...)",
+                en ? '3. AI generates a reply using conversation history + learned patterns' : "3. L'IA génère une réponse avec l'historique + patterns appris",
+                en ? '4. Reply is sent after a 2-4h delay (human-like)' : '4. Réponse envoyée après 2-4h (délai naturel)',
+                en ? '5. Continues until a meeting is accepted or max 5 exchanges' : "5. Continue jusqu'au RDV accepté ou max 5 échanges",
+              ].map((step, i) => (
+                <div key={i} style={{ padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: 6, borderLeft: '2px solid var(--primary)' }}>
+                  {step}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending queue */}
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+            {'\u23F3'} {en ? `${pending.length} pending reply(ies)` : `${pending.length} réponse(s) en attente`}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pending.map(q => {
+              const content = typeof q.content === 'string' ? (() => { try { return JSON.parse(q.content); } catch { return {}; } })() : (q.content || {});
+              return (
+                <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--warning)' }}>
+                  <div className="card-body" style={{ padding: '12px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>
+                          {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.contact_name || q.to_name || q.to_email}
+                          {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, maxHeight: 40, overflow: 'hidden' }}>
+                          {content.body || content.message || ''}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }} onClick={() => cancelMessage(q.id)}>
+                        {en ? 'Cancel' : 'Annuler'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Sent history */}
+      {sent.length > 0 && (
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+            {'\u2705'} {en ? `${sent.length} auto-reply(ies) sent` : `${sent.length} réponse(s) auto envoyée(s)`}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sent.slice(0, 20).map(q => {
+              const content = typeof q.content === 'string' ? (() => { try { return JSON.parse(q.content); } catch { return {}; } })() : (q.content || {});
+              return (
+                <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--success)' }}>
+                  <div className="card-body" style={{ padding: '12px 16px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.contact_name || q.to_name || q.to_email}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, maxHeight: 40, overflow: 'hidden' }}>
+                      {content.body || content.message || ''}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {settings?.enabled && pending.length === 0 && sent.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83E\uDD16'}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {en ? 'Autopilot is active. When prospects reply to your campaigns, AI will manage the conversation here.' : "L'autopilot est actif. Quand vos prospects répondront à vos campagnes, l'IA gérera ici."}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════
    Campaign Row
