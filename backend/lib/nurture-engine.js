@@ -16,6 +16,7 @@ const db = require('../db');
 const { getUserKey } = require('../config');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
+const linkedin = require('../api/linkedin');
 const { sendNurtureEmail } = require('./email-outbound');
 const logger = require('./logger');
 
@@ -212,48 +213,176 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
 }
 
 /**
+ * Generate a personalized LinkedIn message or connection note via Claude.
+ */
+async function generateLinkedInContent(trigger, contact, actionType) {
+  const template = trigger.email_template || {};
+  const isConnect = actionType === 'linkedin_connect';
+  const maxChars = isConnect ? 280 : 600;
+
+  const prompt = isConnect
+    ? `Tu es un commercial B2B. Génère une note de connexion LinkedIn courte et personnalisée (max 280 caractères).
+
+Contexte :
+- Destinataire : ${contact.name} (${contact.title}) chez ${contact.company}
+- Trigger : ${trigger.trigger_type} — ${trigger.name}
+${contact.dealName ? `- Deal : ${contact.dealName} (${contact.dealStatus})` : ''}
+${template.context ? `- Contexte : ${template.context}` : ''}
+
+Instructions :
+- Ton naturel, pas commercial
+- Référencer le contexte business de manière subtile
+- Finir par une ouverture (curiosité ou valeur)
+- Max 280 caractères
+
+Retourne un JSON : { "note": "..." }`
+    : `Tu es un commercial B2B. Génère un message LinkedIn personnalisé (3-4 phrases max).
+
+Contexte :
+- Destinataire : ${contact.name} (${contact.title}) chez ${contact.company}
+- Trigger : ${trigger.trigger_type} — ${trigger.name}
+${contact.dealName ? `- Deal : ${contact.dealName} (${contact.dealStatus})` : ''}
+${template.context ? `- Contexte : ${template.context}` : ''}
+
+Instructions :
+- Ton : ${template.tone || 'professionnel mais chaleureux'}
+- Message court et naturel, pas de pitch
+- Proposer une valeur concrète ou poser une question pertinente
+- ${template.formality === 'tu' ? 'Tutoyer' : 'Vouvoyer'}
+
+Retourne un JSON : { "message": "..." }`;
+
+  const result = await claude.callClaude(
+    'Retourne uniquement du JSON valide.',
+    prompt,
+    isConnect ? 300 : 500,
+    'nurture_linkedin'
+  );
+
+  if (isConnect) {
+    const note = result.parsed?.note
+      || (result.content || '').match(/"note"\s*:\s*"([^"]+)"/)?.[1]
+      || `Bonjour ${contact.name.split(' ')[0]}, votre profil a retenu mon attention.`;
+    return { note: note.slice(0, maxChars) };
+  }
+
+  const message = result.parsed?.message
+    || (result.content || '').match(/"message"\s*:\s*"([^"]+)"/)?.[1]
+    || `Bonjour ${contact.name.split(' ')[0]}, je me permets de vous contacter suite à notre échange.`;
+  return { message: message.slice(0, maxChars) };
+}
+
+/**
+ * Execute a LinkedIn action (connect, message, visit) for a nurture contact.
+ * Logs to prospect_activities for memory/learning.
+ */
+async function executeLinkedInAction(userId, trigger, contact, actionType) {
+  const cookie = await getUserKey(userId, 'linkedin');
+  if (!cookie) throw new Error('LinkedIn not connected');
+
+  // Find LinkedIn URL from opportunity or contact
+  const opp = await db.opportunities.findByEmail(userId, contact.email);
+  const linkedinUrl = opp?.linkedin_url || contact.linkedin_url;
+  if (!linkedinUrl && actionType !== 'linkedin_visit') {
+    throw new Error('No LinkedIn URL for contact');
+  }
+
+  const publicId = linkedinUrl ? linkedinUrl.match(/\/in\/([^/?]+)/)?.[1] : null;
+
+  let content = {};
+
+  if (actionType === 'linkedin_visit' && publicId) {
+    await linkedin.getProfile(cookie, publicId);
+    content = { action: 'visit' };
+  } else if (actionType === 'linkedin_connect' && publicId) {
+    const { note } = await generateLinkedInContent(trigger, contact, 'linkedin_connect');
+    await linkedin.sendConnectionRequest(cookie, { profileUrn: publicId, message: note }, userId);
+    content = { action: 'connect', note };
+  } else if (actionType === 'linkedin_message' && publicId) {
+    const { message } = await generateLinkedInContent(trigger, contact, 'linkedin_message');
+    await linkedin.sendMessage(cookie, { recipientUrn: publicId, message }, userId);
+    content = { action: 'message', message };
+  } else {
+    throw new Error(`Cannot execute ${actionType}: missing LinkedIn profile ID`);
+  }
+
+  // Log in nurture_emails for tracking/UI consistency
+  await db.query(`
+    INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, action_type)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', $8)
+  `, [
+    userId, trigger.id, opp?.id || null, contact.email, contact.name,
+    actionType.replace('linkedin_', 'LinkedIn '),
+    JSON.stringify(content),
+    actionType,
+  ]);
+
+  // Log in prospect_activities for memory & learning
+  const activityType = actionType === 'linkedin_connect' ? 'linkedin_connect_sent'
+    : actionType === 'linkedin_message' ? 'linkedin_message_sent'
+    : 'linkedin_visit';
+
+  await db.query(`
+    INSERT INTO prospect_activities (user_id, lead_email, type, content, source, created_at)
+    VALUES ($1, $2, $3, $4, 'nurture_linkedin', now())
+  `, [userId, contact.email, activityType, JSON.stringify(content)]);
+
+  return { success: true, actionType, contact: contact.name };
+}
+
+/**
  * Run the nurture engine for a user.
- * Evaluates triggers → generates emails → sends (or queues for approval).
+ * Evaluates triggers → generates emails/LinkedIn actions → sends (or queues).
  */
 async function runNurtureEngine(userId) {
   const matches = await evaluateTriggers(userId);
   const results = { triggered: 0, sent: 0, queued: 0, errors: [] };
 
   for (const { trigger, contacts } of matches) {
+    // Determine action type: email (default), linkedin_connect, linkedin_message, linkedin_visit
+    const actionType = trigger.action_type || 'email';
+    const isLinkedIn = actionType.startsWith('linkedin_');
+
     for (const contact of contacts) {
       try {
         results.triggered++;
 
-        // Generate personalized email
-        const { subject, body } = await generateEmail(trigger, contact);
-
-        // Find opportunity in Baakalai DB
-        const opp = await db.opportunities.findByEmail(userId, contact.email);
-
-        if (trigger.mode === 'auto') {
-          // Send immediately
-          const sendResult = await sendNurtureEmail(userId, {
-            triggerId: trigger.id,
-            opportunityId: opp?.id || null,
-            to: contact.email,
-            toName: contact.name,
-            subject,
-            body,
-            crmProvider: trigger.crm_provider || 'pipedrive',
-          });
-
-          if (sendResult.success) {
-            results.sent++;
-          } else {
-            results.errors.push({ contact: contact.name, error: sendResult.error });
-          }
+        if (isLinkedIn) {
+          // Execute LinkedIn action
+          const result = await executeLinkedInAction(userId, trigger, contact, actionType);
+          if (result.success) results.sent++;
         } else {
-          // Queue for approval
-          await db.query(`
-            INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
-          `, [userId, trigger.id, opp?.id || null, contact.email, contact.name, subject, body, []]);
-          results.queued++;
+          // Generate personalized email
+          const { subject, body } = await generateEmail(trigger, contact);
+
+          // Find opportunity in Baakalai DB
+          const opp = await db.opportunities.findByEmail(userId, contact.email);
+
+          if (trigger.mode === 'auto') {
+            // Send immediately
+            const sendResult = await sendNurtureEmail(userId, {
+              triggerId: trigger.id,
+              opportunityId: opp?.id || null,
+              to: contact.email,
+              toName: contact.name,
+              subject,
+              body,
+              crmProvider: trigger.crm_provider || 'pipedrive',
+            });
+
+            if (sendResult.success) {
+              results.sent++;
+            } else {
+              results.errors.push({ contact: contact.name, error: sendResult.error });
+            }
+          } else {
+            // Queue for approval
+            await db.query(`
+              INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
+            `, [userId, trigger.id, opp?.id || null, contact.email, contact.name, subject, body, []]);
+            results.queued++;
+          }
         }
       } catch (err) {
         results.errors.push({ contact: contact.name, error: err.message });
@@ -295,4 +424,4 @@ async function runAllNurture() {
   return allResults;
 }
 
-module.exports = { evaluateTriggers, generateEmail, runNurtureEngine, runAllNurture };
+module.exports = { evaluateTriggers, generateEmail, generateLinkedInContent, executeLinkedInAction, runNurtureEngine, runAllNurture };

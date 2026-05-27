@@ -250,6 +250,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   const [form, setForm] = useState({
     name: '',
     triggerType: 'deal_stagnant',
+    actionType: 'email',
     days: 30,
     mode: 'approval',
     tone: 'professionnel mais chaleureux',
@@ -265,13 +266,14 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
         body: JSON.stringify({
           name: form.name,
           triggerType: form.triggerType,
+          actionType: form.actionType,
           conditions: { days: parseInt(form.days, 10) || 30 },
-          mode: form.mode,
+          mode: form.actionType.startsWith('linkedin_') ? 'auto' : form.mode,
           emailTemplate: { tone: form.tone },
         }),
       });
       setShowCreate(false);
-      setForm({ name: '', triggerType: 'deal_stagnant', days: 30, mode: 'approval', tone: 'professionnel mais chaleureux' });
+      setForm({ name: '', triggerType: 'deal_stagnant', actionType: 'email', days: 30, mode: 'approval', tone: 'professionnel mais chaleureux' });
       onRefresh();
     } catch (err) {
       alert((lang === 'en' ? 'Error: ' : 'Erreur: ') + err.message);
@@ -341,14 +343,27 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                   style={{ width: 80, fontSize: 13, padding: '8px 12px' }}
                 />
                 <select
-                  value={form.mode}
-                  onChange={e => setForm(p => ({ ...p, mode: e.target.value }))}
+                  value={form.actionType}
+                  onChange={e => setForm(p => ({ ...p, actionType: e.target.value }))}
                   className="form-input"
-                  style={{ width: 140, fontSize: 13, padding: '8px 12px' }}
+                  style={{ width: 160, fontSize: 13, padding: '8px 12px' }}
                 >
-                  <option value="approval">{lang === 'en' ? 'Approval' : 'Approbation'}</option>
-                  <option value="auto">{lang === 'en' ? 'Automatic' : 'Automatique'}</option>
+                  <option value="email">{'\u2709\uFE0F'} Email</option>
+                  <option value="linkedin_connect">{'\uD83D\uDD17'} LinkedIn Connect</option>
+                  <option value="linkedin_message">{'\uD83D\uDCAC'} LinkedIn Message</option>
+                  <option value="linkedin_visit">{'\uD83D\uDC41\uFE0F'} LinkedIn Visit</option>
                 </select>
+                {!form.actionType.startsWith('linkedin_') && (
+                  <select
+                    value={form.mode}
+                    onChange={e => setForm(p => ({ ...p, mode: e.target.value }))}
+                    className="form-input"
+                    style={{ width: 140, fontSize: 13, padding: '8px 12px' }}
+                  >
+                    <option value="approval">{lang === 'en' ? 'Approval' : 'Approbation'}</option>
+                    <option value="auto">{lang === 'en' ? 'Automatic' : 'Automatique'}</option>
+                  </select>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowCreate(false)}>
