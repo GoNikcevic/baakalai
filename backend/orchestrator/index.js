@@ -107,6 +107,27 @@ function start() {
   });
 
   // ═══════════════════════════════════════════════════
+  // Agent Chains — Daily 9:45 AM
+  // Autonomous action chains (deal reactivation, auto-upsell)
+  // Runs after strategic agents so data is fresh
+  // ═══════════════════════════════════════════════════
+  cron.schedule('45 9 * * *', async () => {
+    console.log('[agent:chains] Starting autonomous chains...');
+    try {
+      const { runAllChains } = require('../lib/agent-chains');
+      const results = await runAllChains();
+      const summary = results.map(r => {
+        const re = r.reactivation?.executed || r.reactivation?.pending || 0;
+        const up = r.upsell?.executed || r.upsell?.pending || 0;
+        return re + up > 0 ? `user:${r.userId} reactivation:${re} upsell:${up}` : null;
+      }).filter(Boolean);
+      console.log(`[agent:chains] Done — ${summary.length > 0 ? summary.join(', ') : 'no actions triggered'}`);
+    } catch (err) {
+      logger.error('orchestrator', 'Agent chains failed: ' + err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
   // Lifecycle Emails — Daily 10:00 AM
   // Onboarding sequences + retention re-engagement
   // ═══════════════════════════════════════════════════
@@ -152,10 +173,11 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] 5 agents + lifecycle scheduled:');
+  console.log('[orchestrator] 6 agents + lifecycle scheduled:');
   console.log('  Prospection:      daily 8AM + evening batch 8PM');
   console.log('  CRM:              daily 9AM');
   console.log('  Strategic (fast): daily 9:30AM (deal_coach, upsell, copy_optimizer)');
+  console.log('  Agent Chains:     daily 9:45AM (deal reactivation, auto-upsell)');
   console.log('  Lifecycle:        daily 10AM');
   console.log('  Memory:           Sunday 10AM (+ heavy strategic agents)');
   console.log('  Reporting:        Monday 9AM');
