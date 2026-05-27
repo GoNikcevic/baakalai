@@ -126,6 +126,15 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       report.errors.push(`Responses: ${err.message}`);
     }
 
+    // ── Step 4a: Send scheduled autopilot replies ──
+    try {
+      const { sendScheduledReplies } = require('./conversation-autopilot');
+      const autopilotReport = await sendScheduledReplies();
+      report.autopilot = autopilotReport;
+    } catch (err) {
+      report.errors.push(`Autopilot: ${err.message}`);
+    }
+
     // ── Step 4b: A/B Test Analysis ──
     try {
       const { analyzeAbTests } = require('./agents/ab-analyzer');
@@ -196,6 +205,18 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       } catch { /* notification is non-blocking */ }
     } catch (err) {
       report.errors.push(`Churn: ${err.message}`);
+    }
+
+    // ── Step 5b: Auto-enrich new imports with missing data (max 20/day) ──
+    try {
+      const { enrichContacts } = require('./enrich-agent');
+      const enrichReport = await enrichContacts(userId, 'all', { limit: 20 });
+      report.enrich = { enriched: enrichReport.enriched, notFound: enrichReport.notFound, total: enrichReport.total };
+      if (enrichReport.enriched > 0) {
+        logger.info('crm-agent', `Auto-enriched ${enrichReport.enriched}/${enrichReport.total} contacts for user ${userId}`);
+      }
+    } catch (err) {
+      report.errors.push(`Enrich: ${err.message}`);
     }
 
     // ── Step 6: AI Analysis (if significant changes) ──
