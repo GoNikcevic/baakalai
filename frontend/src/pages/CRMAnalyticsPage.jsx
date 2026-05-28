@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import api from '../services/api-client';
 import { useI18n, useT } from '../i18n';
+import { showToast } from '../services/notifications';
 import EngagementChart from '../components/charts/EngagementChart';
 import FunnelChart from '../components/charts/FunnelChart';
 
@@ -701,9 +702,11 @@ function CRMHealthSection() {
             ? `${result.enriched} enriched, ${result.notFound} not found (${result.total} processed)`
             : `${result.enriched} enrichis, ${result.notFound} non trouvés (${result.total} traités)`,
         }}));
+        showToast({ type: 'success', title: en ? 'Enriched' : 'Enrichi', message: `${result.enriched} contact(s)` });
         if (result.enriched > 0) setTimeout(handleScan, 1500);
       } catch (err) {
         setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
+        showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
       }
       setFixing(null);
       return;
@@ -727,10 +730,12 @@ function CRMHealthSection() {
           body: JSON.stringify({ reportId: report?.reportId, fixes }),
         });
         setFixResults(prev => ({ ...(prev || {}), [issue.type]: result }));
+        showToast({ type: 'success', title: en ? 'Fixed' : 'Corrigé', message: `${result.applied || 0} ${en ? 'contact(s) fixed' : 'contact(s) corrigé(s)'}` });
         setTimeout(handleScan, 1000);
       }
     } catch (err) {
       setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
     }
     setFixing(null);
   }, [provider, report, handleScan, navigate, en]);

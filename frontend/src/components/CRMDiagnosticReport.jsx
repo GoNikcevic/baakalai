@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
+import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 
 const ISSUE_META = {
@@ -72,13 +73,15 @@ export default function CRMDiagnosticReport({ onClose }) {
           method: 'POST',
           body: JSON.stringify({ fixes }),
         });
-        // Refresh diagnostic
+        showToast({ type: 'success', title: en ? 'Fixed' : 'Corrigé', message: `${issue.type.replace(/_/g, ' ')}` });
         const fresh = await request('/crm/first-diagnostic', { method: 'POST' });
         setData(fresh);
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message || 'Fix failed' });
+    }
     setFixing(null);
-  }, [data?.provider]);
+  }, [data?.provider, en]);
 
   const handleFixAll = useCallback(async () => {
     const health = data?.health;
@@ -100,12 +103,15 @@ export default function CRMDiagnosticReport({ onClose }) {
           method: 'POST',
           body: JSON.stringify({ fixes }),
         });
+        showToast({ type: 'success', title: en ? 'All fixed' : 'Tout corrigé', message: `${fixes.length} ${en ? 'issue(s) resolved' : 'problème(s) résolus'}` });
         const fresh = await request('/crm/first-diagnostic', { method: 'POST' });
         setData(fresh);
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message || 'Fix all failed' });
+    }
     setFixingAll(false);
-  }, [data]);
+  }, [data, en]);
 
   function handleNav(path) {
     localStorage.setItem('bakal_diagnostic_seen', 'true');
