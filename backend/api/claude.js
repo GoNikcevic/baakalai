@@ -459,6 +459,15 @@ Relancer les contacts inactifs :
 Importer les contacts depuis le CRM :
 { "action": "import_crm", "provider": "pipedrive" }
 
+Créer un trigger d'activation (relance automatique sur condition CRM) :
+{ "action": "create_trigger", "name": "Relance deals stagnants", "triggerType": "deal_stagnant", "actionType": "email", "days": 30, "mode": "approval" }
+triggerType : deal_won | deal_stagnant | inactive_contact | deal_lost | onboarding_check | renewal_reminder | upsell_opportunity | feedback_request
+actionType : email | linkedin_connect | linkedin_message | linkedin_visit
+mode : auto | approval
+
+Activer ou désactiver l'autopilot de conversation (l'IA répond automatiquement aux prospects) :
+{ "action": "toggle_autopilot", "enabled": true }
+
 Lister les clients avec un filtre :
 { "action": "list_clients", "filter": "won|stagnant|inactive", "days": 30 }
 
@@ -478,6 +487,16 @@ RÈGLES send_newsletter :
 - send_newsletter : quand l'utilisateur demande "envoie une newsletter", "email marketing aux membres", "communication aux adhérents".
 - Génère un résumé du contenu proposé AVANT d'envoyer. Demande confirmation.
 - Si Informz n'est pas connecté, dis-le et redirige vers Settings.
+
+RÈGLES create_trigger :
+- create_trigger : quand l'utilisateur demande "crée un trigger", "automatise les relances", "lance une relance automatique quand un deal stagne".
+- Déduis le triggerType, les days et le mode de la demande. Si pas clair, demande des précisions.
+- Par défaut : mode = "approval" (l'utilisateur valide avant envoi), actionType = "email".
+- Si l'utilisateur dit "LinkedIn" → actionType = "linkedin_connect" ou "linkedin_message".
+
+RÈGLES toggle_autopilot :
+- toggle_autopilot : quand l'utilisateur demande "active l'autopilot", "désactive l'autopilot", "laisse l'IA gérer les réponses", "arrête de répondre automatiquement".
+- enabled: true pour activer, false pour désactiver.
 
 RÈGLES scan_crm / clean_crm / run_nurture / import_crm :
 - scan_crm : quand l'utilisateur demande "vérifie mes données", "quel est l'état de mon CRM", "diagnostic CRM".

@@ -572,4 +572,53 @@ router.post('/threads/:id/list-clients', async (req, res, next) => {
   }
 });
 
+// POST /api/chat/threads/:id/create-trigger — Create nurture trigger from chat
+router.post('/threads/:id/create-trigger', async (req, res, next) => {
+  try {
+    const { name, triggerType, actionType, days, mode } = req.body;
+    if (!name || !triggerType) return res.status(400).json({ error: 'name and triggerType required' });
+
+    // Detect CRM provider
+    const { getUserKey } = require('../config');
+    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
+    let crmProvider = null;
+    for (const p of providers) {
+      const key = await getUserKey(req.user.id, p);
+      if (key) { crmProvider = p; break; }
+    }
+
+    const result = await db.query(`
+      INSERT INTO nurture_triggers (user_id, name, trigger_type, conditions, action_type, mode, crm_provider, enabled)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      RETURNING *
+    `, [
+      req.user.id,
+      name,
+      triggerType,
+      JSON.stringify({ days: parseInt(days, 10) || 30 }),
+      actionType || 'email',
+      (actionType || '').startsWith('linkedin_') ? 'auto' : (mode || 'approval'),
+      crmProvider,
+    ]);
+
+    res.json({ trigger: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/chat/threads/:id/toggle-autopilot — Enable/disable autopilot from chat
+router.post('/threads/:id/toggle-autopilot', async (req, res, next) => {
+  try {
+    const { enabled } = req.body;
+    await db.query(
+      `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ autopilot_enabled: !!enabled }), req.user.id]
+    );
+    res.json({ autopilot_enabled: !!enabled });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

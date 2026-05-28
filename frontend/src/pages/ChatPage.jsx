@@ -269,6 +269,12 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute, onP
   if (action === 'list_clients') {
     return <ListClientsCard metadata={metadata} />;
   }
+  if (action === 'create_trigger') {
+    return <CreateTriggerCard metadata={metadata} />;
+  }
+  if (action === 'toggle_autopilot') {
+    return <ToggleAutopilotCard metadata={metadata} />;
+  }
   if (action === 'search_signals') {
     return <SignalSearchCard metadata={metadata} />;
   }
@@ -903,6 +909,106 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
         </div>
       )}
       {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
+    </div>
+  );
+}
+
+function CreateTriggerCard({ metadata }) {
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [status, setStatus] = useState('ready');
+  const [result, setResult] = useState(null);
+  const threadId = metadata?._threadId || 'default';
+
+  const handleCreate = async () => {
+    setStatus('running');
+    try {
+      const res = await request(`/chat/threads/${threadId}/create-trigger`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: metadata.name,
+          triggerType: metadata.triggerType,
+          actionType: metadata.actionType || 'email',
+          days: metadata.days || 30,
+          mode: metadata.mode || 'approval',
+        }),
+      });
+      setResult(res);
+      setStatus('done');
+    } catch (err) {
+      setResult({ error: err.message });
+      setStatus('error');
+    }
+  };
+
+  const actionLabel = (metadata.actionType || 'email').startsWith('linkedin_')
+    ? 'LinkedIn ' + (metadata.actionType || '').replace('linkedin_', '')
+    : 'Email';
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+      padding: 16, marginTop: 8,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+        {'\u26A1'} {en ? 'Create trigger' : 'Créer un trigger'}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+        <strong>{metadata.name}</strong> — {metadata.triggerType?.replace(/_/g, ' ')} · {metadata.days || 30} {en ? 'days' : 'jours'} · {actionLabel} · {metadata.mode === 'auto' ? (en ? 'Automatic' : 'Automatique') : (en ? 'Approval' : 'Approbation')}
+      </div>
+      {status === 'ready' && (
+        <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleCreate}>
+          {en ? 'Create trigger' : 'Créer le trigger'}
+        </button>
+      )}
+      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'Creating...' : 'Création...'}</span>}
+      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {en ? 'Trigger created' : 'Trigger créé'}</span>}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
+    </div>
+  );
+}
+
+function ToggleAutopilotCard({ metadata }) {
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [status, setStatus] = useState('ready');
+  const threadId = metadata?._threadId || 'default';
+  const enabling = metadata.enabled !== false;
+
+  const handleToggle = async () => {
+    setStatus('running');
+    try {
+      await request(`/chat/threads/${threadId}/toggle-autopilot`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled: enabling }),
+      });
+      setStatus('done');
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+      padding: 16, marginTop: 8,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+        {'\uD83E\uDD16'} {enabling ? (en ? 'Enable Autopilot' : 'Activer l\'Autopilot') : (en ? 'Disable Autopilot' : 'Désactiver l\'Autopilot')}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+        {enabling
+          ? (en ? 'AI will automatically respond to prospect replies (max 5 turns, 2-4h delay).' : 'L\'IA répondra automatiquement aux prospects (max 5 tours, délai 2-4h).')
+          : (en ? 'Autopilot will be disabled. You will need to respond manually.' : 'L\'autopilot sera désactivé. Vous devrez répondre manuellement.')}
+      </div>
+      {status === 'ready' && (
+        <button className={`btn ${enabling ? 'btn-success' : 'btn-outline'}`} style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleToggle}>
+          {enabling ? (en ? 'Enable' : 'Activer') : (en ? 'Disable' : 'Désactiver')}
+        </button>
+      )}
+      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'}...</span>}
+      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {enabling ? (en ? 'Autopilot enabled' : 'Autopilot activé') : (en ? 'Autopilot disabled' : 'Autopilot désactivé')}</span>}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {en ? 'Failed' : 'Échec'}</span>}
     </div>
   );
 }
