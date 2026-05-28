@@ -12,7 +12,9 @@
     "seed:supabase": "node scripts/seed-supabase.js",
     "seed:supabase:reset": "node scripts/seed-supabase.js --reset",
     "test": "node --test tests/*.test.js",
-    "check": "node scripts/check-connection.js"
+    "check": "node scripts/check-connection.js",
+    "audit": "node ../scripts/audit-patterns.js",
+    "audit:fix": "node ../scripts/audit-patterns.js --fix-errors-md"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
