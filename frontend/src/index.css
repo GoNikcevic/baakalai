@@ -2166,28 +2166,39 @@ body {
 }
 .toast {
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 14px 18px;
+  border-radius: var(--r-xl); padding: 14px 18px;
   display: flex; align-items: flex-start; gap: 12px;
-  box-shadow: 0 8px 32px rgba(10,10,10,0.15);
-  animation: toastIn 0.3s ease;
-  pointer-events: auto; min-width: 300px;
+  box-shadow: 0 8px 32px rgba(10,10,10,0.12);
+  animation: toastIn 0.4s cubic-bezier(0.2, 0.6, 0.2, 1);
+  pointer-events: auto; min-width: 300px; max-width: 420px;
   transition: all 0.3s ease;
+  backdrop-filter: blur(12px);
+  background: rgba(250, 250, 249, 0.95);
+}
+.toast.success {
+  border-color: rgba(22, 163, 74, 0.2);
+  box-shadow: 0 8px 32px rgba(22, 163, 74, 0.12), 0 0 0 1px rgba(22, 163, 74, 0.08);
+}
+.toast.danger {
+  border-color: rgba(220, 38, 38, 0.2);
+  box-shadow: 0 8px 32px rgba(220, 38, 38, 0.12), 0 0 0 1px rgba(220, 38, 38, 0.08);
 }
 .toast.removing {
   animation: toastOut 0.3s ease forwards;
 }
 @keyframes toastIn {
-  from { opacity: 0; transform: translateX(40px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateX(40px) scale(0.95); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
 @keyframes toastOut {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0; transform: translateX(40px); }
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to { opacity: 0; transform: translateX(40px) scale(0.95); }
 }
 .toast-icon {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 32px; height: 32px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; flex-shrink: 0;
+  animation: scorePulse 0.3s ease;
 }
 .toast-icon.success { background: var(--success-bg); color: var(--success); }
 .toast-icon.warning { background: var(--warning-bg); color: var(--warning); }

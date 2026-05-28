@@ -60,8 +60,8 @@ function getOnboardingSuggestions(lang) {
 
 function getReturningSuggestions(lang) {
   return lang === 'en'
-    ? ['🎯 Create a new campaign', '📡 Find prospects with signals', '⚡ Activate stagnant deals', '📊 Analyze my performance', '👥 Import CRM contacts', '🧠 Show AI recommendations']
-    : ['🎯 Nouvelle campagne', '📡 Trouver des prospects via signaux', '⚡ Relancer les deals stagnants', '📊 Analyser mes performances', '👥 Importer mes contacts CRM', '🧠 Voir les recommandations IA'];
+    ? ['🎯 Create a new campaign', '📡 Find prospects with signals', '⚡ Activate stagnant deals', '🤖 Enable autopilot', '🔍 Scan my CRM health', '🔗 Create a LinkedIn trigger', '📊 Analyze my performance', '🧠 Show AI recommendations']
+    : ['🎯 Nouvelle campagne', '📡 Trouver des prospects via signaux', '⚡ Relancer les deals stagnants', '🤖 Activer l\'autopilot', '🔍 Scanner la santé de mon CRM', '🔗 Créer un trigger LinkedIn', '📊 Analyser mes performances', '🧠 Voir les recommandations IA'];
 }
 
 function getActionPrompts(lang) {
@@ -2023,7 +2023,28 @@ export default function ChatPage() {
     if (metadata.action === 'regenerate_touchpoints') {
       return en ? ['View new versions', 'Deploy changes', 'Change approach'] : ['Voir les nouvelles versions', 'D\u00E9ployer les modifications', 'Modifier l\'approche'];
     }
-    return en ? ['Create a campaign', 'View my stats', 'Refine my sequences'] : ['Cr\u00E9er une campagne', 'Voir mes stats', 'Affiner mes s\u00E9quences'];
+    if (metadata.action === 'scan_crm' || metadata.action === 'clean_crm') {
+      return en ? ['Fix all issues', 'Import contacts', 'Create a trigger', 'Enable autopilot'] : ['Corriger tous les probl\u00E8mes', 'Importer les contacts', 'Cr\u00E9er un trigger', 'Activer l\'autopilot'];
+    }
+    if (metadata.action === 'import_crm') {
+      return en ? ['Scan CRM health', 'Create activation trigger', 'Show imported contacts'] : ['Scanner la sant\u00E9 CRM', 'Cr\u00E9er un trigger d\'activation', 'Voir les contacts import\u00E9s'];
+    }
+    if (metadata.action === 'create_trigger') {
+      return en ? ['Create another trigger', 'Run activation now', 'Enable autopilot'] : ['Cr\u00E9er un autre trigger', 'Lancer l\'activation maintenant', 'Activer l\'autopilot'];
+    }
+    if (metadata.action === 'toggle_autopilot') {
+      return en ? ['Show autopilot queue', 'Create a trigger', 'Scan CRM'] : ['Voir la file autopilot', 'Cr\u00E9er un trigger', 'Scanner le CRM'];
+    }
+    if (metadata.action === 'run_nurture') {
+      return en ? ['View sent emails', 'Check pending approvals', 'Scan CRM health'] : ['Voir les emails envoy\u00E9s', 'V\u00E9rifier les approbations', 'Scanner la sant\u00E9 CRM'];
+    }
+    if (metadata.action === 'send_email') {
+      return en ? ['Send another email', 'Create a follow-up trigger', 'View client profile'] : ['Envoyer un autre email', 'Cr\u00E9er un trigger de suivi', 'Voir le profil client'];
+    }
+    if (metadata.action === 'list_clients') {
+      return en ? ['Export this list', 'Create trigger for these clients', 'Run churn scoring'] : ['Exporter cette liste', 'Cr\u00E9er un trigger pour ces clients', 'Lancer le scoring churn'];
+    }
+    return en ? ['Create a campaign', 'Scan my CRM', 'Enable autopilot'] : ['Cr\u00E9er une campagne', 'Scanner mon CRM', 'Activer l\'autopilot'];
   }, []);
 
   /* ─── Create campaign from chat ─── */
