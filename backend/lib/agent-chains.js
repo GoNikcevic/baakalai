@@ -83,7 +83,8 @@ async function getTimingContext(userId) {
   );
   let bestDay = null, bestHour = null;
   for (const p of patterns.rows) {
-    const data = typeof p.data === 'string' ? JSON.parse(p.data) : p.data;
+    let data = p.data;
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch { data = {}; } }
     if (data?.bestDay) bestDay = data.bestDay;
     if (data?.bestHour != null) bestHour = data.bestHour;
   }
@@ -144,8 +145,8 @@ async function getCrmProvider(userId) {
 
 async function runDealReactivation(userId) {
   const config = await getChainConfig(userId);
-  const chainCfg = typeof config.deal_reactivation === 'string'
-    ? JSON.parse(config.deal_reactivation) : config.deal_reactivation;
+  let chainCfg = config.deal_reactivation;
+  if (typeof chainCfg === 'string') { try { chainCfg = JSON.parse(chainCfg); } catch { chainCfg = { enabled: false }; } }
 
   if (!chainCfg.enabled) return { skipped: true, reason: 'disabled' };
 
@@ -226,7 +227,7 @@ Return JSON: { "subject": "...", "body": "..." }`;
         let email = result.parsed;
         if (!email) {
           const m = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
-          if (m) email = JSON.parse(m[0]);
+          if (m) { try { email = JSON.parse(m[0]); } catch { email = null; } }
         }
         if (!email?.subject || !email?.body) { report.errors.push(`${opp.name}: failed to generate email`); continue; }
 
@@ -289,8 +290,8 @@ Return JSON: { "subject": "...", "body": "..." }`;
 
 async function runAutoUpsell(userId) {
   const config = await getChainConfig(userId);
-  const chainCfg = typeof config.auto_upsell === 'string'
-    ? JSON.parse(config.auto_upsell) : config.auto_upsell;
+  let chainCfg = config.auto_upsell;
+  if (typeof chainCfg === 'string') { try { chainCfg = JSON.parse(chainCfg); } catch { chainCfg = { enabled: false }; } }
 
   if (!chainCfg.enabled) return { skipped: true, reason: 'disabled' };
 
@@ -388,7 +389,7 @@ Return JSON: { "subject": "...", "body": "..." }`;
         let email = result.parsed;
         if (!email) {
           const m = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
-          if (m) email = JSON.parse(m[0]);
+          if (m) { try { email = JSON.parse(m[0]); } catch { email = null; } }
         }
         if (!email?.subject || !email?.body) { report.errors.push(`${opp.name}: failed to generate email`); continue; }
 

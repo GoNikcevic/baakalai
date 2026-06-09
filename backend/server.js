@@ -53,8 +53,11 @@ app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    // Allow Chrome extensions (origin starts with chrome-extension://)
-    if (origin?.startsWith('chrome-extension://')) return callback(null, true);
+    // Allow specific Chrome extension IDs (set ALLOWED_EXTENSION_IDS env var, comma-separated)
+    if (origin?.startsWith('chrome-extension://') && process.env.ALLOWED_EXTENSION_IDS) {
+      const allowed = process.env.ALLOWED_EXTENSION_IDS.split(',').map(id => id.trim());
+      if (allowed.some(id => origin.includes(id))) return callback(null, true);
+    }
     console.error(`[${new Date().toISOString()}] Origin ${origin} not allowed by CORS. Allowed: ${allowedOrigins.join(', ')}`);
     callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
@@ -189,6 +192,11 @@ app.use(errorHandler);
 
 // Create HTTP server and attach Socket.io
 const server = http.createServer(app);
+// Catch unhandled promise rejections (prevents silent cron/agent failures)
+process.on('unhandledRejection', (err) => {
+  logger.error('process', `Unhandled rejection: ${err?.message || err}`);
+});
+
 socketServer.init(server, allowedOrigins);
 
 server.listen(config.port, '0.0.0.0', () => {

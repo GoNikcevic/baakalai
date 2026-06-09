@@ -479,9 +479,9 @@ function TouchpointCard({
       const lines = currentHtml.split(/<br\s*\/?>/);
       if (lines.length > 1) {
         lines[lines.length - 1] = proposal;
-        bodyRef.current.innerHTML = lines.join('<br>');
+        bodyRef.current.innerHTML = sanitizeHtml(lines.join('<br>'));
       } else {
-        bodyRef.current.innerHTML += '<br>' + proposal;
+        bodyRef.current.innerHTML = sanitizeHtml(currentHtml + '<br>' + proposal);
       }
       // Flash green
       bodyRef.current.style.transition = 'box-shadow 0.3s';

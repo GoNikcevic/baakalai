@@ -109,38 +109,49 @@ async function refreshTokenIfNeeded(account) {
     return account;
   }
 
-  try {
-    const res = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(params),
-    });
+  const MAX_RETRIES = 3;
+  let lastErr;
 
-    if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
-    const tokens = await res.json();
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params),
+      });
 
-    const newExpiry = tokens.expires_in
-      ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-      : null;
+      if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+      const tokens = await res.json();
 
-    await db.query(
-      `UPDATE email_accounts SET access_token = $1, token_expiry = $2, status = 'active', updated_at = now() WHERE id = $3`,
-      [encrypt(tokens.access_token), newExpiry, account.id]
-    );
+      const newExpiry = tokens.expires_in
+        ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+        : null;
 
-    // Clear transport cache so new token is used
-    _transportCache.delete(account.id);
+      await db.query(
+        `UPDATE email_accounts SET access_token = $1, token_expiry = $2, status = 'active', updated_at = now() WHERE id = $3`,
+        [encrypt(tokens.access_token), newExpiry, account.id]
+      );
 
-    logger.info('email-outbound', `Refreshed ${account.provider} token for ${account.email_address}`);
-    return { ...account, access_token: encrypt(tokens.access_token), token_expiry: newExpiry };
-  } catch (err) {
-    logger.error('email-outbound', `Token refresh failed for ${account.email_address}: ${err.message}`);
-    await db.query(
-      `UPDATE email_accounts SET status = 'expired', updated_at = now() WHERE id = $1`,
-      [account.id]
-    );
-    throw new Error(`OAuth token expired for ${account.email_address}. Please reconnect.`);
+      // Clear transport cache so new token is used
+      _transportCache.delete(account.id);
+
+      logger.info('email-outbound', `Refreshed ${account.provider} token for ${account.email_address}`);
+      return { ...account, access_token: encrypt(tokens.access_token), token_expiry: newExpiry };
+    } catch (err) {
+      lastErr = err;
+      logger.warn('email-outbound', `Token refresh attempt ${attempt}/${MAX_RETRIES} failed for ${account.email_address}: ${err.message}`);
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 1000 * attempt)); // exponential backoff
+      }
+    }
   }
+
+  logger.error('email-outbound', `Token refresh failed after ${MAX_RETRIES} attempts for ${account.email_address}: ${lastErr.message}`);
+  await db.query(
+    `UPDATE email_accounts SET status = 'expired', updated_at = now() WHERE id = $1`,
+    [account.id]
+  );
+  throw new Error(`OAuth token expired for ${account.email_address}. Please reconnect.`);
 }
 
 /**

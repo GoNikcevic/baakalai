@@ -17,8 +17,12 @@ const odoo = require('../api/odoo');
 const notionCrm = require('../api/notion-crm');
 const airtableCrm = require('../api/airtable-crm');
 const { decrypt } = require('../config/crypto');
+const { validateId, validateEnum } = require('../middleware/validate-params');
 
+const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 const router = Router();
+router.param('id', (req, res, next, id) => validateId(req, res, next));
+router.param('provider', validateEnum('provider', CRM_PROVIDERS));
 
 /**
  * Resolve the current user's decrypted HubSpot access token.

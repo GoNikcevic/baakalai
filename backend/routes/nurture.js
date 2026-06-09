@@ -356,7 +356,7 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
         if (result.parsed) sampleEmail = result.parsed;
         else {
           const m = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
-          if (m) sampleEmail = JSON.parse(m[0]);
+          if (m) { try { sampleEmail = JSON.parse(m[0]); } catch { /* malformed JSON */ } }
         }
       } catch { /* skip preview generation */ }
 
@@ -394,25 +394,27 @@ setInterval(() => {
 }, 300000);
 
 // GET /api/nurture/email-accounts/connect/gmail — Start Gmail OAuth flow
-router.get('/email-accounts/connect/gmail', (req, res) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  if (!clientId) return res.status(500).json({ error: 'Google OAuth not configured' });
-  if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
+router.get('/email-accounts/connect/gmail', (req, res, next) => {
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ error: 'Google OAuth not configured' });
+    if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
-  const state = require('crypto').randomBytes(16).toString('hex');
-  _oauthStates.set(state, { userId: req.user.id, provider: 'gmail', expiresAt: Date.now() + 600000 });
+    const state = require('crypto').randomBytes(16).toString('hex');
+    _oauthStates.set(state, { userId: req.user.id, provider: 'gmail', expiresAt: Date.now() + 600000 });
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/gmail',
-    response_type: 'code',
-    scope: 'https://mail.google.com/ email profile',
-    access_type: 'offline',
-    prompt: 'consent',
-    state,
-  });
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/gmail',
+      response_type: 'code',
+      scope: 'https://mail.google.com/ email profile',
+      access_type: 'offline',
+      prompt: 'consent',
+      state,
+    });
 
-  res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+    res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+  } catch (err) { next(err); }
 });
 
 // GET /api/nurture/email-accounts/callback/gmail — Gmail OAuth callback
@@ -483,24 +485,26 @@ async function gmailCallback(req, res) {
 }
 
 // GET /api/nurture/email-accounts/connect/microsoft — Start Microsoft OAuth flow
-router.get('/email-accounts/connect/microsoft', (req, res) => {
-  const clientId = process.env.MICROSOFT_CLIENT_ID;
-  if (!clientId) return res.status(500).json({ error: 'Microsoft OAuth not configured' });
-  if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
+router.get('/email-accounts/connect/microsoft', (req, res, next) => {
+  try {
+    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ error: 'Microsoft OAuth not configured' });
+    if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
-  const state = require('crypto').randomBytes(16).toString('hex');
-  _oauthStates.set(state, { userId: req.user.id, provider: 'microsoft', expiresAt: Date.now() + 600000 });
+    const state = require('crypto').randomBytes(16).toString('hex');
+    _oauthStates.set(state, { userId: req.user.id, provider: 'microsoft', expiresAt: Date.now() + 600000 });
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/microsoft',
-    response_type: 'code',
-    scope: 'https://outlook.office365.com/SMTP.Send offline_access email openid profile',
-    response_mode: 'query',
-    state,
-  });
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: APP_URL + '/api/nurture/email-accounts/callback/microsoft',
+      response_type: 'code',
+      scope: 'https://outlook.office365.com/SMTP.Send offline_access email openid profile',
+      response_mode: 'query',
+      state,
+    });
 
-  res.json({ url: `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}` });
+    res.json({ url: `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}` });
+  } catch (err) { next(err); }
 });
 
 // GET /api/nurture/email-accounts/callback/microsoft — Microsoft OAuth callback

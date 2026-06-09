@@ -6,11 +6,12 @@
 
 ## 1. What is Baakalai
 
-baakalai orchestre votre prospection et votre relation client avec l'IA. Il génère des séquences personnalisées, les déploie sur vos outils existants, et gère vos clients dans votre CRM — détection des deals stagnants, relance des contacts inactifs, upsell au bon moment. Chaque email envoyé, chaque réponse analysée, chaque deal conclu nourrit une mémoire collective qui apprend quel angle fonctionne, quel timing convertit, et quelle approche décroche un rendez-vous.
+baakalai is a memory system that orchestrates prospection and client management. It connects to your existing CRM (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable, Folk) and outreach tools (Lemlist, Apollo, Smartlead). 12 AI agents analyze every deal, every campaign, every response — and build a collective memory that compounds over time. The memory drives everything: follow-ups on stagnant deals, outbound campaigns, churn alerts, activation emails. The more you use baakalai, the sharper it gets.
 
-- **Prospection** : Create campaigns via AI chat, generate sequences (email + LinkedIn), deploy to Lemlist/Apollo, A/B test, refine automatically
-- **Activation (CRM)** : Import contacts from Pipedrive/HubSpot/Odoo, detect stagnant deals/churn risk, send personalized follow-up emails via user's own SMTP, analyze responses
-- **Intelligence** : 4 autonomous AI agents (Prospection, CRM, Memory, Reporting) + 9 pattern sources that learn from every campaign and every CRM interaction
+- **CRM Intelligence** : Connect your existing CRM, get churn prediction (0-100), deal coaching, data cleaning, upsell/cross-sell detection, win/loss analysis — without switching tools
+- **Activation** : 8 pre-built triggers (deal won, stagnant, lost, inactive, onboarding, renewal, upsell, feedback), personalized follow-ups from CRM history, sent via user's own SMTP
+- **Prospection** : Create campaigns via AI chat, generate sequences (email + LinkedIn), deploy to Lemlist/Apollo/Smartlead, A/B test, refine automatically
+- **Intelligence** : 12 autonomous AI agents (4 operational + 7 strategic + 1 template generator) that learn from every campaign and every CRM interaction
 
 Pricing: $75/user/month. Team plan: up to 5 members with roles (admin, prospection, activation, viewer).
 
@@ -64,7 +65,7 @@ Pricing: $75/user/month. Team plan: up to 5 members with roles (admin, prospecti
 - Trigger effectiveness scoring over time
 - Data cleaning agent: duplicates, missing fields, invalid emails, inactive contacts, format issues (score /100)
 
-### Intelligence (11 AI Agents)
+### Intelligence (12 AI Agents)
 
 **Operational (scheduled):**
 1. **Prospection Agent** (daily 8AM): stats collection + batch A/B + deliverability checks
@@ -271,7 +272,7 @@ Claude can propose these structured actions in the chat (JSON blocks):
 ### Remaining gaps
 - [ ] Microsoft OAuth (Azure app registration needed)
 - [ ] Stripe payment integration
-- [ ] Landing page Lightfield-style redesign
+- [x] Landing page repositioning (CRM copilot, 12 agents, 3-pillar: CRM Intelligence > Activation > Prospection)
 - [ ] Membership analytics: tenure, LTV by segment, renewal rates
 - [ ] Salesforce full integration (contacts + deals done, missing campaigns)
 - [ ] Renewal trigger needs custom field mapping
@@ -283,8 +284,8 @@ Claude can propose these structured actions in the chat (JSON blocks):
 - **Vision**: Full customer lifecycle hub — outreach + CRM + analytics (Amplitude/GA) + billing (Stripe/Odoo) all connected, AI analyzes everything and triggers the right action
 - **ICP**: SMB services B2B (10-400 employees) + membership organizations. Sectors: crypto, telecom, cybersecurity, agencies, biotech, health, freelance
 - **Pricing**: $75/user/month (team plan up to 5 members)
-- **Competitors**: SalesCaptain (~EUR30k/4 months agency), GTM Studio (~EUR140k/7 months agency), Lemlist/Apollo (tools only, no AI orchestration)
-- **Key differentiator**: AI that learns from every campaign + prospection AND activation in one tool
+- **Competitors**: Attio (AI-native CRM, $29-69/seat, no outbound), SalesCaptain (~EUR30k/4 months agency), GTM Studio (~EUR140k/7 months agency), Lemlist/Apollo (outreach only, no CRM intelligence)
+- **Key differentiator**: Memory system that connects to your EXISTING CRM (no migration) + 12 agents + prospection + activation in one tool. Collective memory compounds over time — every deal teaches the next one. No competitor has this.
 - **Target onboarding time**: <30 minutes to first campaign (currently ~25-35 min)
 - **Owner**: Goran Nikcevic (goran@oenobiote.com)
 

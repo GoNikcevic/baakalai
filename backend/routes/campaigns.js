@@ -6,8 +6,12 @@ const { notifyCampaignUpdate, notifyUser } = require('../socket');
 const { sanitizeObject } = require('../lib/sanitize');
 const { getUserKey } = require('../config');
 const logger = require('../lib/logger');
+const { validateId } = require('../middleware/validate-params');
 
 const router = Router();
+
+// Validate :id param on all routes that use it
+router.param('id', (req, res, next, id) => validateId(req, res, next));
 
 // GET /api/campaigns/lemlist/list
 router.get('/lemlist/list', async (_req, res, next) => {

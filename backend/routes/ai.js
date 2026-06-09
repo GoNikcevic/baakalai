@@ -7,8 +7,11 @@ const dryRun = require('../api/dry-run');
 const regenerateJob = require('../orchestrator/jobs/regenerate');
 const logger = require('../lib/logger');
 const icpAgent = require('../lib/icp-agent');
+const { validateId } = require('../middleware/validate-params');
 
 const router = Router();
+router.param('id', (req, res, next, id) => validateId(req, res, next));
+router.param('campaignId', (req, res, next, id) => validateId(req, res, next));
 
 function isDryRun(req) {
   return req.query.dry_run === 'true' || req.query.dry_run === '1';

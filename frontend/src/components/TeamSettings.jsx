@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
+import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 
 function getRoleConfig(lang) {
@@ -75,7 +76,7 @@ export default function TeamSettings() {
   };
 
   const handleRemove = async (userId, name) => {
-    if (!window.confirm(`Retirer ${name} de l'\u00E9quipe ?`)) return;
+    if (!window.confirm(lang === 'en' ? `Remove ${name} from the team?` : `Retirer ${name} de l'\u00E9quipe ?`)) return;
     try {
       await request(`/teams/${team.id}/members/${userId}`, { method: 'DELETE' });
       loadTeam();
@@ -130,7 +131,8 @@ export default function TeamSettings() {
   }
 
   const isAdmin = members.find(m => m.user_id === team.created_by)?.role === 'admin';
-  const currentUserRole = members.find(m => m.email === undefined)?.role; // TODO: match by actual user id
+  const currentUser = getUser();
+  const currentUserRole = members.find(m => m.user_id === currentUser?.id)?.role;
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>

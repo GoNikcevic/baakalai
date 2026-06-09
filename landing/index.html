@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>baakalai — orchestre ta prospection et tes clients avec l'IA</title>
+  <title>baakalai — les patterns qui closent, a chaque deal</title>
   <link rel="icon" href="assets/favicon.svg">
   <link rel="stylesheet" href="site.css">
   <style>
@@ -195,8 +195,8 @@
       <span>baakalai</span>
     </a>
     <div class="links">
-      <a href="#how" data-i18n="nav.how">Comment ça marche</a>
-      <a href="#prospection" data-i18n="nav.features">Fonctionnalités</a>
+      <a href="how-it-works.html" data-i18n="nav.how">Comment ça marche</a>
+      <a href="#crm-intelligence" data-i18n="nav.features">Fonctionnalites</a>
       <a href="#beta" data-i18n="nav.pricing">Beta</a>
       <a href="#faq" data-i18n="nav.faq">FAQ</a>
       <a href="#blog" data-i18n="nav.blog">Blog</a>
@@ -215,24 +215,23 @@
   <section class="hero" id="top">
     <div class="container hero-grid">
       <div class="hero-text">
-        <span class="eyebrow" data-i18n="hero.eyebrow">PROSPECTION + ACTIVATION CLIENT — UNE SEULE PLATEFORME</span>
-        <h1 class="h-display" style="margin-top:24px;">
-          <span data-i18n="hero.title_a">Orchestre ta prospection </span><em class="accent" data-i18n="hero.title_em">et</em><span data-i18n="hero.title_b"> tes clients avec l'IA.</span>
+        <h1 class="h-display">
+          <span data-i18n="hero.title_a">Des patterns qui closent. </span><em class="accent" data-i18n="hero.title_em">À chaque</em><span data-i18n="hero.title_b"> deal.</span>
         </h1>
-        <p class="body large" style="margin-top:28px; max-width:560px;" data-i18n="hero.sub">
-          baakalai gère le cycle complet — de la première campagne froide jusqu'au follow-up qui sauve un deal stagnant. Quatre agents apprennent de chaque interaction. Tu valides, ils exécutent.
+        <p class="body large" style="margin-top:28px; max-width:540px;" data-i18n="hero.sub">
+          Chaque campagne, chaque deal, chaque reponse client cree un pattern. baakalai les memorise, les consolide, et les rejoue au bon moment — relances, prospection, activation. Automatiquement.
         </p>
         <div style="margin-top:36px; display:flex; gap:12px; flex-wrap:wrap;">
           <a href="#book" class="btn btn-primary">
-            <span data-i18n="hero.cta">Commencer avec baakalai</span>
+            <span data-i18n="hero.cta">Rejoindre la beta</span>
             <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
           </a>
-          <a href="#how" class="btn btn-ghost" data-i18n="hero.cta_2">Voir comment ça marche</a>
+          <a href="#how" class="btn btn-ghost" data-i18n="hero.cta_2">Voir comment ca marche</a>
         </div>
         <div style="margin-top:40px; display:flex; gap:24px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--grey-500);">
-          <span data-i18n="hero.tag_1">75 $/utilisateur/mois</span>
+          <span data-i18n="hero.tag_1">Beta privee — places limitees</span>
           <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_2">Setup en 12 minutes</span>
+          <span data-i18n="hero.tag_2">Operationnel en 30 min</span>
         </div>
       </div>
 
@@ -247,7 +246,7 @@
           <div class="browser-body">
             <div class="chat-bubble them">
               <div class="avatar">YO</div>
-              <div class="msg">Cible : DAF cabinets compta 50–200 employés en France. Trigger : levée Q4. Objectif : 10 RDV/semaine.</div>
+              <div class="msg">J'ai 23 deals qui stagnent depuis 2 semaines. Utilise ce qui a marche sur les derniers pour les relancer.</div>
             </div>
             <div class="chat-bubble me" id="hero-reply">
               <div class="avatar">
@@ -285,11 +284,11 @@
         <span class="name">Lemlist</span>
         <span class="name">Apollo</span>
         <span class="name">Smartlead</span>
-        <span class="name">LinkedIn</span>
+        <span class="name">Notion</span>
+        <span class="name">Airtable</span>
+        <span class="name">Folk</span>
         <span class="name">Gmail</span>
         <span class="name">Outlook</span>
-        <span class="name">Calendly</span>
-        <span class="name">Zapier</span>
       </div>
     </div>
   </div>
@@ -313,43 +312,54 @@
     </div>
   </section>
 
-  <!-- ──────── PROSPECTION FEATURE ──────── -->
-  <section class="section" id="prospection">
+  <!-- ──────── CRM INTELLIGENCE FEATURE ──────── -->
+  <section class="section" id="crm-intelligence">
     <div class="container feature-block">
       <div class="feature-text">
-        <span class="eyebrow" data-i18n="prosp.eyebrow">PROSPECTION</span>
+        <span class="eyebrow" data-i18n="crm.eyebrow">CRM INTELLIGENCE</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="prosp.title_a">L'outbound qui </span><em class="accent" data-i18n="prosp.title_em">refine tout seul</em><span data-i18n="prosp.title_b">.</span>
+          <span data-i18n="crm.title_a">Ton CRM sait tout. </span><em class="accent" data-i18n="crm.title_em">Il ne te dit</em><span data-i18n="crm.title_b"> rien.</span>
         </h2>
-        <p class="body large" data-i18n="prosp.sub">Crée une campagne en discutant avec Claude. baakalai génère 3 variantes, les A/B teste, et garde celle qui marche — sans que tu aies à toucher au copywriting.</p>
-        <ul class="feature-list" id="prosp-list"></ul>
+        <p class="body large" data-i18n="crm.sub">baakalai connecte ton CRM existant et le transforme en copilote commercial : churn prediction, deal coaching, data cleaning, upsell detection — sans changer d'outil.</p>
+        <ul class="feature-list" id="crm-list"></ul>
       </div>
 
-      <!-- Mockup: chat composer -->
+      <!-- Mockup: CRM intelligence dashboard -->
       <div class="mockup">
         <div class="chrome">
           <div class="dots"><span></span><span></span><span></span></div>
-          <div class="url">app.baakal.ai/synapse</div>
+          <div class="url">app.baakal.ai/crm-analytics</div>
         </div>
-        <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;background:var(--paper-2);">
-          <div style="display:flex;gap:10px;align-items:flex-start;">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--lavender);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--ink);">AG</div>
-            <div style="background:var(--paper);border:1px solid var(--border);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;color:var(--ink);max-width:80%;">
-              Cible : DAF cabinets compta 50–200 employés en France. Trigger : levée Q4. Objectif : 10 RDV / semaine.
+        <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border);">
+            <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">23 deals a risque</div>
+            <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--grey-500);text-transform:uppercase;letter-spacing:0.04em;">12 AGENTS ACTIFS</span>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <div style="flex:1;background:var(--primary-soft);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-family:var(--font-mono);font-size:22px;font-weight:600;color:var(--primary-deep);">72%</div>
+              <div style="font-size:11px;color:var(--grey-700);margin-top:2px;">Churn risk</div>
+            </div>
+            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-family:var(--font-mono);font-size:22px;font-weight:600;color:var(--ink);">89/100</div>
+              <div style="font-size:11px;color:var(--grey-700);margin-top:2px;">Data quality</div>
+            </div>
+            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
+              <div style="font-family:var(--font-mono);font-size:22px;font-weight:600;color:#16A34A;">5</div>
+              <div style="font-size:11px;color:var(--grey-700);margin-top:2px;">Upsell ready</div>
             </div>
           </div>
-          <div style="display:flex;gap:10px;align-items:flex-start;flex-direction:row-reverse;">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-              <svg width="14" height="14" viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="#FAFAF9"/></svg>
+          <div style="background:var(--primary-soft);border:1px solid var(--primary);border-radius:12px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+              <div>
+                <div style="font-weight:500;font-size:14px;color:var(--ink);">Atelier Brun · 24 800 EUR</div>
+                <div style="font-family:var(--font-mono);font-size:11px;color:var(--primary-deep);text-transform:uppercase;letter-spacing:0.04em;margin-top:4px;">STAGNANT 18J · DEAL COACH: RELANCER</div>
+              </div>
+              <span style="background:var(--ink);color:var(--paper);padding:4px 8px;border-radius:6px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">REFINE</span>
             </div>
-            <div style="background:var(--primary);color:var(--paper);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;max-width:85%;">
-              Compris. Je génère 3 variantes — un cold email court, un long, une approche LinkedIn-first. Je déploie sur Lemlist dès que tu valides.
+            <div style="font-size:13px;line-height:1.5;color:var(--grey-900);background:var(--paper);border-radius:8px;padding:10px;border:1px dashed var(--primary);">
+              "Salut Marc, je sais que la fin Q2 t'a accapare — je te repropose un creneau jeudi 16h pour finaliser le devis. — Alex"
             </div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
-            <span style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--grey-700);">Variant A · 247 mots</span>
-            <span style="background:var(--paper);border:1px solid var(--primary);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--primary-deep);box-shadow:0 0 0 3px var(--primary-soft);">Variant B · court · 68 mots</span>
-            <span style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--grey-700);">Variant C · LinkedIn</span>
           </div>
         </div>
       </div>
@@ -360,40 +370,82 @@
   <section class="section paper-2" id="activation">
     <div class="container feature-block reverse">
       <div class="feature-text">
-        <span class="eyebrow" data-i18n="crm.eyebrow">ACTIVATION CLIENT</span>
+        <span class="eyebrow" data-i18n="activation.eyebrow">ACTIVATION CLIENT</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="crm.title_a">Tes clients </span><em class="accent" data-i18n="crm.title_em">ne devraient pas</em><span data-i18n="crm.title_b"> mourir dans le pipeline.</span>
+          <span data-i18n="activation.title_a">Tes clients </span><em class="accent" data-i18n="activation.title_em">ne devraient pas</em><span data-i18n="activation.title_b"> mourir dans le pipeline.</span>
         </h2>
-        <p class="body large" data-i18n="crm.sub">baakalai surveille tes deals 24/7, repère ceux qui stagnent ou churnent, et propose le follow-up exact qui les a réveillés la dernière fois.</p>
-        <ul class="feature-list" id="crm-list"></ul>
+        <p class="body large" data-i18n="activation.sub">baakalai surveille tes deals 24/7, repere ceux qui stagnent ou churnent, et envoie le follow-up exact qui les a reveilles la derniere fois — depuis ton propre email.</p>
+        <ul class="feature-list" id="activation-list"></ul>
       </div>
 
-      <!-- Mockup: deal alert -->
+      <!-- Mockup: activation triggers -->
       <div class="mockup">
         <div class="chrome">
           <div class="dots"><span></span><span></span><span></span></div>
-          <div class="url">app.baakal.ai/clients</div>
+          <div class="url">app.baakal.ai/nurture</div>
         </div>
-        <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border);">
-            <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">23 deals à risque</div>
-            <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--grey-500);text-transform:uppercase;letter-spacing:0.04em;">SYNCHRONISÉ · 14:32</span>
+        <div class="body-pad" style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--border);">
+            <div style="font-weight:500;font-size:15px;">8 triggers actifs</div>
+            <span style="font-family:var(--font-mono);font-size:10.5px;color:#16A34A;text-transform:uppercase;">14 emails envoyes aujourd'hui</span>
           </div>
-          <div style="background:var(--primary-soft);border:1px solid var(--primary);border-radius:12px;padding:16px;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-              <div>
-                <div style="font-weight:500;font-size:14px;color:var(--ink);">Atelier Brun · 24 800 €</div>
-                <div style="font-family:var(--font-mono);font-size:11px;color:var(--primary-deep);text-transform:uppercase;letter-spacing:0.04em;margin-top:4px;">STAGNANT 18 JOURS · CHURN 72%</div>
-              </div>
-              <span style="background:var(--ink);color:var(--paper);padding:4px 8px;border-radius:6px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">REFINE</span>
-            </div>
-            <div style="font-size:13px;line-height:1.5;color:var(--grey-900);background:var(--paper);border-radius:8px;padding:10px;border:1px dashed var(--primary);">
-              "Salut Marc, je sais que la fin Q2 t'a accaparé — j'ai relu nos échanges, je te repropose un créneau jeudi 16h pour finaliser le devis sur la base qu'on avait validée. — Alex"
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--paper-2);border-radius:10px;border:1px solid var(--border);">
+            <span style="width:8px;height:8px;border-radius:50%;background:#16A34A;flex-shrink:0;"></span>
+            <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Deal stagnant > 14j</div><div style="font-size:11px;color:var(--grey-500);">5 contacts a relancer</div></div>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--primary-deep);background:var(--primary-soft);padding:4px 8px;border-radius:6px;">AUTO</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--paper-2);border-radius:10px;border:1px solid var(--border);">
+            <span style="width:8px;height:8px;border-radius:50%;background:#16A34A;flex-shrink:0;"></span>
+            <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Deal won — onboarding</div><div style="font-size:11px;color:var(--grey-500);">Email de bienvenue auto</div></div>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--primary-deep);background:var(--primary-soft);padding:4px 8px;border-radius:6px;">AUTO</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--paper-2);border-radius:10px;border:1px solid var(--border);">
+            <span style="width:8px;height:8px;border-radius:50%;background:#EAB308;flex-shrink:0;"></span>
+            <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Upsell opportunity</div><div style="font-size:11px;color:var(--grey-500);">3 clients eligibles</div></div>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--grey-700);background:var(--paper);border:1px solid var(--border);padding:4px 8px;border-radius:6px;">APPROVAL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────── PROSPECTION FEATURE ──────── -->
+  <section class="section" id="prospection">
+    <div class="container feature-block">
+      <div class="feature-text">
+        <span class="eyebrow" data-i18n="prosp.eyebrow">PROSPECTION IA</span>
+        <h2 class="h-section" style="margin-top:18px;">
+          <span data-i18n="prosp.title_a">L'outbound qui </span><em class="accent" data-i18n="prosp.title_em">refine tout seul</em><span data-i18n="prosp.title_b">.</span>
+        </h2>
+        <p class="body large" data-i18n="prosp.sub">Cree une campagne en discutant avec l'IA. baakalai genere 3 variantes, les A/B teste, et garde celle qui marche — sans que tu aies a toucher au copywriting.</p>
+        <ul class="feature-list" id="prosp-list"></ul>
+      </div>
+
+      <!-- Mockup: chat composer -->
+      <div class="mockup">
+        <div class="chrome">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="url">app.baakal.ai/chat</div>
+        </div>
+        <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;background:var(--paper-2);">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--lavender);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--ink);">AG</div>
+            <div style="background:var(--paper);border:1px solid var(--border);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;color:var(--ink);max-width:80%;">
+              Cible : DAF cabinets compta 50-200 employes en France. Trigger : levee Q4. Objectif : 10 RDV / semaine.
             </div>
           </div>
-          <div style="display:flex;gap:8px;">
-            <button style="flex:1;background:var(--ink);color:var(--paper);border-radius:8px;padding:10px;font-size:13px;font-weight:500;">Envoyer maintenant</button>
-            <button style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--grey-700);">Refine</button>
+          <div style="display:flex;gap:10px;align-items:flex-start;flex-direction:row-reverse;">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+              <svg width="14" height="14" viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="#FAFAF9"/></svg>
+            </div>
+            <div style="background:var(--primary);color:var(--paper);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;max-width:85%;">
+              Compris. Je genere 3 variantes — un cold email court, un long, une approche LinkedIn-first. Je deploie sur Lemlist des que tu valides.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+            <span style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--grey-700);">Variant A · 247 mots</span>
+            <span style="background:var(--paper);border:1px solid var(--primary);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--primary-deep);box-shadow:0 0 0 3px var(--primary-soft);">Variant B · court · 68 mots</span>
+            <span style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--grey-700);">Variant C · LinkedIn</span>
           </div>
         </div>
       </div>
@@ -496,9 +548,10 @@
         <div>
           <h5 data-i18n="footer.product">PRODUIT</h5>
           <ul>
-            <li><a href="#how" data-i18n="footer.links.how">Comment ça marche</a></li>
-            <li><a href="#prospection" data-i18n="footer.links.prosp">Prospection</a></li>
-            <li><a href="#activation" data-i18n="footer.links.crm">Activation client</a></li>
+            <li><a href="how-it-works.html" data-i18n="footer.links.how">Comment ça marche</a></li>
+            <li><a href="#crm-intelligence" data-i18n="footer.links.crm">CRM Intelligence</a></li>
+            <li><a href="#activation" data-i18n="footer.links.activation">Activation client</a></li>
+            <li><a href="#prospection" data-i18n="footer.links.prosp">Prospection IA</a></li>
             <li><a href="#synapse" data-i18n="footer.links.synapse">Synapse</a></li>
             <li><a href="#beta" data-i18n="footer.links.pricing">Beta</a></li>
           </ul>
@@ -535,8 +588,8 @@
       const target = document.getElementById('hero-typed');
       if (!target) return;
       const lines = {
-        fr: "Compris. Je génère 3 variantes — un cold email court, un long, et une approche LinkedIn-first. Je déploie sur Lemlist quand tu valides.",
-        en: "Got it. Generating 3 variants — a short cold email, a long one, and a LinkedIn-first approach. I'll deploy to Lemlist as soon as you confirm."
+        fr: "23 deals a risque detectes. Pattern #47 a relance 3 deals similaires le mois dernier — 2 ont close. Je genere les relances avec le meme angle. Tu valides ?",
+        en: "23 at-risk deals detected. Pattern #47 reactivated 3 similar deals last month — 2 closed. Generating follow-ups with the same angle. Approve?"
       };
       let i = 0, mode = 'typing', timer;
       function tick() {
@@ -602,9 +655,10 @@
         </div>
       `).join('');
 
-      // Prosp / CRM lists
-      document.getElementById('prosp-list').innerHTML = d.prosp.list.map(t => `<li>${t}</li>`).join('');
+      // Feature lists
       document.getElementById('crm-list').innerHTML = d.crm.list.map(t => `<li>${t}</li>`).join('');
+      document.getElementById('activation-list').innerHTML = d.activation.list.map(t => `<li>${t}</li>`).join('');
+      document.getElementById('prosp-list').innerHTML = d.prosp.list.map(t => `<li>${t}</li>`).join('');
 
       // Agents
       const icons = {
