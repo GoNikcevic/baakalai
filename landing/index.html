@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>baakalai — les patterns qui closent, a chaque deal</title>
+  <title>baakalai — l'agent qui exploite ton CRM pour générer du CA</title>
   <link rel="icon" href="assets/favicon.svg">
   <link rel="stylesheet" href="site.css">
   <style>
@@ -216,22 +216,22 @@
     <div class="container hero-grid">
       <div class="hero-text">
         <h1 class="h-display">
-          <span data-i18n="hero.title_a">Des patterns qui closent. </span><em class="accent" data-i18n="hero.title_em">À chaque</em><span data-i18n="hero.title_b"> deal.</span>
+          <span data-i18n="hero.title_a">Ton CRM sait déjà qui relancer. </span><em class="accent" data-i18n="hero.title_em">Personne</em><span data-i18n="hero.title_b"> ne le lit.</span>
         </h1>
         <p class="body large" style="margin-top:28px; max-width:540px;" data-i18n="hero.sub">
-          Chaque campagne, chaque deal, chaque reponse client cree un pattern. baakalai les memorise, les consolide, et les rejoue au bon moment — relances, prospection, activation. Automatiquement.
+          baakalai lit ton CRM 24/7, repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner — et agit. Un deal récupéré rembourse l'outil pour des mois.
         </p>
         <div style="margin-top:36px; display:flex; gap:12px; flex-wrap:wrap;">
           <a href="#book" class="btn btn-primary">
             <span data-i18n="hero.cta">Rejoindre la beta</span>
             <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
           </a>
-          <a href="#how" class="btn btn-ghost" data-i18n="hero.cta_2">Voir comment ca marche</a>
+          <a href="#crm-intelligence" class="btn btn-ghost" data-i18n="hero.cta_2">Voir ce que fait l'agent</a>
         </div>
         <div style="margin-top:40px; display:flex; gap:24px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--grey-500);">
-          <span data-i18n="hero.tag_1">Beta privee — places limitees</span>
+          <span data-i18n="hero.tag_1">Opérationnel en 30 min</span>
           <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_2">Operationnel en 30 min</span>
+          <span data-i18n="hero.tag_2">À partir de 49 €/mois</span>
         </div>
       </div>
 
@@ -246,7 +246,7 @@
           <div class="browser-body">
             <div class="chat-bubble them">
               <div class="avatar">YO</div>
-              <div class="msg">J'ai 23 deals qui stagnent depuis 2 semaines. Utilise ce qui a marche sur les derniers pour les relancer.</div>
+              <div class="msg">Mon pipeline a des deals qui dorment. Qu'est-ce qu'on peut récupérer ?</div>
             </div>
             <div class="chat-bubble me" id="hero-reply">
               <div class="avatar">
@@ -332,8 +332,8 @@
         </div>
         <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border);">
-            <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">23 deals a risque</div>
-            <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--grey-500);text-transform:uppercase;letter-spacing:0.04em;">12 AGENTS ACTIFS</span>
+            <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">23 deals récupérables</div>
+            <span style="font-family:var(--font-mono);font-size:10.5px;color:#16A34A;text-transform:uppercase;letter-spacing:0.04em;">74 800 € DE PIPE</span>
           </div>
           <div style="display:flex;gap:10px;">
             <div style="flex:1;background:var(--primary-soft);border-radius:10px;padding:12px;text-align:center;">
@@ -588,8 +588,8 @@
       const target = document.getElementById('hero-typed');
       if (!target) return;
       const lines = {
-        fr: "23 deals a risque detectes. Pattern #47 a relance 3 deals similaires le mois dernier — 2 ont close. Je genere les relances avec le meme angle. Tu valides ?",
-        en: "23 at-risk deals detected. Pattern #47 reactivated 3 similar deals last month — 2 closed. Generating follow-ups with the same angle. Approve?"
+        fr: "23 deals stagnants détectés, 74 800 € de pipe récupérable. Atelier Brun (24 800 €, stagnant 18j) — le même angle a réveillé 3 deals similaires. Je relance ?",
+        en: "23 stagnant deals detected, €74,800 in recoverable pipeline. Atelier Brun (€24,800, stagnant 18d) — same angle reactivated 3 similar deals. Shall I follow up?"
       };
       let i = 0, mode = 'typing', timer;
       function tick() {
@@ -676,18 +676,18 @@
         </div>
       `).join('');
 
-      // Beta program
+      // Pricing tiers
       const check = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
       document.getElementById('beta-grid').innerHTML = `
         <div class="beta-card reveal">
           <div class="beta-card-head">
-            <span class="beta-tag">CE QU'ON OFFRE AUX BETA TESTERS</span>
+            <span class="beta-tag">${lang === 'en' ? 'PLANS' : 'PALIERS'}</span>
           </div>
           <ul class="feats">${d.pricing.perks.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
         </div>
         <div class="beta-card reveal">
           <div class="beta-card-head">
-            <span class="beta-tag">CE QU'ON ATTEND DE TOI</span>
+            <span class="beta-tag">${lang === 'en' ? 'BETA REQUIREMENTS' : 'PRÉ-REQUIS BETA'}</span>
           </div>
           <ul class="feats">${d.pricing.expect.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
           <a href="#book" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:24px;">${d.pricing.cta}</a>

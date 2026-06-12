@@ -6,7 +6,7 @@
 
 ## 1. What is Baakalai
 
-baakalai is a memory system that orchestrates prospection and client management. It connects to your existing CRM (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable, Folk) and outreach tools (Lemlist, Apollo, Smartlead). 12 AI agents analyze every deal, every campaign, every response — and build a collective memory that compounds over time. The memory drives everything: follow-ups on stagnant deals, outbound campaigns, churn alerts, activation emails. The more you use baakalai, the sharper it gets.
+baakalai is the agent that exploits your CRM to generate revenue. It connects to your existing CRM (Pipedrive, HubSpot, Salesforce, Odoo) and reads your data 24/7 — spotting stagnant deals to reactivate, clients ready to upsell, accounts about to churn. It acts: sends the right follow-up, at the right time, from the user's own email. The outbound is a door, not the product. The real value is making the data the client already paid for generate CA without acquisition cost. 12 AI agents build a collective memory that compounds — the more you use baakalai, the sharper it gets.
 
 - **CRM Intelligence** : Connect your existing CRM, get churn prediction (0-100), deal coaching, data cleaning, upsell/cross-sell detection, win/loss analysis — without switching tools
 - **Activation** : 8 pre-built triggers (deal won, stagnant, lost, inactive, onboarding, renewal, upsell, feedback), personalized follow-ups from CRM history, sent via user's own SMTP
@@ -283,9 +283,9 @@ Claude can propose these structured actions in the chat (JSON blocks):
 
 - **Vision**: Full customer lifecycle hub — outreach + CRM + analytics (Amplitude/GA) + billing (Stripe/Odoo) all connected, AI analyzes everything and triggers the right action
 - **ICP**: SMB services B2B (10-400 employees) + membership organizations. Sectors: crypto, telecom, cybersecurity, agencies, biotech, health, freelance
-- **Pricing**: $75/user/month (team plan up to 5 members)
+- **Pricing**: Starter 49€/mo, Growth 149€/mo, Scale 349€/mo (team plan up to 5 members)
 - **Competitors**: Attio (AI-native CRM, $29-69/seat, no outbound), SalesCaptain (~EUR30k/4 months agency), GTM Studio (~EUR140k/7 months agency), Lemlist/Apollo (outreach only, no CRM intelligence)
-- **Key differentiator**: Memory system that connects to your EXISTING CRM (no migration) + 12 agents + prospection + activation in one tool. Collective memory compounds over time — every deal teaches the next one. No competitor has this.
+- **Key differentiator**: Agent that exploits existing CRM data (no migration) to generate revenue — deal reactivation, upsell detection, churn prevention, data cleaning. Revenue intelligence for SMBs, a segment structurally inaccessible to Gong/Clari (40-150k€/year). Collective memory compounds over time. Prospection is a door, not the product.
 - **Target onboarding time**: <30 minutes to first campaign (currently ~25-35 min)
 - **Owner**: Goran Nikcevic (goran@oenobiote.com)
 
