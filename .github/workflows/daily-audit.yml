@@ -15,11 +15,11 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run pattern audit
         id: audit
@@ -37,7 +37,7 @@ jobs:
 
       - name: Create issue if HIGH severity found
         if: contains(steps.audit.outputs.findings, 'HIGH')
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
