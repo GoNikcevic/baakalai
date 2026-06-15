@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Versioned pre-commit hook. Enabled via: git config core.hooksPath .githooks
+# (run scripts/install-hooks.sh once per clone). Bypass with: git commit --no-verify
+exec node "$(git rev-parse --show-toplevel)/scripts/pre-commit-audit.js"

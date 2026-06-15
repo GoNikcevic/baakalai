@@ -5,6 +5,12 @@ on:
     - cron: '0 7 * * *'  # Every day at 7:00 UTC
   workflow_dispatch: {}    # Manual trigger
 
+# The default GITHUB_TOKEN is read-only, so the "Commit ERRORS.md updates"
+# push was failing with a 403 every day. Grant the writes this job needs.
+permissions:
+  contents: write   # push ERRORS.md updates back to the repo
+  issues: write     # open/comment the HIGH-severity audit issue
+
 jobs:
   audit:
     runs-on: ubuntu-latest
