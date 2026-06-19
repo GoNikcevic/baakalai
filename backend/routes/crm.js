@@ -16,8 +16,10 @@ const folk = require('../api/folk');
 const odoo = require('../api/odoo');
 const notionCrm = require('../api/notion-crm');
 const airtableCrm = require('../api/airtable-crm');
-const { decrypt } = require('../config/crypto');
+const { decrypt, encrypt } = require('../config/crypto');
 const { validateId, validateEnum } = require('../middleware/validate-params');
+const crypto = require('crypto');
+const logger = require('../lib/logger');
 
 const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 const router = Router();
@@ -1553,8 +1555,39 @@ router.post('/auto-clean', async (req, res, next) => {
   }
 });
 
-// Helper: get CRM token for any provider
+// Helper: get CRM token for any provider (with auto-refresh for Salesforce OAuth)
 async function getUserCrmToken(userId, provider) {
+  if (provider === 'salesforce') {
+    const integration = await db.userIntegrations.get(userId, 'salesforce');
+    if (!integration) return null;
+    try {
+      // Auto-refresh if token expires within 5 minutes and we have a refresh_token
+      if (integration.refresh_token && integration.expires_at) {
+        const expiresAt = new Date(integration.expires_at).getTime();
+        if (expiresAt < Date.now() + 5 * 60 * 1000 && process.env.SALESFORCE_CLIENT_ID) {
+          const refreshToken = decrypt(integration.refresh_token);
+          const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              grant_type: 'refresh_token',
+              refresh_token: refreshToken,
+              client_id: process.env.SALESFORCE_CLIENT_ID,
+              client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+            }),
+          });
+          if (tokenRes.ok) {
+            const tokens = await tokenRes.json();
+            const encryptedAccess = encrypt(tokens.access_token);
+            const expiresAtNew = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+            await db.userIntegrations.upsert(userId, 'salesforce', { accessToken: encryptedAccess, expiresAt: expiresAtNew });
+            return tokens.access_token;
+          }
+        }
+      }
+      return decrypt(integration.access_token);
+    } catch { return null; }
+  }
   const { getUserKey } = require('../config');
   return getUserKey(userId, provider);
 }
@@ -1624,6 +1657,174 @@ router.delete('/autopilot/queue/:id', async (req, res, next) => {
       [req.params.id, req.user.id]
     );
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// =============================================
+// Salesforce OAuth
+// =============================================
+
+const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : 'http://localhost:5173');
+
+const _sfOauthStates = new Map();
+
+// Cleanup expired states every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of _sfOauthStates) {
+    if (val.expiresAt < now) _sfOauthStates.delete(key);
+  }
+}, 300000);
+
+// GET /api/crm/salesforce/connect — Start Salesforce OAuth flow
+router.get('/salesforce/connect', (req, res, next) => {
+  try {
+    const clientId = process.env.SALESFORCE_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ error: 'Salesforce OAuth not configured' });
+    if (_sfOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
+
+    const state = crypto.randomBytes(16).toString('hex');
+    _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000 });
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: APP_URL + '/api/crm/salesforce/callback',
+      scope: 'api refresh_token offline_access',
+      state,
+    });
+
+    res.json({ url: `https://login.salesforce.com/services/oauth2/authorize?${params}` });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/salesforce/callback — Salesforce OAuth callback
+router.get('/salesforce/callback', async (req, res) => {
+  const { code, state } = req.query;
+  const oauthData = _sfOauthStates.get(state);
+
+  if (!oauthData || oauthData.expiresAt < Date.now()) {
+    return res.redirect(APP_URL + '/settings?crm_error=invalid_state');
+  }
+  _sfOauthStates.delete(state);
+
+  try {
+    const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        client_id: process.env.SALESFORCE_CLIENT_ID,
+        client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+        redirect_uri: APP_URL + '/api/crm/salesforce/callback',
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const err = await tokenRes.text();
+      logger.error('salesforce-oauth', `Token exchange failed: ${err}`);
+      return res.redirect(APP_URL + '/settings?crm_error=salesforce_token_failed');
+    }
+
+    const tokens = await tokenRes.json();
+    // tokens: { access_token, refresh_token, instance_url, id, token_type, issued_at, signature }
+
+    const encryptedAccess = encrypt(tokens.access_token);
+    const encryptedRefresh = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
+    // Salesforce access tokens expire in ~2 hours but no expires_in field is returned
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+
+    await db.userIntegrations.upsert(oauthData.userId, 'salesforce', {
+      accessToken: encryptedAccess,
+      refreshToken: encryptedRefresh,
+      metadata: { instance_url: tokens.instance_url, oauth: true },
+      expiresAt,
+      instanceUrl: tokens.instance_url,
+    });
+
+    logger.info('salesforce-oauth', `Salesforce connected for user ${oauthData.userId}: ${tokens.instance_url}`);
+    res.redirect(APP_URL + '/settings?crm_connected=salesforce');
+  } catch (err) {
+    logger.error('salesforce-oauth', `Salesforce OAuth failed: ${err.message}`);
+    res.redirect(APP_URL + '/settings?crm_error=salesforce_failed');
+  }
+});
+
+// POST /api/crm/salesforce/refresh-token — Refresh Salesforce access token
+router.post('/salesforce/refresh-token', async (req, res, next) => {
+  try {
+    const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
+    if (!integration || !integration.refresh_token) {
+      return res.status(400).json({ error: 'No Salesforce refresh token available' });
+    }
+
+    const refreshToken = decrypt(integration.refresh_token);
+    const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: process.env.SALESFORCE_CLIENT_ID,
+        client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const err = await tokenRes.text();
+      logger.error('salesforce-oauth', `Token refresh failed: ${err}`);
+      return res.status(502).json({ error: 'Salesforce token refresh failed' });
+    }
+
+    const tokens = await tokenRes.json();
+    const encryptedAccess = encrypt(tokens.access_token);
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+
+    await db.userIntegrations.upsert(req.user.id, 'salesforce', {
+      accessToken: encryptedAccess,
+      expiresAt,
+    });
+
+    if (tokens.instance_url) {
+      await db.query(
+        `UPDATE user_integrations SET instance_url = $1 WHERE user_id = $2 AND provider = 'salesforce'`,
+        [tokens.instance_url, req.user.id]
+      );
+    }
+
+    logger.info('salesforce-oauth', `Token refreshed for user ${req.user.id}`);
+    res.json({ ok: true, expiresAt });
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/salesforce/manual-connect — Store manually provided Salesforce credentials
+router.post('/salesforce/manual-connect', async (req, res, next) => {
+  try {
+    const { accessToken, instanceUrl } = req.body;
+    if (!accessToken || !instanceUrl) {
+      return res.status(400).json({ error: 'accessToken and instanceUrl are required' });
+    }
+
+    const encryptedAccess = encrypt(accessToken);
+    await db.userIntegrations.upsert(req.user.id, 'salesforce', {
+      accessToken: encryptedAccess,
+      metadata: { instance_url: instanceUrl, oauth: false },
+      instanceUrl,
+    });
+
+    // Test the connection
+    try {
+      const sf = require('../api/salesforce');
+      await sf.listContacts(instanceUrl, accessToken);
+      logger.info('salesforce-manual', `Salesforce connected for user ${req.user.id}: ${instanceUrl}`);
+      res.json({ ok: true, status: 'connected' });
+    } catch (testErr) {
+      logger.warn('salesforce-manual', `Connection test failed: ${testErr.message}`);
+      res.json({ ok: true, status: 'saved_but_test_failed', message: testErr.message });
+    }
   } catch (err) { next(err); }
 });
 

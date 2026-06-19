@@ -633,16 +633,23 @@ const memoryPatterns = {
   },
 
   async create(data) {
+    // Derive confidence_score from text confidence if not explicitly provided
+    const confidenceText = data.confidence || 'Faible';
+    const confidenceScore = data.confidence_score ?? data.confidenceScore
+      ?? { Haute: 0.90, Moyenne: 0.60, Faible: 0.30 }[confidenceText]
+      ?? 0.30;
+
     const result = await query(`
-      INSERT INTO memory_patterns (pattern, category, data, confidence, date_discovered, sectors, targets,
+      INSERT INTO memory_patterns (pattern, category, data, confidence, confidence_score, date_discovered, sectors, targets,
         ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `, [
       data.pattern,
       data.category,
       data.data || null,
-      data.confidence || 'Faible',
+      confidenceText,
+      confidenceScore,
       data.dateDiscovered || new Date().toISOString().split('T')[0],
       data.sectors || [],
       data.targets || [],
@@ -663,7 +670,7 @@ const memoryPatterns = {
     let i = 1;
     const mapping = {
       pattern: 'pattern', category: 'category', data: 'data',
-      confidence: 'confidence',
+      confidence: 'confidence', confidence_score: 'confidence_score', confidenceScore: 'confidence_score',
       date_discovered: 'date_discovered', dateDiscovered: 'date_discovered',
       sectors: 'sectors', targets: 'targets',
       ab_category: 'ab_category', abCategory: 'ab_category',
@@ -794,14 +801,14 @@ const memoryPatterns = {
   async decayAndPromote() {
     // Decay: Moyenne → Faible if not confirmed in 60 days (run BEFORE Haute→Moyenne to avoid double-decay)
     const decayMoyenne = await query(
-      `UPDATE memory_patterns SET confidence = 'Faible'
+      `UPDATE memory_patterns SET confidence = 'Faible', confidence_score = 0.30
        WHERE confidence = 'Moyenne' AND dismissed_at IS NULL AND applied IS NOT TRUE
          AND COALESCE(last_confirmed_at, date_discovered) < now() - interval '60 days'
        RETURNING id`
     );
     // Decay: Haute → Moyenne if not confirmed in 60 days (skip user-approved patterns)
     const decayHaute = await query(
-      `UPDATE memory_patterns SET confidence = 'Moyenne'
+      `UPDATE memory_patterns SET confidence = 'Moyenne', confidence_score = 0.60
        WHERE confidence = 'Haute' AND dismissed_at IS NULL AND applied IS NOT TRUE
          AND COALESCE(last_confirmed_at, date_discovered) < now() - interval '60 days'
        RETURNING id`
@@ -809,7 +816,7 @@ const memoryPatterns = {
 
     // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days
     const promoteToMoyenne = await query(
-      `UPDATE memory_patterns SET confidence = 'Moyenne'
+      `UPDATE memory_patterns SET confidence = 'Moyenne', confidence_score = 0.60
        WHERE confidence = 'Faible' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 3
          AND last_confirmed_at > now() - interval '30 days'
@@ -817,7 +824,7 @@ const memoryPatterns = {
     );
     // Promote: Moyenne → Haute if confirmations >= 8 and confirmed in last 30 days
     const promoteToHaute = await query(
-      `UPDATE memory_patterns SET confidence = 'Haute'
+      `UPDATE memory_patterns SET confidence = 'Haute', confidence_score = 0.90
        WHERE confidence = 'Moyenne' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 8
          AND last_confirmed_at > now() - interval '30 days'
@@ -1578,6 +1585,10 @@ const userIntegrations = {
         sets.push(`expires_at = $${i++}`);
         values.push(data.expiresAt);
       }
+      if (data.instanceUrl !== undefined) {
+        sets.push(`instance_url = $${i++}`);
+        values.push(data.instanceUrl);
+      }
       values.push(userId, provider);
       const result = await query(
         `UPDATE user_integrations SET ${sets.join(', ')} WHERE user_id = $${i++} AND provider = $${i} RETURNING *`,
@@ -1586,8 +1597,8 @@ const userIntegrations = {
       return result.rows[0] || null;
     }
     const result = await query(`
-      INSERT INTO user_integrations (user_id, provider, access_token, refresh_token, metadata, expires_at)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO user_integrations (user_id, provider, access_token, refresh_token, metadata, expires_at, instance_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `, [
       userId,
@@ -1596,6 +1607,7 @@ const userIntegrations = {
       data.refreshToken || null,
       data.metadata ? (typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata)) : '{}',
       data.expiresAt || null,
+      data.instanceUrl || null,
     ]);
     return result.rows[0];
   },
