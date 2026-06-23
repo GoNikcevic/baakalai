@@ -133,7 +133,7 @@ export default function SettingsPage() {
   const EXTENDED_TOOLS = getExtendedTools(lang);
   const [preferences, setPreferences] = useState(() => {
     const saved = localStorage.getItem('bakal-preferences');
-    return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : { ...DEFAULT_PREFERENCES };
+    try { return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : { ...DEFAULT_PREFERENCES }; } catch { return { ...DEFAULT_PREFERENCES }; }
   });
   const [theme, setTheme] = useState(() =>
     document.documentElement.getAttribute('data-theme') || 'light'
@@ -996,6 +996,29 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {/* Restart onboarding */}
+      <div className="card" style={{ marginTop: 24 }}>
+        <div className="card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{en ? 'Onboarding wizard' : 'Assistant de configuration'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              {en ? 'Re-run the setup wizard to update your company profile and connections.' : 'Relancez l\'assistant pour mettre à jour votre profil et vos connexions.'}
+            </div>
+          </div>
+          <button className="btn btn-ghost" onClick={() => {
+            localStorage.removeItem('bakal_onboarding_complete');
+            const tkn = localStorage.getItem('bakal_token');
+            fetch('/api/auth/onboarding-reset', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
+            }).catch(() => {});
+            window.location.reload();
+          }}>
+            {en ? 'Restart onboarding' : 'Relancer l\'onboarding'}
+          </button>
+        </div>
+      </div>
+
       {/* Danger Zone */}
       <DeleteAccountSection t={t} showToast={showToast} lang={lang} />
       </div>
@@ -1013,7 +1036,8 @@ function DeleteAccountSection({ t, showToast, lang }) {
   const [deleting, setDeleting] = useState(false);
 
   // Check if user is OAuth-only (no password_hash)
-  const user = JSON.parse(localStorage.getItem('bakal_user') || '{}');
+  let user = {};
+  try { user = JSON.parse(localStorage.getItem('bakal_user') || '{}'); } catch { /* ignore */ }
   const isOAuth = !user.hasPassword && user.hasPassword !== undefined;
 
   async function handleDelete() {

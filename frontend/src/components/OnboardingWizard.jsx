@@ -609,14 +609,23 @@ export default function OnboardingWizard({ onComplete }) {
             {saving ? t('wizard.saving') : t('wizard.continue')}
           </button>
         ) : (
-          <button className="btn btn-primary" onClick={next} disabled={step === 0 && uploadedDocs.length === 0}>
-            {step === 0 && uploadedDocs.length === 0
-              ? (en ? 'Upload docs to continue' : 'Uploadez des docs pour continuer')
-              : t('wizard.continue')}
+          <button className="btn btn-primary" onClick={next}>
+            {t('wizard.continue')}
           </button>
         )}
       </div>
     );
+  }
+
+  /* ─── Skip / close handler ─── */
+  function handleSkip() {
+    const tkn = localStorage.getItem('bakal_token');
+    fetch('/api/auth/onboarding-complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
+    }).catch(() => {});
+    localStorage.setItem('bakal_onboarding_complete', 'true');
+    if (onComplete) onComplete();
   }
 
   /* ─── Main render ─── */
@@ -625,6 +634,19 @@ export default function OnboardingWizard({ onComplete }) {
     <div className="wizard-overlay">
       <div className="wizard-modal">
         <div className="wizard-header">
+          <button
+            onClick={handleSkip}
+            title={t('wizard.skipOnboarding')}
+            style={{
+              position: 'absolute', top: 16, right: 16, background: 'none', border: 'none',
+              cursor: 'pointer', fontSize: 20, color: 'var(--text-muted)', lineHeight: 1,
+              padding: '4px 8px', borderRadius: 6,
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            ✕
+          </button>
           <div className="wizard-logo">
             <svg width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
               <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round"/>
@@ -647,15 +669,7 @@ export default function OnboardingWizard({ onComplete }) {
           {renderActions()}
 
           {step < TOTAL_STEPS - 1 && (
-            <div className="wizard-skip" onClick={() => {
-              const tkn = localStorage.getItem('bakal_token');
-              fetch('/api/auth/onboarding-complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
-              }).catch(() => {});
-              localStorage.setItem('bakal_onboarding_complete', 'true');
-              if (onComplete) onComplete();
-            }}>
+            <div className="wizard-skip" onClick={handleSkip}>
               {t('wizard.skipOnboarding')}
             </div>
           )}

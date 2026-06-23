@@ -533,6 +533,16 @@ router.post('/onboarding-complete', requireAuth, async (req, res, next) => {
   }
 });
 
+// POST /api/auth/onboarding-reset — Allow user to re-run onboarding wizard
+router.post('/onboarding-reset', requireAuth, async (req, res, next) => {
+  try {
+    await db.query('UPDATE users SET onboarding_complete = false WHERE id = $1', [req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/auth/exchange-code — Exchange one-time auth code for tokens
 router.post('/exchange-code', async (req, res) => {
   const { code } = req.body;

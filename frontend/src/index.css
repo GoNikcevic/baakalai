@@ -2436,7 +2436,7 @@ body {
 }
 @keyframes wizardSlideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 .wizard-header {
-  padding: 32px 32px 0; text-align: center;
+  padding: 32px 32px 0; text-align: center; position: relative;
 }
 .wizard-logo { font-size: 36px; margin-bottom: 8px; }
 .wizard-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
