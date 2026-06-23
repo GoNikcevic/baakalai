@@ -427,7 +427,7 @@ export default function CRMDiagnosticReport({ onClose }) {
 
         {/* Footer actions */}
         <div style={styles.footer}>
-          <button className="btn btn-ghost" onClick={() => handleNav('/crm-analytics')}>
+          <button className="btn btn-ghost" onClick={() => handleNav('/analytics')}>
             {t('diagnostic.goToHealth')}
           </button>
           <div style={{ display: 'flex', gap: 8 }}>

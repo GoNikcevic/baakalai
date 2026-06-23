@@ -13,6 +13,8 @@
     "clients": "Clients",
     "signals": "Signaux",
     "nurture": "Activation",
+    "activation": "Activation",
+    "analytics": "Analytics",
     "crmAnalytics": "CRM Analytics",
     "membership": "Analytics Clients",
     "help": "Aide",

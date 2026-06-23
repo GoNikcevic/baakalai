@@ -19,13 +19,9 @@ const NAV_ITEMS = [
   { i18nKey: 'nav.assistant',    to: '/chat',          icon: 'chat' },
   { i18nKey: 'nav.dashboard',    to: '/dashboard',     icon: 'dashboard',  end: true },
   { i18nKey: 'nav.campaigns',    to: '/campaigns',     icon: 'campaigns', adminOnly: true },
-  { i18nKey: 'nav.memory',       to: '/memory',        icon: 'memory', adminOnly: true },
   { i18nKey: 'nav.clients',      to: '/clients',       icon: 'clients' },
-  { i18nKey: 'nav.signals',      to: '/signals',       icon: 'signals' },
-  { i18nKey: 'nav.nurture',      to: '/nurture',       icon: 'nurture' },
-  { i18nKey: 'nav.crmAnalytics', to: '/crm-analytics', icon: 'crm', adminOnly: true },
-  { i18nKey: 'nav.membership',   to: '/membership',    icon: 'crm', adminOnly: true },
-  { i18nKey: 'nav.profile',      to: '/profil',        icon: 'profil' },
+  { i18nKey: 'nav.activation',   to: '/activation',    icon: 'nurture' },
+  { i18nKey: 'nav.analytics',    to: '/analytics',     icon: 'crm', adminOnly: true },
   { i18nKey: 'nav.settings',     to: '/settings',      icon: 'settings', adminOnly: true },
   { i18nKey: 'nav.help',         to: '/help',          icon: 'settings' },
 ];
@@ -34,8 +30,8 @@ const NAV_ITEMS = [
 const MOBILE_NAV = [
   { i18nKey: 'nav.chat',        to: '/chat',        icon: 'chat' },
   { i18nKey: 'nav.dashboard',   to: '/dashboard',   icon: 'dashboard' },
-  { i18nKey: 'nav.campaigns',   to: '/campaigns',   icon: 'campaigns' },
-  { i18nKey: 'nav.performance', to: '/performance',  icon: 'reports' },
+  { i18nKey: 'nav.clients',     to: '/clients',     icon: 'clients' },
+  { i18nKey: 'nav.activation',  to: '/activation',  icon: 'nurture' },
   { i18nKey: 'nav.settings',    to: '/settings',    icon: 'settings' },
 ];
 

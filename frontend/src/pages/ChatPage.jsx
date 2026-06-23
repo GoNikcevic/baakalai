@@ -1125,7 +1125,7 @@ function SignalSearchCard({ metadata }) {
           <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>
             ✅ {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
           </div>
-          <a href="/signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
+          <a href="/activation" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
             {en ? 'View signals →' : 'Voir les signaux →'}
           </a>
         </div>
@@ -1972,7 +1972,7 @@ export default function ChatPage() {
           id: m.id || Date.now() + Math.random(),
           role: m.role,
           content: m.content,
-          metadata: m.metadata ? (typeof m.metadata === 'string' ? JSON.parse(m.metadata) : m.metadata) : null,
+          metadata: m.metadata ? (typeof m.metadata === 'string' ? (() => { try { return JSON.parse(m.metadata); } catch { return null; } })() : m.metadata) : null,
           animate: false,
         })));
         setShowWelcome(false);

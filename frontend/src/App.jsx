@@ -32,15 +32,10 @@ const CampaignsList = lazyRetry(() => import('./pages/CampaignsList'))
 const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'))
 const PerformancePage = lazyRetry(() => import('./pages/PerformancePage'))
 const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
-const MemoryExplorerPage = lazyRetry(() => import('./pages/MemoryExplorerPage'))
-const ProfilePage = lazyRetry(() => import('./pages/ProfilePage'))
-const SettingsPage = lazyRetry(() => import('./pages/SettingsPage'))
-const IntegrationsPage = lazyRetry(() => import('./pages/IntegrationsPage'))
-const CRMAnalyticsPage = lazyRetry(() => import('./pages/CRMAnalyticsPage'))
 const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
-const NurturePage = lazyRetry(() => import('./pages/NurturePage'))
-const SignalsPage = lazyRetry(() => import('./pages/SignalsPage'))
-const MembershipPage = lazyRetry(() => import('./pages/MembershipPage'))
+const ActivationPage = lazyRetry(() => import('./pages/ActivationPage'))
+const AnalyticsPage = lazyRetry(() => import('./pages/AnalyticsPage'))
+const SettingsWrapper = lazyRetry(() => import('./pages/SettingsWrapper'))
 const HelpPage = lazyRetry(() => import('./pages/HelpPage'))
 const JoinTeamPage = lazyRetry(() => import('./pages/JoinTeamPage'))
 const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
@@ -184,20 +179,23 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/campaigns" element={<CampaignsList />} />
             <Route path="/campaigns/:id" element={<CampaignDetailRoute />} />
-            <Route path="/copyeditor" element={<Navigate to="/campaigns" replace />} />
+            <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/activation" element={<ActivationPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/settings" element={<SettingsWrapper />} />
             <Route path="/performance" element={<PerformancePage />} />
             <Route path="/recos" element={<RecosPage />} />
-            <Route path="/memory" element={<MemoryExplorerPage />} />
-            <Route path="/profil" element={<ProfilePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/integrations" element={<IntegrationsPage />} />
-            <Route path="/crm-analytics" element={<CRMAnalyticsPage />} />
-            <Route path="/clients" element={<ClientsPage />} />
-            <Route path="/signals" element={<SignalsPage />} />
-            <Route path="/nurture" element={<NurturePage />} />
-            <Route path="/membership" element={<MembershipPage />} />
             <Route path="/help" element={<HelpPage />} />
             <Route path="/join/:code" element={<JoinTeamPage />} />
+            {/* Redirects for old routes */}
+            <Route path="/nurture" element={<Navigate to="/activation" replace />} />
+            <Route path="/signals" element={<Navigate to="/activation" replace />} />
+            <Route path="/crm-analytics" element={<Navigate to="/analytics" replace />} />
+            <Route path="/membership" element={<Navigate to="/analytics" replace />} />
+            <Route path="/profil" element={<Navigate to="/settings" replace />} />
+            <Route path="/memory" element={<Navigate to="/settings" replace />} />
+            <Route path="/integrations" element={<Navigate to="/settings" replace />} />
+            <Route path="/copyeditor" element={<Navigate to="/campaigns" replace />} />
             <Route path="/" element={<Navigate to="/chat" replace />} />
             <Route path="*" element={<Navigate to="/chat" replace />} />
           </Route>

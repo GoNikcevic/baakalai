@@ -13,8 +13,8 @@ import { request } from '../services/api-client';
 
 const STEP_CONFIG = [
   { key: 'accountCreated', route: null },
-  { key: 'crmConnected', route: '/integrations' },
-  { key: 'emailConnected', route: '/integrations' },
+  { key: 'crmConnected', route: '/settings' },
+  { key: 'emailConnected', route: '/settings' },
   { key: 'contactsImported', route: '/clients' },
   { key: 'firstCampaign', route: '/chat' },
   { key: 'firstLaunch', route: '/campaigns' },
