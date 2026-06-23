@@ -12,6 +12,7 @@ import { disconnect as disconnectSocket } from '../services/socket';
 import { useSocketEvents } from '../hooks/useSocketEvents';
 import CampaignCreatorModal from './CampaignCreatorModal';
 import NotificationBell from './NotificationBell';
+import HelpWidget from './HelpWidget';
 
 /* ─── Sidebar nav items (keys reference i18n nav.* keys) ─── */
 // adminOnly: only visible to admins and solo users
@@ -23,7 +24,6 @@ const NAV_ITEMS = [
   { i18nKey: 'nav.activation',   to: '/activation',    icon: 'nurture' },
   { i18nKey: 'nav.analytics',    to: '/analytics',     icon: 'crm', adminOnly: true },
   { i18nKey: 'nav.settings',     to: '/settings',      icon: 'settings', adminOnly: true },
-  { i18nKey: 'nav.help',         to: '/help',          icon: 'settings' },
 ];
 
 /* ─── Mobile bottom nav (subset) ─── */
@@ -273,6 +273,8 @@ export default function Layout() {
       {showCreatorModal && (
         <CampaignCreatorModal onClose={() => setShowCreatorModal(false)} />
       )}
+
+      <HelpWidget />
     </div>
   );
 }

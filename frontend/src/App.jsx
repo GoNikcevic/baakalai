@@ -36,7 +36,6 @@ const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
 const ActivationPage = lazyRetry(() => import('./pages/ActivationPage'))
 const AnalyticsPage = lazyRetry(() => import('./pages/AnalyticsPage'))
 const SettingsWrapper = lazyRetry(() => import('./pages/SettingsWrapper'))
-const HelpPage = lazyRetry(() => import('./pages/HelpPage'))
 const JoinTeamPage = lazyRetry(() => import('./pages/JoinTeamPage'))
 const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
 
@@ -185,7 +184,7 @@ export default function App() {
             <Route path="/settings" element={<SettingsWrapper />} />
             <Route path="/performance" element={<PerformancePage />} />
             <Route path="/recos" element={<RecosPage />} />
-            <Route path="/help" element={<HelpPage />} />
+            <Route path="/help" element={<Navigate to="/chat" replace />} />
             <Route path="/join/:code" element={<JoinTeamPage />} />
             {/* Redirects for old routes */}
             <Route path="/nurture" element={<Navigate to="/activation" replace />} />
