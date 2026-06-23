@@ -37,8 +37,8 @@ function getMainTools(lang) {
       guide: en ? ['Go to app.waalaxy.com', 'Settings \u2192 Integrations'] : ['Allez dans app.waalaxy.com', 'Settings \u2192 Integrations'], link: 'https://app.waalaxy.com/settings' },
     { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM',
       guide: en ? ['Go to app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Create an app or copy the token (pat-)'] : ['Allez dans app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Cr\u00E9ez une app ou copiez le token (pat-)'], link: 'https://app.hubspot.com/settings/integrations' },
-    { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce API key' : 'Votre cl\u00E9 API Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM',
-      guide: en ? ['Log in to your instance', 'Setup \u2192 Apps \u2192 Connected Apps', 'Copy the consumer key'] : ['Connectez-vous sur votre instance', 'Setup \u2192 Apps \u2192 Connected Apps', 'Copiez le consumer key'] },
+    { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce access token' : 'Votre access token Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
+      guide: en ? ['Log in to your Salesforce instance', 'Setup \u2192 Apps \u2192 Connected Apps', 'Generate an access token', 'Paste the token and your instance URL below'] : ['Connectez-vous sur votre instance Salesforce', 'Setup \u2192 Apps \u2192 Connected Apps', 'G\u00E9n\u00E9rez un access token', 'Collez le token et votre URL d\'instance ci-dessous'] },
     { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM',
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
@@ -568,7 +568,7 @@ export default function SettingsPage() {
                   )}
 
                   {/* Inline edit */}
-                  {isEditing && tool.multiField && (
+                  {isEditing && tool.multiField === true && (
                     <OdooConfigForm
                       draft={drafts[tool.field] || ''}
                       onSave={(json) => { setDrafts(prev => ({ ...prev, [tool.field]: json })); saveField(tool.field, json); }}
@@ -576,6 +576,15 @@ export default function SettingsPage() {
                       saving={saving}
                       isConnected={isConnected}
                       onRemove={() => removeField(tool.field)}
+                    />
+                  )}
+                  {isEditing && tool.multiField === 'salesforce' && (
+                    <SalesforceConfigForm
+                      onCancel={() => cancelEdit(tool.field)}
+                      saving={saving}
+                      isConnected={isConnected}
+                      onRemove={() => removeField(tool.field)}
+                      onDone={() => { cancelEdit(tool.field); loadKeys(); }}
                     />
                   )}
                   {isEditing && !tool.multiField && (
@@ -1243,6 +1252,79 @@ function MetadataConfig({ provider, en }) {
 }
 
 /* ═══ Odoo Config Form ═══ */
+
+function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone }) {
+  const { t, lang } = useI18n();
+  const en = lang === 'en';
+  const [accessToken, setAccessToken] = useState('');
+  const [instanceUrl, setInstanceUrl] = useState('');
+  const [status, setStatus] = useState(null);
+
+  const handleConnect = async () => {
+    if (!accessToken || !instanceUrl) return;
+    setStatus('connecting');
+    try {
+      const res = await request('/api/crm/salesforce/manual-connect', {
+        method: 'POST',
+        body: JSON.stringify({ accessToken, instanceUrl: instanceUrl.replace(/\/$/, '') }),
+      });
+      if (res.ok && res.status === 'connected') {
+        setStatus('connected');
+        setTimeout(() => onDone(), 1000);
+      } else {
+        setStatus(res.status === 'saved_but_test_failed' ? 'test_failed' : 'error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  const isValid = accessToken.length > 10 && instanceUrl.startsWith('http');
+
+  return (
+    <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+      <div style={{
+        fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
+        background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+      }}>
+        {en
+          ? <>1. Log in to your Salesforce instance<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. Generate an access token<br/>4. Paste both fields below</>
+          : <>1. Connectez-vous sur votre instance Salesforce<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. G{'\u00E9'}n{'\u00E9'}rez un access token<br/>4. Collez les deux champs ci-dessous</>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <input className="form-input" type="text"
+          placeholder={en ? "Instance URL (e.g., https://mycompany.salesforce.com)" : "URL de l'instance (ex: https://mycompany.salesforce.com)"}
+          value={instanceUrl} onChange={e => setInstanceUrl(e.target.value)} autoFocus
+          style={{ fontSize: 11, padding: '5px 8px' }} />
+        <input className="form-input" type="password"
+          placeholder={en ? "Access token" : "Access token"}
+          value={accessToken} onChange={e => setAccessToken(e.target.value)}
+          style={{ fontSize: 11, padding: '5px 8px' }} />
+      </div>
+      {status === 'connected' && (
+        <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>{en ? 'Connected!' : 'Connect\u00E9 !'}</div>
+      )}
+      {status === 'test_failed' && (
+        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed — token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9 — le token a peut-\u00EAtre expir\u00E9'}</div>
+      )}
+      {status === 'error' && (
+        <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{en ? 'Connection failed' : '\u00C9chec de connexion'}</div>
+      )}
+      <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+        <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
+          onClick={handleConnect} disabled={saving || status === 'connecting' || !isValid}>
+          {status === 'connecting' ? (en ? 'Connecting...' : 'Connexion...') : (en ? 'Connect' : 'Connecter')}
+        </button>
+        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
+          onClick={onCancel}>{'\u2715'}</button>
+      </div>
+      {isConnected && (
+        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, color: 'var(--danger)', width: '100%' }}
+          onClick={onRemove} disabled={saving}>{t('settings.delete')}</button>
+      )}
+    </div>
+  );
+}
 
 function OdooConfigForm({ onSave, onCancel, saving, isConnected, onRemove }) {
   const { t, lang } = useI18n();
