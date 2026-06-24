@@ -90,6 +90,7 @@ export default function OnboardingChecklist() {
   const doneCount = steps.filter(s => s.done).length;
   const total = steps.length;
   if (doneCount === total) return null;
+  const nextStepKey = (steps.find(s => !s.done) || {}).key;
 
   return (
     <div style={{
@@ -162,35 +163,41 @@ export default function OnboardingChecklist() {
 
       {/* Checklist items */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-        {steps.map((step) => (
-          <div
-            key={step.key}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              fontSize: 13,
-              color: step.done ? 'var(--success, #22c55e)' : 'var(--text)',
-              opacity: step.done ? 0.7 : 1,
-              cursor: !step.done && step.route ? 'pointer' : 'default',
-            }}
-            onClick={() => { if (!step.done && step.route) navigate(step.route); }}
-          >
-            <span style={{
-              width: 20, height: 20, borderRadius: 6,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, flexShrink: 0,
-              background: step.done ? 'var(--success, #22c55e)' : 'var(--border, #e5e7eb)',
-              color: step.done ? '#fff' : 'var(--text-muted)',
-            }}>
-              {step.done ? '\u2713' : ' '}
-            </span>
-            <span style={{ textDecoration: step.done ? 'line-through' : 'none', flex: 1 }}>
-              {t(`onboarding.${step.key}`)}
-            </span>
-            {!step.done && step.route && (
-              <span style={{ fontSize: 11, color: 'var(--blue, #3b82f6)', fontWeight: 600 }}>→</span>
-            )}
-          </div>
-        ))}
+        {steps.map((step) => {
+          const isNext = step.key === nextStepKey;
+          return (
+            <div
+              key={step.key}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                fontSize: 13, padding: '6px 10px', borderRadius: 8,
+                color: step.done ? 'var(--success, #22c55e)' : 'var(--text)',
+                opacity: step.done ? 0.7 : 1,
+                cursor: !step.done && step.route ? 'pointer' : 'default',
+                background: isNext ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                fontWeight: isNext ? 600 : 400,
+                transition: 'background 0.2s',
+              }}
+              onClick={() => { if (!step.done && step.route) navigate(step.route); }}
+            >
+              <span style={{
+                width: 20, height: 20, borderRadius: 6,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, flexShrink: 0,
+                background: step.done ? 'var(--success, #22c55e)' : isNext ? 'var(--blue, #3b82f6)' : 'var(--border, #e5e7eb)',
+                color: step.done ? '#fff' : isNext ? '#fff' : 'var(--text-muted)',
+              }}>
+                {step.done ? '\u2713' : isNext ? '!' : ' '}
+              </span>
+              <span style={{ textDecoration: step.done ? 'line-through' : 'none', flex: 1 }}>
+                {t(`onboarding.${step.key}`)}
+              </span>
+              {!step.done && step.route && (
+                <span style={{ fontSize: 11, color: 'var(--blue, #3b82f6)', fontWeight: 600 }}>{isNext ? 'Go →' : '→'}</span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* CTA */}

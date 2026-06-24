@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from './context/useApp'
 import { isLoggedIn, validateToken } from './services/auth'
 import { SocketProvider } from './context/SocketContext'
@@ -45,16 +45,17 @@ const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy']
 export default function App() {
   const { initData } = useApp()
   const location = useLocation()
+  const navigate = useNavigate()
   const [authed, setAuthed] = useState(null) // null = checking, true/false
   const [onboarded, setOnboarded] = useState(null) // null = checking, true/false
   const [authError, setAuthError] = useState(null)
 
-  // Re-initialize data after onboarding completes
-  // (initial initData may have run before onboarding was done)
+  // Re-initialize data after onboarding completes — send to dashboard for guided checklist
   function handleOnboardingComplete() {
     setOnboarded(true)
     localStorage.setItem('bakal_onboarding_complete', 'true')
     initData()
+    navigate('/dashboard', { replace: true })
   }
 
   // Handle Google OAuth callback — exchange one-time code for tokens

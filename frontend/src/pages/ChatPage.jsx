@@ -11,6 +11,7 @@ import { useSocket } from '../context/SocketContext';
 import api, { request } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 import Confetti from '../components/Confetti';
+import OnboardingChecklist from '../components/OnboardingChecklist';
 import { useT, useI18n } from '../i18n';
 
 /* ─── Helpers ─── */
@@ -1714,6 +1715,13 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
         </svg>
         <h2 className="chat-welcome-title" style={{ marginBottom: 8 }}>{title}</h2>
         <p className="chat-welcome-text" style={{ marginBottom: 24 }}>{subtitle}</p>
+
+        {/* Onboarding checklist — shown for new users */}
+        {(!hasProfile || campaignCount === 0) && (
+          <div style={{ maxWidth: 520, width: '100%', marginBottom: 16 }}>
+            <OnboardingChecklist />
+          </div>
+        )}
 
         {/* Memory insights — shown when patterns exist */}
         {topInsights.length > 0 && (
