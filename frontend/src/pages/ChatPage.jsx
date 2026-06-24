@@ -61,8 +61,8 @@ function getOnboardingSuggestions(lang) {
 
 function getReturningSuggestions(lang) {
   return lang === 'en'
-    ? ['🎯 Create a new campaign', '📡 Find prospects with signals', '⚡ Activate stagnant deals', '🤖 Enable autopilot', '🔍 Scan my CRM health', '🔗 Create a LinkedIn trigger', '📊 Analyze my performance', '🧠 Show AI recommendations']
-    : ['🎯 Nouvelle campagne', '📡 Trouver des prospects via signaux', '⚡ Relancer les deals stagnants', '🤖 Activer l\'autopilot', '🔍 Scanner la santé de mon CRM', '🔗 Créer un trigger LinkedIn', '📊 Analyser mes performances', '🧠 Voir les recommandations IA'];
+    ? ['🎯 Create a new campaign', '⚡ Activate stagnant deals', '🔍 Scan my CRM health', '📊 Analyze my performance']
+    : ['🎯 Nouvelle campagne', '⚡ Relancer les deals stagnants', '🔍 Scanner la santé de mon CRM', '📊 Analyser mes performances'];
 }
 
 function getActionPrompts(lang) {
@@ -1691,11 +1691,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
     subtitle = lang === 'en'
       ? `${activeCampaigns} active campaign${activeCampaigns > 1 ? 's' : ''}.${topInfo} What can I do for you?`
       : `${activeCampaigns} campagne${activeCampaigns > 1 ? 's' : ''} active${activeCampaigns > 1 ? 's' : ''}.${topInfo} Que puis-je faire pour vous ?`;
-    actions = [
-      { key: 'refine', label: t('chat.refineCampaigns') },
-      { key: 'analyze', label: t('chat.analyzePerf') },
-      { key: 'create', label: t('chat.newCampaign') },
-    ];
+    actions = [];
   }
 
   // Show top insights from memory analysis
@@ -1726,26 +1722,25 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
         {/* Memory insights — shown when patterns exist */}
         {topInsights.length > 0 && (
           <div style={{
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
-            borderRadius: 12, padding: '14px 18px', marginBottom: 16,
-            textAlign: 'left', maxWidth: 520, width: '100%',
+            background: 'var(--bg-elevated, var(--paper-2))',
+            borderRadius: 12, padding: '14px 18px', marginBottom: 20,
+            textAlign: 'left', maxWidth: 480, width: '100%',
           }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--success)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
               {t('chat.insightsTitle')}
             </div>
             {topInsights.map((insight, i) => (
               <div key={i} style={{
-                fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5,
-                padding: '6px 0',
-                borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6,
+                padding: '4px 0',
               }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(insight.text) }} />
             ))}
             <button
-              className="btn btn-primary"
-              style={{ fontSize: 12, marginTop: 10, padding: '6px 14px' }}
+              className="btn btn-ghost"
+              style={{ fontSize: 12, marginTop: 8, padding: '5px 12px', color: 'var(--accent)' }}
               onClick={() => onAction('create_from_insights')}
             >
-              {t('chat.createFromInsights')}
+              {t('chat.createFromInsights')} →
             </button>
           </div>
         )}
@@ -1776,20 +1771,24 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
           </div>
         )}
 
-        <div className="chat-welcome-suggestions" id="chatWelcomeSuggestions" style={{ marginBottom: 20 }}>
-          {suggestions.map((s) => (
-            <button key={s} className="chat-suggestion" onClick={() => onSuggestionClick(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-        <div className="chat-welcome-actions" style={{ display: 'flex', gap: '8px', marginTop: '0', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {actions.map((a) => (
-            <button key={a.key} className="btn btn-ghost" style={{ fontSize: '12px' }} onClick={() => onAction(a.key)}>
-              {a.label}
-            </button>
-          ))}
-        </div>
+        {suggestions.length > 0 && (
+          <div className="chat-welcome-suggestions" id="chatWelcomeSuggestions" style={{ marginBottom: actions.length > 0 ? 16 : 0 }}>
+            {suggestions.map((s) => (
+              <button key={s} className="chat-suggestion" onClick={() => onSuggestionClick(s)}>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {actions.length > 0 && (
+          <div className="chat-welcome-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {actions.map((a) => (
+              <button key={a.key} className="btn btn-ghost" style={{ fontSize: '12px' }} onClick={() => onAction(a.key)}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
