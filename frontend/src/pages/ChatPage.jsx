@@ -1709,8 +1709,8 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
           <circle cx="30" cy="80" r="7" fill="#C4B5FD"/>
           <circle cx="50" cy="50" r="13" fill="#6E57FA"/>
         </svg>
-        <h2 className="chat-welcome-title" style={{ marginBottom: 8 }}>{title}</h2>
-        <p className="chat-welcome-text" style={{ marginBottom: 24 }}>{subtitle}</p>
+        <h2 className="chat-welcome-title" style={{ marginBottom: 10 }}>{title}</h2>
+        <p className="chat-welcome-text" style={{ marginBottom: 32, fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 480 }}>{subtitle}</p>
 
         {/* Onboarding checklist — shown for new users */}
         {(!hasProfile || campaignCount === 0) && (
