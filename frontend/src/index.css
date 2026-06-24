@@ -1885,7 +1885,8 @@ body {
 /* ── Welcome state ── */
 .chat-welcome {
   flex: 1; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; padding: 48px 32px 64px; text-align: center; gap: 28px;
+  justify-content: flex-start; padding: 48px 32px 64px; text-align: center; gap: 28px;
+  overflow-y: auto;
 }
 .chat-welcome-inner {
   display: flex; flex-direction: column; align-items: center;
