@@ -1285,7 +1285,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
     if (!instanceUrl.startsWith('http')) return;
     setStatus('connecting');
     try {
-      const res = await request('/api/crm/salesforce/instance-url', {
+      const res = await request('/crm/salesforce/instance-url', {
         method: 'PATCH',
         body: JSON.stringify({ instanceUrl: instanceUrl.replace(/\/$/, '') }),
       });
