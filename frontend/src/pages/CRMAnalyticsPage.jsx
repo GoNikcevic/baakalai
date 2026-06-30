@@ -6,6 +6,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
+import { useSocket } from '../context/SocketContext';
 import api from '../services/api-client';
 import { useI18n, useT } from '../i18n';
 import { showToast } from '../services/notifications';
@@ -79,20 +80,23 @@ function getTabs(t) { return [
 /* ═══ Main Component ═══ */
 
 export default function CRMAnalyticsPage() {
-  const { backendAvailable } = useApp();
+  const { backendAvailable, opportunities } = useApp();
+  const { socket } = useSocket();
   const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const [activeTab, setActiveTab] = useState('pipeline');
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
   const TABS = getTabs(t);
   const fetchedRef = useRef(new Set());
 
-  const fetchData = useCallback(async (tab) => {
+  const fetchData = useCallback(async (tab, force) => {
     if (!backendAvailable) {
       setData({});
       return;
     }
-    if (fetchedRef.current.has(tab)) return; // already fetched
+    if (!force && fetchedRef.current.has(tab)) return;
     fetchedRef.current.add(tab);
     setLoading(true);
     try {
@@ -108,7 +112,40 @@ export default function CRMAnalyticsPage() {
     fetchData(activeTab);
   }, [activeTab, fetchData]);
 
+  // Auto-refresh after CRM sync completes
+  useEffect(() => {
+    if (!socket) return;
+    const onCrmSync = (ev) => {
+      if (ev.status === 'done') {
+        fetchedRef.current.clear();
+        fetchData(activeTab, true);
+      }
+    };
+    socket.on('crm:sync', onCrmSync);
+    return () => socket.off('crm:sync', onCrmSync);
+  }, [socket, activeTab, fetchData]);
+
   const tabData = data[activeTab];
+  const contactCount = Object.keys(opportunities || {}).length;
+  const hasData = contactCount > 0;
+
+  // KPI summary from pipeline data
+  const pipelineData = data.pipeline;
+  const kpis = useMemo(() => {
+    if (!pipelineData) return null;
+    const stages = pipelineData.stages || [];
+    const total = pipelineData.total || 0;
+    const won = stages.find(s => s.stage === 'won')?.count || 0;
+    const lost = stages.find(s => s.stage === 'lost')?.count || 0;
+    const active = total - won - lost;
+    const winRate = (won + lost) > 0 ? Math.round((won / (won + lost)) * 100) : 0;
+    return { total, active, won, winRate };
+  }, [pipelineData]);
+
+  // Fetch pipeline for KPIs on mount
+  useEffect(() => {
+    if (backendAvailable && !data.pipeline) fetchData('pipeline');
+  }, [backendAvailable, data.pipeline, fetchData]);
 
   return (
     <div className="dashboard-page">
@@ -120,21 +157,73 @@ export default function CRMAnalyticsPage() {
         </div>
       </div>
 
+      {/* KPI Summary Cards */}
+      {kpis && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: 12, marginBottom: 20,
+        }}>
+          {[
+            { label: en ? 'Total contacts' : 'Contacts total', value: kpis.total },
+            { label: en ? 'Active deals' : 'Deals actifs', value: kpis.active },
+            { label: en ? 'Won' : 'Gagnés', value: kpis.won },
+            { label: en ? 'Win rate' : 'Taux de conversion', value: kpis.winRate + '%' },
+          ].map((kpi, i) => (
+            <div key={i} style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 12, padding: '14px 18px',
+            }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{kpi.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 700 }}>{kpi.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Tab bar */}
       <div className="crm-tabs">
-        {TABS.map(t => (
+        {TABS.map(tab => (
           <button
-            key={t.key}
-            className={`crm-tab${activeTab === t.key ? ' active' : ''}`}
-            onClick={() => setActiveTab(t.key)}
+            key={tab.key}
+            className={`crm-tab${activeTab === tab.key ? ' active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
           >
-            {t.label}
+            {tab.label}
           </button>
         ))}
       </div>
 
       {/* Content */}
       {loading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading...</div>}
+
+      {/* Empty state — no data */}
+      {!loading && !tabData && activeTab !== 'health' && (
+        <div style={{
+          textAlign: 'center', padding: '60px 20px',
+          color: 'var(--text-muted)',
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>{hasData ? '' : ''}</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+            {hasData
+              ? (en ? 'No data for this view yet' : 'Pas encore de données pour cette vue')
+              : (en ? 'Connect your CRM to get started' : 'Connectez votre CRM pour commencer')}
+          </div>
+          <div style={{ fontSize: 13, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
+            {hasData
+              ? (en ? 'Data will appear here once your contacts and deals have enough activity.' : 'Les données apparaîtront ici quand vos contacts et deals auront assez d\'activité.')
+              : (en ? 'Go to Settings, connect your CRM (Salesforce, HubSpot, Pipedrive...) and sync your data.' : 'Allez dans Paramètres, connectez votre CRM (Salesforce, HubSpot, Pipedrive...) et synchronisez vos données.')}
+          </div>
+          {!hasData && (
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: 16, fontSize: 13, padding: '8px 20px' }}
+              onClick={() => window.location.href = '/settings'}
+            >
+              {en ? 'Go to Settings' : 'Aller aux Paramètres'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* CSV Export button */}
       {!loading && activeTab !== 'health' && tabData && (
