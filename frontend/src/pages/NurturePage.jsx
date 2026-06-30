@@ -100,7 +100,7 @@ export default function NurturePage() {
                 const data = await request('/nurture/preview', { method: 'POST' });
                 setPreviews(data.previews || []);
               } catch (err) {
-                alert((lang === 'en' ? 'Error: ' : 'Erreur: ') + err.message);
+                showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: err.message });
               }
               setPreviewing(false);
             }}
@@ -163,7 +163,7 @@ export default function NurturePage() {
                       setPreviews(null);
                       loadData();
                     } catch (err) {
-                      alert((lang === 'en' ? 'Error: ' : 'Erreur: ') + err.message);
+                      showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: err.message });
                     }
                     setExecuting(false);
                   }}
@@ -282,7 +282,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
       setForm({ name: '', triggerType: 'deal_stagnant', actionType: 'email', days: 30, mode: 'approval', tone: 'professionnel mais chaleureux' });
       onRefresh();
     } catch (err) {
-      alert((lang === 'en' ? 'Error: ' : 'Erreur: ') + err.message);
+      showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: err.message });
     }
     setSaving(false);
   };
@@ -470,7 +470,7 @@ function EmailsSection({ emails, type, onRefresh }) {
       await request(`/nurture/emails/${id}/approve`, { method: 'POST' });
       onRefresh();
     } catch (err) {
-      alert((en ? 'Error: ' : 'Erreur: ') + err.message);
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
     }
   };
 

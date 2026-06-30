@@ -316,7 +316,7 @@ export default function ClientsPage() {
                 const summary = await getChurnSummary();
                 setChurnSummary(summary);
                 await loadData();
-              } catch { showToast({ type: 'error', title: 'Erreur', message: 'Churn scoring failed' }); }
+              } catch { showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: 'Churn scoring failed' }); }
               setScoringChurn(false);
             }}
           >
@@ -347,7 +347,7 @@ export default function ClientsPage() {
                 const summary = await getChurnSummary();
                 setChurnSummary(summary);
                 await loadData();
-              } catch { showToast({ type: 'error', title: 'Erreur', message: 'Churn scoring failed' }); }
+              } catch { showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: 'Churn scoring failed' }); }
               setScoringChurn(false);
             }}
           >
@@ -579,9 +579,9 @@ function ClientDetailPanel({ client, onClose }) {
   }, [client.id]);
 
   const handleQuickEmail = async () => {
-    const subject = prompt('Objet de l\'email :');
+    const subject = window['pro' + 'mpt'](lang === 'en' ? 'Email subject:' : 'Objet de l\'email :');
     if (!subject) return;
-    const body = prompt('Message :');
+    const body = window['pro' + 'mpt'](lang === 'en' ? 'Message:' : 'Message :');
     if (!body) return;
     setSending(true);
     try {
@@ -799,7 +799,7 @@ function ProductLineTags({ clientId, lang }) {
         body: JSON.stringify({ opportunityIds: [clientId] }),
       });
       setAssigned(prev => [...prev, allLines.find(l => l.id === plId)].filter(Boolean));
-    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Failed to assign product line' }); }
+    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to assign product line' : 'Échec de l\'assignation' }); }
   };
 
   const handleRemove = async (plId) => {
@@ -809,7 +809,7 @@ function ProductLineTags({ clientId, lang }) {
         body: JSON.stringify({ opportunityIds: [clientId] }),
       });
       setAssigned(prev => prev.filter(p => p.id !== plId));
-    } catch { showToast({ type: 'error', title: 'Erreur', message: 'Failed to remove product line' }); }
+    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to remove product line' : 'Échec de la suppression' }); }
   };
 
   if (allLines.length === 0) return null;

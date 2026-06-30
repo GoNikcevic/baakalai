@@ -6,12 +6,15 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
+import { useI18n } from '../i18n';
 import AnalyticsSection from './AnalyticsSection';
 import { exportCampaignsCsv, exportReportPdf } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 
 export default function PerformancePage() {
   const { campaigns, reports } = useApp();
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const navigate = useNavigate();
   const openCreator = useCallback(() => navigate('/chat'), [navigate]);
 
@@ -25,7 +28,7 @@ export default function PerformancePage() {
         <div>
           <h1 className="page-title">Performance</h1>
           <div className="page-subtitle">
-            Analytics et rapports hebdomadaires
+            {en ? 'Analytics and weekly reports' : 'Analytics et rapports hebdomadaires'}
           </div>
         </div>
       </div>
@@ -35,8 +38,8 @@ export default function PerformancePage() {
 
       {/* Weekly Reports */}
       <div style={{ marginTop: '32px' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>Rapports hebdomadaires</h2>
-        <ReportsSection isEmpty={isEmpty} reports={reports} onCreateCampaign={openCreator} />
+        <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>{en ? 'Weekly reports' : 'Rapports hebdomadaires'}</h2>
+        <ReportsSection isEmpty={isEmpty} reports={reports} onCreateCampaign={openCreator} en={en} />
       </div>
     </div>
   );
@@ -47,20 +50,20 @@ export default function PerformancePage() {
    Reports Section (moved from DashboardPage)
    ═══════════════════════════════════════════════════ */
 
-function ReportsSection({ isEmpty, reports, onCreateCampaign }) {
+function ReportsSection({ isEmpty, reports, onCreateCampaign, en }) {
   if (isEmpty || !reports || reports.length === 0) {
     return (
       <div id="section-reports">
         <div className="empty-state">
           <div className="empty-state-icon">{'📋'}</div>
-          <div className="empty-state-title">Aucun rapport disponible</div>
+          <div className="empty-state-title">{en ? 'No reports available' : 'Aucun rapport disponible'}</div>
           <div className="empty-state-desc">
-            Les rapports hebdomadaires sont générés automatiquement chaque lundi.
-            Lancez votre première campagne pour recevoir votre premier bilan de
-            performance.
+            {en
+              ? 'Weekly reports are generated automatically every Monday. Launch your first campaign to receive your first performance review.'
+              : 'Les rapports hebdomadaires sont générés automatiquement chaque lundi. Lancez votre première campagne pour recevoir votre premier bilan de performance.'}
           </div>
           <button className="btn btn-primary" onClick={() => navigate('/chat')}>
-            Créer ma première campagne
+            {en ? 'Create my first campaign' : 'Créer ma première campagne'}
           </button>
         </div>
       </div>
@@ -76,14 +79,14 @@ function ReportsSection({ isEmpty, reports, onCreateCampaign }) {
           style={{ fontSize: '12px', padding: '8px 14px' }}
           onClick={exportCampaignsCsv}
         >
-          Exporter CSV
+          {en ? 'Export CSV' : 'Exporter CSV'}
         </button>
         <button
           className="btn btn-primary"
           style={{ fontSize: '12px', padding: '8px 14px' }}
           onClick={exportReportPdf}
         >
-          Rapport PDF
+          {en ? 'PDF Report' : 'Rapport PDF'}
         </button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -100,10 +103,10 @@ function ReportsSection({ isEmpty, reports, onCreateCampaign }) {
               {/* Mini KPIs */}
               <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Contacts:</span> <strong>{r.metrics.contacts}</strong></div>
-                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Ouverture:</span> <strong>{r.metrics.openRate}</strong></div>
-                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Réponse:</span> <strong>{r.metrics.replyRate}</strong></div>
-                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>Intéressés:</span> <strong>{r.metrics.interested}</strong></div>
-                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>RDV:</span> <strong>{r.metrics.meetings}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>{en ? 'Opens:' : 'Ouverture:'}</span> <strong>{r.metrics.openRate}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>{en ? 'Replies:' : 'Réponse:'}</span> <strong>{r.metrics.replyRate}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>{en ? 'Interested:' : 'Intéressés:'}</span> <strong>{r.metrics.interested}</strong></div>
+                <div style={{ fontSize: '12px' }}><span style={{ color: 'var(--text-muted)' }}>{en ? 'Meetings:' : 'RDV:'}</span> <strong>{r.metrics.meetings}</strong></div>
               </div>
               {/* Synthesis */}
               <div style={{ fontSize: '13px', lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(r.synthesis) }} />

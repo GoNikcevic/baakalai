@@ -21,16 +21,28 @@ import DeliverabilityCard from '../components/DeliverabilityCard';
 import { scoreLeads, exportScoresToCRM, downloadScoresCSV, sendRecoFeedback } from '../services/api-client';
 
 const KPI_LABELS = {
-  contacts: '\u{1F4E4} Contacts atteints',
-  openRate: "\u{1F4EC} Taux d'ouverture",
-  replyRate: '\u{1F4AC} Taux de r\u00e9ponse',
-  interested: '\u{1F525} Prospects int\u00e9ress\u00e9s',
-  meetings: '\u{1F4C5} RDV qualifi\u00e9s',
-  stops: '\u{1F6AB} Stops',
+  fr: {
+    contacts: '\u{1F4E4} Contacts atteints',
+    openRate: "\u{1F4EC} Taux d'ouverture",
+    replyRate: '\u{1F4AC} Taux de r\u00e9ponse',
+    interested: '\u{1F525} Prospects int\u00e9ress\u00e9s',
+    meetings: '\u{1F4C5} RDV qualifi\u00e9s',
+    stops: '\u{1F6AB} Stops',
+  },
+  en: {
+    contacts: '\u{1F4E4} Contacts reached',
+    openRate: '\u{1F4EC} Open rate',
+    replyRate: '\u{1F4AC} Reply rate',
+    interested: '\u{1F525} Interested prospects',
+    meetings: '\u{1F4C5} Qualified meetings',
+    stops: '\u{1F6AB} Stops',
+  },
 };
 
 export default function DashboardPage() {
   const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const { campaigns, globalKpis, opportunities, recommendations, chartData, setOpportunities } = useApp();
   const { setShowCreatorModal } = useOutletContext() || {};
   const navigate = useNavigate();
@@ -61,14 +73,12 @@ export default function DashboardPage() {
     ? t('dashboard.welcomeSubtitle')
     : (() => {
         const today = new Date();
-        const weekStr =
-          'Semaine du ' +
-          today.toLocaleDateString('fr-FR', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-          });
-        return `${activeCount} campagne${activeCount > 1 ? 's' : ''} active${activeCount > 1 ? 's' : ''} \u00b7 ${weekStr}`;
+        const weekStr = en
+          ? 'Week of ' + today.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+          : 'Semaine du ' + today.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+        return en
+          ? `${activeCount} active campaign${activeCount > 1 ? 's' : ''} \u00b7 ${weekStr}`
+          : `${activeCount} campagne${activeCount > 1 ? 's' : ''} active${activeCount > 1 ? 's' : ''} \u00b7 ${weekStr}`;
       })();
 
   return (
@@ -79,7 +89,7 @@ export default function DashboardPage() {
           <h1 className="page-title">Dashboard</h1>
           <div className="page-subtitle">
             {!isEmpty && <span className="pulse-dot"></span>}
-            &nbsp;&nbsp;{subtitle}
+            <span style={{ marginLeft: 8 }}>{subtitle}</span>
           </div>
         </div>
       </div>
@@ -98,7 +108,7 @@ export default function DashboardPage() {
             borderTopColor: 'transparent', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
-          <span>Analyse {syncStatus.type} en cours — {syncStatus.message || `${syncStatus.progress || 0}%`}</span>
+          <span>{en ? `${syncStatus.type} analysis in progress` : `Analyse ${syncStatus.type} en cours`} — {syncStatus.message || `${syncStatus.progress || 0}%`}</span>
         </div>
       )}
 
@@ -118,7 +128,7 @@ export default function DashboardPage() {
       {!isEmpty && (
         <div style={{ marginBottom: 16, textAlign: 'right' }}>
           <Link to="/performance" style={{ fontSize: 13, color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>
-            Rapport hebdo & tendances {'\u2192'}
+            {en ? 'Weekly report & trends' : 'Rapport hebdo & tendances'} {'\u2192'}
           </Link>
         </div>
       )}
@@ -145,6 +155,8 @@ export default function DashboardPage() {
 
 function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recommendations, chartData, onCreateCampaign, setOpportunities }) {
   const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const [scoring, setScoring] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [ratedRecos, setRatedRecos] = useState({});
@@ -203,7 +215,7 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
       <div className="kpi-grid">
         {Object.entries(globalKpis).map(([key, k]) => (
           <div className="kpi-card" key={key}>
-            <div className="kpi-label">{KPI_LABELS[key] || key}</div>
+            <div className="kpi-label">{(en ? KPI_LABELS.en[key] : KPI_LABELS.fr[key]) || key}</div>
             <div className="kpi-value">
               <AnimatedCounter value={k.value} />
             </div>
@@ -255,11 +267,11 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
         {/* Opportunities */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">{'\u{1F525}'} Opportunités</div>
+            <div className="card-title">{'\u{1F525}'} {en ? 'Opportunities' : 'Opportunités'}</div>
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleExportCSV}>CSV</button>
               <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleExportCRM} disabled={exporting}>{exporting ? '...' : 'CRM'}</button>
-              <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleScoreLeads} disabled={scoring}>{scoring ? '...' : 'Scorer'}</button>
+              <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={handleScoreLeads} disabled={scoring}>{scoring ? '...' : (en ? 'Score' : 'Scorer')}</button>
             </div>
           </div>
           <div className="card-body" style={{ padding: '16px 24px' }}>
@@ -282,7 +294,7 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
                 ))
               ) : (
                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
-                  Les opportunités s'afficheront ici.
+                  {en ? 'Opportunities will appear here.' : 'Les opportunités s\'afficheront ici.'}
                 </div>
               )}
             </div>
@@ -292,7 +304,7 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
         {/* AI Recommendations */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">{'\u{1F4A1}'} Recommandations Baakalai</div>
+            <div className="card-title">{'\u{1F4A1}'} {en ? 'Baakalai Recommendations' : 'Recommandations Baakalai'}</div>
             <Link
               to="/recos"
               className="btn btn-ghost"
@@ -313,18 +325,18 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
                       </div>
                       <div style={{ display: 'flex', gap: '4px', marginLeft: '12px', flexShrink: 0 }}>
                         {ratedRecos[i] ? (
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Merci</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{en ? 'Thanks' : 'Merci'}</span>
                         ) : (
                           <>
                             <button
                               onClick={() => handleRecoFeedback(i, rec, 'useful')}
                               style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
-                              title="Utile"
+                              title={en ? 'Useful' : 'Utile'}
                             >{'\uD83D\uDC4D'}</button>
                             <button
                               onClick={() => handleRecoFeedback(i, rec, 'not_useful')}
                               style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
-                              title="Pas utile"
+                              title={en ? 'Not useful' : 'Pas utile'}
                             >{'\uD83D\uDC4E'}</button>
                           </>
                         )}
@@ -334,7 +346,7 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
                 ))
               ) : (
                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
-                  Les recommandations IA s'afficheront ici.
+                  {en ? 'AI recommendations will appear here.' : 'Les recommandations IA s\'afficheront ici.'}
                 </div>
               )}
             </div>
@@ -349,6 +361,8 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
 /* ═══ Campaigns Table (overview summary) ═══ */
 
 function CampaignsTable({ campaigns }) {
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const activeCampaigns = campaigns.filter(
     (c) => c.status === 'active' || c.status === 'prep'
   );
@@ -357,12 +371,12 @@ function CampaignsTable({ campaigns }) {
     <table className="campaign-table">
       <thead>
         <tr>
-          <th>Campagne</th>
-          <th>Canal</th>
-          <th>Statut</th>
-          <th>Ouvertures</th>
-          <th>Réponses</th>
-          <th>RDV</th>
+          <th>{en ? 'Campaign' : 'Campagne'}</th>
+          <th>{en ? 'Channel' : 'Canal'}</th>
+          <th>{en ? 'Status' : 'Statut'}</th>
+          <th>{en ? 'Opens' : 'Ouvertures'}</th>
+          <th>{en ? 'Replies' : 'Réponses'}</th>
+          <th>{en ? 'Meetings' : 'RDV'}</th>
         </tr>
       </thead>
       <tbody>
@@ -375,6 +389,8 @@ function CampaignsTable({ campaigns }) {
 }
 
 function CampaignTableRow({ campaign: c }) {
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const isPrep = c.status === 'prep';
   const isLinkedin = c.channel === 'linkedin';
 
@@ -384,7 +400,7 @@ function CampaignTableRow({ campaign: c }) {
       Active
     </span>
   ) : (
-    <span className="status-badge status-prep">{'\u23F3'} En préparation</span>
+    <span className="status-badge status-prep">{'\u23F3'} {en ? 'Preparing' : 'En préparation'}</span>
   );
 
   let openContent, replyContent, meetingsContent;
@@ -563,7 +579,7 @@ function EmptyKpis() {
             &mdash;
           </div>
           <div className="kpi-trend" style={{ color: 'var(--text-muted)' }}>
-            En attente de données
+            {en ? 'Waiting for data' : 'En attente de données'}
           </div>
         </div>
       ))}
@@ -625,7 +641,7 @@ function EmptyOverviewGrid({ onCreateCampaign }) {
 
       <div className="card card-empty">
         <div className="card-header">
-          <div className="card-title">{'\u{1F4A1}'} Recommandations Baakalai</div>
+          <div className="card-title">{'\u{1F4A1}'} {en ? 'Baakalai Recommendations' : 'Recommandations Baakalai'}</div>
         </div>
         <div className="card-body">
           <div className="empty-icon">{'\u{1F916}'}</div>

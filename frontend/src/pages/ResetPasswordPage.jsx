@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useI18n } from '../i18n';
 
 const styles = {
   overlay: {
@@ -111,6 +112,8 @@ const styles = {
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const token = searchParams.get('token');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -121,8 +124,8 @@ export default function ResetPasswordPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (password !== confirm) { setError('Les mots de passe ne correspondent pas'); return; }
-    if (password.length < 8) { setError('Min. 8 caractères'); return; }
+    if (password !== confirm) { setError(en ? 'Passwords do not match' : 'Les mots de passe ne correspondent pas'); return; }
+    if (password.length < 8) { setError(en ? 'Min. 8 characters' : 'Min. 8 caractères'); return; }
 
     setLoading(true);
     try {
@@ -132,10 +135,10 @@ export default function ResetPasswordPage() {
         body: JSON.stringify({ token, password }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Erreur'); return; }
+      if (!res.ok) { setError(data.error || (en ? 'Error' : 'Erreur')); return; }
       setStatus('success');
     } catch {
-      setError('Erreur réseau');
+      setError(en ? 'Network error' : 'Erreur réseau');
     } finally {
       setLoading(false);
     }
@@ -152,10 +155,10 @@ export default function ResetPasswordPage() {
             </div>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
-            Lien de réinitialisation invalide ou manquant.
+            {en ? 'Invalid or missing reset link.' : 'Lien de réinitialisation invalide ou manquant.'}
           </p>
           <button style={styles.submitBtn} onClick={() => navigate('/login')}>
-            Retour à la connexion
+            {en ? 'Back to login' : 'Retour à la connexion'}
           </button>
         </div>
       </div>
@@ -175,40 +178,40 @@ export default function ResetPasswordPage() {
         {status === 'success' ? (
           <div>
             <p style={styles.success}>
-              Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.
+              {en ? 'Your password has been successfully reset. You can now log in.' : 'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.'}
             </p>
             <button style={styles.submitBtn} onClick={() => navigate('/login')}>
-              Se connecter
+              {en ? 'Log in' : 'Se connecter'}
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>
-              Choisissez un nouveau mot de passe pour votre compte.
+              {en ? 'Choose a new password for your account.' : 'Choisissez un nouveau mot de passe pour votre compte.'}
             </p>
             <div style={styles.fieldGroup}>
-              <label style={styles.label} htmlFor="reset-password">Nouveau mot de passe</label>
+              <label style={styles.label} htmlFor="reset-password">{en ? 'New password' : 'Nouveau mot de passe'}</label>
               <input
                 type="password"
                 id="reset-password"
                 required
                 autoComplete="new-password"
                 style={styles.input}
-                placeholder="Min. 8 caractères"
+                placeholder={en ? 'Min. 8 characters' : 'Min. 8 caractères'}
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
             <div style={{ marginBottom: 20 }}>
-              <label style={styles.label} htmlFor="reset-confirm">Confirmer le mot de passe</label>
+              <label style={styles.label} htmlFor="reset-confirm">{en ? 'Confirm password' : 'Confirmer le mot de passe'}</label>
               <input
                 type="password"
                 id="reset-confirm"
                 required
                 autoComplete="new-password"
                 style={styles.input}
-                placeholder="Retapez votre mot de passe"
+                placeholder={en ? 'Retype your password' : 'Retapez votre mot de passe'}
                 minLength={8}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
@@ -225,7 +228,7 @@ export default function ResetPasswordPage() {
                 ...(loading ? styles.submitBtnDisabled : {}),
               }}
             >
-              {loading ? 'Réinitialisation...' : 'Réinitialiser le mot de passe'}
+              {loading ? (en ? 'Resetting...' : 'Réinitialisation...') : (en ? 'Reset password' : 'Réinitialiser le mot de passe')}
             </button>
           </form>
         )}

@@ -78,7 +78,7 @@ export default function SignalsPage() {
       const result = await request('/signals/scan', { method: 'POST' });
       showToast({ type: 'success', title: en ? 'Scan complete' : 'Scan terminé', message: `${result.detected || 0} ${en ? 'signals detected' : 'signaux détectés'}` });
       await loadData();
-    } catch { showToast({ type: 'error', title: 'Erreur', message: en ? 'Scan failed' : 'Échec du scan' }); }
+    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Scan failed' : 'Échec du scan' }); }
     setScanning(false);
   };
 
@@ -90,7 +90,7 @@ export default function SignalsPage() {
       const label = action === 'add_to_crm' ? (en ? 'Added to CRM' : 'Ajouté au CRM') :
         action === 'send_email' ? (en ? 'Email sent' : 'Email envoyé') : (en ? 'Dismissed' : 'Ignoré');
       showToast({ type: 'success', title: label });
-    } catch { showToast({ type: 'error', title: 'Erreur', message: en ? 'Action failed' : 'Action échouée' }); }
+    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Action failed' : 'Action échouée' }); }
     setActioningId(null);
   };
 
@@ -111,7 +111,7 @@ export default function SignalsPage() {
       setShowCreate(false);
       setForm({ name: '', signalTypes: ['funding', 'hiring', 'news'], targetSectors: '', targetTitles: '', targetKeywords: '', targetCompetitors: '' });
       await loadData();
-    } catch { showToast({ type: 'error', title: 'Erreur', message: en ? 'Failed to create config' : 'Échec de création' }); }
+    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to create config' : 'Échec de création' }); }
   };
 
   const handleDeleteConfig = async (id) => {
@@ -119,7 +119,7 @@ export default function SignalsPage() {
     try {
       await request(`/signals/configs/${id}`, { method: 'DELETE' });
       await loadData();
-    } catch { showToast({ type: 'error', title: 'Erreur' }); }
+    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur' }); }
   };
 
   const handleViewCompany = async (companyName) => {
@@ -146,7 +146,7 @@ export default function SignalsPage() {
     try {
       await request(`/signals/configs/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !enabled }) });
       await loadData();
-    } catch { showToast({ type: 'error', title: 'Erreur' }); }
+    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur' }); }
   };
 
   const tabs = [
@@ -331,7 +331,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
                             await request(`/signals/${s.id}/linkedin-outreach`, { method: 'POST' });
                             setSignals(prev => prev.map(sig => sig.id === s.id ? { ...sig, status: 'actioned', action_taken: 'linkedin_connect' } : sig));
                             showToast({ type: 'success', title: en ? 'Connection sent' : 'Connexion envoyée' });
-                          } catch (err) { showToast({ type: 'error', title: 'Erreur', message: err.message }); }
+                          } catch (err) { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message }); }
                           setActioningId(null);
                         }} disabled={actioningId === s.id}>
                         {en ? 'Connect on LinkedIn' : 'Connecter sur LinkedIn'}
