@@ -30,19 +30,19 @@ const config = {
 
   claude: {
     apiKey: process.env.ANTHROPIC_API_KEY,
-    model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+    model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6-20250620',
     models: {
       // Sonnet 4.6 — default for most actions (fast, cost-effective)
-      generateSequence:    'claude-sonnet-4-20250514',
-      generateTouchpoint:  'claude-sonnet-4-20250514',
-      analyzeCampaign:     'claude-sonnet-4-20250514',
-      chat:                'claude-sonnet-4-20250514',
-      chatStream:          'claude-sonnet-4-20250514',
-      generateVariables:   'claude-sonnet-4-20250514',
+      generateSequence:    'claude-sonnet-4-6-20250620',
+      generateTouchpoint:  'claude-sonnet-4-6-20250620',
+      analyzeCampaign:     'claude-sonnet-4-6-20250620',
+      chat:                'claude-sonnet-4-6-20250620',
+      chatStream:          'claude-sonnet-4-6-20250620',
+      generateVariables:   'claude-sonnet-4-6-20250620',
       // Opus 4.6 — premium actions (best reasoning, marginal cost)
-      regenerateSequence:  'claude-opus-4-20250514',
-      consolidateMemory:   'claude-opus-4-20250514',
-      generateIcebreaker:  'claude-opus-4-20250514',
+      regenerateSequence:  'claude-opus-4-6-20250620',
+      consolidateMemory:   'claude-opus-4-6-20250620',
+      generateIcebreaker:  'claude-opus-4-6-20250620',
     },
   },
 

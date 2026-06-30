@@ -69,11 +69,11 @@ async function checkClaude() {
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: key });
     const res = await client.messages.create({
-      model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
+      model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6-20250620',
       max_tokens: 10,
       messages: [{ role: 'user', content: 'Reply with just "ok".' }],
     });
-    ok('Claude API', `model=${process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514'} tokens=${res.usage?.input_tokens}+${res.usage?.output_tokens}`);
+    ok('Claude API', `model=${process.env.CLAUDE_MODEL || 'claude-sonnet-4-6-20250620'} tokens=${res.usage?.input_tokens}+${res.usage?.output_tokens}`);
   } catch (err) {
     fail('Claude API', err.message?.substring(0, 120));
   }
