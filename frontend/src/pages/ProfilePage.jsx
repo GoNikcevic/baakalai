@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/useApp';
 import { request } from '../services/api-client';
+import { showToast } from '../services/notifications';
 import { useI18n } from '../i18n';
 
 /* ─── Default empty profile ─── */
@@ -123,16 +124,7 @@ export default function ProfilePage() {
 
     // Save to backend
     try {
-      const token = localStorage.getItem('bakal_token');
-      const res = await fetch('/api/profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(profile),
-      });
-      if (!res.ok) throw new Error('Save failed');
+      await request('/profile', { method: 'POST', body: JSON.stringify(profile) });
     } catch {
       // Backend not available -- localStorage fallback already done
     }
@@ -253,14 +245,14 @@ export default function ProfilePage() {
             const details = (reparseData.results || [])
               .map(r => `• ${r.name}: ${r.status}${r.message ? ' (' + r.message + ')' : ''}${r.chars ? ' — ' + r.chars + ' chars' : ''}`)
               .join('\n');
-            alert((en ? 'Reparse failed for all docs:\n\n' : 'Reparse a échoué pour tous les docs:\n\n') + details);
+            showToast({ type: 'error', title: en ? 'Reparse failed' : 'Reparse échoué', message: details.slice(0, 200) });
           }
         } catch (retryErr) {
           console.warn('Reparse failed:', retryErr.message);
-          alert((en ? 'Error: ' : 'Erreur: ') + err.message);
+          showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
         }
       } else {
-        alert('Auto-fill: ' + err.message);
+        showToast({ type: 'error', title: 'Auto-fill', message: err.message });
       }
     }
     setAutoFilling(false);
@@ -349,156 +341,6 @@ export default function ProfilePage() {
       <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect}
         docProps={{ files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize }} />
 
-      {/* Documents moved inside ProductLinesSection */}
-      {false && <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header"><div className="card-title">{en ? 'Company documents' : 'Documents entreprise'}</div></div>
-        <div className="card-body">
-          <div className="page-subtitle" style={{ marginBottom: 16 }}>
-            {en ? 'Briefs, guidelines, personas PDF, campaign examples — Baakalai will use them to personalize your sequences.' : 'Briefs, guidelines, personas PDF, exemples de campagnes — Baakalai les utilisera pour personnaliser vos séquences.'}
-          </div>
-          <div
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            style={{
-              border: `2px dashed ${isDragging ? 'var(--blue)' : 'var(--border)'}`,
-              borderRadius: 12,
-              padding: '32px 20px',
-              textAlign: 'center',
-              background: isDragging ? 'rgba(96,165,250,0.06)' : 'var(--bg-elevated)',
-              transition: 'all 0.2s',
-              cursor: 'pointer',
-            }}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".csv,.xlsx,.xls,.pdf,.docx,.txt,.png,.jpg,.jpeg,.webp"
-              style={{ display: 'none' }}
-              onChange={(e) => { if (e.target.files?.length > 0) { addFiles(e.target.files); e.target.value = ''; } }}
-            />
-            <div style={{ fontSize: 28, marginBottom: 8 }}>+</div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
-              {isDragging ? (en ? 'Drop your files here' : 'Déposez vos fichiers ici') : (en ? 'Drag your files here or click to browse' : 'Glissez vos fichiers ici ou cliquez pour parcourir')}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              {en ? 'PDF, DOCX, CSV, Excel, images — max 20 MB per file' : 'PDF, DOCX, CSV, Excel, images — max 20 Mo par fichier'}
-            </div>
-          </div>
-
-          {files.length > 0 && (
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {files.map((f, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 12px', background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border)', borderRadius: 8, fontSize: 13,
-                }}>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                  <select
-                    value={fileTypes[f.name] || 'other'}
-                    onChange={e => setFileTypes(prev => ({ ...prev, [f.name]: e.target.value }))}
-                    onClick={e => e.stopPropagation()}
-                    style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-secondary)' }}
-                  >
-                    <option value="company">{en ? 'Company overview' : 'Présentation entreprise'}</option>
-                    <option value="prospects">{en ? 'Prospect list' : 'Liste prospects'}</option>
-                    <option value="brief">{en ? 'Campaign brief' : 'Brief campagne'}</option>
-                    <option value="other">{en ? 'Other' : 'Autre'}</option>
-                  </select>
-                  <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{formatSize(f.size)}</span>
-                  <button onClick={() => removeFile(i)} style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-muted)', fontSize: 14, padding: '0 4px',
-                  }}>x</button>
-                </div>
-              ))}
-              <button
-                className="btn btn-primary"
-                onClick={handleUpload}
-                disabled={uploading}
-                style={{ alignSelf: 'flex-start', marginTop: 8 }}
-              >
-                {uploading ? (en ? 'Uploading...' : 'Upload en cours...') : (en ? `Upload ${files.length} file${files.length > 1 ? 's' : ''}` : `Envoyer ${files.length} fichier${files.length > 1 ? 's' : ''}`)}
-              </button>
-            </div>
-          )}
-
-          {/* Upload success message */}
-          {uploadSuccess && (
-            <div style={{
-              marginTop: 12, padding: '10px 14px', borderRadius: 8,
-              background: 'rgba(0,214,143,0.08)', border: '1px solid rgba(0,214,143,0.2)',
-              color: 'var(--success)', fontSize: 13, fontWeight: 500,
-              animation: 'fadeInUp 0.3s ease-out',
-            }}>
-              ✅ {uploadSuccess}
-            </div>
-          )}
-
-          {/* Already uploaded documents */}
-          {uploadedDocs.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                {en ? 'Uploaded documents' : 'Documents envoyés'}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {uploadedDocs.map((doc, i) => (
-                  <div key={doc.id || i} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 10px', background: 'var(--bg-elevated)',
-                    borderRadius: 6, fontSize: 13,
-                  }}>
-                    <span style={{ fontSize: 14 }}>
-                      {doc.mime_type?.includes('pdf') ? '📄' : doc.mime_type?.includes('spreadsheet') || doc.mime_type?.includes('excel') ? '📊' : doc.mime_type?.includes('presentation') ? '📽️' : '📎'}
-                    </span>
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {doc.original_name}
-                    </span>
-                    <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10,
-                      background: doc.doc_type === 'company' ? 'rgba(0,214,143,0.1)' : 'var(--bg-elevated)',
-                      color: doc.doc_type === 'company' ? 'var(--success)' : 'var(--text-muted)',
-                      border: `1px solid ${doc.doc_type === 'company' ? 'rgba(0,214,143,0.2)' : 'var(--border)'}`,
-                    }}>
-                      {doc.doc_type === 'company' ? (en ? 'Company' : 'Entreprise') : doc.doc_type === 'prospects' ? 'Prospects' : doc.doc_type === 'brief' ? 'Brief' : (en ? 'Other' : 'Autre')}
-                    </span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
-                      {new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                    </span>
-                    <button
-                      onClick={async () => {
-                        try {
-                          await request('/documents/' + doc.id, { method: 'DELETE' });
-                          setUploadedDocs(prev => prev.filter(d => d.id !== doc.id));
-                        } catch {}
-                      }}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: 'var(--text-muted)', fontSize: 13, padding: '0 4px',
-                        transition: 'color 0.15s',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                      title={en ? 'Delete' : 'Supprimer'}
-                    >×</button>
-                  </div>
-                ))}
-              </div>
-              <button
-                className="btn btn-primary"
-                onClick={handleAutoFill}
-                disabled={autoFilling}
-                style={{ marginTop: 12, width: 'auto', alignSelf: 'flex-start' }}
-              >
-                {autoFilling ? (en ? 'Analyzing...' : 'Analyse en cours...') : (en ? '\uD83E\uDDE0 Auto-fill from company documents' : '\uD83E\uDDE0 Auto-remplir avec mes documents entreprise')}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>}
     </div>
   );
 }

@@ -514,9 +514,6 @@ export default function SettingsPage() {
         <div className="card-header">
           <div className="card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
             {t('settings.integrations')}
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {t('settings.integrations')}
-            </span>
           </div>
         </div>
         <div className="card-body">

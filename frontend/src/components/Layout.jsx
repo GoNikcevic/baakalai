@@ -32,7 +32,7 @@ const MOBILE_NAV = [
   { i18nKey: 'nav.dashboard',   to: '/dashboard',   icon: 'dashboard' },
   { i18nKey: 'nav.clients',     to: '/clients',     icon: 'clients' },
   { i18nKey: 'nav.activation',  to: '/activation',  icon: 'nurture' },
-  { i18nKey: 'nav.settings',    to: '/settings',    icon: 'settings' },
+  { i18nKey: 'nav.settings',    to: '/settings',    icon: 'settings', adminOnly: true },
 ];
 
 /* ─── Simple SVG icon map ─── */
@@ -255,7 +255,11 @@ export default function Layout() {
 
       {/* ═══ Mobile bottom nav ═══ */}
       <nav className="mobile-nav">
-        {MOBILE_NAV.map((item) => (
+        {MOBILE_NAV.filter(item => {
+          if (!item.adminOnly) return true;
+          const u = getUser();
+          return !u?.teamRole || u.teamRole === 'admin';
+        }).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

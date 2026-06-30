@@ -2399,7 +2399,6 @@ body {
 .settings-key-btns { display: flex; gap: 6px; }
 .settings-key-edit-row { display: flex; align-items: center; gap: 8px; }
 .settings-key-input { width: 260px; font-size: 13px; }
-.btn-sm { padding: 5px 12px; font-size: 12px; }
 .settings-btn-danger { color: var(--danger); }
 .settings-btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
 .settings-status-badge {
