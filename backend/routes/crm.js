@@ -1828,6 +1828,31 @@ router.post('/salesforce/manual-connect', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// PATCH /api/crm/salesforce/instance-url — Update just the instance URL for existing connection
+router.patch('/salesforce/instance-url', async (req, res, next) => {
+  try {
+    const { instanceUrl } = req.body;
+    if (!instanceUrl) return res.status(400).json({ error: 'instanceUrl is required' });
+
+    // Check that a Salesforce integration already exists
+    const existing = await db.query(
+      `SELECT id FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
+      [req.user.id]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ error: 'No Salesforce connection found. Connect Salesforce first.' });
+    }
+
+    await db.query(
+      `UPDATE user_integrations SET instance_url = $1, updated_at = NOW() WHERE user_id = $2 AND provider = 'salesforce'`,
+      [instanceUrl.replace(/\/$/, ''), req.user.id]
+    );
+
+    logger.info('salesforce', `Instance URL updated for user ${req.user.id}: ${instanceUrl}`);
+    res.json({ ok: true, status: 'updated' });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
 module.exports.syncOpportunityToHubspot = syncOpportunityToHubspot;
 module.exports.getUserHubspotToken = getUserHubspotToken;

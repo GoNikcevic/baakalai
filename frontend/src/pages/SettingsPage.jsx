@@ -1280,6 +1280,26 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
   const [instanceUrl, setInstanceUrl] = useState('');
   const [status, setStatus] = useState(null);
 
+  // If already connected, allow updating just the instance URL
+  const handleUpdateUrl = async () => {
+    if (!instanceUrl.startsWith('http')) return;
+    setStatus('connecting');
+    try {
+      const res = await request('/api/crm/salesforce/instance-url', {
+        method: 'PATCH',
+        body: JSON.stringify({ instanceUrl: instanceUrl.replace(/\/$/, '') }),
+      });
+      if (res.ok) {
+        setStatus('connected');
+        setTimeout(() => onDone(), 1000);
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  };
+
   const handleConnect = async () => {
     if (!accessToken || !instanceUrl) return;
     setStatus('connecting');
@@ -1299,27 +1319,42 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
     }
   };
 
-  const isValid = accessToken.length > 10 && instanceUrl.startsWith('http');
+  const isValid = isConnected
+    ? instanceUrl.startsWith('http')
+    : accessToken.length > 10 && instanceUrl.startsWith('http');
 
   return (
     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
-      <div style={{
-        fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
-        background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
-      }}>
-        {en
-          ? <>1. Log in to your Salesforce instance<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. Generate an access token<br/>4. Paste both fields below</>
-          : <>1. Connectez-vous sur votre instance Salesforce<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. G{'\u00E9'}n{'\u00E9'}rez un access token<br/>4. Collez les deux champs ci-dessous</>}
-      </div>
+      {isConnected ? (
+        <div style={{
+          fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
+          background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+        }}>
+          {en
+            ? <>Your Salesforce token is saved. Add your instance URL below (e.g., https://mycompany.my.salesforce.com).</>
+            : <>Votre token Salesforce est sauvegard{'\u00E9'}. Ajoutez l'URL de votre instance ci-dessous (ex: https://mycompany.my.salesforce.com).</>}
+        </div>
+      ) : (
+        <div style={{
+          fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
+          background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+        }}>
+          {en
+            ? <>1. Log in to your Salesforce instance<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. Generate an access token<br/>4. Paste both fields below</>
+            : <>1. Connectez-vous sur votre instance Salesforce<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. G{'\u00E9'}n{'\u00E9'}rez un access token<br/>4. Collez les deux champs ci-dessous</>}
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <input className="form-input" type="text"
-          placeholder={en ? "Instance URL (e.g., https://mycompany.salesforce.com)" : "URL de l'instance (ex: https://mycompany.salesforce.com)"}
+          placeholder={en ? "Instance URL (e.g., https://mycompany.my.salesforce.com)" : "URL de l'instance (ex: https://mycompany.my.salesforce.com)"}
           value={instanceUrl} onChange={e => setInstanceUrl(e.target.value)} autoFocus
           style={{ fontSize: 11, padding: '5px 8px' }} />
-        <input className="form-input" type="password"
-          placeholder={en ? "Access token" : "Access token"}
-          value={accessToken} onChange={e => setAccessToken(e.target.value)}
-          style={{ fontSize: 11, padding: '5px 8px' }} />
+        {!isConnected && (
+          <input className="form-input" type="password"
+            placeholder={en ? "Access token" : "Access token"}
+            value={accessToken} onChange={e => setAccessToken(e.target.value)}
+            style={{ fontSize: 11, padding: '5px 8px' }} />
+        )}
       </div>
       {status === 'connected' && (
         <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>{en ? 'Connected!' : 'Connect\u00E9 !'}</div>
@@ -1332,8 +1367,8 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
       )}
       <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
         <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
-          onClick={handleConnect} disabled={saving || status === 'connecting' || !isValid}>
-          {status === 'connecting' ? (en ? 'Connecting...' : 'Connexion...') : (en ? 'Connect' : 'Connecter')}
+          onClick={isConnected ? handleUpdateUrl : handleConnect} disabled={saving || status === 'connecting' || !isValid}>
+          {status === 'connecting' ? (en ? 'Saving...' : 'Sauvegarde...') : isConnected ? (en ? 'Save URL' : 'Sauvegarder') : (en ? 'Connect' : 'Connecter')}
         </button>
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
           onClick={onCancel}>{'\u2715'}</button>
