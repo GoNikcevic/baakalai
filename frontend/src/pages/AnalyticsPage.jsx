@@ -4,7 +4,7 @@
    =============================================================================== */
 
 import { useState } from 'react';
-import { useT, useI18n } from '../i18n';
+import { useT } from '../i18n';
 import CRMAnalyticsPage from './CRMAnalyticsPage';
 import MembershipPage from './MembershipPage';
 

@@ -202,7 +202,7 @@ export default function CRMAnalyticsPage() {
           textAlign: 'center', padding: '60px 20px',
           color: 'var(--text-muted)',
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>{hasData ? '' : ''}</div>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>{hasData ? '—' : '—'}</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
             {hasData
               ? (en ? 'No data for this view yet' : 'Pas encore de données pour cette vue')
@@ -217,7 +217,7 @@ export default function CRMAnalyticsPage() {
             <button
               className="btn btn-primary"
               style={{ marginTop: 16, fontSize: 13, padding: '8px 20px' }}
-              onClick={() => window.location.href = '/settings'}
+              onClick={() => navigate('/settings')}
             >
               {en ? 'Go to Settings' : 'Aller aux Paramètres'}
             </button>

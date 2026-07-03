@@ -1289,7 +1289,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
         method: 'PATCH',
         body: JSON.stringify({ instanceUrl: instanceUrl.replace(/\/$/, '') }),
       });
-      if (res.ok) {
+      if (res.status === 'updated' || res.ok) {
         setStatus('connected');
         setTimeout(() => onDone(), 1000);
       } else {
@@ -1304,11 +1304,11 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
     if (!accessToken || !instanceUrl) return;
     setStatus('connecting');
     try {
-      const res = await request('/api/crm/salesforce/manual-connect', {
+      const res = await request('/crm/salesforce/manual-connect', {
         method: 'POST',
         body: JSON.stringify({ accessToken, instanceUrl: instanceUrl.replace(/\/$/, '') }),
       });
-      if (res.ok && res.status === 'connected') {
+      if (res.status === 'connected') {
         setStatus('connected');
         setTimeout(() => onDone(), 1000);
       } else {
