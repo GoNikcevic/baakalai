@@ -854,7 +854,7 @@ router.post('/:id/launch-salesforce', async (req, res, next) => {
           title: p.title || '',
           company: p.company || '',
         });
-        const contactId = contactResult.contactId || contactResult.id;
+        const contactId = contactResult.id;
         if (!contactId) { results.skipped++; continue; }
 
         await salesforce.addToCampaign(instanceUrl, accessToken, sfCampaignId, contactId, 'Sent');

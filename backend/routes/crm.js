@@ -657,7 +657,8 @@ router.post('/import/:provider', async (req, res, next) => {
       const integration = await db.query(
         `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [req.user.id]
       );
-      const instanceUrl = integration.rows[0]?.instance_url || 'https://login.salesforce.com';
+      const instanceUrl = integration.rows[0]?.instance_url;
+      if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
       const sf = require('../api/salesforce');
       const contacts = await sf.listContacts(instanceUrl, token);
 
@@ -999,7 +1000,8 @@ router.get('/client/:id', async (req, res, next) => {
         } else if (token && opp.crm_provider === 'salesforce') {
           const sf = require('../api/salesforce');
           const integration = await db.query(`SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [req.user.id]);
-          const instanceUrl = integration.rows[0]?.instance_url || 'https://login.salesforce.com';
+          const instanceUrl = integration.rows[0]?.instance_url;
+          if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
           crmActivities = await sf.getActivities(instanceUrl, token, opp.crm_contact_id);
         } else if (token && opp.crm_provider === 'odoo') {
           let creds;
@@ -1041,7 +1043,9 @@ router.post('/churn/score', async (req, res, next) => {
         else if (provider === 'salesforce') {
           const sf = require('../api/salesforce');
           const integ = await db.query(`SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [req.user.id]);
-          deals = await sf.getDeals(integ.rows[0]?.instance_url || 'https://login.salesforce.com', token);
+          const sfInstanceUrl = integ.rows[0]?.instance_url;
+          if (!sfInstanceUrl) throw new Error('Salesforce instance URL not configured');
+          deals = await sf.getDeals(sfInstanceUrl, token);
         }
         break;
       } catch { /* scoring works without deals */ }
@@ -1339,7 +1343,8 @@ async function importContactsForUser(userId, provider) {
     const integration = await db.query(
       `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
     );
-    const instanceUrl = integration.rows[0]?.instance_url || 'https://login.salesforce.com';
+    const instanceUrl = integration.rows[0]?.instance_url;
+    if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
     const raw = await salesforce.listContacts(instanceUrl, token);
     contacts = (raw || []).map(r => ({
       name: r.name || 'Unknown',

@@ -85,9 +85,10 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       [userId]
     );
     if (integration.rows[0]) {
+      if (!integration.rows[0].instance_url) throw new Error('Salesforce instance URL not configured');
       crmCreds = {
         accessToken: typeof token === 'string' ? token : decrypt(integration.rows[0].access_token),
-        instanceUrl: integration.rows[0].instance_url || 'https://login.salesforce.com',
+        instanceUrl: integration.rows[0].instance_url,
       };
     }
   }
@@ -670,7 +671,7 @@ Retourne un JSON : { "A": { "subject": "...", "body": "..." }, "B": { "subject":
       const result = await claude.callClaude('Retourne uniquement du JSON valide.', prompt, 800);
       let parsed = result.parsed;
       if (!parsed) {
-        const match = (result.content || '').match(/\{[\s\S]*"A"[\s\S]*"B"[\s\S]*\}/);
+        const match = (result.raw || '').match(/\{[\s\S]*"A"[\s\S]*"B"[\s\S]*\}/);
         if (match) parsed = JSON.parse(match[0]);
       }
       if (parsed?.A?.subject && parsed?.B?.subject) return { ...parsed, patternIds };
@@ -689,7 +690,7 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
   try {
     const result = await claude.callClaude('Retourne uniquement du JSON valide.', prompt, 500);
     if (result.parsed) return { ...result.parsed, patternIds };
-    const match = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
+    const match = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
     if (match) return { ...JSON.parse(match[0]), patternIds };
   } catch { /* fallback below */ }
 

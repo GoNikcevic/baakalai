@@ -1,4 +1,5 @@
 const { getUserKey } = require('../config');
+const db = require('../db');
 const logger = require('./logger');
 
 function buildContactData(o) {
@@ -41,14 +42,16 @@ async function exportScoresToSalesforce(userId, opportunities) {
   const apiKey = await getUserKey(userId, 'salesforce');
   if (!apiKey) throw new Error('Salesforce non configuré');
 
-  // Salesforce needs instance URL — try to extract from token or use default
-  const instanceUrl = process.env.SALESFORCE_INSTANCE_URL || 'https://login.salesforce.com';
+  // Salesforce needs instance URL from DB
+  const integration = await db.userIntegrations.get(userId, 'salesforce');
+  const instanceUrl = integration?.instance_url;
+  if (!instanceUrl) throw new Error('Salesforce instance URL not configured. Please reconnect Salesforce.');
 
   const results = [];
   for (const o of opportunities.filter(o => o.score != null)) {
     const c = buildContactData(o);
     try {
-      const res = await fetch(`${instanceUrl}/services/data/v62.0/sobjects/Contact`, {
+      const res = await fetch(`${instanceUrl}/services/data/v58.0/sobjects/Contact`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({

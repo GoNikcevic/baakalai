@@ -50,7 +50,8 @@ async function evaluateTriggers(userId) {
     const integration = await db.query(
       `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
     );
-    const instanceUrl = integration.rows[0]?.instance_url || 'https://login.salesforce.com';
+    const instanceUrl = integration.rows[0]?.instance_url;
+    if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
     contacts = await sf.listContacts(instanceUrl, crmToken);
     deals = await sf.getDeals(instanceUrl, crmToken);
   } else if (crmProvider === 'hubspot') {
@@ -270,7 +271,7 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
   if (result.parsed) return result.parsed;
 
   // Fallback: try to extract JSON from the response
-  const text = result.content || '';
+  const text = result.raw || '';
   const jsonMatch = text.match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
   if (jsonMatch) {
     try { return JSON.parse(jsonMatch[0]); } catch { /* fall through */ }
@@ -331,13 +332,13 @@ Retourne un JSON : { "message": "..." }`;
 
   if (isConnect) {
     const note = result.parsed?.note
-      || (result.content || '').match(/"note"\s*:\s*"([^"]+)"/)?.[1]
+      || (result.raw || '').match(/"note"\s*:\s*"([^"]+)"/)?.[1]
       || `Bonjour ${contact.name.split(' ')[0]}, votre profil a retenu mon attention.`;
     return { note: note.slice(0, maxChars) };
   }
 
   const message = result.parsed?.message
-    || (result.content || '').match(/"message"\s*:\s*"([^"]+)"/)?.[1]
+    || (result.raw || '').match(/"message"\s*:\s*"([^"]+)"/)?.[1]
     || `Bonjour ${contact.name.split(' ')[0]}, je me permets de vous contacter suite à notre échange.`;
   return { message: message.slice(0, maxChars) };
 }
