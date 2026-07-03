@@ -64,12 +64,15 @@ async function syncCRM(userId) {
         closedAt: d.close_time || d.won_time || '',
       }));
     } else if (provider === 'salesforce') {
-      // Salesforce requires instance URL — simplified version using login.salesforce.com
+      // Salesforce requires instance URL for API calls
+      const integration = await db.userIntegrations.get(userId, 'salesforce');
+      const instanceUrl = integration?.instance_url;
+      if (!instanceUrl) throw new Error('Salesforce instance URL not configured. Go to Settings to add it.');
       const soql = encodeURIComponent(
         'SELECT Name, Amount, StageName, CloseDate FROM Opportunity LIMIT 100'
       );
       const res = await fetch(
-        `https://login.salesforce.com/services/data/v62.0/query?q=${soql}`,
+        `${instanceUrl}/services/data/v58.0/query?q=${soql}`,
         { headers: { Authorization: `Bearer ${apiKey}` } }
       );
       if (!res.ok) throw new Error('Salesforce API error: ' + res.status);
