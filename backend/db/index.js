@@ -1919,6 +1919,15 @@ const crmCleaningReports = {
     return result.rows;
   },
 
+  async getLatestByProvider(userId, provider, maxAgeMs = 24 * 60 * 60 * 1000) {
+    const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
+    const result = await query(
+      'SELECT * FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2 AND created_at > $3 ORDER BY created_at DESC LIMIT 1',
+      [userId, provider, cutoff]
+    );
+    return result.rows[0] || null;
+  },
+
   async update(id, data) {
     const sets = [];
     const values = [];

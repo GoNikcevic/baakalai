@@ -191,6 +191,8 @@ export default function SettingsPage() {
         duration: 5000,
       });
       loadKeys();
+      // Auto-trigger CRM sync after OAuth connection
+      syncCRM().catch(() => {});
       // Clean URL params
       window.history.replaceState({}, '', window.location.pathname);
     } else if (crmError) {

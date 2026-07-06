@@ -751,6 +751,22 @@ function CRMHealthSection() {
     }).catch(() => setProvider('pipedrive'));
   }, []);
 
+  // Load cached report (GET) — returns DB cache if <24h, otherwise runs fresh scan server-side
+  const loadReport = useCallback(async () => {
+    if (!provider) return;
+    setScanning(true);
+    setReport(null);
+    setFixResults(null);
+    try {
+      const result = await api.request(`/crm/scan/${provider}`);
+      setReport(result);
+    } catch (err) {
+      setReport({ error: err.message });
+    }
+    setScanning(false);
+  }, [provider]);
+
+  // Force fresh scan (POST) — always runs a new scan
   const handleScan = useCallback(async () => {
     if (!provider) return;
     setScanning(true);
@@ -765,8 +781,8 @@ function CRMHealthSection() {
     setScanning(false);
   }, [provider]);
 
-  // Auto-scan once provider is detected
-  useEffect(() => { if (provider) handleScan(); }, [provider]);
+  // Auto-load cached report once provider is detected
+  useEffect(() => { if (provider) loadReport(); }, [provider, loadReport]);
 
   const handleFix = useCallback(async (issue) => {
     // Review action — navigate to Clients page with filter

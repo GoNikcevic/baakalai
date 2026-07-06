@@ -472,7 +472,38 @@ router.get('/airtable/tables', async (req, res, next) => {
 
 const crmCleaning = require('../lib/crm-cleaning-agent');
 
-// POST /api/crm/scan/:provider — Run a CRM health scan
+// GET /api/crm/scan/:provider — Return cached scan report (<24h) or run fresh scan
+router.get('/scan/:provider', async (req, res, next) => {
+  try {
+    const { provider } = req.params;
+    const cached = await db.crmCleaningReports.getLatestByProvider(req.user.id, provider);
+    if (cached) {
+      return res.json({
+        score: cached.score,
+        totalContacts: cached.total_contacts,
+        summary: cached.summary,
+        issues: cached.issues,
+        reportId: cached.id,
+        cachedAt: cached.created_at,
+      });
+    }
+    // No recent report — run a fresh scan
+    const report = await crmCleaning.scanCRM(req.user.id, provider);
+    const saved = await db.crmCleaningReports.create({
+      userId: req.user.id,
+      provider,
+      score: report.score,
+      totalContacts: report.totalContacts,
+      summary: report.summary,
+      issues: report.issues,
+    });
+    res.json({ ...report, reportId: saved.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/crm/scan/:provider — Run a CRM health scan (always fresh)
 router.post('/scan/:provider', async (req, res, next) => {
   try {
     const { provider } = req.params;
@@ -1718,6 +1749,13 @@ router.get('/salesforce/callback', async (req, res) => {
     });
 
     logger.info('salesforce-oauth', `Salesforce connected for user ${oauthData.userId}: ${tokens.instance_url}`);
+
+    // Auto-trigger CRM sync in background after OAuth connection
+    const { syncCRM } = require('../lib/crm-sync');
+    syncCRM(oauthData.userId).catch((err) => {
+      logger.error('salesforce-oauth', `Background CRM sync failed for user ${oauthData.userId}: ${err.message}`);
+    });
+
     res.redirect(APP_URL + '/settings?crm_connected=salesforce');
   } catch (err) {
     logger.error('salesforce-oauth', `Salesforce OAuth failed: ${err.message}`);

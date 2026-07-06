@@ -83,6 +83,44 @@ async function syncCRM(userId) {
         stage: d.StageName || '',
         closedAt: d.CloseDate || '',
       }));
+
+      // Also pull Contacts (orgs like AOM may not use Opportunities)
+      try {
+        const contactSoql = encodeURIComponent(
+          'SELECT Id, FirstName, LastName, Email, Phone, Account.Name, Title, CreatedDate, LastModifiedDate FROM Contact WHERE Email != null LIMIT 500'
+        );
+        const contactRes = await fetch(
+          `${instanceUrl}/services/data/v58.0/query?q=${contactSoql}`,
+          { headers: { Authorization: `Bearer ${apiKey}` } }
+        );
+        if (contactRes.ok) {
+          const contactData = await contactRes.json();
+          let contactsImported = 0;
+          for (const c of (contactData.records || [])) {
+            const email = c.Email;
+            if (!email) continue;
+            try {
+              const existing = await db.opportunities.findByEmail(userId, email);
+              if (existing) continue;
+              await db.opportunities.create({
+                userId,
+                name: `${c.FirstName || ''} ${c.LastName || ''}`.trim() || 'Unknown',
+                email,
+                title: c.Title || null,
+                company: c.Account?.Name || null,
+                phone: c.Phone || null,
+                status: 'imported',
+                crmProvider: 'salesforce',
+                crmContactId: c.Id,
+              });
+              contactsImported++;
+            } catch { /* skip individual failures */ }
+          }
+          console.log(`[crm-sync] Salesforce: imported ${contactsImported} new contacts`);
+        }
+      } catch (contactErr) {
+        console.warn('[crm-sync] Salesforce contact pull failed:', contactErr.message);
+      }
     } else if (provider === 'notion' || provider === 'airtable' || provider === 'odoo') {
       // For Notion/Airtable/Odoo: use already-imported opportunities as deals
       const opps = await db.opportunities.listByUser(userId, 200);
