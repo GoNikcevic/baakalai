@@ -849,6 +849,48 @@ function SendEmailCard({ metadata }) {
   );
 }
 
+function IssueRow({ issue, en }) {
+  const [expanded, setExpanded] = useState(false);
+  const severity = issue.severity === 'critical' || issue.severity === 'high' ? '\uD83D\uDD34'
+    : issue.severity === 'warning' || issue.severity === 'medium' ? '\uD83D\uDFE1' : '\uD83D\uDFE2';
+  const contacts = issue.contacts || [];
+  const hasContacts = contacts.length > 0;
+  const typeLabel = {
+    invalid_email_format: en ? 'Invalid email format' : 'Format email invalide',
+    invalid_email_domain: en ? 'Invalid email domain (no mail server)' : 'Domaine email invalide (pas de serveur mail)',
+    invalid_email: en ? 'Invalid emails' : 'Emails invalides',
+    duplicate_email: en ? 'Duplicate emails' : 'Emails en doublon',
+    missing_email: en ? 'Missing emails' : 'Emails manquants',
+    missing_name: en ? 'Missing names' : 'Noms manquants',
+    format_name_caps: en ? 'Name formatting' : 'Format des noms',
+  }[issue.type] || issue.message || issue.type;
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div
+        style={{ display: 'flex', gap: 6, lineHeight: 1.5, cursor: hasContacts ? 'pointer' : 'default' }}
+        onClick={() => hasContacts && setExpanded(!expanded)}
+      >
+        <span>{severity}</span>
+        <span style={{ flex: 1 }}>{typeLabel} {issue.count > 1 ? `(${issue.count})` : ''}</span>
+        {hasContacts && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{expanded ? '\u25B2' : '\u25BC'}</span>}
+      </div>
+      {expanded && contacts.length > 0 && (
+        <div style={{ marginLeft: 22, marginTop: 4, marginBottom: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+          {contacts.slice(0, 10).map((c, j) => (
+            <div key={j} style={{ padding: '2px 0' }}>
+              {c.name ? `${c.name} — ` : ''}<span style={{ color: 'var(--danger)' }}>{c.email}</span>
+            </div>
+          ))}
+          {contacts.length > 10 && (
+            <div style={{ fontStyle: 'italic', marginTop: 2 }}>+{contacts.length - 10} {en ? 'more' : 'de plus'}...</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CrmActionCard({ metadata, actionType, label, icon }) {
   const { lang } = useI18n();
   const en = lang === 'en';
@@ -908,18 +950,19 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
             {result?.autoFixed != null && ` — ${result.autoFixed} ${en ? 'fixed' : 'corrig\u00E9(s)'}, ${result.remainingManual || 0} ${en ? 'remaining' : 'restant(s)'}`}
             {result?.message && ` — ${result.message}`}
           </div>
-          {/* Detailed health results inline */}
-          {result?.health?.issues?.length > 0 && (
+          {/* Detailed results inline — from health scan or CRM scan */}
+          {(result?.health?.issues?.length > 0 || result?.issues?.length > 0) && (
             <div style={{ fontSize: 12, marginTop: 6, padding: '10px 12px', background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 8 }}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>{en ? 'Issues found' : 'Problèmes détectés'} ({result.health.issues.length})</div>
-              {result.health.issues.slice(0, 8).map((issue, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 4, lineHeight: 1.5 }}>
-                  <span>{issue.severity === 'critical' ? '\uD83D\uDD34' : issue.severity === 'warning' ? '\uD83D\uDFE1' : '\uD83D\uDFE2'}</span>
-                  <span>{issue.message || issue.type} {issue.count > 1 ? `(${issue.count})` : ''}</span>
-                </div>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                {en ? 'Issues found' : 'Problèmes détectés'} ({(result?.health?.issues || result?.issues || []).length})
+              </div>
+              {(result?.health?.issues || result?.issues || []).slice(0, 8).map((issue, i) => (
+                <IssueRow key={i} issue={issue} en={en} />
               ))}
-              {result.health.issues.length > 8 && (
-                <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>+{result.health.issues.length - 8} {en ? 'more' : 'de plus'}...</div>
+              {(result?.health?.issues || result?.issues || []).length > 8 && (
+                <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                  +{(result?.health?.issues || result?.issues || []).length - 8} {en ? 'more' : 'de plus'}...
+                </div>
               )}
             </div>
           )}
