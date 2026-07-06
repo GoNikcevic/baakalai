@@ -128,7 +128,7 @@ jobs:
             # on require. Skip those (they would hang the CI). The smoke
             # test is mostly about helper / api / lib modules where the
             # bug class we care about lives.
-            if [[ "$rel" == "server.js" || "$rel" == "routes/"* || "$rel" == "orchestrator/"* ]]; then
+            if [[ "$rel" == "server.js" || "$rel" == "routes/"* || "$rel" == "orchestrator/"* || "$rel" == "scripts/"* ]]; then
               echo "⊘ skip (side-effectful at load): $rel"
               continue
             fi
