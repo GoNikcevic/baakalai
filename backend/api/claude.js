@@ -9,7 +9,7 @@ let clientKeyHash;
 function getClient() {
   const currentKey = config.claude.apiKey || '';
   if (!currentKey) {
-    const err = new Error('Clé API Anthropic non configurée. Ajoutez-la dans Réglages ou dans le fichier .env.');
+    const err = new Error('Anthropic API key not configured. Add it in Settings or .env file.');
     err.status = 503;
     err.code = 'API_KEY_MISSING';
     throw err;
@@ -26,31 +26,31 @@ function wrapApiError(err) {
   const msg = err?.error?.error?.message || err?.message || String(err);
 
   if (msg.includes('credit balance') || msg.includes('billing')) {
-    const wrapped = new Error('Crédits API Anthropic insuffisants. Rechargez votre compte sur console.anthropic.com.');
+    const wrapped = new Error('Insufficient Anthropic API credits. Top up at console.anthropic.com.');
     wrapped.status = 402;
     wrapped.code = 'INSUFFICIENT_CREDITS';
     return wrapped;
   }
   if (msg.includes('authentication') || msg.includes('invalid x-api-key') || msg.includes('invalid api key')) {
-    const wrapped = new Error('Clé API Anthropic invalide. Vérifiez-la dans Réglages.');
+    const wrapped = new Error('Invalid Anthropic API key. Check it in Settings.');
     wrapped.status = 401;
     wrapped.code = 'INVALID_API_KEY';
     return wrapped;
   }
   if (msg.includes('rate_limit') || msg.includes('rate limit')) {
-    const wrapped = new Error('Limite de requêtes API atteinte. Réessayez dans quelques instants.');
+    const wrapped = new Error('API rate limit reached. Try again in a moment.');
     wrapped.status = 429;
     wrapped.code = 'RATE_LIMITED';
     return wrapped;
   }
   if (msg.includes('overloaded') || msg.includes('529')) {
-    const wrapped = new Error('API Anthropic temporairement surchargée. Réessayez dans quelques minutes.');
+    const wrapped = new Error('Anthropic API temporarily overloaded. Try again in a few minutes.');
     wrapped.status = 503;
     wrapped.code = 'API_OVERLOADED';
     return wrapped;
   }
 
-  const wrapped = new Error('Erreur API Claude : ' + msg.substring(0, 200));
+  const wrapped = new Error('Claude API error: ' + msg.substring(0, 200));
   wrapped.status = err.status || 500;
   wrapped.code = 'API_ERROR';
   return wrapped;

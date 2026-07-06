@@ -27,12 +27,12 @@ async function syncCRM(userId) {
       const key = await getUserKey(userId, p);
       if (key) { provider = p; apiKey = key; break; }
     }
-    if (!provider) throw new Error('Aucun CRM configuré');
+    if (!provider) throw new Error('No CRM configured');
 
     notifyUser(userId, 'crm:sync', {
       status: 'fetching',
       progress: 10,
-      message: `Connexion à ${provider}...`,
+      message: `Connecting to ${provider}...`,
     });
 
     // Fetch deals based on provider
@@ -99,14 +99,14 @@ async function syncCRM(userId) {
     notifyUser(userId, 'crm:sync', {
       status: 'fetching',
       progress: 40,
-      message: `${deals.length} deals récupérés`,
+      message: `${deals.length} deals fetched`,
     });
 
     if (deals.length === 0) {
       notifyUser(userId, 'crm:sync', {
         status: 'done',
         progress: 100,
-        message: 'Aucun deal trouvé dans le CRM',
+        message: 'No deals found in CRM',
         patternsCount: 0,
       });
       return { deals: 0, patterns: 0 };
@@ -116,7 +116,7 @@ async function syncCRM(userId) {
     notifyUser(userId, 'crm:sync', {
       status: 'analyzing',
       progress: 60,
-      message: 'Claude analyse vos deals...',
+      message: 'Claude is analyzing your deals...',
     });
 
     const analysisInput = deals.map(d =>
@@ -145,7 +145,7 @@ Sois spécifique et actionnable.`;
     notifyUser(userId, 'crm:sync', {
       status: 'saving',
       progress: 85,
-      message: 'Sauvegarde des insights...',
+      message: 'Saving insights...',
     });
 
     // Save patterns
@@ -177,7 +177,7 @@ Sois spécifique et actionnable.`;
     notifyUser(userId, 'crm:sync', {
       status: 'done',
       progress: 100,
-      message: `Analyse terminée — ${patternsCount} patterns identifiés sur ${deals.length} deals (${provider})`,
+      message: `Analysis complete — ${patternsCount} patterns identified from ${deals.length} deals (${provider})`,
       patternsCount,
       dealsCount: deals.length,
       provider,
