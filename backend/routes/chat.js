@@ -259,8 +259,12 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       const userRow = await db.query('SELECT language FROM users WHERE id = $1', [req.user.id]);
       userLang = userRow.rows?.[0]?.language || 'fr';
     } catch { /* default to fr */ }
+
+    // Insert language instruction at the BEGINNING of context (high priority)
     if (userLang === 'en') {
-      contextParts.push('LANGUAGE: The user speaks English. Reply in English. Generate all campaign copy, sequences, and suggestions in English.');
+      contextParts.unshift('CRITICAL LANGUAGE RULE: You MUST reply in ENGLISH. The user speaks English. ALL your responses, campaign copy, sequences, suggestions, action labels, and quick_replies MUST be in English. The context below may contain French labels — ignore the language of the context, always respond in English.');
+    } else {
+      contextParts.unshift('LANGUE: Réponds en français. Tout le contenu (campagnes, séquences, suggestions, quick_replies) doit être en français.');
     }
 
     const context = contextParts.join('\n\n');
