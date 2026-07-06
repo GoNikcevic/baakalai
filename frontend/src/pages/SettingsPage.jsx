@@ -1224,18 +1224,21 @@ function MetadataConfig({ provider, en }) {
             {en ? 'No databases found. Share your Notion database with the integration first.' : 'Aucune base trouvée. Partagez d\'abord votre base Notion avec l\'intégration.'}
           </div>
         )}
-        {selected && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={handleSave}>
-              {saved ? (en ? 'Saved!' : 'Enregistré !') : (en ? 'Save database' : 'Enregistrer la base')}
+        {selected && !saved && (
+          <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={handleSave}>
+            {en ? 'Save database' : 'Enregistrer la base'}
+          </button>
+        )}
+        {(saved || (currentMeta?.database_id && !selected)) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>{'\u2705'} {en ? 'Database configured' : 'Base configurée'}</span>
+            <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-muted)' }}
+              onClick={() => { setSaved(false); setSelected(''); }}>
+              {en ? 'Change' : 'Changer'}
             </button>
-            {saved && <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>{'\u2705'}</span>}
           </div>
         )}
         {saveError && <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{saveError}</div>}
-        {currentMeta?.database_id && !selected && (
-          <div style={{ fontSize: 11, color: 'var(--success)' }}>{'\u2705'} {en ? 'Database configured' : 'Base configurée'}</div>
-        )}
       </div>
     );
   }
