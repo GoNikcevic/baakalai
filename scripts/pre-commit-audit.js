@@ -73,6 +73,33 @@ const CRITICAL_PATTERNS = [
       return issues;
     },
   },
+  {
+    name: 'Hardcoded French string without i18n (use en ? or t())',
+    test(lines, filePath) {
+      if (!filePath.includes('frontend/src/')) return [];
+      // Skip i18n json files and test files
+      if (filePath.includes('/i18n/') || filePath.includes('.test.')) return [];
+      const issues = [];
+      // Common French patterns that should be wrapped in en ? ternary or t()
+      const frenchPatterns = [
+        /['"`](?:Aucun|Erreur|Chargement|Enregistr|Sauvegard|Supprim|Connexion|Paramètre|Configur|Campagne|Analyser|Créer|Modifier|Confirmer|Bienvenue|Recherch|Importer|Exporter|Envoyer|Annuler|Valider|Sélectionner|Ajouter|Fermer|Retour|Suivant|Précédent)[^'"`]*['"`]/,
+      ];
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip comments
+        if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue;
+        // Skip lines that already have en ? or t( — they're handling i18n
+        if (/\ben\s*\?/.test(line) || /\bt\s*\(/.test(line)) continue;
+        for (const pattern of frenchPatterns) {
+          if (pattern.test(line)) {
+            issues.push(i + 1);
+            break;
+          }
+        }
+      }
+      return issues;
+    },
+  },
 ];
 
 let hasErrors = false;
