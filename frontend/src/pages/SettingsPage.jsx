@@ -812,10 +812,23 @@ export default function SettingsPage() {
                 {crmSyncStatus.status === 'done' ? '\u2705 ' : crmSyncStatus.status === 'error' ? '\u274c ' : ''}{crmSyncStatus.message || ''}
               </div>
               {crmSyncStatus.status === 'done' && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                  {en
-                    ? 'Patterns saved to AI Memory. View them in the Memory Explorer page.'
-                    : 'Patterns sauvegard\u00e9s dans la M\u00e9moire IA. Consultez-les dans la page M\u00e9moire.'}
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
+                    {en
+                      ? 'Your CRM data is now synced. Here\'s what you can do next:'
+                      : 'Vos données CRM sont synchronisées. Voici ce que vous pouvez faire :'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => window.location.href = '/analytics'}>
+                      {en ? 'View Analytics' : 'Voir les Analytics'}
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => window.location.href = '/clients'}>
+                      {en ? 'Browse Clients' : 'Voir les Clients'}
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => window.location.href = '/chat'}>
+                      {en ? 'Ask the AI' : 'Demander à l\'IA'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
