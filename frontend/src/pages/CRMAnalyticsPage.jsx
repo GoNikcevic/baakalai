@@ -1023,7 +1023,6 @@ function CRMHealthSection() {
             : `${result.enriched} enrichis, ${result.notFound} non trouvés (${result.total} traités)`,
         }}));
         showToast({ type: 'success', title: en ? 'Enriched' : 'Enrichi', message: `${result.enriched} contact(s)` });
-        if (result.enriched > 0) setTimeout(handleScan, 1500);
       } catch (err) {
         setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
         showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
@@ -1051,7 +1050,6 @@ function CRMHealthSection() {
         });
         setFixResults(prev => ({ ...(prev || {}), [issue.type]: result }));
         showToast({ type: 'success', title: en ? 'Fixed' : 'Corrigé', message: `${result.applied || 0} ${en ? 'contact(s) fixed' : 'contact(s) corrigé(s)'}` });
-        setTimeout(handleScan, 1000);
       }
     } catch (err) {
       setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
@@ -1130,9 +1128,26 @@ function CRMHealthSection() {
         </div>
       </div>
 
-      {/* Issues list with action buttons */}
+      {/* Fix all + Issues list */}
       {(report.issues || []).length > 0 && (
         <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Fix all button */}
+          {report.issues.some(i => i.suggestedAction && i.suggestedAction !== 'review' && !fixResults?.[i.type]) && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={fixing}
+                onClick={async () => {
+                  const fixable = report.issues.filter(i => i.suggestedAction && i.suggestedAction !== 'review' && !fixResults?.[i.type]);
+                  for (const issue of fixable) {
+                    await handleFix(issue);
+                  }
+                }}
+              >
+                {fixing ? (en ? 'Fixing...' : 'Correction...') : (en ? 'Fix all' : 'Tout corriger')}
+              </button>
+            </div>
+          )}
           {report.issues.map((issue, i) => {
             const config = ISSUE_CONFIG[issue.type] || { icon: '?', label: issue.type, color: 'var(--text-muted)' };
             const count = issue.count || issue.contacts?.length || 0;
