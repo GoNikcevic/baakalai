@@ -12,6 +12,7 @@ import { useI18n, useT } from '../i18n';
 import { showToast } from '../services/notifications';
 import EngagementChart from '../components/charts/EngagementChart';
 import FunnelChart from '../components/charts/FunnelChart';
+import LoadingTips from '../components/LoadingTips';
 
 /* ─── Helpers ─── */
 
@@ -234,7 +235,7 @@ export default function CRMAnalyticsPage() {
       </div>
 
       {/* Content */}
-      {loading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading...</div>}
+      {loading && <LoadingTips />}
 
       {/* Empty state — no data */}
       {!loading && !tabData && activeTab !== 'health' && (
@@ -1061,10 +1062,11 @@ function CRMHealthSection() {
 
   if (scanning) {
     return (
-      <div className="crm-section" style={{ textAlign: 'center', padding: 60 }}>
-        <div style={{ fontSize: 32, marginBottom: 16 }}>{'\uD83D\uDD0D'}</div>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{en ? 'CRM scan in progress...' : 'Scan CRM en cours...'}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{en ? `Analyzing ${provider} contacts` : `Analyse des contacts ${provider}`}</div>
+      <div className="crm-section">
+        <LoadingTips
+          title={en ? 'CRM scan in progress...' : 'Scan CRM en cours...'}
+          subtitle={en ? `Analyzing ${provider} contacts` : `Analyse des contacts ${provider}`}
+        />
       </div>
     );
   }
