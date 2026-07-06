@@ -5,6 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
@@ -18,6 +19,14 @@ const TYPE_ICONS = {
   reveal_done: '📧',
   icp_ready: '🎯',
   welcome: '👋',
+  churn_alert: '⚠️',
+  warning: '⚠️',
+};
+
+/* ─── Type → link mapping (clickable notifications) ─── */
+const TYPE_LINKS = {
+  churn_alert: '/clients?filter=churn',
+  warning: '/clients?filter=churn',
 };
 
 /* ─── Time-ago helper ─── */
@@ -36,6 +45,7 @@ function timeAgo(dateStr, t) {
 
 export default function NotificationBell() {
   const t = useT();
+  const navigate = useNavigate();
   const { socket } = useSocket();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -243,26 +253,41 @@ export default function NotificationBell() {
               {t('notifications.empty')}
             </div>
           ) : (
-            notifications.map((n) => (
+            notifications.map((n) => {
+              const link = TYPE_LINKS[n.type];
+              const isChurnAlert = n.type === 'churn_alert' || n.type === 'warning';
+              return (
               <div
                 key={n.id}
-                onClick={() => !n.read && handleMarkRead(n.id)}
+                onClick={() => {
+                  if (!n.read) handleMarkRead(n.id);
+                  if (link) { setOpen(false); navigate(link); }
+                }}
                 style={{
                   display: 'flex',
                   gap: 10,
                   padding: '10px 16px',
-                  cursor: n.read ? 'default' : 'pointer',
-                  background: n.read ? 'transparent' : 'var(--bg-elevated, rgba(59,130,246,0.06))',
+                  cursor: link || !n.read ? 'pointer' : 'default',
+                  background: n.read
+                    ? 'transparent'
+                    : isChurnAlert
+                      ? 'var(--warning-soft, rgba(217,119,6,0.08))'
+                      : 'var(--bg-elevated, rgba(59,130,246,0.06))',
                   borderBottom: '1px solid var(--border, #222)',
+                  borderLeft: isChurnAlert ? '3px solid var(--warning, #D97706)' : 'none',
                   transition: 'background 0.15s',
                 }}
                 onMouseEnter={(e) => {
-                  if (!n.read) e.currentTarget.style.background = 'var(--bg-hover, rgba(59,130,246,0.1))';
+                  if (!n.read || link) e.currentTarget.style.background = isChurnAlert
+                    ? 'var(--warning-soft, rgba(217,119,6,0.12))'
+                    : 'var(--bg-hover, rgba(59,130,246,0.1))';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = n.read
                     ? 'transparent'
-                    : 'var(--bg-elevated, rgba(59,130,246,0.06))';
+                    : isChurnAlert
+                      ? 'var(--warning-soft, rgba(217,119,6,0.08))'
+                      : 'var(--bg-elevated, rgba(59,130,246,0.06))';
                 }}
               >
                 {/* Icon */}
@@ -309,14 +334,14 @@ export default function NotificationBell() {
                       width: 8,
                       height: 8,
                       borderRadius: '50%',
-                      background: 'var(--blue, #3b82f6)',
+                      background: isChurnAlert ? 'var(--warning, #D97706)' : 'var(--blue, #3b82f6)',
                       flexShrink: 0,
                       marginTop: 6,
                     }}
                   />
                 )}
               </div>
-            ))
+              ); })
           )}
         </div>
       )}

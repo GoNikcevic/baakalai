@@ -24,14 +24,43 @@ const STAGE_COLORS = {
   lost: 'var(--danger)',
 };
 
-const STATUS_LABELS = {
-  new: 'Nouveau',
-  interested: 'Intéressé',
-  meeting: 'RDV',
-  negotiation: 'Négo',
-  won: 'Gagné',
-  lost: 'Perdu',
-};
+/* ─── Vocabulary mapping (sales vs membership orgs) ─── */
+
+function getVocabulary(mode, en) {
+  if (mode === 'membership') {
+    return {
+      deal: en ? 'Membership' : 'Adhésion',
+      won: en ? 'Renewed' : 'Renouvelé',
+      lost: en ? 'Lapsed' : 'Expiré',
+      pipeline: en ? 'Member Lifecycle' : 'Cycle de vie membre',
+      new: en ? 'New member' : 'Nouveau membre',
+      interested: en ? 'Engaged' : 'Engagé',
+      meeting: en ? 'Active' : 'Actif',
+      negotiation: en ? 'At risk' : 'À risque',
+    };
+  }
+  return {
+    deal: en ? 'Deal' : 'Deal',
+    won: en ? 'Won' : 'Gagné',
+    lost: en ? 'Lost' : 'Perdu',
+    pipeline: 'Pipeline',
+    new: en ? 'New' : 'Nouveau',
+    interested: en ? 'Interested' : 'Intéressé',
+    meeting: en ? 'Meeting' : 'RDV',
+    negotiation: en ? 'Negotiation' : 'Négo',
+  };
+}
+
+function getStatusLabels(vocab) {
+  return {
+    new: vocab.new,
+    interested: vocab.interested,
+    meeting: vocab.meeting,
+    negotiation: vocab.negotiation,
+    won: vocab.won,
+    lost: vocab.lost,
+  };
+}
 
 const CHANNEL_COLORS = {
   email: 'var(--blue)',
@@ -67,13 +96,14 @@ function HealthGauge({ score, label }) {
 
 /* ─── Sections ─── */
 
-function getTabs(t) { return [
-  { key: 'pipeline', label: 'Pipeline' },
+function getTabs(t, vocab) { return [
+  { key: 'pipeline', label: vocab?.pipeline || 'Pipeline' },
   { key: 'attribution', label: 'Attribution' },
   { key: 'scoring', label: 'Lead Scoring' },
   { key: 'trends', label: t('analytics.trends') },
   { key: 'channels', label: t('analytics.channels') },
   { key: 'forecast', label: 'Forecast' },
+  { key: 'renewals', label: t('analytics.renewals') },
   { key: 'health', label: t('analytics.crmHealth') },
 ]; }
 
@@ -85,10 +115,20 @@ export default function CRMAnalyticsPage() {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+
+  // Detect vocabulary mode: membership orgs vs sales teams
+  const mode = useMemo(() => {
+    const opps = Object.values(opportunities || {});
+    const hasDeals = opps.some(o => o.deal_value > 0 || o.status === 'won' || o.status === 'lost');
+    return hasDeals ? 'sales' : 'membership';
+  }, [opportunities]);
+  const vocab = useMemo(() => getVocabulary(mode, en), [mode, en]);
+  const STATUS_LABELS = useMemo(() => getStatusLabels(vocab), [vocab]);
+
   const [activeTab, setActiveTab] = useState('pipeline');
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
-  const TABS = getTabs(t);
+  const TABS = getTabs(t, vocab);
   const fetchedRef = useRef(new Set());
 
   const fetchData = useCallback(async (tab, force) => {
@@ -165,8 +205,8 @@ export default function CRMAnalyticsPage() {
         }}>
           {[
             { label: en ? 'Total contacts' : 'Contacts total', value: kpis.total },
-            { label: en ? 'Active deals' : 'Deals actifs', value: kpis.active },
-            { label: en ? 'Won' : 'Gagnés', value: kpis.won },
+            { label: en ? `Active ${vocab.deal.toLowerCase()}s` : `${vocab.deal}s actifs`, value: kpis.active },
+            { label: vocab.won, value: kpis.won },
             { label: en ? 'Win rate' : 'Taux de conversion', value: kpis.winRate + '%' },
           ].map((kpi, i) => (
             <div key={i} style={{
@@ -210,7 +250,7 @@ export default function CRMAnalyticsPage() {
           </div>
           <div style={{ fontSize: 13, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
             {hasData
-              ? (en ? 'Data will appear here once your contacts and deals have enough activity.' : 'Les données apparaîtront ici quand vos contacts et deals auront assez d\'activité.')
+              ? (en ? `Data will appear here once your contacts and ${vocab.deal.toLowerCase()}s have enough activity.` : `Les données apparaîtront ici quand vos contacts et ${vocab.deal.toLowerCase()}s auront assez d'activité.`)
               : (en ? 'Go to Settings, connect your CRM (Salesforce, HubSpot, Pipedrive...) and sync your data.' : 'Allez dans Paramètres, connectez votre CRM (Salesforce, HubSpot, Pipedrive...) et synchronisez vos données.')}
           </div>
           {!hasData && (
@@ -238,12 +278,13 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {!loading && activeTab === 'pipeline' && tabData && <PipelineSection data={tabData} />}
+      {!loading && activeTab === 'pipeline' && tabData && <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
       {!loading && activeTab === 'attribution' && tabData && <AttributionSection data={tabData} />}
-      {!loading && activeTab === 'scoring' && tabData && <ScoringSection data={tabData} />}
+      {!loading && activeTab === 'scoring' && tabData && <ScoringSection data={tabData} statusLabels={STATUS_LABELS} />}
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
-      {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} />}
+      {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
+      {!loading && activeTab === 'renewals' && tabData && <RenewalsSection data={tabData} />}
       {!loading && activeTab === 'health' && <CRMHealthSection />}
     </div>
   );
@@ -251,8 +292,9 @@ export default function CRMAnalyticsPage() {
 
 /* ═══ Pipeline Section ═══ */
 
-function PipelineSection({ data }) {
+function PipelineSection({ data, statusLabels, vocab }) {
   const t = useT();
+  const STATUS_LABELS = statusLabels;
   const funnelStages = (data.stages || [])
     .filter(s => s.stage !== 'lost')
     .map(s => ({ label: s.label, value: s.count }));
@@ -380,7 +422,8 @@ function AttributionSection({ data }) {
 
 /* ═══ Scoring Section ═══ */
 
-function ScoringSection({ data }) {
+function ScoringSection({ data, statusLabels }) {
+  const STATUS_LABELS = statusLabels;
   const t = useT();
   const [filter, setFilter] = useState('all');
 
@@ -471,11 +514,34 @@ function ScoringSection({ data }) {
 
 /* ═══ Trends Section ═══ */
 
-function TrendsSection({ data }) {
+function TrendsSection({ data: initialData }) {
   const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [trendData, setTrendData] = useState(initialData);
+  const defaultFrom = useMemo(() => {
+    const d = new Date(); d.setDate(d.getDate() - 90);
+    return d.toISOString().split('T')[0];
+  }, []);
+  const defaultTo = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const [fromDate, setFromDate] = useState(defaultFrom);
+  const [toDate, setToDate] = useState(defaultTo);
+
+  useEffect(() => {
+    if (fromDate === defaultFrom && toDate === defaultTo) {
+      setTrendData(initialData);
+      return;
+    }
+    let cancelled = false;
+    api.request(`/analytics/trends?from=${fromDate}&to=${toDate}`).then(result => {
+      if (!cancelled) setTrendData(result);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [fromDate, toDate, defaultFrom, defaultTo, initialData]);
+
   const chartData = useMemo(() => {
-    if (data.weeks && data.weeks.length > 0) {
-      return data.weeks.map(w => ({
+    if (trendData?.weeks && trendData.weeks.length > 0) {
+      return trendData.weeks.map(w => ({
         label: w.label,
         open: w.openRate ?? w.open ?? 0,
         reply: w.replyRate ?? w.reply ?? 0,
@@ -483,12 +549,20 @@ function TrendsSection({ data }) {
       }));
     }
     return [];
-  }, [data.weeks]);
+  }, [trendData?.weeks]);
 
   return (
     <div className="crm-section">
       <div className="card">
         <div className="card-title">{t('analytics.weeklyTrends')}</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', padding: '0 16px' }}>
+          <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'From' : 'De'}</label>
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+            className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
+          <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'To' : '\u00C0'}</label>
+          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+            className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
+        </div>
         <div className="card-body">
           {chartData.length > 0 ? (
             <EngagementChart data={chartData} />
@@ -571,18 +645,53 @@ function ChannelsSection({ data }) {
 
 /* ═══ Forecast Section ═══ */
 
-function ForecastSection({ data }) {
+function ForecastSection({ data: initialData, statusLabels, vocab }) {
+  const STATUS_LABELS = statusLabels;
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [forecastData, setForecastData] = useState(initialData);
+  const defaultFrom = useMemo(() => {
+    const d = new Date(); d.setDate(d.getDate() - 90);
+    return d.toISOString().split('T')[0];
+  }, []);
+  const defaultTo = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const [fromDate, setFromDate] = useState(defaultFrom);
+  const [toDate, setToDate] = useState(defaultTo);
+
+  useEffect(() => {
+    if (fromDate === defaultFrom && toDate === defaultTo) {
+      setForecastData(initialData);
+      return;
+    }
+    let cancelled = false;
+    api.request(`/analytics/forecast?from=${fromDate}&to=${toDate}`).then(result => {
+      if (!cancelled) setForecastData(result);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [fromDate, toDate, defaultFrom, defaultTo, initialData]);
+
+  const data = forecastData;
   const pipeline = data.pipeline || {};
   const retention = data.retention || {};
   const cycle = data.salesCycle || {};
 
   return (
     <div className="crm-section">
+      {/* Date range picker */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'From' : 'De'}</label>
+        <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+          className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
+        <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'To' : '\u00C0'}</label>
+        <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+          className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
+      </div>
+
       {/* KPI row */}
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--blue)' }}>${(pipeline.totalValue || 0).toLocaleString()}</div>
-          <div className="crm-kpi-label">Total Pipeline</div>
+          <div className="crm-kpi-label">{`Total ${vocab.pipeline}`}</div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>${(pipeline.weightedForecast || 0).toLocaleString()}</div>
@@ -594,19 +703,19 @@ function ForecastSection({ data }) {
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>${(retention.totalWonRevenue || 0).toLocaleString()}</div>
-          <div className="crm-kpi-label">Won Revenue</div>
+          <div className="crm-kpi-label">{`${vocab.won} Revenue`}</div>
         </div>
       </div>
 
       <div className="crm-grid-2">
         {/* Pipeline by stage */}
         <div className="card">
-          <div className="card-title">Pipeline by Stage (Weighted)</div>
+          <div className="card-title">{`${vocab.pipeline} by Stage (Weighted)`}</div>
           <div className="card-body">
             <div className="crm-table">
               <div className="crm-table-header">
                 <span style={{ flex: 2 }}>Stage</span>
-                <span>Deals</span>
+                <span>{`${vocab.deal}s`}</span>
                 <span>Value</span>
                 <span>Win %</span>
                 <span>Weighted</span>
@@ -654,7 +763,7 @@ function ForecastSection({ data }) {
       {/* Revenue History */}
       {(data.revenueHistory || []).length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-title">Monthly Won Revenue</div>
+          <div className="card-title">{`Monthly ${vocab.won} Revenue`}</div>
           <div className="card-body">
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 120 }}>
               {data.revenueHistory.map((m, i) => {
@@ -676,7 +785,7 @@ function ForecastSection({ data }) {
       {/* Projected deals */}
       {(data.projectedDeals || []).length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-title">Top Projected Deals</div>
+          <div className="card-title">{`Top Projected ${vocab.deal}s`}</div>
           <div className="card-body">
             <div className="crm-table">
               <div className="crm-table-header">
@@ -711,8 +820,113 @@ function ForecastSection({ data }) {
       {(pipeline.byStage || []).every(s => s.deals === 0) && (
         <div className="card" style={{ marginTop: 16, textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-            No deals with values in pipeline. Add deal values to your contacts to see revenue forecasts.
+            {`No ${vocab.deal.toLowerCase()}s with values in ${vocab.pipeline.toLowerCase()}. Add ${vocab.deal.toLowerCase()} values to your contacts to see revenue forecasts.`}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ Renewals Section ═══ */
+
+function RenewalsSection({ data }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+
+  const allContacts = useMemo(() => {
+    const groups = [
+      ...(data.overdue?.contacts || []),
+      ...(data.next30?.contacts || []),
+      ...(data.next60?.contacts || []),
+      ...(data.next90?.contacts || []),
+    ];
+    return groups.sort((a, b) => a.days_until - b.days_until);
+  }, [data]);
+
+  function urgencyColor(days) {
+    if (days < 0) return 'var(--danger)';
+    if (days <= 30) return 'var(--orange, #f97316)';
+    if (days <= 60) return 'var(--warning)';
+    return 'var(--success)';
+  }
+
+  function urgencyBg(days) {
+    if (days < 0) return 'rgba(239, 68, 68, 0.06)';
+    if (days <= 30) return 'rgba(249, 115, 22, 0.06)';
+    if (days <= 60) return 'rgba(234, 179, 8, 0.06)';
+    return 'transparent';
+  }
+
+  return (
+    <div className="crm-section">
+      {/* KPI cards */}
+      <div className="crm-kpi-row">
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--danger)' }}>{data.overdue?.count || 0}</div>
+          <div className="crm-kpi-label">{en ? 'Overdue' : 'En retard'}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--orange, #f97316)' }}>{data.next30?.count || 0}</div>
+          <div className="crm-kpi-label">{en ? 'Next 30 days' : '30 prochains jours'}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--warning)' }}>{data.next60?.count || 0}</div>
+          <div className="crm-kpi-label">{en ? 'Next 60 days' : '60 prochains jours'}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.next90?.count || 0}</div>
+          <div className="crm-kpi-label">{en ? 'Next 90 days' : '90 prochains jours'}</div>
+        </div>
+      </div>
+
+      {/* Contacts table */}
+      <div className="card">
+        <div className="card-title">{t('analytics.renewalsUpcoming')}</div>
+        <div className="card-body">
+          <div className="crm-table">
+            <div className="crm-table-header">
+              <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
+              <span>Email</span>
+              <span>{en ? 'Company' : 'Entreprise'}</span>
+              <span>{en ? 'Renewal date' : 'Date renouvellement'}</span>
+              <span>{en ? 'Days' : 'Jours'}</span>
+              <span>{en ? 'Value' : 'Valeur'}</span>
+            </div>
+            {allContacts.map(c => (
+              <div
+                className="crm-table-row"
+                key={c.id}
+                style={{ background: urgencyBg(c.days_until) }}
+              >
+                <span style={{ flex: 2, fontWeight: 600 }}>{c.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.email}</span>
+                <span>{c.company}</span>
+                <span style={{ fontSize: 12 }}>{c.renewal_date}</span>
+                <span style={{ fontWeight: 700, color: urgencyColor(c.days_until) }}>
+                  {c.days_until < 0
+                    ? (en ? `${Math.abs(c.days_until)}d overdue` : `${Math.abs(c.days_until)}j en retard`)
+                    : (en ? `${c.days_until}d` : `${c.days_until}j`)}
+                </span>
+                <span>{c.deal_value > 0 ? `$${c.deal_value.toLocaleString()}` : '\u2014'}</span>
+              </div>
+            ))}
+            {allContacts.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
+                {t('analytics.renewalsEmpty')}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Later count */}
+      {(data.later?.count || 0) > 0 && (
+        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+          {en
+            ? `${data.later.count} more renewal(s) beyond 90 days`
+            : `${data.later.count} renouvellement(s) suppl\u00e9mentaire(s) au-del\u00e0 de 90 jours`}
         </div>
       )}
     </div>

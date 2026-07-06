@@ -185,22 +185,31 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
           message: `${churnReport.atRisk} contact(s) à risque de churn (score >= 50)`,
         });
       }
-      // Real-time notification for critical churn contacts (76+)
+      // Real-time notification for high churn contacts (70+)
       try {
-        const criticalResult = await db.query(
+        const highChurnResult = await db.query(
           `SELECT id, name, company, email, churn_score FROM opportunities
-           WHERE user_id = $1 AND churn_score >= 76 ORDER BY churn_score DESC LIMIT 10`,
+           WHERE user_id = $1 AND churn_score >= 70 ORDER BY churn_score DESC LIMIT 10`,
           [userId]
         );
-        if (criticalResult.rows.length > 0) {
+        if (highChurnResult.rows.length > 0) {
           const { createNotification } = require('./notify');
-          const names = criticalResult.rows.slice(0, 3).map(c => c.name || c.company || c.email).join(', ');
-          const extra = criticalResult.rows.length > 3 ? ` +${criticalResult.rows.length - 3} others` : '';
+          const critical = highChurnResult.rows.filter(c => c.churn_score >= 76);
+          const high = highChurnResult.rows.filter(c => c.churn_score >= 70 && c.churn_score < 76);
+          const severity = critical.length > 0 ? 'critical' : 'high';
+          const names = highChurnResult.rows.slice(0, 5).map(c => c.name || c.company || c.email).join(', ');
+          const extra = highChurnResult.rows.length > 5 ? ` +${highChurnResult.rows.length - 5} others` : '';
           await createNotification(userId, {
-            type: 'warning',
-            title: `${criticalResult.rows.length} contact(s) at critical churn risk`,
-            body: `${names}${extra} — churn score 76+. Review in Clients page.`,
-            metadata: { contactIds: criticalResult.rows.map(c => c.id), count: criticalResult.rows.length },
+            type: 'churn_alert',
+            title: `${highChurnResult.rows.length} contact(s) at high churn risk`,
+            body: `${names}${extra} — churn score 70+. Review in Clients page.`,
+            metadata: {
+              contactIds: highChurnResult.rows.map(c => c.id),
+              count: highChurnResult.rows.length,
+              criticalCount: critical.length,
+              highCount: high.length,
+              severity,
+            },
           });
         }
       } catch { /* notification is non-blocking */ }

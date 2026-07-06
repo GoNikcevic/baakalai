@@ -7,6 +7,7 @@
  * GET /api/analytics/trends        — Weekly KPI trend data
  * GET /api/analytics/channels      — Channel performance comparison
  * GET /api/analytics/health        — CRM health score + alerts
+ * GET /api/analytics/renewals      — Renewal pipeline (overdue / 30 / 60 / 90 day windows)
  */
 
 const { Router } = require('express');
@@ -245,6 +246,16 @@ router.get('/scoring', async (req, res, next) => {
 router.get('/trends', async (req, res, next) => {
   try {
     const userId = req.user.id;
+
+    // Date range filtering — defaults to last 90 days
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const defaultTo = now.toISOString().split('T')[0];
+    const fromDate = req.query.from || defaultFrom;
+    const toDate = req.query.to || defaultTo;
+    const fromMs = new Date(fromDate).getTime();
+    const toMs = new Date(toDate + 'T23:59:59.999Z').getTime();
+
     const [chartRows, reports] = await Promise.all([
       db.chartData.listByUser(userId),
       db.reports.listByUser(userId, 52, 0),
@@ -257,31 +268,42 @@ router.get('/trends', async (req, res, next) => {
       const reportByWeek = {};
       for (const r of reports) reportByWeek[r.week] = r;
 
-      weeks = chartRows.map(row => {
-        const report = reportByWeek[row.label] || {};
-        return {
-          label: row.label,
-          weekStart: row.week_start || null,
-          emailCount: row.email_count || 0,
-          linkedinCount: row.linkedin_count || 0,
-          openRate: report.open_rate != null ? report.open_rate : null,
-          replyRate: report.reply_rate != null ? report.reply_rate : null,
-          interested: report.interested || 0,
-          meetings: report.meetings || 0,
-        };
-      });
+      weeks = chartRows
+        .filter(row => {
+          if (!row.week_start) return true;
+          const ws = new Date(row.week_start).getTime();
+          return ws >= fromMs && ws <= toMs;
+        })
+        .map(row => {
+          const report = reportByWeek[row.label] || {};
+          return {
+            label: row.label,
+            weekStart: row.week_start || null,
+            emailCount: row.email_count || 0,
+            linkedinCount: row.linkedin_count || 0,
+            openRate: report.open_rate != null ? report.open_rate : null,
+            replyRate: report.reply_rate != null ? report.reply_rate : null,
+            interested: report.interested || 0,
+            meetings: report.meetings || 0,
+          };
+        });
     } else {
       // Generate from reports if no chart_data
-      weeks = reports.map(r => ({
-        label: r.week,
-        weekStart: r.date_range ? r.date_range.split(' - ')[0] : null,
-        emailCount: r.contacts || 0,
-        linkedinCount: 0,
-        openRate: r.open_rate,
-        replyRate: r.reply_rate,
-        interested: r.interested || 0,
-        meetings: r.meetings || 0,
-      })).reverse(); // oldest first
+      weeks = reports
+        .filter(r => {
+          const ca = r.created_at ? new Date(r.created_at).getTime() : 0;
+          return ca >= fromMs && ca <= toMs;
+        })
+        .map(r => ({
+          label: r.week,
+          weekStart: r.date_range ? r.date_range.split(' - ')[0] : null,
+          emailCount: r.contacts || 0,
+          linkedinCount: 0,
+          openRate: r.open_rate,
+          replyRate: r.reply_rate,
+          interested: r.interested || 0,
+          meetings: r.meetings || 0,
+        })).reverse(); // oldest first
     }
 
     res.json({ weeks });
@@ -514,9 +536,24 @@ router.get('/health', async (req, res, next) => {
 router.get('/forecast', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const allOpportunities = await db.opportunities.listByUser(userId, 10000, 0);
     const now = Date.now();
     const DAY_MS = 1000 * 60 * 60 * 24;
+
+    // Date range filtering — defaults to last 90 days
+    const defaultFrom = new Date(now - 90 * DAY_MS).toISOString().split('T')[0];
+    const defaultTo = new Date(now).toISOString().split('T')[0];
+    const fromDate = req.query.from || defaultFrom;
+    const toDate = req.query.to || defaultTo;
+    const fromMs = new Date(fromDate).getTime();
+    const toMs = new Date(toDate + 'T23:59:59.999Z').getTime();
+
+    const opportunities = allOpportunities.filter(o => {
+      const d = o.updated_at || o.created_at;
+      if (!d) return true;
+      const ts = new Date(d).getTime();
+      return ts >= fromMs && ts <= toMs;
+    });
 
     // ── Historical closed revenue (by month) ──
     const wonDeals = opportunities.filter(o => canonicalStage(o.status) === 'won' && o.deal_value);
@@ -615,6 +652,84 @@ router.get('/forecast', async (req, res, next) => {
       },
     });
   } catch (err) { next(err); }
+});
+
+// =============================================
+// GET /api/analytics/renewals
+// =============================================
+
+router.get('/renewals', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const now = new Date();
+    const DAY_MS = 1000 * 60 * 60 * 24;
+
+    // Compute renewal date for each opportunity
+    // Priority: renewal_date > close_date > (won_date + 365) > (updated_at + 365)
+    const withRenewal = opportunities
+      .filter(o => canonicalStage(o.status) !== 'lost')
+      .map(o => {
+        let renewalDate = null;
+        if (o.renewal_date) {
+          renewalDate = new Date(o.renewal_date);
+        } else if (o.close_date) {
+          renewalDate = new Date(o.close_date);
+        } else if (o.won_date) {
+          renewalDate = new Date(new Date(o.won_date).getTime() + 365 * DAY_MS);
+        } else if (o.updated_at) {
+          renewalDate = new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS);
+        }
+        if (!renewalDate || isNaN(renewalDate.getTime())) return null;
+
+        const daysUntil = Math.round((renewalDate.getTime() - now.getTime()) / DAY_MS);
+        return {
+          id: o.id,
+          name: o.name,
+          email: o.email,
+          company: o.company,
+          renewal_date: renewalDate.toISOString().split('T')[0],
+          deal_value: Number(o.deal_value || 0),
+          days_until: daysUntil,
+        };
+      })
+      .filter(Boolean);
+
+    // Group by renewal window
+    const overdue = { count: 0, contacts: [] };
+    const next30 = { count: 0, contacts: [] };
+    const next60 = { count: 0, contacts: [] };
+    const next90 = { count: 0, contacts: [] };
+    const later = { count: 0 };
+
+    for (const c of withRenewal) {
+      if (c.days_until < 0) {
+        overdue.count++;
+        overdue.contacts.push(c);
+      } else if (c.days_until <= 30) {
+        next30.count++;
+        next30.contacts.push(c);
+      } else if (c.days_until <= 60) {
+        next60.count++;
+        next60.contacts.push(c);
+      } else if (c.days_until <= 90) {
+        next90.count++;
+        next90.contacts.push(c);
+      } else {
+        later.count++;
+      }
+    }
+
+    // Sort contacts by renewal date (soonest first)
+    overdue.contacts.sort((a, b) => a.days_until - b.days_until);
+    next30.contacts.sort((a, b) => a.days_until - b.days_until);
+    next60.contacts.sort((a, b) => a.days_until - b.days_until);
+    next90.contacts.sort((a, b) => a.days_until - b.days_until);
+
+    res.json({ total: withRenewal.length, overdue, next30, next60, next90, later });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── CSV Export helpers ──
@@ -769,6 +884,32 @@ router.get('/forecast/csv', async (req, res, next) => {
       return [o.name, o.company, stage, o.deal_value || 0, prob, Math.round(Number(o.deal_value || 0) * prob / 100)];
     });
     sendCsv(res, 'baakal-forecast.csv', headers, rows);
+  } catch (err) { next(err); }
+});
+
+// GET /api/analytics/renewals/csv
+router.get('/renewals/csv', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const now = new Date();
+    const DAY_MS = 86400000;
+    const rows = opportunities
+      .filter(o => canonicalStage(o.status) !== 'lost')
+      .map(o => {
+        let rd = o.renewal_date ? new Date(o.renewal_date)
+          : o.close_date ? new Date(o.close_date)
+          : o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)
+          : o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : null;
+        if (!rd || isNaN(rd.getTime())) return null;
+        const days = Math.round((rd.getTime() - now.getTime()) / DAY_MS);
+        const window = days < 0 ? 'Overdue' : days <= 30 ? '0-30 days' : days <= 60 ? '30-60 days' : days <= 90 ? '60-90 days' : '90+ days';
+        return [o.name, o.email, o.company, rd.toISOString().split('T')[0], days, o.deal_value || 0, window];
+      })
+      .filter(Boolean)
+      .sort((a, b) => a[4] - b[4]);
+    const headers = ['Name', 'Email', 'Company', 'Renewal Date', 'Days Until', 'Deal Value', 'Window'];
+    sendCsv(res, 'baakal-renewals.csv', headers, rows);
   } catch (err) { next(err); }
 });
 
