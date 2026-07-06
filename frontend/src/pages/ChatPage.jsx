@@ -896,17 +896,39 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
       )}
       {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'In progress...' : 'En cours...'}</span>}
       {status === 'done' && (
-        <div style={{ fontSize: 12, color: 'var(--success)' }}>
-          {'\u2705'} {en ? 'Done' : 'Termin\u00E9'}
-          {result?.score != null && !result?.health && ` — ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
-          {result?.imported != null && ` — ${result.imported} ${en ? 'contact(s) imported' : 'contact(s) import\u00E9(s)'}`}
-          {result?.sent != null && ` — ${result.sent} ${en ? 'email(s) sent' : 'email(s) envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
-          {result?.triggered != null && ` — ${result.triggered} trigger(s), ${result.sent || 0} ${en ? 'sent' : 'envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
-          {result?.health?.score != null && ` — ${en ? 'Health' : 'Sant\u00E9'}: ${result.health.score}/100`}
-          {result?.contacts?.total != null && ` — ${result.contacts.total} contacts`}
-          {result?.health?.issues?.length > 0 && ` — ${result.health.issues.length} ${en ? 'issue(s)' : 'probl\u00E8me(s)'}`}
-          {result?.autoFixed != null && ` — ${result.autoFixed} ${en ? 'fixed' : 'corrig\u00E9(s)'}, ${result.remainingManual || 0} ${en ? 'remaining' : 'restant(s)'}`}
-          {result?.message && ` — ${result.message}`}
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--success)', marginBottom: 8 }}>
+            {'\u2705'} {en ? 'Done' : 'Termin\u00E9'}
+            {result?.score != null && !result?.health && ` — ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
+            {result?.imported != null && ` — ${result.imported} ${en ? 'contact(s) imported' : 'contact(s) import\u00E9(s)'}`}
+            {result?.sent != null && ` — ${result.sent} ${en ? 'email(s) sent' : 'email(s) envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
+            {result?.triggered != null && ` — ${result.triggered} trigger(s), ${result.sent || 0} ${en ? 'sent' : 'envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
+            {result?.health?.score != null && ` — ${en ? 'Health' : 'Sant\u00E9'}: ${result.health.score}/100`}
+            {result?.contacts?.total != null && ` — ${result.contacts.total} contacts`}
+            {result?.autoFixed != null && ` — ${result.autoFixed} ${en ? 'fixed' : 'corrig\u00E9(s)'}, ${result.remainingManual || 0} ${en ? 'remaining' : 'restant(s)'}`}
+            {result?.message && ` — ${result.message}`}
+          </div>
+          {/* Detailed health results inline */}
+          {result?.health?.issues?.length > 0 && (
+            <div style={{ fontSize: 12, marginTop: 6, padding: '10px 12px', background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>{en ? 'Issues found' : 'Problèmes détectés'} ({result.health.issues.length})</div>
+              {result.health.issues.slice(0, 8).map((issue, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 4, lineHeight: 1.5 }}>
+                  <span>{issue.severity === 'critical' ? '\uD83D\uDD34' : issue.severity === 'warning' ? '\uD83D\uDFE1' : '\uD83D\uDFE2'}</span>
+                  <span>{issue.message || issue.type} {issue.count > 1 ? `(${issue.count})` : ''}</span>
+                </div>
+              ))}
+              {result.health.issues.length > 8 && (
+                <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>+{result.health.issues.length - 8} {en ? 'more' : 'de plus'}...</div>
+              )}
+            </div>
+          )}
+          {/* Link to full analytics */}
+          {(result?.score != null || result?.health?.score != null) && (
+            <a href="/analytics" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', display: 'inline-block', marginTop: 8 }}>
+              {en ? 'View full analytics →' : 'Voir les analytics complètes →'}
+            </a>
+          )}
         </div>
       )}
       {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
