@@ -177,6 +177,33 @@ export default function SettingsPage() {
     return () => socket.off('lemlist:sync', onSync);
   }, [socket, notifyToast, en]);
 
+  /* ─── Handle OAuth callback URL params (e.g. ?crm_connected=salesforce) ─── */
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const crmConnected = params.get('crm_connected');
+    const crmError = params.get('crm_error');
+    if (crmConnected) {
+      notifyToast({
+        type: 'success',
+        title: en ? `${crmConnected} connected` : `${crmConnected} connect\u00E9`,
+        message: en ? 'Your CRM account has been connected via OAuth.' : 'Votre CRM a \u00E9t\u00E9 connect\u00E9 via OAuth.',
+        duration: 5000,
+      });
+      loadKeys();
+      // Clean URL params
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (crmError) {
+      notifyToast({
+        type: 'danger',
+        title: en ? 'CRM connection failed' : '\u00C9chec de connexion CRM',
+        message: decodeURIComponent(crmError),
+        duration: 8000,
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ─── Socket listener for outreach sync progress (Apollo/Instantly/Smartlead) ─── */
 
   useEffect(() => {
@@ -1295,6 +1322,23 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
   const [accessToken, setAccessToken] = useState('');
   const [instanceUrl, setInstanceUrl] = useState('');
   const [status, setStatus] = useState(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  const handleOAuthConnect = async () => {
+    setOauthLoading(true);
+    try {
+      const res = await request('/crm/salesforce/connect');
+      if (res.url) {
+        window.location.href = res.url;
+      } else {
+        setStatus('error');
+        setOauthLoading(false);
+      }
+    } catch {
+      setStatus('error');
+      setOauthLoading(false);
+    }
+  };
 
   // If already connected, allow updating just the instance URL
   const handleUpdateUrl = async () => {
@@ -1341,6 +1385,34 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
 
   return (
     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+      {/* OAuth connect button */}
+      {!isConnected && (
+        <>
+          <button
+            style={{
+              width: '100%', padding: '8px 12px', fontSize: 12, fontWeight: 600,
+              background: '#00A1E0', color: '#fff', border: 'none', borderRadius: 6,
+              cursor: oauthLoading ? 'wait' : 'pointer', opacity: oauthLoading ? 0.7 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+            onClick={handleOAuthConnect}
+            disabled={oauthLoading}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z" fill="#fff"/></svg>
+            {oauthLoading
+              ? (en ? 'Redirecting...' : 'Redirection...')
+              : (en ? 'Connect with Salesforce' : 'Connecter Salesforce')}
+          </button>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0',
+            fontSize: 10, color: 'var(--text-muted)',
+          }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            {en ? 'or enter manually' : 'ou saisir manuellement'}
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
+        </>
+      )}
       {isConnected ? (
         <div style={{
           fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,

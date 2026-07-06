@@ -4,7 +4,7 @@
    or Pipedrive), analyzes with Claude, and populates memory_patterns table.
    =============================================================================== */
 
-const { getUserKey } = require('../config');
+const { getUserCrmToken } = require('./crm-token');
 const claude = require('../api/claude');
 const db = require('../db');
 const { notifyUser } = require('../socket');
@@ -24,7 +24,7 @@ async function syncCRM(userId) {
     let provider = null;
     let apiKey = null;
     for (const p of ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'notion', 'airtable']) {
-      const key = await getUserKey(userId, p);
+      const key = await getUserCrmToken(userId, p);
       if (key) { provider = p; apiKey = key; break; }
     }
     if (!provider) throw new Error('No CRM configured');
