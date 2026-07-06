@@ -220,6 +220,16 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const hasDocuments = docs && docs.length > 0;
     const hasActiveCampaign = campaigns.some(c => c.status === 'active');
 
+    // CRM integration context — tell Claude which CRM is connected
+    const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
+    const connectedCrms = userIntegrations.filter(i => crmProviders.includes(i.provider) && i.access_token);
+    if (connectedCrms.length > 0) {
+      const crmLines = connectedCrms.map(c => `- ${c.provider.charAt(0).toUpperCase() + c.provider.slice(1)}${c.instance_url ? ' (' + c.instance_url + ')' : ''}`);
+      contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}\n\nL'utilisateur a un CRM connecté. Tu peux proposer d'analyser son CRM, scanner la santé des données, importer des contacts, ou lancer des triggers d'activation.`);
+    } else {
+      contextParts.push("CRM: Aucun CRM connecté. Si l'utilisateur demande une analyse CRM, redirige-le vers Paramètres pour connecter Pipedrive, HubSpot, Salesforce, Notion ou un autre CRM.");
+    }
+
     if (!profileFilled || !hasCampaigns) {
       const onboardingLines = [
         'ONBOARDING STATUS: This user is NEW.',
