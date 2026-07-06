@@ -1353,6 +1353,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
       });
       if (res.status === 'updated' || res.ok) {
         setStatus('connected');
+        syncCRM().catch(() => {});
         setTimeout(() => onDone(), 1000);
       } else {
         setStatus('error');
@@ -1370,11 +1371,12 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
         method: 'POST',
         body: JSON.stringify({ accessToken, instanceUrl: instanceUrl.replace(/\/$/, '') }),
       });
-      if (res.status === 'connected') {
-        setStatus('connected');
+      if (res.status === 'connected' || res.status === 'saved_but_test_failed') {
+        setStatus(res.status === 'connected' ? 'connected' : 'test_failed');
+        syncCRM().catch(() => {});
         setTimeout(() => onDone(), 1000);
       } else {
-        setStatus(res.status === 'saved_but_test_failed' ? 'test_failed' : 'error');
+        setStatus('error');
       }
     } catch {
       setStatus('error');
