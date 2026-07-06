@@ -39,10 +39,10 @@ const config = {
       chat:                'claude-sonnet-4-6',
       chatStream:          'claude-sonnet-4-6',
       generateVariables:   'claude-sonnet-4-6',
-      // Opus 4.6 — premium actions (best reasoning, marginal cost)
-      regenerateSequence:  'claude-opus-4-6',
-      consolidateMemory:   'claude-opus-4-6',
-      generateIcebreaker:  'claude-opus-4-6',
+      // Opus — premium actions (best reasoning)
+      regenerateSequence:  process.env.CLAUDE_OPUS_MODEL || 'claude-opus-4-6',
+      consolidateMemory:   process.env.CLAUDE_OPUS_MODEL || 'claude-opus-4-6',
+      generateIcebreaker:  process.env.CLAUDE_OPUS_MODEL || 'claude-opus-4-6',
     },
   },
 
