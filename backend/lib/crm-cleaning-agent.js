@@ -17,6 +17,9 @@
 const pipedrive = require('../api/pipedrive');
 const { getUserKey } = require('../config');
 const db = require('../db');
+const { getMxHost, smtpVerify } = require('./enrich-agent');
+const hunter = require('../api/hunter');
+const dropcontact = require('../api/dropcontact');
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
@@ -269,17 +272,65 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // 4. Invalid email format
-  const invalidEmails = persons.filter(p => p.email && !isValidEmail(p.email));
-  if (invalidEmails.length > 0) {
+  // 4a. Invalid email format (regex)
+  const invalidFormatEmails = persons.filter(p => p.email && !isValidEmail(p.email));
+  if (invalidFormatEmails.length > 0) {
     issues.push({
-      type: 'invalid_email',
+      type: 'invalid_email_format',
       severity: 'high',
-      contacts: invalidEmails.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email })),
-      count: invalidEmails.length,
+      contacts: invalidFormatEmails.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email })),
+      count: invalidFormatEmails.length,
       suggestedAction: 'fix',
     });
   }
+
+  // 4b. Invalid email domain (MX check) — only for emails that pass regex
+  const validFormatEmails = persons.filter(p => p.email && isValidEmail(p.email));
+  // Group by domain to avoid redundant DNS lookups, limit to first 100 contacts
+  const domainGroups = new Map();
+  for (const p of validFormatEmails.slice(0, 100)) {
+    const domain = p.email.split('@')[1];
+    if (!domainGroups.has(domain)) domainGroups.set(domain, []);
+    domainGroups.get(domain).push(p);
+  }
+
+  const MX_TIMEOUT = 3000;
+  const mxCache = new Map();
+  const mxCheckPromises = [];
+  for (const [domain] of domainGroups) {
+    mxCheckPromises.push(
+      Promise.race([
+        getMxHost(domain).then(mx => mxCache.set(domain, mx)),
+        new Promise(resolve => setTimeout(() => { mxCache.set(domain, 'timeout'); resolve(); }, MX_TIMEOUT)),
+      ])
+    );
+  }
+  await Promise.allSettled(mxCheckPromises);
+
+  const invalidDomainContacts = [];
+  for (const [domain, contacts] of domainGroups) {
+    const mx = mxCache.get(domain);
+    if (mx === null) {
+      // No MX records — domain cannot receive email
+      for (const p of contacts) {
+        invalidDomainContacts.push({ id: p.id, name: p.name, email: p.email, domain });
+      }
+    }
+    // 'timeout' or valid MX → skip (don't flag on timeout)
+  }
+
+  if (invalidDomainContacts.length > 0) {
+    issues.push({
+      type: 'invalid_email_domain',
+      severity: 'high',
+      contacts: invalidDomainContacts.slice(0, 50),
+      count: invalidDomainContacts.length,
+      suggestedAction: 'verify',
+    });
+  }
+
+  // Combine for score calculation (backward compat)
+  const invalidEmails = [...invalidFormatEmails, ...invalidDomainContacts];
 
   // 5. Inactive contacts (no update in 6+ months)
   const now = Date.now();
@@ -407,6 +458,57 @@ async function applyFixes(userId, provider, fixes) {
             applied += deleteIds.length;
           }
           break;
+
+        case 'verify_emails': {
+          const emails = (fix.emails || []);
+          if (emails.length === 0) { skipped++; break; }
+
+          let verifyResults = [];
+          const hunterKey = await getUserKey(userId, 'hunter').catch(() => null);
+          const dropcontactKey = await getUserKey(userId, 'dropcontact').catch(() => null);
+
+          if (hunterKey) {
+            // Hunter.io verification
+            const hunterResults = await hunter.verifyBatch(hunterKey, emails);
+            verifyResults = hunterResults.map(r => ({
+              email: r.email,
+              status: r.status === 'valid' ? 'valid' : r.status === 'invalid' ? 'invalid' : 'unknown',
+              source: 'hunter',
+              score: r.score,
+            }));
+          } else if (dropcontactKey) {
+            // DropContact batch verification
+            const contacts = emails.map(email => ({ email }));
+            const dcResults = await dropcontact.verifyEmails(dropcontactKey, contacts);
+            verifyResults = dcResults.map(r => ({
+              email: r.email,
+              status: r.verified ? 'valid' : 'invalid',
+              source: 'dropcontact',
+            }));
+          } else {
+            // Fallback: SMTP verification via enrich-agent
+            for (const email of emails) {
+              try {
+                const domain = email.split('@')[1];
+                const mxHost = await getMxHost(domain);
+                const status = mxHost ? await smtpVerify(email, mxHost) : 'unknown';
+                verifyResults.push({ email, status, source: 'smtp' });
+              } catch {
+                verifyResults.push({ email, status: 'unknown', source: 'smtp' });
+              }
+            }
+          }
+
+          const valid = verifyResults.filter(r => r.status === 'valid').length;
+          const invalid = verifyResults.filter(r => r.status === 'invalid').length;
+          const unknown = verifyResults.filter(r => r.status === 'unknown' || r.status === 'error').length;
+
+          applied += verifyResults.length;
+          // Attach results to the fix object so caller can read them
+          fix.verifyResults = verifyResults;
+          fix.verifySummary = { valid, invalid, unknown, total: verifyResults.length };
+          break;
+        }
 
         default:
           skipped++;

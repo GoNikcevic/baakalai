@@ -515,4 +515,4 @@ async function enrichContacts(userId, issueType = 'all', options = {}) {
   return report;
 }
 
-module.exports = { enrichContacts, enrichOne };
+module.exports = { enrichContacts, enrichOne, getMxHost, smtpVerify };
