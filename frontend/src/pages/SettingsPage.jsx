@@ -15,6 +15,7 @@ import EmailAccountSettings from '../components/EmailAccountSettings';
 import TeamSettings from '../components/TeamSettings';
 import ProductLinesSettings from '../components/ProductLinesSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
+import LoadingTips from '../components/LoadingTips';
 
 /* ─── Unified tool list organized by category ─── */
 
@@ -840,6 +841,12 @@ export default function SettingsPage() {
               <div style={{ fontSize: 12, color: crmSyncStatus.status === 'done' ? 'var(--success)' : crmSyncStatus.status === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
                 {crmSyncStatus.status === 'done' ? '\u2705 ' : crmSyncStatus.status === 'error' ? '\u274c ' : ''}{crmSyncStatus.message || ''}
               </div>
+              {crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error' && (
+                <LoadingTips
+                  title={en ? 'Analyzing your CRM...' : 'Analyse de votre CRM...'}
+                  subtitle={crmSyncStatus.message}
+                />
+              )}
               {crmSyncStatus.status === 'done' && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
