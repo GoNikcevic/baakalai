@@ -476,6 +476,11 @@ RÈGLES send_email :
 - L'email DOIT avoir l'air personnel, PAS marketing. Texte simple, 3-6 lignes, pas de HTML.
 - Génère l'objet et le contenu en fonction du contexte (dernier échange, deal en cours, etc.).
 - Si l'email du contact n'est pas connu, demande-le ou propose de chercher dans le CRM.
+- IMPORTANT : tu ne peux envoyer un email qu'aux contacts qui existent dans la base de l'utilisateur. Si le destinataire n'est PAS dans les contacts connus, NE GÉNÈRE PAS l'action send_email. À la place :
+  1. Informe l'utilisateur que ce contact n'est pas dans sa base.
+  2. Propose d'ajouter le contact d'abord : "Voulez-vous que j'ajoute [nom] ([email]) à vos contacts avant d'envoyer ?"
+  3. Si l'utilisateur confirme, utilise l'action import_crm pour ajouter le contact, PUIS propose l'envoi.
+  4. Ne jamais envoyer à une adresse qui n'est pas dans les contacts — le serveur rejettera l'envoi.
 
 Rechercher des signaux d'achat :
 { "action": "search_signals", "sectors": ["crypto", "DeFi"], "keywords": ["funding", "hiring"], "titles": ["CEO", "CMO"] }
