@@ -55,6 +55,11 @@ function verifyToken(token) {
  * Sets req.user = { id, email, role }.
  */
 function requireAuth(req, res, next) {
+  // Salesforce OAuth callback is a browser redirect — no JWT available
+  if (req.originalUrl === '/api/crm/salesforce/callback' || req.originalUrl.startsWith('/api/crm/salesforce/callback?')) {
+    return next();
+  }
+
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });
