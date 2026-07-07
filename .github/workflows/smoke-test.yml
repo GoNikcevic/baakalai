@@ -64,6 +64,13 @@ jobs:
         working-directory: backend
         run: npm ci --no-audit --no-fund
 
+      # ─── Security: dependency audit ─────────────────────────────
+      - name: "Security: dependency audit"
+        working-directory: backend
+        run: |
+          echo "Running npm audit (high/critical)..."
+          npm audit --audit-level=high || true
+
       # ─── Runtime module-load smoke test ───────────────────────────
       # The real safety net. `node -c` only checks parse-time syntax
       # and misses bugs like unescaped backticks inside large template

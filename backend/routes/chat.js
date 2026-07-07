@@ -3,6 +3,9 @@ const db = require('../db');
 const claude = require('../api/claude');
 const { emitToThread, notifyUser } = require('../socket');
 const { sanitizeText } = require('../lib/sanitize');
+const { rateLimit } = require('../lib/rate-limit');
+const emailLimit = rateLimit({ windowMs: 60000, max: 10 }); // 10 emails per minute
+const cleanLimit = rateLimit({ windowMs: 60000, max: 5 });
 
 const router = Router();
 
@@ -423,11 +426,22 @@ router.post('/threads/:id/create-campaign', async (req, res, next) => {
 // ═══════════════════════════════════════════════════
 
 // POST /api/chat/threads/:id/send-email — Send personal email from chat
-router.post('/threads/:id/send-email', async (req, res, next) => {
+router.post('/threads/:id/send-email', emailLimit, async (req, res, next) => {
   try {
     const { sendNurtureEmail } = require('../lib/email-outbound');
     const { to, toName, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, body required' });
+
+    // Input validation
+    if (typeof to !== 'string' || !to.includes('@') || to.length > 320) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+    if (typeof subject !== 'string' || subject.length > 500) {
+      return res.status(400).json({ error: 'Invalid subject' });
+    }
+    if (typeof body !== 'string' || body.length > 50000) {
+      return res.status(400).json({ error: 'Message too long' });
+    }
 
     // Validate recipient exists in user's contacts
     const opp = await db.opportunities.findByEmail(req.user.id, to);
@@ -458,7 +472,7 @@ router.post('/threads/:id/scan-crm', async (req, res, next) => {
 });
 
 // POST /api/chat/threads/:id/clean-crm — Auto-fix CRM issues
-router.post('/threads/:id/clean-crm', async (req, res, next) => {
+router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
     const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');

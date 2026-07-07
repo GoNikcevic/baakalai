@@ -21,6 +21,10 @@ const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
 const logger = require('../lib/logger');
 
+const { rateLimit } = require('../lib/rate-limit');
+const cleanLimit = rateLimit({ windowMs: 60000, max: 5 }); // 5 clean ops per minute
+const scanLimit = rateLimit({ windowMs: 60000, max: 3 }); // 3 scans per minute
+
 const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 const router = Router();
 router.param('id', (req, res, next, id) => validateId(req, res, next));
@@ -504,7 +508,7 @@ router.get('/scan/:provider', async (req, res, next) => {
 });
 
 // POST /api/crm/scan/:provider — Run a CRM health scan (always fresh)
-router.post('/scan/:provider', async (req, res, next) => {
+router.post('/scan/:provider', scanLimit, async (req, res, next) => {
   try {
     const { provider } = req.params;
     const report = await crmCleaning.scanCRM(req.user.id, provider);
@@ -526,12 +530,27 @@ router.post('/scan/:provider', async (req, res, next) => {
 });
 
 // POST /api/crm/clean/:provider — Apply selected fixes
-router.post('/clean/:provider', async (req, res, next) => {
+router.post('/clean/:provider', cleanLimit, async (req, res, next) => {
   try {
     const { provider } = req.params;
     const { reportId, fixes } = req.body;
     if (!fixes || !Array.isArray(fixes)) {
       return res.status(400).json({ error: 'fixes array is required' });
+    }
+
+    // Validate fix structure
+    for (const fix of fixes) {
+      if (!fix.type || typeof fix.type !== 'string') {
+        return res.status(400).json({ error: 'Each fix must have a string "type"' });
+      }
+      if (!['auto_fix_caps', 'delete', 'merge', 'archive', 'review', 'verify_emails'].includes(fix.action)) {
+        return res.status(400).json({ error: `Invalid fix action: ${fix.action}` });
+      }
+      // Validate contactIds are strings/numbers, not objects
+      const ids = fix.contactIds || (fix.contacts || []).map(c => c.id);
+      if (ids.some(id => typeof id !== 'string' && typeof id !== 'number')) {
+        return res.status(400).json({ error: 'contactIds must be strings or numbers' });
+      }
     }
 
     // Validate that all contactIds belong to the authenticated user
@@ -1574,7 +1593,7 @@ router.post('/first-diagnostic', async (req, res, next) => {
 // =============================================
 // POST /api/crm/auto-clean — Auto-fix safe CRM issues (no thread required)
 // =============================================
-router.post('/auto-clean', async (req, res, next) => {
+router.post('/auto-clean', cleanLimit, async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
     const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
