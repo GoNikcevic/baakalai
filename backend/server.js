@@ -164,6 +164,8 @@ app.use('/api/stats', requireAuth, statsRouter);
 app.use('/api/projects', requireAuth, projectsRouter);
 app.use('/api/variables', requireAuth, variablesRouter);
 app.use('/api/export', requireAuth, exportRouter);
+// Salesforce OAuth callback must be public (browser redirect, no JWT)
+app.get('/api/crm/salesforce/callback', crmRouter);
 app.use('/api/crm', requireAuth, crmRouter);
 app.use('/api/team-campaigns', requireAuth, require('./routes/team-campaigns'));
 app.use('/api/strategic', requireAuth, require('./routes/strategic'));
