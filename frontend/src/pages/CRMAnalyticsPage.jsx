@@ -104,6 +104,8 @@ function getTabs(t, vocab) { return [
   { key: 'trends', label: t('analytics.trends') },
   { key: 'channels', label: t('analytics.channels') },
   { key: 'forecast', label: 'Forecast' },
+  { key: 'segments', label: t('analytics.segments') },
+  { key: 'engagement', label: t('analytics.engagement') },
   { key: 'renewals', label: t('analytics.renewals') },
   { key: 'health', label: t('analytics.crmHealth') },
 ]; }
@@ -204,20 +206,37 @@ export default function CRMAnalyticsPage() {
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
           gap: 12, marginBottom: 20,
         }}>
-          {[
-            { label: en ? 'Total contacts' : 'Contacts total', value: kpis.total },
-            { label: en ? `Active ${vocab.deal.toLowerCase()}s` : `${vocab.deal}s actifs`, value: kpis.active },
-            { label: vocab.won, value: kpis.won },
-            { label: en ? 'Win rate' : 'Taux de conversion', value: kpis.winRate + '%' },
-          ].map((kpi, i) => (
-            <div key={i} style={{
-              background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderRadius: 12, padding: '14px 18px',
-            }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{kpi.label}</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{kpi.value}</div>
-            </div>
-          ))}
+          {(() => {
+            const ch = pipelineData?.comparison?.changes;
+            return [
+              { label: en ? 'Total contacts' : 'Contacts total', value: kpis.total, delta: ch?.total },
+              { label: en ? `Active ${vocab.deal.toLowerCase()}s` : `${vocab.deal}s actifs`, value: kpis.active },
+              { label: vocab.won, value: kpis.won, delta: ch?.won },
+              { label: en ? 'Win rate' : 'Taux de conversion', value: kpis.winRate + '%', delta: ch?.winRate, suffix: 'pp' },
+            ].map((kpi, i) => (
+              <div key={i} style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 12, padding: '14px 18px',
+              }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{kpi.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 700 }}>{kpi.value}</div>
+                {kpi.delta != null && kpi.delta !== 0 ? (
+                  <div style={{
+                    fontSize: 11, marginTop: 4,
+                    color: kpi.delta > 0 ? 'var(--success)' : 'var(--danger)',
+                  }}>
+                    {kpi.delta > 0 ? '\u25B2' : '\u25BC'}{' '}
+                    {kpi.delta > 0 ? '+' : ''}{kpi.delta}{kpi.suffix || ''}{' '}
+                    {en ? 'vs last 30d' : 'vs 30j préc.'}
+                  </div>
+                ) : kpi.delta === 0 ? (
+                  <div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>
+                    {'—'} {en ? 'vs last 30d' : 'vs 30j préc.'}
+                  </div>
+                ) : null}
+              </div>
+            ));
+          })()}
         </div>
       )}
 
@@ -285,6 +304,8 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
+      {!loading && activeTab === 'segments' && tabData && <SegmentsSection data={tabData} />}
+      {!loading && activeTab === 'engagement' && tabData && <EngagementSection data={tabData} />}
       {!loading && activeTab === 'renewals' && tabData && <RenewalsSection data={tabData} />}
       {!loading && activeTab === 'health' && <CRMHealthSection />}
     </div>
@@ -829,6 +850,135 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
   );
 }
 
+/* ═══ Segments Section ═══ */
+
+const SEGMENT_CONFIG = {
+  champions: { color: 'var(--purple)', icon: '\u2B50' },
+  active: { color: 'var(--success)', icon: '\u26A1' },
+  new: { color: 'var(--blue)', icon: '\u2728' },
+  at_risk: { color: 'var(--orange, #f97316)', icon: '\u26A0\uFE0F' },
+  dormant: { color: 'var(--text-muted)', icon: '\uD83D\uDCA4' },
+};
+
+function SegmentsSection({ data }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [selected, setSelected] = useState(null);
+
+  const segmentLabels = {
+    champions: t('analytics.segmentChampions'),
+    active: t('analytics.segmentActive'),
+    new: t('analytics.segmentNew'),
+    at_risk: t('analytics.segmentAtRisk'),
+    dormant: t('analytics.segmentDormant'),
+  };
+
+  const segments = data.segments || [];
+  const selectedSegment = segments.find(s => s.key === selected);
+
+  function metricLine(seg) {
+    if (seg.key === 'champions' || seg.key === 'active') {
+      return `${t('analytics.segmentTotalValue')}: $${(seg.totalValue || 0).toLocaleString()}`;
+    }
+    if (seg.key === 'at_risk') {
+      return `${t('analytics.segmentAvgChurn')}: ${seg.avgChurnScore || 0}`;
+    }
+    if (seg.key === 'dormant') {
+      return `${t('analytics.segmentDaysInactive')}: ${seg.daysSinceActivity || 0}`;
+    }
+    return '';
+  }
+
+  return (
+    <div className="crm-section">
+      {/* Segment cards grid */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 12, marginBottom: 20,
+      }}>
+        {segments.map(seg => {
+          const cfg = SEGMENT_CONFIG[seg.key] || { color: 'var(--text-muted)', icon: '?' };
+          const isSelected = selected === seg.key;
+          return (
+            <div
+              key={seg.key}
+              onClick={() => setSelected(isSelected ? null : seg.key)}
+              style={{
+                background: 'var(--bg-card)',
+                border: `2px solid ${isSelected ? cfg.color : 'var(--border)'}`,
+                borderRadius: 12, padding: '16px 18px', cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 18 }}>{cfg.icon}</span>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{segmentLabels[seg.key] || seg.key}</span>
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: cfg.color }}>{seg.count}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                {t('analytics.segmentContacts')}
+              </div>
+              {metricLine(seg) && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
+                  {metricLine(seg)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Contact table for selected segment */}
+      {selectedSegment && (
+        <div className="card">
+          <div className="card-title">
+            {SEGMENT_CONFIG[selectedSegment.key]?.icon} {segmentLabels[selectedSegment.key]} ({selectedSegment.count})
+          </div>
+          <div className="card-body">
+            <div className="crm-table">
+              <div className="crm-table-header">
+                <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
+                <span>Email</span>
+                <span>{en ? 'Company' : 'Entreprise'}</span>
+                <span>{en ? 'Churn' : 'Churn'}</span>
+                <span>{en ? 'Value' : 'Valeur'}</span>
+                <span>{en ? 'Last activity' : 'Derni\u00e8re activit\u00e9'}</span>
+              </div>
+              {(selectedSegment.contacts || []).map(c => (
+                <div className="crm-table-row" key={c.id}>
+                  <span style={{ flex: 2, fontWeight: 600 }}>{c.name}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.email}</span>
+                  <span>{c.company}</span>
+                  <span>
+                    {c.churn_score > 0 ? <ScoreBadge score={c.churn_score} /> : '\u2014'}
+                  </span>
+                  <span>{c.deal_value > 0 ? `$${c.deal_value.toLocaleString()}` : '\u2014'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}
+                  </span>
+                </div>
+              ))}
+              {(selectedSegment.contacts || []).length === 0 && (
+                <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
+                  {t('analytics.segmentNoContacts')}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hint when no segment selected */}
+      {!selectedSegment && (
+        <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
+          {t('analytics.segmentSelectToView')}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══ Renewals Section ═══ */
 
 function RenewalsSection({ data }) {
@@ -930,6 +1080,72 @@ function RenewalsSection({ data }) {
             : `${data.later.count} renouvellement(s) suppl\u00e9mentaire(s) au-del\u00e0 de 90 jours`}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ═══ Engagement Section ═══ */
+
+function EngagementSection({ data }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+
+  const contacts = data.contacts || [];
+
+  return (
+    <div className="crm-section">
+      {/* KPI cards */}
+      <div className="crm-kpi-row">
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value">{data.avgScore?.toFixed(1) || '—'}</div>
+          <div className="crm-kpi-label">{t('analytics.engagementAvgScore')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.distribution?.high || 0}</div>
+          <div className="crm-kpi-label">{t('analytics.engagementHigh')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--warning)' }}>{data.distribution?.medium || 0}</div>
+          <div className="crm-kpi-label">{t('analytics.engagementMedium')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--danger)' }}>{data.distribution?.low || 0}</div>
+          <div className="crm-kpi-label">{t('analytics.engagementLow')}</div>
+        </div>
+      </div>
+
+      {/* Contacts table */}
+      <div className="card">
+        <div className="card-title">{t('analytics.engagementScoreboard')}</div>
+        <div className="card-body">
+          <div className="crm-table">
+            <div className="crm-table-header">
+              <span>Score</span>
+              <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
+              <span>Email</span>
+              <span>{en ? 'Company' : 'Entreprise'}</span>
+              <span>{en ? 'Last activity' : 'Dernière activité'}</span>
+            </div>
+            {contacts.map(c => (
+              <div className="crm-table-row" key={c.id}>
+                <span><ScoreBadge score={c.engagement_score} /></span>
+                <span style={{ flex: 2, fontWeight: 600 }}>{c.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.email}</span>
+                <span>{c.company}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {c.last_activity ? c.last_activity.split('T')[0] : '—'}
+                </span>
+              </div>
+            ))}
+            {contacts.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
+                {t('analytics.engagementNoData')}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

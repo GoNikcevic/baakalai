@@ -569,13 +569,22 @@ function ClientDetailPanel({ client, onClose }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [timeline, setTimeline] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
 
   useEffect(() => {
     setLoading(true);
+    setTimelineLoading(true);
+    setTimelineExpanded(false);
     request(`/crm/client/${client.id}`)
       .then(data => setDetail(data))
       .catch(() => setDetail(null))
       .finally(() => setLoading(false));
+    request(`/crm/client/${client.id}/timeline`)
+      .then(data => setTimeline(data.timeline || []))
+      .catch(() => setTimeline([]))
+      .finally(() => setTimelineLoading(false));
   }, [client.id]);
 
   const handleQuickEmail = async () => {
@@ -600,8 +609,6 @@ function ClientDetailPanel({ client, onClose }) {
   };
 
   const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
-  const emails = detail?.emails || [];
-  const activities = detail?.crmActivities || [];
 
   return (
     <div style={{
@@ -729,46 +736,167 @@ function ClientDetailPanel({ client, onClose }) {
         <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>{t('common.loading')}</div>
       ) : (
         <>
-          {/* Timeline */}
+          {/* Unified Timeline */}
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Timeline</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {/* Nurture emails */}
-            {emails.map(e => (
-              <div key={e.id} style={{
-                padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)',
-                borderLeft: `3px solid ${e.status === 'sent' ? 'var(--success)' : e.status === 'pending' ? 'var(--warning)' : 'var(--text-muted)'}`,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
-                  <span>{'\u2709\uFE0F'} Email {e.status === 'sent' ? 'envoy\u00e9' : e.status === 'pending' ? 'en attente' : e.status}</span>
-                  <span>{new Date(e.sent_at || e.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{e.subject}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, maxHeight: 40, overflow: 'hidden' }}>{e.body}</div>
-              </div>
-            ))}
-
-            {/* CRM activities */}
-            {activities.map(a => (
-              <div key={a.id} style={{
-                padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)',
-                borderLeft: '3px solid var(--blue)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
-                  <span>{a.type === 'call' ? '\uD83D\uDCDE' : a.type === 'meeting' ? '\uD83D\uDCC5' : '\uD83D\uDCCB'} {a.type} {a.done ? '\u2705' : ''}</span>
-                  <span>{a.dueDate}</span>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>{a.subject}</div>
-                {a.note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, maxHeight: 40, overflow: 'hidden' }}>{a.note}</div>}
-              </div>
-            ))}
-
-            {emails.length === 0 && activities.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>
-                {t('clients.noActivity')}
-              </div>
-            )}
-          </div>
+          <UnifiedTimeline
+            timeline={timeline}
+            loading={timelineLoading}
+            expanded={timelineExpanded}
+            onToggleExpand={() => setTimelineExpanded(e => !e)}
+            lang={lang}
+            t={t}
+          />
         </>
+      )}
+    </div>
+  );
+}
+
+/* ═══ Unified Timeline ═══ */
+
+function formatRelativeDate(dateStr, lang) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH = Math.floor(diffMs / 3600000);
+  const diffD = Math.floor(diffMs / 86400000);
+
+  if (diffMin < 1) return lang === 'en' ? 'just now' : 'maintenant';
+  if (diffMin < 60) return lang === 'en' ? `${diffMin}m ago` : `il y a ${diffMin}m`;
+  if (diffH < 24) return lang === 'en' ? `${diffH}h ago` : `il y a ${diffH}h`;
+  if (diffD < 7) return lang === 'en' ? `${diffD}d ago` : `il y a ${diffD}j`;
+  if (diffD < 30) {
+    const w = Math.floor(diffD / 7);
+    return lang === 'en' ? `${w}w ago` : `il y a ${w}sem`;
+  }
+  return date.toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
+}
+
+const TIMELINE_CONFIG = {
+  email_sent: { icon: '\u2709\uFE0F', color: 'var(--success)', label: (e, lang) => e.subject || (lang === 'en' ? 'Email' : 'Email') },
+  campaign_activity: { icon: '\uD83D\uDCCA', color: 'var(--accent)', label: (e, lang) => `${e.event || ''} — ${e.campaign_name || ''}` },
+  crm_activity: { icon: '\uD83D\uDCCB', color: 'var(--blue)', label: (e) => e.subject || e.activity_type || 'Activity' },
+};
+
+function getTimelineIcon(item) {
+  if (item.type === 'crm_activity') {
+    if (item.activity_type === 'call') return '\uD83D\uDCDE';
+    if (item.activity_type === 'meeting') return '\uD83D\uDCC5';
+    return '\uD83D\uDCCB';
+  }
+  return TIMELINE_CONFIG[item.type]?.icon || '\u25CF';
+}
+
+function getTimelineColor(item) {
+  if (item.type === 'email_sent') {
+    if (item.status === 'sent') return 'var(--success)';
+    if (item.status === 'pending') return 'var(--warning)';
+    if (item.status === 'failed') return 'var(--danger)';
+    return 'var(--text-muted)';
+  }
+  return TIMELINE_CONFIG[item.type]?.color || 'var(--text-muted)';
+}
+
+function getTimelineDescription(item, lang) {
+  const cfg = TIMELINE_CONFIG[item.type];
+  if (!cfg) return item.type;
+  return cfg.label(item, lang);
+}
+
+function getTimelineSourceLabel(item) {
+  const src = item.source || '';
+  if (src === 'nurture') return 'Nurture';
+  return src.charAt(0).toUpperCase() + src.slice(1);
+}
+
+function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t }) {
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>{t('common.loading')}</div>;
+  }
+
+  if (timeline.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12, marginBottom: 20 }}>
+        {t('clients.noActivity')}
+      </div>
+    );
+  }
+
+  const visible = expanded ? timeline : timeline.slice(0, 10);
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ position: 'relative', paddingLeft: 24 }}>
+        {/* Vertical line */}
+        <div style={{
+          position: 'absolute', left: 7, top: 4, bottom: 4, width: 2,
+          background: 'var(--border)', borderRadius: 1,
+        }} />
+
+        {visible.map((item, idx) => {
+          const color = getTimelineColor(item);
+          const icon = getTimelineIcon(item);
+          const desc = getTimelineDescription(item, lang);
+          const sourceLabel = getTimelineSourceLabel(item);
+
+          return (
+            <div key={item.id || idx} style={{ position: 'relative', paddingBottom: idx < visible.length - 1 ? 12 : 0 }}>
+              {/* Dot */}
+              <div style={{
+                position: 'absolute', left: -20, top: 3, width: 12, height: 12,
+                borderRadius: '50%', background: 'var(--bg-card)', border: `2px solid ${color}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, zIndex: 1,
+              }} />
+
+              {/* Content */}
+              <div style={{
+                padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                borderLeft: `3px solid ${color}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{icon}</span>
+                    <span style={{
+                      fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                      background: `${color}15`, color, fontWeight: 600,
+                    }}>
+                      {sourceLabel}
+                    </span>
+                    {item.type === 'email_sent' && item.status && (
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {item.status === 'sent' ? (lang === 'en' ? 'sent' : 'envoy\u00e9')
+                          : item.status === 'pending' ? (lang === 'en' ? 'pending' : 'en attente')
+                          : item.status === 'replied' ? (lang === 'en' ? 'replied' : 'r\u00e9pondu')
+                          : item.status === 'opened' ? (lang === 'en' ? 'opened' : 'ouvert')
+                          : item.status}
+                      </span>
+                    )}
+                    {item.type === 'crm_activity' && item.done && <span style={{ fontSize: 10 }}>{'\u2705'}</span>}
+                  </span>
+                  <span style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{formatRelativeDate(item.date, lang)}</span>
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{desc}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {timeline.length > 10 && (
+        <button
+          onClick={onToggleExpand}
+          style={{
+            display: 'block', margin: '10px auto 0', padding: '6px 16px', fontSize: 11,
+            border: '1px solid var(--border)', borderRadius: 8, background: 'transparent',
+            color: 'var(--accent)', cursor: 'pointer', fontWeight: 600,
+          }}
+        >
+          {expanded
+            ? (lang === 'en' ? 'Show less' : 'Voir moins')
+            : (lang === 'en' ? `Show all ${timeline.length} activities` : `Voir les ${timeline.length} activit\u00e9s`)}
+        </button>
       )}
     </div>
   );

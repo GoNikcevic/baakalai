@@ -1304,6 +1304,99 @@ router.post('/product-lines/:id/unassign', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/crm/client/:id/timeline — Unified activity timeline
+router.get('/client/:id/timeline', async (req, res, next) => {
+  try {
+    const opp = await db.opportunities.get(req.params.id);
+    if (!opp) return res.status(404).json({ error: 'Client not found' });
+    if (opp.user_id !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+
+    const timeline = [];
+
+    // 1. Nurture emails
+    const emails = await db.query(
+      `SELECT id, subject, status, sent_at, created_at
+       FROM nurture_emails WHERE opportunity_id = $1 OR to_email = $2
+       ORDER BY COALESCE(sent_at, created_at) DESC LIMIT 50`,
+      [opp.id, opp.email]
+    );
+    for (const e of emails.rows) {
+      timeline.push({
+        type: 'email_sent',
+        date: e.sent_at || e.created_at,
+        subject: e.subject,
+        status: e.status,
+        source: 'nurture',
+        id: e.id,
+      });
+    }
+
+    // 2. Campaign activities (prospect_activities by email)
+    if (opp.email) {
+      const activities = await db.query(
+        `SELECT pa.id, pa.type, pa.happened_at, pa.source, c.name AS campaign_name
+         FROM prospect_activities pa
+         LEFT JOIN campaigns c ON c.id = pa.campaign_id
+         WHERE pa.lead_email = $1 AND pa.user_id = $2
+         ORDER BY pa.happened_at DESC LIMIT 50`,
+        [opp.email, req.user.id]
+      );
+      const eventMap = {
+        emailsOpened: 'open', emailsClicked: 'click', emailsReplied: 'reply',
+        emailsBounced: 'bounce', emailsUnsubscribed: 'unsubscribe',
+      };
+      for (const a of activities.rows) {
+        timeline.push({
+          type: 'campaign_activity',
+          date: a.happened_at,
+          campaign_name: a.campaign_name || 'Unknown campaign',
+          event: eventMap[a.type] || a.type,
+          source: a.source || 'lemlist',
+          id: a.id,
+        });
+      }
+    }
+
+    // 3. CRM activities (from connected CRM provider)
+    if (opp.crm_contact_id) {
+      try {
+        const token = await getUserCrmToken(req.user.id, opp.crm_provider);
+        let crmActivities = [];
+        if (token && opp.crm_provider === 'pipedrive') {
+          crmActivities = await pipedrive.getActivities(token, parseInt(opp.crm_contact_id, 10));
+        } else if (token && opp.crm_provider === 'salesforce') {
+          const sf = require('../api/salesforce');
+          const integration = await db.query(`SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [req.user.id]);
+          const instanceUrl = integration.rows[0]?.instance_url;
+          if (instanceUrl) crmActivities = await sf.getActivities(instanceUrl, token, opp.crm_contact_id);
+        } else if (token && opp.crm_provider === 'odoo') {
+          let creds;
+          try { creds = JSON.parse(token); } catch { creds = null; }
+          if (creds) crmActivities = await odoo.getActivities(creds, parseInt(opp.crm_contact_id, 10));
+        }
+        for (const a of crmActivities) {
+          timeline.push({
+            type: 'crm_activity',
+            date: a.dueDate || a.date || a.update_time,
+            subject: a.subject || a.summary || '',
+            activity_type: a.type || 'note',
+            done: a.done || false,
+            source: opp.crm_provider,
+            id: a.id,
+          });
+        }
+      } catch { /* CRM activities are best-effort */ }
+    }
+
+    // Sort by date descending, limit to 50
+    timeline.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    res.json({ timeline: timeline.slice(0, 50) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/crm/client/:id/product-lines — Get product lines for a contact
 router.get('/client/:id/product-lines', async (req, res, next) => {
   try {

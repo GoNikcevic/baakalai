@@ -8,11 +8,14 @@
  * GET /api/analytics/channels      — Channel performance comparison
  * GET /api/analytics/health        — CRM health score + alerts
  * GET /api/analytics/renewals      — Renewal pipeline (overdue / 30 / 60 / 90 day windows)
+ * GET /api/analytics/segments      — Smart segments (auto-grouping of contacts)
+ * GET /api/analytics/engagement    — Engagement scoring (0-100 per contact)
  */
 
 const { Router } = require('express');
 const db = require('../db');
 const { scoreOpportunities } = require('../lib/lead-scoring');
+const { scoreEngagement } = require('../lib/engagement-scoring');
 
 const router = Router();
 
@@ -113,7 +116,40 @@ router.get('/pipeline', async (req, res, next) => {
         : 0;
     }
 
-    res.json({ stages, conversions, total, avgTimeInStage });
+    // ── Period comparison: current 30d vs previous 30d ──
+    const now30 = now - 30 * 24 * 60 * 60 * 1000;
+    const now60 = now - 60 * 24 * 60 * 60 * 1000;
+
+    const currentOpps = opportunities.filter(o => {
+      const ca = o.created_at ? new Date(o.created_at).getTime() : 0;
+      return ca >= now30;
+    });
+    const previousOpps = opportunities.filter(o => {
+      const ca = o.created_at ? new Date(o.created_at).getTime() : 0;
+      return ca >= now60 && ca < now30;
+    });
+
+    const curTotal = currentOpps.length;
+    const curWon = currentOpps.filter(o => canonicalStage(o.status) === 'won').length;
+    const curLost = currentOpps.filter(o => canonicalStage(o.status) === 'lost').length;
+    const curWinRate = (curWon + curLost) > 0 ? Math.round((curWon / (curWon + curLost)) * 100) : 0;
+
+    const prevTotal = previousOpps.length;
+    const prevWon = previousOpps.filter(o => canonicalStage(o.status) === 'won').length;
+    const prevLost = previousOpps.filter(o => canonicalStage(o.status) === 'lost').length;
+    const prevWinRate = (prevWon + prevLost) > 0 ? Math.round((prevWon / (prevWon + prevLost)) * 100) : 0;
+
+    const comparison = {
+      current: { total: curTotal, won: curWon, lost: curLost, winRate: curWinRate },
+      previous: { total: prevTotal, won: prevWon, lost: prevLost, winRate: prevWinRate },
+      changes: {
+        total: curTotal - prevTotal,
+        won: curWon - prevWon,
+        winRate: curWinRate - prevWinRate,
+      },
+    };
+
+    res.json({ stages, conversions, total, avgTimeInStage, comparison });
   } catch (err) {
     next(err);
   }
@@ -730,6 +766,160 @@ router.get('/renewals', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// =============================================
+// GET /api/analytics/segments
+// =============================================
+
+router.get('/segments', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const now = Date.now();
+    const DAY_MS = 1000 * 60 * 60 * 24;
+    const DAYS_30 = 30 * DAY_MS;
+    const DAYS_90 = 90 * DAY_MS;
+
+    // Compute average deal value for Champions threshold
+    const dealsWithValue = opportunities.filter(o => o.deal_value > 0);
+    const avgDealValue = dealsWithValue.length > 0
+      ? dealsWithValue.reduce((sum, o) => sum + Number(o.deal_value), 0) / dealsWithValue.length
+      : 0;
+
+    // Classify each opportunity into a segment
+    const segments = {
+      champions: { contacts: [], totalValue: 0 },
+      active: { contacts: [], totalValue: 0 },
+      new: { contacts: [] },
+      at_risk: { contacts: [], totalChurnScore: 0 },
+      dormant: { contacts: [], totalDaysSince: 0 },
+    };
+
+    for (const opp of opportunities) {
+      const stage = canonicalStage(opp.status);
+      const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : 0;
+      const createdAt = opp.created_at ? new Date(opp.created_at).getTime() : now;
+      const daysSinceActivity = (now - updatedAt) / DAY_MS;
+      const churnScore = opp.churn_score || 0;
+      const dealValue = Number(opp.deal_value || 0);
+
+      const contact = {
+        id: opp.id,
+        name: opp.name,
+        email: opp.email,
+        company: opp.company,
+        churn_score: churnScore,
+        deal_value: dealValue,
+        last_activity: opp.updated_at || opp.created_at || null,
+      };
+
+      // Champions: won + above-avg deal value + low churn
+      if (stage === 'won' && dealValue > avgDealValue && churnScore < 30) {
+        segments.champions.contacts.push(contact);
+        segments.champions.totalValue += dealValue;
+      }
+      // New: created in last 30 days
+      else if ((now - createdAt) < DAYS_30) {
+        segments.new.contacts.push(contact);
+      }
+      // Dormant: no activity in 90+ days
+      else if ((now - updatedAt) >= DAYS_90) {
+        segments.dormant.contacts.push(contact);
+        segments.dormant.totalDaysSince += daysSinceActivity;
+      }
+      // At-risk: high churn OR inactive 30-90 days and not won
+      else if (churnScore >= 50 || ((now - updatedAt) >= DAYS_30 && stage !== 'won')) {
+        segments.at_risk.contacts.push(contact);
+        segments.at_risk.totalChurnScore += churnScore;
+      }
+      // Active: recent activity + positive status
+      else if ((now - updatedAt) < DAYS_30 && (stage === 'won' || stage === 'interested' || stage === 'meeting')) {
+        segments.active.contacts.push(contact);
+        segments.active.totalValue += dealValue;
+      }
+      // Fallback: if none of the above matched, put in active
+      else {
+        segments.active.contacts.push(contact);
+        segments.active.totalValue += dealValue;
+      }
+    }
+
+    const result = [
+      {
+        key: 'champions',
+        count: segments.champions.contacts.length,
+        totalValue: Math.round(segments.champions.totalValue),
+        contacts: segments.champions.contacts.slice(0, 10),
+      },
+      {
+        key: 'active',
+        count: segments.active.contacts.length,
+        totalValue: Math.round(segments.active.totalValue),
+        contacts: segments.active.contacts.slice(0, 10),
+      },
+      {
+        key: 'new',
+        count: segments.new.contacts.length,
+        contacts: segments.new.contacts.slice(0, 10),
+      },
+      {
+        key: 'at_risk',
+        count: segments.at_risk.contacts.length,
+        avgChurnScore: segments.at_risk.contacts.length > 0
+          ? Math.round(segments.at_risk.totalChurnScore / segments.at_risk.contacts.length)
+          : 0,
+        contacts: segments.at_risk.contacts.slice(0, 10),
+      },
+      {
+        key: 'dormant',
+        count: segments.dormant.contacts.length,
+        daysSinceActivity: segments.dormant.contacts.length > 0
+          ? Math.round(segments.dormant.totalDaysSince / segments.dormant.contacts.length)
+          : 0,
+        contacts: segments.dormant.contacts.slice(0, 10),
+      },
+    ];
+
+    res.json({ segments: result, total: opportunities.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/engagement
+// =============================================
+
+router.get('/engagement', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const contacts = await db.opportunities.listByUser(userId, 10000, 0);
+    const result = await scoreEngagement(userId, contacts);
+
+    res.json({
+      avgScore: result.avgScore,
+      distribution: result.distribution,
+      contacts: result.contacts.slice(0, 50),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/analytics/engagement/csv
+router.get('/engagement/csv', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const contacts = await db.opportunities.listByUser(userId, 10000, 0);
+    const result = await scoreEngagement(userId, contacts);
+    const headers = ['Score', 'Name', 'Email', 'Company', 'Status', 'Last Activity'];
+    const rows = result.contacts.map(c => [
+      c.engagement_score, c.name, c.email, c.company, c.status,
+      c.last_activity ? c.last_activity.split('T')[0] : '',
+    ]);
+    sendCsv(res, 'baakal-engagement.csv', headers, rows);
+  } catch (err) { next(err); }
 });
 
 // ── CSV Export helpers ──
