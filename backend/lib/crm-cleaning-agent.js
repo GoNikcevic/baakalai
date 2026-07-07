@@ -445,6 +445,14 @@ async function applyFixes(userId, provider, fixes) {
           }
           break;
 
+        case 'archive':
+          // Archive = soft delete: mark as inactive in local DB
+          for (const id of (fix.contactIds || [])) {
+            await db.query(`UPDATE opportunities SET status = 'archived' WHERE id = $1 AND user_id = $2`, [id, userId]);
+            applied++;
+          }
+          break;
+
         case 'merge':
           // Keep the first contact, merge data from others, delete others
           if (fix.contactIds && fix.contactIds.length >= 2) {

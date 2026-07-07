@@ -113,6 +113,7 @@ function getTabs(t, vocab) { return [
 /* ═══ Main Component ═══ */
 
 export default function CRMAnalyticsPage() {
+  const navigate = useNavigate();
   const { backendAvailable, opportunities } = useApp();
   const { socket } = useSocket();
   const t = useT();
@@ -122,6 +123,7 @@ export default function CRMAnalyticsPage() {
   // Detect vocabulary mode: membership orgs vs sales teams
   const mode = useMemo(() => {
     const opps = Object.values(opportunities || {});
+    if (opps.length === 0) return 'sales'; // default to sales when no data
     const hasDeals = opps.some(o => o.deal_value > 0 || o.status === 'won' || o.status === 'lost');
     return hasDeals ? 'sales' : 'membership';
   }, [opportunities]);

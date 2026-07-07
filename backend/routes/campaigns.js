@@ -5,6 +5,7 @@ const notionSync = require('../api/notion-sync');
 const { notifyCampaignUpdate, notifyUser } = require('../socket');
 const { sanitizeObject } = require('../lib/sanitize');
 const { getUserKey } = require('../config');
+const { getUserCrmToken } = require('../lib/crm-token');
 const logger = require('../lib/logger');
 const { validateId } = require('../middleware/validate-params');
 
@@ -808,7 +809,7 @@ router.post('/:id/launch-salesforce', async (req, res, next) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const accessToken = await getUserKey(req.user.id, 'salesforce');
+    const accessToken = await getUserCrmToken(req.user.id, 'salesforce');
     if (!accessToken) {
       return res.status(400).json({ error: 'Salesforce not connected. Add your credentials in Settings.' });
     }

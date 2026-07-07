@@ -1,4 +1,5 @@
 const { getUserKey } = require('../config');
+const { getUserCrmToken } = require('./crm-token');
 const db = require('../db');
 const logger = require('./logger');
 
@@ -39,7 +40,7 @@ async function exportScoresToHubSpot(userId, opportunities) {
 }
 
 async function exportScoresToSalesforce(userId, opportunities) {
-  const apiKey = await getUserKey(userId, 'salesforce');
+  const apiKey = await getUserCrmToken(userId, 'salesforce');
   if (!apiKey) throw new Error('Salesforce non configuré');
 
   // Salesforce needs instance URL from DB

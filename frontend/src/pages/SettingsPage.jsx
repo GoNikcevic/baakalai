@@ -428,7 +428,8 @@ export default function SettingsPage() {
   /* ─── Detect connected CRM ─── */
 
   const crmFieldLabels = { hubspotKey: 'HubSpot', salesforceKey: 'Salesforce', pipedriveKey: 'Pipedrive', odooKey: 'Odoo', notionToken: 'Notion', airtableKey: 'Airtable' };
-  const connectedCrmField = Object.keys(crmFieldLabels).find(f => keyStatus[f]?.configured);
+  const connectedCrms = Object.keys(crmFieldLabels).filter(f => keyStatus[f]?.configured);
+  const connectedCrmField = connectedCrms[0]; // keep first for backward compat
   const connectedCrmLabel = connectedCrmField ? crmFieldLabels[connectedCrmField] : null;
 
   /* ─── Render key row ─── */

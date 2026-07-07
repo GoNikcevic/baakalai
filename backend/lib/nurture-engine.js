@@ -14,6 +14,7 @@
 
 const db = require('../db');
 const { getUserKey } = require('../config');
+const { getUserCrmToken } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const linkedin = require('../api/linkedin');
@@ -36,7 +37,7 @@ async function evaluateTriggers(userId) {
 
   // Get CRM token
   const crmProvider = triggers.rows[0].crm_provider || 'pipedrive';
-  const crmToken = await getUserKey(userId, crmProvider);
+  const crmToken = await getUserCrmToken(userId, crmProvider);
   if (!crmToken) return [];
 
   // Get CRM data (multi-provider)

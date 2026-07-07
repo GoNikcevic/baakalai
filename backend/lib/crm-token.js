@@ -20,9 +20,11 @@ async function getUserCrmToken(userId, provider) {
     if (!integration) return null;
     try {
       // Auto-refresh if token expires within 5 minutes and we have a refresh_token
-      if (integration.refresh_token && integration.expires_at) {
-        const expiresAt = new Date(integration.expires_at).getTime();
-        if (expiresAt < Date.now() + 5 * 60 * 1000 && process.env.SALESFORCE_CLIENT_ID) {
+      if (integration.refresh_token && process.env.SALESFORCE_CLIENT_ID && process.env.SALESFORCE_CLIENT_SECRET) {
+        const shouldRefresh = integration.expires_at
+          ? new Date(integration.expires_at).getTime() < Date.now() + 5 * 60 * 1000
+          : false; // manual tokens without expires_at: don't auto-refresh
+        if (shouldRefresh) {
           const refreshToken = decrypt(integration.refresh_token);
           const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
             method: 'POST',

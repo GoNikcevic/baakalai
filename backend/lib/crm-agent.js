@@ -19,6 +19,7 @@
 
 const db = require('../db');
 const { getUserKey } = require('../config');
+const { getUserCrmToken } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
@@ -63,10 +64,10 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
 
   // Detect connected CRM provider and resolve credentials
   let crmProvider = 'pipedrive';
-  let token = await getUserKey(userId, 'pipedrive');
+  let token = await getUserCrmToken(userId, 'pipedrive');
   if (!token) {
     for (const p of ['hubspot', 'salesforce', 'odoo']) {
-      token = await getUserKey(userId, p);
+      token = await getUserCrmToken(userId, p);
       if (token) { crmProvider = p; break; }
     }
   }
@@ -231,7 +232,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
 
     // ── Step 6: AI Analysis (if significant changes) ──
     if (report.sync.imported > 0 || report.alerts.length > 0 || trigger === 'manual') {
-      await stepAnalysis(userId, report);
+      await stepAnalysis(userId, report, teamId);
     }
 
   } catch (err) {
@@ -363,8 +364,8 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
     // Sync deal values + lifecycle dates from CRM deals
     try {
       let deals = [];
-      if (crmProvider === 'pipedrive') deals = await pipedrive.getDeals(crmCreds, 500);
-      else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(crmCreds.instanceUrl, crmCreds.accessToken); }
+      if (crmProvider === 'pipedrive') deals = await pipedrive.getDeals(token, 500);
+      else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
 
       for (const deal of deals) {
         const personId = deal.personId ? String(deal.personId) : null;
@@ -712,7 +713,7 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
 
 // ── Step 6: AI Analysis ──
 
-async function stepAnalysis(userId, report) {
+async function stepAnalysis(userId, report, teamId = null) {
   try {
     const { sync, cleaning, nurture, alerts } = report;
     const hasChanges = sync.imported > 0 || nurture.sent > 0 || nurture.queued > 0;
@@ -907,7 +908,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
 
 async function runAllAgents() {
   const users = await db.query(
-    `SELECT DISTINCT user_id FROM user_integrations WHERE provider = 'pipedrive' AND access_token IS NOT NULL`
+    `SELECT DISTINCT user_id FROM user_integrations WHERE provider IN ('pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable') AND access_token IS NOT NULL`
   );
 
   const results = [];

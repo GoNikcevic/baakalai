@@ -903,13 +903,13 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
       let endpoint;
       let body = {};
       if (actionType === 'scan_crm') {
-        endpoint = '/crm/scan/' + (metadata.provider || 'pipedrive');
+        endpoint = '/crm/scan/' + (metadata.provider || 'auto');
         body = {};
       } else if (actionType === 'run_nurture') {
         endpoint = '/nurture/run';
         body = {};
       } else if (actionType === 'import_crm') {
-        endpoint = '/crm/import/' + (metadata.provider || 'pipedrive');
+        endpoint = '/crm/import/' + (metadata.provider || 'auto');
         body = {};
       } else if (actionType === 'clean_crm') {
         endpoint = '/crm/auto-clean';

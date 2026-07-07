@@ -65,7 +65,9 @@ export default function OnboardingChecklist() {
       (keys.pipedriveKey && keys.pipedriveKey.configured) ||
       (keys.hubspotKey && keys.hubspotKey.configured) ||
       (keys.salesforceKey && keys.salesforceKey.configured) ||
-      (keys.odooUrl && keys.odooUrl.configured)
+      (keys.odooKey && keys.odooKey.configured) ||
+      (keys.notionToken && keys.notionToken.configured) ||
+      (keys.airtableKey && keys.airtableKey.configured)
     ));
 
     // 3. Email connected — any email account (SMTP/OAuth)

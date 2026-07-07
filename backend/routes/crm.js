@@ -240,8 +240,8 @@ async function syncOpportunityToHubspot(accessToken, opportunity) {
 
 router.get('/providers', async (req, res, next) => {
   try {
-    const providers = ['hubspot', 'salesforce', 'pipedrive', 'folk', 'notion', 'airtable'];
-    const labelMap = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', folk: 'Folk', notion: 'Notion', airtable: 'Airtable' };
+    const providers = ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'folk', 'notion', 'airtable'];
+    const labelMap = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', odoo: 'Odoo', folk: 'Folk', notion: 'Notion', airtable: 'Airtable' };
 
     // Single query instead of 6
     const result = await db.query(
@@ -320,7 +320,7 @@ router.post('/sync-to/:provider', async (req, res, next) => {
       result = await syncOpportunityToHubspot(token, opportunity);
     } else if (provider === 'salesforce') {
       const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
-      const instanceUrl = metadata.instance_url;
+      const instanceUrl = metadata.instance_url || integration.instance_url;
       if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
 
       const contactData = salesforce.mapOpportunityToContact(opportunity);
@@ -1277,13 +1277,21 @@ router.post('/product-lines/:id/assign', async (req, res, next) => {
     if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
       return res.status(400).json({ error: 'opportunityIds array required' });
     }
-    for (const oppId of opportunityIds) {
+    // Validate opportunity ownership
+    const validOpps = await db.query(
+      `SELECT id FROM opportunities WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+      [req.user.id, opportunityIds]
+    );
+    const validIds = new Set(validOpps.rows.map(r => r.id));
+    const filtered = opportunityIds.filter(id => validIds.has(id));
+
+    for (const oppId of filtered) {
       await db.query(
         `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
         [oppId, req.params.id]
       );
     }
-    res.json({ assigned: opportunityIds.length });
+    res.json({ assigned: filtered.length });
   } catch (err) { next(err); }
 });
 
@@ -1400,6 +1408,9 @@ router.get('/client/:id/timeline', async (req, res, next) => {
 // GET /api/crm/client/:id/product-lines — Get product lines for a contact
 router.get('/client/:id/product-lines', async (req, res, next) => {
   try {
+    const opp = await db.query(`SELECT id FROM opportunities WHERE id = $1 AND user_id = $2`, [req.params.id, req.user.id]);
+    if (!opp.rows.length) return res.status(404).json({ error: 'Contact not found' });
+
     const result = await db.query(`
       SELECT pl.* FROM product_lines pl
       JOIN opportunity_product_lines opl ON opl.product_line_id = pl.id
