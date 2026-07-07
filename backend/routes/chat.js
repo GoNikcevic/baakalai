@@ -429,12 +429,15 @@ router.post('/threads/:id/send-email', async (req, res, next) => {
     const { to, toName, subject, body } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ error: 'to, subject, body required' });
 
-    // Find matching opportunity
+    // Validate recipient exists in user's contacts
     const opp = await db.opportunities.findByEmail(req.user.id, to);
+    if (!opp) {
+      return res.status(400).json({ error: 'Recipient not found in your contacts. Add them first or send from your email client.' });
+    }
 
     const result = await sendNurtureEmail(req.user.id, {
       to, toName, subject, body,
-      opportunityId: opp?.id || null,
+      opportunityId: opp.id,
     });
 
     res.json(result);
@@ -475,15 +478,18 @@ router.post('/threads/:id/clean-crm', async (req, res, next) => {
       return res.json({ score: scan.score, applied: 0, message: 'No issues found' });
     }
 
-    // Auto-fix safe issues (format + duplicates + invalid emails)
+    // Auto-fix only truly safe issues (formatting only)
     const safeFixes = [];
+    const reviewItems = [];
     for (const issue of scan.issues) {
       if (issue.type === 'format_name_caps' && issue.contacts?.length > 0) {
         safeFixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
-      } else if (issue.type === 'duplicate_email' && issue.suggestedAction === 'merge' && issue.contacts?.length >= 2) {
-        safeFixes.push({ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) });
+      } else if (issue.type === 'duplicate_email' && issue.contacts?.length >= 2) {
+        // Duplicates require manual review — no auto-merge
+        reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       } else if (issue.type === 'invalid_email' && issue.contacts?.length > 0) {
-        safeFixes.push({ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) });
+        // Invalid emails require manual review — no auto-delete
+        reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       }
     }
 
@@ -496,6 +502,7 @@ router.post('/threads/:id/clean-crm', async (req, res, next) => {
       score: scan.score,
       totalIssues: scan.issues.length,
       autoFixed: fixResult.applied,
+      needsReview: reviewItems,
       remainingManual: scan.issues.length - safeFixes.length,
       issues: scan.issues.map(i => ({ type: i.type, count: i.count, suggestedAction: i.suggestedAction })),
     });

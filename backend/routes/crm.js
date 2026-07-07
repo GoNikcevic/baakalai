@@ -534,6 +534,35 @@ router.post('/clean/:provider', async (req, res, next) => {
       return res.status(400).json({ error: 'fixes array is required' });
     }
 
+    // Validate that all contactIds belong to the authenticated user
+    const allContactIds = [];
+    for (const fix of fixes) {
+      if (Array.isArray(fix.contactIds)) allContactIds.push(...fix.contactIds);
+      if (fix.contactId) allContactIds.push(fix.contactId);
+      if (Array.isArray(fix.contacts)) {
+        for (const c of fix.contacts) { if (c.id) allContactIds.push(c.id); }
+      }
+    }
+    if (allContactIds.length > 0) {
+      const uniqueIds = [...new Set(allContactIds)];
+      const placeholders = uniqueIds.map((_, i) => `$${i + 2}`).join(',');
+      const owned = await db.query(
+        `SELECT id FROM opportunities WHERE user_id = $1 AND id IN (${placeholders})`,
+        [req.user.id, ...uniqueIds]
+      );
+      const ownedSet = new Set(owned.rows.map(r => r.id));
+      const filtered = uniqueIds.filter(id => !ownedSet.has(id));
+      if (filtered.length > 0) {
+        console.warn(`[SECURITY] User ${req.user.id} tried to clean ${filtered.length} contacts they don't own: ${filtered.join(', ')}`);
+        // Remove unauthorized contactIds from fixes
+        for (const fix of fixes) {
+          if (Array.isArray(fix.contactIds)) fix.contactIds = fix.contactIds.filter(id => ownedSet.has(id));
+          if (fix.contactId && !ownedSet.has(fix.contactId)) fix.contactId = null;
+          if (Array.isArray(fix.contacts)) fix.contacts = fix.contacts.filter(c => ownedSet.has(c.id));
+        }
+      }
+    }
+
     const result = await crmCleaning.applyFixes(req.user.id, provider, fixes);
 
     // Update report if provided
@@ -1563,14 +1592,18 @@ router.post('/auto-clean', async (req, res, next) => {
       return res.json({ score: scan.score, applied: 0, message: 'No issues found' });
     }
 
+    // Auto-fix only truly safe issues (formatting only)
     const safeFixes = [];
+    const reviewItems = [];
     for (const issue of scan.issues) {
       if (issue.type === 'format_name_caps' && issue.contacts?.length > 0) {
         safeFixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
-      } else if (issue.type === 'duplicate_email' && issue.suggestedAction === 'merge' && issue.contacts?.length >= 2) {
-        safeFixes.push({ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) });
+      } else if (issue.type === 'duplicate_email' && issue.contacts?.length >= 2) {
+        // Duplicates require manual review — no auto-merge
+        reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       } else if (issue.type === 'invalid_email' && issue.contacts?.length > 0) {
-        safeFixes.push({ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) });
+        // Invalid emails require manual review — no auto-delete
+        reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       }
     }
 
@@ -1583,6 +1616,7 @@ router.post('/auto-clean', async (req, res, next) => {
       score: scan.score,
       totalIssues: scan.issues.length,
       autoFixed: fixResult.applied,
+      needsReview: reviewItems,
       remainingManual: scan.issues.length - safeFixes.length,
       issues: scan.issues.map(i => ({ type: i.type, count: i.count, suggestedAction: i.suggestedAction })),
     });
