@@ -39,7 +39,7 @@ export default function MembershipPage() {
           { label: en ? 'Avg cycle' : 'Cycle moyen', value: k.avg_cycle_days ? `${k.avg_cycle_days}j` : '—' },
           { label: en ? 'Avg churn score' : 'Score churn moyen', value: k.avg_churn_score || '—', color: k.avg_churn_score >= 50 ? '#DC2626' : '#F59E0B' },
         ].map((kpi, i) => (
-          <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 20px' }}>
+          <div key={i} className="card" style={{ padding: '16px 20px' }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color || 'var(--text-primary)' }}>{kpi.value}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{kpi.label}</div>
           </div>
@@ -48,7 +48,7 @@ export default function MembershipPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         {/* Churn distribution */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
+        <div className="card" style={{ padding: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Churn Distribution' : 'Distribution Churn'}</div>
           {(data.churnDistribution || []).map(b => (
             <div key={b.band} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -62,7 +62,7 @@ export default function MembershipPage() {
         </div>
 
         {/* Tenure distribution */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
+        <div className="card" style={{ padding: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Client Tenure' : 'Ancienneté clients'}</div>
           {(data.tenure || []).map(t => (
             <div key={t.band} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
@@ -76,7 +76,7 @@ export default function MembershipPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         {/* Revenue by size */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
+        <div className="card" style={{ padding: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Revenue by Company Size' : 'Revenu par taille entreprise'}</div>
           {(data.bySize || []).map(s => (
             <div key={s.segment} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
@@ -87,7 +87,7 @@ export default function MembershipPage() {
         </div>
 
         {/* Performance by rep */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
+        <div className="card" style={{ padding: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Performance by Rep' : 'Performance par commercial'}</div>
           {(data.byOwner || []).map(o => {
             const winRate = parseInt(o.total) > 0 ? Math.round((parseInt(o.won) / parseInt(o.total)) * 100) : 0;
@@ -104,7 +104,7 @@ export default function MembershipPage() {
 
       {/* Monthly trend */}
       {data.monthlyTrend?.length > 0 && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginBottom: 24 }}>
+        <div className="card" style={{ padding: 20, marginBottom: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Monthly Wins & Revenue' : 'Gains & revenus mensuels'}</div>
           <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 100 }}>
             {data.monthlyTrend.map(m => {
@@ -124,7 +124,7 @@ export default function MembershipPage() {
 
       {/* Upcoming renewals */}
       {data.upcomingRenewals?.length > 0 && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
+        <div className="card" style={{ padding: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Upcoming Renewals (60 days)' : 'Renouvellements à venir (60 jours)'}</div>
           {data.upcomingRenewals.map(r => (
             <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>

@@ -11,6 +11,7 @@ import api, { exportCampaignCsv } from '../services/api-client';
 import VariableManager from '../components/VariableManager';
 import VarGenerator from '../components/VarGenerator';
 import { sanitizeHtml } from '../services/sanitize';
+import { useI18n } from '../i18n';
 
 /* ─── Fallback data ─── */
 
@@ -584,6 +585,7 @@ function TouchpointCard({
 }
 
 function LaunchBar({ campaign, campaignKey, touchpoints, backendAvailable, onLaunchSuccess }) {
+  const { lang } = useI18n(); const en = lang === 'en';
   const [launching, setLaunching] = useState(false);
   const [launched, setLaunched] = useState(false);
   const [error, setError] = useState(null);
@@ -615,10 +617,10 @@ function LaunchBar({ campaign, campaignKey, touchpoints, backendAvailable, onLau
       <div className="editor-launch-bar" style={{ borderColor: 'var(--success)' }}>
         <div className="editor-launch-info" style={{ flex: 1 }}>
           <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--success)', letterSpacing: '-0.2px' }}>
-            Séquence déployée
+            {en ? 'Sequence deployed' : 'Séquence déployée'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            {touchpoints.length} touchpoints actifs -- Les premiers envois démarrent sous 24h
+            {touchpoints.length} {en ? 'active touchpoints -- First sends start within 24h' : 'touchpoints actifs -- Les premiers envois démarrent sous 24h'}
           </div>
         </div>
       </div>
@@ -628,9 +630,9 @@ function LaunchBar({ campaign, campaignKey, touchpoints, backendAvailable, onLau
   return (
     <div className="editor-launch-bar">
       <div className="editor-launch-info">
-        <div style={{ fontSize: '14px', fontWeight: 600, letterSpacing: '-0.2px' }}>Séquence prête</div>
+        <div style={{ fontSize: '14px', fontWeight: 600, letterSpacing: '-0.2px' }}>{en ? 'Sequence ready' : 'Séquence prête'}</div>
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-          {touchpoints.length} touchpoints -- Vérifiez vos messages puis lancez la campagne
+          {touchpoints.length} touchpoints -- {en ? 'Review your messages then launch the campaign' : 'Vérifiez vos messages puis lancez la campagne'}
         </div>
       </div>
       <button
@@ -639,7 +641,7 @@ function LaunchBar({ campaign, campaignKey, touchpoints, backendAvailable, onLau
         onClick={handleLaunch}
         style={launching ? { opacity: 0.6 } : undefined}
       >
-        {launching ? 'Lancement en cours...' : 'Lancer la sequence'}
+        {launching ? (en ? 'Launching...' : 'Lancement en cours...') : (en ? 'Launch sequence' : 'Lancer la séquence')}
       </button>
       {error && (
         <div style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '8px' }}>
@@ -651,6 +653,7 @@ function LaunchBar({ campaign, campaignKey, touchpoints, backendAvailable, onLau
 }
 
 function ParamsPanel({ params, onClose }) {
+  const { lang } = useI18n(); const en = lang === 'en';
   return (
     <div id="params-panel" style={{
       background: 'var(--bg-elevated)',
@@ -660,8 +663,8 @@ function ParamsPanel({ params, onClose }) {
       marginBottom: '16px',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div style={{ fontSize: '14px', fontWeight: 600 }}>Paramètres de la campagne</div>
-        <button className="tp-action" style={{ fontSize: '11px' }} onClick={onClose}>Fermer</button>
+        <div style={{ fontSize: '14px', fontWeight: 600 }}>{en ? 'Campaign parameters' : 'Paramètres de la campagne'}</div>
+        <button className="tp-action" style={{ fontSize: '11px' }} onClick={onClose}>{en ? 'Close' : 'Fermer'}</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         {params.map((p) => (
@@ -678,6 +681,7 @@ function ParamsPanel({ params, onClose }) {
 /* ═══ Main Component ═══ */
 
 export default function CopyEditorPage() {
+  const { lang } = useI18n(); const en = lang === 'en';
   const { campaigns, backendAvailable, setCampaigns } = useApp();
   const navigate = useNavigate();
 
@@ -1012,18 +1016,18 @@ export default function CopyEditorPage() {
       <div className="page-content">
         <div className="page-header">
           <div>
-            <div className="page-title">Copy & Séquences</div>
-            <div className="page-subtitle">Éditeur de séquences et touchpoints</div>
+            <div className="page-title">{en ? 'Copy & Sequences' : 'Copy & Séquences'}</div>
+            <div className="page-subtitle">{en ? 'Sequence and touchpoint editor' : 'Éditeur de séquences et touchpoints'}</div>
           </div>
         </div>
         <div className="empty-state" style={{ padding: '80px 0' }}>
           <div className="empty-state-icon">✏️</div>
-          <div className="empty-state-title">Aucune campagne</div>
+          <div className="empty-state-title">{en ? 'No campaigns' : 'Aucune campagne'}</div>
           <div className="empty-state-desc">
-            Créez votre première campagne pour commencer à éditer vos séquences et touchpoints.
+            {en ? 'Create your first campaign to start editing your sequences and touchpoints.' : 'Créez votre première campagne pour commencer à éditer vos séquences et touchpoints.'}
           </div>
           <button className="btn btn-primary" onClick={() => navigate('/chat')}>
-            Créer ma première campagne
+            {en ? 'Create my first campaign' : 'Créer ma première campagne'}
           </button>
         </div>
       </div>

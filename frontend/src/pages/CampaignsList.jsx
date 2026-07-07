@@ -111,14 +111,14 @@ export default function CampaignsList({ onNavigateCampaign }) {
         [campaign.id]: { ...prev[campaign.id], status: 'archived' },
       }));
     } catch (err) {
-      window.alert(t('campaigns.errorPrefix', { message: err.message }));
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
     }
     setActionLoading(prev => ({ ...prev, [campaign.id]: null }));
-  }, [setCampaigns, t]);
+  }, [setCampaigns, t, en]);
 
   const handleDelete = useCallback(async (e, campaign) => {
     e.stopPropagation();
-    if (!window.confirm(t('campaigns.confirmDelete', { name: campaign.name }))) return;
+    if (!window.confirm(en ? `Delete campaign "${campaign.name}"?` : `Supprimer la campagne "${campaign.name}" ?`)) return;
     const backendId = campaign._backendId || campaign.id;
     setActionLoading(prev => ({ ...prev, [campaign.id]: 'deleting' }));
     try {
@@ -129,10 +129,10 @@ export default function CampaignsList({ onNavigateCampaign }) {
         return next;
       });
     } catch (err) {
-      window.alert(t('campaigns.errorPrefix', { message: err.message }));
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
     }
     setActionLoading(prev => ({ ...prev, [campaign.id]: null }));
-  }, [setCampaigns, t]);
+  }, [setCampaigns, t, en]);
 
   /* ── Empty state ── */
   if (isEmpty) {

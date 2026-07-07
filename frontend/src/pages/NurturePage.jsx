@@ -252,6 +252,7 @@ export default function NurturePage() {
 function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   const t = useT();
   const { lang } = useI18n();
+  const en = lang === 'en';
   const TRIGGER_TYPES = getTriggerTypes(lang);
   const [form, setForm] = useState({
     name: '',
@@ -298,7 +299,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(t('activation.delete') + '?')) return;
+    if (!window.confirm(en ? 'Delete this trigger?' : 'Supprimer ce trigger ?')) return;
     try {
       await request(`/nurture/triggers/${id}`, { method: 'DELETE' });
       onRefresh();

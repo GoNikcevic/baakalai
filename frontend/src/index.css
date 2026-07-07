@@ -3549,7 +3549,12 @@ input[type="checkbox"]:checked {
 .crm-tabs {
   display: flex; gap: 4px; margin-bottom: 24px;
   border-bottom: 1px solid var(--border); padding-bottom: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.crm-tabs::-webkit-scrollbar { display: none; }
 .crm-tab {
   padding: 8px 16px; border: none; background: none; cursor: pointer;
   font-size: 13px; font-weight: 500; font-family: inherit;

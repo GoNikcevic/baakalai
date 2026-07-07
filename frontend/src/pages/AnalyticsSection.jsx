@@ -6,6 +6,7 @@
 
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/useApp';
+import { useI18n } from '../i18n';
 import EngagementChart from '../components/charts/EngagementChart';
 import FunnelChart from '../components/charts/FunnelChart';
 
@@ -49,6 +50,7 @@ const PERIODS = ['4w', '8w', '12w'];
 /* ─── Campaign Performance Row (React) ─── */
 
 function CampaignPerfRow({ campaign }) {
+  const { lang } = useI18n(); const en = lang === 'en';
   const isLinkedin = campaign.channel === 'linkedin';
   const openRate = isLinkedin ? null : campaign.kpis?.openRate;
   const replyRate = campaign.kpis?.replyRate;
@@ -60,7 +62,7 @@ function CampaignPerfRow({ campaign }) {
         {openRate != null && (
           <>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px' }}>Ouverture</div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px' }}>{en ? 'Open rate' : 'Ouverture'}</div>
               <div className="campaign-perf-bar-track">
                 <div
                   className="campaign-perf-bar-fill"
@@ -76,7 +78,7 @@ function CampaignPerfRow({ campaign }) {
         {replyRate != null && (
           <>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px' }}>Réponse</div>
+              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px' }}>{en ? 'Reply rate' : 'Réponse'}</div>
               <div className="campaign-perf-bar-track">
                 <div
                   className="campaign-perf-bar-fill"
@@ -97,6 +99,7 @@ function CampaignPerfRow({ campaign }) {
 /* ─── Component ─── */
 
 export default function AnalyticsSection({ onNavigate }) {
+  const { lang } = useI18n(); const en = lang === 'en';
   const { campaigns, globalKpis } = useApp();
 
   const [period, setPeriod] = useState('4w');
@@ -164,11 +167,11 @@ export default function AnalyticsSection({ onNavigate }) {
     const replied = Math.round(totalContacts * 0.081);
 
     return [
-      { label: 'Contactés', value: totalContacts },
-      { label: 'Ouvert', value: opened },
-      { label: 'Répondu', value: replied },
-      { label: 'Intéressé', value: totalInterested },
-      { label: 'RDV', value: totalMeetings },
+      { label: en ? 'Contacted' : 'Contactés', value: totalContacts },
+      { label: en ? 'Opened' : 'Ouvert', value: opened },
+      { label: en ? 'Replied' : 'Répondu', value: replied },
+      { label: en ? 'Interested' : 'Intéressé', value: totalInterested },
+      { label: en ? 'Meetings' : 'RDV', value: totalMeetings },
     ];
   }, [activeCampaigns]);
 
@@ -179,13 +182,13 @@ export default function AnalyticsSection({ onNavigate }) {
       <div id="section-analytics">
         <div className="empty-state">
           <div className="empty-state-icon">{'📈'}</div>
-          <div className="empty-state-title">Analytics non disponibles</div>
+          <div className="empty-state-title">{en ? 'Analytics not available' : 'Analytics non disponibles'}</div>
           <div className="empty-state-desc">
-            Les graphiques de performance s'afficheront dès que votre première campagne sera active avec des données de prospection.
+            {en ? 'Performance charts will appear once your first campaign is active with prospecting data.' : 'Les graphiques de performance s\'afficheront dès que votre première campagne sera active avec des données de prospection.'}
           </div>
           {onNavigate && (
             <button className="btn btn-ghost" onClick={() => onNavigate('overview')}>
-              Retour au dashboard
+              {en ? 'Back to dashboard' : 'Retour au dashboard'}
             </button>
           )}
         </div>
@@ -201,19 +204,19 @@ export default function AnalyticsSection({ onNavigate }) {
       {/* KPI Row */}
       <div className="analytics-kpi-row">
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">Taux d'ouverture</div>
+          <div className="analytics-kpi-label">{en ? 'Open rate' : 'Taux d\'ouverture'}</div>
           <div className="analytics-kpi-value">{kpis.openRate}</div>
         </div>
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">Taux de réponse</div>
+          <div className="analytics-kpi-label">{en ? 'Reply rate' : 'Taux de réponse'}</div>
           <div className="analytics-kpi-value">{kpis.replyRate}</div>
         </div>
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">Intéressés</div>
+          <div className="analytics-kpi-label">{en ? 'Interested' : 'Intéressés'}</div>
           <div className="analytics-kpi-value">{kpis.interested}</div>
         </div>
         <div className="analytics-kpi-card">
-          <div className="analytics-kpi-label">RDV obtenus</div>
+          <div className="analytics-kpi-label">{en ? 'Meetings booked' : 'RDV obtenus'}</div>
           <div className="analytics-kpi-value">{kpis.meetings}</div>
         </div>
       </div>
@@ -221,7 +224,7 @@ export default function AnalyticsSection({ onNavigate }) {
       {/* Engagement Trends — Recharts */}
       <div className="card">
         <div className="card-header">
-          <div className="card-title">Tendances d'engagement</div>
+          <div className="card-title">{en ? 'Engagement trends' : 'Tendances d\'engagement'}</div>
           <div className="analytics-period-selector">
             {PERIODS.map(p => (
               <button
@@ -241,11 +244,11 @@ export default function AnalyticsSection({ onNavigate }) {
 
       {/* Campaign Performance — React components instead of innerHTML */}
       <div className="card">
-        <div className="card-title">Performance par campagne</div>
+        <div className="card-title">{en ? 'Campaign performance' : 'Performance par campagne'}</div>
         <div className="card-body">
           {activeCampaigns.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '13px' }}>
-              Aucune campagne active pour le moment.
+              {en ? 'No active campaigns at the moment.' : 'Aucune campagne active pour le moment.'}
             </div>
           ) : (
             activeCampaigns.map(c => <CampaignPerfRow key={c.id} campaign={c} />)
@@ -258,7 +261,7 @@ export default function AnalyticsSection({ onNavigate }) {
 
         {/* Channel Breakdown */}
         <div className="card">
-          <div className="card-title">Répartition par canal</div>
+          <div className="card-title">{en ? 'Channel breakdown' : 'Répartition par canal'}</div>
           <div className="card-body">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Channel bars */}
@@ -270,9 +273,9 @@ export default function AnalyticsSection({ onNavigate }) {
 
               {/* Channel details */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <ChannelRow label="Email" count={channelData.emailCount} color="var(--blue)" value={`${channelData.avgOpenRate}%`} metric="Ouverture moy." />
-                <ChannelRow label="LinkedIn" count={channelData.linkedinCount} color="var(--purple)" value={`${channelData.avgAcceptRate}%`} metric="Accept. moy." />
-                <ChannelRow label="Multi-canal" count={channelData.multiCount} color="var(--orange)" value={`${Math.round(channelData.multiCount / channelData.total * 100)}%`} metric="du portefeuille" />
+                <ChannelRow label="Email" count={channelData.emailCount} color="var(--blue)" value={`${channelData.avgOpenRate}%`} metric={en ? 'Avg. open rate' : 'Ouverture moy.'} en={en} />
+                <ChannelRow label="LinkedIn" count={channelData.linkedinCount} color="var(--purple)" value={`${channelData.avgAcceptRate}%`} metric={en ? 'Avg. accept rate' : 'Accept. moy.'} en={en} />
+                <ChannelRow label={en ? 'Multi-channel' : 'Multi-canal'} count={channelData.multiCount} color="var(--orange)" value={`${Math.round(channelData.multiCount / channelData.total * 100)}%`} metric={en ? 'of portfolio' : 'du portefeuille'} en={en} />
               </div>
             </div>
           </div>
@@ -280,7 +283,7 @@ export default function AnalyticsSection({ onNavigate }) {
 
         {/* Conversion Funnel — Recharts */}
         <div className="card">
-          <div className="card-title">Entonnoir de conversion</div>
+          <div className="card-title">{en ? 'Conversion funnel' : 'Entonnoir de conversion'}</div>
           <div className="card-body">
             <FunnelChart stages={funnelStages} />
           </div>
@@ -292,14 +295,14 @@ export default function AnalyticsSection({ onNavigate }) {
 
 /* ─── Channel Row helper ─── */
 
-function ChannelRow({ label, count, color, value, metric }) {
+function ChannelRow({ label, count, color, value, metric, en }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <div style={{ width: '10px', height: '10px', borderRadius: '3px', background: color }} />
         <div>
           <div style={{ fontSize: '13px', fontWeight: 600 }}>{label}</div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{count} campagne{count !== 1 ? 's' : ''}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{count} {en ? (count !== 1 ? 'campaigns' : 'campaign') : ('campagne' + (count !== 1 ? 's' : ''))}</div>
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
