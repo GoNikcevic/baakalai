@@ -1860,8 +1860,9 @@ router.get('/salesforce/connect', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/salesforce/callback — Salesforce OAuth callback
+// GET /api/crm/salesforce/callback — Salesforce OAuth callback (public, no auth)
 router.get('/salesforce/callback', async (req, res) => {
+  logger.info('salesforce-oauth', `Callback hit: ${req.originalUrl}, APP_URL=${APP_URL}`);
   const { code, state } = req.query;
   const oauthData = _sfOauthStates.get(state);
 
