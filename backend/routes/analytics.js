@@ -22,12 +22,12 @@ const router = Router();
 // ── Stage definitions (ordered for funnel) ──
 
 const STAGE_DEFS = [
-  { stage: 'new', label: 'Nouveau' },
-  { stage: 'interested', label: 'Intéressé' },
-  { stage: 'meeting', label: 'RDV' },
-  { stage: 'negotiation', label: 'Négociation' },
-  { stage: 'won', label: 'Gagné' },
-  { stage: 'lost', label: 'Perdu' },
+  { stage: 'new', label: 'New', labelFr: 'Nouveau' },
+  { stage: 'interested', label: 'Interested', labelFr: 'Intéressé' },
+  { stage: 'meeting', label: 'Meeting', labelFr: 'RDV' },
+  { stage: 'negotiation', label: 'Negotiation', labelFr: 'Négociation' },
+  { stage: 'won', label: 'Won', labelFr: 'Gagné' },
+  { stage: 'lost', label: 'Lost', labelFr: 'Perdu' },
 ];
 
 // Map various status values to canonical stages
@@ -75,6 +75,7 @@ router.get('/pipeline', async (req, res, next) => {
     const stages = STAGE_DEFS.map(def => ({
       stage: def.stage,
       label: def.label,
+      labelFr: def.labelFr,
       count: counts[def.stage] || 0,
       percentage: total > 0 ? Math.round(((counts[def.stage] || 0) / total) * 1000) / 10 : 0,
     }));
