@@ -1250,14 +1250,16 @@ function CRMHealthSection() {
     setFixing(issue.type);
     try {
       let fixes = [];
-      if (issue.type === 'format_name_caps') {
+      if (issue.type === 'format_name_caps' || issue.suggestedAction === 'auto_fix') {
         fixes = [{ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts }];
-      } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'archive') {
-        fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
-      } else if (issue.suggestedAction === 'merge' && issue.contacts.length >= 2) {
+      } else if (issue.suggestedAction === 'merge' && issue.contacts?.length >= 2) {
         fixes = [{ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) }];
-      } else if (issue.suggestedAction === 'fix' && issue.contacts?.length > 0) {
+      } else if (issue.suggestedAction === 'archive') {
+        fixes = [{ type: issue.type, action: 'archive', contactIds: issue.contacts.map(c => c.id) }];
+      } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'fix') {
         fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
+      } else if (issue.suggestedAction === 'verify') {
+        fixes = [{ type: issue.type, action: 'verify_emails', contactIds: issue.contacts.map(c => c.id) }];
       }
       if (fixes.length > 0) {
         const result = await api.request(`/crm/clean/${provider}`, {
