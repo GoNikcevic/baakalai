@@ -1846,7 +1846,10 @@ router.get('/salesforce/connect', (req, res, next) => {
     if (_sfOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
     const state = crypto.randomBytes(16).toString('hex');
-    _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000 });
+    // PKCE: generate code_verifier and code_challenge
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+    _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000, codeVerifier });
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -1854,6 +1857,8 @@ router.get('/salesforce/connect', (req, res, next) => {
       redirect_uri: APP_URL + '/api/crm/salesforce/callback',
       scope: 'api refresh_token offline_access',
       state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
     });
 
     res.json({ url: `https://login.salesforce.com/services/oauth2/authorize?${params}` });
@@ -1881,6 +1886,7 @@ router.get('/salesforce/callback', async (req, res) => {
         client_id: process.env.SALESFORCE_CLIENT_ID,
         client_secret: process.env.SALESFORCE_CLIENT_SECRET,
         redirect_uri: APP_URL + '/api/crm/salesforce/callback',
+        code_verifier: oauthData.codeVerifier,
       }),
     });
 
