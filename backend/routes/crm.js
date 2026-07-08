@@ -1839,6 +1839,7 @@ setInterval(() => {
 }, 300000);
 
 // GET /api/crm/salesforce/connect — Start Salesforce OAuth flow
+// Supports ?domain=mycompany.my.salesforce.com for orgs with custom domains
 router.get('/salesforce/connect', (req, res, next) => {
   try {
     const clientId = process.env.SALESFORCE_CLIENT_ID;
@@ -1851,17 +1852,26 @@ router.get('/salesforce/connect', (req, res, next) => {
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
     _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000, codeVerifier });
 
+    // Support custom Salesforce domain (e.g. mycompany.my.salesforce.com)
+    let loginHost = 'login.salesforce.com';
+    if (req.query.domain) {
+      const domain = req.query.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      if (domain.endsWith('.salesforce.com') || domain.endsWith('.force.com')) {
+        loginHost = domain;
+      }
+    }
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
       redirect_uri: APP_URL + '/api/crm/salesforce/callback',
-      scope: 'api refresh_token offline_access',
+      scope: 'api refresh_token',
       state,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
     });
 
-    res.json({ url: `https://login.salesforce.com/services/oauth2/authorize?${params}` });
+    res.json({ url: `https://${loginHost}/services/oauth2/authorize?${params}` });
   } catch (err) { next(err); }
 });
 
