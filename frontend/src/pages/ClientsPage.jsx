@@ -283,6 +283,10 @@ export default function ClientsPage() {
 
       {/* Churn risk summary */}
       {churnSummary && churnSummary.scored > 0 && (
+        <>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+          {t('clients.churnRiskTitle')}
+        </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
           {[
             { label: t('clients.critical'), count: churnSummary.critical, color: 'var(--danger)' },
@@ -302,7 +306,7 @@ export default function ClientsPage() {
             flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
             borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
           }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{churnSummary.avgScore}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{churnSummary.avgScore}<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>/100</span></div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('clients.avgScore')}</div>
           </div>
           <button
@@ -323,6 +327,7 @@ export default function ClientsPage() {
             {scoringChurn ? t('clients.scoring') : t('clients.rescore')}
           </button>
         </div>
+        </>
       )}
 
       {!churnSummary || churnSummary.scored === 0 ? (
@@ -535,7 +540,7 @@ export default function ClientsPage() {
                               fontSize: 12, fontWeight: 600,
                               color: c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)',
                             }}>
-                              {c.churn_score}
+                              {c.churn_score}<span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>/100</span>
                             </span>
                           </>
                         ) : (

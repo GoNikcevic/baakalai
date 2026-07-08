@@ -1333,11 +1333,15 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
   const [instanceUrl, setInstanceUrl] = useState('');
   const [status, setStatus] = useState(null);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [customDomain, setCustomDomain] = useState('');
 
   const handleOAuthConnect = async () => {
     setOauthLoading(true);
     try {
-      const res = await request('/crm/salesforce/connect');
+      const endpoint = customDomain
+        ? `/crm/salesforce/connect?domain=${encodeURIComponent(customDomain)}`
+        : '/crm/salesforce/connect';
+      const res = await request(endpoint);
       if (res.url) {
         window.location.href = res.url;
       } else {
@@ -1400,6 +1404,19 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
       {/* OAuth connect button */}
       {!isConnected && (
         <>
+          <div style={{ marginBottom: 6 }}>
+            <input
+              type="text"
+              placeholder={en ? 'Custom domain (optional) — e.g. mycompany.my.salesforce.com' : 'Domaine personnalisé (optionnel) — ex: mycompany.my.salesforce.com'}
+              value={customDomain}
+              onChange={e => setCustomDomain(e.target.value)}
+              style={{
+                width: '100%', padding: '6px 10px', fontSize: 11, borderRadius: 6,
+                border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+                color: 'var(--text-primary)',
+              }}
+            />
+          </div>
           <button
             style={{
               width: '100%', padding: '8px 12px', fontSize: 12, fontWeight: 600,
