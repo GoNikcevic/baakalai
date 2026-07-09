@@ -98,16 +98,16 @@ function HealthGauge({ score, label }) {
 /* ─── Sections ─── */
 
 function getTabs(t, vocab) { return [
-  { key: 'pipeline', label: vocab?.pipeline || 'Pipeline' },
-  { key: 'attribution', label: 'Attribution' },
-  { key: 'scoring', label: 'Lead Scoring' },
-  { key: 'trends', label: t('analytics.trends') },
-  { key: 'channels', label: t('analytics.channels') },
-  { key: 'forecast', label: 'Forecast' },
-  { key: 'segments', label: t('analytics.segments') },
-  { key: 'engagement', label: t('analytics.engagement') },
-  { key: 'renewals', label: t('analytics.renewals') },
-  { key: 'health', label: t('analytics.crmHealth') },
+  { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline') },
+  { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
+  { key: 'scoring', label: 'Lead Scoring', desc: t('analytics.tabDescScoring') },
+  { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
+  { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
+  { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
+  { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments') },
+  { key: 'engagement', label: t('analytics.engagement'), desc: t('analytics.tabDescEngagement') },
+  { key: 'renewals', label: t('analytics.renewals'), desc: t('analytics.tabDescRenewals') },
+  { key: 'health', label: t('analytics.crmHealth'), desc: t('analytics.tabDescHealth') },
 ]; }
 
 /* ═══ Main Component ═══ */
@@ -254,6 +254,19 @@ export default function CRMAnalyticsPage() {
           </button>
         ))}
       </div>
+
+      {/* Active tab description */}
+      {(() => {
+        const active = TABS.find(t => t.key === activeTab);
+        return active?.desc ? (
+          <div style={{
+            fontSize: 13, color: 'var(--text-muted)', margin: '8px 0 16px',
+            lineHeight: 1.4,
+          }}>
+            {active.desc}
+          </div>
+        ) : null;
+      })()}
 
       {/* Content */}
       {loading && <LoadingTips />}

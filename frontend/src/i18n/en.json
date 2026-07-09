@@ -562,7 +562,17 @@
     "engagementMedium": "Medium (30-69)",
     "engagementLow": "Low (<30)",
     "engagementScoreboard": "Engagement scoreboard",
-    "engagementNoData": "No engagement data yet. Activity will appear once emails are sent and tracked."
+    "engagementNoData": "No engagement data yet. Activity will appear once emails are sent and tracked.",
+    "tabDescPipeline": "Where are your contacts in the sales funnel? Track progression from first contact to close.",
+    "tabDescAttribution": "Which campaigns drive the most conversions? See ROI by campaign and channel.",
+    "tabDescScoring": "AI-scored leads ranked by conversion potential. Focus on the hottest prospects first.",
+    "tabDescTrends": "How are your KPIs evolving week over week? Spot patterns in open rates, replies and more.",
+    "tabDescChannels": "Email vs LinkedIn vs multi-channel — which channel performs best for your audience?",
+    "tabDescForecast": "Revenue projections based on your pipeline. Weighted forecast and top deals to watch.",
+    "tabDescSegments": "Your contacts grouped by behavior: champions, active, new, at-risk, dormant.",
+    "tabDescEngagement": "How engaged are your contacts? Scored from 0-100 based on recent activity.",
+    "tabDescRenewals": "Upcoming contract renewals and overdue ones. Never miss a renewal again.",
+    "tabDescHealth": "Data quality audit: duplicates, missing fields, invalid emails. Clean your CRM in one click."
   },
   "diagnostic": {
     "title": "CRM Diagnostic",

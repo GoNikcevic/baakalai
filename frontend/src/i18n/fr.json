@@ -562,7 +562,17 @@
     "engagementMedium": "Moyen (30-69)",
     "engagementLow": "Faible (<30)",
     "engagementScoreboard": "Scoreboard engagement",
-    "engagementNoData": "Pas encore de donn\u00e9es d'engagement. L'activit\u00e9 appara\u00eetra une fois les emails envoy\u00e9s et track\u00e9s."
+    "engagementNoData": "Pas encore de donn\u00e9es d'engagement. L'activit\u00e9 appara\u00eetra une fois les emails envoy\u00e9s et track\u00e9s.",
+    "tabDescPipeline": "O\u00f9 en sont vos contacts dans le cycle de vente ? Suivez la progression du premier contact au closing.",
+    "tabDescAttribution": "Quelles campagnes g\u00e9n\u00e8rent le plus de conversions ? ROI par campagne et par canal.",
+    "tabDescScoring": "Leads class\u00e9s par potentiel de conversion (score IA). Concentrez-vous sur les plus chauds.",
+    "tabDescTrends": "Comment \u00e9voluent vos KPIs semaine apr\u00e8s semaine ? Rep\u00e9rez les tendances.",
+    "tabDescChannels": "Email vs LinkedIn vs multi-canal \u2014 quel canal performe le mieux pour votre audience ?",
+    "tabDescForecast": "Projections de revenus bas\u00e9es sur votre pipeline. Pr\u00e9visions pond\u00e9r\u00e9es et deals \u00e0 suivre.",
+    "tabDescSegments": "Vos contacts group\u00e9s par comportement : champions, actifs, nouveaux, \u00e0 risque, dormants.",
+    "tabDescEngagement": "Quel est le niveau d'engagement de vos contacts ? Score de 0 \u00e0 100 bas\u00e9 sur l'activit\u00e9 r\u00e9cente.",
+    "tabDescRenewals": "Renouvellements \u00e0 venir et en retard. Ne ratez plus jamais un renouvellement.",
+    "tabDescHealth": "Audit qualit\u00e9 : doublons, champs manquants, emails invalides. Nettoyez votre CRM en un clic."
   },
   "diagnostic": {
     "title": "Diagnostic CRM",
