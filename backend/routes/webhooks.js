@@ -38,7 +38,8 @@ router.post('/pipedrive', async (req, res) => {
       return res.status(401).json({ error: 'Invalid webhook secret' });
     }
   } else if (process.env.NODE_ENV === 'production') {
-    logger.warn('webhooks', 'Accepting unsigned webhook — set PIPEDRIVE_WEBHOOK_SECRET');
+    logger.error('webhooks', 'Rejecting unsigned webhook — PIPEDRIVE_WEBHOOK_SECRET not set');
+    return res.status(401).json({ error: 'Webhook secret not configured' });
   }
 
   const { current, previous, event, meta } = req.body;

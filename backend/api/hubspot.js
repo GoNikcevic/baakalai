@@ -5,33 +5,37 @@
  * All API functions require an explicit accessToken parameter (per-user isolation).
  */
 
+const { withRetry } = require('../lib/retry');
+
 const BASE_URL = 'https://api.hubapi.com';
 
 async function hubspotFetch(accessToken, endpoint, options = {}) {
   if (!accessToken) {
     throw new Error('HubSpot access token is required');
   }
-  const url = `${BASE_URL}${endpoint}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
-  });
+  return withRetry(async () => {
+    const url = `${BASE_URL}${endpoint}`;
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...options.headers,
+      },
+    });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw Object.assign(
-      new Error(`HubSpot API ${res.status}: ${body}`),
-      { status: res.status }
-    );
-  }
+    if (!res.ok) {
+      const body = await res.text();
+      throw Object.assign(
+        new Error(`HubSpot API ${res.status}: ${body}`),
+        { status: res.status }
+      );
+    }
 
-  // 204 No Content
-  if (res.status === 204) return null;
-  return res.json();
+    // 204 No Content
+    if (res.status === 204) return null;
+    return res.json();
+  }, { maxRetries: 3, baseDelay: 1000 });
 }
 
 // =============================================

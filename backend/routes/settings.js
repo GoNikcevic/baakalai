@@ -298,6 +298,9 @@ async function testKey(field, key) {
           return { status: 'invalid', message: 'JSON incomplet — url, db, username, password requis' };
         }
         const odoo = require('../api/odoo');
+        if (!odoo.isValidOdooUrl(creds.url)) {
+          return { status: 'invalid', message: 'URL invalide — doit être HTTPS avec un domaine valide (ex: https://mycompany.odoo.com)' };
+        }
         return await odoo.testConnection(creds);
       } catch (err) {
         return { status: 'error', message: err.message };

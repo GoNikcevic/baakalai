@@ -13,9 +13,27 @@ const { withRetry } = require('../lib/retry');
 
 let _uidCache = new Map(); // url+db+user → uid
 
+// ── URL validation (SSRF prevention) ──
+
+const BLOCKED_HOSTS_RE = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.|::1|\[::1\])/;
+
+function isValidOdooUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    if (BLOCKED_HOSTS_RE.test(parsed.hostname)) return false;
+    // Must have a real domain (not just an IP unless it's a public one)
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(parsed.hostname)) return false; // block all raw IPs
+    return true;
+  } catch { return false; }
+}
+
 // ── JSON-RPC helpers ──
 
 async function jsonRpc(url, service, method, args) {
+  if (!isValidOdooUrl(url)) {
+    throw new Error('Invalid Odoo URL — must be HTTPS with a valid domain (e.g. https://mycompany.odoo.com)');
+  }
   return withRetry(async () => {
     const res = await fetch(`${url}/jsonrpc`, {
       method: 'POST',
@@ -249,6 +267,7 @@ async function testConnection(creds) {
 }
 
 module.exports = {
+  isValidOdooUrl,
   authenticate,
   listContacts,
   listAllContacts,

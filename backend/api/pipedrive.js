@@ -5,35 +5,39 @@
  * All API functions require an explicit apiToken (per-user isolation).
  */
 
+const { withRetry } = require('../lib/retry');
+
 const BASE_URL = 'https://api.pipedrive.com/v1';
 
 async function pdFetch(apiToken, endpoint, options = {}) {
   if (!apiToken) {
     throw new Error('Pipedrive API token is required');
   }
-  const sep = endpoint.includes('?') ? '&' : '?';
-  const url = `${BASE_URL}${endpoint}${sep}api_token=${apiToken}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  return withRetry(async () => {
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const url = `${BASE_URL}${endpoint}${sep}api_token=${apiToken}`;
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw Object.assign(
-      new Error(`Pipedrive API ${res.status}: ${body}`),
-      { status: res.status }
-    );
-  }
+    if (!res.ok) {
+      const body = await res.text();
+      throw Object.assign(
+        new Error(`Pipedrive API ${res.status}: ${body}`),
+        { status: res.status }
+      );
+    }
 
-  const json = await res.json();
-  if (!json.success) {
-    throw new Error(`Pipedrive error: ${json.error || 'Unknown'}`);
-  }
-  return json.data;
+    const json = await res.json();
+    if (!json.success) {
+      throw new Error(`Pipedrive error: ${json.error || 'Unknown'}`);
+    }
+    return json.data;
+  }, { maxRetries: 3, baseDelay: 1000 });
 }
 
 // ── Persons (Contacts) ──

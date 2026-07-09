@@ -5,34 +5,38 @@
  * All API functions require an explicit apiKey (per-user personal access token).
  */
 
+const { withRetry } = require('../lib/retry');
+
 const AIRTABLE_BASE_URL = 'https://api.airtable.com/v0';
 
 /**
- * Generic fetch wrapper for Airtable API calls.
+ * Generic fetch wrapper for Airtable API calls with retry on 429.
  */
 async function airtableFetch(apiKey, url, options = {}) {
   if (!apiKey) {
     throw new Error('Airtable API key is required');
   }
 
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  return withRetry(async () => {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw Object.assign(
-      new Error(`Airtable API ${res.status}: ${body}`),
-      { status: res.status }
-    );
-  }
+    if (!res.ok) {
+      const body = await res.text();
+      throw Object.assign(
+        new Error(`Airtable API ${res.status}: ${body}`),
+        { status: res.status }
+      );
+    }
 
-  return res.json();
+    return res.json();
+  }, { maxRetries: 3, baseDelay: 1000 });
 }
 
 // ── Push Single Prospect ──
