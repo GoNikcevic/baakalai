@@ -504,7 +504,9 @@
     "selected": "s\u00E9lectionn\u00E9(s)",
     "changeStatus": "Changer statut...",
     "owner": "Commercial",
-    "churnFactors": "Facteurs de risque churn"
+    "churnFactors": "Facteurs de risque churn",
+    "churnScoringError": "Le scoring churn a échoué",
+    "error": "Erreur"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring et sant\u00E9 de votre CRM",

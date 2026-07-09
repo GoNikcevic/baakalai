@@ -320,7 +320,7 @@ export default function ClientsPage() {
                 const summary = await getChurnSummary();
                 setChurnSummary(summary);
                 await loadData();
-              } catch { showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: 'Churn scoring failed' }); }
+              } catch { showToast({ type: 'error', title: t('clients.error'), message: t('clients.churnScoringError') }); }
               setScoringChurn(false);
             }}
           >
@@ -352,7 +352,7 @@ export default function ClientsPage() {
                 const summary = await getChurnSummary();
                 setChurnSummary(summary);
                 await loadData();
-              } catch { showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: 'Churn scoring failed' }); }
+              } catch { showToast({ type: 'error', title: t('clients.error'), message: t('clients.churnScoringError') }); }
               setScoringChurn(false);
             }}
           >

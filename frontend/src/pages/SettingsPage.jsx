@@ -1407,14 +1407,11 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           <div style={{ marginBottom: 6 }}>
             <input
               type="text"
+              className="form-input"
               placeholder={en ? 'Custom domain (optional) — e.g. mycompany.my.salesforce.com' : 'Domaine personnalisé (optionnel) — ex: mycompany.my.salesforce.com'}
               value={customDomain}
               onChange={e => setCustomDomain(e.target.value)}
-              style={{
-                width: '100%', padding: '6px 10px', fontSize: 11, borderRadius: 6,
-                border: '1px solid var(--border)', background: 'var(--bg-elevated)',
-                color: 'var(--text-primary)',
-              }}
+              style={{ width: '100%', padding: '6px 10px', fontSize: 11 }}
             />
           </div>
           <button

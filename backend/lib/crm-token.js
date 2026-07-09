@@ -26,7 +26,9 @@ async function getUserCrmToken(userId, provider) {
           : false; // manual tokens without expires_at: don't auto-refresh
         if (shouldRefresh) {
           const refreshToken = decrypt(integration.refresh_token);
-          const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+          const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+          const refreshHost = metadata.loginHost || 'login.salesforce.com';
+          const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({

@@ -1850,16 +1850,16 @@ router.get('/salesforce/connect', (req, res, next) => {
     // PKCE: generate code_verifier and code_challenge
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-    _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000, codeVerifier });
-
     // Support custom Salesforce domain (e.g. mycompany.my.salesforce.com)
     let loginHost = 'login.salesforce.com';
     if (req.query.domain) {
       const domain = req.query.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      if (domain.endsWith('.salesforce.com') || domain.endsWith('.force.com')) {
+      if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com)$/.test(domain)) {
         loginHost = domain;
       }
     }
+
+    _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000, codeVerifier, loginHost });
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -1878,7 +1878,18 @@ router.get('/salesforce/connect', (req, res, next) => {
 // GET /api/crm/salesforce/callback — Salesforce OAuth callback (public, no auth)
 router.get('/salesforce/callback', async (req, res) => {
   logger.info('salesforce-oauth', `Callback hit: ${req.originalUrl}, APP_URL=${APP_URL}`);
+
+  // Handle user denial or Salesforce error
+  if (req.query.error) {
+    logger.warn('salesforce-oauth', `OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
+    return res.redirect(APP_URL + '/settings?crm_error=' + encodeURIComponent(req.query.error));
+  }
+
   const { code, state } = req.query;
+  if (!code) {
+    return res.redirect(APP_URL + '/settings?crm_error=missing_code');
+  }
+
   const oauthData = _sfOauthStates.get(state);
 
   if (!oauthData || oauthData.expiresAt < Date.now()) {
@@ -1886,8 +1897,10 @@ router.get('/salesforce/callback', async (req, res) => {
   }
   _sfOauthStates.delete(state);
 
+  const tokenHost = oauthData.loginHost || 'login.salesforce.com';
+
   try {
-    const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+    const tokenRes = await fetch(`https://${tokenHost}/services/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -1917,7 +1930,7 @@ router.get('/salesforce/callback', async (req, res) => {
     await db.userIntegrations.upsert(oauthData.userId, 'salesforce', {
       accessToken: encryptedAccess,
       refreshToken: encryptedRefresh,
-      metadata: { instance_url: tokens.instance_url, oauth: true },
+      metadata: { instance_url: tokens.instance_url, oauth: true, loginHost: tokenHost },
       expiresAt,
       instanceUrl: tokens.instance_url,
     });
@@ -1946,7 +1959,10 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
     }
 
     const refreshToken = decrypt(integration.refresh_token);
-    const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    const refreshHost = metadata.loginHost || 'login.salesforce.com';
+
+    const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -1959,7 +1975,7 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
 
     if (!tokenRes.ok) {
       const err = await tokenRes.text();
-      logger.error('salesforce-oauth', `Token refresh failed: ${err}`);
+      logger.error('salesforce-oauth', `Token refresh failed (${refreshHost}): ${err}`);
       return res.status(502).json({ error: 'Salesforce token refresh failed' });
     }
 
@@ -1984,12 +2000,24 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Validate Salesforce instance URL to prevent SSRF
+function isValidSalesforceUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' &&
+      /^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com|force\.com|visual\.force\.com)$/.test(parsed.hostname);
+  } catch { return false; }
+}
+
 // POST /api/crm/salesforce/manual-connect — Store manually provided Salesforce credentials
 router.post('/salesforce/manual-connect', async (req, res, next) => {
   try {
     const { accessToken, instanceUrl } = req.body;
     if (!accessToken || !instanceUrl) {
       return res.status(400).json({ error: 'accessToken and instanceUrl are required' });
+    }
+    if (!isValidSalesforceUrl(instanceUrl)) {
+      return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL (e.g. https://mycompany.my.salesforce.com)' });
     }
 
     const encryptedAccess = encrypt(accessToken);
@@ -2017,6 +2045,9 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
   try {
     const { instanceUrl } = req.body;
     if (!instanceUrl) return res.status(400).json({ error: 'instanceUrl is required' });
+    if (!isValidSalesforceUrl(instanceUrl)) {
+      return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL' });
+    }
 
     // Check that a Salesforce integration already exists
     const existing = await db.query(

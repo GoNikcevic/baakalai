@@ -504,7 +504,9 @@
     "selected": "selected",
     "changeStatus": "Change status...",
     "owner": "Owner",
-    "churnFactors": "Churn risk factors"
+    "churnFactors": "Churn risk factors",
+    "churnScoringError": "Churn scoring failed",
+    "error": "Error"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring and CRM health",
