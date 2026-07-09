@@ -435,7 +435,8 @@ router.get('/memory/:id/story', async (req, res, next) => {
       : null;
 
     // Build story text
-    const data = typeof pattern.data === 'string' ? JSON.parse(pattern.data) : (pattern.data || {});
+    let data = pattern.data || {};
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch { data = {}; } }
     const age = Math.round((Date.now() - new Date(pattern.date_discovered).getTime()) / 86400000);
 
     res.json({
@@ -685,7 +686,7 @@ router.post('/deploy-to-outreach', async (req, res, next) => {
 router.post('/score-leads', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { scoreOpportunities } = require('../lib/lead-scoring');
+    const { scoreOpportunities } = require('../lib/contact-scoring');
 
     const [opps, profile] = await Promise.all([
       db.opportunities.listByUser(userId, 100, 0),
@@ -858,7 +859,8 @@ router.post('/ab-record-winner', async (req, res, next) => {
     const activeTest = versions.find(v => v.result === 'testing' || v.result === 'improved' || v.result === 'neutral');
 
     if (activeTest && campaign?.ab_config) {
-      const config = typeof campaign.ab_config === 'string' ? JSON.parse(campaign.ab_config) : campaign.ab_config;
+      let config = campaign.ab_config;
+      if (typeof config === 'string') { try { config = JSON.parse(config); } catch { config = {}; } }
       const touchpoints = await db.touchpoints.listByCampaign(campaignId);
 
       // Compute improvement based on reply rates on tested steps

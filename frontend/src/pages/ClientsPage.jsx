@@ -731,6 +731,7 @@ function ClientDetailPanel({ client, onClose }) {
             style={{ cursor: 'pointer' }}
           />
           {'\uD83E\uDD16'} {lang === 'en' ? 'Autopilot' : 'Autopilot'}
+          <span title={t('clients.autopilotHelp')} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14, borderRadius: '50%', fontSize: 9, fontWeight: 700, cursor: 'help', background: 'var(--border)', color: 'var(--text-muted)', marginLeft: 4 }}>?</span>
         </label>
       </div>
 

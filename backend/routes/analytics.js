@@ -14,8 +14,7 @@
 
 const { Router } = require('express');
 const db = require('../db');
-const { scoreOpportunities } = require('../lib/lead-scoring');
-const { scoreEngagement } = require('../lib/engagement-scoring');
+const { scoreOpportunities, scoreAllContacts } = require('../lib/contact-scoring');
 
 const router = Router();
 
@@ -226,50 +225,12 @@ router.get('/attribution', async (req, res, next) => {
 
 router.get('/scoring', async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const [opportunities, allCampaigns, profile] = await Promise.all([
-      db.opportunities.listByUser(userId, 10000, 0),
-      db.campaigns.list({ userId }),
-      db.profiles.get(userId),
-    ]);
-
-    // Build campaign map
-    const campaignMap = {};
-    for (const c of allCampaigns) campaignMap[c.id] = c;
-
-    // Score all opportunities
-    const scored = scoreOpportunities(opportunities, profile, campaignMap);
-    scored.sort((a, b) => (b.score || 0) - (a.score || 0));
-
-    // Distribution buckets
-    const distribution = { high: 0, medium: 0, low: 0 };
-    let totalScore = 0;
-    for (const opp of scored) {
-      const s = opp.score || 0;
-      totalScore += s;
-      if (s >= 70) distribution.high++;
-      else if (s >= 40) distribution.medium++;
-      else distribution.low++;
-    }
-
-    const leads = scored.map(opp => ({
-      id: opp.id,
-      name: opp.name,
-      company: opp.company,
-      title: opp.title,
-      status: opp.status,
-      score: opp.score || 0,
-      scoreBreakdown: opp.scoreBreakdown || { engagement: 0, fit: 0 },
-      campaign: campaignMap[opp.campaign_id]?.name || null,
-      updatedAt: opp.updated_at,
-    }));
+    const result = await scoreAllContacts(req.user.id);
 
     res.json({
-      leads,
-      distribution,
-      avgScore: scored.length > 0
-        ? Math.round((totalScore / scored.length) * 10) / 10
-        : 0,
+      leads: result.contacts.slice(0, 200),
+      distribution: result.distribution,
+      avgScore: result.avgScore,
     });
   } catch (err) {
     next(err);
@@ -892,11 +853,10 @@ router.get('/segments', async (req, res, next) => {
 // GET /api/analytics/engagement
 // =============================================
 
+// Engagement endpoint now returns unified contact scores (backwards compatible)
 router.get('/engagement', async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const contacts = await db.opportunities.listByUser(userId, 10000, 0);
-    const result = await scoreEngagement(userId, contacts);
+    const result = await scoreAllContacts(req.user.id);
 
     res.json({
       avgScore: result.avgScore,
@@ -908,18 +868,13 @@ router.get('/engagement', async (req, res, next) => {
   }
 });
 
-// GET /api/analytics/engagement/csv
+// GET /api/analytics/engagement/csv — now uses unified contact scoring
 router.get('/engagement/csv', async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const contacts = await db.opportunities.listByUser(userId, 10000, 0);
-    const result = await scoreEngagement(userId, contacts);
+    const result = await scoreAllContacts(req.user.id);
     const headers = ['Score', 'Name', 'Email', 'Company', 'Status', 'Last Activity'];
-    const rows = result.contacts.map(c => [
-      c.engagement_score, c.name, c.email, c.company, c.status,
-      c.last_activity ? c.last_activity.split('T')[0] : '',
-    ]);
-    sendCsv(res, 'baakal-engagement.csv', headers, rows);
+    const rows = result.contacts.map(c => [c.score, c.name, c.email, c.company, c.status, c.lastActivity || '']);
+    sendCsv(res, 'baakal-contact-score.csv', headers, rows);
   } catch (err) { next(err); }
 });
 
@@ -990,14 +945,10 @@ router.get('/attribution/csv', async (req, res, next) => {
 // GET /api/analytics/scoring/csv
 router.get('/scoring/csv', async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const [opportunities, allCampaigns, profile] = await Promise.all([db.opportunities.listByUser(userId, 10000, 0), db.campaigns.list({ userId }), db.profiles.get(userId)]);
-    const campaignMap = {}; for (const c of allCampaigns) campaignMap[c.id] = c;
-    const scored = scoreOpportunities(opportunities, profile, campaignMap);
-    scored.sort((a, b) => (b.score || 0) - (a.score || 0));
-    const headers = ['Score', 'Name', 'Company', 'Title', 'Status', 'Campaign', 'Engagement', 'Fit'];
-    const rows = scored.map(o => [o.score || 0, o.name, o.company, o.title, o.status, campaignMap[o.campaign_id]?.name || '', o.scoreBreakdown?.engagement || 0, o.scoreBreakdown?.fit || 0]);
-    sendCsv(res, 'baakal-scoring.csv', headers, rows);
+    const result = await scoreAllContacts(req.user.id);
+    const headers = ['Score', 'Name', 'Company', 'Title', 'Status', 'Campaign', 'Activity', 'Fit', 'Last Activity'];
+    const rows = result.contacts.map(c => [c.score, c.name, c.company, c.title, c.status, c.campaign || '', c.breakdown?.activity || 0, c.breakdown?.fit || 0, c.lastActivity || '']);
+    sendCsv(res, 'baakal-contact-score.csv', headers, rows);
   } catch (err) { next(err); }
 });
 

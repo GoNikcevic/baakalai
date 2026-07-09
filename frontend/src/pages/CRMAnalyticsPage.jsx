@@ -71,13 +71,29 @@ const CHANNEL_COLORS = {
 
 function ScoreBadge({ score }) {
   const color = score >= 70 ? 'var(--success)' : score >= 40 ? 'var(--warning)' : 'var(--danger)';
+  const label = score >= 70 ? 'High' : score >= 40 ? 'Med' : 'Low';
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       minWidth: 36, padding: '2px 8px', borderRadius: 12,
       fontSize: 12, fontWeight: 700, color: 'white',
       background: color,
-    }}>{score}</span>
+    }} title={label}>{score}</span>
+  );
+}
+
+function HelpTip({ text }) {
+  return (
+    <span
+      title={text}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 16, height: 16, borderRadius: '50%',
+        fontSize: 10, fontWeight: 700, cursor: 'help',
+        background: 'var(--border)', color: 'var(--text-muted)',
+        marginLeft: 5, verticalAlign: 'middle', flexShrink: 0,
+      }}
+    >?</span>
   );
 }
 
@@ -100,12 +116,11 @@ function HealthGauge({ score, label }) {
 function getTabs(t, vocab) { return [
   { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline') },
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
-  { key: 'scoring', label: 'Lead Scoring', desc: t('analytics.tabDescScoring') },
+  { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
   { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
   { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments') },
-  { key: 'engagement', label: t('analytics.engagement'), desc: t('analytics.tabDescEngagement') },
   { key: 'renewals', label: t('analytics.renewals'), desc: t('analytics.tabDescRenewals') },
   { key: 'health', label: t('analytics.crmHealth'), desc: t('analytics.tabDescHealth') },
 ]; }
@@ -320,7 +335,6 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
       {!loading && activeTab === 'segments' && tabData && <SegmentsSection data={tabData} />}
-      {!loading && activeTab === 'engagement' && tabData && <EngagementSection data={tabData} />}
       {!loading && activeTab === 'renewals' && tabData && <RenewalsSection data={tabData} />}
       {!loading && activeTab === 'health' && <CRMHealthSection />}
     </div>
@@ -462,6 +476,8 @@ function AttributionSection({ data }) {
 function ScoringSection({ data, statusLabels }) {
   const STATUS_LABELS = statusLabels;
   const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
   const [filter, setFilter] = useState('all');
 
   const filtered = useMemo(() => {
@@ -478,7 +494,7 @@ function ScoringSection({ data, statusLabels }) {
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">
           <div className="crm-kpi-value">{data.avgScore?.toFixed(1) || '—'}</div>
-          <div className="crm-kpi-label">{t('analytics.avgScore')}</div>
+          <div className="crm-kpi-label">{t('analytics.avgScore')}<HelpTip text={t('analytics.helpContactScore')} /></div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.distribution?.high || 0}</div>
@@ -497,7 +513,7 @@ function ScoringSection({ data, statusLabels }) {
       {/* Filter + Table */}
       <div className="card">
         <div className="card-header">
-          <div className="card-title">{t('analytics.leadScoreboard')}</div>
+          <div className="card-title">{t('analytics.contactScoreboard')}</div>
           <div style={{ display: 'flex', gap: 6 }}>
             {['all', 'high', 'medium', 'low'].map(f => (
               <button
@@ -514,27 +530,25 @@ function ScoringSection({ data, statusLabels }) {
           <div className="crm-table">
             <div className="crm-table-header">
               <span>Score</span>
-              <span style={{ flex: 2 }}>Nom</span>
-              <span>Entreprise</span>
-              <span>Titre</span>
-              <span>Statut</span>
-              <span>Campagne</span>
-              <span>Engagement</span>
-              <span>Fit</span>
+              <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
+              <span>{en ? 'Company' : 'Entreprise'}</span>
+              <span>{en ? 'Status' : 'Statut'}</span>
+              <span>{en ? 'Activity' : 'Activité'}<HelpTip text={t('analytics.helpActivity')} /></span>
+              <span>Fit<HelpTip text={t('analytics.helpFit')} /></span>
+              <span>{en ? 'Last active' : 'Dern. activité'}</span>
             </div>
             {filtered.map(l => (
               <div className="crm-table-row" key={l.id}>
                 <span><ScoreBadge score={l.score} /></span>
                 <span style={{ flex: 2, fontWeight: 600 }}>{l.name}</span>
                 <span>{l.company}</span>
-                <span style={{ color: 'var(--text-muted)' }}>{l.title}</span>
                 <span>
                   <span className="crm-status-dot" style={{ background: STAGE_COLORS[l.status] || 'var(--text-muted)' }} />
                   {STATUS_LABELS[l.status] || l.status}
                 </span>
-                <span style={{ fontSize: 12 }}>{l.campaign}</span>
-                <span style={{ color: 'var(--blue)' }}>{l.scoreBreakdown?.engagement || 0}</span>
-                <span style={{ color: 'var(--purple)' }}>{l.scoreBreakdown?.fit || 0}</span>
+                <span style={{ color: 'var(--blue)' }}>{l.breakdown?.activity ?? l.scoreBreakdown?.engagement ?? 0}</span>
+                <span style={{ color: 'var(--purple)' }}>{l.breakdown?.fit ?? l.scoreBreakdown?.fit ?? 0}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{l.lastActivity || l.updatedAt?.split?.('T')?.[0] || '—'}</span>
               </div>
             ))}
             {filtered.length === 0 && (
@@ -732,11 +746,11 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>${(pipeline.weightedForecast || 0).toLocaleString()}</div>
-          <div className="crm-kpi-label">Weighted Forecast</div>
+          <div className="crm-kpi-label">{t('analytics.weightedForecast')}<HelpTip text={t('analytics.helpForecast')} /></div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value">{cycle.avgDays || '—'}</div>
-          <div className="crm-kpi-label">Avg Sales Cycle (days)</div>
+          <div className="crm-kpi-label">{t('analytics.avgSalesCycle')}<HelpTip text={t('analytics.helpSalesCycle')} /></div>
         </div>
         <div className="crm-kpi-card">
           <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>${(retention.totalWonRevenue || 0).toLocaleString()}</div>
@@ -956,7 +970,7 @@ function SegmentsSection({ data }) {
                 <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
                 <span>Email</span>
                 <span>{en ? 'Company' : 'Entreprise'}</span>
-                <span>{en ? 'Churn' : 'Churn'}</span>
+                <span>{en ? 'Churn' : 'Churn'}<HelpTip text={t('analytics.helpChurn')} /></span>
                 <span>{en ? 'Value' : 'Valeur'}</span>
                 <span>{en ? 'Last activity' : 'Derni\u00e8re activit\u00e9'}</span>
               </div>
@@ -1095,72 +1109,6 @@ function RenewalsSection({ data }) {
             : `${data.later.count} renouvellement(s) suppl\u00e9mentaire(s) au-del\u00e0 de 90 jours`}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ═══ Engagement Section ═══ */
-
-function EngagementSection({ data }) {
-  const t = useT();
-  const { lang } = useI18n();
-  const en = lang === 'en';
-
-  const contacts = data.contacts || [];
-
-  return (
-    <div className="crm-section">
-      {/* KPI cards */}
-      <div className="crm-kpi-row">
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value">{data.avgScore?.toFixed(1) || '—'}</div>
-          <div className="crm-kpi-label">{t('analytics.engagementAvgScore')}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.distribution?.high || 0}</div>
-          <div className="crm-kpi-label">{t('analytics.engagementHigh')}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--warning)' }}>{data.distribution?.medium || 0}</div>
-          <div className="crm-kpi-label">{t('analytics.engagementMedium')}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--danger)' }}>{data.distribution?.low || 0}</div>
-          <div className="crm-kpi-label">{t('analytics.engagementLow')}</div>
-        </div>
-      </div>
-
-      {/* Contacts table */}
-      <div className="card">
-        <div className="card-title">{t('analytics.engagementScoreboard')}</div>
-        <div className="card-body">
-          <div className="crm-table">
-            <div className="crm-table-header">
-              <span>Score</span>
-              <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
-              <span>Email</span>
-              <span>{en ? 'Company' : 'Entreprise'}</span>
-              <span>{en ? 'Last activity' : 'Dernière activité'}</span>
-            </div>
-            {contacts.map(c => (
-              <div className="crm-table-row" key={c.id}>
-                <span><ScoreBadge score={c.engagement_score} /></span>
-                <span style={{ flex: 2, fontWeight: 600 }}>{c.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.email}</span>
-                <span>{c.company}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {c.last_activity ? c.last_activity.split('T')[0] : '—'}
-                </span>
-              </div>
-            ))}
-            {contacts.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
-                {t('analytics.engagementNoData')}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
