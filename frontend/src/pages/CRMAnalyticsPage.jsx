@@ -113,16 +113,17 @@ function HealthGauge({ score, label }) {
 
 /* ─── Sections ─── */
 
+// Essential tabs shown by default; advanced tabs behind "More"
 function getTabs(t, vocab) { return [
-  { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline') },
+  { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline'), essential: true },
+  { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring'), essential: true },
+  { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments'), essential: true },
+  { key: 'health', label: t('analytics.crmHealth'), desc: t('analytics.tabDescHealth'), essential: true },
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
-  { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
   { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
-  { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments') },
   { key: 'renewals', label: t('analytics.renewals'), desc: t('analytics.tabDescRenewals') },
-  { key: 'health', label: t('analytics.crmHealth'), desc: t('analytics.tabDescHealth') },
 ]; }
 
 /* ═══ Main Component ═══ */
@@ -148,6 +149,7 @@ export default function CRMAnalyticsPage() {
   const [activeTab, setActiveTab] = useState('pipeline');
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showAllTabs, setShowAllTabs] = useState(false);
   const TABS = getTabs(t, vocab);
   const fetchedRef = useRef(new Set());
 
@@ -257,9 +259,9 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* Tab bar */}
+      {/* Tab bar — essential tabs + expandable advanced tabs */}
       <div className="crm-tabs">
-        {TABS.map(tab => (
+        {TABS.filter(tab => tab.essential || showAllTabs || activeTab === tab.key).map(tab => (
           <button
             key={tab.key}
             className={`crm-tab${activeTab === tab.key ? ' active' : ''}`}
@@ -268,6 +270,15 @@ export default function CRMAnalyticsPage() {
             {tab.label}
           </button>
         ))}
+        {!showAllTabs && (
+          <button
+            className="crm-tab"
+            onClick={() => setShowAllTabs(true)}
+            style={{ color: 'var(--text-muted)', fontSize: 12 }}
+          >
+            {en ? 'More' : 'Plus'} +
+          </button>
+        )}
       </div>
 
       {/* Active tab description */}

@@ -16,6 +16,7 @@ import ScoreBadge from '../components/ScoreBadge';
 import AnimatedCounter from '../components/AnimatedCounter';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import DealCoachCard from '../components/DealCoachCard';
+import QuickWinCard from '../components/QuickWinCard';
 import ICPInsightsCard from '../components/ICPInsightsCard';
 import DeliverabilityCard from '../components/DeliverabilityCard';
 import { scoreLeads, exportScoresToCRM, downloadScoresCSV, sendRecoFeedback } from '../services/api-client';
@@ -114,6 +115,9 @@ export default function DashboardPage() {
 
       {/* Onboarding checklist for new users */}
       <OnboardingChecklist />
+
+      {/* Quick Win — immediate CRM insight after sync */}
+      <QuickWinCard />
 
       {/* Deal Coach — stagnant deal suggestions with action buttons */}
       {!isEmpty && <DealCoachCard />}
