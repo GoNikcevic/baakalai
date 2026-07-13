@@ -149,7 +149,7 @@ Return JSON:
         const avgAccepted = Math.round(acceptedLens.reduce((a, b) => a + b, 0) / acceptedLens.length);
         const avgIgnored = Math.round(ignoredLens.reduce((a, b) => a + b, 0) / ignoredLens.length);
 
-        await db.memoryPatterns.replaceOrCreate(userId, {
+        await db.memoryPatterns.replaceOrCreate({
           pattern: `LinkedIn : taux d'acceptation ${acceptRate}%. Longueur optimale ~${avgAccepted} car. (accept\u00e9s) vs ${avgIgnored} car. (ignor\u00e9s)`,
           category: 'Canal',
           source: 'copy_optimizer_linkedin',

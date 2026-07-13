@@ -41,7 +41,9 @@ async function analyzeResponses(userId) {
      LEFT JOIN nurture_triggers nt ON nt.id = ne.trigger_id
      WHERE ne.user_id = $1 AND ne.status = 'sent'
        AND ne.sent_at > now() - interval '14 days'
-       AND ne.analyzed_at IS NULL`,
+       AND ne.analyzed_at IS NULL
+     ORDER BY ne.sent_at DESC
+     LIMIT 50`,
     [userId]
   );
 
@@ -268,8 +270,8 @@ Analyse et retourne un JSON :
 
     if (result.parsed) return result.parsed;
 
-    const match = (result.content || '').match(/\{[\s\S]*"sentiment"[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
+    const match = (result.raw || '').match(/\{[\s\S]*"sentiment"[\s\S]*\}/);
+    if (match) try { return JSON.parse(match[0]); } catch { /* fallback below */ }
   } catch { /* fallback below */ }
 
   return {

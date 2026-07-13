@@ -148,7 +148,7 @@ async function run(userId) {
           const dayInsight = `LinkedIn : meilleur jour = ${dayNames[bestDay[0]]} (${bestDay[1]}/${withResponse.length} r\u00e9ponses)`;
           report.recommendations.push(dayInsight);
 
-          await db.memoryPatterns.replaceOrCreate(userId, {
+          await db.memoryPatterns.replaceOrCreate({
             pattern: dayInsight,
             category: 'S\u00e9quence',
             source: 'timing_agent_linkedin',

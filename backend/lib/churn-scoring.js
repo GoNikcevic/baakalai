@@ -162,18 +162,30 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
   let scored = 0;
   let atRisk = 0;
 
+  // Score all opportunities in memory first
+  const results = [];
   for (const opp of opps) {
     const { score, factors } = scoreOpportunity(opp, { deals, activities: [], emails: allEmails });
+    results.push({ id: opp.id, score, factors: JSON.stringify(factors) });
+    scored++;
+    if (score >= 50) atRisk++;
+  }
 
+  // Bulk UPDATE in batches of 500
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < results.length; i += BATCH_SIZE) {
+    const batch = results.slice(i, i + BATCH_SIZE);
     try {
+      const values = batch.map((r, idx) => `($${idx * 3 + 1}::uuid, $${idx * 3 + 2}::int, $${idx * 3 + 3}::jsonb)`).join(', ');
+      const params = batch.flatMap(r => [r.id, r.score, r.factors]);
       await db.query(
-        `UPDATE opportunities SET churn_score = $1, churn_factors = $2, churn_scored_at = now() WHERE id = $3`,
-        [score, JSON.stringify(factors), opp.id]
+        `UPDATE opportunities AS o SET churn_score = v.score, churn_factors = v.factors, churn_scored_at = now()
+         FROM (VALUES ${values}) AS v(id, score, factors)
+         WHERE o.id = v.id`,
+        params
       );
-      scored++;
-      if (score >= 50) atRisk++;
     } catch (err) {
-      logger.error('churn-scoring', `Failed to update opp ${opp.id}: ${err.message}`);
+      logger.error('churn-scoring', `Batch update failed (batch ${Math.floor(i / BATCH_SIZE)}): ${err.message}`);
     }
   }
 

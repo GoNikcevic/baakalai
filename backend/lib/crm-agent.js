@@ -86,7 +86,11 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       [userId]
     );
     if (integration.rows[0]) {
-      if (!integration.rows[0].instance_url) throw new Error('Salesforce instance URL not configured');
+      if (!integration.rows[0].instance_url) {
+        _running.delete(userId);
+        report.errors.push('Salesforce instance URL not configured');
+        return report;
+      }
       crmCreds = {
         accessToken: typeof token === 'string' ? token : decrypt(integration.rows[0].access_token),
         instanceUrl: integration.rows[0].instance_url,
@@ -95,7 +99,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
   }
 
   // Notify user that agent is working
-  notifyUser(userId, 'crm-agent', { status: 'running', trigger });
+  try { notifyUser(userId, 'crm-agent', { status: 'running', trigger }); } catch { /* non-critical */ }
 
   try {
     // ── Step 1: Delta Sync ──
@@ -238,22 +242,24 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
   } catch (err) {
     report.errors.push(err.message);
     logger.error('crm-agent', `Agent failed for user ${userId}: ${err.message}`);
+  } finally {
+    report.duration = Date.now() - startTime;
+
+    // Notify completion (non-critical)
+    try {
+      notifyUser(userId, 'crm-agent', {
+        status: 'done',
+        trigger,
+        summary: `Sync: +${report.sync.imported}, Nurture: ${report.nurture.sent} envoy\u00E9s / ${report.nurture.queued} en attente`,
+        alerts: report.alerts.length,
+        duration: report.duration,
+      });
+    } catch { /* never block cleanup */ }
+
+    logger.info('crm-agent', `User ${userId} [${trigger}]: sync +${report.sync.imported}/${report.sync.updated}, nurture ${report.nurture.sent}/${report.nurture.queued}, alerts ${report.alerts.length} (${report.duration}ms)`);
+
+    _running.delete(userId);
   }
-
-  report.duration = Date.now() - startTime;
-
-  // Notify completion
-  notifyUser(userId, 'crm-agent', {
-    status: 'done',
-    trigger,
-    summary: `Sync: +${report.sync.imported}, Nurture: ${report.nurture.sent} envoy\u00E9s / ${report.nurture.queued} en attente`,
-    alerts: report.alerts.length,
-    duration: report.duration,
-  });
-
-  logger.info('crm-agent', `User ${userId} [${trigger}]: sync +${report.sync.imported}/${report.sync.updated}, nurture ${report.nurture.sent}/${report.nurture.queued}, alerts ${report.alerts.length} (${report.duration}ms)`);
-
-  _running.delete(userId);
   return report;
 }
 

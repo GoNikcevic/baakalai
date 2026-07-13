@@ -185,7 +185,7 @@ ${channel === 'linkedin'
 
   if (result.parsed) return result.parsed;
 
-  const match = (result.content || '').match(/\{[\s\S]*(?:"message"|"subject")[\s\S]*\}/);
+  const match = (result.raw || '').match(/\{[\s\S]*(?:"message"|"subject")[\s\S]*\}/);
   if (match) {
     try { return JSON.parse(match[0]); } catch { /* fallthrough */ }
   }
@@ -224,6 +224,7 @@ async function sendScheduledReplies() {
     WHERE aq.status = 'pending' AND aq.scheduled_at <= now()
     ORDER BY aq.scheduled_at
     LIMIT 20
+    FOR UPDATE OF aq SKIP LOCKED
   `);
 
   let sent = 0;
