@@ -121,10 +121,33 @@ router.post('/refresh-stats', refreshLimiter, async (req, res, next) => {
 // GET /api/dashboard/memory — Cross-campaign patterns (paginated)
 router.get('/memory', async (req, res, next) => {
   try {
-    const { category, confidence } = req.query;
+    const { category, confidence, lang } = req.query;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
     const patterns = await db.memoryPatterns.list({ category, confidence, limit, offset });
+
+    // Translate patterns to English if requested (lightweight — only visible patterns)
+    if (lang === 'en' && patterns.length > 0) {
+      try {
+        const claude = require('../api/claude');
+        const textsToTranslate = patterns.slice(0, 10).map(p => p.pattern).join('\n---\n');
+        const result = await claude.callClaude(
+          'You are a translator. Translate each French text to English. Return a JSON array of translated strings, one per input. Keep it concise and professional.',
+          `Translate these CRM/sales insights to English (keep same order, return JSON array of strings):\n\n${textsToTranslate}`,
+          500, 'translate_patterns'
+        );
+        let translations = result.parsed;
+        if (!translations && result.raw) {
+          const m = result.raw.match(/\[[\s\S]*\]/);
+          if (m) try { translations = JSON.parse(m[0]); } catch { /* ignore */ }
+        }
+        if (Array.isArray(translations)) {
+          for (let i = 0; i < Math.min(translations.length, patterns.length); i++) {
+            if (translations[i]) patterns[i].pattern = translations[i];
+          }
+        }
+      } catch { /* translation is best-effort, return French if it fails */ }
+    }
 
     res.json({ patterns });
   } catch (err) {

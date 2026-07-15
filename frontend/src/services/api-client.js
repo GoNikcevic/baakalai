@@ -302,13 +302,18 @@ export function transformChartData(d) {
 
 /* ─── Transform: memory patterns → recommendations ─── */
 
-export function patternsToRecommendations(patterns) {
+export function patternsToRecommendations(patterns, lang = null) {
+  const userLang = lang || localStorage.getItem('bakal_lang') || 'fr';
   const levelMap = {
     Haute: 'success',
     Moyenne: 'warning',
     Faible: 'blue',
   };
-  const labelMap = {
+  const labelMap = userLang === 'en' ? {
+    Haute: '\u2705 Apply \u2014 High impact',
+    Moyenne: '\uD83D\uDCA1 Test \u2014 Opportunity',
+    Faible: '\uD83D\uDCCA Insight',
+  } : {
     Haute: '\u2705 Appliquer \u2014 Impact fort',
     Moyenne: '\uD83D\uDCA1 Tester \u2014 Opportunit\u00e9',
     Faible: '\uD83D\uDCCA Insight',
@@ -415,8 +420,9 @@ export async function fetchChartData() {
 
 /** Fetch AI recommendations (derived from memory patterns) */
 export async function fetchRecommendations() {
-  const data = await request('/dashboard/memory');
-  return patternsToRecommendations(data.patterns || []);
+  const lang = localStorage.getItem('bakal_lang') || 'fr';
+  const data = await request(`/dashboard/memory${lang !== 'fr' ? `?lang=${lang}` : ''}`);
+  return patternsToRecommendations(data.patterns || [], lang);
 }
 
 /** Create a new campaign */
