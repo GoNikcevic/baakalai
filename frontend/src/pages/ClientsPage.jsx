@@ -66,8 +66,10 @@ export default function ClientsPage() {
       ]);
 
       const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
-      const connected = (providersData.providers || []).find(p => crmProviders.includes(p.provider) && p.connected);
-      setConnectedCrm(connected?.provider || null);
+      const connectedProviders = (providersData.providers || []).filter(p => crmProviders.includes(p.provider) && p.connected);
+      // Use active CRM from backend, fallback to first connected
+      const activeCrm = providersData.activeCrm || connectedProviders[0]?.provider || null;
+      setConnectedCrm(activeCrm);
       setClients(oppsData.opportunities || []);
       if (churnData) setChurnSummary(churnData);
       setOwners(ownersData.owners || []);

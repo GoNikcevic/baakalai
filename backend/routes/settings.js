@@ -112,6 +112,14 @@ router.post('/keys', async (req, res, next) => {
       }
       try {
         await db.userIntegrations.upsert(req.user.id, provider, { accessToken: encrypted });
+        // Auto-set as active CRM if this is a CRM provider and none is set yet
+        const crmProviders = ['hubspot', 'pipedrive', 'salesforce', 'odoo', 'folk', 'notion', 'airtable'];
+        if (crmProviders.includes(provider)) {
+          await db.query(
+            `UPDATE users SET active_crm_provider = $1 WHERE id = $2 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+            [provider, req.user.id]
+          );
+        }
       } catch (dbErr) {
         console.error(`[settings] DB upsert failed for ${field}/${provider}:`, dbErr.message);
         errors.push(`${field}: save failed`);

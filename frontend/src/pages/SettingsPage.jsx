@@ -38,7 +38,7 @@ function getMainTools(lang) {
     { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM',
       guide: en ? ['Go to app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Create an app or copy the token (pat-)'] : ['Allez dans app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Cr\u00E9ez une app ou copiez le token (pat-)'], link: 'https://app.hubspot.com/settings/integrations' },
     { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce access token' : 'Votre access token Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
-      guide: en ? ['Log in to your Salesforce instance', 'Setup \u2192 Apps \u2192 Connected Apps', 'Generate an access token', 'Paste the token and your instance URL below'] : ['Connectez-vous sur votre instance Salesforce', 'Setup \u2192 Apps \u2192 Connected Apps', 'G\u00E9n\u00E9rez un access token', 'Collez le token et votre URL d\'instance ci-dessous'] },
+      guide: en ? ['Click "Connect with Salesforce" below', 'Authorize baakalai in the Salesforce popup', 'Your data syncs automatically'] : ['Cliquez sur "Connecter Salesforce" ci-dessous', 'Autorisez baakalai dans la popup Salesforce', 'Vos donn\u00E9es se synchronisent automatiquement'] },
     { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM',
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
@@ -125,6 +125,7 @@ export default function SettingsPage() {
 
   const [syncStatus, setSyncStatus] = useState(null);
   const [crmSyncStatus, setCrmSyncStatus] = useState(null);
+  const [activeCrm, setActiveCrm] = useState(null);
   const { socket } = useSocket();
   const { showToast: notifyToast } = useNotifications();
   const { lang, setLang, t } = useI18n();
@@ -143,8 +144,12 @@ export default function SettingsPage() {
 
   const loadKeys = useCallback(async () => {
     try {
-      const data = await getKeys();
+      const [data, providersData] = await Promise.all([
+        getKeys(),
+        request('/crm/providers').catch(() => null),
+      ]);
       setKeyStatus(data.keys || {});
+      if (providersData?.activeCrm) setActiveCrm(providersData.activeCrm);
     } catch {
       /* backend not available */
     }
@@ -428,9 +433,21 @@ export default function SettingsPage() {
   /* ─── Detect connected CRM ─── */
 
   const crmFieldLabels = { hubspotKey: 'HubSpot', salesforceKey: 'Salesforce', pipedriveKey: 'Pipedrive', odooKey: 'Odoo', notionToken: 'Notion', airtableKey: 'Airtable' };
+  const crmFieldToProvider = { hubspotKey: 'hubspot', salesforceKey: 'salesforce', pipedriveKey: 'pipedrive', odooKey: 'odoo', notionToken: 'notion', airtableKey: 'airtable' };
+  const crmProviderToLabel = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', odoo: 'Odoo', notion: 'Notion', airtable: 'Airtable' };
   const connectedCrms = Object.keys(crmFieldLabels).filter(f => keyStatus[f]?.configured);
-  const connectedCrmField = connectedCrms[0]; // keep first for backward compat
-  const connectedCrmLabel = connectedCrmField ? crmFieldLabels[connectedCrmField] : null;
+  const connectedCrmProviders = connectedCrms.map(f => crmFieldToProvider[f]);
+  const connectedCrmLabel = activeCrm ? crmProviderToLabel[activeCrm] : (connectedCrms[0] ? crmFieldLabels[connectedCrms[0]] : null);
+
+  const handleSetActiveCrm = async (provider) => {
+    try {
+      await request('/crm/active', { method: 'PUT', body: JSON.stringify({ provider }) });
+      setActiveCrm(provider);
+      showToast(en ? `${crmProviderToLabel[provider]} set as primary CRM` : `${crmProviderToLabel[provider]} défini comme CRM principal`);
+    } catch {
+      showToast(en ? 'Failed to set active CRM' : 'Erreur lors du changement de CRM', 'error');
+    }
+  };
 
   /* ─── Render key row ─── */
 
@@ -768,9 +785,23 @@ export default function SettingsPage() {
             <div className="card-title">{en ? 'CRM Analysis' : 'Analyse CRM'}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
               {connectedCrmLabel
-                ? (en ? `Connected to ${connectedCrmLabel}` : `Connect\u00e9 \u00e0 ${connectedCrmLabel}`)
+                ? (en ? `Connected to ${connectedCrmLabel}` : `Connecté à ${connectedCrmLabel}`)
                 : (en ? 'Connect a CRM above to get started' : 'Connectez un CRM ci-dessus pour commencer')}
             </div>
+            {connectedCrmProviders.length > 1 && (
+              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                {connectedCrmProviders.map(p => (
+                  <button key={p}
+                    className={`btn btn-sm ${activeCrm === p ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: 10, padding: '2px 8px' }}
+                    onClick={() => handleSetActiveCrm(p)}
+                  >
+                    {crmProviderToLabel[p]}
+                    {activeCrm === p && ' \u2713'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {connectedCrmLabel && (
             <button
@@ -1454,8 +1485,8 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
         }}>
           {en
-            ? <>1. Log in to your Salesforce instance<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. Generate an access token<br/>4. Paste both fields below</>
-            : <>1. Connectez-vous sur votre instance Salesforce<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. G{'\u00E9'}n{'\u00E9'}rez un access token<br/>4. Collez les deux champs ci-dessous</>}
+            ? <>1. In Salesforce: Setup &gt; Apps &gt; App Manager &gt; New Connected App<br/>2. Enable OAuth, add scope "Full access (full)"<br/>3. Set callback URL: <code>https://app.baakal.ai</code><br/>4. Copy the <strong>Consumer Secret</strong> (not the Key) and your instance URL below</>
+            : <>1. Dans Salesforce : Param{'\u00E8'}tres &gt; Apps &gt; Gestionnaire d'apps &gt; Nouvelle app connect{'\u00E9'}e<br/>2. Activez OAuth, ajoutez "Acc{'\u00E8'}s complet (full)"<br/>3. URL de rappel : <code>https://app.baakal.ai</code><br/>4. Copiez le <strong>Secret consommateur</strong> (pas la Cl{'\u00E9'}) et l'URL de votre instance ci-dessous</>}
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>

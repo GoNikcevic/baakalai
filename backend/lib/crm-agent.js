@@ -62,11 +62,23 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     if (team) teamId = team.id;
   } catch { /* solo user, no team */ }
 
-  // Detect connected CRM provider and resolve credentials
-  let crmProvider = 'pipedrive';
-  let token = await getUserCrmToken(userId, 'pipedrive');
+  // Detect connected CRM provider — use user's active CRM preference, fallback to first connected
+  let crmProvider = null;
+  let token = null;
+
+  // 1. Try user's explicitly chosen active CRM
+  try {
+    const userRow = await db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [userId]);
+    const activeCrm = userRow.rows[0]?.active_crm_provider;
+    if (activeCrm) {
+      token = await getUserCrmToken(userId, activeCrm);
+      if (token) crmProvider = activeCrm;
+    }
+  } catch { /* fallback below */ }
+
+  // 2. Fallback: try all providers if no active CRM set or its token is missing
   if (!token) {
-    for (const p of ['hubspot', 'salesforce', 'odoo']) {
+    for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo']) {
       token = await getUserCrmToken(userId, p);
       if (token) { crmProvider = p; break; }
     }
@@ -733,7 +745,7 @@ async function stepAnalysis(userId, report, teamId = null) {
       report.alerts.push({
         type: 'new_contacts',
         severity: 'info',
-        message: `${sync.imported} nouveau(x) contact(s) import\u00E9(s) depuis Pipedrive`,
+        message: `${sync.imported} nouveau(x) contact(s) importé(s) depuis le CRM`,
       });
     }
 

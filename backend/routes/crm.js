@@ -243,12 +243,13 @@ router.get('/providers', async (req, res, next) => {
     const providers = ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'folk', 'notion', 'airtable'];
     const labelMap = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', odoo: 'Odoo', folk: 'Folk', notion: 'Notion', airtable: 'Airtable' };
 
-    // Single query instead of 6
-    const result = await db.query(
-      `SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)`,
-      [req.user.id, providers]
-    );
-    const connectedSet = new Set(result.rows.map(r => r.provider));
+    // Single query: connected providers + user's active CRM
+    const [intResult, userResult] = await Promise.all([
+      db.query(`SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)`, [req.user.id, providers]),
+      db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [req.user.id]),
+    ]);
+    const connectedSet = new Set(intResult.rows.map(r => r.provider));
+    const activeCrm = userResult.rows[0]?.active_crm_provider || null;
 
     const statuses = providers.map(provider => ({
       provider,
@@ -256,7 +257,30 @@ router.get('/providers', async (req, res, next) => {
       label: labelMap[provider] || provider,
     }));
 
-    res.json({ providers: statuses });
+    res.json({ providers: statuses, activeCrm });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/crm/active — Set the user's active/primary CRM provider
+router.put('/active', async (req, res, next) => {
+  try {
+    const { provider } = req.body;
+    const validProviders = ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'folk', 'notion', 'airtable'];
+    if (!provider || !validProviders.includes(provider)) {
+      return res.status(400).json({ error: 'Invalid provider' });
+    }
+    // Verify the provider is actually connected
+    const integration = await db.query(
+      `SELECT id FROM user_integrations WHERE user_id = $1 AND provider = $2`,
+      [req.user.id, provider]
+    );
+    if (!integration.rows.length) {
+      return res.status(400).json({ error: 'Provider not connected' });
+    }
+    await db.query(`UPDATE users SET active_crm_provider = $1 WHERE id = $2`, [provider, req.user.id]);
+    res.json({ ok: true, activeCrm: provider });
   } catch (err) {
     next(err);
   }
@@ -1937,6 +1961,12 @@ router.get('/salesforce/callback', async (req, res) => {
 
     logger.info('salesforce-oauth', `Salesforce connected for user ${oauthData.userId}: ${tokens.instance_url}`);
 
+    // Auto-set as active CRM if none is set
+    await db.query(
+      `UPDATE users SET active_crm_provider = 'salesforce' WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+      [oauthData.userId]
+    );
+
     // Auto-trigger CRM sync in background after OAuth connection
     const { syncCRM } = require('../lib/crm-sync');
     syncCRM(oauthData.userId).catch((err) => {
@@ -2026,6 +2056,12 @@ router.post('/salesforce/manual-connect', async (req, res, next) => {
       metadata: { instance_url: instanceUrl, oauth: false },
       instanceUrl,
     });
+
+    // Auto-set as active CRM if none is set
+    await db.query(
+      `UPDATE users SET active_crm_provider = 'salesforce' WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+      [req.user.id]
+    );
 
     // Test the connection
     try {
