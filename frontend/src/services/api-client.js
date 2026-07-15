@@ -303,7 +303,7 @@ export function transformChartData(d) {
 /* ─── Transform: memory patterns → recommendations ─── */
 
 export function patternsToRecommendations(patterns, lang = null) {
-  const userLang = lang || localStorage.getItem('bakal_lang') || 'fr';
+  const userLang = lang || localStorage.getItem('baakalai_lang') || 'fr';
   const levelMap = {
     Haute: 'success',
     Moyenne: 'warning',
@@ -420,7 +420,7 @@ export async function fetchChartData() {
 
 /** Fetch AI recommendations (derived from memory patterns) */
 export async function fetchRecommendations() {
-  const lang = localStorage.getItem('bakal_lang') || 'fr';
+  const lang = localStorage.getItem('baakalai_lang') || 'fr';
   const data = await request(`/dashboard/memory${lang !== 'fr' ? `?lang=${lang}` : ''}`);
   return patternsToRecommendations(data.patterns || [], lang);
 }
