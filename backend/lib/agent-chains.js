@@ -54,9 +54,11 @@ async function countTodayExecutions(userId, chainType) {
 }
 
 async function getRecentlyEmailed(userId) {
+  // Check both recent emails (7 days) AND very recent sends (last 2 hours)
+  // to avoid duplicating emails sent by CRM Agent in the same scheduling window
   const result = await db.query(
     `SELECT DISTINCT LOWER(to_email) as email FROM nurture_emails
-     WHERE user_id = $1 AND created_at > now() - interval '7 days'`,
+     WHERE user_id = $1 AND (created_at > now() - interval '7 days' OR sent_at > now() - interval '2 hours')`,
     [userId]
   );
   return new Set(result.rows.map(r => r.email));
@@ -226,13 +228,20 @@ Return JSON: { "subject": "...", "body": "..." }`;
         const result = await claude.callClaude('Return only valid JSON.', prompt, 500, 'chain_deal_reactivation');
         let email = result.parsed;
         if (!email) {
-          const m = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
+          const m = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
           if (m) { try { email = JSON.parse(m[0]); } catch { email = null; } }
         }
         if (!email?.subject || !email?.body) { report.errors.push(`${opp.name}: failed to generate email`); continue; }
 
         // Step 5: Execute or queue for approval
         if (chainCfg.approval_required) {
+          // Skip if a pending email already exists for this contact
+          const existingPending = await db.query(
+            `SELECT id FROM nurture_emails WHERE user_id = $1 AND opportunity_id = $2 AND status = 'pending' LIMIT 1`,
+            [userId, opp.id]
+          );
+          if (existingPending.rows.length > 0) { report.skipped++; continue; }
+
           // Queue as pending — user sees it in nurture dashboard
           await db.query(
             `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids, metadata)
@@ -388,12 +397,19 @@ Return JSON: { "subject": "...", "body": "..." }`;
         const result = await claude.callClaude('Return only valid JSON.', prompt, 500, 'chain_auto_upsell');
         let email = result.parsed;
         if (!email) {
-          const m = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
+          const m = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
           if (m) { try { email = JSON.parse(m[0]); } catch { email = null; } }
         }
         if (!email?.subject || !email?.body) { report.errors.push(`${opp.name}: failed to generate email`); continue; }
 
         if (chainCfg.approval_required) {
+          // Skip if a pending email already exists for this contact
+          const existingPending = await db.query(
+            `SELECT id FROM nurture_emails WHERE user_id = $1 AND opportunity_id = $2 AND status = 'pending' LIMIT 1`,
+            [userId, opp.id]
+          );
+          if (existingPending.rows.length > 0) { report.skipped++; continue; }
+
           await db.query(
             `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids, metadata)
              VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8)`,

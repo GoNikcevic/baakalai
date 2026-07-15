@@ -30,6 +30,15 @@ if (useSqlite) {
   sqliteAdapter = require('./sqlite-adapter');
 }
 
+// Simple string hash for Postgres advisory locks (returns a 32-bit integer)
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
 // Helper: run a query and return rows
 async function query(text, params) {
   if (useSqlite) {
@@ -745,52 +754,68 @@ const memoryPatterns = {
       if (dismissed.rows[0]) return null; // User dismissed this recently, don't recreate
     }
 
-    // Try to find existing active pattern with same category and content
-    const existing = await query(
-      `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL LIMIT 1`,
-      [data.category, data.pattern]
-    );
-    if (existing.rows[0]) {
-      return this.update(existing.rows[0].id, data);
-    }
-    // Also check by partial match (text prefix)
-    if (prefix.length >= 10) {
-      const partial = await query(
-        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL LIMIT 1`,
-        [data.category, prefix + '%']
-      );
-      if (partial.rows[0]) {
-        return this.update(partial.rows[0].id, data);
-      }
-    }
-
-    // Semantic deduplication via pgvector (if enabled)
+    // Atomic upsert: use Postgres advisory lock on category hash to prevent race conditions
+    // between concurrent agents (e.g. Timing Agent + Copy Optimizer writing to same category)
+    const lockKey = Math.abs(hashCode(`${data.category}:${prefix}`));
     try {
-      const { findSimilarPattern, upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
-      if (ENABLED) {
-        const similar = await findSimilarPattern(data.pattern, 0.85);
-        if (similar?.sourceId) {
-          // Check if the similar pattern is active (not dismissed)
-          const active = await query('SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL', [similar.sourceId]);
-          if (active.rows[0]) {
-            const updated = await this.update(active.rows[0].id, data);
-            // Update embedding with new content
-            await upsertPatternEmbedding(active.rows[0].id, data.pattern, { category: data.category, confidence: data.confidence });
-            return updated;
-          }
+      await query('SELECT pg_advisory_lock($1)', [lockKey]);
+
+      // Try to find existing active pattern with same category and content
+      const existing = await query(
+        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL LIMIT 1`,
+        [data.category, data.pattern]
+      );
+      if (existing.rows[0]) {
+        const result = await this.update(existing.rows[0].id, data);
+        await query('SELECT pg_advisory_unlock($1)', [lockKey]);
+        return result;
+      }
+      // Also check by partial match (text prefix)
+      if (prefix.length >= 10) {
+        const partial = await query(
+          `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL LIMIT 1`,
+          [data.category, prefix + '%']
+        );
+        if (partial.rows[0]) {
+          const result = await this.update(partial.rows[0].id, data);
+          await query('SELECT pg_advisory_unlock($1)', [lockKey]);
+          return result;
         }
       }
-    } catch { /* pgvector optional, fall through to create */ }
 
-    // Create new pattern + embed it
-    const created = await this.create(data);
-    try {
-      const { upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
-      if (ENABLED && created) {
-        await upsertPatternEmbedding(created.id, created.pattern, { category: created.category, confidence: created.confidence });
-      }
-    } catch { /* embedding optional */ }
-    return created;
+      // Semantic deduplication via pgvector (if enabled)
+      try {
+        const { findSimilarPattern, upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
+        if (ENABLED) {
+          const similar = await findSimilarPattern(data.pattern, 0.85);
+          if (similar?.sourceId) {
+            const active = await query('SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL', [similar.sourceId]);
+            if (active.rows[0]) {
+              const updated = await this.update(active.rows[0].id, data);
+              await upsertPatternEmbedding(active.rows[0].id, data.pattern, { category: data.category, confidence: data.confidence });
+              await query('SELECT pg_advisory_unlock($1)', [lockKey]);
+              return updated;
+            }
+          }
+        }
+      } catch { /* pgvector optional, fall through to create */ }
+
+      // Create new pattern + embed it
+      const created = await this.create(data);
+      try {
+        const { upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
+        if (ENABLED && created) {
+          await upsertPatternEmbedding(created.id, created.pattern, { category: created.category, confidence: created.confidence });
+        }
+      } catch { /* embedding optional */ }
+
+      await query('SELECT pg_advisory_unlock($1)', [lockKey]);
+      return created;
+    } catch (err) {
+      // Always release lock even on error
+      try { await query('SELECT pg_advisory_unlock($1)', [lockKey]); } catch { /* ignore */ }
+      throw err;
+    }
   },
 
   /**

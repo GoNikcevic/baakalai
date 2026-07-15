@@ -117,7 +117,9 @@ async function analyzeResponses(userId) {
       }
 
       // 6-7. Score trigger + patterns (skip if already scored by real-time learning-signal)
-      const alreadyScored = !!email.sentiment;
+      // Re-read from DB to catch concurrent learning-signal updates
+      const freshEmail = await db.query('SELECT sentiment FROM nurture_emails WHERE id = $1', [email.id]);
+      const alreadyScored = !!(freshEmail.rows[0]?.sentiment || email.sentiment);
       if (!alreadyScored) {
         if (email.trigger_id && analysis.sentiment === 'positive') {
           await scoreTrigger(email.trigger_id, 'positive');
