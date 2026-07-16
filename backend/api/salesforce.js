@@ -47,7 +47,7 @@ async function createContact(instanceUrl, accessToken, data) {
 }
 
 async function searchContacts(instanceUrl, accessToken, email) {
-  const query = `SELECT Id, FirstName, LastName, Email, Title FROM Contact WHERE Email = '${email.replace(/'/g, "\\'")}'`;
+  const query = `SELECT Id, FirstName, LastName, Email, Title FROM Contact WHERE Email = '${email.replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return result.records || [];
 }
@@ -329,7 +329,7 @@ async function getEmailMessages(instanceUrl, accessToken, { contactId, contactEm
   if (contactId) {
     where = `WHERE RelatedToId = '${contactId}' OR (ToAddress = (SELECT Email FROM Contact WHERE Id = '${contactId}'))`;
   } else if (contactEmail) {
-    where = `WHERE ToAddress = '${contactEmail.replace(/'/g, "\\'")}'`;
+    where = `WHERE ToAddress = '${contactEmail.replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
   } else {
     where = 'WHERE CreatedDate > ' + (since || 'LAST_N_DAYS:90');
   }
@@ -377,7 +377,7 @@ async function getEmailMessageStats(instanceUrl, accessToken, { since = 'LAST_N_
 }
 
 async function getContactEmailActivity(instanceUrl, accessToken, contactEmail) {
-  const safe = contactEmail.replace(/'/g, "\\'");
+  const safe = contactEmail.replace(/'/g, "''").replace(/\\/g, '\\\\');
   const query = `SELECT Id, Subject, Status, CreatedDate, ToAddress, FromAddress
     FROM EmailMessage
     WHERE ToAddress = '${safe}' OR FromAddress = '${safe}'
@@ -413,7 +413,8 @@ async function createLead(instanceUrl, accessToken, data) {
 }
 
 async function searchLeads(instanceUrl, accessToken, email) {
-  const query = `SELECT Id, FirstName, LastName, Email, Company, Title, Phone, Status, OwnerId, CreatedDate FROM Lead WHERE Email = '${email.replace(/'/g, "\\'")}'`;
+  const safe = email.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  const query = `SELECT Id, FirstName, LastName, Email, Company, Title, Phone, Status, OwnerId, CreatedDate FROM Lead WHERE Email = '${safe}'`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return result.records || [];
 }
@@ -451,19 +452,21 @@ async function listLeads(instanceUrl, accessToken, { limit = 10000 } = {}) {
   return all;
 }
 
-async function convertLead(instanceUrl, accessToken, leadId, { contactId, accountId, opportunityName } = {}) {
-  const body = {
-    leadId,
-    convertedStatus: 'Closed - Converted',
+async function convertLead(instanceUrl, accessToken, leadId, { contactId, accountId, opportunityName, convertedStatus = 'Closed - Converted' } = {}) {
+  const leadConvert = {
+    LeadId: leadId,
+    ConvertedStatus: convertedStatus,
   };
-  if (contactId) body.contactId = contactId;
-  if (accountId) body.accountId = accountId;
-  if (opportunityName) body.opportunityName = opportunityName;
+  if (contactId) leadConvert.ContactId = contactId;
+  if (accountId) leadConvert.AccountId = accountId;
+  if (opportunityName) leadConvert.OpportunityName = opportunityName;
+  else leadConvert.DoNotCreateOpportunity = true;
 
-  return sfFetch(instanceUrl, accessToken, '/sobjects/Lead/convert', {
+  const result = await sfFetch(instanceUrl, accessToken, '/actions/standard/convertLead', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ inputs: [{ leadConvert }] }),
   });
+  return result[0]?.outputValues || result;
 }
 
 // ── Accounts ──
@@ -482,7 +485,7 @@ async function createAccount(instanceUrl, accessToken, data) {
 }
 
 async function searchAccounts(instanceUrl, accessToken, name) {
-  const safe = name.replace(/'/g, "\\'");
+  const safe = name.replace(/'/g, "''").replace(/\\/g, '\\\\');
   const query = `SELECT Id, Name, Industry, Website, Phone, BillingCity, OwnerId, CreatedDate FROM Account WHERE Name LIKE '%${safe}%' ORDER BY CreatedDate DESC LIMIT 50`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return (result.records || []).map(a => ({
@@ -692,13 +695,26 @@ async function bulkQuery(instanceUrl, accessToken, soqlQuery) {
   }
   const csv = await resultsRes.text();
 
-  // 4. Parse CSV to array of objects
+  // 4. Parse CSV to array of objects (handles quoted fields with commas)
   const lines = csv.split('\n').filter(l => l.trim());
   if (lines.length === 0) return [];
-  const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+  const parseCsvLine = (line) => {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (ch === ',' && !inQuotes) { fields.push(current.trim()); current = ''; continue; }
+      current += ch;
+    }
+    fields.push(current.trim());
+    return fields;
+  };
+  const headers = parseCsvLine(lines[0]);
   const records = [];
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
+    const values = parseCsvLine(lines[i]);
     const record = {};
     for (let j = 0; j < headers.length; j++) {
       record[headers[j]] = values[j] || '';
