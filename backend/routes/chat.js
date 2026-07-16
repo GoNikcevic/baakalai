@@ -474,15 +474,17 @@ router.post('/threads/:id/scan-crm', async (req, res, next) => {
 // POST /api/chat/threads/:id/clean-crm — Auto-fix CRM issues
 router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
   try {
-    const { getUserKey } = require('../config');
     const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
 
-    // Detect connected CRM
-    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
-    let provider = null;
-    for (const p of providers) {
-      const key = await getUserKey(req.user.id, p);
-      if (key) { provider = p; break; }
+    // Use active CRM
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    let provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) {
+      const { getUserKey } = require('../config');
+      for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable']) {
+        const key = await getUserKey(req.user.id, p);
+        if (key) { provider = p; break; }
+      }
     }
     if (!provider) return res.json({ error: 'No CRM connected', applied: 0 });
 
@@ -539,39 +541,18 @@ router.post('/threads/:id/run-nurture', async (req, res, next) => {
 // POST /api/chat/threads/:id/import-crm — Import contacts from CRM
 router.post('/threads/:id/import-crm', async (req, res, next) => {
   try {
-    const { getUserKey } = require('../config');
-    const pipedrive = require('../api/pipedrive');
-    const { provider } = req.body;
+    const { importContactsForUser } = require('./crm');
+    let { provider } = req.body;
 
-    if (provider !== 'pipedrive') return res.status(400).json({ error: `Import not supported for ${provider}` });
-
-    const token = await getUserKey(req.user.id, provider);
-    if (!token) return res.status(400).json({ error: `${provider} not connected` });
-
-    const persons = await pipedrive.listAllPersons(token);
-    let imported = 0, skipped = 0;
-
-    for (const raw of (persons || [])) {
-      const email = Array.isArray(raw.email)
-        ? (raw.email.find(e => e.primary)?.value || raw.email[0]?.value || null)
-        : (raw.email || null);
-      if (!email) { skipped++; continue; }
-      const existing = await db.opportunities.findByEmail(req.user.id, email);
-      if (existing) { skipped++; continue; }
-      await db.opportunities.create({
-        userId: req.user.id,
-        name: raw.name || 'Unknown',
-        email,
-        title: raw.job_title || null,
-        company: raw.org_name || raw.org_id?.name || null,
-        status: 'imported',
-        crmProvider: 'pipedrive',
-        crmContactId: String(raw.id),
-      });
-      imported++;
+    // Use active CRM if no provider specified
+    if (!provider) {
+      const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+      provider = userRow.rows[0]?.active_crm_provider;
     }
+    if (!provider) return res.status(400).json({ error: 'No CRM connected' });
 
-    res.json({ imported, skipped });
+    const result = await importContactsForUser(req.user.id, provider);
+    res.json(result);
   } catch (err) {
     next(err);
   }

@@ -2160,5 +2160,7 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
 
 module.exports = router;
 module.exports.syncOpportunityToHubspot = syncOpportunityToHubspot;
+module.exports.syncOpportunityToProvider = syncOpportunityToProvider;
+module.exports.importContactsForUser = importContactsForUser;
 module.exports.getUserHubspotToken = getUserHubspotToken;
 module.exports.getUserCrmToken = getUserCrmToken;
