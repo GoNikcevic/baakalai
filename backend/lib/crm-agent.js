@@ -402,6 +402,23 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         if (deal.status === 'lost' && o.status !== 'lost') { updates.status = 'lost'; updates.lost_date = new Date().toISOString(); }
 
         if (Object.keys(updates).length > 0) {
+          // Attribution: if deal moves to 'won' from lost/stagnant, check for reactivation email in last 90 days
+          if (updates.status === 'won' && ['lost', 'stagnant', 'imported', 'new'].includes(o.status)) {
+            const reactivationEmail = await db.query(
+              `SELECT id FROM nurture_emails
+               WHERE opportunity_id = $1 AND user_id = $2 AND status = 'sent'
+                 AND metadata->>'chain' = 'deal_reactivation'
+                 AND created_at > NOW() - INTERVAL '90 days'
+               ORDER BY created_at DESC LIMIT 1`,
+              [o.id, userId]
+            );
+            if (reactivationEmail.rows[0]) {
+              updates.reactivated_at = new Date().toISOString();
+              updates.reactivated_from_email_id = reactivationEmail.rows[0].id;
+              report.reactivations = (report.reactivations || 0) + 1;
+              logger.info('crm-agent', `Deal reactivated: ${o.id} (email ${reactivationEmail.rows[0].id})`);
+            }
+          }
           await db.opportunities.update(o.id, updates);
         }
       }

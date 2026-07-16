@@ -2158,6 +2158,67 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/crm/reactivation-stats — Reactivation KPIs
+router.get('/reactivation-stats', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [reactivated, emailsSent, pipeline] = await Promise.all([
+      // Deals successfully reactivated (attributed)
+      db.query(`
+        SELECT COUNT(*) as count, COALESCE(SUM(deal_value), 0) as revenue,
+               json_agg(json_build_object(
+                 'id', o.id, 'name', o.name, 'company', o.company,
+                 'dealValue', o.deal_value, 'reactivatedAt', o.reactivated_at,
+                 'wonDate', o.won_date
+               ) ORDER BY o.reactivated_at DESC) as deals
+        FROM opportunities o
+        WHERE o.user_id = $1 AND o.reactivated_at IS NOT NULL
+      `, [userId]),
+      // Reactivation emails sent (last 90 days)
+      db.query(`
+        SELECT COUNT(*) as total,
+               COUNT(*) FILTER (WHERE replied_at IS NOT NULL) as replied,
+               COUNT(*) FILTER (WHERE status = 'pending') as pending
+        FROM nurture_emails
+        WHERE user_id = $1 AND metadata->>'chain' = 'deal_reactivation'
+          AND created_at > NOW() - INTERVAL '90 days'
+      `, [userId]),
+      // Current stagnant deals (reactivation pipeline)
+      db.query(`
+        SELECT COUNT(*) as count, COALESCE(SUM(deal_value), 0) as potential_revenue
+        FROM opportunities
+        WHERE user_id = $1 AND status NOT IN ('won', 'lost')
+          AND updated_at < NOW() - INTERVAL '14 days'
+          AND deal_value IS NOT NULL AND deal_value > 0
+      `, [userId]),
+    ]);
+
+    const stats = reactivated.rows[0];
+    const emails = emailsSent.rows[0];
+    const pipe = pipeline.rows[0];
+
+    res.json({
+      reactivated: {
+        count: parseInt(stats.count),
+        revenue: parseFloat(stats.revenue) || 0,
+        deals: stats.count > 0 ? stats.deals : [],
+      },
+      emails: {
+        sent: parseInt(emails.total),
+        replied: parseInt(emails.replied),
+        pending: parseInt(emails.pending),
+        replyRate: emails.total > 0 ? Math.round((emails.replied / emails.total) * 100) : 0,
+      },
+      pipeline: {
+        stagnantDeals: parseInt(pipe.count),
+        potentialRevenue: parseFloat(pipe.potential_revenue) || 0,
+      },
+      conversionRate: emails.total > 0 ? Math.round((stats.count / emails.total) * 100) : 0,
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
 module.exports.syncOpportunityToHubspot = syncOpportunityToHubspot;
 module.exports.syncOpportunityToProvider = syncOpportunityToProvider;

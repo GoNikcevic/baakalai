@@ -1435,6 +1435,8 @@ const opportunities = {
       lost_date: 'lost_date', lostDate: 'lost_date',
       renewal_date: 'renewal_date', renewalDate: 'renewal_date',
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
+      reactivated_at: 'reactivated_at', reactivatedAt: 'reactivated_at',
+      reactivated_from_email_id: 'reactivated_from_email_id', reactivatedFromEmailId: 'reactivated_from_email_id',
       data: 'data',
     };
     const jsonbCols = new Set(['personalization', 'churn_factors']);
