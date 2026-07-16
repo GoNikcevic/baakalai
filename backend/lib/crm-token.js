@@ -20,23 +20,19 @@ async function getUserCrmToken(userId, provider) {
     if (!integration) return null;
     try {
       // Auto-refresh if token expires within 5 minutes and we have a refresh_token
-      if (integration.refresh_token && process.env.SALESFORCE_CLIENT_ID && process.env.SALESFORCE_CLIENT_SECRET) {
+      const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+      const clientId = metadata.consumerKey;
+      const clientSecret = metadata.encryptedConsumerSecret ? decrypt(metadata.encryptedConsumerSecret) : null;
+      if (integration.refresh_token && clientId && clientSecret) {
         const shouldRefresh = integration.expires_at
           ? new Date(integration.expires_at).getTime() < Date.now() + 5 * 60 * 1000
           : false; // manual tokens without expires_at: don't auto-refresh
         if (shouldRefresh) {
           const refreshToken = decrypt(integration.refresh_token);
-          const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
           const refreshHost = metadata.loginHost || 'login.salesforce.com';
+          const tokenBody = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret });
           const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              grant_type: 'refresh_token',
-              refresh_token: refreshToken,
-              client_id: process.env.SALESFORCE_CLIENT_ID,
-              client_secret: process.env.SALESFORCE_CLIENT_SECRET,
-            }),
+            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: tokenBody,
           });
           if (tokenRes.ok) {
             const tokens = await tokenRes.json();

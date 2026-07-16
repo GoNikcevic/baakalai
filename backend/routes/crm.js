@@ -1862,25 +1862,32 @@ setInterval(() => {
   }
 }, 300000);
 
-// GET /api/crm/salesforce/connect — Start Salesforce OAuth flow
-// Supports ?domain=mycompany.my.salesforce.com for orgs with custom domains
-router.get('/salesforce/connect', (req, res, next) => {
+// GET /api/crm/salesforce/connect — Start Salesforce OAuth flow using client's own Connected App
+router.get('/salesforce/connect', async (req, res, next) => {
   try {
-    const clientId = process.env.SALESFORCE_CLIENT_ID;
-    if (!clientId) return res.status(500).json({ error: 'Salesforce OAuth not configured' });
     if (_sfOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
+    // Read per-user Connected App credentials from DB
+    const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
+    const metadata = typeof integration?.metadata === 'string' ? JSON.parse(integration.metadata) : (integration?.metadata || {});
+    const clientId = metadata.consumerKey;
+    if (!clientId) {
+      return res.status(400).json({ error: 'No Salesforce Connected App configured. Save your Consumer Key and Secret first.' });
+    }
+
     const state = crypto.randomBytes(16).toString('hex');
-    // PKCE: generate code_verifier and code_challenge
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-    // Support custom Salesforce domain (e.g. mycompany.my.salesforce.com)
+
+    // Derive login host from stored instance URL
     let loginHost = 'login.salesforce.com';
-    if (req.query.domain) {
-      const domain = req.query.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com)$/.test(domain)) {
-        loginHost = domain;
-      }
+    if (integration.instance_url) {
+      try {
+        const host = new URL(integration.instance_url).hostname;
+        if (/\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com)$/.test(host)) {
+          loginHost = host;
+        }
+      } catch {}
     }
 
     _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000, codeVerifier, loginHost });
@@ -1924,14 +1931,24 @@ router.get('/salesforce/callback', async (req, res) => {
   const tokenHost = oauthData.loginHost || 'login.salesforce.com';
 
   try {
+    // Read per-user Connected App credentials from DB
+    const integration = await db.userIntegrations.get(oauthData.userId, 'salesforce');
+    const prevMetadata = typeof integration?.metadata === 'string' ? JSON.parse(integration.metadata) : (integration?.metadata || {});
+    const clientId = prevMetadata.consumerKey;
+    const clientSecret = prevMetadata.encryptedConsumerSecret ? decrypt(prevMetadata.encryptedConsumerSecret) : null;
+    if (!clientId || !clientSecret) {
+      logger.error('salesforce-oauth', `No Connected App credentials found for user ${oauthData.userId}`);
+      return res.redirect(APP_URL + '/settings?crm_error=salesforce_no_credentials');
+    }
+
     const tokenRes = await fetch(`https://${tokenHost}/services/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        client_id: process.env.SALESFORCE_CLIENT_ID,
-        client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: APP_URL + '/api/crm/salesforce/callback',
         code_verifier: oauthData.codeVerifier,
       }),
@@ -1944,17 +1961,22 @@ router.get('/salesforce/callback', async (req, res) => {
     }
 
     const tokens = await tokenRes.json();
-    // tokens: { access_token, refresh_token, instance_url, id, token_type, issued_at, signature }
 
     const encryptedAccess = encrypt(tokens.access_token);
     const encryptedRefresh = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
-    // Salesforce access tokens expire in ~2 hours but no expires_in field is returned
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
+    // Preserve Connected App credentials in metadata
     await db.userIntegrations.upsert(oauthData.userId, 'salesforce', {
       accessToken: encryptedAccess,
       refreshToken: encryptedRefresh,
-      metadata: { instance_url: tokens.instance_url, oauth: true, loginHost: tokenHost },
+      metadata: {
+        consumerKey: prevMetadata.consumerKey,
+        encryptedConsumerSecret: prevMetadata.encryptedConsumerSecret,
+        instance_url: tokens.instance_url,
+        oauth: true,
+        loginHost: tokenHost,
+      },
       expiresAt,
       instanceUrl: tokens.instance_url,
     });
@@ -1992,14 +2014,21 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
     const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
     const refreshHost = metadata.loginHost || 'login.salesforce.com';
 
+    // Use per-user Connected App credentials
+    const clientId = metadata.consumerKey;
+    const clientSecret = metadata.encryptedConsumerSecret ? decrypt(metadata.encryptedConsumerSecret) : null;
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({ error: 'No Connected App credentials found. Please reconnect Salesforce.' });
+    }
+
     const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: process.env.SALESFORCE_CLIENT_ID,
-        client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
       }),
     });
 
@@ -2039,40 +2068,27 @@ function isValidSalesforceUrl(url) {
   } catch { return false; }
 }
 
-// POST /api/crm/salesforce/manual-connect — Store manually provided Salesforce credentials
+// POST /api/crm/salesforce/manual-connect — Save client's own Connected App credentials
+// The client creates a Connected App in their Salesforce org and provides:
+//   consumerKey (client_id), consumerSecret (client_secret), instanceUrl
 router.post('/salesforce/manual-connect', async (req, res, next) => {
   try {
-    const { accessToken, instanceUrl } = req.body;
-    if (!accessToken || !instanceUrl) {
-      return res.status(400).json({ error: 'accessToken and instanceUrl are required' });
+    const { consumerKey, consumerSecret, instanceUrl } = req.body;
+    if (!consumerKey || !consumerSecret || !instanceUrl) {
+      return res.status(400).json({ error: 'consumerKey, consumerSecret, and instanceUrl are required' });
     }
     if (!isValidSalesforceUrl(instanceUrl)) {
       return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL (e.g. https://mycompany.my.salesforce.com)' });
     }
 
-    const encryptedAccess = encrypt(accessToken);
+    const encryptedSecret = encrypt(consumerSecret);
     await db.userIntegrations.upsert(req.user.id, 'salesforce', {
-      accessToken: encryptedAccess,
-      metadata: { instance_url: instanceUrl, oauth: false },
+      metadata: { consumerKey, encryptedConsumerSecret: encryptedSecret, instance_url: instanceUrl, oauth: false },
       instanceUrl,
     });
 
-    // Auto-set as active CRM if none is set
-    await db.query(
-      `UPDATE users SET active_crm_provider = 'salesforce' WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
-      [req.user.id]
-    );
-
-    // Test the connection
-    try {
-      const sf = require('../api/salesforce');
-      await sf.listContacts(instanceUrl, accessToken);
-      logger.info('salesforce-manual', `Salesforce connected for user ${req.user.id}: ${instanceUrl}`);
-      res.json({ ok: true, status: 'connected' });
-    } catch (testErr) {
-      logger.warn('salesforce-manual', `Connection test failed: ${testErr.message}`);
-      res.json({ ok: true, status: 'saved_but_test_failed', message: testErr.message });
-    }
+    logger.info('salesforce-manual', `Connected App credentials saved for user ${req.user.id}: ${instanceUrl}`);
+    res.json({ ok: true, status: 'credentials_saved' });
   } catch (err) { next(err); }
 });
 

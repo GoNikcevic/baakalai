@@ -37,8 +37,8 @@ function getMainTools(lang) {
       guide: en ? ['Go to app.waalaxy.com', 'Settings \u2192 Integrations'] : ['Allez dans app.waalaxy.com', 'Settings \u2192 Integrations'], link: 'https://app.waalaxy.com/settings' },
     { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM',
       guide: en ? ['Go to app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Create an app or copy the token (pat-)'] : ['Allez dans app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Cr\u00E9ez une app ou copiez le token (pat-)'], link: 'https://app.hubspot.com/settings/integrations' },
-    { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce access token' : 'Votre access token Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
-      guide: en ? ['Click "Connect with Salesforce" below', 'Authorize baakalai in the Salesforce popup', 'Your data syncs automatically'] : ['Cliquez sur "Connecter Salesforce" ci-dessous', 'Autorisez baakalai dans la popup Salesforce', 'Vos donn\u00E9es se synchronisent automatiquement'] },
+    { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce Consumer Key' : 'Votre Cl\u00E9 consommateur Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
+      guide: en ? ['Create a Connected App in your Salesforce (Setup > External Client Apps)', 'Enable OAuth with "Full access" scope', 'Copy Consumer Key + Secret below, then authorize'] : ['Cr\u00E9ez une app connect\u00E9e dans votre Salesforce (Param\u00E8tres > Apps clientes externes)', 'Activez OAuth avec "Acc\u00E8s complet"', 'Copiez Cl\u00E9 + Secret ci-dessous, puis autorisez'] },
     { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM',
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
@@ -1360,32 +1360,42 @@ function MetadataConfig({ provider, en }) {
 function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone }) {
   const { t, lang } = useI18n();
   const en = lang === 'en';
-  const [accessToken, setAccessToken] = useState('');
+  const [consumerKey, setConsumerKey] = useState('');
+  const [consumerSecret, setConsumerSecret] = useState('');
   const [instanceUrl, setInstanceUrl] = useState('');
   const [status, setStatus] = useState(null);
-  const [oauthLoading, setOauthLoading] = useState(false);
-  const [customDomain, setCustomDomain] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleOAuthConnect = async () => {
-    setOauthLoading(true);
+  const handleConnect = async () => {
+    if (!consumerKey || !consumerSecret || !instanceUrl) return;
+    setLoading(true);
+    setStatus('connecting');
     try {
-      const endpoint = customDomain
-        ? `/crm/salesforce/connect?domain=${encodeURIComponent(customDomain)}`
-        : '/crm/salesforce/connect';
-      const res = await request(endpoint);
-      if (res.url) {
-        window.location.href = res.url;
+      // Step 1: Save Connected App credentials
+      const saveRes = await request('/crm/salesforce/manual-connect', {
+        method: 'POST',
+        body: JSON.stringify({
+          consumerKey,
+          consumerSecret,
+          instanceUrl: instanceUrl.replace(/\/$/, ''),
+        }),
+      });
+      if (!saveRes.ok) { setStatus('error'); setLoading(false); return; }
+
+      // Step 2: Start OAuth flow with saved credentials
+      const oauthRes = await request('/crm/salesforce/connect');
+      if (oauthRes.url) {
+        window.location.href = oauthRes.url;
       } else {
         setStatus('error');
-        setOauthLoading(false);
+        setLoading(false);
       }
     } catch {
       setStatus('error');
-      setOauthLoading(false);
+      setLoading(false);
     }
   };
 
-  // If already connected, allow updating just the instance URL
   const handleUpdateUrl = async () => {
     if (!instanceUrl.startsWith('http')) return;
     setStatus('connecting');
@@ -1406,78 +1416,20 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
     }
   };
 
-  const handleConnect = async () => {
-    if (!accessToken || !instanceUrl) return;
-    setStatus('connecting');
-    try {
-      const res = await request('/crm/salesforce/manual-connect', {
-        method: 'POST',
-        body: JSON.stringify({ accessToken, instanceUrl: instanceUrl.replace(/\/$/, '') }),
-      });
-      if (res.status === 'connected' || res.status === 'saved_but_test_failed') {
-        setStatus(res.status === 'connected' ? 'connected' : 'test_failed');
-        syncCRM().catch(() => {});
-        setTimeout(() => onDone(), 1000);
-      } else {
-        setStatus('error');
-      }
-    } catch {
-      setStatus('error');
-    }
-  };
-
   const isValid = isConnected
     ? instanceUrl.startsWith('http')
-    : accessToken.length > 10 && instanceUrl.startsWith('http');
+    : consumerKey.length > 5 && consumerSecret.length > 5 && instanceUrl.startsWith('http');
 
   return (
     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
-      {/* OAuth connect button */}
-      {!isConnected && (
-        <>
-          <div style={{ marginBottom: 6 }}>
-            <input
-              type="text"
-              className="form-input"
-              placeholder={en ? 'Custom domain (optional) — e.g. mycompany.my.salesforce.com' : 'Domaine personnalisé (optionnel) — ex: mycompany.my.salesforce.com'}
-              value={customDomain}
-              onChange={e => setCustomDomain(e.target.value)}
-              style={{ width: '100%', padding: '6px 10px', fontSize: 11 }}
-            />
-          </div>
-          <button
-            style={{
-              width: '100%', padding: '8px 12px', fontSize: 12, fontWeight: 600,
-              background: '#00A1E0', color: '#fff', border: 'none', borderRadius: 6,
-              cursor: oauthLoading ? 'wait' : 'pointer', opacity: oauthLoading ? 0.7 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}
-            onClick={handleOAuthConnect}
-            disabled={oauthLoading}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z" fill="#fff"/></svg>
-            {oauthLoading
-              ? (en ? 'Redirecting...' : 'Redirection...')
-              : (en ? 'Connect with Salesforce' : 'Connecter Salesforce')}
-          </button>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0',
-            fontSize: 10, color: 'var(--text-muted)',
-          }}>
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            {en ? 'or enter manually' : 'ou saisir manuellement'}
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          </div>
-        </>
-      )}
       {isConnected ? (
         <div style={{
           fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
           background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
         }}>
           {en
-            ? <>Your Salesforce token is saved. Add your instance URL below (e.g., https://mycompany.my.salesforce.com).</>
-            : <>Votre token Salesforce est sauvegard{'\u00E9'}. Ajoutez l'URL de votre instance ci-dessous (ex: https://mycompany.my.salesforce.com).</>}
+            ? <>Salesforce is connected. You can update your instance URL below.</>
+            : <>Salesforce est connect{'\u00E9'}. Vous pouvez modifier l'URL de votre instance ci-dessous.</>}
         </div>
       ) : (
         <div style={{
@@ -1485,8 +1437,22 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
         }}>
           {en
-            ? <>1. In Salesforce: Setup &gt; Apps &gt; App Manager &gt; New Connected App<br/>2. Enable OAuth, add scope "Full access (full)"<br/>3. Set callback URL: <code>https://app.baakal.ai</code><br/>4. Copy the <strong>Consumer Secret</strong> (not the Key) and your instance URL below</>
-            : <>1. Dans Salesforce : Param{'\u00E8'}tres &gt; Apps &gt; Gestionnaire d'apps &gt; Nouvelle app connect{'\u00E9'}e<br/>2. Activez OAuth, ajoutez "Acc{'\u00E8'}s complet (full)"<br/>3. URL de rappel : <code>https://app.baakal.ai</code><br/>4. Copiez le <strong>Secret consommateur</strong> (pas la Cl{'\u00E9'}) et l'URL de votre instance ci-dessous</>}
+            ? <>
+                <strong>Create a Connected App in your Salesforce:</strong><br/>
+                1. Setup &gt; Platform Tools &gt; Apps &gt; External Client Apps<br/>
+                2. Click "New External Client App"<br/>
+                3. Enable OAuth, add scope "Full access (full)"<br/>
+                4. Set callback URL: <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
+                5. Copy your <strong>Consumer Key</strong> and <strong>Consumer Secret</strong> below
+              </>
+            : <>
+                <strong>Cr{'\u00E9'}ez une application connect{'\u00E9'}e dans votre Salesforce :</strong><br/>
+                1. Param{'\u00E8'}tres &gt; Outils de la plate-forme &gt; Applications clientes externes<br/>
+                2. Cliquez "Nouvelle application cliente externe"<br/>
+                3. Activez OAuth, ajoutez "Acc{'\u00E8'}s complet (full)"<br/>
+                4. URL de rappel : <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
+                5. Copiez la <strong>Cl{'\u00E9'} consommateur</strong> et le <strong>Secret consommateur</strong> ci-dessous
+              </>}
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -1495,25 +1461,28 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           value={instanceUrl} onChange={e => setInstanceUrl(e.target.value)} autoFocus
           style={{ fontSize: 11, padding: '5px 8px' }} />
         {!isConnected && (
-          <input className="form-input" type="password"
-            placeholder={en ? "Access token" : "Access token"}
-            value={accessToken} onChange={e => setAccessToken(e.target.value)}
-            style={{ fontSize: 11, padding: '5px 8px' }} />
+          <>
+            <input className="form-input" type="text"
+              placeholder={en ? "Consumer Key (Client ID)" : "Cl\u00E9 consommateur (Client ID)"}
+              value={consumerKey} onChange={e => setConsumerKey(e.target.value)}
+              style={{ fontSize: 11, padding: '5px 8px' }} />
+            <input className="form-input" type="password"
+              placeholder={en ? "Consumer Secret (Client Secret)" : "Secret consommateur (Client Secret)"}
+              value={consumerSecret} onChange={e => setConsumerSecret(e.target.value)}
+              style={{ fontSize: 11, padding: '5px 8px' }} />
+          </>
         )}
       </div>
       {status === 'connected' && (
         <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>{en ? 'Connected!' : 'Connect\u00E9 !'}</div>
-      )}
-      {status === 'test_failed' && (
-        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed — token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9 — le token a peut-\u00EAtre expir\u00E9'}</div>
       )}
       {status === 'error' && (
         <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{en ? 'Connection failed' : '\u00C9chec de connexion'}</div>
       )}
       <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
         <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
-          onClick={isConnected ? handleUpdateUrl : handleConnect} disabled={saving || status === 'connecting' || !isValid}>
-          {status === 'connecting' ? (en ? 'Saving...' : 'Sauvegarde...') : isConnected ? (en ? 'Save URL' : 'Sauvegarder') : (en ? 'Connect' : 'Connecter')}
+          onClick={isConnected ? handleUpdateUrl : handleConnect} disabled={saving || loading || !isValid}>
+          {loading ? (en ? 'Connecting...' : 'Connexion...') : status === 'connecting' ? (en ? 'Saving...' : 'Sauvegarde...') : isConnected ? (en ? 'Save URL' : 'Sauvegarder') : (en ? 'Connect Salesforce' : 'Connecter Salesforce')}
         </button>
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
           onClick={onCancel}>{'\u2715'}</button>
