@@ -283,11 +283,12 @@ router.post('/run', async (req, res, next) => {
 // POST /api/nurture/preview — Preview what would happen without sending
 router.post('/preview', async (req, res, next) => {
   try {
-    const { getUserKey } = require('../config');
-    const pipedrive = require('../api/pipedrive');
+    const { getUserCrmToken } = require('../lib/crm-token');
     const claude = require('../api/claude');
 
-    const token = await getUserKey(req.user.id, 'pipedrive');
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const activeCrm = userRow.rows[0]?.active_crm_provider || 'pipedrive';
+    const token = await getUserCrmToken(req.user.id, activeCrm);
     if (!token) return res.status(400).json({ error: 'CRM non connect\u00E9' });
 
     // Get triggers

@@ -20,12 +20,20 @@ async function syncCRM(userId) {
   try {
     notifyUser(userId, 'crm:sync', { status: 'starting', progress: 0 });
 
-    // Detect CRM provider
+    // Detect CRM provider — prefer user's active_crm_provider
     let provider = null;
     let apiKey = null;
-    for (const p of ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'notion', 'airtable']) {
-      const key = await getUserCrmToken(userId, p);
-      if (key) { provider = p; apiKey = key; break; }
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+    const activeCrm = userRow.rows[0]?.active_crm_provider;
+    if (activeCrm) {
+      const key = await getUserCrmToken(userId, activeCrm);
+      if (key) { provider = activeCrm; apiKey = key; }
+    }
+    if (!provider) {
+      for (const p of ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'notion', 'airtable']) {
+        const key = await getUserCrmToken(userId, p);
+        if (key) { provider = p; apiKey = key; break; }
+      }
     }
     if (!provider) throw new Error('No CRM configured');
 

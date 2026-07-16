@@ -35,8 +35,9 @@ async function evaluateTriggers(userId) {
 
   if (triggers.rows.length === 0) return [];
 
-  // Get CRM token
-  const crmProvider = triggers.rows[0].crm_provider || 'pipedrive';
+  // Get CRM token — always use user's active_crm_provider
+  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+  const crmProvider = userRow.rows[0]?.active_crm_provider || 'pipedrive';
   const crmToken = await getUserCrmToken(userId, crmProvider);
   if (!crmToken) return [];
 

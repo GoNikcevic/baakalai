@@ -1166,6 +1166,7 @@ function CRMHealthSection() {
   // Auto-detect connected CRM provider
   useEffect(() => {
     api.request('/crm/providers').then(data => {
+      if (data.activeCrm) { setProvider(data.activeCrm); return; }
       const connected = (data.providers || []).find(p => ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'].includes(p.provider) && p.connected);
       setProvider(connected ? connected.provider : 'pipedrive');
     }).catch(() => setProvider('pipedrive'));

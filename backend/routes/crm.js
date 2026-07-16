@@ -70,30 +70,16 @@ router.get('/status', async (req, res, next) => {
 router.post('/sync-opportunity', async (req, res, next) => {
   try {
     const { opportunityId } = req.body;
-    if (!opportunityId) {
-      return res.status(400).json({ error: 'opportunityId is required' });
-    }
-
+    if (!opportunityId) return res.status(400).json({ error: 'opportunityId is required' });
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) return res.status(400).json({ error: 'No active CRM configured. Connect a CRM in Settings.' });
     const opportunity = await db.opportunities.get(opportunityId);
-    if (!opportunity) {
-      return res.status(404).json({ error: 'Opportunity not found' });
-    }
-
-    // Check user owns this opportunity
-    if (opportunity.user_id !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    const token = await getUserHubspotToken(req.user.id);
-    if (!token) {
-      return res.status(400).json({ error: 'HubSpot not configured. Add your token in Settings.' });
-    }
-
-    const result = await syncOpportunityToHubspot(token, opportunity);
+    if (!opportunity) return res.status(404).json({ error: 'Opportunity not found' });
+    if (opportunity.user_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const result = await syncOpportunityToProvider(req.user.id, provider, opportunity);
     res.json(result);
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 // =============================================
@@ -102,10 +88,9 @@ router.post('/sync-opportunity', async (req, res, next) => {
 
 router.post('/push-contacts', async (req, res, next) => {
   try {
-    const token = await getUserHubspotToken(req.user.id);
-    if (!token) {
-      return res.status(400).json({ error: 'HubSpot not configured. Add your token in Settings.' });
-    }
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) return res.status(400).json({ error: 'No active CRM configured. Connect a CRM in Settings.' });
 
     const { opportunityIds } = req.body;
     const opportunities = opportunityIds
@@ -114,28 +99,17 @@ router.post('/push-contacts', async (req, res, next) => {
 
     const results = [];
     const errors = [];
-
     for (const opp of opportunities) {
       if (!opp) continue;
       if (opp.user_id !== req.user.id && req.user.role !== 'admin') continue;
-
       try {
-        const result = await syncOpportunityToHubspot(token, opp);
-        results.push(result);
+        results.push(await syncOpportunityToProvider(req.user.id, provider, opp));
       } catch (err) {
         errors.push({ opportunityId: opp.id, name: opp.name, error: err.message });
       }
     }
-
-    res.json({
-      synced: results.length,
-      errors: errors.length,
-      results,
-      errorDetails: errors,
-    });
-  } catch (err) {
-    next(err);
-  }
+    res.json({ synced: results.length, errors: errors.length, results, errorDetails: errors });
+  } catch (err) { next(err); }
 });
 
 // =============================================
@@ -144,34 +118,96 @@ router.post('/push-contacts', async (req, res, next) => {
 
 router.post('/sync-patterns', async (req, res, next) => {
   try {
-    const token = await getUserHubspotToken(req.user.id);
-    if (!token) {
-      return res.status(400).json({ error: 'HubSpot not configured. Add your token in Settings.' });
-    }
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) return res.status(400).json({ error: 'No active CRM configured.' });
+
+    const token = await getUserCrmToken(req.user.id, provider);
+    if (!token) return res.status(400).json({ error: `${provider} not configured.` });
 
     const { dealId } = req.body;
-
-    // Get high-confidence patterns
-    const allPatterns = await db.memoryPatterns.list({ confidence: 'Haute' });
+    const allPatterns = await db.memoryPatterns.list({ confidence: 'Haute', userId: req.user.id });
     if (allPatterns.length === 0) {
       return res.json({ synced: false, reason: 'No high-confidence patterns found' });
     }
 
-    const noteBody = hubspot.formatPatternsAsNote(allPatterns);
-    const associations = {};
-    if (dealId) associations.dealId = dealId;
-
-    const note = await hubspot.createNote(token, noteBody, associations);
-
-    res.json({ synced: true, noteId: note.id, patternsCount: allPatterns.length });
-  } catch (err) {
-    next(err);
-  }
+    if (provider === 'hubspot') {
+      const noteBody = hubspot.formatPatternsAsNote(allPatterns);
+      const associations = {};
+      if (dealId) associations.dealId = dealId;
+      const note = await hubspot.createNote(token, noteBody, associations);
+      res.json({ synced: true, noteId: note.id, patternsCount: allPatterns.length });
+    } else if (provider === 'salesforce') {
+      const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
+      const instanceUrl = integration?.instance_url;
+      if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
+      const noteBody = allPatterns.map(p => `[${p.type}] ${p.pattern} (${p.confidence})`).join('\n');
+      const note = await salesforce.createNote(instanceUrl, token, { title: 'Baakal.ai — Memory Patterns', body: noteBody, parentId: dealId });
+      res.json({ synced: true, noteId: note.id, patternsCount: allPatterns.length });
+    } else {
+      res.json({ synced: false, reason: `Pattern sync not yet supported for ${provider}` });
+    }
+  } catch (err) { next(err); }
 });
 
 // =============================================
-// Shared sync logic
+// Shared sync logic — sync one opportunity to any CRM
 // =============================================
+
+async function syncOpportunityToProvider(userId, provider, opportunity) {
+  const integration = await db.userIntegrations.get(userId, provider);
+  if (!integration) throw new Error(`${provider} not configured`);
+  let token;
+  try { token = decrypt(integration.access_token); } catch { throw new Error('Invalid stored credentials'); }
+
+  if (provider === 'hubspot') {
+    return syncOpportunityToHubspot(token, opportunity);
+  } else if (provider === 'salesforce') {
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    const instanceUrl = metadata.instance_url || integration.instance_url;
+    if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
+    const contactData = salesforce.mapOpportunityToContact(opportunity);
+    const contacts = opportunity.email ? await salesforce.searchContacts(instanceUrl, token, opportunity.email) : [];
+    let contactId = contacts.length > 0 ? contacts[0].Id : null;
+    if (!contactId) { contactId = (await salesforce.createContact(instanceUrl, token, contactData)).id; }
+    const deal = await salesforce.createDeal(instanceUrl, token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, status: opportunity.status });
+    await db.opportunities.update(opportunity.id, { crm_provider: 'salesforce', crm_contact_id: contactId, crm_deal_id: deal.id });
+    return { opportunityId: opportunity.id, provider: 'salesforce', contactId, dealId: deal.id };
+  } else if (provider === 'pipedrive') {
+    const personData = pipedrive.mapOpportunityToPerson(opportunity);
+    const { person, action } = await pipedrive.upsertPerson(token, personData);
+    const deal = await pipedrive.createDeal(token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, personId: person.id, status: opportunity.status });
+    await db.opportunities.update(opportunity.id, { crm_provider: 'pipedrive', crm_contact_id: person.id, crm_deal_id: deal.id });
+    return { opportunityId: opportunity.id, provider: 'pipedrive', personId: person.id, dealId: deal.id, action };
+  } else if (provider === 'folk') {
+    const personData = folk.mapOpportunityToPerson(opportunity);
+    const person = await folk.createPerson(token, personData);
+    await db.opportunities.update(opportunity.id, { crm_provider: 'folk', crm_contact_id: person.id });
+    return { opportunityId: opportunity.id, provider: 'folk', personId: person.id };
+  } else if (provider === 'notion') {
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    if (!metadata.database_id) throw new Error('Notion database ID not configured');
+    const prospect = { name: opportunity.name || '', email: opportunity.email || '', title: opportunity.title || '', company: opportunity.company || '', company_size: opportunity.company_size || '', linkedin_url: opportunity.linkedin_url || '' };
+    const { pageId } = await notionCrm.pushProspectToNotion(token, metadata.database_id, prospect);
+    await db.opportunities.update(opportunity.id, { crm_provider: 'notion', crm_contact_id: pageId });
+    return { opportunityId: opportunity.id, provider: 'notion', pageId };
+  } else if (provider === 'airtable') {
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    if (!metadata.base_id || !metadata.table_name) throw new Error('Airtable base/table not configured');
+    const prospect = airtableCrm.mapOpportunityToProspect(opportunity);
+    const { recordId } = await airtableCrm.pushProspectToAirtable(token, metadata.base_id, metadata.table_name, prospect);
+    await db.opportunities.update(opportunity.id, { crm_provider: 'airtable', crm_contact_id: recordId });
+    return { opportunityId: opportunity.id, provider: 'airtable', recordId };
+  } else if (provider === 'odoo') {
+    let creds;
+    try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are invalid JSON'); }
+    const { id, action } = await odoo.upsertContact(creds, { name: opportunity.name, email: opportunity.email, title: opportunity.title, company: opportunity.company });
+    const deal = await odoo.createDeal(creds, { name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`, contactId: id });
+    await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(deal.id) });
+    return { opportunityId: opportunity.id, provider: 'odoo', contactId: id, dealId: deal.id, action };
+  }
+  throw new Error(`Unsupported CRM provider: ${provider}`);
+}
 
 async function syncOpportunityToHubspot(accessToken, opportunity) {
   const campaign = opportunity.campaign_id
@@ -1622,13 +1658,15 @@ router.post('/first-diagnostic', async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // Auto-detect connected CRM
-    const { getUserKey } = require('../config');
-    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
-    let connectedProvider = null;
-    for (const p of providers) {
-      const key = await getUserKey(userId, p);
-      if (key) { connectedProvider = p; break; }
+    // Use active CRM, fallback to auto-detect
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+    let connectedProvider = userRow.rows[0]?.active_crm_provider || null;
+    if (!connectedProvider) {
+      const { getUserKey } = require('../config');
+      for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable']) {
+        const key = await getUserKey(userId, p);
+        if (key) { connectedProvider = p; break; }
+      }
     }
 
     // Load contacts — auto-import if DB is empty but CRM is connected

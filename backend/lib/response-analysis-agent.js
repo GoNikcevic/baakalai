@@ -17,6 +17,7 @@
 
 const db = require('../db');
 const { getUserKey } = require('../config');
+const { getUserCrmToken } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const logger = require('./logger');
@@ -27,8 +28,14 @@ const DAY_MS = 86400000;
  * Analyze responses for a user's nurture campaigns.
  */
 async function analyzeResponses(userId) {
-  const token = await getUserKey(userId, 'pipedrive');
+  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+  const activeCrm = userRow.rows[0]?.active_crm_provider || 'pipedrive';
+  const token = await getUserCrmToken(userId, activeCrm);
   if (!token) return { analyzed: 0, positive: 0, negative: 0 };
+  if (activeCrm !== 'pipedrive') {
+    logger.info('response-agent', `CRM activity analysis not yet supported for ${activeCrm}, skipping (user ${userId})`);
+    return { analyzed: 0, positive: 0, negative: 0 };
+  }
 
   const report = { analyzed: 0, positive: 0, negative: 0, neutral: 0, actions: [] };
 
