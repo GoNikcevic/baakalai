@@ -106,9 +106,7 @@ export function transformCampaign(c, sequence, diagnostics, history) {
     sequence: (sequence || []).map(transformTouchpoint),
     diagnostics: (diagnostics || []).map(transformDiagnostic),
     history: (history || []).map(transformVersion),
-    abConfig: c.ab_config
-      ? (typeof c.ab_config === 'string' ? JSON.parse(c.ab_config) : c.ab_config)
-      : null,
+    abConfig: (() => { try { return c.ab_config ? (typeof c.ab_config === 'string' ? JSON.parse(c.ab_config) : c.ab_config) : null; } catch { return null; } })(),
     prepChecklist: c.status === 'prep' ? buildDefaultChecklist(c) : undefined,
     info: {
       period: c.start_date || '',
@@ -421,7 +419,7 @@ export async function fetchChartData() {
 /** Fetch AI recommendations (derived from memory patterns) */
 export async function fetchRecommendations() {
   const lang = localStorage.getItem('baakalai_lang') || 'fr';
-  const data = await request(`/dashboard/memory${lang !== 'fr' ? `?lang=${lang}` : ''}`);
+  const data = await request(`/dashboard/memory?lang=${lang}`);
   return patternsToRecommendations(data.patterns || [], lang);
 }
 

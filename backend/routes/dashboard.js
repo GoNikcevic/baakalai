@@ -126,14 +126,15 @@ router.get('/memory', async (req, res, next) => {
     const offset = parseInt(req.query.offset, 10) || 0;
     const patterns = await db.memoryPatterns.list({ category, confidence, limit, offset });
 
-    // Translate patterns to English if requested (lightweight — only visible patterns)
-    if (lang === 'en' && patterns.length > 0) {
+    // Translate patterns to the user's language (patterns are stored in English by agents)
+    const targetLang = lang || 'fr';
+    if (targetLang === 'fr' && patterns.length > 0) {
       try {
         const claude = require('../api/claude');
         const textsToTranslate = patterns.slice(0, 10).map(p => p.pattern).join('\n---\n');
         const result = await claude.callClaude(
-          'You are a translator. Translate each French text to English. Return a JSON array of translated strings, one per input. Keep it concise and professional.',
-          `Translate these CRM/sales insights to English (keep same order, return JSON array of strings):\n\n${textsToTranslate}`,
+          'You are a translator. Translate each English text to French. Return a JSON array of translated strings, one per input. Keep it concise and professional.',
+          `Translate these CRM/sales insights to French (keep same order, return JSON array of strings):\n\n${textsToTranslate}`,
           500, 'translate_patterns'
         );
         let translations = result.parsed;
@@ -146,7 +147,7 @@ router.get('/memory', async (req, res, next) => {
             if (translations[i]) patterns[i].pattern = translations[i];
           }
         }
-      } catch { /* translation is best-effort, return French if it fails */ }
+      } catch { /* translation is best-effort, return English if it fails */ }
     }
 
     res.json({ patterns });
