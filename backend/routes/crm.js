@@ -749,7 +749,7 @@ router.post('/import/:provider', async (req, res, next) => {
           if (!email) { skipped++; continue; }
 
           // Check if already imported
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
           if (existing) { skipped++; continue; }
 
           await db.opportunities.create({
@@ -775,7 +775,7 @@ router.post('/import/:provider', async (req, res, next) => {
       for (const raw of contacts) {
         try {
           if (!raw.email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, raw.email);
+          const existing = await db.opportunities.findByEmail(req.user.id, raw.email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -804,7 +804,7 @@ router.post('/import/:provider', async (req, res, next) => {
       for (const raw of contacts) {
         try {
           if (!raw.email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, raw.email);
+          const existing = await db.opportunities.findByEmail(req.user.id, raw.email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -833,7 +833,7 @@ router.post('/import/:provider', async (req, res, next) => {
         try {
           const email = c.properties?.email;
           if (!email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -862,7 +862,7 @@ router.post('/import/:provider', async (req, res, next) => {
           const name = raw.name || raw.company || 'Unknown';
           const email = raw.email || null;
           if (!email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -889,7 +889,7 @@ router.post('/import/:provider', async (req, res, next) => {
         try {
           const email = raw.email || null;
           if (!email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -1631,7 +1631,7 @@ async function importContactsForUser(userId, provider) {
   for (const c of contacts) {
     if (!c.email) continue;
     try {
-      const existing = await db.opportunities.findByEmail(userId, c.email);
+      const existing = await db.opportunities.findByEmail(userId, c.email, provider);
       if (existing) continue;
       await db.opportunities.create({
         userId,

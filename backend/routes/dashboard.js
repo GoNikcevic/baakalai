@@ -124,7 +124,7 @@ router.get('/memory', async (req, res, next) => {
     const { category, confidence, lang } = req.query;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
-    const patterns = await db.memoryPatterns.list({ category, confidence, limit, offset });
+    const patterns = await db.memoryPatterns.list({ category, confidence, limit, offset, userId: req.user.id });
 
     // Translate patterns to the user's language (patterns are a mix of FR and EN from different agents)
     const targetLang = lang || 'fr';

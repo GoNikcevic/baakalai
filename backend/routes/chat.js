@@ -98,7 +98,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       db.profiles.get(req.user.id),
       db.documents.getParsedTextByUser(req.user.id, 5),
       db.campaigns.list({ userId: req.user.id, limit: MAX_CAMPAIGNS_IN_CONTEXT }),
-      db.memoryPatterns.list({ limit: MAX_PATTERNS_IN_CONTEXT }),
+      db.memoryPatterns.list({ limit: MAX_PATTERNS_IN_CONTEXT, userId: req.user.id }),
       listUserSources(req.user.id),
       db.userIntegrations.listByUser(req.user.id),
     ]);

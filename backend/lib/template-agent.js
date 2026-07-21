@@ -36,7 +36,7 @@ async function runTemplateAgent({ sectors = null, force = false } = {}) {
 
   try {
     // 1. Load memory patterns (user-applied + high confidence)
-    const patterns = await db.memoryPatterns.listForPrompt(30);
+    const patterns = await db.memoryPatterns.listForPrompt(30, null, null);
 
     // 2. Load campaign stats for sector analysis
     const campaigns = await db.query(`
@@ -165,7 +165,7 @@ Return ONLY valid JSON:
 
   let template = result.parsed;
   if (!template) {
-    const match = (result.content || '').match(/\{[\s\S]*"name"[\s\S]*"sequence"[\s\S]*\}/);
+    const match = (result.raw || '').match(/\{[\s\S]*"name"[\s\S]*"sequence"[\s\S]*\}/);
     if (match) template = JSON.parse(match[0]);
   }
 

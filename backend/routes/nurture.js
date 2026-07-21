@@ -338,7 +338,7 @@ router.post('/preview', async (req, res, next) => {
         // Load memory patterns for better email generation
         let patternsCtx = '';
         try {
-          const patterns = await db.memoryPatterns.listForPrompt(8);
+          const patterns = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
           if (patterns.length > 0) {
             patternsCtx = '\n\nPATTERNS QUI FONCTIONNENT :\n' +
               patterns.map(p => `- ${p.applied ? '[APPROUV\u00c9]' : ''} ${p.pattern}`).join('\n') +

@@ -599,10 +599,14 @@ const memoryPatterns = {
       conditions.push(`confidence = $${i++}`);
       params.push(filter.confidence);
     }
-    // Team filter: show team patterns + global shared patterns
+    // Team filter: show team patterns + global shared high-confidence patterns
     if (filter.teamId) {
-      conditions.push(`(team_id = $${i++} OR team_id IS NULL OR shared = true)`);
+      conditions.push(`(team_id = $${i++} OR (shared = true AND confidence = 'Haute'))`);
       params.push(filter.teamId);
+    } else if (filter.userId) {
+      // Solo user: show only patterns they created or shared best practices
+      conditions.push(`(team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i++}) OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.userId);
     }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY date_discovered DESC';
@@ -722,12 +726,18 @@ const memoryPatterns = {
    * Get patterns that should be injected into email generation prompts.
    * Priority: user-applied patterns first, then high-confidence patterns.
    */
-  async listForPrompt(limit = 15, teamId = null) {
-    const teamFilter = teamId
-      ? `AND (team_id = $2 OR team_id IS NULL OR shared = true)`
-      : '';
+  async listForPrompt(limit = 15, teamId = null, userId = null) {
+    let teamFilter;
     const params = [limit];
-    if (teamId) params.push(teamId);
+    if (teamId) {
+      teamFilter = `AND (team_id = $2 OR (shared = true AND confidence = 'Haute'))`;
+      params.push(teamId);
+    } else if (userId) {
+      teamFilter = `AND (team_id IN (SELECT team_id FROM team_members WHERE user_id = $2) OR (shared = true AND confidence = 'Haute'))`;
+      params.push(userId);
+    } else {
+      teamFilter = `AND shared = true AND confidence = 'Haute'`;
+    }
     const result = await query(
       `SELECT * FROM memory_patterns
        WHERE dismissed_at IS NULL AND (applied = true OR confidence = 'Haute')
@@ -1472,8 +1482,15 @@ const opportunities = {
     return { changes: result.rowCount };
   },
 
-  async findByEmail(userId, email) {
+  async findByEmail(userId, email, crmProvider = null) {
     if (!email) return null;
+    if (crmProvider) {
+      const result = await query(
+        'SELECT * FROM opportunities WHERE user_id = $1 AND LOWER(email) = LOWER($2) AND crm_provider = $3 LIMIT 1',
+        [userId, email, crmProvider]
+      );
+      return result.rows[0] || null;
+    }
     const result = await query(
       'SELECT * FROM opportunities WHERE user_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1',
       [userId, email]
