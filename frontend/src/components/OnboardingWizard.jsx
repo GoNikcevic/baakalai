@@ -38,55 +38,84 @@ function getStepMeta(t) {
 
 const OUTREACH_OPTIONS = [
   {
-    value: 'lemlist', label: 'Lemlist', field: 'lemlistKey', placeholder: 'Votre cl\u00E9 API Lemlist',
-    guide: [
+    value: 'lemlist', label: 'Lemlist', field: 'lemlistKey',
+    guideFr: [
       'Connectez-vous sur app.lemlist.com',
       'Allez dans Settings \u2192 Integrations \u2192 API',
       'Copiez la cl\u00E9 affich\u00E9e et collez-la ci-dessous',
     ],
+    guideEn: [
+      'Sign in to app.lemlist.com',
+      'Go to Settings \u2192 Integrations \u2192 API',
+      'Copy the displayed key and paste it below',
+    ],
     link: 'https://app.lemlist.com/settings/integrations',
   },
   {
-    value: 'apollo', label: 'Apollo', field: 'apolloKey', placeholder: 'Votre cl\u00E9 API Apollo',
-    guide: [
+    value: 'apollo', label: 'Apollo', field: 'apolloKey',
+    guideFr: [
       'Connectez-vous sur app.apollo.io',
       'Cliquez sur votre avatar \u2192 Settings \u2192 Integrations \u2192 API Keys',
       'Cr\u00E9ez une cl\u00E9 ou copiez une cl\u00E9 existante',
     ],
+    guideEn: [
+      'Sign in to app.apollo.io',
+      'Click your avatar \u2192 Settings \u2192 Integrations \u2192 API Keys',
+      'Create a key or copy an existing one',
+    ],
     link: 'https://app.apollo.io/#/settings/integrations/api-keys',
   },
   {
-    value: 'instantly', label: 'Instantly', field: 'instantlyKey', placeholder: 'Votre cl\u00E9 API Instantly',
-    guide: [
+    value: 'instantly', label: 'Instantly', field: 'instantlyKey',
+    guideFr: [
       'Connectez-vous sur app.instantly.ai',
       'Allez dans Settings \u2192 Integrations \u2192 API Key',
       'Copiez la cl\u00E9 et collez-la ci-dessous',
     ],
+    guideEn: [
+      'Sign in to app.instantly.ai',
+      'Go to Settings \u2192 Integrations \u2192 API Key',
+      'Copy the key and paste it below',
+    ],
     link: 'https://app.instantly.ai/settings/integrations',
   },
   {
-    value: 'smartlead', label: 'Smartlead', field: 'smartleadKey', placeholder: 'Votre cl\u00E9 API Smartlead',
-    guide: [
+    value: 'smartlead', label: 'Smartlead', field: 'smartleadKey',
+    guideFr: [
       'Connectez-vous sur app.smartlead.ai',
       'Allez dans Settings \u2192 API \u2192 Copiez la cl\u00E9',
+    ],
+    guideEn: [
+      'Sign in to app.smartlead.ai',
+      'Go to Settings \u2192 API \u2192 Copy the key',
     ],
     link: 'https://app.smartlead.ai/settings',
   },
   {
-    value: 'lgm', label: 'La Growth Machine', field: 'lgmKey', placeholder: 'Votre cl\u00E9 API LGM',
-    guide: [
+    value: 'lgm', label: 'La Growth Machine', field: 'lgmKey',
+    guideFr: [
       'Connectez-vous sur app.lagrowthmachine.com',
       'Allez dans Settings \u2192 API',
       'Copiez votre cl\u00E9 API',
     ],
+    guideEn: [
+      'Sign in to app.lagrowthmachine.com',
+      'Go to Settings \u2192 API',
+      'Copy your API key',
+    ],
     link: 'https://app.lagrowthmachine.com/settings',
   },
   {
-    value: 'waalaxy', label: 'Waalaxy', field: 'waalaxyKey', placeholder: 'Votre cl\u00E9 API Waalaxy',
-    guide: [
+    value: 'waalaxy', label: 'Waalaxy', field: 'waalaxyKey',
+    guideFr: [
       'Connectez-vous sur app.waalaxy.com',
       'Allez dans Settings \u2192 Integrations',
       'Copiez votre cl\u00E9 API',
+    ],
+    guideEn: [
+      'Sign in to app.waalaxy.com',
+      'Go to Settings \u2192 Integrations',
+      'Copy your API key',
     ],
     link: 'https://app.waalaxy.com/settings',
   },
@@ -94,34 +123,54 @@ const OUTREACH_OPTIONS = [
 
 const CRM_GUIDES = {
   hubspot: {
-    guide: [
+    guideFr: [
       'Connectez-vous sur app.hubspot.com',
       'Allez dans Settings \u2192 Integrations \u2192 Private Apps',
       'Cr\u00E9ez une app ou copiez le token (commence par pat-)',
     ],
+    guideEn: [
+      'Sign in to app.hubspot.com',
+      'Go to Settings \u2192 Integrations \u2192 Private Apps',
+      'Create an app or copy the token (starts with pat-)',
+    ],
     link: 'https://app.hubspot.com/settings/integrations',
   },
   pipedrive: {
-    guide: [
+    guideFr: [
       'Connectez-vous sur app.pipedrive.com',
       'Allez dans Settings \u2192 Personal preferences \u2192 API',
       'Copiez le token personnel affich\u00E9',
     ],
+    guideEn: [
+      'Sign in to app.pipedrive.com',
+      'Go to Settings \u2192 Personal preferences \u2192 API',
+      'Copy the personal token displayed',
+    ],
     link: 'https://app.pipedrive.com/settings/api',
   },
   salesforce: {
-    guide: [
+    guideFr: [
       'Connectez-vous sur votre instance Salesforce',
       'Allez dans Setup \u2192 Apps \u2192 Connected Apps',
       'Cr\u00E9ez une connected app et copiez le consumer key',
     ],
+    guideEn: [
+      'Sign in to your Salesforce instance',
+      'Go to Setup \u2192 Apps \u2192 Connected Apps',
+      'Create a connected app and copy the consumer key',
+    ],
     link: null,
   },
   odoo: {
-    guide: [
+    guideFr: [
       'Connectez-vous sur votre instance Odoo',
       'Allez dans Param\u00E8tres \u2192 Technique \u2192 Base de donn\u00E9es',
-      'Notez l\'URL, le nom de base, votre login et mot de passe',
+      "Notez l'URL, le nom de base, votre login et mot de passe",
+    ],
+    guideEn: [
+      'Sign in to your Odoo instance',
+      'Go to Settings \u2192 Technical \u2192 Database',
+      'Note the URL, database name, your login and password',
     ],
     link: null,
   },
@@ -331,7 +380,7 @@ export default function OnboardingWizard({ onComplete }) {
                 <input className="form-input" placeholder="Ex: FormaPro Consulting" value={company} onChange={e => setCompany(e.target.value)} />
               </div>
               <div className="form-group" style={{ position: 'relative' }}>
-                <label className="form-label">Secteur d'activité</label>
+                <label className="form-label">{t('wizard.sectorLabel')}</label>
                 <input
                   className="form-input"
                   placeholder="Ex: SaaS, Formation, Finance..."
@@ -400,32 +449,30 @@ export default function OnboardingWizard({ onComplete }) {
             {/* Document upload — required */}
             <div style={{ marginTop: 20, padding: 16, border: `2px dashed ${uploadedDocs.length > 0 ? 'var(--success)' : 'var(--accent)'}`, borderRadius: 12, background: 'var(--bg-elevated)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-                📄 {en ? 'Upload your company documents' : 'Uploadez vos documents entreprise'}
+                {t('wizard.uploadTitle')}
                 <span style={{ color: 'var(--danger)', marginLeft: 4 }}>*</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-                {en
-                  ? 'Presentation, brief, case studies... baakalai needs these to personalize your campaigns. At least 1 document required.'
-                  : 'Présentation, brief, études de cas... baakalai en a besoin pour personnaliser vos campagnes. Au moins 1 document requis.'}
+                {t('wizard.uploadDesc')}
               </div>
               <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.txt,.csv,.xlsx,.png,.jpg" style={{ display: 'none' }}
                 onChange={(e) => { if (e.target.files?.length > 0) { handleDocUpload(e.target.files); e.target.value = ''; } }} />
               <button className="btn btn-primary" style={{ fontSize: 12, padding: '8px 16px' }}
                 onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                {uploading ? (en ? 'Uploading...' : 'Upload en cours...') : (en ? '+ Upload documents' : '+ Uploader des documents')}
+                {uploading ? t('wizard.uploading') : t('wizard.uploadBtn')}
               </button>
               {uploadedDocs.length > 0 && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {uploadedDocs.map((d, i) => (
                     <div key={i} style={{ fontSize: 12, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      ✅ {d.original_name || d.name || 'Document'}
+                      {d.original_name || d.name || 'Document'}
                     </div>
                   ))}
                 </div>
               )}
               {uploadedDocs.length === 0 && (
                 <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 8 }}>
-                  ⚠️ {en ? 'You must upload at least 1 document to continue' : 'Vous devez uploader au moins 1 document pour continuer'}
+                  {t('wizard.uploadRequired')}
                 </div>
               )}
             </div>
@@ -453,6 +500,7 @@ export default function OnboardingWizard({ onComplete }) {
                   </select>
                   {outreachProvider && (() => {
                     const opt = OUTREACH_OPTIONS.find(o => o.value === outreachProvider);
+                    const guide = en ? (opt?.guideEn || []) : (opt?.guideFr || []);
                     return (
                       <>
                         <div style={{
@@ -460,19 +508,19 @@ export default function OnboardingWizard({ onComplete }) {
                           padding: '10px 12px', marginBottom: 8, lineHeight: 1.6,
                         }}>
                           <ol style={{ margin: 0, paddingLeft: 16, color: 'var(--grey-700)' }}>
-                            {(opt?.guide || []).map((s, i) => <li key={i}>{s}</li>)}
+                            {guide.map((s, i) => <li key={i}>{s}</li>)}
                           </ol>
                           {opt?.link && (
                             <a href={opt.link} target="_blank" rel="noopener noreferrer"
                               style={{ fontSize: 11, color: 'var(--primary)', display: 'inline-block', marginTop: 6 }}>
-                              Ouvrir {opt.label} {'\u2192'}
+                              {t('wizard.openLink').replace('{label}', opt.label)}
                             </a>
                           )}
                         </div>
                         <input
                           className="form-input"
                           type="password"
-                          placeholder={opt?.placeholder}
+                          placeholder={t('wizard.apiKeyPlaceholder').replace('{tool}', opt?.label || '')}
                           value={outreachKey}
                           onChange={e => setOutreachKey(e.target.value)}
                         />
@@ -506,6 +554,8 @@ export default function OnboardingWizard({ onComplete }) {
                   </select>
                   {crmProvider && (() => {
                     const crmGuide = CRM_GUIDES[crmProvider];
+                    const guide = en ? (crmGuide?.guideEn || []) : (crmGuide?.guideFr || []);
+                    const crmLabel = crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1);
                     return (
                       <>
                         <div style={{
@@ -513,19 +563,19 @@ export default function OnboardingWizard({ onComplete }) {
                           padding: '10px 12px', marginBottom: 8, lineHeight: 1.6,
                         }}>
                           <ol style={{ margin: 0, paddingLeft: 16, color: 'var(--grey-700)' }}>
-                            {(crmGuide?.guide || []).map((s, i) => <li key={i}>{s}</li>)}
+                            {guide.map((s, i) => <li key={i}>{s}</li>)}
                           </ol>
                           {crmGuide?.link && (
                             <a href={crmGuide.link} target="_blank" rel="noopener noreferrer"
                               style={{ fontSize: 11, color: 'var(--primary)', display: 'inline-block', marginTop: 6 }}>
-                              Ouvrir {crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)} {'\u2192'}
+                              {t('wizard.openLink').replace('{label}', crmLabel)}
                             </a>
                           )}
                         </div>
                         <input
                           className="form-input"
                           type="password"
-                          placeholder={crmProvider === 'hubspot' ? 'pat-...' : 'Votre cl\u00E9 API'}
+                          placeholder={crmProvider === 'hubspot' ? 'pat-...' : t('wizard.crmApiKeyPlaceholder')}
                           value={crmKey}
                           onChange={e => setCrmKey(e.target.value)}
                         />
@@ -536,7 +586,7 @@ export default function OnboardingWizard({ onComplete }) {
               </div>
               {keySaveStatus === 'error' && (
                 <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 4 }}>
-                  Format de clé invalide. Vérifiez et réessayez.
+                  {t('wizard.keyInvalid')}
                 </div>
               )}
             </div>
@@ -554,28 +604,28 @@ export default function OnboardingWizard({ onComplete }) {
             </div>
             <div className="wizard-complete-title">{t('wizard.allReady')}</div>
             <div className="wizard-complete-desc">
-              Votre espace Baakalai est configuré. Vous pouvez maintenant créer votre première campagne.
+              {t('wizard.completeDesc')}
             </div>
             <div className="wizard-checklist">
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{company ? '\u2705' : '\u2B1C'}</span>
-                <span>Profil entreprise {company ? `\u2014 ${company}` : '(à compléter plus tard)'}</span>
+                <span>{t('wizard.checkCompany')} {company ? `\u2014 ${company}` : t('wizard.checkCompanyLater')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{outreachKey && outreachProvider ? '\u2705' : '\u2B1C'}</span>
-                <span>{outreachLabel} {outreachKey && outreachProvider ? '\u2014 Connecté' : '(à configurer dans Paramètres)'}</span>
+                <span>{outreachLabel} {outreachKey && outreachProvider ? `\u2014 ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{crmKey && crmProvider ? '\u2705' : '\u2B1C'}</span>
-                <span>CRM {crmKey && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : '(optionnel \u2014 configurable dans Paramètres)'}</span>
+                <span>CRM {crmKey && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{targetSectors || personaPrimary ? '\u2705' : '\u2B1C'}</span>
-                <span>Ciblage {targetSectors ? `\u2014 ${targetSectors}` : '(à compléter plus tard)'}</span>
+                <span>{t('wizard.checkTargeting')} {targetSectors ? `\u2014 ${targetSectors}` : t('wizard.checkTargetingLater')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{'\u2705'}</span>
-                <span>Style \u2014 {tone}, {formality}</span>
+                <span>{t('wizard.checkStyle')} \u2014 {tone}, {formality}</span>
               </div>
             </div>
           </>

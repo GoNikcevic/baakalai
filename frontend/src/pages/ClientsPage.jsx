@@ -75,14 +75,14 @@ export default function ClientsPage() {
       if (churnData) setChurnSummary(churnData);
       setOwners(ownersData.owners || []);
 
-      // Load pipeline stages (depends on detected provider)
-      if (connected?.provider === 'pipedrive') {
+      // Load pipeline stages (depends on active CRM)
+      if (activeCrm === 'pipedrive') {
         const pipelinesData = await request('/crm/pipedrive/pipelines').catch(() => ({ pipelines: [] }));
         if (pipelinesData.pipelines?.length > 0) {
           const stagesData = await request(`/crm/pipedrive/stages/${pipelinesData.pipelines[0].id}`).catch(() => ({ stages: [] }));
           setStages(stagesData.stages || []);
         }
-      } else if (connected?.provider === 'odoo') {
+      } else if (activeCrm === 'odoo') {
         const stagesData = await request('/crm/odoo/stages').catch(() => ({ stages: [] }));
         setStages(stagesData.stages || []);
       }

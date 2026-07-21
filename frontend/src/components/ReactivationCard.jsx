@@ -5,12 +5,14 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { useI18n } from '../i18n';
 
 export default function ReactivationCard() {
   const { lang } = useI18n();
   const en = lang === 'en';
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [expanded, setExpanded] = useState(false);
 
@@ -23,8 +25,11 @@ export default function ReactivationCard() {
   }, []);
 
   if (!stats) return null;
-  // Don't show if no reactivation activity at all
+  // Don't show if truly nothing to show (no CRM data at all)
   if (stats.reactivated.count === 0 && stats.emails.sent === 0 && stats.pipeline.stagnantDeals === 0) return null;
+
+  // Zero reactivations but stagnant deals exist = show CTA mode
+  const ctaMode = stats.reactivated.count === 0 && stats.emails.sent === 0 && stats.pipeline.stagnantDeals > 0;
 
   const fmt = (n) => {
     if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -36,6 +41,42 @@ export default function ReactivationCard() {
     if (n >= 1000) return `${(n / 1000).toFixed(1)}k\u00A0\u20AC`;
     return `${Math.round(n)}\u00A0\u20AC`;
   };
+
+  if (ctaMode) {
+    return (
+      <div style={{
+        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+        borderRadius: 12, padding: '16px 20px', marginBottom: 16, color: '#fff',
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+          {en ? 'Stagnant deals detected' : 'Deals stagnants d\u00E9tect\u00E9s'}
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1 }}>
+          {fmt(stats.pipeline.stagnantDeals)} {en ? 'deals' : 'deals'}
+          {stats.pipeline.potentialRevenue > 0 && (
+            <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 8 }}>
+              ({fmtCurrency(stats.pipeline.potentialRevenue)} {en ? 'potential' : 'potentiel'})
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, opacity: 0.9, marginTop: 6, marginBottom: 12 }}>
+          {en
+            ? 'These deals have been inactive for 14+ days. Set up reactivation to recover revenue automatically.'
+            : 'Ces deals sont inactifs depuis 14+ jours. Activez la r\u00E9activation pour r\u00E9cup\u00E9rer du revenu automatiquement.'}
+        </div>
+        <button
+          onClick={() => navigate('/activation?tab=triggers&create=deal_stagnant')}
+          style={{
+            background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)',
+            color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 12,
+            fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          {en ? 'Activate deal reactivation' : 'Activer la r\u00E9activation'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{

@@ -124,7 +124,7 @@ export default function DashboardPage() {
       <QuickWinCard />
 
       {/* Deal Coach — stagnant deal suggestions with action buttons */}
-      {!isEmpty && <DealCoachCard />}
+      <DealCoachCard />
 
       {/* Deliverability — show if user has >= 1 campaign */}
       {campaignsList.length >= 1 && <DeliverabilityCard />}
