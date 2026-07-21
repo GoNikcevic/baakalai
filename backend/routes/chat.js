@@ -579,6 +579,7 @@ router.post('/threads/:id/list-clients', async (req, res, next) => {
       clients: filtered.map(o => ({
         id: o.id, name: o.name, email: o.email, company: o.company,
         title: o.title, status: o.status, score: o.score,
+        crmProvider: o.crm_provider || null,
         lastUpdate: o.updated_at || o.created_at,
       })),
       total: filtered.length,

@@ -128,10 +128,15 @@ function getAdapter(provider) {
     case 'airtable':
     case 'salesforce': {
       // For these providers, scan from already-imported opportunities in Baakalai DB
+      // Filter by crm_provider to avoid cross-CRM false duplicates
+      const dbProvider = provider;
       return {
         async listPersons(_token, userId) {
-          const opps = await db.opportunities.listByUser(userId, 500);
-          return opps;
+          const result = await db.query(
+            'SELECT * FROM opportunities WHERE user_id = $1 AND crm_provider = $2 ORDER BY created_at DESC LIMIT 500',
+            [userId, dbProvider]
+          );
+          return result.rows;
         },
         normalizePerson(raw) {
           return {

@@ -40,6 +40,7 @@ export default function ClientsPage() {
   const [scoringChurn, setScoringChurn] = useState(false);
   const [owners, setOwners] = useState([]);
   const [ownerFilter, setOwnerFilter] = useState('all');
+  const [crmFilter, setCrmFilter] = useState('all');
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkAction, setBulkAction] = useState(null);
@@ -120,6 +121,7 @@ export default function ClientsPage() {
     if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
+    if (crmFilter !== 'all' && c.crm_provider !== crmFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return (c.name || '').toLowerCase().includes(q)
@@ -130,11 +132,19 @@ export default function ClientsPage() {
   }).sort((a, b) => {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
     return 0;
-  }), [clients, filter, ownerFilter, search, highlightIds]);
+  }), [clients, filter, ownerFilter, crmFilter, search, highlightIds]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
     for (const c of clients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
+    return counts;
+  }, [clients]);
+
+  const crmProviderCounts = useMemo(() => {
+    const counts = {};
+    for (const c of clients) {
+      if (c.crm_provider) counts[c.crm_provider] = (counts[c.crm_provider] || 0) + 1;
+    }
     return counts;
   }, [clients]);
 
@@ -403,6 +413,21 @@ export default function ClientsPage() {
             <option value="all">{t('clients.allReps')}</option>
             {owners.map(o => (
               <option key={o.id} value={o.id}>{o.name} ({o.contact_count})</option>
+            ))}
+          </select>
+        )}
+        {Object.keys(crmProviderCounts).length > 1 && (
+          <select
+            value={crmFilter}
+            onChange={e => setCrmFilter(e.target.value)}
+            style={{
+              padding: '8px 12px', border: '1px solid var(--border)',
+              borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12,
+            }}
+          >
+            <option value="all">{lang === 'en' ? 'All CRMs' : 'Tous les CRM'}</option>
+            {Object.entries(crmProviderCounts).map(([p, count]) => (
+              <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)} ({count})</option>
             ))}
           </select>
         )}
