@@ -73,6 +73,7 @@ async function searchSimilar(userId, query, limit = 5, sourceType = null) {
 /**
  * Find a semantically similar pattern (for deduplication).
  * Returns the source_id of the most similar existing pattern above threshold.
+ * Uses direct embedding on memory_patterns first (no JOIN), falls back to memory_embeddings.
  */
 async function findSimilarPattern(text, threshold = 0.85) {
   if (!ENABLED) return null;
@@ -81,7 +82,23 @@ async function findSimilarPattern(text, threshold = 0.85) {
   if (!embedding) return null;
 
   try {
-    const result = await db.query(
+    // Direct search on memory_patterns.embedding (HNSW index, no JOIN)
+    const direct = await db.query(
+      `SELECT id, pattern, 1 - (embedding <=> $1::vector) AS similarity
+       FROM memory_patterns
+       WHERE embedding IS NOT NULL
+       ORDER BY embedding <=> $1::vector
+       LIMIT 1`,
+      [JSON.stringify(embedding)]
+    );
+
+    const match = direct.rows[0];
+    if (match && parseFloat(match.similarity) >= threshold) {
+      return { sourceId: match.id, similarity: parseFloat(match.similarity), content: match.pattern };
+    }
+
+    // Fallback to memory_embeddings for patterns not yet backfilled
+    const fallback = await db.query(
       `SELECT source_id, content, 1 - (embedding <=> $1::vector) AS similarity
        FROM memory_embeddings
        WHERE source_type = 'pattern'
@@ -90,9 +107,9 @@ async function findSimilarPattern(text, threshold = 0.85) {
       [JSON.stringify(embedding)]
     );
 
-    const match = result.rows[0];
-    if (match && parseFloat(match.similarity) >= threshold) {
-      return { sourceId: match.source_id, similarity: parseFloat(match.similarity), content: match.content };
+    const fbMatch = fallback.rows[0];
+    if (fbMatch && parseFloat(fbMatch.similarity) >= threshold) {
+      return { sourceId: fbMatch.source_id, similarity: parseFloat(fbMatch.similarity), content: fbMatch.content };
     }
     return null;
   } catch (err) {
@@ -103,7 +120,7 @@ async function findSimilarPattern(text, threshold = 0.85) {
 
 /**
  * Store or update the embedding for a pattern.
- * Upserts by source_id to avoid duplicates when patterns are updated.
+ * Writes to BOTH memory_patterns.embedding (direct, fast) and memory_embeddings (legacy).
  */
 async function upsertPatternEmbedding(patternId, text, metadata = {}) {
   if (!ENABLED) return null;
@@ -112,12 +129,20 @@ async function upsertPatternEmbedding(patternId, text, metadata = {}) {
   if (!embedding) return null;
 
   try {
-    // Delete existing embedding for this pattern, then insert fresh
+    const embeddingJson = JSON.stringify(embedding);
+
+    // Write directly on memory_patterns (primary — no JOIN needed for queries)
+    await db.query(
+      'UPDATE memory_patterns SET embedding = $1::vector WHERE id = $2',
+      [embeddingJson, patternId]
+    );
+
+    // Also write to memory_embeddings (legacy — other source_types still use it)
     await db.query('DELETE FROM memory_embeddings WHERE source_type = $1 AND source_id = $2', ['pattern', patternId]);
     const result = await db.query(
       `INSERT INTO memory_embeddings (user_id, source_type, source_id, content, embedding, metadata)
        VALUES (NULL, 'pattern', $1, $2, $3, $4) RETURNING id`,
-      [patternId, text.slice(0, 5000), JSON.stringify(embedding), JSON.stringify(metadata)]
+      [patternId, text.slice(0, 5000), embeddingJson, JSON.stringify(metadata)]
     );
     return result.rows[0]?.id || null;
   } catch (err) {
@@ -129,6 +154,7 @@ async function upsertPatternEmbedding(patternId, text, metadata = {}) {
 /**
  * Find the most relevant patterns for a given context (sector, target, etc.).
  * Used for contextual pattern injection in email generation.
+ * Direct search on memory_patterns.embedding (no JOIN), falls back to memory_embeddings.
  */
 async function findRelevantPatterns(contextText, limit = 10) {
   if (!ENABLED) return [];
@@ -137,9 +163,23 @@ async function findRelevantPatterns(contextText, limit = 10) {
   if (!embedding) return [];
 
   try {
+    // Direct search on memory_patterns.embedding — faster, no JOIN
     const result = await db.query(
+      `SELECT id, pattern, category, confidence, confidence_score, applied, confirmations,
+              1 - (embedding <=> $1::vector) AS similarity
+       FROM memory_patterns
+       WHERE embedding IS NOT NULL AND dismissed_at IS NULL
+       ORDER BY applied DESC, embedding <=> $1::vector
+       LIMIT $2`,
+      [JSON.stringify(embedding), limit]
+    );
+
+    if (result.rows.length > 0) return result.rows;
+
+    // Fallback to memory_embeddings JOIN for patterns not yet backfilled
+    const fallback = await db.query(
       `SELECT me.source_id, me.content, me.metadata, 1 - (me.embedding <=> $1::vector) AS similarity,
-              mp.id, mp.pattern, mp.category, mp.confidence, mp.applied, mp.confirmations
+              mp.id, mp.pattern, mp.category, mp.confidence, mp.confidence_score, mp.applied, mp.confirmations
        FROM memory_embeddings me
        JOIN memory_patterns mp ON mp.id = me.source_id
        WHERE me.source_type = 'pattern' AND mp.dismissed_at IS NULL
@@ -148,7 +188,7 @@ async function findRelevantPatterns(contextText, limit = 10) {
       [JSON.stringify(embedding), limit]
     );
 
-    return result.rows;
+    return fallback.rows;
   } catch (err) {
     logger.warn('vector-store', `findRelevantPatterns failed: ${err.message}`);
     return [];

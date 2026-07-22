@@ -106,7 +106,7 @@ Return JSON: { "note": "..." }`;
         const result = await claude.callClaude('Return only valid JSON.', notePrompt, 300, 'linkedin_note');
         let note = result.parsed?.note;
         if (!note) {
-          const m = (result.content || '').match(/"note"\s*:\s*"([^"]+)"/);
+          const m = (result.raw || '').match(/"note"\s*:\s*"([^"]+)"/);
           if (m) note = m[1];
         }
         if (!note) {
@@ -174,7 +174,7 @@ Return JSON: { "message": "..." }`;
         const result = await claude.callClaude('Return only valid JSON.', msgPrompt, 400, 'linkedin_followup');
         let message = result.parsed?.message;
         if (!message) {
-          const m = (result.content || '').match(/"message"\s*:\s*"([^"]+)"/);
+          const m = (result.raw || '').match(/"message"\s*:\s*"([^"]+)"/);
           if (m) message = m[1];
         }
         if (!message) continue;
