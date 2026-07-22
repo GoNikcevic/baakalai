@@ -36,13 +36,27 @@ export default function OnboardingChecklist() {
     let cancelled = false;
     async function load() {
       try {
+        // Cache in sessionStorage to avoid duplicate API calls (component mounts on Dashboard + Chat)
+        const cacheKey = 'bakal_checklist_data';
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const { keys: k, accounts: a, ts } = JSON.parse(cached);
+          if (Date.now() - ts < 60000) { // 1 min cache
+            if (!cancelled) { setKeys(k); setEmailAccounts(a); }
+            if (!cancelled) setLoading(false);
+            return;
+          }
+        }
         const [keysRes, emailRes] = await Promise.all([
           request('/settings/keys'),
           request('/nurture/email-accounts').catch(() => ({ accounts: [] })),
         ]);
         if (!cancelled) {
-          setKeys(keysRes.keys || keysRes);
-          setEmailAccounts(emailRes.accounts || []);
+          const k = keysRes.keys || keysRes;
+          const a = emailRes.accounts || [];
+          setKeys(k);
+          setEmailAccounts(a);
+          sessionStorage.setItem(cacheKey, JSON.stringify({ keys: k, accounts: a, ts: Date.now() }));
         }
       } catch { /* checklist won't show */ }
       finally { if (!cancelled) setLoading(false); }
