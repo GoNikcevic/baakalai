@@ -41,7 +41,8 @@ export default function DealCoachCard() {
 
   const loadSuggestions = useCallback(async (forceRefresh = false) => {
     // Cache for 30 min to avoid re-running the agent on every dashboard visit
-    const CACHE_KEY = 'bakal_dealcoach_cache';
+    const userId = (localStorage.getItem('baakal_token') || '').slice(-8);
+    const CACHE_KEY = `bakal_dealcoach_cache_${userId}`;
     const CACHE_TTL = 30 * 60 * 1000;
     if (!forceRefresh) {
       try {

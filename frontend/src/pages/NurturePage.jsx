@@ -514,13 +514,31 @@ function EmailsSection({ emails, type, onRefresh }) {
                   )}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>{email.subject}</div>
-                <div style={{
-                  fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
-                  whiteSpace: 'pre-wrap', lineHeight: 1.5,
-                  maxHeight: 80, overflow: 'hidden',
-                }}>
+                <div
+                  style={{
+                    fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
+                    whiteSpace: 'pre-wrap', lineHeight: 1.5,
+                    maxHeight: email._expanded ? 'none' : 80, overflow: 'hidden',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    const updated = emails.map(e => e.id === email.id ? { ...e, _expanded: !e._expanded } : e);
+                    setEmails(updated);
+                  }}
+                  title={en ? 'Click to expand/collapse' : 'Cliquer pour d\u00E9plier/replier'}
+                >
                   {email.body}
                 </div>
+                {!email._expanded && email.body && email.body.length > 200 && (
+                  <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2, cursor: 'pointer' }}
+                    onClick={() => {
+                      const updated = emails.map(e => e.id === email.id ? { ...e, _expanded: true } : e);
+                      setEmails(updated);
+                    }}
+                  >
+                    {en ? 'Show full email' : 'Voir l\'email complet'}
+                  </div>
+                )}
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
                   {email.to_email}
                   {email.sent_at && ` \u00B7 ${en ? 'Sent on' : 'Envoy\u00E9 le'} ${new Date(email.sent_at).toLocaleString(en ? 'en-US' : 'fr-FR')}`}

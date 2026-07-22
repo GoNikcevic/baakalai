@@ -97,10 +97,11 @@ function getCampaignTemplates(t) {
 /* ─── Sub-components ─── */
 
 function AiStatusBadge({ online }) {
+  const { lang } = useI18n();
   return (
     <div className={`ai-status${online ? '' : ' offline'}`}>
       <span className="ai-pulse"></span>
-      {online ? 'Online' : 'Offline'}
+      {online ? (lang === 'en' ? 'Online' : 'En ligne') : (lang === 'en' ? 'Offline' : 'Hors ligne')}
     </div>
   );
 }
@@ -127,7 +128,7 @@ function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew }) {
         threads.map((t) => {
           const active = t.id === currentThreadId ? ' active' : '';
           const date = new Date(t.updated_at || t.created_at);
-          const dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+          const dateStr = date.toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
           return (
             <div
               key={t.id}
@@ -1564,7 +1565,7 @@ function TypingIndicator() {
 function ChatMessage({ role, content, metadata, animate, isLast, onCreateCampaign, onSendMessage, onActionExecute, onPreview }) {
   const { lang } = useI18n();
   const avatar = role === 'assistant' ? 'b' : '~';
-  const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'fr-FR', { hour: '2-digit', minute: '2-digit' });
 
   let formattedContent = content;
   if (role === 'assistant') {
@@ -1641,7 +1642,7 @@ function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage, 
     return () => clearInterval(timer);
   }, [content]);
 
-  const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'fr-FR', { hour: '2-digit', minute: '2-digit' });
   const hasActionCard = metadata && metadata.action;
 
   return (

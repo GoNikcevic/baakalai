@@ -165,7 +165,7 @@ export default function App() {
   }
 
   const fallback = (
-    <div style={{ marginLeft: 240, padding: '28px 32px' }}>
+    <div style={{ padding: '28px 32px' }}>
       <DashboardSkeleton />
     </div>
   )
