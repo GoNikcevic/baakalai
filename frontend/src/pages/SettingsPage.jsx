@@ -6,6 +6,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getKeys, saveKeys, testKeys, syncLemlist, syncCRM, syncOutreach, saveLanguage, request } from '../services/api-client';
 import { deleteAccount } from '../services/auth';
 import { useNotifications } from '../context/NotificationContext';
@@ -116,6 +117,7 @@ function StatusBadge({ status, lang }) {
 /* ─── Component ─── */
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const [keyStatus, setKeyStatus] = useState({});
   const [testStatus, setTestStatus] = useState({});
   const [drafts, setDrafts] = useState({});
@@ -887,13 +889,13 @@ export default function SettingsPage() {
                       : 'Vos données CRM sont synchronisées. Voici ce que vous pouvez faire :'}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-primary btn-sm" onClick={() => window.location.href = '/analytics'}>
+                    <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
                       {en ? 'View Analytics' : 'Voir les Analytics'}
                     </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => window.location.href = '/clients'}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/clients')}>
                       {en ? 'Browse Clients' : 'Voir les Clients'}
                     </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => window.location.href = '/chat'}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
                       {en ? 'Ask the AI' : 'Demander à l\'IA'}
                     </button>
                   </div>

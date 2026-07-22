@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
@@ -27,6 +27,7 @@ function getStatusLabels(lang) {
 }
 
 export default function ClientsPage() {
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -269,7 +270,7 @@ export default function ClientsPage() {
           <button
             className="btn btn-outline"
             style={{ fontSize: 12, padding: '8px 16px' }}
-            onClick={() => window.location.href = '/settings'}
+            onClick={() => navigate('/settings')}
           >
             {t('clients.connectCrm')}
           </button>

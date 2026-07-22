@@ -8,6 +8,7 @@ import { request } from '../services/api-client';
 import { getUser } from '../services/auth';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
+import { useConfirm } from '../components/ConfirmModal';
 
 function getTriggerTypes(lang) {
   const en = lang === 'en';
@@ -253,6 +254,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  const confirm = useConfirm();
   const TRIGGER_TYPES = getTriggerTypes(lang);
   const [form, setForm] = useState({
     name: '',
@@ -299,7 +301,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(en ? 'Delete this trigger?' : 'Supprimer ce trigger ?')) return;
+    if (!await confirm(en ? 'Delete this trigger?' : 'Supprimer ce trigger ?', { danger: true })) return;
     try {
       await request(`/nurture/triggers/${id}`, { method: 'DELETE' });
       onRefresh();
@@ -806,6 +808,7 @@ function CampaignsSection({ campaigns }) {
 
 function TeamCampaignsSection({ lang }) {
   const en = lang === 'en';
+  const confirm = useConfirm();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -865,7 +868,7 @@ function TeamCampaignsSection({ lang }) {
   };
 
   const handleLaunch = async (id) => {
-    if (!window.confirm(en ? 'Launch this campaign? Emails will be sent from each rep\'s inbox.' : 'Lancer cette campagne ? Les emails seront envoy\u00E9s depuis la bo\u00EEte de chaque commercial.')) return;
+    if (!await confirm(en ? 'Launch this campaign? Emails will be sent from each rep\'s inbox.' : 'Lancer cette campagne ? Les emails seront envoy\u00E9s depuis la bo\u00EEte de chaque commercial.')) return;
     setLaunching(id);
     try {
       await request(`/team-campaigns/${id}/launch`, { method: 'POST' });

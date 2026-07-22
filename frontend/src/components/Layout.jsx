@@ -4,7 +4,7 @@
    =============================================================================== */
 
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { logout, getUser } from '../services/auth';
@@ -123,6 +123,7 @@ function NavIcon({ name }) {
 export default function Layout() {
   const { user, setUser } = useApp();
   const t = useT();
+  const navigate = useNavigate();
   const [showCreatorModal, setShowCreatorModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -133,7 +134,7 @@ export default function Layout() {
     disconnectSocket();
     await logout();
     setUser(null);
-    window.location.href = '/';
+    navigate('/');
   }
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';

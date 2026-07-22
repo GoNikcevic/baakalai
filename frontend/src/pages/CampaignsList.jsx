@@ -10,6 +10,7 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import api, { request } from '../services/api-client';
+import { useConfirm } from '../components/ConfirmModal';
 import { showToast } from '../services/notifications';
 
 export default function CampaignsList({ onNavigateCampaign }) {
@@ -17,6 +18,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
   const navigate = useNavigate();
   const t = useT();
   const { lang } = useI18n();
+  const confirm = useConfirm();
   const en = lang === 'en';
   const [view, setView] = useState('campaigns');
   const [actionLoading, setActionLoading] = useState({});
@@ -118,7 +120,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
   const handleDelete = useCallback(async (e, campaign) => {
     e.stopPropagation();
-    if (!window.confirm(en ? `Delete campaign "${campaign.name}"?` : `Supprimer la campagne "${campaign.name}" ?`)) return;
+    if (!await confirm(en ? `Delete campaign "${campaign.name}"?` : `Supprimer la campagne "${campaign.name}" ?`, { danger: true })) return;
     const backendId = campaign._backendId || campaign.id;
     setActionLoading(prev => ({ ...prev, [campaign.id]: 'deleting' }));
     try {
