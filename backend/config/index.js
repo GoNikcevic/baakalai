@@ -30,20 +30,12 @@ const config = {
 
   claude: {
     apiKey: process.env.ANTHROPIC_API_KEY,
+    // Défaut global. Conserve son rôle de commutateur Settings : s'il contient
+    // "opus", il surcharge TOUTES les actions (cf. resolveModel).
     model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
-    models: {
-      // Sonnet 4.6 — default for most actions (fast, cost-effective)
-      generateSequence:    'claude-sonnet-4-6',
-      generateTouchpoint:  'claude-sonnet-4-6',
-      analyzeCampaign:     'claude-sonnet-4-6',
-      chat:                'claude-sonnet-4-6',
-      chatStream:          'claude-sonnet-4-6',
-      generateVariables:   'claude-sonnet-4-6',
-      // Opus — premium actions (best reasoning)
-      regenerateSequence:  process.env.CLAUDE_OPUS_MODEL || 'claude-opus-4-6',
-      consolidateMemory:   process.env.CLAUDE_OPUS_MODEL || 'claude-opus-4-6',
-      generateIcebreaker:  process.env.CLAUDE_OPUS_MODEL || 'claude-opus-4-6',
-    },
+    // Le routage par action vit désormais dans config/models.js — une seule
+    // source de vérité, exhaustive, surchargeable par CLAUDE_MODEL_<ACTION>
+    // et CLAUDE_TIER_<TIER>.
   },
 
   // All integration tokens are now stored per-user in user_integrations table.

@@ -3,6 +3,7 @@ const { config } = require('../config');
 const prompts = require('./prompts');
 const { withRetry } = require('../lib/retry');
 const logger = require('../lib/logger');
+const models = require('../config/models');
 
 let client;
 let clientKeyHash;
@@ -62,8 +63,12 @@ function wrapApiError(err) {
  * Priority:
  * 1. If config.claude.model is explicitly set to an Opus model (via env or
  *    Settings), it acts as a global override — every action uses Opus.
- * 2. Otherwise, use the per-action model from config.claude.models.
- * 3. Fallback to config.claude.model (Sonnet by default).
+ * 2. Otherwise config/models.js decides, in this order:
+ *      CLAUDE_MODEL_<ACTION>  →  CLAUDE_TIER_<TIER>  →  tier declared by the action.
+ *
+ * Actions with no entry in config/models.js fall back to the `balanced` tier.
+ * Run `node -e "console.log(require('./config/models').describeRouting())"` to
+ * print the resolved table for the current environment.
  */
 function resolveModel(action) {
   const globalModel = config.claude.model;
@@ -74,12 +79,8 @@ function resolveModel(action) {
     return globalModel;
   }
 
-  // Per-action routing from config.claude.models
-  const actionModel = config.claude.models?.[action];
-  if (actionModel) return actionModel;
-
-  // Fallback to the global default
-  return globalModel;
+  // Per-action routing (config/models.js): env override → tier → default tier.
+  return models.modelFor(action);
 }
 
 /**
@@ -112,11 +113,16 @@ function toSystemBlocks(systemPrompt) {
  */
 async function callClaude(systemPrompt, userContent, maxTokens = 4000, action) {
   const model = resolveModel(action);
+  // Per-action thinking config. No-op on 4.x models (they don't think unless
+  // asked), but load-bearing on gen-5 where thinking is on by default and would
+  // otherwise eat into max_tokens. See config/models.js.
+  const thinking = models.thinkingFor(action);
   let response;
   try {
     response = await withRetry(() => getClient().messages.create({
       model,
       max_tokens: maxTokens,
+      ...(thinking ? { thinking } : {}),
       system: toSystemBlocks(systemPrompt),
       messages: [{ role: 'user', content: userContent }],
     }), { maxRetries: 3, baseDelay: 2000 });
