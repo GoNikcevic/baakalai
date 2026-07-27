@@ -5,6 +5,44 @@ const { withRetry } = require('../lib/retry');
 const logger = require('../lib/logger');
 const models = require('../config/models');
 
+/**
+ * Timeout par requête, en millisecondes (le SDK JS attend des ms).
+ * Généreux par défaut : certains prompts de consolidation sortent 3000 tokens.
+ */
+const CLAUDE_TIMEOUT_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS, 10) || 120000;
+
+/**
+ * Enregistre un appel LLM dans `llm_usage`.
+ *
+ * Best-effort par construction : toute erreur d'écriture est avalée. La
+ * comptabilité ne doit jamais faire échouer un appel métier, et la table peut
+ * ne pas exister (migration 067 non jouée).
+ *
+ * Les tokens étaient déjà journalisés, mais uniquement sur stdout Railway —
+ * sans rétention ni agrégation possible.
+ */
+function recordUsage({ action, model, usage, durationMs, ok = true, errorType = null, userId = null }) {
+  setImmediate(async () => {
+    try {
+      const db = require('../db');
+      await db.query(
+        `INSERT INTO llm_usage
+           (action, model, user_id, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens, duration_ms, ok, error_type)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          action || null, model, userId,
+          usage?.input_tokens || 0,
+          usage?.output_tokens || 0,
+          usage?.cache_read_input_tokens || 0,
+          usage?.cache_creation_input_tokens || 0,
+          durationMs ?? null, ok, errorType,
+        ]
+      );
+    } catch { /* comptabilité best-effort */ }
+  });
+}
+
 let client;
 let clientKeyHash;
 function getClient() {
@@ -16,7 +54,17 @@ function getClient() {
     throw err;
   }
   if (!client || clientKeyHash !== currentKey) {
-    client = new Anthropic({ apiKey: currentKey });
+    client = new Anthropic({
+      apiKey: currentKey,
+      // Aucun timeout n'était appliqué : un appel bloqué immobilisait l'agent
+      // indéfiniment (le seul garde-fou existant, AGENT_TIMEOUT_MS, ne couvre
+      // que le chemin hebdomadaire de strategic-orchestrator).
+      timeout: CLAUDE_TIMEOUT_MS,
+      // Le SDK retente 2 fois par défaut, et lib/retry.js retente 3 fois par
+      // dessus : jusqu'à 9 appels facturés pour une seule demande. On laisse
+      // withRetry seul aux commandes.
+      maxRetries: 0,
+    });
     clientKeyHash = currentKey;
   }
   return client;
@@ -117,6 +165,7 @@ async function callClaude(systemPrompt, userContent, maxTokens = 4000, action) {
   // asked), but load-bearing on gen-5 where thinking is on by default and would
   // otherwise eat into max_tokens. See config/models.js.
   const thinking = models.thinkingFor(action);
+  const startedAt = Date.now();
   let response;
   try {
     response = await withRetry(() => getClient().messages.create({
@@ -128,10 +177,14 @@ async function callClaude(systemPrompt, userContent, maxTokens = 4000, action) {
     }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
     logger.error('claude', 'API call failed', { action, model, error: err.message });
+    recordUsage({ action, model, usage: null, durationMs: Date.now() - startedAt, ok: false, errorType: err?.name || 'error' });
     throw wrapApiError(err);
   }
 
-  const text = response.content[0].text;
+  // Ne PAS indexer content[0] en dur : sur les modeles gen-5 la reflexion est
+  // active par defaut et un bloc `thinking` precede le texte, ce qui ferait
+  // renvoyer undefined ici.
+  const text = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || '';
 
   // Try to extract JSON from response
   let parsed;
@@ -148,6 +201,7 @@ async function callClaude(systemPrompt, userContent, maxTokens = 4000, action) {
     input_tokens: response.usage?.input_tokens,
     output_tokens: response.usage?.output_tokens,
   });
+  recordUsage({ action, model, usage: response.usage, durationMs: Date.now() - startedAt });
 
   return { raw: text, parsed, usage: response.usage, model };
 }

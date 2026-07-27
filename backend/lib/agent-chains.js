@@ -43,10 +43,23 @@ async function getChainConfig(userId) {
   return fresh.rows[0];
 }
 
+/**
+ * Nombre d'actions déjà consommées aujourd'hui sur le quota `max_per_day`.
+ *
+ * On compte 'pending' et 'approved' en plus de 'executed' : en mode
+ * approbation, les lignes créées restent 'pending' jusqu'à validation
+ * manuelle. En ne comptant que 'executed', le quota ne s'incrémentait JAMAIS
+ * dans ce mode — `max_per_day` était sans effet et le nombre d'emails générés
+ * par jour n'était pas borné.
+ *
+ * Ce qui coûte (génération LLM + email en attente), c'est la création de la
+ * ligne, pas son envoi final.
+ */
 async function countTodayExecutions(userId, chainType) {
   const result = await db.query(
     `SELECT COUNT(*) as count FROM agent_chain_executions
-     WHERE user_id = $1 AND chain_type = $2 AND status = 'executed'
+     WHERE user_id = $1 AND chain_type = $2
+       AND status IN ('executed', 'pending', 'approved')
        AND created_at > CURRENT_DATE`,
     [userId, chainType]
   );
