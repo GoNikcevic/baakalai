@@ -8,6 +8,7 @@ const regenerateJob = require('../orchestrator/jobs/regenerate');
 const logger = require('../lib/logger');
 const icpAgent = require('../lib/icp-agent');
 const { validateId } = require('../middleware/validate-params');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = Router();
 router.param('id', (req, res, next, id) => validateId(req, res, next));
@@ -390,7 +391,9 @@ router.post('/memory/:id/toggle-apply', async (req, res, next) => {
 });
 
 // POST /api/ai/memory/:id/toggle-share — toggle pattern shared (cross-team) status
-router.post('/memory/:id/toggle-share', async (req, res, next) => {
+// Admin-only: publishing a pattern to the global pool exposes it to every tenant,
+// so this is a curation action on shared state, not a per-user preference.
+router.post('/memory/:id/toggle-share', requireAdmin, async (req, res, next) => {
   try {
     const result = await db.query(
       `UPDATE memory_patterns SET shared = NOT COALESCE(shared, false) WHERE id = $1 RETURNING id, shared`,

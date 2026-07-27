@@ -75,6 +75,17 @@ function requireAuth(req, res, next) {
 }
 
 /**
+ * Express middleware: requires an authenticated admin.
+ * Use after requireAuth for actions that curate shared, cross-tenant resources
+ * (e.g. publishing a memory pattern to the global pool).
+ */
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin role required' });
+  next();
+}
+
+/**
  * Optional auth: attaches req.user if token present, but doesn't block.
  */
 function optionalAuth(req, _res, next) {
@@ -93,5 +104,6 @@ module.exports = {
   hashRefreshToken,
   verifyToken,
   requireAuth,
+  requireAdmin,
   optionalAuth,
 };
