@@ -66,15 +66,16 @@ async function run() {
 
     console.log(`[consolidate] Done. Created: ${savedIds.length}, Updated: ${updatedCount}, HubSpot: ${hubspotResult.synced} deals`);
 
-    // Incremental embedding sync — only embed patterns not yet in memory_embeddings
+    // Incremental embedding sync — only embed patterns with no vector yet.
+    // Source of truth is memory_patterns.embedding; the memory_embeddings twin
+    // table was dropped in migration 065.
     if (process.env.PGVECTOR_ENABLED === 'true') {
       try {
         const { upsertPatternEmbedding } = require('../../lib/vector-store');
         const unembedded = await db.query(
           `SELECT mp.id, mp.pattern, mp.category, mp.confidence, mp.sectors
            FROM memory_patterns mp
-           LEFT JOIN memory_embeddings me ON me.source_id = mp.id AND me.source_type = 'pattern'
-           WHERE mp.dismissed_at IS NULL AND me.id IS NULL
+           WHERE mp.dismissed_at IS NULL AND mp.embedding IS NULL
            LIMIT 100`
         );
         let embedded = 0;

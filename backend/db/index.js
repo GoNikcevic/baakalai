@@ -793,16 +793,20 @@ const memoryPatterns = {
         }
       }
 
-      // Semantic deduplication via pgvector (if enabled)
+      // Semantic deduplication via pgvector (if enabled).
+      // findSimilarPattern returns the embedding it computed; we carry it over to
+      // the write below so the same text isn't embedded (and billed) twice.
+      let precomputedEmbedding = null;
       try {
         const { findSimilarPattern, upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
         if (ENABLED) {
           const similar = await findSimilarPattern(data.pattern, 0.85);
+          precomputedEmbedding = similar?.embedding || null;
           if (similar?.sourceId) {
             const active = await query('SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL', [similar.sourceId]);
             if (active.rows[0]) {
               const updated = await this.update(active.rows[0].id, data);
-              await upsertPatternEmbedding(active.rows[0].id, data.pattern, { category: data.category, confidence: data.confidence });
+              await upsertPatternEmbedding(active.rows[0].id, data.pattern, null, precomputedEmbedding);
               await query('SELECT pg_advisory_unlock($1)', [lockKey]);
               return updated;
             }
@@ -815,7 +819,7 @@ const memoryPatterns = {
       try {
         const { upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
         if (ENABLED && created) {
-          await upsertPatternEmbedding(created.id, created.pattern, { category: created.category, confidence: created.confidence });
+          await upsertPatternEmbedding(created.id, created.pattern, null, precomputedEmbedding);
         }
       } catch { /* embedding optional */ }
 
@@ -1666,81 +1670,6 @@ const userIntegrations = {
 };
 
 // =============================================
-// Job Queue (PostgreSQL-backed, replaces in-memory queue)
-// =============================================
-
-const jobQueue = {
-  async add(jobName, data = {}, opts = {}) {
-    const priority = opts.priority || 0;
-    const maxAttempts = opts.maxAttempts || 3;
-    const result = await query(`
-      INSERT INTO job_queue (job_name, data, priority, max_attempts, status)
-      VALUES ($1, $2, $3, $4, 'pending')
-      RETURNING *
-    `, [jobName, JSON.stringify(data), priority, maxAttempts]);
-    return result.rows[0];
-  },
-
-  async claimNext() {
-    // Atomic claim: grab the oldest pending job and mark it processing
-    const result = await query(`
-      UPDATE job_queue SET status = 'processing', started_at = now(), attempts = attempts + 1
-      WHERE id = (
-        SELECT id FROM job_queue
-        WHERE status = 'pending' AND (run_after IS NULL OR run_after <= now())
-        ORDER BY priority DESC, created_at ASC
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED
-      )
-      RETURNING *
-    `);
-    return result.rows[0] || null;
-  },
-
-  async complete(id) {
-    await query(
-      "UPDATE job_queue SET status = 'completed', completed_at = now() WHERE id = $1",
-      [id]
-    );
-  },
-
-  async fail(id, errorMsg) {
-    // Check if we should retry or move to dead letter
-    const job = await query('SELECT * FROM job_queue WHERE id = $1', [id]);
-    const row = job.rows[0];
-    if (row && row.attempts < row.max_attempts) {
-      // Exponential backoff: 2^attempts seconds
-      const backoffSec = Math.pow(2, row.attempts);
-      await query(
-        "UPDATE job_queue SET status = 'pending', last_error = $1, run_after = now() + ($2 || ' seconds')::interval WHERE id = $3",
-        [errorMsg, backoffSec.toString(), id]
-      );
-    } else {
-      await query(
-        "UPDATE job_queue SET status = 'dead', last_error = $1, completed_at = now() WHERE id = $2",
-        [errorMsg, id]
-      );
-    }
-  },
-
-  async getDeadLetterQueue(limit = 50) {
-    const result = await query(
-      "SELECT * FROM job_queue WHERE status = 'dead' ORDER BY completed_at DESC LIMIT $1",
-      [limit]
-    );
-    return result.rows;
-  },
-
-  async cleanup(olderThanDays = 7) {
-    const result = await query(
-      "DELETE FROM job_queue WHERE status = 'completed' AND completed_at < now() - ($1 || ' days')::interval",
-      [olderThanDays.toString()]
-    );
-    return { changes: result.rowCount };
-  },
-};
-
-// =============================================
 // Raw query helper (for special cases in routes)
 // =============================================
 
@@ -1787,13 +1716,6 @@ const recoFeedback = {
       [userId, patternId, patternText, feedback]
     );
     return result.rows[0];
-  },
-  async listByUser(userId) {
-    const result = await query(
-      `SELECT * FROM recommendation_feedback WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
-      [userId]
-    );
-    return result.rows;
   },
 };
 
@@ -2100,7 +2022,6 @@ module.exports = {
   reports,
   chartData,
   userIntegrations,
-  jobQueue,
   recoFeedback,
   templates,
   notifications,

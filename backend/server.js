@@ -215,11 +215,6 @@ server.listen(config.port, '0.0.0.0', () => {
     try { await db.refreshTokens.deleteExpired(); } catch { /* ignore */ }
   }, 60 * 60 * 1000);
 
-  // Clean up completed jobs every 6 hours
-  const jobCleanupInterval = setInterval(async () => {
-    try { await db.jobQueue.cleanup(7); } catch { /* ignore */ }
-  }, 6 * 60 * 60 * 1000);
-
   // Data retention cleanup — runs daily at startup + every 24h
   const { runRetentionCleanup } = require('./lib/retention-cleanup');
   runRetentionCleanup().catch(() => {});
@@ -238,7 +233,6 @@ server.listen(config.port, '0.0.0.0', () => {
     logger.info('shutdown', `${signal} received — graceful shutdown starting...`);
 
     clearInterval(tokenCleanupInterval);
-    clearInterval(jobCleanupInterval);
     clearInterval(retentionInterval);
 
     // Stop accepting new connections

@@ -392,7 +392,7 @@ setInterval(() => {
   for (const [key, val] of _oauthStates) {
     if (val.expiresAt < now) _oauthStates.delete(key);
   }
-}, 300000);
+}, 300000).unref();
 
 // GET /api/nurture/email-accounts/connect/gmail — Start Gmail OAuth flow
 router.get('/email-accounts/connect/gmail', (req, res, next) => {

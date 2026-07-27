@@ -48,7 +48,7 @@ setInterval(() => {
   for (const [key, val] of _oauthStates) {
     if (val < now) _oauthStates.delete(key);
   }
-}, 60000);
+}, 60000).unref();
 
 // HTTPS helpers — bypass Railway proxy cert issues
 function httpsPost(url, body) {

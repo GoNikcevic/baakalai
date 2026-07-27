@@ -1898,7 +1898,7 @@ setInterval(() => {
   for (const [key, val] of _sfOauthStates) {
     if (val.expiresAt < now) _sfOauthStates.delete(key);
   }
-}, 300000);
+}, 300000).unref();
 
 // GET /api/crm/salesforce/connect — Start Salesforce OAuth flow using client's own Connected App
 router.get('/salesforce/connect', async (req, res, next) => {

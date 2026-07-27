@@ -29,6 +29,6 @@ setInterval(() => {
   for (const [key, bucket] of buckets) {
     if (now > bucket.resetAt + 60000) buckets.delete(key);
   }
-}, 300000);
+}, 300000).unref();
 
 module.exports = { rateLimit };
