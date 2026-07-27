@@ -1681,6 +1681,21 @@ async function rawQuery(text, params) {
   return result;
 }
 
+/**
+ * Acquire a dedicated client from the pool.
+ *
+ * Required for anything session-scoped — advisory locks in particular.
+ * `rawQuery` goes through `pool.query()`, which may hand out a different
+ * connection on every call: locking on one and unlocking on another leaks the
+ * lock until that connection is recycled. Callers MUST release the client.
+ *
+ * Returns null in SQLite mode (no pool, no advisory locks).
+ */
+async function getClient() {
+  if (useSqlite) return null;
+  return pool.connect();
+}
+
 async function closeDb() {
   if (useSqlite && sqliteAdapter) {
     sqliteAdapter.closeDb();
@@ -2000,6 +2015,7 @@ const teams = {
 
 module.exports = {
   query: rawQuery,
+  getClient,
   closeDb,
   healthCheck,
   campaigns,

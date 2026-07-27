@@ -23,8 +23,39 @@ const regenerate = require('./jobs/regenerate');
 const consolidate = require('./jobs/consolidate');
 const { runBatchOrchestrator } = require('./jobs/batch-orchestrator');
 const logger = require('../lib/logger');
+const { withLock } = require('../lib/db-lock');
 
 const isEnabled = () => process.env.ORCHESTRATOR_ENABLED === 'true';
+
+/**
+ * Fuseau des expressions cron.
+ *
+ * Sans `timezone`, node-cron interprete l'expression dans le fuseau du
+ * conteneur — UTC sur Railway. « 9h » tombait donc a 10h ou 11h a Paris selon
+ * la saison. L'intention produit est l'heure de bureau francaise.
+ */
+const TZ = process.env.CRON_TIMEZONE || 'Europe/Paris';
+
+/**
+ * Planifie une tache sous verrou exclusif.
+ *
+ * node-cron est purement in-process : chaque instance enregistre ses propres
+ * crons. Avec deux replicas — ou pendant un redeploiement qui chevauche un
+ * creneau — la meme tache s'executerait deux fois, donc double facture LLM et
+ * emails envoyes en double. Le verrou consultatif Postgres (non bloquant) fait
+ * qu'une seule instance execute; les autres passent leur tour.
+ */
+function schedule(name, expression, handler) {
+  cron.schedule(expression, async () => {
+    const outcome = await withLock(`cron:${name}`, handler).catch((err) => {
+      logger.error('orchestrator', `${name} failed: ${err.message}`, { cron: name });
+      return { ran: true };
+    });
+    if (outcome && outcome.ran === false) {
+      logger.info('orchestrator', `${name} skipped — already running on another instance`, { cron: name });
+    }
+  }, { timezone: TZ });
+}
 
 function start() {
   if (!isEnabled()) {
@@ -32,13 +63,13 @@ function start() {
     return;
   }
 
-  console.log('[orchestrator] Starting 4-agent scheduler...');
+  console.log(`[orchestrator] Starting scheduler (timezone: ${TZ})...`);
 
   // ═══════════════════════════════════════════════════
   // Agent 1: Prospection Agent — Daily 8:00 AM
   // Stats collection + batch A/B + deliverability
   // ═══════════════════════════════════════════════════
-  cron.schedule('0 8 * * *', async () => {
+  schedule('prospection', '0 8 * * *', async () => {
     console.log('[agent:prospection] Starting...');
     try {
       const { runProspectionAgent } = require('../lib/prospection-agent');
@@ -50,7 +81,7 @@ function start() {
   });
 
   // Evening batch check (8PM) — only batch orchestrator, not full agent
-  cron.schedule('0 20 * * *', async () => {
+  schedule('evening-batch', '0 20 * * *', async () => {
     try {
       const result = await runBatchOrchestrator();
       if (result) console.log('[agent:prospection] Evening batch check complete');
@@ -63,7 +94,7 @@ function start() {
   // Agent 2: CRM Agent — Daily 9:00 AM
   // Sync + cleaning + nurture
   // ═══════════════════════════════════════════════════
-  cron.schedule('0 9 * * *', async () => {
+  schedule('crm-agent', '0 9 * * *', async () => {
     console.log('[agent:crm] Starting...');
     try {
       const { runAllAgents } = require('../lib/crm-agent');
@@ -80,7 +111,7 @@ function start() {
   // Deal Coach + Upsell + Copy Optimizer (benefit from daily runs)
   // Heavy agents (ICP, Win/Loss, Competitor, Timing) stay weekly in Memory Agent
   // ═══════════════════════════════════════════════════
-  cron.schedule('30 9 * * *', async () => {
+  schedule('strategic-daily', '30 9 * * *', async () => {
     console.log('[agent:strategic-daily] Starting fast strategic agents...');
     try {
       const { runOne } = require('../lib/agents/strategic-orchestrator');
@@ -111,7 +142,7 @@ function start() {
   // Autonomous action chains (deal reactivation, auto-upsell)
   // Runs after strategic agents so data is fresh
   // ═══════════════════════════════════════════════════
-  cron.schedule('45 9 * * *', async () => {
+  schedule('agent-chains', '45 9 * * *', async () => {
     console.log('[agent:chains] Starting autonomous chains...');
     try {
       const { runAllChains } = require('../lib/agent-chains');
@@ -131,7 +162,7 @@ function start() {
   // Lifecycle Emails — Daily 10:00 AM
   // Onboarding sequences + retention re-engagement
   // ═══════════════════════════════════════════════════
-  cron.schedule('0 10 * * *', async () => {
+  schedule('lifecycle-emails', '0 10 * * *', async () => {
     try {
       const { runLifecycleEmails } = require('../lib/lifecycle-emails');
       const report = await runLifecycleEmails();
@@ -147,7 +178,7 @@ function start() {
   // Agent 3: Memory Agent — Sunday 10:00 AM
   // Consolidation + pruning + templates (when needed)
   // ═══════════════════════════════════════════════════
-  cron.schedule('0 10 * * 0', async () => {
+  schedule('memory-agent', '0 10 * * 0', async () => {
     console.log('[agent:memory] Starting...');
     try {
       const { runMemoryAgent } = require('../lib/memory-agent');
@@ -162,7 +193,7 @@ function start() {
   // Agent 4: Reporting Agent — Monday 9:00 AM
   // Weekly report + anomaly detection
   // ═══════════════════════════════════════════════════
-  cron.schedule('0 9 * * 1', async () => {
+  schedule('reporting-agent', '0 9 * * 1', async () => {
     console.log('[agent:reporting] Starting...');
     try {
       const { runReportingAgent } = require('../lib/reporting-agent');
@@ -173,7 +204,7 @@ function start() {
     }
   });
 
-  console.log('[orchestrator] 6 agents + lifecycle scheduled:');
+  console.log(`[orchestrator] Started — 8 cron jobs registered (timezone: ${TZ})`);
   console.log('  Prospection:      daily 8AM + evening batch 8PM');
   console.log('  CRM:              daily 9AM');
   console.log('  Strategic (fast): daily 9:30AM (deal_coach, upsell, copy_optimizer)');
