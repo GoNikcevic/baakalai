@@ -1375,10 +1375,10 @@ const opportunities = {
     return result.rows;
   },
 
-  async listByCampaign(campaignId) {
+  async listByCampaign(campaignId, limit = 1000) {
     const result = await query(
-      'SELECT * FROM opportunities WHERE campaign_id = $1 ORDER BY created_at DESC',
-      [campaignId]
+      'SELECT * FROM opportunities WHERE campaign_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [campaignId, limit]
     );
     return result.rows;
   },
