@@ -1620,9 +1620,13 @@ const userIntegrations = {
   async upsert(userId, provider, data) {
     const existing = await this.get(userId, provider);
     if (existing) {
-      const sets = ['access_token = $1', 'updated_at = now()'];
-      const values = [data.accessToken];
-      let i = 2;
+      const sets = ['updated_at = now()'];
+      const values = [];
+      let i = 1;
+      if (data.accessToken !== undefined) {
+        sets.push(`access_token = $${i++}`);
+        values.push(data.accessToken);
+      }
       if (data.refreshToken !== undefined) {
         sets.push(`refresh_token = $${i++}`);
         values.push(data.refreshToken);
