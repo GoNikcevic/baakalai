@@ -26,7 +26,11 @@ function scoreOpportunity(opp, { deals = [], activities = [], emails = [] } = {}
   let score = 0;
 
   // ── 1. Inactivity (max 30 pts) ──
-  const lastActivity = opp.updated_at || opp.created_at;
+  // `updated_at` est réécrit à chaque synchro CRM : s'en servir ici rendait le
+  // critère d'inactivité — 30 points sur 100, le plus lourd — impossible à
+  // déclencher. Mesuré avant correction : 286 scores à 0, aucun au-dessus de 40.
+  // `last_activity_at` porte la date réelle côté CRM (lib/crm-activity-date.js).
+  const lastActivity = opp.last_activity_at || opp.created_at;
   const daysSinceActivity = lastActivity ? (now - new Date(lastActivity).getTime()) / DAY_MS : 999;
 
   if (daysSinceActivity >= 120) {

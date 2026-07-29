@@ -53,10 +53,16 @@ function getDefaultSuggestions(lang) {
     : ['🎯 Cr\u00e9er une campagne de prospection', '📡 Scanner les signaux d\'achat', '🔍 Analyser la sant\u00e9 de mon CRM', '📊 Voir les performances de mes campagnes'];
 }
 
+// Suggestions du tout premier ecran (campaignCount === 0).
+// Elles etaient exclusivement orientees prospection — profil, premiere campagne,
+// ICP — alors que c'est precisement l'utilisateur dont le time-to-wow compte le
+// plus. Les actions CRM n'apparaissaient qu'une fois une campagne creee
+// (getReturningSuggestions) : le chemin qui porte la proposition de valeur ne se
+// debloquait donc qu'apres le chemin secondaire.
 function getOnboardingSuggestions(lang) {
   return lang === 'en'
-    ? ['📄 Help me set up my profile', '🎯 Create my first campaign', '❓ How does baakalai work?', '🧠 Help me define my ICP']
-    : ['📄 Aide-moi \u00e0 configurer mon profil', '🎯 Cr\u00e9er ma premi\u00e8re campagne', '❓ Comment fonctionne baakalai ?', '🧠 Aide-moi \u00e0 d\u00e9finir mon ICP'];
+    ? ['⚡ Show me my dormant deals', '🔍 Analyze my CRM health', '🎯 Create my first campaign', '❓ How does baakalai work?']
+    : ['⚡ Montre-moi mes deals dormants', '🔍 Analyser la santé de mon CRM', '🎯 Créer ma première campagne', '❓ Comment fonctionne baakalai ?'];
 }
 
 function getReturningSuggestions(lang) {

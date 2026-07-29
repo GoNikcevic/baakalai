@@ -25,6 +25,7 @@ const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const { notifyUser } = require('../socket');
 const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
+const { extractActivityDate } = require('./crm-activity-date');
 const { applyMappings } = require('./crm-field-mapper');
 const logger = require('./logger');
 
@@ -322,6 +323,11 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
 
       const existing = existingByEmail.get(email.toLowerCase());
 
+      // Date de dernière activité réelle chez le client. À NE PAS confondre
+      // avec `updated_at`, qui est réécrit à chaque synchro et ne dit donc rien
+      // de la fraîcheur du deal. Voir lib/crm-activity-date.js.
+      const lastActivityAt = extractActivityDate(crmProvider, raw);
+
       if (!existing) {
         await db.opportunities.create({
           userId,
@@ -335,6 +341,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           crmOwnerId,
           ownerEmail,
           ownerId,
+          lastActivityAt,
         });
         report.sync.imported++;
       } else {
@@ -347,6 +354,13 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         const company = raw.org_name || raw.org_id?.name || '';
         if (company && company !== existing.company) updates.company = company;
         if (!existing.crm_contact_id) updates.crm_contact_id = String(raw.id);
+        // On n'écrit que si la date avance : une resynchronisation ne doit
+        // jamais faire « rajeunir » un deal, sinon on efface le signal de
+        // dormance qu'on cherche précisément à détecter.
+        if (lastActivityAt && (!existing.last_activity_at
+            || new Date(lastActivityAt) > new Date(existing.last_activity_at))) {
+          updates.last_activity_at = lastActivityAt;
+        }
         // Sync owner
         if (crmOwnerId && crmOwnerId !== existing.crm_owner_id) {
           updates.crm_owner_id = crmOwnerId;

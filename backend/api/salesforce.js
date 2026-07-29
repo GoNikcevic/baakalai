@@ -5,6 +5,8 @@
  * All API functions require an explicit accessToken + instanceUrl (per-user isolation).
  */
 
+const { extractActivityDate } = require('../lib/crm-activity-date');
+
 async function sfFetch(instanceUrl, accessToken, endpoint, options = {}) {
   if (!accessToken || !instanceUrl) {
     throw new Error('Salesforce credentials required (accessToken + instanceUrl)');
@@ -77,7 +79,9 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
 }
 
 async function getDeals(instanceUrl, accessToken, limit = 100) {
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  // LastActivityDate / LastModifiedDate : sans elles, la récence d'un deal est
+  // inconnue et rien ne peut être signalé comme dormant. Voir lib/crm-activity-date.js.
+  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return (result.records || []).map(r => ({
     id: r.Id,
@@ -86,6 +90,8 @@ async function getDeals(instanceUrl, accessToken, limit = 100) {
     amount: r.Amount,
     closeDate: r.CloseDate,
     createdAt: r.CreatedDate,
+    // Sans ces deux champs le deal remonte sans recence, donc jamais dormant.
+    lastActivityAt: extractActivityDate('salesforce', r),
   }));
 }
 
@@ -211,7 +217,7 @@ async function getActivities(instanceUrl, accessToken, contactId) {
 async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
   const all = [];
   let result = await sfFetch(instanceUrl, accessToken,
-    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Title, Account.Name, OwnerId FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
+    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Title, Account.Name, OwnerId, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
   );
   const mapRecords = (records) => {
     for (const c of (records || [])) {
@@ -222,6 +228,8 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
         title: c.Title,
         company: c.Account?.Name || '',
         ownerId: c.OwnerId,
+        // C'est ce chemin-ci qu'emprunte la synchro (stepSync), pas getDeals.
+        lastActivityAt: extractActivityDate('salesforce', c),
       });
     }
   };
