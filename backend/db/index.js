@@ -30,14 +30,9 @@ if (useSqlite) {
   sqliteAdapter = require('./sqlite-adapter');
 }
 
-// Simple string hash for Postgres advisory locks (returns a 32-bit integer)
-function hashCode(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return hash;
-}
+// `hashCode` a été retiré avec le dernier pg_advisory_lock : il ne servait
+// qu'à dériver une clé de verrou entière. Les baux de cron_locks sont nommés,
+// donc aucune fonction de hachage n'est nécessaire.
 
 // Helper: run a query and return rows
 async function query(text, params) {
@@ -585,6 +580,57 @@ const versions = {
 // Memory Patterns
 // =============================================
 
+/**
+ * Anonymise un pattern avant écriture.
+ *
+ * Placé ici, dans le DAO, et non chez les appelants : la migration 013
+ * déclarait déjà l'anonymisation « by convention », et la convention n'a pas
+ * tenu — des noms de clients (LVMH, Qonto, Sanofi…) se sont retrouvés en base.
+ * Un point de passage obligé est la seule forme d'anonymisation qui survive à
+ * l'ajout d'un nouvel agent.
+ *
+ * Règles :
+ * - la rédaction ne peut jamais faire échouer une écriture (un pattern rédigé
+ *   partiellement vaut mieux qu'un agent qui plante) ;
+ * - `shared` n'est accordé que si le lexique était chargé ET qu'aucun résidu
+ *   n'est détecté. Par défaut on ne partage pas.
+ */
+async function anonymizeBeforeWrite(data, op) {
+  if (!data || typeof data !== 'object') return data;
+  if (data.pattern === undefined && data.data === undefined) return data;
+
+  try {
+    const anonymize = require('../lib/anonymize');
+    const lexicon = await anonymize.loadLexicon({ query });
+    const result = anonymize.anonymizePattern(
+      { pattern: data.pattern, data: data.data },
+      lexicon
+    );
+
+    const out = { ...data };
+    if (data.pattern !== undefined) out.pattern = result.pattern;
+    if (data.data !== undefined) out.data = result.data;
+
+    // Le partage est un privilège, pas un défaut : on ne peut que le retirer.
+    if (out.shared === true && !result.safeToShare) out.shared = false;
+
+    if (result.redacted > 0 || result.residual.length > 0) {
+      // console plutôt que lib/logger : le reste de ce module fait pareil et
+      // db/index.js est chargé très tôt.
+      console.warn(
+        `[anonymize] pattern ${op}: ${result.redacted} redaction(s)`
+        + `, residu=${result.residual.slice(0, 5).join(',') || 'aucun'}`
+        + `, partageable=${result.safeToShare}`
+      );
+    }
+    return out;
+  } catch (err) {
+    // Échec de la rédaction : on écrit quand même, mais jamais en partagé.
+    console.error(`[anonymize] rédaction impossible, pattern non partagé: ${err.message}`);
+    return { ...data, shared: false };
+  }
+}
+
 const memoryPatterns = {
   async list(filter = {}) {
     let sql = 'SELECT * FROM memory_patterns';
@@ -646,6 +692,8 @@ const memoryPatterns = {
   },
 
   async create(data) {
+    data = await anonymizeBeforeWrite(data, 'create');
+
     // Derive confidence_score from text confidence if not explicitly provided
     const confidenceText = data.confidence || 'Faible';
     const confidenceScore = data.confidence_score ?? data.confidenceScore
@@ -654,8 +702,8 @@ const memoryPatterns = {
 
     const result = await query(`
       INSERT INTO memory_patterns (pattern, category, data, confidence, confidence_score, date_discovered, sectors, targets,
-        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source, shared)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
     `, [
       data.pattern,
@@ -674,11 +722,19 @@ const memoryPatterns = {
       data.confirmations || 1,
       data.teamId || data.team_id || null,
       data.source || null,
+      // `shared` etait absent de cette liste : le drapeau etait donc
+      // inatteignable a la creation et retombait sur le DEFAULT false. Combine
+      // au fait qu'aucun agent ne le demande, le pool global ne pouvait
+      // structurellement jamais se remplir. La valeur transmise est deja
+      // passee par anonymizeBeforeWrite, qui ne sait que la retirer.
+      data.shared === true,
     ]);
     return result.rows[0];
   },
 
   async update(id, data) {
+    data = await anonymizeBeforeWrite(data, 'update');
+
     const sets = [];
     const values = [];
     let i = 1;
@@ -766,11 +822,25 @@ const memoryPatterns = {
       if (dismissed.rows[0]) return null; // User dismissed this recently, don't recreate
     }
 
-    // Atomic upsert: use Postgres advisory lock on category hash to prevent race conditions
-    // between concurrent agents (e.g. Timing Agent + Copy Optimizer writing to same category)
-    const lockKey = Math.abs(hashCode(`${data.category}:${prefix}`));
+    // Exclusion mutuelle entre agents concurrents écrivant la même catégorie
+    // (Timing Agent + Copy Optimizer, par exemple).
+    //
+    // ⚠️ NE PAS revenir à pg_advisory_lock. DATABASE_URL pointe sur Supavisor
+    // en mode transaction : les advisory locks appartiennent à la session
+    // serveur, que le pooler ne garantit pas stable d'une requête à l'autre.
+    // Le lock se pose sur une connexion, l'unlock part sur une autre et
+    // échoue — le verrou reste alors détenu par une connexion `idle` du
+    // pooler. Comme pg_advisory_lock est BLOQUANT, l'appel suivant attend
+    // indéfiniment : mesuré ici même, une écriture de pattern a bloqué plus de
+    // deux minutes avant d'être tuée. Sur un cron, cela fige la tâche.
+    //
+    // Le bail en table (lib/db-lock.js, migration 066) s'acquiert en une
+    // instruction atomique, expire tout seul, et ne bloque jamais.
+    const lockName = `pattern:${data.category}:${prefix}`;
+    let releaseLock = async () => {};
     try {
-      await query('SELECT pg_advisory_lock($1)', [lockKey]);
+      const { acquire } = require('../lib/db-lock');
+      releaseLock = await acquire(lockName, { ttlSeconds: 60 });
 
       // Try to find existing active pattern with same category and content
       const existing = await query(
@@ -778,9 +848,7 @@ const memoryPatterns = {
         [data.category, data.pattern]
       );
       if (existing.rows[0]) {
-        const result = await this.update(existing.rows[0].id, data);
-        await query('SELECT pg_advisory_unlock($1)', [lockKey]);
-        return result;
+        return await this.update(existing.rows[0].id, data);
       }
       // Also check by partial match (text prefix)
       if (prefix.length >= 10) {
@@ -789,9 +857,7 @@ const memoryPatterns = {
           [data.category, prefix + '%']
         );
         if (partial.rows[0]) {
-          const result = await this.update(partial.rows[0].id, data);
-          await query('SELECT pg_advisory_unlock($1)', [lockKey]);
-          return result;
+          return await this.update(partial.rows[0].id, data);
         }
       }
 
@@ -809,7 +875,6 @@ const memoryPatterns = {
             if (active.rows[0]) {
               const updated = await this.update(active.rows[0].id, data);
               await upsertPatternEmbedding(active.rows[0].id, data.pattern, null, precomputedEmbedding);
-              await query('SELECT pg_advisory_unlock($1)', [lockKey]);
               return updated;
             }
           }
@@ -825,12 +890,12 @@ const memoryPatterns = {
         }
       } catch { /* embedding optional */ }
 
-      await query('SELECT pg_advisory_unlock($1)', [lockKey]);
       return created;
-    } catch (err) {
-      // Always release lock even on error
-      try { await query('SELECT pg_advisory_unlock($1)', [lockKey]); } catch { /* ignore */ }
-      throw err;
+    } finally {
+      // Libération unique, quel que soit le chemin de sortie — la version
+      // précédente répétait l'unlock devant chaque `return`, et en avait
+      // forcément oublié un le jour où l'on ajouterait une branche.
+      await releaseLock();
     }
   },
 

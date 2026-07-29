@@ -88,4 +88,73 @@ async function withLock(name, fn, opts = {}) {
   }
 }
 
-module.exports = { withLock, INSTANCE_ID, DEFAULT_TTL_SECONDS };
+/** Compteur local : distingue deux acquisitions concurrentes du même process. */
+let _seq = 0;
+
+/** Libération inerte — sert quand le bail n'a pas été obtenu. */
+const NOOP_RELEASE = async () => {};
+
+/**
+ * Variante impérative de `withLock`, pour les sections critiques à sorties
+ * multiples qu'on ne peut pas envelopper dans un callback.
+ *
+ * Contrat en cas de contention : `acquire` ATTEND, mais de façon BORNÉE
+ * (`waitMs`, 5 s par défaut). Passé ce délai il renvoie une libération inerte
+ * et laisse l'appelant continuer sans garde.
+ *
+ * Ce choix vient d'une mesure : sans attente du tout, trois écritures
+ * concurrentes du même pattern produisaient trois lignes — exactement
+ * l'explosion que la déduplication doit empêcher. Avec une attente non bornée
+ * (le `pg_advisory_lock` d'origine), un bail bloqué figeait l'écriture plus de
+ * deux minutes. L'attente bornée sérialise le cas courant sans jamais pouvoir
+ * bloquer indéfiniment.
+ *
+ * @returns {Promise<Function>} fonction de libération, toujours sûre à appeler
+ */
+async function acquire(name, opts = {}) {
+  const ttl = opts.ttlSeconds || DEFAULT_TTL_SECONDS;
+  const waitMs = opts.waitMs ?? 5000;
+  const pollMs = opts.pollMs ?? 50;
+  const holder = `${INSTANCE_ID}#${++_seq}`;
+  const deadline = Date.now() + waitMs;
+
+  for (;;) {
+    try {
+      const res = await db.query(
+        `INSERT INTO cron_locks (name, instance_id, locked_at, expires_at)
+         VALUES ($1, $2, now(), now() + ($3 || ' seconds')::interval)
+         ON CONFLICT (name) DO UPDATE
+           SET instance_id = EXCLUDED.instance_id,
+               locked_at   = EXCLUDED.locked_at,
+               expires_at  = EXCLUDED.expires_at
+           WHERE cron_locks.expires_at < now()
+         RETURNING name`,
+        [name, holder, String(ttl)]
+      );
+      if (res.rows.length > 0) break; // bail obtenu
+    } catch (err) {
+      logger.warn('db-lock', `acquire impossible, section non gardee: ${err.message}`, { name });
+      return NOOP_RELEASE;
+    }
+
+    if (Date.now() >= deadline) {
+      // Le détenteur est anormalement long ou mort sans libérer. On préfère
+      // une écriture non gardée (au pire un doublon) à un blocage.
+      logger.warn('db-lock', `bail non obtenu apres ${waitMs}ms, section non gardee`, { name });
+      return NOOP_RELEASE;
+    }
+    await new Promise(r => setTimeout(r, pollMs));
+  }
+
+  return async () => {
+    try {
+      // Ne libérer que SON bail : si le nôtre a expiré et qu'un autre l'a
+      // repris, on ne doit pas le lui retirer.
+      await db.query('DELETE FROM cron_locks WHERE name = $1 AND instance_id = $2', [name, holder]);
+    } catch (err) {
+      logger.warn('db-lock', `release impossible, le bail expirera seul: ${err.message}`, { name });
+    }
+  };
+}
+
+module.exports = { withLock, acquire, INSTANCE_ID, DEFAULT_TTL_SECONDS };
