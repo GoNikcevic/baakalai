@@ -184,6 +184,12 @@ export default function OnboardingWizard({ onComplete }) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  // Premier import CRM declenche a la fin du wizard.
+  // status: 'idle' | 'running' | 'done' | 'error'
+  const [importState, setImportState] = useState({ status: 'idle', imported: null, error: null });
+  // Empeche de rejouer la sauvegarde du profil / la synchro outreach au 2e clic.
+  const setupDoneRef = useRef(false);
+
   // Document upload
   const [uploadedDocs, setUploadedDocs] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -280,6 +286,18 @@ export default function OnboardingWizard({ onComplete }) {
   /* ─── Save profile + complete ─── */
 
   function handleFinish() {
+    const token = localStorage.getItem('bakal_token');
+
+    // Le bouton de l'etape 3 est cliquable deux fois : une fois pour lancer
+    // l'import, une fois pour entrer dans l'app. Sans ce garde-fou, le second
+    // clic renverrait le profil et relancerait la synchro outreach — donc un
+    // double import chez le fournisseur.
+    if (setupDoneRef.current) {
+      finalize(token);
+      return;
+    }
+    setupDoneRef.current = true;
+
     // Save profile to localStorage (ProfilePage will pick it up)
     const profile = {
       company, sector, website, team_size: teamSize,
@@ -291,7 +309,6 @@ export default function OnboardingWizard({ onComplete }) {
     localStorage.setItem('bakal_profile', JSON.stringify(profile));
 
     // Also try to save to backend
-    const token = localStorage.getItem('bakal_token');
     fetch('/api/profile', {
       method: 'POST',
       headers: {
@@ -322,7 +339,47 @@ export default function OnboardingWizard({ onComplete }) {
         }).catch(() => {});
       }
     }
-    if (crmKey && crmProvider) {
+    // Import CRM : volontairement PAS en fire-and-forget.
+    //
+    // L'appel précédent ne visait que /keys/sync-crm, qui déclenche l'ANALYSE
+    // des deals — pas l'import des contacts. Résultat : un utilisateur
+    // Pipedrive ou HubSpot terminait l'inscription avec zéro opportunité en
+    // base, donc `segments.total === 0`, donc la QuickWinCard du dashboard
+    // renvoyait null. Le « wow » n'avait aucune matière sur laquelle porter.
+    //
+    // On lance donc le vrai import et on attend son résultat, pour pouvoir
+    // annoncer « N contacts importés » avant de rendre la main.
+    if (crmProvider && importState.status === 'idle') {
+      runFirstImport(crmProvider, token);
+      return; // on ne rend la main qu'une fois le resultat annonce
+    }
+    finalize(token);
+  }
+
+  /**
+   * Premier import CRM, avec état visible.
+   *
+   * Un échec ne bloque jamais la fin de l'inscription : l'utilisateur pourra
+   * relancer l'import depuis Clients. Mais il doit le savoir, au lieu de
+   * découvrir un dashboard vide sans explication.
+   */
+  async function runFirstImport(provider, token) {
+    setImportState({ status: 'running', imported: null, error: null });
+    try {
+      const res = await fetch(`/api/crm/import/${provider}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+
+      setImportState({ status: 'done', imported: body.imported ?? 0, error: null });
+
+      // L'analyse peut rester en tâche de fond : elle n'est pas nécessaire à
+      // l'affichage des deals dormants, qui se calcule à la demande en SQL.
       fetch('/api/settings/keys/sync-crm', {
         method: 'POST',
         headers: {
@@ -330,7 +387,16 @@ export default function OnboardingWizard({ onComplete }) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       }).catch(() => {});
+    } catch (err) {
+      // On n'appelle PAS finalize ici : l'utilisateur doit voir le resultat,
+      // succes comme echec, avant que le wizard se ferme. Le bouton de l'etape
+      // 3 devient alors « Voir mes deals dormants » (ou « Continuer » en cas
+      // d'echec) et c'est lui qui declenche finalize.
+      setImportState({ status: 'error', imported: null, error: err.message });
     }
+  }
+
+  function finalize(token) {
 
     // Mark onboarding complete on backend (authoritative)
     fetch('/api/auth/onboarding-complete', {
@@ -628,6 +694,24 @@ export default function OnboardingWizard({ onComplete }) {
                 <span>{t('wizard.checkStyle')} \u2014 {tone}, {formality}</span>
               </div>
             </div>
+            {/* Etat du premier import CRM. Sans ce retour, un import qui echoue
+                laissait l'utilisateur devant un dashboard vide sans explication. */}
+            {importState.status !== 'idle' && (
+              <div className="wizard-import-state" style={{
+                marginTop: 16, padding: '12px 14px', borderRadius: 10, fontSize: 13,
+                background: importState.status === 'error' ? 'var(--danger-bg, #FEF2F2)' : 'var(--paper-2)',
+                color: importState.status === 'error' ? 'var(--danger, #B42318)' : 'var(--grey-700)',
+                textAlign: 'left', lineHeight: 1.6,
+              }}>
+                {importState.status === 'running' && t('wizard.importRunningDesc')}
+                {importState.status === 'done' && (
+                  importState.imported > 0
+                    ? t('wizard.importDone').replace('{count}', importState.imported)
+                    : t('wizard.importEmpty')
+                )}
+                {importState.status === 'error' && t('wizard.importError')}
+              </div>
+            )}
           </>
         );
 
@@ -640,10 +724,18 @@ export default function OnboardingWizard({ onComplete }) {
 
   function renderActions() {
     if (step === TOTAL_STEPS - 1) {
+      const { status, imported } = importState;
+      // Le libelle suit l'etat de l'import : pendant, on ne promet rien ;
+      // apres, on nomme explicitement ce que l'utilisateur va voir, pour que
+      // le clic mene au « wow » au lieu d'un dashboard generique.
+      const label =
+        status === 'running' ? t('wizard.importRunning')
+        : status === 'done' && imported > 0 ? t('wizard.seeDormantDeals')
+        : t('wizard.goToDashboard');
       return (
         <div className="wizard-actions">
-          <button className="btn btn-primary" onClick={handleFinish}>
-            {t('wizard.goToDashboard')}
+          <button className="btn btn-primary" onClick={handleFinish} disabled={status === 'running'}>
+            {label}
           </button>
         </div>
       );

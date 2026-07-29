@@ -761,6 +761,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'pipedrive',
             crmContactId: String(raw.id),
+            lastActivityAt: extractActivityDate(provider, raw),
           });
           imported++;
         } catch (err) {
@@ -786,6 +787,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'odoo',
             crmContactId: String(raw.id),
+            lastActivityAt: extractActivityDate(provider, raw),
           });
           imported++;
         } catch (err) {
@@ -815,13 +817,16 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'salesforce',
             crmContactId: String(raw.id),
+            lastActivityAt: extractActivityDate(provider, raw),
             crmOwnerId: raw.ownerId || null,
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
       }
     } else if (provider === 'hubspot') {
-      const res2 = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=500&properties=email,firstname,lastname,jobtitle,company', {
+      // Les trois dernières propriétés portent la récence commerciale : sans
+      // elles aucun deal ne peut être détecté dormant (lib/crm-activity-date.js).
+      const res2 = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=500&properties=email,firstname,lastname,jobtitle,company,hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res2.ok) {
@@ -844,6 +849,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'hubspot',
             crmContactId: String(c.id),
+            lastActivityAt: extractActivityDate(provider, c),
           });
           imported++;
         } catch (err) { errors.push({ error: err.message }); }
@@ -873,6 +879,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'notion',
             crmContactId: raw.notionPageId || null,
+            lastActivityAt: extractActivityDate(provider, raw),
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
@@ -900,6 +907,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'airtable',
             crmContactId: raw.airtableRecordId || null,
+            lastActivityAt: extractActivityDate(provider, raw),
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
@@ -1813,6 +1821,7 @@ router.post('/auto-clean', cleanLimit, async (req, res, next) => {
 // Helper: get CRM token for any provider (with auto-refresh for Salesforce OAuth)
 // Delegated to shared utility to avoid circular deps
 const { getUserCrmToken } = require('../lib/crm-token');
+const { extractActivityDate } = require('../lib/crm-activity-date');
 
 // =============================================
 // Autopilot settings

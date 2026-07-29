@@ -8,6 +8,7 @@ const { getUserCrmToken } = require('./crm-token');
 const claude = require('../api/claude');
 const db = require('../db');
 const { notifyUser } = require('../socket');
+const { extractActivityDate } = require('./crm-activity-date');
 
 /**
  * Sync deals from the user's CRM and analyze them with Claude.
@@ -120,6 +121,9 @@ async function syncCRM(userId) {
                 status: 'imported',
                 crmProvider: 'salesforce',
                 crmContactId: c.Id,
+                // LastModifiedDate était déjà demandée dans le SOQL ci-dessus
+                // mais jamais exploitée.
+                lastActivityAt: extractActivityDate('salesforce', c),
               });
               contactsImported++;
             } catch { /* skip individual failures */ }
