@@ -654,8 +654,8 @@ const memoryPatterns = {
 
     const result = await query(`
       INSERT INTO memory_patterns (pattern, category, data, confidence, confidence_score, date_discovered, sectors, targets,
-        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `, [
       data.pattern,
@@ -673,6 +673,7 @@ const memoryPatterns = {
       data.improvement_pct || data.improvementPct || null,
       data.confirmations || 1,
       data.teamId || data.team_id || null,
+      data.source || null,
     ]);
     return result.rows[0];
   },
@@ -694,6 +695,7 @@ const memoryPatterns = {
       confirmations: 'confirmations',
       team_id: 'team_id', teamId: 'team_id',
       shared: 'shared',
+      source: 'source',
     };
     const seen = new Set();
     for (const [inputKey, col] of Object.entries(mapping)) {

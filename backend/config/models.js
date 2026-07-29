@@ -97,6 +97,15 @@ const ACTIONS = {
   enrichment:              { tier: 'fast',     thinking: 'disabled' },
   web_search_prospects:    { tier: 'fast' },
 
+  // Extraction depuis des snippets de recherche web : tâches purement
+  // mécaniques, sorties courtes et structurées. Ces quatre actions appelaient
+  // le SDK en direct sur un modèle codé en dur — donc hors routage, hors
+  // timeout, hors retry et absentes de llm_usage.
+  personalization_icebreaker: { tier: 'fast', thinking: 'disabled' },
+  enrich_company_from_web:    { tier: 'fast', thinking: 'disabled' },
+  enrich_contact_from_web:    { tier: 'fast', thinking: 'disabled' },
+  web_prospect_parse:         { tier: 'fast', thinking: 'disabled' },
+
   // ---- Analyse de synchronisation CRM ----
   sync_analysis:           { tier: 'balanced' },
 

@@ -9,10 +9,12 @@
 
 const { webSearch } = require('../api/brave-search');
 const { config } = require('../config');
+const claude = require('../api/claude');
 const logger = require('./logger');
+const { safeParseClaudeArray } = require('./utils/safe-json-parse');
 
-// Use Haiku for snippet parsing — cheap and fast.
-const PARSE_MODEL = 'claude-haiku-4-5-20251001';
+// Le modele n'est plus code en dur ici : l'action `web_prospect_parse` est
+// routee vers le tier `fast` dans config/models.js.
 
 /**
  * Search for prospect contacts at specific companies using web search.
@@ -132,11 +134,7 @@ async function searchProspectsWeb(companies, titles, options = {}) {
  * Use Claude Haiku to parse web search snippets into structured contacts.
  */
 async function parseSearchResults(searchResults, company, titles) {
-  const Anthropic = require('@anthropic-ai/sdk');
-  const apiKey = config.claude.apiKey;
-  if (!apiKey) return [];
-
-  const client = new Anthropic({ apiKey });
+  if (!config.claude.apiKey) return [];
 
   const snippetsText = searchResults
     .map((r, i) => `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.description}`)
@@ -145,10 +143,7 @@ async function parseSearchResults(searchResults, company, titles) {
   const titlesText = titles.join(', ');
 
   try {
-    const response = await client.messages.create({
-      model: PARSE_MODEL,
-      max_tokens: 2000,
-      system: [
+    const systemPrompt = [
         'Tu es un extracteur de contacts professionnels expert.',
         'A partir de snippets de recherche web, extrais TOUTES les personnes identifiables qui travaillent chez "' + company + '" ou une filiale/division de "' + company + '".',
         'Titres recherches : ' + titlesText + '. Mais inclus aussi les profils proches (VP R&D, Head of Innovation, Chief Scientific Officer, Responsable R&D, etc.).',
@@ -157,17 +152,18 @@ async function parseSearchResults(searchResults, company, titles) {
         'Pour chaque contact, retourne : {"name": "Prenom Nom", "firstName": "Prenom", "lastName": "Nom", "title": "Titre exact trouve", "linkedinUrl": "https://linkedin.com/in/xxx"}',
         'Si le linkedinUrl n\'est pas disponible, mets null.',
         'Retourne UNIQUEMENT un tableau JSON []. Pas de texte autour. Si aucun contact, retourne [].',
-      ].join('\n'),
-      messages: [{ role: 'user', content: snippetsText }],
-    });
+    ].join('\n');
 
-    const text = response.content[0].text.trim();
-    // Extract JSON array from response
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return [];
+    // Via api/claude : client partage, timeout, retry, routage par action et
+    // comptabilisation llm_usage. L'appel direct lisait aussi content[0].text en
+    // dur, ce qui casserait sur un modele gen-5 (bloc `thinking` en premier).
+    const result = await claude.callClaude(systemPrompt, snippetsText, 2000, 'web_prospect_parse');
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(parsed)) return [];
+    const parsed = safeParseClaudeArray(result);
+    if (!Array.isArray(parsed)) {
+      logger.warn('web-prospect', `Reponse non parsable pour "${company}" — 0 contact extrait`);
+      return [];
+    }
 
     // Validate and clean
     return parsed

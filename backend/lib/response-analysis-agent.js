@@ -372,7 +372,16 @@ async function scoreTrigger(triggerId, outcome) {
 
 /**
  * Create a memory pattern from accumulated response data.
+ *
+ * NOTE: `userId` n'est pas transmis à replaceOrCreate — sa signature est
+ * replaceOrCreate(data), à un seul argument. Les trois appels ci-dessous
+ * passaient (userId, {...}), ce qui décalait tout : `data` valait la chaîne
+ * userId, `data.pattern` était undefined, l'INSERT violait le NOT NULL et
+ * l'exception était avalée par les catch. Aucun de ces trois patterns n'a
+ * jamais été écrit. L'attribution au tenant passe par team_id (non renseigné
+ * par les agents aujourd'hui) — à traiter avec le chantier mémoire.
  */
+// eslint-disable-next-line no-unused-vars
 async function createMemoryPattern(userId, report) {
   if (report.analyzed < 5) return;
 
@@ -392,7 +401,7 @@ async function createMemoryPattern(userId, report) {
       ? `Les emails d'activation g\u00E9n\u00E8rent ${emailRate}% de r\u00E9ponses positives (${emailPositive}/${emailActions.length})`
       : `Les emails d'activation ont un taux de r\u00E9ponse positive de ${emailRate}% \u2014 envisager d'ajuster le ton ou le timing`;
     try {
-      await db.memoryPatterns.replaceOrCreate(userId, {
+      await db.memoryPatterns.replaceOrCreate({
         pattern: emailPattern,
         category: 'Corps',
         source: 'response_analysis_email',
@@ -413,7 +422,7 @@ async function createMemoryPattern(userId, report) {
       ? `LinkedIn : ${liRate}% de r\u00E9ponses positives (${liPositive}/${linkedinActions.length}). ${connectAccepted} connexions accept\u00E9es.`
       : `LinkedIn : taux de r\u00E9ponse positive ${liRate}%. ${connectAccepted} connexions accept\u00E9es sur ${linkedinActions.length} actions.`;
     try {
-      await db.memoryPatterns.replaceOrCreate(userId, {
+      await db.memoryPatterns.replaceOrCreate({
         pattern: liPattern,
         category: 'Canal',
         source: 'response_analysis_linkedin',
@@ -430,7 +439,7 @@ async function createMemoryPattern(userId, report) {
     ? `Activation : ${successRate}% de r\u00E9ponses positives (${report.positive}/${report.analyzed}) — email + LinkedIn`
     : `Activation : taux de r\u00E9ponse positive de ${successRate}% (${report.positive}/${report.analyzed})`;
   try {
-    await db.memoryPatterns.replaceOrCreate(userId, {
+    await db.memoryPatterns.replaceOrCreate({
       pattern,
       category: 'Corps',
       source: 'response_analysis_global',

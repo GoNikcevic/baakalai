@@ -269,8 +269,15 @@ Return empty array [] if nothing is relevant.`;
   try {
     const result = await claude.callClaude('Return only valid JSON array.', prompt, 1500, 'signal_extraction');
     const parsed = safeParseClaudeArray(result);
-    return Array.isArray(parsed) ? parsed.filter(s => s.title && s.relevance >= 30) : [];
-  } catch {
+    if (!Array.isArray(parsed)) {
+      logger.warn('signal-agent', 'extraction: reponse non parsable, signaux ignores');
+      return [];
+    }
+    return parsed.filter(s => s.title && s.relevance >= 30);
+  } catch (err) {
+    // Un tableau vide et une panne d'extraction se lisaient pareil en amont :
+    // "aucun signal detecte". On distingue les deux dans les logs.
+    logger.warn('signal-agent', `extraction echouee: ${err.message}`);
     return [];
   }
 }

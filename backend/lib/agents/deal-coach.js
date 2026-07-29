@@ -90,6 +90,12 @@ Suggest ONE specific action. Return JSON:
             ...coaching,
           });
           report.coached++;
+        } else {
+          // Sans cette branche, un deal dont la reponse etait illisible
+          // disparaissait du rapport sans laisser de trace : `coached: 3` sur
+          // 10 deals avec `errors: []` se lisait comme "7 deals n'avaient rien
+          // a signaler", alors que 7 appels avaient echoue au parsing.
+          report.errors.push(`${deal.name}: reponse Claude non parsable`);
         }
       } catch (err) {
         report.errors.push(`${deal.name}: ${err.message}`);

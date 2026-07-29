@@ -8,31 +8,16 @@
  */
 
 const { webSearch } = require('../api/brave-search');
-const Anthropic = require('@anthropic-ai/sdk');
-const { config } = require('../config');
-const { withRetry } = require('./retry');
+const claude = require('../api/claude');
 const logger = require('./logger');
 const db = require('../db');
 
-const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 const BATCH_SIZE = 3;
 const BATCH_DELAY_MS = 500;
 
 /** Sleep helper */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/** Get an Anthropic client instance */
-function getClient() {
-  const key = config.claude.apiKey;
-  if (!key) {
-    const err = new Error('Cle API Anthropic non configuree.');
-    err.status = 503;
-    err.code = 'API_KEY_MISSING';
-    throw err;
-  }
-  return new Anthropic({ apiKey: key });
 }
 
 /**
@@ -116,29 +101,15 @@ Resultats de recherche web :
 ${searchSummary}`;
 
   try {
-    const client = getClient();
-    const response = await withRetry(() => client.messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 300,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }],
-    }), { maxRetries: 2, baseDelay: 1000 });
+    // Passe par api/claude : client partage, timeout, retry unique, routage par
+    // action (config/models.js) et comptabilisation dans llm_usage. L'appel
+    // direct au SDK instanciait un client Anthropic par prospect et n'apparaissait
+    // dans aucun suivi de cout.
+    const { parsed } = await claude.callClaude(systemPrompt, userContent, 300, 'personalization_icebreaker');
 
-    const text = response.content[0].text;
-    let parsed;
-    try {
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\})/);
-      parsed = jsonMatch ? JSON.parse(jsonMatch[1] || jsonMatch[0]) : null;
-    } catch {
-      parsed = null;
+    if (!parsed) {
+      logger.warn('personalization', 'Reponse non parsable — icebreaker vide', { prospect: name, company });
     }
-
-    logger.info('personalization', 'Haiku icebreaker generated', {
-      prospect: name,
-      company,
-      input_tokens: response.usage?.input_tokens,
-      output_tokens: response.usage?.output_tokens,
-    });
 
     return {
       context: parsed?.context || '',
@@ -146,7 +117,7 @@ ${searchSummary}`;
       sources: sources.slice(0, 5),
     };
   } catch (err) {
-    logger.error('personalization', 'Haiku call failed', { prospect: name, error: err.message });
+    logger.error('personalization', 'Appel Claude echoue', { prospect: name, error: err.message });
     return { context: '', icebreaker: '', sources };
   }
 }
