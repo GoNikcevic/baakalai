@@ -592,6 +592,12 @@ router.post('/clean/:provider', cleanLimit, async (req, res, next) => {
       });
     }
 
+    // Invalidate the cached scan for this provider regardless — a fix just changed contact
+    // data (caps corrected, contact archived/deleted, emails verified), so the next scan read
+    // (e.g. Data Quality's Duplicates tab, which doesn't pass reportId) must not keep serving
+    // the pre-fix snapshot.
+    await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [req.user.id, provider]);
+
     res.json(result);
   } catch (err) {
     next(err);
@@ -1140,6 +1146,9 @@ router.post('/churn/score', async (req, res, next) => {
 // =============================================
 router.get('/churn/summary', async (req, res, next) => {
   try {
+    // Churn risk is a retention concept scoped to won clients — an active deal isn't a client
+    // yet, so it must never be counted here (see ChurnPage.jsx / ClientsPage.jsx for the
+    // matching frontend filters).
     const result = await db.query(
       `SELECT
         COUNT(*) FILTER (WHERE churn_score >= 76) AS critical,
@@ -1148,7 +1157,7 @@ router.get('/churn/summary', async (req, res, next) => {
         COUNT(*) FILTER (WHERE churn_score < 26 OR churn_score IS NULL) AS low,
         COUNT(*) FILTER (WHERE churn_score IS NOT NULL) AS scored,
         ROUND(AVG(churn_score) FILTER (WHERE churn_score IS NOT NULL)) AS avg_score
-      FROM opportunities WHERE user_id = $1`,
+      FROM opportunities WHERE user_id = $1 AND status = 'won'`,
       [req.user.id]
     );
     const row = result.rows[0] || {};

@@ -12,7 +12,7 @@
  * DELETE /api/nurture/triggers/:id       — Delete trigger
  * POST /api/nurture/triggers/:id/run     — Manually run a trigger
  *
- * GET  /api/nurture/emails               — List nurture emails (pending/sent)
+ * GET  /api/nurture/emails               — List nurture emails (pending/sent), optional ?chain= filter
  * POST /api/nurture/emails/:id/approve   — Approve a pending email
  * POST /api/nurture/emails/:id/cancel    — Cancel a pending email
  * POST /api/nurture/run                  — Run nurture engine for current user
@@ -211,6 +211,7 @@ router.post('/triggers/:id/run', async (req, res, next) => {
 router.get('/emails', async (req, res, next) => {
   try {
     const status = req.query.status || null;
+    const chain = req.query.chain || null; // 'deal_reactivation' | 'auto_upsell'
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     let sql = `SELECT ne.*, nt.name as trigger_name
                FROM nurture_emails ne
@@ -218,8 +219,12 @@ router.get('/emails', async (req, res, next) => {
                WHERE ne.user_id = $1`;
     const params = [req.user.id];
     if (status) {
-      sql += ` AND ne.status = $2`;
+      sql += ` AND ne.status = $${params.length + 1}`;
       params.push(status);
+    }
+    if (chain) {
+      sql += ` AND ne.metadata ->> 'chain' = $${params.length + 1}`;
+      params.push(chain);
     }
     sql += ` ORDER BY ne.created_at DESC LIMIT $${params.length + 1}`;
     params.push(limit);
@@ -248,7 +253,28 @@ router.post('/emails/:id/approve', async (req, res, next) => {
       toName: e.to_name,
       subject: e.subject,
       body: e.body,
+      existingEmailId: e.id,
     });
+
+    // If this email came from an autonomous chain (deal_reactivation/auto_upsell),
+    // keep agent_chain_executions in sync with the real send outcome.
+    await db.query(
+      `UPDATE agent_chain_executions SET status = $1, executed_at = now()
+       WHERE nurture_email_id = $2 AND status = 'pending'`,
+      [result.success ? 'executed' : 'failed', e.id]
+    );
+
+    // Reactivation/upsell emails: give the reply a week before this candidate can
+    // resurface in the queue, as a baseline safety net when the CRM isn't updated.
+    // If a real reply arrives sooner, the existing response-analysis/autopilot flow
+    // (Pipedrive-only today) already updates status/planned_followup_date faster.
+    const chain = e.metadata?.chain;
+    if (result.success && e.opportunity_id && (chain === 'deal_reactivation' || chain === 'auto_upsell')) {
+      await db.query(
+        `UPDATE opportunities SET planned_followup_date = now() + interval '7 days', planned_followup_reason = 'post_send_cooldown' WHERE id = $1`,
+        [e.opportunity_id]
+      );
+    }
 
     res.json(result);
   } catch (err) {
@@ -259,10 +285,19 @@ router.post('/emails/:id/approve', async (req, res, next) => {
 // POST /api/nurture/emails/:id/cancel
 router.post('/emails/:id/cancel', async (req, res, next) => {
   try {
-    await db.query(
-      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
+    const result = await db.query(
+      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = $1 AND user_id = $2 AND status = 'pending' RETURNING id`,
       [req.params.id, req.user.id]
     );
+
+    if (result.rows[0]) {
+      await db.query(
+        `UPDATE agent_chain_executions SET status = 'blocked'
+         WHERE nurture_email_id = $1 AND status = 'pending'`,
+        [result.rows[0].id]
+      );
+    }
+
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -33,6 +33,12 @@ const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'
 const PerformancePage = lazyRetry(() => import('./pages/PerformancePage'))
 const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
 const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
+const DealsToReactivatePage = lazyRetry(() => import('./pages/DealsToReactivatePage'))
+const ClientsToUpsellPage = lazyRetry(() => import('./pages/ClientsToUpsellPage'))
+const DealReactivationDetailRoute = lazyRetry(() => import('./pages/DealReactivationDetailRoute'))
+const UpsellDetailRoute = lazyRetry(() => import('./pages/UpsellDetailRoute'))
+const DataQualityPage = lazyRetry(() => import('./pages/DataQualityPage'))
+const ChurnPage = lazyRetry(() => import('./pages/ChurnPage'))
 const ActivationPage = lazyRetry(() => import('./pages/ActivationPage'))
 const AnalyticsPage = lazyRetry(() => import('./pages/AnalyticsPage'))
 const SettingsWrapper = lazyRetry(() => import('./pages/SettingsWrapper'))
@@ -180,6 +186,12 @@ export default function App() {
             <Route path="/campaigns" element={<CampaignsList />} />
             <Route path="/campaigns/:id" element={<CampaignDetailRoute />} />
             <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/deals-to-reactivate" element={<DealsToReactivatePage />} />
+            <Route path="/deals-to-reactivate/:opportunityId" element={<DealReactivationDetailRoute />} />
+            <Route path="/clients-to-upsell" element={<ClientsToUpsellPage />} />
+            <Route path="/clients-to-upsell/:opportunityId" element={<UpsellDetailRoute />} />
+            <Route path="/data-quality" element={<DataQualityPage />} />
+            <Route path="/churn-risk" element={<ChurnPage />} />
             <Route path="/activation" element={<ActivationPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsWrapper />} />

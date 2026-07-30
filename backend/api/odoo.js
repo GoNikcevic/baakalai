@@ -133,6 +133,20 @@ async function updateContact(creds, contactId, data) {
   return { id: contactId };
 }
 
+// Archive (not `unlink`) — res.partner is frequently FK-referenced by crm.lead/account.move,
+// so a hard delete can fail on those constraints and is irreversible anyway, defeating undo.
+// `listContacts`'s search implicitly excludes active=false records (Odoo ORM default), so
+// archived contacts disappear from future scans with no extra filtering needed.
+async function archiveContact(creds, contactId) {
+  await call(creds, 'res.partner', 'write', [[contactId], { active: false }]);
+  return { id: contactId };
+}
+
+async function unarchiveContact(creds, contactId) {
+  await call(creds, 'res.partner', 'write', [[contactId], { active: true }]);
+  return { id: contactId };
+}
+
 async function upsertContact(creds, data) {
   if (data.email) {
     const existing = await searchContactByEmail(creds, data.email);
@@ -274,6 +288,8 @@ module.exports = {
   searchContactByEmail,
   createContact,
   updateContact,
+  archiveContact,
+  unarchiveContact,
   upsertContact,
   getDeals,
   createDeal,

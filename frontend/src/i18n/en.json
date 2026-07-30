@@ -21,7 +21,149 @@
     "newCampaign": "+ New campaign",
     "openSidebar": "Open sidebar",
     "collapseSidebar": "Collapse sidebar",
-    "logoutTitle": "Log out"
+    "logoutTitle": "Log out",
+    "dealsToReactivate": "Deals to reactivate",
+    "clientsToUpsell": "Clients to upsell",
+    "churnRisk": "Clients at risk",
+    "dataQuality": "Data Quality"
+  },
+  "chainConfig": {
+    "enabled": "Auto-reactivation: Enabled",
+    "disabled": "Auto-reactivation: Disabled",
+    "maxPerDay": "Max per day:"
+  },
+  "dealsToReactivate": {
+    "title": "Deals to reactivate",
+    "subtitle": "Stagnant deals, or overdue on their planned follow-up date — the email is drafted the moment you open it."
+  },
+  "upsell": {
+    "title": "Clients to upsell",
+    "subtitle": "Clients ready for an upsell based on their current offers and engagement signals — the email is drafted the moment you open it."
+  },
+  "dataQuality": {
+    "title": "Data Quality",
+    "subtitle": "Want to improve Baakalai's performance? Improve the data you give it.",
+    "tabs": {
+      "duplicates": "Duplicates",
+      "dealQuality": "Deal quality",
+      "clientQuality": "Client quality",
+      "history": "History"
+    },
+    "banners": {
+      "noEmail": {
+        "title": "No email account connected",
+        "desc": "Without a connected email account, Baakalai can't send any follow-up or upsell proposal.",
+        "cta": "Connect an email account"
+      },
+      "noCrm": {
+        "title": "No CRM connected",
+        "desc": "Connect a CRM so Baakalai can analyze your deals and clients.",
+        "cta": "Connect a CRM"
+      }
+    },
+    "duplicates": {
+      "rescan": "Rescan",
+      "scanning": "Scanning...",
+      "scanError": "Scan failed",
+      "noneFound": "No duplicates found on this CRM.",
+      "otherIssuesTitle": "Other issues detected",
+      "mergeButton": "Merge",
+      "reviewDiff": "Field comparison",
+      "keepThis": "Keep this contact",
+      "willBeRemoved": "Will be removed in favor of the kept contact:",
+      "confirmMerge": "Confirm merge",
+      "cancel": "Cancel",
+      "manualChecklistTitle": "Manual deletion required",
+      "manualChecklistNote": "This CRM doesn't support automatic deletion — please delete these contacts yourself directly in your CRM:",
+      "fieldFromContact": "Contact {n}",
+      "conflictBadge": "Different values",
+      "activityRow": "Activity (emails · exchanges · product lines)",
+      "historyMergedNote": "Emails, exchanges, and other activity from removed contacts are automatically re-linked to the kept contact — nothing is lost.",
+      "mergeSuccess": "Merge completed",
+      "mergeError": "Merge failed"
+    },
+    "dealQuality": {
+      "missingSector": "Sector not filled in",
+      "missingDealValue": "Deal value not filled in",
+      "stageMappingIssue": "Status not configured for this CRM",
+      "missingWonLostDate": "Missing close date",
+      "ownerNotMapped": "Owner not matched to a team member",
+      "zeroActivity": "No CRM activity logged",
+      "configureMapping": "Configure",
+      "noneFound": "No quality issues detected on your active deals."
+    },
+    "clientQuality": {
+      "missingProductLines": "No product line assigned",
+      "noProductLinesConfigured": "No product lines configured for your team",
+      "configureProductLines": "Configure product lines",
+      "noneFound": "No quality issues detected on your clients."
+    },
+    "history": {
+      "noneFound": "No history yet.",
+      "groupLabel": {
+        "merge_keep": "Duplicate merge (contact kept)",
+        "merge_delete": "Duplicate merge (contact removed)",
+        "enrichment": "Field enriched"
+      },
+      "remoteActionLabel": {
+        "updated": "CRM updated",
+        "deleted": "Deleted from CRM",
+        "archived": "Archived in CRM",
+        "manual_required": "Manual deletion required",
+        "none": "Local only"
+      },
+      "undo": "Undo",
+      "undoConfirm": "Restore the original state?",
+      "undoSuccess": "Change undone",
+      "undoFailed": "Undo failed",
+      "undone": "Undone"
+    },
+    "common": {
+      "view": "View",
+      "affectedCount": "{count} affected",
+      "lastScanAt": "Last scan: {date}"
+    }
+  },
+  "reactivation": {
+    "sortByValue": "Sort by value",
+    "sortByOverdue": "Sort by overdue",
+    "viewEmail": "View email",
+    "postpone": "Postpone",
+    "noCandidates": "No candidates yet.",
+    "back": "Back",
+    "send": "Send",
+    "regenerate": "Regenerate",
+    "subjectLabel": "Subject",
+    "bodyLabel": "Message",
+    "sent": "Sent",
+    "generating": "Writing the email...",
+    "generatingHint": "This takes a few seconds — please don't leave this page.",
+    "crmHygieneBanner": "💡 Log your exchanges with these contacts directly in your CRM (or as a note) — Baakalai relies on that to know automatically whether and when to follow up.",
+    "tabPending": "Pending",
+    "tabHistory": "History",
+    "historyEmpty": "No history yet.",
+    "historySentOn": "Email sent on {date}",
+    "historyPostponedManualOn": "Manually postponed to {date}",
+    "historyPostponedAutoOn": "Automatically postponed to {date}",
+    "historyWonOn": "Won on {date}",
+    "historyLostOn": "Lost on {date}",
+    "sendFailedBadge": "⚠ Last send failed"
+  },
+  "churn": {
+    "title": "Clients at churn risk",
+    "subtitle": "Explainable weighted risk score, with detailed factors per client.",
+    "markChurned": "Mark as churned",
+    "markStillClient": "Still a client",
+    "markMissedChurn": "Flag missed churn",
+    "reasonPrompt": "Reason (optional)",
+    "reasonPrix": "Price",
+    "reasonConcurrent": "Competitor",
+    "reasonSupport": "Support",
+    "reasonProduitInadapte": "Product mismatch",
+    "reasonBudgetCoupe": "Budget cut",
+    "reasonAutre": "Other",
+    "outcomeSaved": "Saved",
+    "outcomeSaveError": "Failed to save"
   },
   "auth": {
     "login": "Sign in",

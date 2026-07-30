@@ -18,8 +18,7 @@
  */
 
 const db = require('../db');
-const { getUserKey } = require('../config');
-const { getUserCrmToken } = require('./crm-token');
+const { resolveCrmForUser } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
@@ -62,40 +61,12 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     if (team) teamId = team.id;
   } catch { /* solo user, no team */ }
 
-  // Detect connected CRM provider and resolve credentials
-  let crmProvider = 'pipedrive';
-  let token = await getUserCrmToken(userId, 'pipedrive');
-  if (!token) {
-    for (const p of ['hubspot', 'salesforce', 'odoo']) {
-      token = await getUserCrmToken(userId, p);
-      if (token) { crmProvider = p; break; }
-    }
-  }
-  if (!token) {
+  // Detect connected CRM provider — use user's active CRM preference, fallback to first connected
+  const { provider: crmProvider, creds: crmCreds } = await resolveCrmForUser(userId);
+  if (!crmProvider) {
     _running.delete(userId);
     report.errors.push('No CRM connected');
     return report;
-  }
-
-  // Salesforce needs instanceUrl + accessToken as credentials object
-  let crmCreds = token;
-  if (crmProvider === 'salesforce') {
-    const { decrypt } = require('../config/crypto');
-    const integration = await db.query(
-      `SELECT access_token, instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
-      [userId]
-    );
-    if (integration.rows[0]) {
-      if (!integration.rows[0].instance_url) {
-        _running.delete(userId);
-        report.errors.push('Salesforce instance URL not configured');
-        return report;
-      }
-      crmCreds = {
-        accessToken: typeof token === 'string' ? token : decrypt(integration.rows[0].access_token),
-        instanceUrl: integration.rows[0].instance_url,
-      };
-    }
   }
 
   // Notify user that agent is working
@@ -109,10 +80,10 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     const _opps = await db.opportunities.listByUser(userId, 10000, 0);
 
     // ── Step 2: Quick Data Quality Check ──
-    await stepDataQuality(userId, token, report, _opps);
+    await stepDataQuality(userId, crmCreds, report, _opps);
 
     // ── Step 3: Nurture Evaluation ──
-    await stepNurture(userId, token, report);
+    await stepNurture(userId, crmCreds, report);
 
     // ── Step 3b: LinkedIn Response Sync ──
     try {
@@ -343,6 +314,10 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         }
 
         if (Object.keys(updates).length > 0) {
+          // A genuine field diff means the CRM record actually changed since last sync —
+          // use this as the "real activity" signal instead of the DB's own `updated_at`
+          // (which a trigger resets on every internal write, including this one).
+          updates.last_activity_at = new Date().toISOString();
           await db.opportunities.update(existing.id, updates);
           report.sync.updated++;
         }
@@ -378,7 +353,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         if (!personId) continue;
 
         const opp = await db.query(
-          `SELECT id, status, won_date, lost_date, deal_value FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
           [userId, personId]
         );
         if (!opp.rows[0]) continue;
@@ -388,6 +363,22 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         if (deal.value && deal.value !== parseFloat(o.deal_value)) updates.deal_value = deal.value;
         if (deal.status === 'won' && o.status !== 'won') { updates.status = 'won'; updates.won_date = new Date().toISOString(); }
         if (deal.status === 'lost' && o.status !== 'lost') { updates.status = 'lost'; updates.lost_date = new Date().toISOString(); }
+        // Pipedrive's native "next activity" date feeds planned_followup_date — never overwrite
+        // a manually-set date with null (Pipedrive is the only provider synced here today).
+        if (deal.nextActivityDate && deal.nextActivityDate !== o.planned_followup_date) {
+          updates.planned_followup_date = deal.nextActivityDate;
+          updates.planned_followup_reason = 'crm_sync';
+        }
+        // The CRM's own "last modified" timestamp is the real activity signal — `updated_at`
+        // gets reset to now() by a DB trigger on every internal write (e.g. churn scoring),
+        // so it can't be trusted for staleness. Only advance last_activity_at forward, never back.
+        if (deal.updatedAt) {
+          const crmUpdated = new Date(deal.updatedAt);
+          const stored = o.last_activity_at ? new Date(o.last_activity_at) : null;
+          if (!isNaN(crmUpdated.getTime()) && (!stored || crmUpdated > stored)) {
+            updates.last_activity_at = crmUpdated.toISOString();
+          }
+        }
 
         if (Object.keys(updates).length > 0) {
           await db.opportunities.update(o.id, updates);

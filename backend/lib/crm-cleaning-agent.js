@@ -23,6 +23,28 @@ const dropcontact = require('../api/dropcontact');
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
+// ── Credentials resolution ──
+
+/**
+ * Resolve credentials for a specific provider. Every provider except Salesforce returns the
+ * same bare decrypted string getUserKey() already returns. Salesforce's real API calls need
+ * { instanceUrl, accessToken } — getUserKey only returns the decrypted access token, so
+ * instance_url is read separately (same query pattern used elsewhere, e.g. routes/crm.js's
+ * /fields/:provider and lib/crm-token.js's resolveCrmForUser).
+ */
+async function getProviderCredentials(userId, provider) {
+  const token = await getUserKey(userId, provider);
+  if (provider !== 'salesforce' || !token) return token;
+
+  const integration = await db.query(
+    `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
+    [userId]
+  );
+  const instanceUrl = integration.rows[0]?.instance_url;
+  if (!instanceUrl) return null;
+  return { accessToken: token, instanceUrl };
+}
+
 // ── Provider Adapters ──
 
 function getAdapter(provider) {
@@ -56,15 +78,23 @@ function getAdapter(provider) {
         async deletePerson(token, id) {
           return pipedrive.deletePerson(token, id);
         },
+        async createPerson(token, data) {
+          const created = await pipedrive.createPerson(token, data);
+          // createPerson doesn't accept phone directly — patch it in immediately so a
+          // recreated (undone) contact restores as many original fields as possible.
+          if (data.phone) await pipedrive.updatePerson(token, created.id, { phone: data.phone });
+          return created;
+        },
       };
 
     case 'odoo': {
       const odoo = require('../api/odoo');
+      const parseOdooCreds = (token) => {
+        try { return JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
+      };
       return {
         async listPersons(token) {
-          let creds;
-          try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
-          return odoo.listAllContacts(creds);
+          return odoo.listAllContacts(parseOdooCreds(token));
         },
         normalizePerson(raw) {
           return {
@@ -79,12 +109,18 @@ function getAdapter(provider) {
           };
         },
         async updatePerson(token, id, data) {
-          let creds;
-          try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
-          return odoo.updateContact(creds, id, data);
+          return odoo.updateContact(parseOdooCreds(token), id, data);
         },
-        async deletePerson() {
-          throw new Error('Odoo does not support contact deletion via API — archive instead');
+        async deletePerson(token, id) {
+          // Archive (not a hard delete) — res.partner is frequently FK-referenced, and
+          // archiving keeps the id + relations intact so undo is instant (unarchivePerson).
+          return odoo.archiveContact(parseOdooCreds(token), id);
+        },
+        async unarchivePerson(token, id) {
+          return odoo.unarchiveContact(parseOdooCreds(token), id);
+        },
+        async createPerson(token, data) {
+          return odoo.createContact(parseOdooCreds(token), data);
         },
       };
     }
@@ -121,13 +157,62 @@ function getAdapter(provider) {
         async deletePerson(token, id) {
           return hubspot.archiveContact(token, id);
         },
+        async createPerson(token, data) {
+          const props = {};
+          if (data.name) {
+            const parts = data.name.split(' ');
+            props.firstname = parts[0] || '';
+            props.lastname = parts.slice(1).join(' ') || '';
+          }
+          if (data.email) props.email = data.email;
+          if (data.company) props.company = data.company;
+          if (data.title) props.jobtitle = data.title;
+          return hubspot.createContact(token, props);
+        },
+      };
+    }
+
+    case 'salesforce': {
+      // Real, native-ID adapter (pulled out of the notion/airtable local-DB-only bucket —
+      // api/salesforce.js already has a real listContacts/updateContact that was never wired
+      // in here). `token` for this provider is { accessToken, instanceUrl } — see
+      // getProviderCredentials, not a bare string like every other provider.
+      const salesforce = require('../api/salesforce');
+      return {
+        async listPersons(creds) {
+          return salesforce.listContacts(creds.instanceUrl, creds.accessToken);
+        },
+        normalizePerson(raw) {
+          return {
+            id: raw.id,
+            name: raw.name || '',
+            email: raw.email ? raw.email.toLowerCase().trim() : null,
+            phone: raw.phone || null,
+            title: raw.title || '',
+            company: raw.company || '',
+            updatedAt: raw.updatedAt || null,
+            raw,
+          };
+        },
+        async updatePerson(creds, id, data) {
+          return salesforce.updateContact(creds.instanceUrl, creds.accessToken, id, data);
+        },
+        async deletePerson(creds, id) {
+          return salesforce.deleteContact(creds.instanceUrl, creds.accessToken, id);
+        },
+        async createPerson(creds, data) {
+          return salesforce.createContact(creds.instanceUrl, creds.accessToken, data);
+        },
       };
     }
 
     case 'notion':
-    case 'airtable':
-    case 'salesforce': {
-      // For these providers, scan from already-imported opportunities in Baakalai DB
+    case 'airtable': {
+      // No update/delete capability exists for these providers (create-only push functions —
+      // see api/notion-crm.js / api/airtable-crm.js) — scan from Baakalai's own imported
+      // opportunities rows instead of the live API, and keep updatePerson/deletePerson as
+      // documented no-ops ("manual only" — the Data Quality page's duplicates strate shows a
+      // manual checklist instead of attempting a remote write for these two).
       return {
         async listPersons(_token, userId) {
           const opps = await db.opportunities.listByUser(userId, 500);
@@ -170,6 +255,36 @@ function isValidEmail(email) {
   return email && EMAIL_RE.test(email);
 }
 
+// ── Merge diff (full field comparison across a duplicate group) ──
+
+/**
+ * Given the full-snapshot contacts array for one duplicate group (from scanCRM's
+ * duplicate_email/duplicate_name issues), compare ALL fields — not just name — and surface
+ * exactly which contact had which value, plus a heuristic reconciled record. This is what the
+ * merge-review UI reads before a user confirms a merge, so nothing is silently dropped.
+ */
+function computeMergeDiff(contacts) {
+  const fields = ['name', 'email', 'phone', 'title', 'company'];
+  const perContact = contacts.map(c => ({
+    id: c.id, name: c.name, email: c.email, phone: c.phone, title: c.title, company: c.company, updatedAt: c.updatedAt,
+  }));
+
+  // Tiebreaker for real conflicts: prefer the most-recently-updated contact's value.
+  const mostRecent = [...contacts].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))[0];
+
+  const diffs = {};
+  const suggested = {};
+  for (const field of fields) {
+    const values = [...new Set(contacts.map(c => c[field]).filter(v => v !== null && v !== undefined && v !== ''))];
+    diffs[field] = { values, conflict: values.length > 1 };
+    if (values.length === 0) suggested[field] = null;
+    else if (values.length === 1) suggested[field] = values[0];
+    else suggested[field] = mostRecent?.[field] || values[0];
+  }
+
+  return { fields, perContact, diffs, suggested };
+}
+
 // ── Scan CRM ──
 
 /**
@@ -179,8 +294,8 @@ function isValidEmail(email) {
  * @returns {{ score, totalContacts, issues[], summary }}
  */
 async function scanCRM(userId, provider) {
-  const dbBasedProviders = ['notion', 'airtable', 'salesforce'];
-  const token = await getUserKey(userId, provider);
+  const dbBasedProviders = ['notion', 'airtable'];
+  const token = await getProviderCredentials(userId, provider);
   if (!token && !dbBasedProviders.includes(provider)) {
     throw new Error(`No ${provider} API key configured`);
   }
@@ -197,7 +312,10 @@ async function scanCRM(userId, provider) {
     if (!p.email) continue;
     const key = p.email.toLowerCase();
     if (!emailGroups.has(key)) emailGroups.set(key, []);
-    emailGroups.get(key).push({ id: p.id, name: p.name, email: p.email, company: p.company });
+    // Full snapshot (not just id/name/email/company) — this is what confirm-merge's field
+    // diff/reconciliation reads, persisted as-is into crm_cleaning_reports.issues so the
+    // merge-review UI never needs an extra live re-fetch.
+    emailGroups.get(key).push({ id: p.id, name: p.name, email: p.email, phone: p.phone, title: p.title, company: p.company, updatedAt: p.updatedAt });
   }
   for (const [email, group] of emailGroups) {
     if (group.length > 1) {
@@ -218,7 +336,7 @@ async function scanCRM(userId, provider) {
     if (!p.name || !p.company) continue;
     const key = `${p.name.toLowerCase().trim()}|${p.company.toLowerCase().trim()}`;
     if (!nameGroups.has(key)) nameGroups.set(key, []);
-    nameGroups.get(key).push({ id: p.id, name: p.name, email: p.email, company: p.company });
+    nameGroups.get(key).push({ id: p.id, name: p.name, email: p.email, phone: p.phone, title: p.title, company: p.company, updatedAt: p.updatedAt });
   }
   for (const [nameKey, group] of nameGroups) {
     if (group.length > 1) {
@@ -409,7 +527,7 @@ async function scanCRM(userId, provider) {
  * @param {{ type, action, contactIds, data }[]} fixes
  */
 async function applyFixes(userId, provider, fixes) {
-  const token = await getUserKey(userId, provider);
+  const token = await getProviderCredentials(userId, provider);
   if (!token) throw new Error(`No ${provider} API key configured`);
 
   const adapter = getAdapter(provider);
@@ -529,4 +647,4 @@ async function applyFixes(userId, provider, fixes) {
   return { applied, skipped, errors };
 }
 
-module.exports = { scanCRM, applyFixes, getAdapter };
+module.exports = { scanCRM, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials };

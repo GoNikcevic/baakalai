@@ -54,4 +54,48 @@ async function getUserCrmToken(userId, provider) {
   return getUserKey(userId, provider);
 }
 
-module.exports = { getUserCrmToken };
+/**
+ * Resolve the CRM provider + credentials to use for a user: their explicit
+ * active_crm_provider preference, falling back to the first connected provider.
+ * Salesforce credentials are shaped as {accessToken, instanceUrl}; every other
+ * provider's credentials are the raw token/key as stored.
+ * @returns {Promise<{provider: string|null, creds: any}>}
+ */
+async function resolveCrmForUser(userId) {
+  let provider = null;
+  let token = null;
+
+  try {
+    const userRow = await db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [userId]);
+    const activeCrm = userRow.rows[0]?.active_crm_provider;
+    if (activeCrm) {
+      token = await getUserCrmToken(userId, activeCrm);
+      if (token) provider = activeCrm;
+    }
+  } catch { /* fallback below */ }
+
+  if (!token) {
+    for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo']) {
+      token = await getUserCrmToken(userId, p);
+      if (token) { provider = p; break; }
+    }
+  }
+  if (!token) return { provider: null, creds: null };
+
+  let creds = token;
+  if (provider === 'salesforce') {
+    const integration = await db.query(
+      `SELECT access_token, instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
+      [userId]
+    );
+    if (!integration.rows[0]?.instance_url) return { provider: null, creds: null };
+    creds = {
+      accessToken: typeof token === 'string' ? token : decrypt(integration.rows[0].access_token),
+      instanceUrl: integration.rows[0].instance_url,
+    };
+  }
+
+  return { provider, creds };
+}
+
+module.exports = { getUserCrmToken, resolveCrmForUser };

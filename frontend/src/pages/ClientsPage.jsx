@@ -11,6 +11,7 @@ import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
+import ProductLineTags from '../components/ProductLineTags';
 
 const STAGE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
@@ -115,7 +116,7 @@ export default function ClientsPage() {
   const filtered = useMemo(() => clients.filter(c => {
     // If highlight param is set, only show those contacts
     if (highlightIds) return highlightIds.has(c.id);
-    if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
+    if (filter === 'churn_risk' && (c.status !== 'won' || c.churn_score == null || c.churn_score < 50)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
     if (search) {
@@ -208,7 +209,7 @@ export default function ClientsPage() {
     { key: 'interested', label: STATUS_LABELS.interested, count: statusCounts.interested || 0 },
     { key: 'meeting', label: STATUS_LABELS.meeting, count: statusCounts.meeting || 0 },
     { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
-    { key: 'churn_risk', label: t('clients.churnRisk'), count: clients.filter(c => c.churn_score >= 50).length },
+    { key: 'churn_risk', label: t('clients.churnRisk'), count: clients.filter(c => c.status === 'won' && c.churn_score >= 50).length },
   ].filter(tab => tab.key === 'all' || tab.count > 0);
 
   return (
@@ -530,7 +531,10 @@ export default function ClientsPage() {
                     )}
                     {!selectedClient && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {c.churn_score != null ? (
+                        {/* Churn risk is a retention concept \u2014 only meaningful once a deal has
+                            actually become a client. Showing it on a still-active deal mixes
+                            the two approaches, so it's only rendered for status === 'won'. */}
+                        {c.status === 'won' && c.churn_score != null ? (
                           <>
                             <div style={{
                               width: 8, height: 8, borderRadius: '50%',
@@ -650,7 +654,7 @@ function ClientDetailPanel({ client, onClose }) {
             Score : {client.score}/100
           </span>
         )}
-        {client.churn_score != null && (
+        {client.status === 'won' && client.churn_score != null && (
           <span style={{
             fontSize: 12, padding: '4px 14px', borderRadius: 8,
             background: client.churn_score >= 76 ? 'var(--danger-soft)' : client.churn_score >= 51 ? 'var(--warning-soft)' : client.churn_score >= 26 ? '#FEF3C7' : 'var(--success-soft)',
@@ -678,8 +682,8 @@ function ClientDetailPanel({ client, onClose }) {
         )}
       </div>
 
-      {/* Churn factors */}
-      {client.churn_factors && client.churn_factors.length > 0 && (
+      {/* Churn factors — retention concept, won clients only */}
+      {client.status === 'won' && client.churn_factors && client.churn_factors.length > 0 && (
         <div style={{
           background: client.churn_score >= 50 ? 'rgba(220,38,38,0.04)' : 'var(--bg-elevated)',
           border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 16,
@@ -904,107 +908,6 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
             : (lang === 'en' ? `Show all ${timeline.length} activities` : `Voir les ${timeline.length} activit\u00e9s`)}
         </button>
       )}
-    </div>
-  );
-}
-
-/* ═══ Product Line Tags ═══ */
-
-function ProductLineTags({ clientId, lang }) {
-  const en = lang === 'en';
-  const [allLines, setAllLines] = useState([]);
-  const [assigned, setAssigned] = useState([]);
-  const [showPicker, setShowPicker] = useState(false);
-
-  useEffect(() => {
-    request('/crm/product-lines').then(d => {
-      setAllLines(d.productLines || []);
-    }).catch(() => {});
-    // Load assigned product lines for this client
-    request(`/crm/client/${clientId}/product-lines`).then(d => {
-      setAssigned(d.productLines || []);
-    }).catch(() => setAssigned([]));
-  }, [clientId]);
-
-  const handleAssign = async (plId) => {
-    try {
-      await request(`/crm/product-lines/${plId}/assign`, {
-        method: 'POST',
-        body: JSON.stringify({ opportunityIds: [clientId] }),
-      });
-      setAssigned(prev => [...prev, allLines.find(l => l.id === plId)].filter(Boolean));
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to assign product line' : 'Échec de l\'assignation' }); }
-  };
-
-  const handleRemove = async (plId) => {
-    try {
-      await request(`/crm/product-lines/${plId}/unassign`, {
-        method: 'POST',
-        body: JSON.stringify({ opportunityIds: [clientId] }),
-      });
-      setAssigned(prev => prev.filter(p => p.id !== plId));
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to remove product line' : 'Échec de la suppression' }); }
-  };
-
-  if (allLines.length === 0) return null;
-
-  const assignedIds = new Set(assigned.map(a => a.id));
-  const available = allLines.filter(l => !assignedIds.has(l.id));
-
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-        {en ? 'Product lines' : 'Lignes de produits'}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        {assigned.map(pl => (
-          <span key={pl.id} style={{
-            fontSize: 11, padding: '3px 10px', borderRadius: 12,
-            background: 'rgba(110,87,250,0.1)', color: 'var(--accent)',
-            fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            {pl.icon || '\uD83D\uDCE6'} {pl.name}
-            <button onClick={() => handleRemove(pl.id)} style={{
-              background: 'none', border: 'none', color: 'var(--text-muted)',
-              cursor: 'pointer', fontSize: 10, padding: 0, marginLeft: 2,
-            }}>{'\u2715'}</button>
-          </span>
-        ))}
-        {available.length > 0 && (
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowPicker(!showPicker)}
-              style={{
-                fontSize: 11, padding: '3px 10px', borderRadius: 12,
-                border: '1px dashed var(--border)', background: 'transparent',
-                color: 'var(--text-muted)', cursor: 'pointer',
-              }}
-            >
-              + {en ? 'Add' : 'Ajouter'}
-            </button>
-            {showPicker && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, zIndex: 10,
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 8, padding: 6, minWidth: 160, marginTop: 4,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              }}>
-                {available.map(pl => (
-                  <div key={pl.id} onClick={() => { handleAssign(pl.id); setShowPicker(false); }} style={{
-                    padding: '6px 10px', fontSize: 12, cursor: 'pointer',
-                    borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span>{pl.icon || '\uD83D\uDCE6'}</span> {pl.name}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

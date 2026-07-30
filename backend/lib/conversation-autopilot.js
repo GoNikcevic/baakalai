@@ -31,6 +31,8 @@ const logger = require('./logger');
 const MAX_TURNS = 5;
 const MIN_DELAY_MS = 2 * 60 * 60 * 1000;  // 2 hours
 const MAX_DELAY_MS = 4 * 60 * 60 * 1000;  // 4 hours
+const DAY_MS = 24 * 60 * 60 * 1000;
+const NOT_NOW_FOLLOWUP_DAYS = 21; // matches the "in a few weeks" wording used in the auto-reply
 
 // Intents that stop the autopilot
 const STOP_INTENTS = ['not_interested', 'unsubscribe'];
@@ -103,6 +105,12 @@ async function processReply(userId, opts) {
       break;
     case 'not_now':
       instruction = 'The prospect says not now. Acknowledge respectfully, offer to follow up in a few weeks, and ask when would be a better time.';
+      // The reply promises "a few weeks" — actually schedule that, instead of just
+      // sending a polite auto-reply with no structural effect on the reactivation queue.
+      await db.opportunities.update(opportunityId, {
+        planned_followup_date: new Date(Date.now() + NOT_NOW_FOLLOWUP_DAYS * DAY_MS).toISOString(),
+        planned_followup_reason: 'not_now',
+      });
       break;
     default:
       instruction = 'Continue the conversation naturally. Be helpful and professional. Try to understand their needs and move toward a meeting.';

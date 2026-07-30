@@ -1410,6 +1410,8 @@ const opportunities = {
       lost_date: 'lost_date', lostDate: 'lost_date',
       renewal_date: 'renewal_date', renewalDate: 'renewal_date',
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
+      planned_followup_date: 'planned_followup_date', plannedFollowupDate: 'planned_followup_date',
+      planned_followup_reason: 'planned_followup_reason', plannedFollowupReason: 'planned_followup_reason',
       data: 'data',
     };
     const jsonbCols = new Set(['personalization', 'churn_factors']);

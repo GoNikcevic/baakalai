@@ -9,24 +9,41 @@
  *   26-50 = Medium risk (yellow)
  *   51-75 = High risk (orange)
  *   76-100 = Critical (red)
+ *
+ * Sector weights (sector_churn_weights) are static/hand-tuned for now. Recalibrating them
+ * from real churn_outcomes feedback is future work — intended to reuse the memory_patterns
+ * cross-user learning pattern (memory_patterns.sectors) via the existing Sunday Memory Agent,
+ * not a separate learning system. This phase only wires up the data collection.
  */
 
 const db = require('../db');
 const logger = require('./logger');
+const { getSectorMultiplier } = require('./sector-classifier');
 
 const DAY_MS = 86400000;
 
 /**
  * Score a single opportunity for churn risk.
+ * `ownSectorMultiplier`/`clientSectorMultiplier` are pre-resolved by scoreAllForUser
+ * (via lib/sector-classifier) so this function stays synchronous.
+ * `upsellEmails` is the subset of nurture_emails from the auto_upsell chain for this contact.
+ * `externalSignals` is this opportunity's rows from churn_external_signals (last 30d).
  * Returns { score, factors[] }
  */
-function scoreOpportunity(opp, { deals = [], activities = [], emails = [] } = {}) {
+function scoreOpportunity(opp, {
+  deals = [], activities = [], emails = [],
+  ownSectorMultiplier = 1.0, clientSectorMultiplier = 1.0, clientSectorLabel = null,
+  upsellEmails = [], externalSignals = [],
+} = {}) {
   const now = Date.now();
   const factors = [];
   let score = 0;
 
   // ── 1. Inactivity (max 30 pts) ──
-  const lastActivity = opp.updated_at || opp.created_at;
+  // `last_activity_at` reflects genuine CRM changes; `updated_at` is reset to now() by a
+  // DB trigger on every internal write (including this very scoring pass), so it can't
+  // be trusted to measure staleness.
+  const lastActivity = opp.last_activity_at || opp.created_at;
   const daysSinceActivity = lastActivity ? (now - new Date(lastActivity).getTime()) / DAY_MS : 999;
 
   if (daysSinceActivity >= 120) {
@@ -133,6 +150,40 @@ function scoreOpportunity(opp, { deals = [], activities = [], emails = [] } = {}
     }
   }
 
+  // ── 6. Sector weighting ──
+  const sectorMultiplier = ownSectorMultiplier * clientSectorMultiplier;
+  if (sectorMultiplier !== 1.0) {
+    const before = score;
+    score = Math.round(score * sectorMultiplier);
+    factors.push({
+      signal: 'sector_weight',
+      weight: score - before,
+      detail: clientSectorLabel
+        ? `Pondération secteur (client: ${clientSectorLabel}, x${sectorMultiplier.toFixed(2)})`
+        : `Pondération secteur (x${sectorMultiplier.toFixed(2)})`,
+    });
+  }
+
+  // ── 7. Upsell-response history ──
+  if (upsellEmails.length > 0) {
+    const latest = [...upsellEmails].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    if (latest.replied_at && latest.sentiment === 'positive') {
+      score = Math.max(0, score - 10);
+      factors.push({ signal: 'upsell_accepted', weight: -10, detail: 'A répondu positivement à une proposition d’upsell' });
+    } else if (latest.status === 'sent' && !latest.replied_at) {
+      score += 5;
+      factors.push({ signal: 'upsell_ignored', weight: 5, detail: 'Proposition d’upsell envoyée sans réponse' });
+    }
+  }
+
+  // ── 8. External web signals (last 30 days) ──
+  if (externalSignals.length > 0) {
+    const distinctTypes = [...new Set(externalSignals.map(s => s.signal_type))];
+    const bump = Math.min(distinctTypes.length * 10, 20);
+    score += bump;
+    factors.push({ signal: 'external_signals', weight: bump, detail: `Signal(aux) externe(s) détecté(s) : ${distinctTypes.join(', ')}` });
+  }
+
   return {
     score: Math.min(100, Math.max(0, score)),
     factors,
@@ -147,16 +198,59 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
   const opps = await db.opportunities.listByUser(userId, 10000, 0);
   if (opps.length === 0) return { scored: 0, atRisk: 0 };
 
-  // Load nurture emails if not provided
+  // Load nurture emails if not provided (includes opportunity_id + metadata for the
+  // upsell-response-history factor, in addition to the existing to_email matching above)
   let allEmails = emails;
   if (allEmails.length === 0) {
     try {
       const emailResult = await db.query(
-        `SELECT to_email, status, sentiment, replied_at, created_at FROM nurture_emails WHERE user_id = $1`,
+        `SELECT to_email, status, sentiment, replied_at, created_at, opportunity_id, metadata FROM nurture_emails WHERE user_id = $1`,
         [userId]
       );
       allEmails = emailResult.rows;
     } catch { allEmails = []; }
+  }
+  const upsellEmailsByOpp = new Map();
+  for (const e of allEmails) {
+    if (e.metadata?.chain !== 'auto_upsell' || !e.opportunity_id) continue;
+    if (!upsellEmailsByOpp.has(e.opportunity_id)) upsellEmailsByOpp.set(e.opportunity_id, []);
+    upsellEmailsByOpp.get(e.opportunity_id).push(e);
+  }
+
+  // Load external signals from the last 30 days, grouped by opportunity
+  const externalSignalsByOpp = new Map();
+  try {
+    const sigResult = await db.query(
+      `SELECT opportunity_id, signal_type FROM churn_external_signals
+       WHERE user_id = $1 AND detected_at > now() - interval '30 days'`,
+      [userId]
+    );
+    for (const s of sigResult.rows) {
+      if (!externalSignalsByOpp.has(s.opportunity_id)) externalSignalsByOpp.set(s.opportunity_id, []);
+      externalSignalsByOpp.get(s.opportunity_id).push(s);
+    }
+  } catch { /* table may be empty — fine */ }
+
+  // Resolve the user's own-business sector multiplier once (not per-opportunity)
+  let ownSectorMultiplier = 1.0;
+  try {
+    const profile = await db.query('SELECT sector FROM user_profiles WHERE user_id = $1', [userId]);
+    const ownSectorText = profile.rows[0]?.sector;
+    if (ownSectorText) {
+      const resolved = await getSectorMultiplier(ownSectorText, 'own_business');
+      ownSectorMultiplier = resolved.multiplier;
+    }
+  } catch { /* neutral fallback */ }
+
+  // Pre-resolve each distinct client sector text once, to avoid a classifier call per opportunity
+  const clientSectorMap = new Map();
+  const distinctClientSectors = [...new Set(opps.map(o => o.data?.sector).filter(Boolean))];
+  for (const raw of distinctClientSectors) {
+    try {
+      clientSectorMap.set(raw, await getSectorMultiplier(raw, 'client_industry'));
+    } catch {
+      clientSectorMap.set(raw, { multiplier: 1.0, sector: null });
+    }
   }
 
   let scored = 0;
@@ -165,7 +259,15 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
   // Score all opportunities in memory first
   const results = [];
   for (const opp of opps) {
-    const { score, factors } = scoreOpportunity(opp, { deals, activities: [], emails: allEmails });
+    const clientSector = opp.data?.sector ? clientSectorMap.get(opp.data.sector) : null;
+    const { score, factors } = scoreOpportunity(opp, {
+      deals, activities: [], emails: allEmails,
+      ownSectorMultiplier,
+      clientSectorMultiplier: clientSector?.multiplier ?? 1.0,
+      clientSectorLabel: clientSector?.sector ?? null,
+      upsellEmails: upsellEmailsByOpp.get(opp.id) || [],
+      externalSignals: externalSignalsByOpp.get(opp.id) || [],
+    });
     results.push({ id: opp.id, score, factors: JSON.stringify(factors) });
     scored++;
     if (score >= 50) atRisk++;

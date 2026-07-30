@@ -77,7 +77,7 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
 }
 
 async function getDeals(instanceUrl, accessToken, limit = 100) {
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return (result.records || []).map(r => ({
     id: r.Id,
@@ -86,6 +86,7 @@ async function getDeals(instanceUrl, accessToken, limit = 100) {
     amount: r.Amount,
     closeDate: r.CloseDate,
     createdAt: r.CreatedDate,
+    updatedAt: r.LastModifiedDate,
   }));
 }
 
@@ -140,6 +141,16 @@ async function updateContact(instanceUrl, accessToken, contactId, data) {
       ...(data.company ? { Account: { Name: data.company } } : {}),
     }),
   });
+  return { id: contactId };
+}
+
+// ── Delete Contact ──
+// Hard delete via REST (Salesforce retains it in the Recycle Bin ~15 days server-side, but from
+// our API's perspective it's gone). Undo recreates a NEW Contact via createContact — it gets a
+// new Salesforce Id, a known limitation of this approach vs. the Recycle Bin's `undelete`
+// composite API, which could restore the exact same Id within the 15-day window if ever needed.
+async function deleteContact(instanceUrl, accessToken, contactId) {
+  await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}`, { method: 'DELETE' });
   return { id: contactId };
 }
 
@@ -203,6 +214,11 @@ async function getActivities(instanceUrl, accessToken, contactId) {
     status: a.Status,
     date: a.ActivityDate,
     description: a.Description,
+    // Aliases matching Pipedrive/Odoo's getActivities shape, for callers that consume
+    // multiple providers generically (e.g. response-analysis-agent.js).
+    dueDate: a.ActivityDate,
+    note: a.Description,
+    type: 'task',
   }));
 }
 
@@ -211,7 +227,7 @@ async function getActivities(instanceUrl, accessToken, contactId) {
 async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
   const all = [];
   let result = await sfFetch(instanceUrl, accessToken,
-    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Title, Account.Name, OwnerId FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
+    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Phone, Title, Account.Name, OwnerId, LastModifiedDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
   );
   const mapRecords = (records) => {
     for (const c of (records || [])) {
@@ -219,9 +235,11 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
         id: c.Id,
         name: `${c.FirstName || ''} ${c.LastName || ''}`.trim(),
         email: c.Email,
+        phone: c.Phone || null,
         title: c.Title,
         company: c.Account?.Name || '',
         ownerId: c.OwnerId,
+        updatedAt: c.LastModifiedDate,
       });
     }
   };
@@ -398,6 +416,7 @@ async function getContactEmailActivity(instanceUrl, accessToken, contactEmail) {
 module.exports = {
   createContact,
   updateContact,
+  deleteContact,
   upsertContact,
   searchContacts,
   listContacts,
