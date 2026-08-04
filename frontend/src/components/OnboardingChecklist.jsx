@@ -81,7 +81,8 @@ export default function OnboardingChecklist() {
       (keys.salesforceKey && keys.salesforceKey.configured) ||
       (keys.odooKey && keys.odooKey.configured) ||
       (keys.notionToken && keys.notionToken.configured) ||
-      (keys.airtableKey && keys.airtableKey.configured)
+      (keys.airtableKey && keys.airtableKey.configured) ||
+      (keys.folkKey && keys.folkKey.configured)
     ));
 
     // 3. Email connected — any email account (SMTP/OAuth)

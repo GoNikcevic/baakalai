@@ -1,11 +1,9 @@
 /* ===============================================================================
    BAKAL — Onboarding Wizard (React)
    Multi-step wizard shown on first login. Steps:
-   1. Welcome + company basics
-   2. Core API keys (Outreach tool selector + CRM)
-   3. Target & persona
-   4. Communication style
-   5. Done — recap
+   1. Company basics + documents
+   2. CRM first (hero job — 7 providers), then outreach + targeting (optional)
+   3. Done — recap + first CRM import
    Sets localStorage 'bakal_onboarding_complete' on finish.
    =============================================================================== */
 
@@ -174,6 +172,60 @@ const CRM_GUIDES = {
     ],
     link: null,
   },
+  notion: {
+    guideFr: [
+      'Cr\u00E9ez une int\u00E9gration sur notion.so/my-integrations',
+      'Partagez votre base CRM avec cette int\u00E9gration (\u22EF \u2192 Connexions)',
+      'Copiez le token (secret_... ou ntn_...) \u2014 vous choisirez la base dans Param\u00E8tres',
+    ],
+    guideEn: [
+      'Create an integration at notion.so/my-integrations',
+      'Share your CRM database with it (\u22EF \u2192 Connections)',
+      'Copy the token (secret_... or ntn_...) \u2014 you will pick the database in Settings',
+    ],
+    link: 'https://www.notion.so/my-integrations',
+  },
+  airtable: {
+    guideFr: [
+      'Connectez-vous sur airtable.com',
+      'Allez sur airtable.com/create/tokens et cr\u00E9ez un token personnel',
+      'Accordez les scopes data.records:read et schema.bases:read, puis copiez le token (pat...)',
+    ],
+    guideEn: [
+      'Sign in to airtable.com',
+      'Go to airtable.com/create/tokens and create a personal token',
+      'Grant data.records:read and schema.bases:read scopes, then copy the token (pat...)',
+    ],
+    link: 'https://airtable.com/create/tokens',
+  },
+  folk: {
+    guideFr: [
+      'Connectez-vous sur app.folk.app',
+      'Allez dans Settings \u2192 API',
+      'G\u00E9n\u00E9rez une cl\u00E9 API et copiez-la ci-dessous',
+    ],
+    guideEn: [
+      'Sign in to app.folk.app',
+      'Go to Settings \u2192 API',
+      'Generate an API key and copy it below',
+    ],
+    link: null,
+  },
+};
+
+/**
+ * Champ saveKeys par fournisseur CRM \u2014 doit refl\u00E9ter PROVIDER_MAP c\u00F4t\u00E9
+ * backend (routes/settings.js). Odoo/Notion/Airtable/Folk manquaient : le
+ * wizard proposait Odoo dans la liste mais jetait silencieusement sa cl\u00E9.
+ */
+const CRM_FIELD_MAP = {
+  hubspot: 'hubspotKey',
+  pipedrive: 'pipedriveKey',
+  salesforce: 'salesforceKey',
+  odoo: 'odooKey',
+  notion: 'notionToken',
+  airtable: 'airtableKey',
+  folk: 'folkKey',
 };
 
 export default function OnboardingWizard({ onComplete }) {
@@ -260,8 +312,7 @@ export default function OnboardingWizard({ onComplete }) {
       if (outreach) keysToSave[outreach.field] = outreachKey.trim();
     }
     if (crmKey.trim() && crmProvider) {
-      const crmFieldMap = { hubspot: 'hubspotKey', pipedrive: 'pipedriveKey', salesforce: 'salesforceKey' };
-      const field = crmFieldMap[crmProvider];
+      const field = CRM_FIELD_MAP[crmProvider];
       if (field) keysToSave[field] = crmKey.trim();
     }
     if (Object.keys(keysToSave).length === 0) { next(); return; }
@@ -498,18 +549,6 @@ export default function OnboardingWizard({ onComplete }) {
                   <option value="100+">100+</option>
                 </select>
               </div>
-              <div className="form-group">
-                <label className="form-label">{t('wizard.targetSectors')}</label>
-                <input className="form-input" placeholder="Ex: Finance, RH, SaaS" value={targetSectors} onChange={e => setTargetSectors(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">{t('wizard.targetSize')}</label>
-                <input className="form-input" placeholder="Ex: 11-50 salari\u00E9s" value={targetSize} onChange={e => setTargetSize(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">{t('wizard.targetZone')}</label>
-                <input className="form-input" placeholder="Ex: France, \u00CEle-de-France" value={targetZones} onChange={e => setTargetZones(e.target.value)} />
-              </div>
             </div>
 
             {/* Document upload — required */}
@@ -551,6 +590,76 @@ export default function OnboardingWizard({ onComplete }) {
             <div className="wizard-step-title">{STEP_META[1].title}</div>
             <div className="wizard-step-desc">{STEP_META[1].desc}</div>
             <div className="wizard-core-keys">
+              {/* CRM en premier : c'est le hero job (réactivation de deals),
+                  pas un à-côté. L'outreach et le ciblage descendent en bloc
+                  optionnel — l'inverse de la version précédente. */}
+              <div className="wizard-key-row">
+                <div className="wizard-key-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </div>
+                <div className="wizard-key-input">
+                  <div className="wizard-key-label">{t('wizard.crmLabel')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    {t('wizard.crmPitch')}
+                  </div>
+                  <select
+                    className="form-input"
+                    value={crmProvider}
+                    onChange={e => { setCrmProvider(e.target.value); setCrmKey(''); }}
+                    style={{ marginBottom: 8 }}
+                  >
+                    <option value="">{t('wizard.selectCrm')}</option>
+                    <option value="pipedrive">Pipedrive</option>
+                    <option value="hubspot">HubSpot</option>
+                    <option value="salesforce">Salesforce</option>
+                    <option value="odoo">Odoo</option>
+                    <option value="notion">Notion</option>
+                    <option value="airtable">Airtable</option>
+                    <option value="folk">Folk</option>
+                  </select>
+                  {crmProvider && (() => {
+                    const crmGuide = CRM_GUIDES[crmProvider];
+                    const guide = en ? (crmGuide?.guideEn || []) : (crmGuide?.guideFr || []);
+                    const crmLabel = crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1);
+                    return (
+                      <>
+                        <div style={{
+                          fontSize: 12, background: 'var(--paper-2)', borderRadius: 8,
+                          padding: '10px 12px', marginBottom: 8, lineHeight: 1.6,
+                        }}>
+                          <ol style={{ margin: 0, paddingLeft: 16, color: 'var(--grey-700)' }}>
+                            {guide.map((s, i) => <li key={i}>{s}</li>)}
+                          </ol>
+                          {crmGuide?.link && (
+                            <a href={crmGuide.link} target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize: 11, color: 'var(--primary)', display: 'inline-block', marginTop: 6 }}>
+                              {t('wizard.openLink').replace('{label}', crmLabel)}
+                            </a>
+                          )}
+                        </div>
+                        <input
+                          className="form-input"
+                          type="password"
+                          placeholder={crmProvider === 'hubspot' ? 'pat-...' : t('wizard.crmApiKeyPlaceholder')}
+                          value={crmKey}
+                          onChange={e => setCrmKey(e.target.value)}
+                        />
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', margin: '16px 0 12px', paddingTop: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{t('wizard.prospectionOptional')}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>{t('wizard.prospectionDesc')}</div>
+              </div>
+
               <div className="wizard-key-row">
                 <div className="wizard-key-icon">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -595,61 +704,22 @@ export default function OnboardingWizard({ onComplete }) {
                   })()}
                 </div>
               </div>
-              <div className="wizard-key-row">
-                <div className="wizard-key-icon">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
+
+              <div className="form-grid" style={{ marginTop: 4 }}>
+                <div className="form-group">
+                  <label className="form-label">{t('wizard.targetSectors')}</label>
+                  <input className="form-input" placeholder="Ex: Finance, RH, SaaS" value={targetSectors} onChange={e => setTargetSectors(e.target.value)} />
                 </div>
-                <div className="wizard-key-input">
-                  <div className="wizard-key-label">{t('wizard.crmOptional')}</div>
-                  <select
-                    className="form-input"
-                    value={crmProvider}
-                    onChange={e => { setCrmProvider(e.target.value); setCrmKey(''); }}
-                    style={{ marginBottom: 8 }}
-                  >
-                    <option value="">{t('wizard.selectCrm')}</option>
-                    <option value="hubspot">HubSpot</option>
-                    <option value="pipedrive">Pipedrive</option>
-                    <option value="salesforce">Salesforce</option>
-                    <option value="odoo">Odoo</option>
-                  </select>
-                  {crmProvider && (() => {
-                    const crmGuide = CRM_GUIDES[crmProvider];
-                    const guide = en ? (crmGuide?.guideEn || []) : (crmGuide?.guideFr || []);
-                    const crmLabel = crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1);
-                    return (
-                      <>
-                        <div style={{
-                          fontSize: 12, background: 'var(--paper-2)', borderRadius: 8,
-                          padding: '10px 12px', marginBottom: 8, lineHeight: 1.6,
-                        }}>
-                          <ol style={{ margin: 0, paddingLeft: 16, color: 'var(--grey-700)' }}>
-                            {guide.map((s, i) => <li key={i}>{s}</li>)}
-                          </ol>
-                          {crmGuide?.link && (
-                            <a href={crmGuide.link} target="_blank" rel="noopener noreferrer"
-                              style={{ fontSize: 11, color: 'var(--primary)', display: 'inline-block', marginTop: 6 }}>
-                              {t('wizard.openLink').replace('{label}', crmLabel)}
-                            </a>
-                          )}
-                        </div>
-                        <input
-                          className="form-input"
-                          type="password"
-                          placeholder={crmProvider === 'hubspot' ? 'pat-...' : t('wizard.crmApiKeyPlaceholder')}
-                          value={crmKey}
-                          onChange={e => setCrmKey(e.target.value)}
-                        />
-                      </>
-                    );
-                  })()}
+                <div className="form-group">
+                  <label className="form-label">{t('wizard.targetSize')}</label>
+                  <input className="form-input" placeholder="Ex: 11-50 salariés" value={targetSize} onChange={e => setTargetSize(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">{t('wizard.targetZone')}</label>
+                  <input className="form-input" placeholder="Ex: France, Île-de-France" value={targetZones} onChange={e => setTargetZones(e.target.value)} />
                 </div>
               </div>
+
               {keySaveStatus === 'error' && (
                 <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 4 }}>
                   {t('wizard.keyInvalid')}
@@ -677,13 +747,14 @@ export default function OnboardingWizard({ onComplete }) {
                 <span className="wizard-check-icon">{company ? '\u2705' : '\u2B1C'}</span>
                 <span>{t('wizard.checkCompany')} {company ? `\u2014 ${company}` : t('wizard.checkCompanyLater')}</span>
               </div>
-              <div className="wizard-check-item">
-                <span className="wizard-check-icon">{outreachKey && outreachProvider ? '\u2705' : '\u2B1C'}</span>
-                <span>{outreachLabel} {outreachKey && outreachProvider ? `\u2014 ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
-              </div>
+              {/* CRM avant outreach : m\u00EAme hi\u00E9rarchie que les \u00E9tapes du wizard. */}
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{crmKey && crmProvider ? '\u2705' : '\u2B1C'}</span>
                 <span>CRM {crmKey && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
+              </div>
+              <div className="wizard-check-item">
+                <span className="wizard-check-icon">{outreachKey && outreachProvider ? '\u2705' : '\u2B1C'}</span>
+                <span>{outreachLabel} {outreachKey && outreachProvider ? `\u2014 ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{targetSectors || personaPrimary ? '\u2705' : '\u2B1C'}</span>
