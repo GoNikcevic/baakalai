@@ -244,6 +244,10 @@ const KNOWN_CAPITALIZED = new Set([
   'cta', 'sdr', 'bdr', 'mrr', 'arr', 'acv', 'ltv', 'cac', 'nps', 'sla', 'rgpd',
   'api', 'url', 'smtp', 'dns', 'pdf', 'csv', 'faq', 'poc', 'mvp', 'ux', 'ui',
   'ab', 'kpis', 'rdvs', 'pmes', 'tpe', 'ia', 'llm', 'roas', 'cpl', 'cpc',
+  // Vocabulaire économique français et anglicismes métier observés en prod :
+  // « CAC40 », « French Tech », « ESN », « Annual Contract Value » bloquaient
+  // le partage de patterns pourtant entièrement rédigés.
+  'cac40', 'french', 'tech', 'esn', 'annual', 'contract', 'value',
 ]);
 
 /**

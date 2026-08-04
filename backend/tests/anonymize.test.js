@@ -118,6 +118,17 @@ test('ne signale pas ses propres placeholders', () => {
   assert.deepStrictEqual(detectResidual('Le compte [ENTREPRISE] progresse'), []);
 });
 
+test('le vocabulaire economique courant n est pas une entite', () => {
+  // Cas observes en prod le 2026-08-04 : ces trois patterns entierement
+  // rediges etaient bloques au partage par la garde.
+  assert.deepStrictEqual(
+    detectResidual('Mix entreprises B2B etablies (CAC40, scale-ups tech) vs prospects individuels'), []);
+  assert.deepStrictEqual(
+    detectResidual('Grands groupes CAC40, scale-ups French Tech, ESN/conseil sans segmentation'), []);
+  assert.deepStrictEqual(
+    detectResidual('Cela empeche tout calcul d ACV (Annual Contract Value) ou de deal size moyen'), []);
+});
+
 // ─────────────────────────────────────────────────────────────
 // Contrat de anonymizePattern
 // ─────────────────────────────────────────────────────────────

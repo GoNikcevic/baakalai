@@ -33,7 +33,7 @@ baakalai is the agent that exploits your CRM to generate revenue. It connects to
 
 1. **i18n**: NEVER hardcode French text in JSX. Always use `t('key')` from `useI18n()`. Add keys to BOTH `fr.json` AND `en.json` in the same commit.
 2. **Active CRM**: Always use `users.active_crm_provider` to determine which CRM to sync/display. Never hardcode provider priority order.
-3. **Pattern writes**: All `replaceOrCreate()` calls use Postgres advisory locks to prevent race conditions between concurrent agents.
+3. **Pattern writes**: `replaceOrCreate()` uses a table-based lease (`lib/db-lock.js`, `cron_locks` table) for mutual exclusion. NEVER use `pg_advisory_lock` — DATABASE_URL goes through Supavisor in transaction mode, where advisory locks leak and block forever. All pattern writes are anonymized in the DAO (`lib/anonymize.js`); `shared` is granted automatically when redaction is complete.
 4. **Email dedup**: Before inserting nurture emails, always check for existing pending/recent emails for the same contact (2-hour + 7-day windows).
 5. **Environments**: Never share credentials between prod and staging. Never point staging `APP_URL` to production.
 

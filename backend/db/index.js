@@ -592,8 +592,16 @@ const versions = {
  * Règles :
  * - la rédaction ne peut jamais faire échouer une écriture (un pattern rédigé
  *   partiellement vaut mieux qu'un agent qui plante) ;
- * - `shared` n'est accordé que si le lexique était chargé ET qu'aucun résidu
- *   n'est détecté. Par défaut on ne partage pas.
+ * - politique de partage (décision produit 2026-08-04) : `shared` est accordé
+ *   automatiquement dès que la rédaction est complète — lexique réellement
+ *   chargé ET aucun résidu détecté sur le texte du pattern. Le mérite
+ *   (confiance Haute) n'entre pas ici : il est filtré à la lecture par
+ *   `listForPrompt`, ce qui laisse un pattern monter en confiance après coup
+ *   sans réécriture. L'accord n'a lieu que si l'appel porte le texte du
+ *   pattern (`data.pattern` présent) : sur une mise à jour partielle, la garde
+ *   n'a pas vu le vrai texte et ne peut rien promettre. Un `shared: false`
+ *   explicite de l'appelant est respecté ; l'inverse (`shared: true` non sûr)
+ *   est toujours retiré.
  */
 async function anonymizeBeforeWrite(data, op) {
   if (!data || typeof data !== 'object') return data;
@@ -611,8 +619,13 @@ async function anonymizeBeforeWrite(data, op) {
     if (data.pattern !== undefined) out.pattern = result.pattern;
     if (data.data !== undefined) out.data = result.data;
 
-    // Le partage est un privilège, pas un défaut : on ne peut que le retirer.
+    // Retrait : un partage demandé mais non sûr est toujours refusé.
     if (out.shared === true && !result.safeToShare) out.shared = false;
+    // Accord : rédaction complète + texte du pattern présent + pas de refus
+    // explicite de l'appelant → le pattern rejoint le pool global.
+    if (out.shared === undefined && data.pattern !== undefined && result.safeToShare) {
+      out.shared = true;
+    }
 
     if (result.redacted > 0 || result.residual.length > 0) {
       // console plutôt que lib/logger : le reste de ce module fait pareil et
