@@ -734,6 +734,7 @@ router.post('/import/:provider', async (req, res, next) => {
     if (!token) return res.status(400).json({ error: `${provider} not connected` });
 
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
     const errors = [];
 
@@ -865,21 +866,59 @@ router.post('/import/:provider', async (req, res, next) => {
       const contacts = await notionCrm.queryContacts(notionToken, databaseId);
       for (const raw of contacts) {
         try {
-          const name = raw.name || raw.company || 'Unknown';
+          // Dans une base CRM Notion, la propriété title est souvent
+          // l'entreprise ; la personne vit dans « Contact Principal ».
+          const company = raw.company || raw.name || null;
+          const name = raw.contact || raw.name || raw.company || 'Unknown';
           const email = raw.email || null;
           if (!email) { skipped++; continue; }
+
+          const lastActivityAt = extractActivityDate(provider, raw);
+          const statusNorm = notionCrm.normalizeNotionStatus(raw.status);
+          const dealValue = typeof raw.dealValue === 'number' ? raw.dealValue : null;
+
           const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
-          if (existing) { skipped++; continue; }
+          if (existing) {
+            const updates = {};
+            // Monotone : une resynchronisation ne fait jamais rajeunir un deal.
+            if (lastActivityAt && (!existing.last_activity_at
+                || new Date(lastActivityAt) > new Date(existing.last_activity_at))) {
+              updates.lastActivityAt = lastActivityAt;
+            }
+            if (dealValue != null && Number(existing.deal_value || 0) !== dealValue) {
+              updates.dealValue = dealValue;
+            }
+            if (raw.contact && raw.contact !== existing.name) updates.name = raw.contact;
+            if (company && company !== existing.company) updates.company = company;
+            if (statusNorm && statusNorm !== existing.status) {
+              updates.status = statusNorm;
+              if (statusNorm === 'won' && !existing.won_date) {
+                updates.wonDate = lastActivityAt || new Date().toISOString();
+              }
+              if (statusNorm === 'lost' && !existing.lost_date) {
+                updates.lostDate = lastActivityAt || new Date().toISOString();
+              }
+            }
+            if (Object.keys(updates).length > 0) {
+              await db.opportunities.update(existing.id, updates);
+              updated++;
+            } else skipped++;
+            continue;
+          }
+
           await db.opportunities.create({
             userId: req.user.id,
             name,
             email,
             title: raw.title || null,
-            company: raw.company || null,
-            status: 'imported',
+            company,
+            status: statusNorm || 'imported',
             crmProvider: 'notion',
             crmContactId: raw.notionPageId || null,
-            lastActivityAt: extractActivityDate(provider, raw),
+            lastActivityAt,
+            dealValue,
+            wonDate: statusNorm === 'won' ? (lastActivityAt || new Date().toISOString()) : null,
+            lostDate: statusNorm === 'lost' ? (lastActivityAt || new Date().toISOString()) : null,
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
@@ -916,7 +955,7 @@ router.post('/import/:provider', async (req, res, next) => {
       return res.status(400).json({ error: `Import not yet supported for ${provider}` });
     }
 
-    res.json({ imported, skipped, errors: errors.length > 0 ? errors : undefined });
+    res.json({ imported, updated, skipped, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
     next(err);
   }

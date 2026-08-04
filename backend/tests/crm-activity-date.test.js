@@ -70,6 +70,29 @@ test('renvoie null quand le CRM n expose aucune date', () => {
   assert.strictEqual(extractActivityDate('inconnu', { update_time: '2026-01-01' }), null);
 });
 
+test('notion : last_edited_time prime sur created_time', () => {
+  const out = extractActivityDate('notion', {
+    created_time: '2026-05-22T08:47:00.000Z',
+    last_edited_time: '2026-07-30T10:00:00.000Z',
+  });
+  assert.strictEqual(out, '2026-07-30T10:00:00.000Z');
+  assert.strictEqual(
+    extractActivityDate('notion', { created_time: '2026-05-22T08:47:00.000Z' }),
+    '2026-05-22T08:47:00.000Z'
+  );
+});
+
+test('notion : normalisation des statuts vers won/lost/open', () => {
+  const { normalizeNotionStatus } = require('../api/notion-crm');
+  assert.strictEqual(normalizeNotionStatus('Gagné'), 'won');
+  assert.strictEqual(normalizeNotionStatus('Perdu'), 'lost');
+  assert.strictEqual(normalizeNotionStatus('Churned'), 'lost');
+  assert.strictEqual(normalizeNotionStatus('Négociation'), 'open');
+  assert.strictEqual(normalizeNotionStatus('Lead'), 'open');
+  assert.strictEqual(normalizeNotionStatus(''), null);
+  assert.strictEqual(normalizeNotionStatus(null), null);
+});
+
 test('tolere les entrees absurdes sans lever', () => {
   assert.strictEqual(extractActivityDate('pipedrive', null), null);
   assert.strictEqual(extractActivityDate('pipedrive', 'texte'), null);

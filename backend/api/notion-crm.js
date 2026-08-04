@@ -18,7 +18,32 @@ const PROPERTY_ALIASES = {
   company: ['Company', 'Entreprise', 'Société', 'Organisation', 'Organization', 'Org'],
   companySize: ['Company Size', 'Taille', 'Size', 'Effectif', 'Employees'],
   linkedin: ['LinkedIn', 'linkedin', 'LinkedIn URL', 'Profil LinkedIn', 'LinkedIn Profile'],
+  // Dans beaucoup de bases CRM Notion, la propriété title est l'ENTREPRISE et
+  // la personne vit dans une propriété texte séparée — d'où ce champ dédié.
+  contact: ['Contact Principal', 'Contact', 'Nom du contact', 'Personne', 'Person'],
+  status: ['Statut', 'Status', 'Étape', 'Etape', 'Stage', 'État', 'Etat', 'Pipeline'],
+  dealValue: [
+    'Deal Value (€)', 'Deal Value ($)', 'Deal Value', 'Montant (€)', 'Montant',
+    'Valeur', 'Amount', 'Value', 'MRR Potentiel (€)', 'MRR', 'Budget',
+  ],
 };
+
+/**
+ * Ramène un statut libre de CRM Notion aux trois états canoniques du produit
+ * (won / lost / open) — la condition pour que won_date, le win/loss analysis
+ * et la LTV fonctionnent. « Churned » devient lost : couplé à won_date, c'est
+ * ce qui permet le calcul de tenure/LTV dans les analytics.
+ * Renvoie null si le libellé est vide (statut inconnu ≠ statut absent).
+ */
+const STATUS_WON = new Set(['gagné', 'gagne', 'won', 'signé', 'signe', 'client']);
+const STATUS_LOST = new Set(['perdu', 'lost', 'churned', 'churn', 'abandonné', 'abandonne']);
+function normalizeNotionStatus(label) {
+  if (!label) return null;
+  const s = String(label).toLowerCase().trim();
+  if (STATUS_WON.has(s)) return 'won';
+  if (STATUS_LOST.has(s)) return 'lost';
+  return 'open';
+}
 
 /**
  * Discover which property names exist in a Notion database
@@ -262,9 +287,18 @@ async function queryContacts(notionToken, databaseId) {
           val = prop.number;
         } else if (meta.type === 'select') {
           val = prop.select?.name || null;
+        } else if (meta.type === 'status') {
+          // Notion a deux types pour un statut : select (bases anciennes) et
+          // status (bases récentes). Les deux portent la valeur dans .name.
+          val = prop.status?.name || null;
         }
         contact[field] = val;
       }
+
+      // Timestamps de page : c'est la seule date d'activité que Notion expose.
+      // lib/crm-activity-date.js les attend sous ces noms exacts.
+      contact.last_edited_time = page.last_edited_time || null;
+      contact.created_time = page.created_time || null;
 
       // Also try to extract email from direct 'Email' property if schema didn't catch it
       if (!contact.email) {
@@ -289,4 +323,5 @@ module.exports = {
   discoverSchema,
   buildProperties,
   queryContacts,
+  normalizeNotionStatus,
 };

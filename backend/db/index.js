@@ -1474,8 +1474,8 @@ const opportunities = {
 
   async create(data) {
     const result = await query(`
-      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
       RETURNING *
     `, [
       data.userId || null,
@@ -1498,6 +1498,13 @@ const opportunities = {
       data.ownerEmail || data.owner_email || null,
       data.crmOwnerId || data.crm_owner_id || null,
       data.data || null,
+      // Ces quatre colonnes étaient absentes de l'INSERT : tous les imports qui
+      // passaient lastActivityAt ou dealValue les perdaient silencieusement, et
+      // seul le chemin update() des synchros suivantes pouvait les rattraper.
+      data.lastActivityAt || data.last_activity_at || null,
+      data.dealValue ?? data.deal_value ?? null,
+      data.wonDate || data.won_date || null,
+      data.lostDate || data.lost_date || null,
     ]);
     return result.rows[0];
   },
