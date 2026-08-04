@@ -116,6 +116,10 @@ app.get('/api/health', async (_req, res) => {
     'notion.token',
     'claude.apiKey',
   ]);
+  // État des crons (dernier run par job + retard éventuel). Informative
+  // seulement : ne dégrade pas le status, sinon Railway redémarrerait le
+  // service en boucle pour une panne que le restart ne répare pas.
+  const crons = await require('./lib/cron-watchdog').healthSummary(db);
   res.json({
     status: dbHealth.ok ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
@@ -127,6 +131,7 @@ app.get('/api/health', async (_req, res) => {
     database: dbHealth,
     sockets: socketServer.getConnectedUserCount(),
     configComplete: configOk,
+    ...(crons ? { crons } : {}),
   });
 });
 
@@ -224,6 +229,12 @@ server.listen(config.port, '0.0.0.0', () => {
 
   // Start orchestrator (cron jobs) if enabled
   orchestrator.start();
+
+  // Dead-man's switch des crons — démarre TOUJOURS, sans condition sur
+  // ORCHESTRATOR_ENABLED : c'est précisément quand ce flag casse (cf. les
+  // trois mois d'extinction silencieuse d'avril-juillet 2026) que le
+  // processus web doit donner l'alerte.
+  require('./lib/cron-watchdog').startWatchdog(db);
 
   // ── Graceful Shutdown ──
   let shuttingDown = false;

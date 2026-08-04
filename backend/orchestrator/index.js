@@ -44,15 +44,43 @@ const TZ = process.env.CRON_TIMEZONE || 'Europe/Paris';
  * creneau — la meme tache s'executerait deux fois, donc double facture LLM et
  * emails envoyes en double. Le verrou consultatif Postgres (non bloquant) fait
  * qu'une seule instance execute; les autres passent leur tour.
+ *
+ * Chaque declenchement est trace dans cron_runs (migration 069) : c'est la
+ * matiere premiere du dead-man's switch (lib/cron-watchdog.js), ne le
+ * retirer sous aucun pretexte — sans lui, une panne de scheduler redevient
+ * invisible, comme les trois mois d'extinction d'avril-juillet 2026.
+ * Le tracage est best-effort : il ne doit jamais empecher un job de tourner.
  */
 function schedule(name, expression, handler) {
   cron.schedule(expression, async () => {
+    const db = require('../db');
+    let runId = null;
+    try {
+      const r = await db.query(
+        `INSERT INTO cron_runs (job) VALUES ($1) RETURNING id`, [name]
+      );
+      runId = r.rows[0]?.id ?? null;
+    } catch { /* table absente ou DB indisponible : le job prime */ }
+
+    let ok = true;
+    let errMsg = null;
     const outcome = await withLock(`cron:${name}`, handler).catch((err) => {
+      ok = false;
+      errMsg = err.message;
       logger.error('orchestrator', `${name} failed: ${err.message}`, { cron: name });
       return { ran: true };
     });
     if (outcome && outcome.ran === false) {
       logger.info('orchestrator', `${name} skipped — already running on another instance`, { cron: name });
+    }
+
+    if (runId != null) {
+      try {
+        await db.query(
+          `UPDATE cron_runs SET finished_at = now(), ok = $1, error = $2, meta = $3 WHERE id = $4`,
+          [ok, errMsg, JSON.stringify({ skipped: outcome?.ran === false }), runId]
+        );
+      } catch { /* best-effort */ }
     }
   }, { timezone: TZ });
 }
