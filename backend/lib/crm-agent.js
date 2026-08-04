@@ -521,16 +521,20 @@ async function stepNurture(userId, token, report) {
             return age >= days && age < days + 7; // window of 7 days after loss
           });
           break;
+        // Stagnation et inactivité se mesurent sur last_activity_at, le signal
+        // d'activité commerciale extrait du CRM — jamais sur updated_at, que la
+        // synchro réécrit à chaque passage (376 opportunités partageaient
+        // 3 minutes distinctes de updated_at).
         case 'deal_stagnant':
           matched = opps.filter(o => {
             if (o.status === 'won' || o.status === 'lost') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+            const age = (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY_MS;
             return age >= days;
           });
           break;
         case 'inactive_contact':
           matched = opps.filter(o => {
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+            const age = (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY_MS;
             return age >= days && o.status !== 'lost';
           });
           break;
