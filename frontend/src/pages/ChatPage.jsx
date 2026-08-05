@@ -1616,67 +1616,6 @@ function ChatMessage({ role, content, metadata, animate, isLast, onCreateCampaig
   );
 }
 
-function StreamingMessage({ content, metadata, onCreateCampaign, onSendMessage, onActionExecute }) {
-  const { lang } = useI18n();
-  const [displayedContent, setDisplayedContent] = useState('');
-  const [showAction, setShowAction] = useState(false);
-  const contentRef = useRef(content);
-
-  useEffect(() => {
-    contentRef.current = content;
-    // Strip JSON blocks for display
-    const displayText = content.replace(/```json\s*[\s\S]*?```/g, '').trim();
-    const words = displayText.split(/(\s+)/);
-    let buffer = '';
-    let i = 0;
-    const chunkSize = 3;
-    const baseDelay = 18;
-
-    const timer = setInterval(() => {
-      if (i >= words.length) {
-        clearInterval(timer);
-        setShowAction(true);
-        return;
-      }
-      buffer += words[i];
-      if (i % chunkSize === chunkSize - 1 || i === words.length - 1) {
-        setDisplayedContent(formatMarkdown(buffer));
-      }
-      i++;
-    }, baseDelay + Math.random() * 12);
-
-    return () => clearInterval(timer);
-  }, [content]);
-
-  const timeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const hasActionCard = metadata && metadata.action;
-
-  return (
-    <div className="chat-msg assistant" style={{ animation: 'chatFadeIn 0.25s ease' }}>
-      <div className="chat-msg-avatar">b</div>
-      <div className="chat-msg-body">
-        <div
-          className="chat-msg-content"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(displayedContent) }}
-        />
-        {showAction && hasActionCard && (
-          <ActionCard
-            metadata={metadata}
-            onCreateCampaign={onCreateCampaign}
-            onModify={() => onSendMessage(lang === 'en' ? 'Can you adjust this campaign?' : 'Peux-tu ajuster cette campagne ?')}
-            onActionExecute={onActionExecute}
-            onPreview={onPreview}
-          />
-        )}
-        {/* Quick replies after action card — only for non-campaign actions to avoid duplicate buttons */}
-        {showAction && !hasActionCard && metadata?.quick_replies?.length > 0 && (
-          <QuickReplies replies={metadata.quick_replies} onSend={onSendMessage} />
-        )}
-        <div className="chat-msg-time">{timeStr}</div>
-      </div>
-    </div>
-  );
-}
 
 function QuickReplies({ replies, onSend, disabled }) {
   if (!replies || replies.length === 0) return null;

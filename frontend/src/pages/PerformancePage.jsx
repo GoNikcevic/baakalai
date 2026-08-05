@@ -62,7 +62,7 @@ function ReportsSection({ isEmpty, reports, onCreateCampaign, en }) {
               ? 'Weekly reports are generated automatically every Monday. Launch your first campaign to receive your first performance review.'
               : 'Les rapports hebdomadaires sont générés automatiquement chaque lundi. Lancez votre première campagne pour recevoir votre premier bilan de performance.'}
           </div>
-          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
+          <button className="btn btn-primary" onClick={onCreateCampaign}>
             {en ? 'Create my first campaign' : 'Créer ma première campagne'}
           </button>
         </div>

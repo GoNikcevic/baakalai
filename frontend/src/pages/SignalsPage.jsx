@@ -94,6 +94,18 @@ export default function SignalsPage() {
     setActioningId(null);
   };
 
+  // Endpoint dédié (pas /action) : l'état signals/actioningId vit ici,
+  // SignalFeed ne reçoit que des callbacks.
+  const handleLinkedInOutreach = async (signalId) => {
+    setActioningId(signalId);
+    try {
+      await request(`/signals/${signalId}/linkedin-outreach`, { method: 'POST' });
+      setSignals(prev => prev.map(sig => sig.id === signalId ? { ...sig, status: 'actioned', action_taken: 'linkedin_connect' } : sig));
+      showToast({ type: 'success', title: en ? 'Connection sent' : 'Connexion envoyée' });
+    } catch (err) { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message }); }
+    setActioningId(null);
+  };
+
   const handleCreateConfig = async () => {
     if (!form.name.trim()) return;
     try {
@@ -217,7 +229,7 @@ export default function SignalsPage() {
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
       ) : activeTab === 'feed' ? (
         <SignalFeed signals={signals} counts={counts} filter={filter} setFilter={setFilter}
-          onAction={handleAction} actioningId={actioningId} en={en}
+          onAction={handleAction} onLinkedInOutreach={handleLinkedInOutreach} actioningId={actioningId} en={en}
           onViewCompany={handleViewCompany} onCreateSequence={handleCreateSequence}
           creatingSequence={creatingSequence} sequenceResult={sequenceResult} />
       ) : activeTab === 'company' ? (
@@ -234,7 +246,7 @@ export default function SignalsPage() {
 
 /* ═══ Signal Feed ═══ */
 
-function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId, en, onViewCompany, onCreateSequence, creatingSequence, sequenceResult }) {
+function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOutreach, actioningId, en, onViewCompany, onCreateSequence, creatingSequence, sequenceResult }) {
   const filters = [
     { key: 'new', label: en ? 'New' : 'Nouveaux', count: counts.new || 0 },
     { key: 'actioned', label: en ? 'Actioned' : 'Traités', count: counts.actioned || 0 },
@@ -325,15 +337,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
                     )}
                     {s.contact_linkedin && (
                       <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', border: '1px solid #0A66C2', color: '#0A66C2' }}
-                        onClick={async () => {
-                          setActioningId(s.id);
-                          try {
-                            await request(`/signals/${s.id}/linkedin-outreach`, { method: 'POST' });
-                            setSignals(prev => prev.map(sig => sig.id === s.id ? { ...sig, status: 'actioned', action_taken: 'linkedin_connect' } : sig));
-                            showToast({ type: 'success', title: en ? 'Connection sent' : 'Connexion envoyée' });
-                          } catch (err) { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message }); }
-                          setActioningId(null);
-                        }} disabled={actioningId === s.id}>
+                        onClick={() => onLinkedInOutreach(s.id)} disabled={actioningId === s.id}>
                         {en ? 'Connect on LinkedIn' : 'Connecter sur LinkedIn'}
                       </button>
                     )}

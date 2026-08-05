@@ -724,7 +724,7 @@ function ChannelsSection({ data }) {
 
 function ForecastSection({ data: initialData, statusLabels, vocab }) {
   const STATUS_LABELS = statusLabels;
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const en = lang === 'en';
   const [forecastData, setForecastData] = useState(initialData);
   const defaultFrom = useMemo(() => {

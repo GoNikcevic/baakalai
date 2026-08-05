@@ -23,23 +23,8 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
 
   const hasAB = abConfig && testedTouchpoints.length > 0;
 
-  if (!hasAB) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: 42, marginBottom: 12 }}>🧬</div>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
-          {en ? 'No active A/B test on this campaign' : 'Aucun test A/B actif sur cette campagne'}
-        </div>
-        <div style={{ fontSize: 13, maxWidth: 480, margin: '0 auto' }}>
-          {en
-            ? 'A/B tests are configured automatically when creating a campaign from the chat. Create a new campaign by asking Baakalai to propose an A/B configuration.'
-            : 'Les tests A/B sont configurés automatiquement à la création de la campagne depuis le chat. Crée une nouvelle campagne en demandant à Baakalai de proposer une configuration A/B.'}
-        </div>
-      </div>
-    );
-  }
-
-  // Compute aggregated stats
+  // Compute aggregated stats — avant l'early return : un hook après un
+  // return conditionnel change l'ordre des hooks entre rendus (crash React).
   const stats = useMemo(() => {
     let aReplyAvg = 0, bReplyAvg = 0, aOpenAvg = 0, bOpenAvg = 0, count = 0;
     for (const tp of testedTouchpoints) {
@@ -57,6 +42,22 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
       bOpen: +(bOpenAvg / count).toFixed(1),
     };
   }, [testedTouchpoints]);
+
+  if (!hasAB) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 42, marginBottom: 12 }}>🧬</div>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+          {en ? 'No active A/B test on this campaign' : 'Aucun test A/B actif sur cette campagne'}
+        </div>
+        <div style={{ fontSize: 13, maxWidth: 480, margin: '0 auto' }}>
+          {en
+            ? 'A/B tests are configured automatically when creating a campaign from the chat. Create a new campaign by asking Baakalai to propose an A/B configuration.'
+            : 'Les tests A/B sont configurés automatiquement à la création de la campagne depuis le chat. Crée une nouvelle campagne en demandant à Baakalai de proposer une configuration A/B.'}
+        </div>
+      </div>
+    );
+  }
 
   const hasStats = stats && (stats.aReply > 0 || stats.bReply > 0);
   const winner = hasStats

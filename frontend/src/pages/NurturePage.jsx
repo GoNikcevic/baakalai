@@ -468,6 +468,16 @@ function EmailsSection({ emails, type, onRefresh }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  // emails est une prop : l'état déplié/replié vit ici, pas chez le parent.
+  const [expandedIds, setExpandedIds] = useState(new Set());
+  const toggleExpanded = (id, value) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      const expand = value !== undefined ? value : !next.has(id);
+      if (expand) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
   const handleApprove = async (id) => {
     try {
       await request(`/nurture/emails/${id}/approve`, { method: 'POST' });
@@ -520,23 +530,17 @@ function EmailsSection({ emails, type, onRefresh }) {
                   style={{
                     fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
                     whiteSpace: 'pre-wrap', lineHeight: 1.5,
-                    maxHeight: email._expanded ? 'none' : 80, overflow: 'hidden',
+                    maxHeight: expandedIds.has(email.id) ? 'none' : 80, overflow: 'hidden',
                     cursor: 'pointer',
                   }}
-                  onClick={() => {
-                    const updated = emails.map(e => e.id === email.id ? { ...e, _expanded: !e._expanded } : e);
-                    setEmails(updated);
-                  }}
+                  onClick={() => toggleExpanded(email.id)}
                   title={en ? 'Click to expand/collapse' : 'Cliquer pour d\u00E9plier/replier'}
                 >
                   {email.body}
                 </div>
-                {!email._expanded && email.body && email.body.length > 200 && (
+                {!expandedIds.has(email.id) && email.body && email.body.length > 200 && (
                   <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2, cursor: 'pointer' }}
-                    onClick={() => {
-                      const updated = emails.map(e => e.id === email.id ? { ...e, _expanded: true } : e);
-                      setEmails(updated);
-                    }}
+                    onClick={() => toggleExpanded(email.id, true)}
                   >
                     {en ? 'Show full email' : 'Voir l\'email complet'}
                   </div>
