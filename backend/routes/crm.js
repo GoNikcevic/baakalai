@@ -2232,13 +2232,23 @@ router.get('/reactivation-stats', async (req, res, next) => {
         WHERE user_id = $1 AND metadata->>'chain' = 'deal_reactivation'
           AND created_at > NOW() - INTERVAL '90 days'
       `, [userId]),
-      // Current stagnant deals (reactivation pipeline)
+      // Pipeline ouvert + deals stagnants. Stagnance mesurée sur
+      // last_activity_at (signal métier) et non updated_at, réécrit en masse
+      // par chaque import — même piège que stepNurture, corrigé le 04/08.
       db.query(`
-        SELECT COUNT(*) as count, COALESCE(SUM(deal_value), 0) as potential_revenue
+        SELECT
+          COUNT(*) as open_count,
+          COALESCE(SUM(deal_value), 0) as open_value,
+          COUNT(*) FILTER (
+            WHERE COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ) as count,
+          COALESCE(SUM(deal_value) FILTER (
+            WHERE COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ), 0) as potential_revenue
         FROM opportunities
         WHERE user_id = $1 AND status NOT IN ('won', 'lost')
-          AND updated_at < NOW() - INTERVAL '14 days'
-          AND deal_value IS NOT NULL AND deal_value > 0
       `, [userId]),
     ]);
 
@@ -2261,6 +2271,8 @@ router.get('/reactivation-stats', async (req, res, next) => {
       pipeline: {
         stagnantDeals: parseInt(pipe.count),
         potentialRevenue: parseFloat(pipe.potential_revenue) || 0,
+        openDeals: parseInt(pipe.open_count),
+        totalValue: parseFloat(pipe.open_value) || 0,
       },
       conversionRate: emails.total > 0 ? Math.round((stats.count / emails.total) * 100) : 0,
     });

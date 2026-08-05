@@ -9,20 +9,23 @@ import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { useI18n } from '../i18n';
 
-export default function ReactivationCard() {
+export default function ReactivationCard({ stats: statsProp }) {
   const { lang } = useI18n();
   const en = lang === 'en';
   const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
+  const [fetched, setFetched] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const stats = statsProp ?? fetched;
 
   useEffect(() => {
+    // Le parent (Dashboard) fournit déjà les stats — ne re-fetch que monté seul.
+    if (statsProp) return;
     let cancelled = false;
     request('/crm/reactivation-stats').then(d => {
-      if (!cancelled) setStats(d);
+      if (!cancelled) setFetched(d);
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [statsProp]);
 
   if (!stats) return null;
   // Don't show if truly nothing to show (no CRM data at all)
