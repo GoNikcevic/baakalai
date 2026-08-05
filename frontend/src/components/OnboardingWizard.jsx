@@ -259,6 +259,7 @@ export default function OnboardingWizard({ onComplete }) {
   const [outreachKey, setOutreachKey] = useState('');
   const [crmProvider, setCrmProvider] = useState('');
   const [crmKey, setCrmKey] = useState('');
+  const [crmKeyError, setCrmKeyError] = useState(null);
   const [keySaveStatus, setKeySaveStatus] = useState(null); // 'saved' | 'error' | null
 
   // Step 3 — Target
@@ -318,6 +319,33 @@ export default function OnboardingWizard({ onComplete }) {
     if (Object.keys(keysToSave).length === 0) { next(); return; }
 
     setSaving(true);
+
+    // Valider la clé CRM AVANT de la sauvegarder : sans ce contrôle, un token
+    // invalide donnait une coche verte « CRM connecté » et l'utilisateur
+    // découvrait le mensonge sur un import raté. On ne bloque que sur un refus
+    // explicite du fournisseur (401) — un fournisseur injoignable ou non
+    // testable (Salesforce) laisse passer.
+    const crmField = crmKey.trim() && crmProvider ? CRM_FIELD_MAP[crmProvider] : null;
+    if (crmField) {
+      try {
+        const token = localStorage.getItem('bakal_token');
+        const res = await fetch('/api/settings/keys/test-one', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ field: crmField, key: crmKey.trim() }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.result?.status === 'invalid') {
+          setCrmKeyError(t('wizard.crmKeyInvalid').replace('{provider}', crmProvider));
+          setSaving(false);
+          return;
+        }
+      } catch { /* test injoignable : ne pas bloquer l'inscription */ }
+    }
+
     try {
       const res = await saveKeys(keysToSave);
       if (res.errors && res.errors.length > 0) {
@@ -642,8 +670,14 @@ export default function OnboardingWizard({ onComplete }) {
                           type="password"
                           placeholder={crmProvider === 'hubspot' ? 'pat-...' : t('wizard.crmApiKeyPlaceholder')}
                           value={crmKey}
-                          onChange={e => setCrmKey(e.target.value)}
+                          onChange={e => { setCrmKey(e.target.value); setCrmKeyError(null); }}
+                          style={crmKeyError ? { borderColor: 'var(--danger, #B42318)' } : undefined}
                         />
+                        {crmKeyError && (
+                          <div style={{ fontSize: 12, color: 'var(--danger, #B42318)', marginTop: 6 }}>
+                            {crmKeyError}
+                          </div>
+                        )}
                       </>
                     );
                   })()}

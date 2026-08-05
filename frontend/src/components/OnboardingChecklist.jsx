@@ -11,11 +11,14 @@ import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
 
+// Ordre CRM-first : l'import des deals suit immédiatement la connexion CRM —
+// c'est lui qui produit le « wow » (deals dormants). L'email n'est nécessaire
+// que pour agir ensuite.
 const STEP_CONFIG = [
   { key: 'accountCreated', route: null },
   { key: 'crmConnected', route: '/settings' },
-  { key: 'emailConnected', route: '/settings' },
   { key: 'contactsImported', route: '/clients' },
+  { key: 'emailConnected', route: '/settings' },
   { key: 'firstCampaign', route: '/chat' },
   { key: 'firstLaunch', route: '/campaigns' },
 ];
@@ -99,7 +102,7 @@ export default function OnboardingChecklist() {
 
     return STEP_CONFIG.map((cfg, i) => ({
       ...cfg,
-      done: [accountCreated, crmConnected, emailConnected, contactsImported, firstCampaign, firstLaunch][i],
+      done: [accountCreated, crmConnected, contactsImported, emailConnected, firstCampaign, firstLaunch][i],
     }));
   }, [loading, keys, emailAccounts, contactsList, campaignsList]);
 

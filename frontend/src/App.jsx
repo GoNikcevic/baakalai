@@ -196,8 +196,10 @@ export default function App() {
             <Route path="/memory" element={<Navigate to="/settings" replace />} />
             <Route path="/integrations" element={<Navigate to="/settings" replace />} />
             <Route path="/copyeditor" element={<Navigate to="/campaigns" replace />} />
-            <Route path="/" element={<Navigate to="/chat" replace />} />
-            <Route path="*" element={<Navigate to="/chat" replace />} />
+            {/* Accueil = dashboard (deals à relancer), pas le chat : le chat
+                est l'outil de prospection, le produit est le CRM exploité. */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>
       </Suspense>

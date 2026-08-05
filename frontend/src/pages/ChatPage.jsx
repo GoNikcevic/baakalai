@@ -1679,7 +1679,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
       { key: 'create', label: t('chat.createFirst') },
     ];
   } else if (hasProfile && campaignCount === 0) {
-    title = userName ? t('chat.readyToProspect', { name: userName }) : (lang === 'en' ? 'Ready to prospect?' : 'Pr\u00EAt \u00E0 prospecter ?');
+    title = userName ? t('chat.readyToProspect', { name: userName }) : (lang === 'en' ? 'Which deals shall we revive today?' : 'On relance quels deals aujourd\u2019hui ?');
     subtitle = t('chat.chooseTemplate');
     actions = [];
     suggestions = [];

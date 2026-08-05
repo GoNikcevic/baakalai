@@ -9,7 +9,7 @@ import { useOutletContext, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import { useSocket } from '../context/SocketContext';
-import { ProgressCard, CumulativeValueBanner, BenchmarkBadge } from '../components/RetentionBiases';
+import { CumulativeValueBanner, BenchmarkBadge } from '../components/RetentionBiases';
 import PerformanceChart from '../components/charts/PerformanceChart';
 import { sanitizeHtml } from '../services/sanitize';
 import ScoreBadge from '../components/ScoreBadge';
@@ -208,9 +208,11 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
     }
   }, []);
   if (isEmpty) {
+    // Pas de ProgressCard ici : l'OnboardingChecklist au-dessus guide déjà les
+    // premiers pas — deux jauges de progression concurrentes brouillaient le
+    // message (constat de l'audit UX du 2026-08-05).
     return (
       <div id="section-overview">
-        <ProgressCard />
         <EmptyKpis />
         <EmptyOverviewGrid onCreateCampaign={onCreateCampaign} />
       </div>
@@ -237,11 +239,6 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
       {/* Retention: Cumulative value banner + benchmark */}
       <CumulativeValueBanner />
       <BenchmarkBadge />
-
-      {/* Progress card — full width */}
-      <div style={{ marginBottom: 16 }}>
-        <ProgressCard />
-      </div>
 
       {/* Section grid — 2x2 */}
       <div className="section-grid">

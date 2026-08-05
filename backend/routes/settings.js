@@ -164,6 +164,23 @@ router.post('/keys/test', async (req, res, next) => {
   }
 });
 
+// POST /api/settings/keys/test-one — teste une clé AVANT de la sauvegarder.
+// Utilisé par le wizard : refuser une clé invalide au moment où l'utilisateur
+// la colle, au lieu de la laisser découvrir un import raté avec une coche
+// verte mensongère. Ne persiste rien.
+router.post('/keys/test-one', async (req, res, next) => {
+  try {
+    const { field, key } = req.body;
+    if (!field || !key || !PROVIDER_MAP[field]) {
+      return res.status(400).json({ error: 'field and key are required' });
+    }
+    const result = await testKey(field, String(key));
+    res.json({ result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/settings/keys/sync-lemlist — trigger background Lemlist analysis
 router.post('/keys/sync-lemlist', async (req, res, next) => {
   try {
