@@ -8,9 +8,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/')) {
-            return 'vendor';
+          if (!id.includes('node_modules/')) return;
+          // Recharts + d3 ne servent qu'aux pages analytics (déjà lazy) :
+          // les isoler évite de les charger au boot pour tout le monde.
+          if (/node_modules\/(recharts|d3-[^/]+|victory-vendor|internmap|decimal\.js-light|fast-equals)\//.test(id)) {
+            return 'vendor-charts';
           }
+          return 'vendor';
         },
       },
     },
