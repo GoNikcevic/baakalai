@@ -489,8 +489,6 @@ export default function OnboardingWizard({ onComplete }) {
       case 0:
         return (
           <>
-            <div className="wizard-step-title">{STEP_META[0].title}</div>
-            <div className="wizard-step-desc">{STEP_META[0].desc}</div>
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">{t('wizard.companyName')}</label>
@@ -555,7 +553,6 @@ export default function OnboardingWizard({ onComplete }) {
             <div style={{ marginTop: 20, padding: 16, border: `2px dashed ${uploadedDocs.length > 0 ? 'var(--success)' : 'var(--accent)'}`, borderRadius: 12, background: 'var(--bg-elevated)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
                 {t('wizard.uploadTitle')}
-                <span style={{ color: 'var(--danger)', marginLeft: 4 }}>*</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                 {t('wizard.uploadDesc')}
@@ -576,7 +573,7 @@ export default function OnboardingWizard({ onComplete }) {
                 </div>
               )}
               {uploadedDocs.length === 0 && (
-                <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
                   {t('wizard.uploadRequired')}
                 </div>
               )}
@@ -587,8 +584,6 @@ export default function OnboardingWizard({ onComplete }) {
       case 1:
         return (
           <>
-            <div className="wizard-step-title">{STEP_META[1].title}</div>
-            <div className="wizard-step-desc">{STEP_META[1].desc}</div>
             <div className="wizard-core-keys">
               {/* CRM en premier : c'est le hero job (réactivation de deals),
                   pas un à-côté. L'outreach et le ciblage descendent en bloc
@@ -762,7 +757,7 @@ export default function OnboardingWizard({ onComplete }) {
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{'\u2705'}</span>
-                <span>{t('wizard.checkStyle')} \u2014 {tone}, {formality}</span>
+                <span>{t('wizard.checkStyle')} {'\u2014'} {tone}, {formality}</span>
               </div>
             </div>
             {/* Etat du premier import CRM. Sans ce retour, un import qui echoue
