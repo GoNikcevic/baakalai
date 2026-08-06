@@ -9978,3 +9978,204 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 116 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/refresh', {` |
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
+
+### Automated Audit — 2026-08-06
+
+Found 194 potential issue(s):
+
+| Severity | File | Line | Pattern | Code |
+|----------|------|------|---------|------|
+| MEDIUM | `backend/routes/ai.js` | 529 | Empty catch block (swallowed error) | `} catch { /* solo user */ }` |
+| MEDIUM | `backend/routes/ai.js` | 707 | Empty catch block (swallowed error) | `try { campaignMap[cid] = await db.campaigns.get(cid); } catch {}` |
+| MEDIUM | `backend/routes/analytics.js` | 106 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
+| MEDIUM | `backend/routes/analytics.js` | 107 | new Date() on potentially null value without guard | `const createdAt = opp.created_at ? new Date(opp.created_at).getTime() : now;` |
+| MEDIUM | `backend/routes/analytics.js` | 124 | new Date() on potentially null value without guard | `const ca = o.created_at ? new Date(o.created_at).getTime() : 0;` |
+| MEDIUM | `backend/routes/analytics.js` | 128 | new Date() on potentially null value without guard | `const ca = o.created_at ? new Date(o.created_at).getTime() : 0;` |
+| MEDIUM | `backend/routes/analytics.js` | 292 | new Date() on potentially null value without guard | `const ca = r.created_at ? new Date(r.created_at).getTime() : 0;` |
+| MEDIUM | `backend/routes/analytics.js` | 613 | new Date() on potentially null value without guard | `const create = new Date(o.created_at).getTime();` |
+| MEDIUM | `backend/routes/analytics.js` | 763 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : 0;` |
+| MEDIUM | `backend/routes/analytics.js` | 764 | new Date() on potentially null value without guard | `const createdAt = opp.created_at ? new Date(opp.created_at).getTime() : now;` |
+| MEDIUM | `backend/routes/analytics.js` | 912 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
+| MEDIUM | `backend/routes/analytics.js` | 999 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
+| MEDIUM | `backend/routes/analytics.js` | 1042 | new Date() on potentially null value without guard | `let rd = o.renewal_date ? new Date(o.renewal_date)` |
+| MEDIUM | `backend/routes/analytics.js` | 1043 | new Date() on potentially null value without guard | `: o.close_date ? new Date(o.close_date)` |
+| MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
+| MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
+| MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
+| MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
+| MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
+| HIGH | `backend/routes/crm.js` | 188 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 195 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 382 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 415 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 431 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 862 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 930 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| LOW | `backend/routes/crm.js` | 1224 | Hardcoded CRM provider list (may be incomplete) | `for (const provider of ['pipedrive', 'salesforce', 'hubspot']) {` |
+| MEDIUM | `backend/routes/crm.js` | 1237 | Empty catch block (swallowed error) | `} catch { /* scoring works without deals */ }` |
+| MEDIUM | `backend/routes/crm.js` | 1503 | Empty catch block (swallowed error) | `} catch { /* CRM activities are best-effort */ }` |
+| HIGH | `backend/routes/crm.js` | 1651 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 1665 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| MEDIUM | `backend/routes/crm.js` | 1695 | Empty catch block (swallowed error) | `} catch { /* skip individual failures */ }` |
+| MEDIUM | `backend/routes/crm.js` | 1976 | Empty catch block (swallowed error) | `} catch {}` |
+| HIGH | `backend/routes/crm.js` | 2030 | fetch() without res.ok check before .json() | `const tokenRes = await fetch(`https://${tokenHost}/services/oauth2/token`, {` |
+| HIGH | `backend/routes/crm.js` | 2100 | JSON.parse without try/catch | `const metadata = typeof integration.metadata === 'string' ? JSON.parse(integrati` |
+| HIGH | `backend/routes/crm.js` | 2110 | fetch() without res.ok check before .json() | `const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {` |
+| MEDIUM | `backend/routes/dashboard.js` | 151 | Empty catch block (swallowed error) | `} catch { /* translation is best-effort, return as-is if it fails */ }` |
+| MEDIUM | `backend/routes/documents.js` | 141 | Empty catch block (swallowed error) | `try { fs.unlinkSync(file.path); } catch {}` |
+| MEDIUM | `backend/routes/documents.js` | 244 | Empty catch block (swallowed error) | `try { fs.unlinkSync(tempPath); } catch {}` |
+| HIGH | `backend/routes/export.js` | 199 | JSON.parse without try/catch | `? JSON.parse(o.score_breakdown \|\| '{}')` |
+| MEDIUM | `backend/routes/extension.js` | 62 | Empty catch block (swallowed error) | `} catch { /* optional */ }` |
+| HIGH | `backend/routes/extension.js` | 102 | JSON.parse without try/catch | `const data = (typeof opp.data === 'string' ? JSON.parse(opp.data) : opp.data) \|` |
+| HIGH | `backend/routes/extension.js` | 143 | JSON.parse without try/catch | `const data = (typeof opp.data === 'string' ? JSON.parse(opp.data) : opp.data) \|` |
+| HIGH | `backend/routes/informz.js` | 67 | JSON.parse without try/catch | `if (m) parsed = JSON.parse(m[0]);` |
+| HIGH | `backend/routes/informz.js` | 210 | JSON.parse without try/catch | `if (m) parsed = JSON.parse(m[0]);` |
+| MEDIUM | `backend/routes/nurture.js` | 347 | Empty catch block (swallowed error) | `} catch { /* optional */ }` |
+| MEDIUM | `backend/routes/nurture.js` | 360 | Empty catch block (swallowed error) | `if (m) { try { sampleEmail = JSON.parse(m[0]); } catch { /* malformed JSON */ } ` |
+| MEDIUM | `backend/routes/nurture.js` | 362 | Empty catch block (swallowed error) | `} catch { /* skip preview generation */ }` |
+| HIGH | `backend/routes/nurture.js` | 433 | fetch() without res.ok check before .json() | `const tokenRes = await fetch('https://oauth2.googleapis.com/token', {` |
+| HIGH | `backend/routes/nurture.js` | 523 | fetch() without res.ok check before .json() | `const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2` |
+| HIGH | `backend/routes/settings.js` | 403 | JSON.parse without try/catch | `const currentMeta = typeof existing.metadata === 'string' ? JSON.parse(existing.` |
+| HIGH | `backend/routes/signals.js` | 166 | JSON.parse without try/catch | `if (m) email = JSON.parse(m[0]);` |
+| HIGH | `backend/routes/signals.js` | 351 | JSON.parse without try/catch | `if (m) sequence = JSON.parse(m[0]);` |
+| HIGH | `backend/routes/stats.js` | 23 | fetch() without res.ok check before .json() | `const resp = await fetch(url, options);` |
+| HIGH | `backend/routes/team-campaigns.js` | 136 | JSON.parse without try/catch | `if (m) sampleEmail = JSON.parse(m[0]);` |
+| MEDIUM | `backend/routes/team-campaigns.js` | 202 | Empty catch block (swallowed error) | `if (m) { try { email = JSON.parse(m[0]); } catch { /* malformed AI response */ }` |
+| HIGH | `backend/lib/ab-memory.js` | 187 | JSON.parse without try/catch | `const data = typeof top.data === 'string' ? JSON.parse(top.data) : (top.data \|\` |
+| MEDIUM | `backend/lib/agent-chains.js` | 360 | Empty catch block (swallowed error) | `} catch { /* no product lines */ }` |
+| MEDIUM | `backend/lib/agent-chains.js` | 382 | Empty catch block (swallowed error) | `} catch { /* ok */ }` |
+| MEDIUM | `backend/lib/agents/signal-agent.js` | 125 | Empty catch block (swallowed error) | `} catch { /* enrichment is optional */ }` |
+| MEDIUM | `backend/lib/agents/signal-agent.js` | 181 | Empty catch block (swallowed error) | `} catch { /* notifications are optional */ }` |
+| MEDIUM | `backend/lib/agents/signal-agent.js` | 206 | Empty catch block (swallowed error) | `} catch { /* skip duplicates */ }` |
+| MEDIUM | `backend/lib/agents/signal-agent.js` | 212 | Empty catch block (swallowed error) | `} catch { /* auto-prospecting is optional */ }` |
+| HIGH | `backend/lib/agents/signal-agent.js` | 296 | fetch() without res.ok check before .json() | `const res = await fetch('https://api.apollo.io/v1/mixed_people/search', {` |
+| MEDIUM | `backend/lib/agents/timing-agent.js` | 99 | new Date() on potentially null value without guard | `const replied = new Date(r.replied_at).getTime();` |
+| MEDIUM | `backend/lib/agents/timing-agent.js` | 163 | new Date() on potentially null value without guard | `const sent = new Date(r.sent_at).getTime();` |
+| MEDIUM | `backend/lib/agents/timing-agent.js` | 164 | new Date() on potentially null value without guard | `const resp = new Date(r.response_at).getTime();` |
+| MEDIUM | `backend/lib/churn-scoring.js` | 89 | new Date() on potentially null value without guard | `const age = (now - new Date(e.created_at).getTime()) / DAY_MS;` |
+| MEDIUM | `backend/lib/contact-scoring.js` | 79 | new Date() on potentially null value without guard | `const ts = a.happened_at ? new Date(a.happened_at).getTime() : 0;` |
+| MEDIUM | `backend/lib/contact-scoring.js` | 112 | new Date() on potentially null value without guard | `const ts = a.happened_at ? new Date(a.happened_at).getTime() : 0;` |
+| MEDIUM | `backend/lib/conversation-autopilot.js` | 190 | Empty catch block (swallowed error) | `try { return JSON.parse(match[0]); } catch { /* fallthrough */ }` |
+| MEDIUM | `backend/lib/conversation-autopilot.js` | 320 | new Date() on potentially null value without guard | `return history.sort((a, b) => new Date(a.date) - new Date(b.date));` |
+| MEDIUM | `backend/lib/crm-agent.js` | 64 | Empty catch block (swallowed error) | `} catch { /* solo user, no team */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 78 | Empty catch block (swallowed error) | `} catch { /* fallback below */ }` |
+| LOW | `backend/lib/crm-agent.js` | 82 | Hardcoded CRM provider list (may be incomplete) | `for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo']) {` |
+| MEDIUM | `backend/lib/crm-agent.js` | 115 | Empty catch block (swallowed error) | `try { notifyUser(userId, 'crm-agent', { status: 'running', trigger }); } catch {` |
+| MEDIUM | `backend/lib/crm-agent.js` | 196 | Empty catch block (swallowed error) | `} catch { /* ok */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 233 | Empty catch block (swallowed error) | `} catch { /* notification is non-blocking */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 270 | Empty catch block (swallowed error) | `} catch { /* never block cleanup */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 313 | Empty catch block (swallowed error) | `} catch { /* owner mapping is optional */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 393 | Empty catch block (swallowed error) | `} catch { /* mapping is optional */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 439 | Empty catch block (swallowed error) | `} catch { /* deal sync is optional */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 612 | Empty catch block (swallowed error) | `} catch { /* fallback to 50/50 */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 701 | Empty catch block (swallowed error) | `} catch { /* patterns optional */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 741 | Empty catch block (swallowed error) | `} catch { /* fallback to single */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 758 | Empty catch block (swallowed error) | `} catch { /* fallback below */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 836 | new Date() on potentially null value without guard | `.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) ` |
+| MEDIUM | `backend/lib/crm-agent.js` | 858 | new Date() on potentially null value without guard | `.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) ` |
+| MEDIUM | `backend/lib/crm-agent.js` | 928 | Empty catch block (swallowed error) | `} catch { /* optional */ }` |
+| MEDIUM | `backend/lib/crm-agent.js` | 957 | Empty catch block (swallowed error) | `} catch { /* optional */ }` |
+| LOW | `backend/lib/crm-bidirectional-sync.js` | 16 | Hardcoded CRM provider list (may be incomplete) | `const SUPPORTED_BIDIRECTIONAL = ['pipedrive', 'hubspot', 'salesforce'];` |
+| MEDIUM | `backend/lib/crm-bidirectional-sync.js` | 100 | Empty catch block (swallowed error) | `} catch { /* ignore individual push errors */ }` |
+| HIGH | `backend/lib/crm-export.js` | 25 | fetch() without res.ok check before .json() | `const res = await fetch('https://api.hubapi.com/crm/v3/objects/contacts', {` |
+| HIGH | `backend/lib/crm-export.js` | 55 | fetch() without res.ok check before .json() | `const res = await fetch(`${instanceUrl}/services/data/v58.0/sobjects/Contact`, {` |
+| HIGH | `backend/lib/crm-export.js` | 80 | fetch() without res.ok check before .json() | `const res = await fetch(`https://api.pipedrive.com/v1/persons?api_token=${apiKey` |
+| HIGH | `backend/lib/crm-export.js` | 94 | fetch() without res.ok check before .json() | `await fetch(`https://api.pipedrive.com/v1/notes?api_token=${apiKey}`, {` |
+| MEDIUM | `backend/lib/crm-owner-resolver.js` | 32 | Empty catch block (swallowed error) | `} catch { /* no team = solo user */ }` |
+| MEDIUM | `backend/lib/crm-sync.js` | 129 | Empty catch block (swallowed error) | `} catch { /* skip individual failures */ }` |
+| MEDIUM | `backend/lib/deliverability-agent.js` | 200 | Empty catch block (swallowed error) | `} catch { /* notification is best-effort */ }` |
+| HIGH | `backend/lib/email-outbound.js` | 117 | fetch() without res.ok check before .json() | `const res = await fetch(tokenUrl, {` |
+| HIGH | `backend/lib/email.js` | 16 | fetch() without res.ok check before .json() | `const res = await fetch('https://api.resend.com/emails', {` |
+| MEDIUM | `backend/lib/engagement-scoring.js` | 30 | new Date() on potentially null value without guard | `const ts = a.happened_at ? new Date(a.happened_at).getTime() : 0;` |
+| MEDIUM | `backend/lib/engagement-scoring.js` | 75 | new Date() on potentially null value without guard | `const ts = a.happened_at ? new Date(a.happened_at).getTime() : 0;` |
+| MEDIUM | `backend/lib/engagement-scoring.js` | 79 | new Date() on potentially null value without guard | `const contactUpdated = contact.updated_at ? new Date(contact.updated_at).getTime` |
+| MEDIUM | `backend/lib/enrich-agent.js` | 213 | Empty catch block (swallowed error) | `} catch { /* Brave search failed */ }` |
+| MEDIUM | `backend/lib/enrich-agent.js` | 333 | Empty catch block (swallowed error) | `} catch { /* verification failed, keep the email */ }` |
+| MEDIUM | `backend/lib/enrich-agent.js` | 372 | Empty catch block (swallowed error) | `} catch { /* continue */ }` |
+| HIGH | `backend/lib/icp-agent.js` | 177 | JSON.parse without try/catch | `const data = typeof userIcp.data === 'string' ? JSON.parse(userIcp.data) : userI` |
+| HIGH | `backend/lib/lifecycle-emails.js` | 188 | JSON.parse without try/catch | `const userData = (typeof user.data === 'string' ? JSON.parse(user.data) : user.d` |
+| MEDIUM | `backend/lib/lifecycle-emails.js` | 190 | new Date() on potentially null value without guard | `const daysSinceSignup = Math.floor((Date.now() - new Date(user.created_at).getTi` |
+| HIGH | `backend/lib/lifecycle-emails.js` | 261 | JSON.parse without try/catch | `const userData = (typeof user.data === 'string' ? JSON.parse(user.data) : user.d` |
+| MEDIUM | `backend/lib/nurture-engine.js` | 81 | new Date() on potentially null value without guard | `const dealAge = (Date.now() - new Date(deal.createdAt).getTime()) / DAY_MS;` |
+| MEDIUM | `backend/lib/nurture-engine.js` | 107 | new Date() on potentially null value without guard | `const lastUpdate = c.update_time ? new Date(c.update_time).getTime() : 0;` |
+| MEDIUM | `backend/lib/nurture-engine.js` | 124 | new Date() on potentially null value without guard | `const renewalTime = new Date(o.renewal_date).getTime();` |
+| MEDIUM | `backend/lib/nurture-engine.js` | 279 | Empty catch block (swallowed error) | `try { return JSON.parse(jsonMatch[0]); } catch { /* fall through */ }` |
+| HIGH | `backend/lib/outreach-deploy.js` | 79 | fetch() without res.ok check before .json() | `const r = await fetch('https://api.apollo.io/v1/emailer_campaigns', {` |
+| HIGH | `backend/lib/outreach-deploy.js` | 124 | fetch() without res.ok check before .json() | `const r = await fetch(`https://api.instantly.ai/api/v1/campaign/step/add?api_key` |
+| MEDIUM | `backend/lib/reporting-agent.js` | 143 | Empty catch block (swallowed error) | `} catch { /* ignore notification errors */ }` |
+| MEDIUM | `backend/lib/response-analysis-agent.js` | 67 | new Date() on potentially null value without guard | `const sentAt = new Date(email.sent_at).getTime();` |
+| MEDIUM | `backend/lib/response-analysis-agent.js` | 69 | new Date() on potentially null value without guard | `const actDate = a.dueDate ? new Date(a.dueDate).getTime() : 0;` |
+| MEDIUM | `backend/lib/response-analysis-agent.js` | 283 | Empty catch block (swallowed error) | `if (match) try { return JSON.parse(match[0]); } catch { /* fallback below */ }` |
+| MEDIUM | `backend/lib/response-analysis-agent.js` | 284 | Empty catch block (swallowed error) | `} catch { /* fallback below */ }` |
+| HIGH | `backend/lib/vector-store.js` | 211 | fetch() without res.ok check before .json() | `const res = await fetch('https://api.voyageai.com/v1/embeddings', {` |
+| HIGH | `backend/api/airtable-crm.js` | 21 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/apollo.js` | 24 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/brave-search.js` | 30 | fetch() without res.ok check before .json() | `const res = await fetch(`${BASE_URL}?${params}`, {` |
+| MEDIUM | `backend/api/claude.js` | 42 | Empty catch block (swallowed error) | `} catch { /* comptabilité best-effort */ }` |
+| HIGH | `backend/api/dropcontact.js` | 22 | fetch() without res.ok check before .json() | `const submitRes = await fetch(`${DROPCONTACT_BASE}/batch`, {` |
+| HIGH | `backend/api/dropcontact.js` | 56 | fetch() without res.ok check before .json() | `const pollRes = await fetch(`${DROPCONTACT_BASE}/batch/${requestId}`, {` |
+| HIGH | `backend/api/folk.js` | 15 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/hubspot.js` | 18 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/informz.js` | 73 | fetch() without res.ok check before .json() | `const res = await fetch(endpoint, {` |
+| HIGH | `backend/api/instantly.js` | 28 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/lagrowthmachine.js` | 25 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/lemlist.js` | 15 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| MEDIUM | `backend/api/lemlist.js` | 647 | Empty catch block (swallowed error) | `} catch { /* logger optional */ }` |
+| MEDIUM | `backend/api/lemlist.js` | 687 | Empty catch block (swallowed error) | `} catch { /* logger optional */ }` |
+| HIGH | `backend/api/lemlist.js` | 749 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/linkedin.js` | 56 | fetch() without res.ok check before .json() | `const res = await fetch(`${VOYAGER_BASE}${endpoint}`, {` |
+| HIGH | `backend/api/odoo.js` | 38 | fetch() without res.ok check before .json() | `const res = await fetch(`${url}/jsonrpc`, {` |
+| HIGH | `backend/api/pipedrive.js` | 19 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/salesforce.js` | 15 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `backend/api/salesforce.js` | 660 | fetch() without res.ok check before .json() | `const createRes = await fetch(baseUrl, {` |
+| HIGH | `backend/api/salesforce.js` | 694 | fetch() without res.ok check before .json() | `const resultsRes = await fetch(`${baseUrl}/${jobId}/results`, {` |
+| HIGH | `backend/api/waalaxy.js` | 25 | fetch() without res.ok check before .json() | `const res = await fetch(url, {` |
+| HIGH | `frontend/src/components/AuthGate.jsx` | 214 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/forgot-password', {` |
+| LOW | `frontend/src/components/FieldMappingSettings.jsx` | 47 | Hardcoded CRM provider list (may be incomplete) | `const crmProviders = ['pipedrive', 'hubspot', 'salesforce'];` |
+| MEDIUM | `frontend/src/components/ICPInsightsCard.jsx` | 201 | new Date() on potentially null value without guard | `{new Date(data.analyzedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: ` |
+| MEDIUM | `frontend/src/components/OnboardingChecklist.jsx` | 64 | Empty catch block (swallowed error) | `} catch { /* checklist won't show */ }` |
+| HIGH | `frontend/src/components/OnboardingWizard.jsx` | 332 | fetch() without res.ok check before .json() | `const res = await fetch('/api/settings/keys/test-one', {` |
+| MEDIUM | `frontend/src/components/OnboardingWizard.jsx` | 346 | Empty catch block (swallowed error) | `} catch { /* test injoignable : ne pas bloquer l'inscription */ }` |
+| HIGH | `frontend/src/components/OnboardingWizard.jsx` | 448 | fetch() without res.ok check before .json() | `const res = await fetch(`/api/crm/import/${provider}`, {` |
+| MEDIUM | `frontend/src/components/TeamSettings.jsx` | 53 | Native alert()/prompt() in frontend | `alert(err.message);` |
+| MEDIUM | `frontend/src/components/TeamSettings.jsx` | 74 | Native alert()/prompt() in frontend | `alert(err.message);` |
+| MEDIUM | `frontend/src/components/TeamSettings.jsx` | 84 | Native alert()/prompt() in frontend | `alert(err.message);` |
+| MEDIUM | `frontend/src/components/TeamSettings.jsx` | 93 | Native alert()/prompt() in frontend | `alert(err.message);` |
+| HIGH | `frontend/src/components/VariableManager.jsx` | 378 | JSON.parse without try/catch | `initialRegistry ? JSON.parse(JSON.stringify(initialRegistry)) : JSON.parse(JSON.` |
+| MEDIUM | `frontend/src/components/campaigns/CampaignDetailLayout.jsx` | 94 | Native alert()/prompt() in frontend | `window.alert(t('campaigns.archiveFailed', { error: err.message \|\| 'erreur inco` |
+| MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
+| MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
+| MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1013 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
+| MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
+| MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
+| HIGH | `frontend/src/pages/CopyEditorPage.jsx` | 809 | JSON.parse without try/catch | `const copy = { ...JSON.parse(JSON.stringify(original)), id: tpId + '-copy', labe` |
+| MEDIUM | `frontend/src/pages/MembershipPage.jsx` | 136 | new Date() on potentially null value without guard | `<div style={{ fontWeight: 600 }}>{new Date(r.renewal_date).toLocaleDateString(en` |
+| MEDIUM | `frontend/src/pages/MemoryExplorerPage.jsx` | 392 | new Date() on potentially null value without guard | `<span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{e.sen` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 419 | new Date() on potentially null value without guard | `{trigger.last_run && ` \u00B7 ${lang === 'en' ? 'Last run:' : 'Dernier run :'} $` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 550 | new Date() on potentially null value without guard | `{email.sent_at && ` \u00B7 ${en ? 'Sent on' : 'Envoy\u00E9 le'} ${new Date(email` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 791 | new Date() on potentially null value without guard | `{e.sent_at ? new Date(e.sent_at).toLocaleDateString(en ? 'en-US' : 'fr-FR', { da` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 1041 | new Date() on potentially null value without guard | `{en ? 'by' : 'par'} {c.created_by_name} {'\u00B7'} {new Date(c.created_at).toLoc` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 1233 | new Date() on potentially null value without guard | `{en ? 'Scheduled:' : 'Planifié :'} {new Date(q.scheduled_at).toLocaleString(lang` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 1269 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(lang === 'en' ? ` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 1336 | new Date() on potentially null value without guard | `{test.startedAt ? new Date(test.startedAt).toLocaleDateString(en ? 'en-US' : 'fr` |
+| MEDIUM | `frontend/src/pages/NurturePage.jsx` | 1527 | new Date() on potentially null value without guard | `{e.to} &middot; {new Date(e.createdAt).toLocaleDateString(en ? 'en-US' : 'fr-FR'` |
+| MEDIUM | `frontend/src/pages/ProfilePage.jsx` | 588 | new Date() on potentially null value without guard | `<span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{new Date(doc.created` |
+| MEDIUM | `frontend/src/pages/ProfilePage.jsx` | 589 | Empty catch block (swallowed error) | `<button onClick={async () => { try { await request('/documents/' + doc.id, { met` |
+| MEDIUM | `frontend/src/pages/RecosPage.jsx` | 69 | new Date() on potentially null value without guard | `date: d.created_at ? new Date(d.created_at).toLocaleDateString(en ? 'en-US' : 'f` |
+| HIGH | `frontend/src/pages/ResetPasswordPage.jsx` | 132 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/reset-password', {` |
+| MEDIUM | `frontend/src/pages/SignalsPage.jsx` | 320 | new Date() on potentially null value without guard | `<span>{new Date(s.detected_at).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day:` |
+| MEDIUM | `frontend/src/pages/SignalsPage.jsx` | 456 | new Date() on potentially null value without guard | `{new Date(s.detected_at).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'nume` |
+| MEDIUM | `frontend/src/pages/SignalsPage.jsx` | 589 | new Date() on potentially null value without guard | `{c.last_run && <span>{en ? 'Last scan' : 'Dernier scan'}: {new Date(c.last_run).` |
+| HIGH | `frontend/src/services/api-client.js` | 23 | fetch() without res.ok check before .json() | `let res = await fetch(url, { headers, ...opts });` |
+| HIGH | `frontend/src/services/api-client.js` | 31 | fetch() without res.ok check before .json() | `res = await fetch(url, { headers, ...opts });` |
+| MEDIUM | `frontend/src/services/api-client.js` | 113 | new Date() on potentially null value without guard | `createdDate: c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR', {` |
+| HIGH | `frontend/src/services/api-client.js` | 720 | fetch() without res.ok check before .json() | `const res = await fetch(url, { method: 'POST', headers, body: formData });` |
+| HIGH | `frontend/src/services/auth.js` | 53 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/login', {` |
+| HIGH | `frontend/src/services/auth.js` | 77 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/register', {` |
+| HIGH | `frontend/src/services/auth.js` | 95 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/resend-verification', {` |
+| HIGH | `frontend/src/services/auth.js` | 116 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/refresh', {` |
+| HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
+| HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
