@@ -79,8 +79,14 @@ router.post('/join/:code', async (req, res, next) => {
     const team = await db.teams.getByInviteCode(req.params.code);
     if (!team) return res.status(404).json({ error: 'Code d\'invitation invalide' });
 
+    // Jamais admin via le lien d'invitation : le lien est diffusable et
+    // n'expire pas \u2014 quiconque le poss\u00E8de pourrait sinon prendre le contr\u00F4le
+    // de l'\u00E9quipe en appelant l'API directement (la page, elle, ne propose
+    // que 3 r\u00F4les). Seul un admin existant peut promouvoir, via PATCH members.
     const role = req.body.role || 'viewer';
-    if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: 'R\u00F4le invalide' });
+    if (!VALID_ROLES.includes(role) || role === 'admin') {
+      return res.status(400).json({ error: 'R\u00F4le invalide' });
+    }
 
     await db.teams.addMember(team.id, req.user.id, role);
 
