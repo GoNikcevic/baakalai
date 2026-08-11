@@ -231,6 +231,9 @@
     "welcome": "Welcome",
     "hello": "Hello {name}!",
     "readyToProspect": "Which deals shall we revive today, {name}?",
+    "readSummary": "I read your {count} deals — {value} in open pipeline.",
+    "readDormant": "{count} have been dormant for 14+ days — I suggest starting with:",
+    "readDays": "{days}d",
     "chooseTemplate": "Choose a template or describe your campaign.",
     "defaultSubtitle": "I can help you create campaigns, refine your sequences and analyze your performance.",
     "refineCampaigns": "Refine my campaigns",
@@ -746,7 +749,12 @@
     "importDone": "{count} contacts imported. I've identified your deals with no recent activity — they're waiting on your dashboard.",
     "importEmpty": "No new contacts to import. You can run the import again from Clients.",
     "importError": "The CRM import didn't complete. You can retry it from Clients — this doesn't block anything.",
-    "seeDormantDeals": "See my dormant deals →"
+    "seeDormantDeals": "See my dormant deals →",
+    "readTitle": "I read {count} deals from your CRM — {value} in open pipeline.",
+    "readDormant": "{count} have been dormant for 14+ days ({value} to revive). The biggest:",
+    "readNoDormant": "No dormant deals detected yet — I keep watching.",
+    "readDaysInactive": "{days} days inactive",
+    "readGaps": "{count} deals are missing an amount — I can already follow up, I'll be more precise once you fill them in your CRM."
   },
   "triggers": {
     "dealWon": "Deal won",

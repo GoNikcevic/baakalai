@@ -1656,6 +1656,76 @@ function InlineSuggestions({ suggestions, onSend }) {
   );
 }
 
+/* Premier dialogue : ce que baakalai a lu dans le CRM, avec les deals
+   dormants cliquables — un clic lance la conversation sur un vrai deal.
+   Rendu uniquement quand l'utilisateur a un profil mais aucune campagne. */
+function CrmReadingSummary({ onSuggestionClick }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    request('/crm/reading-summary')
+      .then(setSummary)
+      .catch((err) => { console.warn('reading-summary failed:', err.message); });
+  }, []);
+
+  if (!summary || !summary.totalDeals) return null;
+
+  const money = (n) => {
+    if (!n) return '0\u00a0€';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M\u00a0€`;
+    if (n >= 1000) return `${Math.round(n / 1000)}k\u00a0€`;
+    return `${Math.round(n)}\u00a0€`;
+  };
+
+  const revivePrompt = (d) => (lang === 'en'
+    ? `Draft a follow-up for the deal "${d.name}"${d.company ? ` (${d.company})` : ''} — no activity for ${d.daysInactive} days.`
+    : `Prépare une relance pour le deal « ${d.name} »${d.company ? ` (${d.company})` : ''} — sans activité depuis ${d.daysInactive} jours.`);
+
+  return (
+    <div style={{
+      background: 'var(--paper)', border: '1px solid var(--border)',
+      borderRadius: 12, padding: '14px 18px', marginBottom: 20,
+      textAlign: 'left', maxWidth: 520, width: '100%',
+    }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        {t('chat.readSummary')
+          .replace('{count}', summary.totalDeals)
+          .replace('{value}', money(summary.openValue))}
+        {summary.dormant.count > 0 && (
+          <> {t('chat.readDormant').replace('{count}', summary.dormant.count)}</>
+        )}
+      </div>
+      {summary.dormant.top.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+          {summary.dormant.top.map(d => (
+            <button
+              key={d.id}
+              onClick={() => onSuggestionClick(revivePrompt(d))}
+              style={{
+                background: 'var(--paper-2)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: '8px 12px', textAlign: 'left',
+                cursor: 'pointer', fontSize: 13, color: 'var(--ink)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <strong>{d.name}</strong>{d.company ? ` · ${d.company}` : ''}
+              </span>
+              <span style={{ flexShrink: 0, color: 'var(--text-secondary)', fontSize: 12 }}>
+                {money(d.dealValue)} · {t('chat.readDays').replace('{days}', d.daysInactive)} →
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) {
   const { userName, campaignCount, hasProfile, activeCampaigns, topCampaign, insights } = userState || {};
   const t = useT();
@@ -1754,6 +1824,11 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
               {t('chat.createFromInsights')} →
             </button>
           </div>
+        )}
+
+        {/* Premier dialogue : compte-rendu de lecture du CRM, deals cliquables */}
+        {(hasProfile && campaignCount === 0) && (
+          <CrmReadingSummary onSuggestionClick={onSuggestionClick} />
         )}
 
         {/* Campaign templates — shown when user has profile but no/few campaigns */}

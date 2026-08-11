@@ -231,6 +231,9 @@
     "welcome": "Bienvenue",
     "hello": "Bonjour {name} !",
     "readyToProspect": "On relance quels deals aujourd'hui, {name} ?",
+    "readSummary": "J'ai lu vos {count} deals — {value} de pipeline.",
+    "readDormant": "{count} dorment depuis plus de 14 jours — je vous propose de commencer par :",
+    "readDays": "{days} j",
     "chooseTemplate": "Choisissez un modèle ou décrivez votre campagne.",
     "defaultSubtitle": "Je peux vous aider à créer des campagnes, affiner vos séquences et analyser vos performances.",
     "refineCampaigns": "Affiner mes campagnes",
@@ -746,7 +749,12 @@
     "importDone": "{count} contacts importés. J'ai identifié vos deals sans activité récente — ils vous attendent sur le tableau de bord.",
     "importEmpty": "Aucun nouveau contact à importer. Vous pourrez relancer l'import depuis Clients.",
     "importError": "L'import CRM n'a pas abouti. Vous pourrez le relancer depuis Clients — cela ne bloque pas la suite.",
-    "seeDormantDeals": "Voir mes deals dormants →"
+    "seeDormantDeals": "Voir mes deals dormants →",
+    "readTitle": "J'ai lu {count} deals dans votre CRM — {value} de pipeline.",
+    "readDormant": "{count} dorment depuis plus de 14 jours ({value} à réveiller). Les plus gros :",
+    "readNoDormant": "Aucun deal dormant détecté pour l'instant — je surveille en continu.",
+    "readDaysInactive": "{days} j sans activité",
+    "readGaps": "Il manque le montant sur {count} deals — je peux déjà relancer, je serai plus précis si vous les complétez dans votre CRM."
   },
   "triggers": {
     "dealWon": "Deal gagné",

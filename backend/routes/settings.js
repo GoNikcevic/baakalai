@@ -175,6 +175,7 @@ router.post('/keys/test-one', async (req, res, next) => {
       return res.status(400).json({ error: 'field and key are required' });
     }
     const result = await testKey(field, String(key));
+    require('../lib/track').track(req.user.id, 'crm_key_tested', { field, status: result?.status || 'unknown' });
     res.json({ result });
   } catch (err) {
     next(err);

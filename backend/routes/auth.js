@@ -170,6 +170,8 @@ router.post('/register', async (req, res, next) => {
 
     const { accessToken, refreshToken } = await issueTokens(user);
 
+    require('../lib/track').track(user.id, 'signup', { hasCompany: !!company });
+
     setRefreshCookie(res, refreshToken);
     res.status(201).json({
       token: accessToken,
@@ -527,6 +529,7 @@ router.delete('/account', requireAuth, async (req, res, next) => {
 router.post('/onboarding-complete', requireAuth, async (req, res, next) => {
   try {
     await db.query('UPDATE users SET onboarding_complete = true WHERE id = $1', [req.user.id]);
+    require('../lib/track').track(req.user.id, 'onboarding_complete');
     res.json({ success: true });
   } catch (err) {
     next(err);

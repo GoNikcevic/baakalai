@@ -8,7 +8,7 @@
    =============================================================================== */
 
 import { useState, useCallback, useRef } from 'react';
-import { saveKeys, request } from '../services/api-client';
+import { saveKeys, request, trackEvent } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 
 const TOTAL_STEPS = 3;
@@ -30,6 +30,53 @@ function getStepMeta(t) {
     { title: t('wizard.step2Title'), desc: t('wizard.step2Desc') },
     { title: t('wizard.step3Title'), desc: '' },
   ];
+}
+
+/* ─── Compte-rendu de lecture CRM (affiché après le premier import) ─── */
+
+function moneyEUR(n) {
+  if (!n) return '0\u00a0€';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M\u00a0€`;
+  if (n >= 1000) return `${Math.round(n / 1000)}k\u00a0€`;
+  return `${Math.round(n)}\u00a0€`;
+}
+
+function renderReadingSummary(s, t) {
+  return (
+    <div>
+      <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
+        {t('wizard.readTitle')
+          .replace('{count}', s.totalDeals)
+          .replace('{value}', moneyEUR(s.openValue))}
+      </div>
+      {s.dormant.count > 0 ? (
+        <>
+          <div style={{ marginTop: 6 }}>
+            {t('wizard.readDormant')
+              .replace('{count}', s.dormant.count)
+              .replace('{value}', moneyEUR(s.dormant.value))}
+          </div>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            {s.dormant.top.map(d => (
+              <li key={d.id}>
+                <strong>{d.name}</strong>
+                {d.company ? ` (${d.company})` : ''}
+                {' — '}{moneyEUR(d.dealValue)}
+                {' · '}{t('wizard.readDaysInactive').replace('{days}', d.daysInactive)}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <div style={{ marginTop: 6 }}>{t('wizard.readNoDormant')}</div>
+      )}
+      {s.dataGaps.missingValue > 0 && (
+        <div style={{ marginTop: 8, color: 'var(--grey-500)', fontSize: 12 }}>
+          {t('wizard.readGaps').replace('{count}', s.dataGaps.missingValue)}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─── Outreach options ─── */
@@ -239,6 +286,8 @@ export default function OnboardingWizard({ onComplete }) {
   // Premier import CRM declenche a la fin du wizard.
   // status: 'idle' | 'running' | 'done' | 'error'
   const [importState, setImportState] = useState({ status: 'idle', imported: null, error: null });
+  // Compte-rendu de lecture (/crm/reading-summary), affiché après l'import.
+  const [readingSummary, setReadingSummary] = useState(null);
   // Empeche de rejouer la sauvegarde du profil / la synchro outreach au 2e clic.
   const setupDoneRef = useRef(false);
 
@@ -298,7 +347,10 @@ export default function OnboardingWizard({ onComplete }) {
   /* ─── Navigation ─── */
 
   function next() {
-    if (step < TOTAL_STEPS - 1) setStep(s => s + 1);
+    if (step < TOTAL_STEPS - 1) {
+      trackEvent('wizard_step_done', { step });
+      setStep(s => s + 1);
+    }
   }
   function prev() {
     if (step > 0) setStep(s => s - 1);
@@ -339,6 +391,7 @@ export default function OnboardingWizard({ onComplete }) {
         });
         const body = await res.json().catch(() => ({}));
         if (res.ok && body.result?.status === 'invalid') {
+          trackEvent('crm_key_invalid', { provider: crmProvider });
           setCrmKeyError(t('wizard.crmKeyInvalid').replace('{provider}', crmProvider));
           setSaving(false);
           return;
@@ -352,6 +405,7 @@ export default function OnboardingWizard({ onComplete }) {
         setKeySaveStatus('error');
       } else {
         setKeySaveStatus('saved');
+        if (crmField) trackEvent('crm_connected', { provider: crmProvider });
         next();
       }
     } catch {
@@ -456,6 +510,12 @@ export default function OnboardingWizard({ onComplete }) {
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
 
       setImportState({ status: 'done', imported: body.imported ?? 0, error: null });
+
+      // Compte-rendu de lecture : pur SQL, disponible immédiatement. Échec
+      // non bloquant — on retombe sur le message générique importDone.
+      request('/crm/reading-summary')
+        .then(setReadingSummary)
+        .catch((err) => { console.warn('reading-summary failed:', err.message); });
 
       // L'analyse peut rester en tâche de fond : elle n'est pas nécessaire à
       // l'affichage des deals dormants, qui se calcule à la demande en SQL.
@@ -806,7 +866,9 @@ export default function OnboardingWizard({ onComplete }) {
                 {importState.status === 'running' && t('wizard.importRunningDesc')}
                 {importState.status === 'done' && (
                   importState.imported > 0
-                    ? t('wizard.importDone').replace('{count}', importState.imported)
+                    ? (readingSummary && readingSummary.totalDeals > 0
+                        ? renderReadingSummary(readingSummary, t)
+                        : t('wizard.importDone').replace('{count}', importState.imported))
                     : t('wizard.importEmpty')
                 )}
                 {importState.status === 'error' && t('wizard.importError')}
@@ -861,6 +923,7 @@ export default function OnboardingWizard({ onComplete }) {
 
   /* ─── Skip / close handler ─── */
   function handleSkip() {
+    trackEvent('wizard_skipped', { step });
     const tkn = localStorage.getItem('bakal_token');
     fetch('/api/auth/onboarding-complete', {
       method: 'POST',

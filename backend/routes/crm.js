@@ -20,6 +20,7 @@ const { decrypt, encrypt } = require('../config/crypto');
 const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
 const logger = require('../lib/logger');
+const { track } = require('../lib/track');
 
 const { rateLimit } = require('../lib/rate-limit');
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 }); // 5 clean ops per minute
@@ -955,8 +956,10 @@ router.post('/import/:provider', async (req, res, next) => {
       return res.status(400).json({ error: `Import not yet supported for ${provider}` });
     }
 
+    track(req.user.id, 'import_done', { provider, imported, updated, skipped });
     res.json({ imported, updated, skipped, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
+    track(req.user.id, 'import_failed', { provider: req.params.provider, error: String(err.message).slice(0, 200) });
     next(err);
   }
 });
@@ -2275,6 +2278,78 @@ router.get('/reactivation-stats', async (req, res, next) => {
         totalValue: parseFloat(pipe.open_value) || 0,
       },
       conversionRate: emails.total > 0 ? Math.round((stats.count / emails.total) * 100) : 0,
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/reading-summary — Compte-rendu de lecture du CRM.
+// Affiché juste après le premier import (wizard) et comme premier message
+// du chat : « voilà ce que j'ai lu, voilà ce qui dort, voilà ce qui manque ».
+// Pur SQL sur opportunities — aucune dépendance à l'analyse IA, donc
+// disponible dans la seconde qui suit l'import.
+router.get('/reading-summary', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [totals, topDormant] = await Promise.all([
+      // Stagnance sur COALESCE(last_activity_at, created_at) — jamais
+      // updated_at, réécrit en masse par chaque import (cf. reactivation-stats).
+      db.query(`
+        SELECT
+          COUNT(*) as total_deals,
+          COALESCE(SUM(deal_value), 0) as total_value,
+          COUNT(*) FILTER (WHERE status NOT IN ('won', 'lost')) as open_deals,
+          COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0) as open_value,
+          COUNT(*) FILTER (
+            WHERE status NOT IN ('won', 'lost')
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ) as dormant_count,
+          COALESCE(SUM(deal_value) FILTER (
+            WHERE status NOT IN ('won', 'lost')
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ), 0) as dormant_value,
+          COUNT(*) FILTER (WHERE deal_value IS NULL OR deal_value = 0) as missing_value,
+          COUNT(*) FILTER (WHERE last_activity_at IS NULL) as missing_activity,
+          COUNT(*) FILTER (WHERE company IS NULL OR company = '') as missing_company
+        FROM opportunities
+        WHERE user_id = $1
+      `, [userId]),
+      db.query(`
+        SELECT id, name, company, deal_value,
+               GREATEST(0, EXTRACT(DAY FROM NOW() - COALESCE(last_activity_at, created_at)))::int as days_inactive
+        FROM opportunities
+        WHERE user_id = $1 AND status NOT IN ('won', 'lost')
+          AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+          AND deal_value IS NOT NULL AND deal_value > 0
+        ORDER BY deal_value DESC
+        LIMIT 3
+      `, [userId]),
+    ]);
+
+    const row = totals.rows[0];
+    res.json({
+      totalDeals: parseInt(row.total_deals),
+      totalValue: parseFloat(row.total_value) || 0,
+      openDeals: parseInt(row.open_deals),
+      openValue: parseFloat(row.open_value) || 0,
+      dormant: {
+        count: parseInt(row.dormant_count),
+        value: parseFloat(row.dormant_value) || 0,
+        top: topDormant.rows.map(d => ({
+          id: d.id,
+          name: d.name,
+          company: d.company,
+          dealValue: parseFloat(d.deal_value) || 0,
+          daysInactive: d.days_inactive,
+        })),
+      },
+      dataGaps: {
+        missingValue: parseInt(row.missing_value),
+        missingActivity: parseInt(row.missing_activity),
+        missingCompany: parseInt(row.missing_company),
+      },
     });
   } catch (err) { next(err); }
 });

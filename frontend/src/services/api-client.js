@@ -45,6 +45,15 @@ export async function request(path, opts = {}) {
   return res.json();
 }
 
+/* ─── Instrumentation produit ─── */
+
+// Fire-and-forget : un événement perdu vaut mieux qu'une UX perturbée par
+// l'analytics. Le backend valide le nom ([a-z0-9_]) et borne les metadata.
+export function trackEvent(event, metadata = null) {
+  request('/events', { method: 'POST', body: JSON.stringify({ event, metadata }) })
+    .catch(() => {});
+}
+
 /* ─── Channel helpers ─── */
 
 const channelMeta = {
