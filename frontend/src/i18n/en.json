@@ -442,6 +442,8 @@
     "sent": "Sent",
     "preview": "Preview",
     "previewing": "Analyzing...",
+    "manualOnlyTrigger": "Evaluated only on manual run",
+    "sequenceE1Queued": "E1 added to the approval queue — E2/E3 still need to be sent manually",
     "newTrigger": "+ New trigger",
     "newTriggerTitle": "New trigger",
     "triggerName": "Trigger name (e.g. Stagnant deal follow-up)",
@@ -761,7 +763,10 @@
     "orPasteKey": "or paste an API key",
     "oauthConnected": "{provider} connected — your deals will be imported when you finish signing up.",
     "oauthUnavailable": "One-click connection isn't available yet for this CRM — paste your API key:",
-    "oauthFailed": "The connection didn't complete. Try again or paste an API key."
+    "oauthFailed": "The connection didn't complete. Try again or paste an API key.",
+    "sfInstanceUrlPlaceholder": "Instance URL (e.g. https://mycompany.my.salesforce.com)",
+    "sfConnect": "Connect Salesforce →",
+    "sfConnecting": "Connecting to Salesforce…"
   },
   "triggers": {
     "dealWon": "Deal won",

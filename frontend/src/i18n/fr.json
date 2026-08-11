@@ -442,6 +442,8 @@
     "sent": "Envoyés",
     "preview": "Prévisualiser",
     "previewing": "Analyse...",
+    "manualOnlyTrigger": "Évalué uniquement au lancement manuel",
+    "sequenceE1Queued": "E1 ajouté à la file d'approbation — E2/E3 restent à envoyer manuellement",
     "newTrigger": "+ Nouveau trigger",
     "newTriggerTitle": "Nouveau trigger",
     "triggerName": "Nom du trigger (ex: Relance deals stagnants)",
@@ -761,7 +763,10 @@
     "orPasteKey": "ou coller une clé API",
     "oauthConnected": "{provider} connecté — vos deals seront importés à la fin de l'inscription.",
     "oauthUnavailable": "La connexion en un clic n'est pas encore disponible pour ce CRM — collez votre clé API :",
-    "oauthFailed": "La connexion n'a pas abouti. Réessayez ou collez une clé API."
+    "oauthFailed": "La connexion n'a pas abouti. Réessayez ou collez une clé API.",
+    "sfInstanceUrlPlaceholder": "URL de l'instance (ex : https://monentreprise.my.salesforce.com)",
+    "sfConnect": "Connecter Salesforce →",
+    "sfConnecting": "Connexion à Salesforce…"
   },
   "triggers": {
     "dealWon": "Deal gagné",

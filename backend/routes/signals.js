@@ -355,13 +355,38 @@ Return JSON:
       return res.status(500).json({ error: 'Could not generate sequence' });
     }
 
-    // Update signal status
+    // E1 part dans la file d'approbation nurture si le contact a un email —
+    // avec la dédup standard (7 jours création / 2 heures envoi).
+    let queuedEmailId = null;
+    if (s.contact_email) {
+      const e1 = sequence.steps[0];
+      const dup = await db.query(
+        `SELECT id FROM nurture_emails
+         WHERE user_id = $1 AND LOWER(to_email) = LOWER($2)
+           AND (created_at > now() - interval '7 days' OR sent_at > now() - interval '2 hours')
+         LIMIT 1`,
+        [req.user.id, s.contact_email]
+      );
+      if (dup.rows.length === 0 && e1?.subject && e1?.body) {
+        const inserted = await db.query(
+          `INSERT INTO nurture_emails (user_id, to_email, to_name, subject, body, status, metadata)
+           VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+           RETURNING id`,
+          [req.user.id, s.contact_email, s.contact_name || null, e1.subject, e1.body,
+           JSON.stringify({ chain: 'signal_sequence', signal_id: s.id, step: e1.step, timing: e1.timing })]
+        );
+        queuedEmailId = inserted.rows[0].id;
+      }
+    }
+
+    // La séquence est persistée sur le signal AVANT de le marquer actioned :
+    // un signal actioned sans trace de ce qui a été créé était un mensonge.
     await db.query(
-      `UPDATE signals SET status = 'actioned', action_taken = 'sequence_created', actioned_at = now() WHERE id = $1`,
-      [s.id]
+      `UPDATE signals SET sequence = $1, status = 'actioned', action_taken = 'sequence_created', actioned_at = now() WHERE id = $2`,
+      [JSON.stringify(sequence), s.id]
     );
 
-    res.json({ sequence, signal: s });
+    res.json({ sequence, signal: s, queuedEmailId });
   } catch (err) { next(err); }
 });
 

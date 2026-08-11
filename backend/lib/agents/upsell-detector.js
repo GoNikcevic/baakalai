@@ -60,7 +60,9 @@ async function run(userId) {
     const now = Date.now();
 
     for (const client of won) {
-      const daysSinceWon = (now - new Date(client.updated_at || client.created_at).getTime()) / DAY_MS;
+      // `updated_at` est réécrit à chaque synchro CRM : la maturité client se
+      // mesure sur won_date (fallback aligné sur crm-agent.js renewal_reminder).
+      const daysSinceWon = (now - new Date(client.won_date || client.updated_at || client.created_at).getTime()) / DAY_MS;
       const assignedPLs = new Set(assignsByOpp.get(client.id) || []);
       const positiveCount = positiveByOpp.get(client.id) || 0;
 

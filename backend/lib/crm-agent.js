@@ -27,6 +27,7 @@ const { notifyUser } = require('../socket');
 const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
 const { extractActivityDate } = require('./crm-activity-date');
 const { applyMappings } = require('./crm-field-mapper');
+const { matchContacts } = require('./trigger-matching');
 const logger = require('./logger');
 
 const DAY_MS = 86400000;
@@ -125,7 +126,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     await stepDataQuality(userId, token, report, _opps);
 
     // ── Step 3: Nurture Evaluation ──
-    await stepNurture(userId, token, report);
+    await stepNurture(userId, token, report, { teamId, crmProvider });
 
     // ── Step 3b: LinkedIn Response Sync ──
     try {
@@ -486,7 +487,11 @@ function findDuplicates(opps) {
 
 // ── Step 3: Nurture ──
 
-async function stepNurture(userId, token, report) {
+// teamId et crmProvider doivent être passés explicitement : ils n'existent que
+// dans le scope de runAgent. Avant ce paramètre, chaque contact matché levait
+// « teamId is not defined », avalé par le catch par-contact — le cron
+// n'a jamais pu générer un seul email de nurture.
+async function stepNurture(userId, token, report, { teamId = null, crmProvider = null } = {}) {
   try {
     // Get triggers
     const triggersResult = await db.query(
@@ -506,76 +511,11 @@ async function stepNurture(userId, token, report) {
     const recentSet = new Set(recentEmails.rows.map(r => r.to_email?.toLowerCase()));
 
     for (const trigger of triggersResult.rows) {
-      const conditions = trigger.conditions || {};
-      const days = conditions.days || 30;
-      let matched = [];
-
-      switch (trigger.trigger_type) {
-        case 'deal_won':
-          matched = opps.filter(o => o.status === 'won');
-          break;
-        case 'deal_lost':
-          matched = opps.filter(o => {
-            if (o.status !== 'lost') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && age < days + 7; // window of 7 days after loss
-          });
-          break;
-        // Stagnation et inactivité se mesurent sur last_activity_at, le signal
-        // d'activité commerciale extrait du CRM — jamais sur updated_at, que la
-        // synchro réécrit à chaque passage (376 opportunités partageaient
-        // 3 minutes distinctes de updated_at).
-        case 'deal_stagnant':
-          matched = opps.filter(o => {
-            if (o.status === 'won' || o.status === 'lost') return false;
-            const age = (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days;
-          });
-          break;
-        case 'inactive_contact':
-          matched = opps.filter(o => {
-            const age = (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && o.status !== 'lost';
-          });
-          break;
-        case 'onboarding_check':
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && age < days + 3; // window of 3 days
-          });
-          break;
-        case 'renewal_reminder':
-          // Match won deals where renewal_date is within X days from now (or past due)
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            if (o.renewal_date) {
-              // Use renewal_date from CRM field mapping
-              const daysUntilRenewal = (new Date(o.renewal_date).getTime() - now) / DAY_MS;
-              return daysUntilRenewal <= days && daysUntilRenewal >= -7; // X days before + 7 days grace
-            }
-            // Fallback: use won_date + trigger days as estimated renewal
-            const wonDate = o.won_date || o.updated_at || o.created_at;
-            if (!wonDate) return false;
-            const age = (now - new Date(wonDate).getTime()) / DAY_MS;
-            return age >= days;
-          });
-          break;
-        case 'upsell_opportunity':
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days;
-          });
-          break;
-        case 'feedback_request':
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && age < days + 7;
-          });
-          break;
-      }
+      // Logique de matching partagée avec la preview (routes/nurture.js) —
+      // toute divergence faisait mentir la preview. null = type évaluable
+      // uniquement en run manuel (newsletter_* via nurture-engine).
+      let matched = matchContacts(trigger, opps, now);
+      if (matched === null) continue;
 
       // Filter already-emailed
       matched = matched.filter(o => o.email && !recentSet.has(o.email.toLowerCase()));

@@ -247,6 +247,7 @@ export default function SignalsPage() {
 /* ═══ Signal Feed ═══ */
 
 function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOutreach, actioningId, en, onViewCompany, onCreateSequence, creatingSequence, sequenceResult }) {
+  const t = useT();
   const filters = [
     { key: 'new', label: en ? 'New' : 'Nouveaux', count: counts.new || 0 },
     { key: 'actioned', label: en ? 'Actioned' : 'Traités', count: counts.actioned || 0 },
@@ -362,6 +363,11 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--accent)' }}>
                       ⚡ {sequenceResult.sequence.name}
                     </div>
+                    {sequenceResult.queuedEmailId && (
+                      <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
+                        ✓ {t('activation.sequenceE1Queued')}
+                      </div>
+                    )}
                     {sequenceResult.sequence.steps.map((step, i) => (
                       <div key={i} style={{ fontSize: 11, marginBottom: 6, paddingLeft: 8, borderLeft: '2px solid var(--border)' }}>
                         <div style={{ fontWeight: 600 }}>{step.step} ({step.timing}) — {step.subject}</div>

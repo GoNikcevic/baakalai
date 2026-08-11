@@ -219,8 +219,14 @@ async function run(userId) {
  * Search Brave and return raw results.
  */
 async function searchBrave(query) {
-  const apiKey = process.env.BRAVE_API_KEY;
-  if (!apiKey) return [];
+  // api/brave-search.js lit BRAVE_SEARCH_API_KEY : accepter les deux noms,
+  // sinon un scan avec la seule autre variable posée rapporte « 0 signal »
+  // sans aucune erreur.
+  const apiKey = process.env.BRAVE_API_KEY || process.env.BRAVE_SEARCH_API_KEY;
+  if (!apiKey) {
+    logger.warn('signal-agent', 'BRAVE_API_KEY/BRAVE_SEARCH_API_KEY absente — scan de signaux impossible');
+    return [];
+  }
 
   try {
     const res = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10&freshness=pw`, {

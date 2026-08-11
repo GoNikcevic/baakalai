@@ -22,10 +22,12 @@ async function run(userId) {
     const opps = await db.opportunities.listByUser(userId, 500, 0);
     const now = Date.now();
 
-    // Find stagnant deals (open, not updated in 14+ days)
+    // Find stagnant deals (open, no activity in 14+ days)
+    // `updated_at` est réécrit à chaque synchro CRM (cf. churn-scoring.js) :
+    // seul `last_activity_at` reflète la vraie dernière activité côté CRM.
     const stagnant = opps.filter(o => {
       if (o.status === 'won' || o.status === 'lost') return false;
-      const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
+      const age = (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY_MS;
       return age >= 14;
     });
 
@@ -57,7 +59,7 @@ async function run(userId) {
     for (const deal of toCoach) {
       try {
         const contactEmails = emailsByContact.get(deal.email?.toLowerCase()) || [];
-        const daysSinceUpdate = Math.round((now - new Date(deal.updated_at || deal.created_at).getTime()) / DAY_MS);
+        const daysSinceUpdate = Math.round((now - new Date(deal.last_activity_at || deal.created_at).getTime()) / DAY_MS);
 
         const prompt = `You are a B2B sales coach. Suggest the next best action for this stagnant deal.
 

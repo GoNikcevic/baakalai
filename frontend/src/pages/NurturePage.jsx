@@ -186,7 +186,9 @@ export default function NurturePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{p.triggerName}</div>
                 <span style={{ fontSize: 11, color: 'var(--grey-500)' }}>
-                  {p.contactsCount} contact{p.contactsCount > 1 ? 's' : ''} {'\u00B7'} {lang === 'en' ? 'mode' : 'mode'} {p.mode === 'auto' ? 'auto' : (lang === 'en' ? 'approval' : 'approbation')}
+                  {p.manualOnly
+                    ? t('activation.manualOnlyTrigger')
+                    : <>{p.contactsCount} contact{p.contactsCount > 1 ? 's' : ''} {'\u00B7'} mode {p.mode === 'auto' ? 'auto' : (lang === 'en' ? 'approval' : 'approbation')}</>}
                 </span>
               </div>
 

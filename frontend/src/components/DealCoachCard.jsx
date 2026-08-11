@@ -40,25 +40,22 @@ export default function DealCoachCard() {
   });
 
   const loadSuggestions = useCallback(async (forceRefresh = false) => {
-    // Cache for 30 min to avoid re-running the agent on every dashboard visit
-    const userId = (localStorage.getItem('baakal_token') || '').slice(-8);
-    const CACHE_KEY = `bakal_dealcoach_cache_${userId}`;
-    const CACHE_TTL = 30 * 60 * 1000;
-    if (!forceRefresh) {
-      try {
-        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-        if (cached && Date.now() - cached.ts < CACHE_TTL) {
-          setSuggestions(cached.data);
+    // Le cron strategic-daily (9h30) persiste le résultat côté serveur :
+    // on lit ce résultat (un SELECT) au lieu de relancer l'agent (jusqu'à
+    // 10 appels Claude). Le POST ne sert que de fallback (résultat absent
+    // ou > 24h) et au bouton Actualiser.
+    const FRESH_MS = 24 * 60 * 60 * 1000;
+    try {
+      if (!forceRefresh) {
+        const cached = await request('/strategic/results/deal_coach');
+        if (cached.result && cached.createdAt && Date.now() - new Date(cached.createdAt).getTime() < FRESH_MS) {
+          setSuggestions(cached.result.suggestions || []);
           setLoading(false);
           return;
         }
-      } catch { /* ignore */ }
-    }
-    try {
+      }
       const data = await request('/strategic/run/deal_coach', { method: 'POST' });
-      const items = data.suggestions || [];
-      setSuggestions(items);
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: items }));
+      setSuggestions(data.suggestions || []);
     } catch {
       setSuggestions([]);
     }

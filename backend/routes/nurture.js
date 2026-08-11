@@ -25,6 +25,7 @@ const db = require('../db');
 const { encrypt } = require('../config/crypto');
 const { sendPersonalEmail, sendNurtureEmail, testEmailAccount } = require('../lib/email-outbound');
 const { runNurtureEngine } = require('../lib/nurture-engine');
+const { matchContacts } = require('../lib/trigger-matching');
 const logger = require('../lib/logger');
 
 const router = Router();
@@ -300,7 +301,6 @@ router.post('/preview', async (req, res, next) => {
 
     const opps = await db.opportunities.listByUser(req.user.id, 10000, 0);
     const now = Date.now();
-    const DAY = 86400000;
 
     // Get recently emailed to exclude
     const recent = await db.query(
@@ -312,18 +312,25 @@ router.post('/preview', async (req, res, next) => {
     const previews = [];
 
     for (const trigger of triggers.rows) {
-      const conditions = trigger.conditions || {};
-      const days = conditions.days || 30;
-      let matched = [];
+      // Même logique de matching que le cron (lib/trigger-matching.js) —
+      // la preview affichait des contacts calculés sur updated_at alors que
+      // le cron déclenchait sur last_activity_at.
+      let matched = matchContacts(trigger, opps, now);
 
-      switch (trigger.trigger_type) {
-        case 'deal_won': matched = opps.filter(o => o.status === 'won'); break;
-        case 'deal_lost': matched = opps.filter(o => o.status === 'lost' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY < days + 7); break;
-        case 'deal_stagnant': matched = opps.filter(o => o.status !== 'won' && o.status !== 'lost' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days); break;
-        case 'inactive_contact': matched = opps.filter(o => o.status !== 'lost' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days); break;
-        case 'onboarding_check': matched = opps.filter(o => o.status === 'won' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY < days + 3); break;
-        case 'renewal_reminder': case 'upsell_opportunity': matched = opps.filter(o => o.status === 'won' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days); break;
-        case 'feedback_request': matched = opps.filter(o => o.status === 'won' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY < days + 7); break;
+      // Types évalués uniquement en run manuel (newsletter_*) : signaler
+      // plutôt que d'ignorer silencieusement.
+      if (matched === null) {
+        previews.push({
+          triggerId: trigger.id,
+          triggerName: trigger.name,
+          triggerType: trigger.trigger_type,
+          mode: trigger.mode,
+          contactsCount: null,
+          contacts: [],
+          sampleEmail: null,
+          manualOnly: true,
+        });
+        continue;
       }
 
       matched = matched.filter(o => o.email && !recentSet.has(o.email.toLowerCase()));

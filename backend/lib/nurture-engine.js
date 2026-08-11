@@ -112,7 +112,11 @@ async function evaluateTriggers(userId) {
         break;
       }
 
-      case 'renewal': {
+      // 'renewal_reminder' est le nom écrit par l'UI et le cron (crm-agent) ;
+      // 'renewal' est l'ancien nom — les deux doivent matcher ici, sinon le
+      // run manuel ignore silencieusement les triggers créés depuis l'UI.
+      case 'renewal':
+      case 'renewal_reminder': {
         const daysBefore = conditions.days || 30;
         const now = Date.now();
         // Load opportunities with renewal_date set

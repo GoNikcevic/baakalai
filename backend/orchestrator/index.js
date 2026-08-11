@@ -144,6 +144,10 @@ function start() {
     try {
       const { runOne } = require('../lib/agents/strategic-orchestrator');
       const db = require('../db');
+
+      // Purge de l'historique des résultats stratégiques (migration 073)
+      await db.query(`DELETE FROM strategic_results WHERE created_at < now() - interval '90 days'`);
+
       const users = await db.query('SELECT id FROM users WHERE onboarding_complete = true');
 
       for (const row of users.rows) {
