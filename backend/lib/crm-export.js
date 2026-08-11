@@ -15,7 +15,9 @@ function buildContactData(o) {
 }
 
 async function exportScoresToHubSpot(userId, opportunities) {
-  const apiKey = await getUserKey(userId, 'hubspot');
+  // crm-token gère le refresh des tokens OAuth (30 min chez HubSpot).
+  const { getUserCrmToken } = require('./crm-token');
+  const apiKey = await getUserCrmToken(userId, 'hubspot');
   if (!apiKey) throw new Error('HubSpot non configuré');
 
   const results = [];
@@ -70,16 +72,24 @@ async function exportScoresToSalesforce(userId, opportunities) {
 }
 
 async function exportScoresToPipedrive(userId, opportunities) {
-  const apiKey = await getUserKey(userId, 'pipedrive');
-  if (!apiKey) throw new Error('Pipedrive non configuré');
+  // getUserCrmToken (et non getUserKey) : gère aussi les connexions OAuth,
+  // où le token est un Bearer sur le domaine société, pas un api_token.
+  const { getUserCrmToken } = require('./crm-token');
+  const auth = await getUserCrmToken(userId, 'pipedrive');
+  if (!auth) throw new Error('Pipedrive non configuré');
+  const isOauth = typeof auth === 'object';
+  const pdUrl = (path) => isOauth
+    ? `${(auth.apiDomain || 'https://api.pipedrive.com').replace(/\/$/, '')}/api/v1${path}`
+    : `https://api.pipedrive.com/v1${path}?api_token=${auth}`;
+  const pdHeaders = isOauth ? { Authorization: `Bearer ${auth.accessToken}` } : {};
 
   const results = [];
   for (const o of opportunities.filter(o => o.score != null)) {
     const c = buildContactData(o);
     try {
-      const res = await fetch(`https://api.pipedrive.com/v1/persons?api_token=${apiKey}`, {
+      const res = await fetch(pdUrl('/persons'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...pdHeaders },
         body: JSON.stringify({
           name: `${c.firstName} ${c.lastName}`.trim(),
           org_id: null,
@@ -88,12 +98,16 @@ async function exportScoresToPipedrive(userId, opportunities) {
           // Add score as note since Pipedrive doesn't have custom fields via basic API
         }),
       });
+      if (!res.ok) {
+        results.push({ name: o.name, status: 'error', code: res.status });
+        continue;
+      }
       const data = await res.json();
       // Add a note with the score
       if (data.success && data.data?.id) {
-        await fetch(`https://api.pipedrive.com/v1/notes?api_token=${apiKey}`, {
+        await fetch(pdUrl('/notes'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...pdHeaders },
           body: JSON.stringify({
             content: `Baakal Score: ${c.score}/100\nEngagement: ${o.score_breakdown?.engagement || '?'}/50\nFit ICP: ${o.score_breakdown?.fit || '?'}/50\nStatut: ${c.status}\nEntreprise: ${c.company}`,
             person_id: data.data.id,

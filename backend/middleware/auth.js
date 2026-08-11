@@ -55,8 +55,9 @@ function verifyToken(token) {
  * Sets req.user = { id, email, role }.
  */
 function requireAuth(req, res, next) {
-  // Salesforce OAuth callback is a browser redirect — no JWT available
-  if (req.originalUrl === '/api/crm/salesforce/callback' || req.originalUrl.startsWith('/api/crm/salesforce/callback?')) {
+  // Les callbacks OAuth CRM sont des redirections navigateur — pas de JWT.
+  // L'identité vient du paramètre state, vérifié dans le handler.
+  if (/^\/api\/crm\/(salesforce|hubspot|pipedrive)\/callback(\?|$)/.test(req.originalUrl)) {
     return next();
   }
 

@@ -13,13 +13,28 @@ async function pdFetch(apiToken, endpoint, options = {}) {
   if (!apiToken) {
     throw new Error('Pipedrive API token is required');
   }
+  // Deux modes d'auth (lib/crm-token.js) :
+  // - string : clé API classique → api.pipedrive.com + ?api_token=
+  // - objet { oauth, accessToken, apiDomain } : OAuth → Bearer sur le domaine
+  //   de la société ({api_domain}/api/v1) — api.pipedrive.com refuse les
+  //   tokens OAuth.
+  const isOauth = typeof apiToken === 'object';
   return withRetry(async () => {
-    const sep = endpoint.includes('?') ? '&' : '?';
-    const url = `${BASE_URL}${endpoint}${sep}api_token=${apiToken}`;
+    let url;
+    const authHeaders = {};
+    if (isOauth) {
+      const base = `${(apiToken.apiDomain || 'https://api.pipedrive.com').replace(/\/$/, '')}/api/v1`;
+      url = `${base}${endpoint}`;
+      authHeaders.Authorization = `Bearer ${apiToken.accessToken}`;
+    } else {
+      const sep = endpoint.includes('?') ? '&' : '?';
+      url = `${BASE_URL}${endpoint}${sep}api_token=${apiToken}`;
+    }
     const res = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options.headers,
       },
     });

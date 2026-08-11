@@ -46,6 +46,43 @@ async function getUserCrmToken(userId, provider) {
       return decrypt(integration.access_token);
     } catch { return null; }
   }
+  // HubSpot / Pipedrive : soit clé API (legacy), soit OAuth produit
+  // (metadata.oauth, app baakalai — lib/crm-oauth.js). En OAuth on
+  // rafraîchit avant expiration ; pour Pipedrive on renvoie un objet
+  // { oauth, accessToken, apiDomain } que api/pipedrive.js sait consommer
+  // (Bearer sur le domaine société, pas api_token sur api.pipedrive.com).
+  if (provider === 'hubspot' || provider === 'pipedrive') {
+    const integration = await db.userIntegrations.get(userId, provider);
+    const metadata = typeof integration?.metadata === 'string'
+      ? (() => { try { return JSON.parse(integration.metadata); } catch { return {}; } })()
+      : (integration?.metadata || {});
+
+    if (integration && metadata.oauth) {
+      try {
+        let accessToken = decrypt(integration.access_token);
+
+        const shouldRefresh = integration.refresh_token && integration.expires_at
+          && new Date(integration.expires_at).getTime() < Date.now() + 5 * 60 * 1000;
+        if (shouldRefresh) {
+          const { refreshTokens } = require('./crm-oauth');
+          const tokens = await refreshTokens(provider, decrypt(integration.refresh_token));
+          accessToken = tokens.access_token;
+          await db.userIntegrations.upsert(userId, provider, {
+            accessToken: encrypt(tokens.access_token),
+            ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
+            expiresAt: new Date(Date.now() + Math.max(60, (tokens.expires_in || 1800) - 60) * 1000).toISOString(),
+          });
+        }
+
+        if (provider === 'pipedrive') {
+          return { oauth: true, accessToken, apiDomain: metadata.apiDomain || null };
+        }
+        return accessToken;
+      } catch { return null; }
+    }
+    // Pas d'OAuth : clé API classique via getUserKey ci-dessous.
+  }
+
   const { getUserKey } = require('../config');
   return getUserKey(userId, provider);
 }

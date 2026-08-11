@@ -291,6 +291,8 @@
     "learnMore": "Learn more",
     "connected": "Connected",
     "configure": "Configure",
+    "connectOauth": "Connect {provider} in one click →",
+    "orPasteKey": "or paste an API key below",
     "edit": "Edit",
     "delete": "Delete",
     "saving": "Saving...",
@@ -754,7 +756,12 @@
     "readDormant": "{count} have been dormant for 14+ days ({value} to revive). The biggest:",
     "readNoDormant": "No dormant deals detected yet — I keep watching.",
     "readDaysInactive": "{days} days inactive",
-    "readGaps": "{count} deals are missing an amount — I can already follow up, I'll be more precise once you fill them in your CRM."
+    "readGaps": "{count} deals are missing an amount — I can already follow up, I'll be more precise once you fill them in your CRM.",
+    "connectOauth": "Connect {provider} in one click →",
+    "orPasteKey": "or paste an API key",
+    "oauthConnected": "{provider} connected — your deals will be imported when you finish signing up.",
+    "oauthUnavailable": "One-click connection isn't available yet for this CRM — paste your API key:",
+    "oauthFailed": "The connection didn't complete. Try again or paste an API key."
   },
   "triggers": {
     "dealWon": "Deal won",

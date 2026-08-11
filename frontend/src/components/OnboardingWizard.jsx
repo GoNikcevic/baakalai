@@ -7,7 +7,7 @@
    Sets localStorage 'bakal_onboarding_complete' on finish.
    =============================================================================== */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { saveKeys, request, trackEvent } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 
@@ -309,6 +309,10 @@ export default function OnboardingWizard({ onComplete }) {
   const [crmProvider, setCrmProvider] = useState('');
   const [crmKey, setCrmKey] = useState('');
   const [crmKeyError, setCrmKeyError] = useState(null);
+  // OAuth produit (hubspot/pipedrive) : connexion en un clic, sans clé API.
+  const [crmOauthConnected, setCrmOauthConnected] = useState(null);
+  const [oauthUnavailable, setOauthUnavailable] = useState(false);
+  const [showKeyField, setShowKeyField] = useState(false);
   const [keySaveStatus, setKeySaveStatus] = useState(null); // 'saved' | 'error' | null
 
   // Step 3 — Target
@@ -344,6 +348,49 @@ export default function OnboardingWizard({ onComplete }) {
     setUploading(false);
   }, []);
 
+  /* ─── Retour de redirection OAuth (hubspot/pipedrive) ─── */
+
+  // Le flow OAuth recharge la page entière : on restaure le brouillon du
+  // wizard sauvegardé juste avant la redirection, puis on reprend à
+  // l'étape CRM avec l'état de connexion.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('crm_connected');
+    const oauthError = params.get('crm_error');
+    if (!connected && !oauthError) return;
+
+    try {
+      const draft = JSON.parse(localStorage.getItem('bakal_wizard_draft') || 'null');
+      if (draft) {
+        if (draft.company) setCompany(draft.company);
+        if (draft.sector) setSector(draft.sector);
+        if (draft.website) setWebsite(draft.website);
+        if (draft.teamSize) setTeamSize(draft.teamSize);
+        if (draft.targetSectors) setTargetSectors(draft.targetSectors);
+        if (draft.targetSize) setTargetSize(draft.targetSize);
+        if (draft.targetZones) setTargetZones(draft.targetZones);
+        if (draft.personaPrimary) setPersonaPrimary(draft.personaPrimary);
+        if (draft.tone) setTone(draft.tone);
+        if (draft.formality) setFormality(draft.formality);
+        if (draft.valueProp) setValueProp(draft.valueProp);
+        if (draft.outreachProvider) setOutreachProvider(draft.outreachProvider);
+        if (draft.outreachKey) setOutreachKey(draft.outreachKey);
+      }
+    } catch { /* brouillon illisible : on repart des champs vides */ }
+    localStorage.removeItem('bakal_wizard_draft');
+
+    if (connected) {
+      setCrmProvider(connected);
+      setCrmOauthConnected(connected);
+    } else {
+      setShowKeyField(true);
+      setCrmKeyError(t('wizard.oauthFailed'));
+    }
+    setStep(1);
+    window.history.replaceState({}, '', window.location.pathname);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ─── Navigation ─── */
 
   function next() {
@@ -354,6 +401,32 @@ export default function OnboardingWizard({ onComplete }) {
   }
   function prev() {
     if (step > 0) setStep(s => s - 1);
+  }
+
+  /* ─── OAuth CRM (hubspot/pipedrive) ─── */
+
+  async function handleConnectOauth() {
+    try {
+      // La redirection OAuth recharge la page : sauvegarder le brouillon
+      // pour ne pas perdre ce que l'utilisateur a déjà rempli.
+      localStorage.setItem('bakal_wizard_draft', JSON.stringify({
+        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
+      }));
+      const res = await request(`/crm/${crmProvider}/connect?from=wizard`);
+      if (res.url) {
+        trackEvent('crm_oauth_started', { provider: crmProvider });
+        window.location.href = res.url;
+        return;
+      }
+      throw new Error('no url');
+    } catch {
+      // 501 : l'app OAuth n'est pas encore enregistrée chez le fournisseur
+      // → repli silencieux sur le champ clé API.
+      localStorage.removeItem('bakal_wizard_draft');
+      setOauthUnavailable(true);
+      setShowKeyField(true);
+    }
   }
 
   /* ─── Save keys (step 2) ─── */
@@ -693,7 +766,7 @@ export default function OnboardingWizard({ onComplete }) {
                   <select
                     className="form-input"
                     value={crmProvider}
-                    onChange={e => { setCrmProvider(e.target.value); setCrmKey(''); }}
+                    onChange={e => { setCrmProvider(e.target.value); setCrmKey(''); setCrmKeyError(null); setShowKeyField(false); }}
                     style={{ marginBottom: 8 }}
                   >
                     <option value="">{t('wizard.selectCrm')}</option>
@@ -709,7 +782,20 @@ export default function OnboardingWizard({ onComplete }) {
                     const crmGuide = CRM_GUIDES[crmProvider];
                     const guide = en ? (crmGuide?.guideEn || []) : (crmGuide?.guideFr || []);
                     const crmLabel = crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1);
-                    return (
+
+                    // Déjà connecté via OAuth : plus rien à saisir.
+                    if (crmOauthConnected === crmProvider) {
+                      return (
+                        <div style={{
+                          fontSize: 13, color: 'var(--success)', background: 'var(--paper-2)',
+                          borderRadius: 8, padding: '10px 12px', lineHeight: 1.5,
+                        }}>
+                          {'✅'} {t('wizard.oauthConnected').replace('{provider}', crmLabel)}
+                        </div>
+                      );
+                    }
+
+                    const keyBlock = (
                       <>
                         <div style={{
                           fontSize: 12, background: 'var(--paper-2)', borderRadius: 8,
@@ -738,6 +824,48 @@ export default function OnboardingWizard({ onComplete }) {
                             {crmKeyError}
                           </div>
                         )}
+                      </>
+                    );
+
+                    // HubSpot / Pipedrive : le geste par défaut est le bouton
+                    // OAuth — la clé API devient le « mode avancé ».
+                    const hasOauth = crmProvider === 'hubspot' || crmProvider === 'pipedrive';
+                    if (hasOauth && !oauthUnavailable) {
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={handleConnectOauth}
+                            style={{ width: '100%', marginBottom: 8 }}
+                          >
+                            {t('wizard.connectOauth').replace('{provider}', crmLabel)}
+                          </button>
+                          {showKeyField ? keyBlock : (
+                            <button
+                              type="button"
+                              onClick={() => setShowKeyField(true)}
+                              style={{
+                                background: 'none', border: 'none', padding: 0,
+                                fontSize: 12, color: 'var(--text-muted)',
+                                textDecoration: 'underline', cursor: 'pointer',
+                              }}
+                            >
+                              {t('wizard.orPasteKey')}
+                            </button>
+                          )}
+                        </>
+                      );
+                    }
+
+                    return (
+                      <>
+                        {hasOauth && oauthUnavailable && (
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                            {t('wizard.oauthUnavailable')}
+                          </div>
+                        )}
+                        {keyBlock}
                       </>
                     );
                   })()}
@@ -838,8 +966,8 @@ export default function OnboardingWizard({ onComplete }) {
               </div>
               {/* CRM avant outreach : m\u00EAme hi\u00E9rarchie que les \u00E9tapes du wizard. */}
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{crmKey && crmProvider ? '\u2705' : '\u2B1C'}</span>
-                <span>CRM {crmKey && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
+                <span className="wizard-check-icon">{(crmKey || crmOauthConnected) && crmProvider ? '\u2705' : '\u2B1C'}</span>
+                <span>CRM {(crmKey || crmOauthConnected) && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">{outreachKey && outreachProvider ? '\u2705' : '\u2B1C'}</span>

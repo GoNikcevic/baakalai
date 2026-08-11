@@ -36,11 +36,11 @@ function getMainTools(lang) {
       guide: en ? ['Go to app.smartlead.ai', 'Settings \u2192 API \u2192 Copy the key'] : ['Allez dans app.smartlead.ai', 'Settings \u2192 API \u2192 Copiez la cl\u00E9'], link: 'https://app.smartlead.ai/settings' },
     { field: 'waalaxyKey', label: 'Waalaxy', desc: en ? 'LinkedIn + email automation' : 'Automatisation LinkedIn + email', placeholder: en ? 'Your Waalaxy API key' : 'Votre cl\u00E9 API Waalaxy', color: '#A29BFE', icon: 'W', category: 'Outreach',
       guide: en ? ['Go to app.waalaxy.com', 'Settings \u2192 Integrations'] : ['Allez dans app.waalaxy.com', 'Settings \u2192 Integrations'], link: 'https://app.waalaxy.com/settings' },
-    { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM',
+    { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM', oauth: 'hubspot',
       guide: en ? ['Go to app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Create an app or copy the token (pat-)'] : ['Allez dans app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Cr\u00E9ez une app ou copiez le token (pat-)'], link: 'https://app.hubspot.com/settings/integrations' },
     { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce Consumer Key' : 'Votre Cl\u00E9 consommateur Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
       guide: en ? ['Create a Connected App in your Salesforce (Setup > External Client Apps)', 'Enable OAuth with "Full access" scope', 'Copy Consumer Key + Secret below, then authorize'] : ['Cr\u00E9ez une app connect\u00E9e dans votre Salesforce (Param\u00E8tres > Apps clientes externes)', 'Activez OAuth avec "Acc\u00E8s complet"', 'Copiez Cl\u00E9 + Secret ci-dessous, puis autorisez'] },
-    { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM',
+    { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM', oauth: 'pipedrive',
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
       guide: en ? ['URL + database name + login + password'] : ['URL + nom de base + login + mot de passe'] },
@@ -122,6 +122,19 @@ export default function SettingsPage() {
   const [testStatus, setTestStatus] = useState({});
   const [drafts, setDrafts] = useState({});
   const [editing, setEditing] = useState({});
+  // OAuth produit (hubspot/pipedrive) : 501 tant que l'app n'est pas
+  // enregistrée chez le fournisseur → on masque le bouton et on garde la clé.
+  const [oauthUnavailable, setOauthUnavailable] = useState({});
+
+  const connectCrmOauth = async (provider) => {
+    try {
+      const res = await request(`/crm/${provider}/connect`);
+      if (res.url) { window.location.href = res.url; return; }
+      throw new Error('no url');
+    } catch {
+      setOauthUnavailable(prev => ({ ...prev, [provider]: true }));
+    }
+  };
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -635,6 +648,17 @@ export default function SettingsPage() {
                   )}
                   {isEditing && !tool.multiField && (
                     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                      {tool.oauth && !oauthUnavailable[tool.oauth] && (
+                        <>
+                          <button className="btn btn-primary" style={{ fontSize: 11, padding: '6px 10px', width: '100%', marginBottom: 6 }}
+                            onClick={() => connectCrmOauth(tool.oauth)}>
+                            {t('settings.connectOauth').replace('{provider}', tool.label)}
+                          </button>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 6 }}>
+                            {t('settings.orPasteKey')}
+                          </div>
+                        </>
+                      )}
                       {tool.guide && (
                         <div style={{
                           fontSize: 11, background: 'var(--paper-2)', borderRadius: 6,

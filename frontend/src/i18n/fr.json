@@ -291,6 +291,8 @@
     "learnMore": "En savoir plus",
     "connected": "Connecté",
     "configure": "Configurer",
+    "connectOauth": "Connecter {provider} en un clic →",
+    "orPasteKey": "ou collez une clé API ci-dessous",
     "edit": "Modifier",
     "delete": "Supprimer",
     "saving": "Sauvegarde...",
@@ -754,7 +756,12 @@
     "readDormant": "{count} dorment depuis plus de 14 jours ({value} à réveiller). Les plus gros :",
     "readNoDormant": "Aucun deal dormant détecté pour l'instant — je surveille en continu.",
     "readDaysInactive": "{days} j sans activité",
-    "readGaps": "Il manque le montant sur {count} deals — je peux déjà relancer, je serai plus précis si vous les complétez dans votre CRM."
+    "readGaps": "Il manque le montant sur {count} deals — je peux déjà relancer, je serai plus précis si vous les complétez dans votre CRM.",
+    "connectOauth": "Connecter {provider} en un clic →",
+    "orPasteKey": "ou coller une clé API",
+    "oauthConnected": "{provider} connecté — vos deals seront importés à la fin de l'inscription.",
+    "oauthUnavailable": "La connexion en un clic n'est pas encore disponible pour ce CRM — collez votre clé API :",
+    "oauthFailed": "La connexion n'a pas abouti. Réessayez ou collez une clé API."
   },
   "triggers": {
     "dealWon": "Deal gagné",

@@ -21,6 +21,7 @@ const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
 const logger = require('../lib/logger');
 const { track } = require('../lib/track');
+const crmOauth = require('../lib/crm-oauth');
 
 const { rateLimit } = require('../lib/rate-limit');
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 }); // 5 clean ops per minute
@@ -36,13 +37,11 @@ router.param('provider', validateEnum('provider', CRM_PROVIDERS));
  * Returns null if not configured.
  */
 async function getUserHubspotToken(userId) {
-  const integration = await db.userIntegrations.get(userId, 'hubspot');
-  if (!integration) return null;
-  try {
-    return decrypt(integration.access_token);
-  } catch {
-    return null;
-  }
+  // Délègue à crm-token pour profiter du refresh automatique des tokens
+  // OAuth (30 min de durée de vie chez HubSpot). Les clés API privées
+  // passent inchangées.
+  const { getUserCrmToken: resolve } = require('../lib/crm-token');
+  return resolve(userId, 'hubspot');
 }
 
 // =============================================
@@ -2280,6 +2279,104 @@ router.get('/reactivation-stats', async (req, res, next) => {
       conversionRate: emails.total > 0 ? Math.round((stats.count / emails.total) * 100) : 0,
     });
   } catch (err) { next(err); }
+});
+
+// =============================================
+// OAuth produit — HubSpot & Pipedrive
+// =============================================
+// Contrairement à Salesforce (Connected App par client), l'app OAuth est la
+// nôtre : credentials en env (HUBSPOT_CLIENT_ID/SECRET, PIPEDRIVE_CLIENT_ID/
+// SECRET). Tant qu'elles ne sont pas posées, /connect répond 501 et le
+// frontend retombe sur le champ clé API.
+
+const _crmOauthStates = new Map();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of _crmOauthStates) {
+    if (val.expiresAt < now) _crmOauthStates.delete(key);
+  }
+}, 300000).unref();
+
+// GET /api/crm/:provider/connect — démarre le flow OAuth (hubspot|pipedrive)
+router.get('/:provider(hubspot|pipedrive)/connect', async (req, res, next) => {
+  try {
+    const { provider } = req.params;
+    if (!crmOauth.isConfigured(provider)) {
+      return res.status(501).json({ error: `${provider} OAuth is not configured yet — paste an API key instead` });
+    }
+    if (_crmOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
+
+    const state = crypto.randomBytes(16).toString('hex');
+    // `from` pilote la redirection retour : le wizard vit sur /, pas /settings.
+    const from = req.query.from === 'wizard' ? 'wizard' : 'settings';
+    _crmOauthStates.set(state, { userId: req.user.id, provider, from, expiresAt: Date.now() + 600000 });
+
+    const url = crmOauth.authorizeUrl(provider, {
+      redirectUri: `${APP_URL}/api/crm/${provider}/callback`,
+      state,
+    });
+    res.json({ url });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/:provider/callback — retour OAuth (public, pas de JWT :
+// bypass explicite dans middleware/auth.js, comme salesforce/callback)
+router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
+  const { provider } = req.params;
+  const { code, state } = req.query;
+
+  const oauthData = _crmOauthStates.get(state);
+  const from = oauthData?.from || 'settings';
+  const fail = (reason) => res.redirect(
+    `${APP_URL}${from === 'wizard' ? '/' : '/settings'}?crm_error=${encodeURIComponent(reason)}`);
+
+  if (req.query.error) {
+    logger.warn('crm-oauth', `${provider} OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
+    return fail(req.query.error);
+  }
+  if (!code) return fail('missing_code');
+  if (!oauthData || oauthData.provider !== provider || oauthData.expiresAt < Date.now()) {
+    return fail('invalid_state');
+  }
+  _crmOauthStates.delete(state);
+
+  try {
+    const tokens = await crmOauth.exchangeCode(provider, {
+      code,
+      redirectUri: `${APP_URL}/api/crm/${provider}/callback`,
+    });
+
+    // Marge de 60 s sur l'expiration pour que le refresh parte avant le 401.
+    const expiresAt = new Date(Date.now() + Math.max(60, (tokens.expires_in || 1800) - 60) * 1000).toISOString();
+
+    await db.userIntegrations.upsert(oauthData.userId, provider, {
+      accessToken: encrypt(tokens.access_token),
+      refreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
+      expiresAt,
+      // apiDomain : Pipedrive OAuth impose d'appeler le domaine de la société
+      // ({api_domain}/api/v1), pas api.pipedrive.com.
+      metadata: { oauth: true, ...(tokens.api_domain ? { apiDomain: tokens.api_domain } : {}) },
+    });
+
+    await db.query(
+      `UPDATE users SET active_crm_provider = $2 WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+      [oauthData.userId, provider]
+    );
+
+    track(oauthData.userId, 'crm_connected', { provider, oauth: true });
+
+    const { syncCRM } = require('../lib/crm-sync');
+    syncCRM(oauthData.userId).catch((err) => {
+      logger.error('crm-oauth', `Background CRM sync failed for user ${oauthData.userId}: ${err.message}`);
+    });
+
+    logger.info('crm-oauth', `${provider} connected via OAuth for user ${oauthData.userId}`);
+    res.redirect(`${APP_URL}${from === 'wizard' ? '/' : '/settings'}?crm_connected=${provider}`);
+  } catch (err) {
+    logger.error('crm-oauth', `${provider} OAuth failed: ${err.message}`);
+    return fail(`${provider}_failed`);
+  }
 });
 
 // GET /api/crm/reading-summary — Compte-rendu de lecture du CRM.
