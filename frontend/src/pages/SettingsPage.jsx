@@ -1465,19 +1465,31 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           {en
             ? <>
                 <strong>Create a Connected App in your Salesforce:</strong><br/>
-                1. Setup &gt; Platform Tools &gt; Apps &gt; External Client Apps<br/>
+                1. Setup &gt; Open Advanced Setup &gt; Platform Tools &gt; External Client Apps &gt; External Client App Manager<br/>
                 2. Click "New External Client App"<br/>
-                3. Enable OAuth, add scope "Full access (full)"<br/>
-                4. Set callback URL: <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
-                5. Copy your <strong>Consumer Key</strong> and <strong>Consumer Secret</strong> below
+                3. Fill in the basic information<br/>
+                4. Enable OAuth, add scope "Full access (full)"<br/>
+                5. Callback URL: <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
+                6. Create<br/>
+                7. From the app list, select baakalai<br/>
+                8. Settings<br/>
+                9. OAuth Settings<br/>
+                10. Consumer Key and Secret<br/>
+                11. Copy the <strong>Consumer Key</strong> and <strong>Consumer Secret</strong> below
               </>
             : <>
                 <strong>Cr{'\u00E9'}ez une application connect{'\u00E9'}e dans votre Salesforce :</strong><br/>
-                1. Param{'\u00E8'}tres &gt; Outils de la plate-forme &gt; Applications clientes externes<br/>
+                1. Param{'\u00E8'}tres &gt; Ouvrir la configuration avanc{'\u00E9'}e &gt; Outils de la plate-forme &gt; Applications clientes externes &gt; Gestionnaire des applications externes<br/>
                 2. Cliquez "Nouvelle application cliente externe"<br/>
-                3. Activez OAuth, ajoutez "Acc{'\u00E8'}s complet (full)"<br/>
-                4. URL de rappel : <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
-                5. Copiez la <strong>Cl{'\u00E9'} consommateur</strong> et le <strong>Secret consommateur</strong> ci-dessous
+                3. Remplissez les infos de base<br/>
+                4. Activez OAuth, ajoutez "Acc{'\u00E8'}s complet (full)"<br/>
+                5. URL de rappel : <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
+                6. Cr{'\u00E9'}er<br/>
+                7. {'\u00C0'} partir de la liste des applications, s{'\u00E9'}lectionnez baakalai<br/>
+                8. Param{'\u00E8'}tres<br/>
+                9. Param{'\u00E8'}tres OAuth<br/>
+                10. Cl{'\u00E9'} et secret consommateur<br/>
+                11. Copiez la <strong>Cl{'\u00E9'} consommateur</strong> et le <strong>Secret consommateur</strong> ci-dessous
               </>}
         </div>
       )}
