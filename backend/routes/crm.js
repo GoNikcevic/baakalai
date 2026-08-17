@@ -2156,27 +2156,40 @@ function isValidSalesforceUrl(url) {
   } catch { return false; }
 }
 
-// POST /api/crm/salesforce/manual-connect — Save client's own Connected App credentials
-// The client creates a Connected App in their Salesforce org and provides:
-//   consumerKey (client_id), consumerSecret (client_secret), instanceUrl
+// POST /api/crm/salesforce/manual-connect — Store a manually provided Salesforce access token
+// (session/bearer token + instance URL, pasted directly — no per-user Connected App required).
 router.post('/salesforce/manual-connect', async (req, res, next) => {
   try {
-    const { consumerKey, consumerSecret, instanceUrl } = req.body;
-    if (!consumerKey || !consumerSecret || !instanceUrl) {
-      return res.status(400).json({ error: 'consumerKey, consumerSecret, and instanceUrl are required' });
+    const { accessToken, instanceUrl } = req.body;
+    if (!accessToken || !instanceUrl) {
+      return res.status(400).json({ error: 'accessToken and instanceUrl are required' });
     }
     if (!isValidSalesforceUrl(instanceUrl)) {
       return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL (e.g. https://mycompany.my.salesforce.com)' });
     }
 
-    const encryptedSecret = encrypt(consumerSecret);
+    const encryptedAccess = encrypt(accessToken);
     await db.userIntegrations.upsert(req.user.id, 'salesforce', {
-      metadata: { consumerKey, encryptedConsumerSecret: encryptedSecret, instance_url: instanceUrl, oauth: false },
+      accessToken: encryptedAccess,
+      metadata: { instance_url: instanceUrl, oauth: false },
       instanceUrl,
     });
 
-    logger.info('salesforce-manual', `Connected App credentials saved for user ${req.user.id}: ${instanceUrl}`);
-    res.json({ ok: true, status: 'credentials_saved' });
+    // Auto-set as active CRM if none is set
+    await db.query(
+      `UPDATE users SET active_crm_provider = 'salesforce' WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+      [req.user.id]
+    );
+
+    // Test the connection
+    try {
+      await salesforce.listContacts(instanceUrl, accessToken);
+      logger.info('salesforce-manual', `Salesforce connected for user ${req.user.id}: ${instanceUrl}`);
+      res.json({ ok: true, status: 'connected' });
+    } catch (testErr) {
+      logger.warn('salesforce-manual', `Connection test failed: ${testErr.message}`);
+      res.json({ ok: true, status: 'saved_but_test_failed', message: testErr.message });
+    }
   } catch (err) { next(err); }
 });
 

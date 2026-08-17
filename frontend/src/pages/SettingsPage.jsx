@@ -1386,39 +1386,27 @@ function MetadataConfig({ provider, en }) {
 function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone }) {
   const { t, lang } = useI18n();
   const en = lang === 'en';
-  const [consumerKey, setConsumerKey] = useState('');
-  const [consumerSecret, setConsumerSecret] = useState('');
+  const [accessToken, setAccessToken] = useState('');
   const [instanceUrl, setInstanceUrl] = useState('');
   const [status, setStatus] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   const handleConnect = async () => {
-    if (!consumerKey || !consumerSecret || !instanceUrl) return;
-    setLoading(true);
+    if (!accessToken || !instanceUrl) return;
     setStatus('connecting');
     try {
-      // Step 1: Save Connected App credentials
-      const saveRes = await request('/crm/salesforce/manual-connect', {
+      const res = await request('/crm/salesforce/manual-connect', {
         method: 'POST',
-        body: JSON.stringify({
-          consumerKey,
-          consumerSecret,
-          instanceUrl: instanceUrl.replace(/\/$/, ''),
-        }),
+        body: JSON.stringify({ accessToken, instanceUrl: instanceUrl.replace(/\/$/, '') }),
       });
-      if (!saveRes.ok) { setStatus('error'); setLoading(false); return; }
-
-      // Step 2: Start OAuth flow with saved credentials
-      const oauthRes = await request('/crm/salesforce/connect');
-      if (oauthRes.url) {
-        window.location.href = oauthRes.url;
+      if (res.status === 'connected' || res.status === 'saved_but_test_failed') {
+        setStatus(res.status === 'connected' ? 'connected' : 'test_failed');
+        syncCRM().catch(() => {});
+        setTimeout(() => onDone(), 1000);
       } else {
         setStatus('error');
-        setLoading(false);
       }
     } catch {
       setStatus('error');
-      setLoading(false);
     }
   };
 
@@ -1444,7 +1432,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
 
   const isValid = isConnected
     ? instanceUrl.startsWith('http')
-    : consumerKey.length > 5 && consumerSecret.length > 5 && instanceUrl.startsWith('http');
+    : accessToken.length > 10 && instanceUrl.startsWith('http');
 
   return (
     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
@@ -1499,28 +1487,25 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           value={instanceUrl} onChange={e => setInstanceUrl(e.target.value)} autoFocus
           style={{ fontSize: 11, padding: '5px 8px' }} />
         {!isConnected && (
-          <>
-            <input className="form-input" type="text"
-              placeholder={en ? "Consumer Key (Client ID)" : "Cl\u00E9 consommateur (Client ID)"}
-              value={consumerKey} onChange={e => setConsumerKey(e.target.value)}
-              style={{ fontSize: 11, padding: '5px 8px' }} />
-            <input className="form-input" type="password"
-              placeholder={en ? "Consumer Secret (Client Secret)" : "Secret consommateur (Client Secret)"}
-              value={consumerSecret} onChange={e => setConsumerSecret(e.target.value)}
-              style={{ fontSize: 11, padding: '5px 8px' }} />
-          </>
+          <input className="form-input" type="password"
+            placeholder={en ? "Access token" : "Access token"}
+            value={accessToken} onChange={e => setAccessToken(e.target.value)}
+            style={{ fontSize: 11, padding: '5px 8px' }} />
         )}
       </div>
       {status === 'connected' && (
         <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>{en ? 'Connected!' : 'Connect\u00E9 !'}</div>
+      )}
+      {status === 'test_failed' && (
+        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed \u2014 token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9 \u2014 le token a peut-\u00EAtre expir\u00E9'}</div>
       )}
       {status === 'error' && (
         <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{en ? 'Connection failed' : '\u00C9chec de connexion'}</div>
       )}
       <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
         <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
-          onClick={isConnected ? handleUpdateUrl : handleConnect} disabled={saving || loading || !isValid}>
-          {loading ? (en ? 'Connecting...' : 'Connexion...') : status === 'connecting' ? (en ? 'Saving...' : 'Sauvegarde...') : isConnected ? (en ? 'Save URL' : 'Sauvegarder') : (en ? 'Connect Salesforce' : 'Connecter Salesforce')}
+          onClick={isConnected ? handleUpdateUrl : handleConnect} disabled={saving || status === 'connecting' || !isValid}>
+          {status === 'connecting' ? (en ? 'Saving...' : 'Sauvegarde...') : isConnected ? (en ? 'Save URL' : 'Sauvegarder') : (en ? 'Connect' : 'Connecter')}
         </button>
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
           onClick={onCancel}>{'\u2715'}</button>
