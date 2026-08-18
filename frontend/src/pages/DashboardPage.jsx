@@ -15,7 +15,7 @@ import { sanitizeHtml } from '../services/sanitize';
 import ScoreBadge from '../components/ScoreBadge';
 import AnimatedCounter from '../components/AnimatedCounter';
 import OnboardingChecklist from '../components/OnboardingChecklist';
-import DealCoachCard from '../components/DealCoachCard';
+import TodayCard from '../components/TodayCard';
 import QuickWinCard from '../components/QuickWinCard';
 import ReactivationCard from '../components/ReactivationCard';
 import ICPInsightsCard from '../components/ICPInsightsCard';
@@ -138,8 +138,9 @@ export default function DashboardPage() {
       {/* Quick Win — immediate CRM insight after sync */}
       <QuickWinCard />
 
-      {/* Deal Coach — stagnant deal suggestions with action buttons */}
-      <DealCoachCard />
+      {/* À traiter aujourd'hui — liste unifiée (nurture à approuver, deals
+          stagnants, upsells, churn, signaux) ; absorbe l'ancien DealCoachCard */}
+      <TodayCard />
 
       {/* Deliverability — show if user has >= 1 campaign */}
       {campaignsList.length >= 1 && <DeliverabilityCard />}

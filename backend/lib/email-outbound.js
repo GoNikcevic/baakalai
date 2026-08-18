@@ -236,17 +236,27 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
 
 /**
  * Send a nurture email + log it + create Pipedrive activity.
+ *
+ * existingEmailId : id d'une ligne nurture_emails déjà en file (status
+ * 'pending'). Dans ce cas on met à jour cette ligne au lieu d'en insérer une
+ * nouvelle — sinon l'approbation créait un doublon et l'original restait
+ * bloqué en 'pending' pour toujours.
  */
 async function sendNurtureEmail(userId, {
-  triggerId, opportunityId, to, toName, subject, body, crmProvider = 'pipedrive', teamCampaignId, patternIds,
+  triggerId, opportunityId, to, toName, subject, body, crmProvider = 'pipedrive', teamCampaignId, patternIds, existingEmailId,
 }) {
-  // 1. Create the email record as pending
-  const emailRecord = await db.query(`
-    INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, team_campaign_id, pattern_ids)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
-    RETURNING *
-  `, [userId, triggerId || null, opportunityId || null, to, toName || null, subject, body, teamCampaignId || null, patternIds || []]);
-  const nurture = emailRecord.rows[0];
+  // 1. Create the email record as pending (or reuse the queued one)
+  let nurture;
+  if (existingEmailId) {
+    nurture = { id: existingEmailId };
+  } else {
+    const emailRecord = await db.query(`
+      INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, team_campaign_id, pattern_ids)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
+      RETURNING *
+    `, [userId, triggerId || null, opportunityId || null, to, toName || null, subject, body, teamCampaignId || null, patternIds || []]);
+    nurture = emailRecord.rows[0];
+  }
 
   // 2. Send the email
   const result = await sendPersonalEmail(userId, { to, toName, subject, body });

@@ -179,6 +179,7 @@ app.use('/api/analytics/membership', requireAuth, require('./routes/analytics-me
 app.use('/api/notifications', requireAuth, require('./routes/notifications'));
 app.use('/api/templates', requireAuth, require('./routes/templates'));
 app.use('/api/nurture', requireAuth, require('./routes/nurture'));
+app.use('/api/priorities', requireAuth, require('./routes/priorities'));
 app.use('/api/ext', requireAuth, require('./routes/extension'));
 app.use('/api/events', requireAuth, require('./routes/events'));
 

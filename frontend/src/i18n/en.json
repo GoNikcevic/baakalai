@@ -785,5 +785,30 @@
     "upsellOpportunityDesc": "Propose an upgrade to active clients after X days",
     "feedbackRequest": "Feedback request",
     "feedbackRequestDesc": "Ask for a testimonial after X days"
+  },
+  "today": {
+    "title": "To handle today",
+    "subtitle": "{count} action(s) prioritized by your CRM",
+    "refresh": "Refresh",
+    "empty": "Nothing to handle — all caught up.",
+    "approveAll": "Approve all ({count})",
+    "approving": "Sending...",
+    "approvedOk": "{sent} sent",
+    "approvedFailed": "{failed} failed",
+    "remaining": "{count} remaining — click again to continue",
+    "approve": "Approve",
+    "dismiss": "Dismiss",
+    "waitingDays": "waiting for {days}d",
+    "typeNurture": "Email ready",
+    "typeDealStagnant": "Stagnant deal",
+    "typeUpsell": "Upsell",
+    "typeChurn": "Churn risk",
+    "typeSignal": "Signal",
+    "alsoFlaggedBy": "also flagged by: {sources}",
+    "openSignals": "View signal",
+    "prepareEmail": "Prepare email",
+    "chatChurnPrefill": "Prepare an email to retain {name} ({company}) — high churn risk detected by the CRM.",
+    "chatUpsellPrefill": "Prepare an upsell email for {name} ({company}). Context: {reason}",
+    "chatDealPrefill": "Send a follow-up email to {name} ({company}). Context: {reason}. Suggestion: {suggestion}"
   }
 }

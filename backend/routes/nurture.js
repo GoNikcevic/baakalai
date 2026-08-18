@@ -249,9 +249,63 @@ router.post('/emails/:id/approve', async (req, res, next) => {
       toName: e.to_name,
       subject: e.subject,
       body: e.body,
+      existingEmailId: e.id,
     });
 
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/nurture/emails/approve-batch — Approve and send up to 20 pending
+// emails in one call. Envois séquentiels (un compte SMTP perso n'aime pas les
+// rafales) ; au-delà de 20, le front ré-appelle avec le reste.
+const APPROVE_BATCH_MAX = 20;
+router.post('/emails/approve-batch', async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.slice(0, APPROVE_BATCH_MAX) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids (array) is required' });
+
+    const rows = await db.query(
+      `SELECT * FROM nurture_emails WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'`,
+      [ids, req.user.id]
+    );
+
+    let sent = 0;
+    let failed = 0;
+    const results = [];
+    for (const e of rows.rows) {
+      const result = await sendNurtureEmail(req.user.id, {
+        triggerId: e.trigger_id,
+        opportunityId: e.opportunity_id,
+        to: e.to_email,
+        toName: e.to_name,
+        subject: e.subject,
+        body: e.body,
+        existingEmailId: e.id,
+      });
+      if (result.success) sent++; else failed++;
+      results.push({ id: e.id, success: result.success, error: result.error || null });
+    }
+
+    res.json({ sent, failed, skipped: ids.length - rows.rows.length, results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/nurture/emails/cancel-batch — Cancel pending emails in bulk
+// (purge d'un backlog obsolète sans cliquer 70 fois).
+router.post('/emails/cancel-batch', async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids (array) is required' });
+    const result = await db.query(
+      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'`,
+      [ids, req.user.id]
+    );
+    res.json({ ok: true, cancelled: result.rowCount });
   } catch (err) {
     next(err);
   }

@@ -785,5 +785,30 @@
     "upsellOpportunityDesc": "Proposer un upgrade aux clients actifs depuis X jours",
     "feedbackRequest": "Demande de feedback",
     "feedbackRequestDesc": "Demander un retour d'expérience après X jours"
+  },
+  "today": {
+    "title": "À traiter aujourd'hui",
+    "subtitle": "{count} action(s) priorisée(s) par votre CRM",
+    "refresh": "Actualiser",
+    "empty": "Rien à traiter — tout est à jour.",
+    "approveAll": "Tout approuver ({count})",
+    "approving": "Envoi...",
+    "approvedOk": "{sent} envoyé(s)",
+    "approvedFailed": "{failed} échec(s)",
+    "remaining": "{count} restant(s) — cliquez à nouveau pour continuer",
+    "approve": "Approuver",
+    "dismiss": "Ignorer",
+    "waitingDays": "en attente depuis {days} j",
+    "typeNurture": "Email prêt",
+    "typeDealStagnant": "Deal stagnant",
+    "typeUpsell": "Upsell",
+    "typeChurn": "Risque churn",
+    "typeSignal": "Signal",
+    "alsoFlaggedBy": "aussi signalé par : {sources}",
+    "openSignals": "Voir le signal",
+    "prepareEmail": "Préparer l'email",
+    "chatChurnPrefill": "Prépare un email pour retenir {name} ({company}) — risque de churn élevé détecté par le CRM.",
+    "chatUpsellPrefill": "Prépare un email d'upsell pour {name} ({company}). Contexte : {reason}",
+    "chatDealPrefill": "Envoie un email de relance à {name} ({company}). Contexte : {reason}. Suggestion : {suggestion}"
   }
 }
