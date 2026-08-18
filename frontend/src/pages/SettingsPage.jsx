@@ -51,34 +51,27 @@ function getMainTools(lang) {
   ];
 }
 
-/* Extended tools in dropdown */
+/* Extended tools in dropdown.
+   Seuls les outils réellement branchés (client dans backend/api/ + usage) sont
+   affichés. Retirés le 2026-08-18 car la clé était stockée mais jamais utilisée
+   (aucun client API) — à réintroduire ici le jour où le backend les branche :
+   Kaspr, Lusha, Snov.io (enrichissement), PhantomBuster, Captain Data
+   (scraping), Calendly, Cal.com (calendrier), MailReach, Warmbox
+   (délivrabilité). */
 function getExtendedTools(lang) {
   const en = lang === 'en';
   return [
     { label: en ? 'Enrichment' : 'Enrichissement', keys: [
       { field: 'dropcontactKey', label: 'DropContact', desc: en ? 'Email and phone enrichment' : 'Enrichissement email et téléphone', placeholder: en ? 'Your DropContact API key' : 'Votre clé API DropContact', color: '#00B894', icon: 'D' },
       { field: 'hunterKey', label: 'Hunter', desc: en ? 'Email search and verification' : 'Recherche et vérification d\'emails', placeholder: en ? 'Your Hunter API key' : 'Votre clé API Hunter', color: '#FF7675', icon: 'H' },
-      { field: 'kasprKey', label: 'Kaspr', desc: en ? 'Real-time LinkedIn data' : 'Données LinkedIn en temps réel', placeholder: en ? 'Your Kaspr API key' : 'Votre clé API Kaspr', color: '#0984E3', icon: 'K' },
-      { field: 'lushaKey', label: 'Lusha', desc: en ? 'Professional contact info' : 'Coordonnées professionnelles', placeholder: en ? 'Your Lusha API key' : 'Votre clé API Lusha', color: '#00CEC9', icon: 'Lu' },
-      { field: 'snovKey', label: 'Snov.io', desc: en ? 'Email finder and drip campaigns' : 'Email finder et drip campaigns', placeholder: en ? 'Your Snov API key' : 'Votre clé API Snov', color: '#E17055', icon: 'S' },
     ]},
     { label: 'Newsletter / Marketing', keys: [
       { field: 'informzKey', label: 'Informz', desc: 'Newsletter campaigns for associations (Higher Logic)', placeholder: 'username:password:brandId', color: '#2D3436', icon: 'Iz',
         helpSteps: ['Get your API credentials from your Informz admin', 'Format: username:password:brandId', 'Your server IP must be whitelisted by Informz'] },
     ]},
-    { label: 'LinkedIn / Scraping', keys: [
+    { label: 'LinkedIn', keys: [
       { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'li_at cookie — enrichment + automated outreach' : 'Cookie li_at — enrichissement + outreach automatisé', placeholder: en ? 'Your li_at cookie (from browser)' : 'Votre cookie li_at (depuis le navigateur)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
         helpSteps: en ? ['Log in to linkedin.com', 'Open DevTools (F12) → Application → Cookies', 'Copy the value of the "li_at" cookie', 'Paste it here'] : ['Connectez-vous à linkedin.com', 'Ouvrez les DevTools (F12) → Application → Cookies', 'Copiez la valeur du cookie "li_at"', 'Collez-la ici'] },
-      { field: 'phantombusterKey', label: 'PhantomBuster', desc: en ? 'Web scraping and automation' : 'Scraping et automatisation web', placeholder: en ? 'Your PhantomBuster API key' : 'Votre clé API PhantomBuster', color: '#636E72', icon: 'PB' },
-      { field: 'captaindataKey', label: 'Captain Data', desc: en ? 'Multi-source data extraction' : 'Extraction de données multi-sources', placeholder: en ? 'Your CaptainData API key' : 'Votre clé API CaptainData', color: '#0984E3', icon: 'CD' },
-    ]},
-    { label: en ? 'Calendar' : 'Calendrier', keys: [
-      { field: 'calendlyKey', label: 'Calendly', desc: en ? 'Automated meeting scheduling' : 'Planification de RDV automatisée', placeholder: en ? 'Your Calendly API key' : 'Votre clé API Calendly', color: '#0069FF', icon: 'Ca' },
-      { field: 'calcomKey', label: 'Cal.com', desc: en ? 'Open-source alternative to Calendly' : 'Alternative open-source à Calendly', placeholder: en ? 'Your Cal.com API key' : 'Votre clé API Cal.com', color: '#292929', icon: 'Cl' },
-    ]},
-    { label: en ? 'Deliverability' : 'Délivrabilité', keys: [
-      { field: 'mailreachKey', label: 'MailReach', desc: en ? 'Warm-up and inbox monitoring' : 'Warm-up et monitoring inbox', placeholder: en ? 'Your MailReach API key' : 'Votre clé API MailReach', color: '#E17055', icon: 'MR' },
-      { field: 'warmboxKey', label: 'Warmbox', desc: en ? 'Automated email warm-up' : 'Préchauffage email automatisé', placeholder: en ? 'Your Warmbox API key' : 'Votre clé API Warmbox', color: '#FDCB6E', icon: 'Wb' },
     ]},
   ];
 }
