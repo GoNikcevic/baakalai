@@ -222,6 +222,22 @@ function start() {
   });
 
   // ═══════════════════════════════════════════════════
+  // CRM Digest — Monday 8:45 AM
+  // Email hebdo « À traiter cette semaine » pour les utilisateurs CRM
+  // (weekly-report ne couvre que ceux qui ont des campagnes actives)
+  // ═══════════════════════════════════════════════════
+  schedule('crm-digest', '45 8 * * 1', async () => {
+    console.log('[crm-digest] Starting...');
+    try {
+      const { runCrmDigests } = require('./jobs/crm-digest');
+      const result = await runCrmDigests();
+      console.log(`[crm-digest] Done — ${result.sent} sent, ${result.skipped} skipped`);
+    } catch (err) {
+      logger.error('orchestrator', 'CRM digest failed: ' + err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
   // Agent 4: Reporting Agent — Monday 9:00 AM
   // Weekly report + anomaly detection
   // ═══════════════════════════════════════════════════
@@ -236,13 +252,14 @@ function start() {
     }
   });
 
-  console.log(`[orchestrator] Started — 8 cron jobs registered (timezone: ${TZ})`);
+  console.log(`[orchestrator] Started — 9 cron jobs registered (timezone: ${TZ})`);
   console.log('  Prospection:      daily 8AM + evening batch 8PM');
   console.log('  CRM:              daily 9AM');
   console.log('  Strategic (fast): daily 9:30AM (deal_coach, upsell, copy_optimizer)');
   console.log('  Agent Chains:     daily 9:45AM (deal reactivation, auto-upsell)');
   console.log('  Lifecycle:        daily 10AM');
   console.log('  Memory:           Sunday 10AM (+ heavy strategic agents)');
+  console.log('  CRM Digest:       Monday 8:45AM (à traiter cette semaine)');
   console.log('  Reporting:        Monday 9AM');
 }
 
