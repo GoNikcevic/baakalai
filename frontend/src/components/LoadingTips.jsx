@@ -10,7 +10,7 @@ const TIPS = {
   en: [
     'Ask the AI to "analyze my CRM health" to get a full diagnostic.',
     'Connect your email (Gmail/Outlook) to send activation emails directly.',
-    'Set up triggers in Activation to auto-follow-up stagnant deals.',
+    'Set up triggers in Activation to auto-follow-up stagnant leads.',
     'The AI learns from every campaign — the more you use it, the smarter it gets.',
     'Use the Renewals tab in Analytics to track upcoming expirations.',
     'Churn alerts notify you when a contact becomes high-risk.',
@@ -22,7 +22,7 @@ const TIPS = {
   fr: [
     'Demandez a l\'IA "analyse la sante de mon CRM" pour un diagnostic complet.',
     'Connectez votre email (Gmail/Outlook) pour envoyer des emails d\'activation.',
-    'Configurez des triggers dans Activation pour relancer les deals stagnants.',
+    'Configurez des triggers dans Activation pour relancer les leads stagnants.',
     'L\'IA apprend de chaque campagne — plus vous l\'utilisez, plus elle est efficace.',
     'Utilisez l\'onglet Renouvellements dans Analytics pour suivre les expirations.',
     'Les alertes churn vous notifient quand un contact devient a risque.',

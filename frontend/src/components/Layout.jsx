@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { i18nKey: 'nav.clientsToUpsell',     to: '/clients-to-upsell',   icon: 'upsell' },
   { i18nKey: 'nav.churnRisk',           to: '/churn-risk',          icon: 'churn' },
   { i18nKey: 'nav.dataQuality',         to: '/data-quality',        icon: 'crm' },
-  { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns', adminOnly: true },
+  { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
   { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture' },
   { i18nKey: 'nav.analytics',           to: '/analytics',           icon: 'crm', adminOnly: true },
   { i18nKey: 'nav.settings',            to: '/settings',            icon: 'settings', adminOnly: true },
@@ -33,6 +33,7 @@ const NAV_ITEMS = [
 const MOBILE_NAV = [
   { i18nKey: 'nav.chat',        to: '/chat',        icon: 'chat' },
   { i18nKey: 'nav.dashboard',   to: '/dashboard',   icon: 'dashboard' },
+  { i18nKey: 'nav.campaigns',   to: '/campaigns',   icon: 'campaigns' },
   { i18nKey: 'nav.churnRisk',   to: '/churn-risk',  icon: 'churn' },
   { i18nKey: 'nav.activation',  to: '/activation',  icon: 'nurture' },
   { i18nKey: 'nav.settings',    to: '/settings',    icon: 'settings', adminOnly: true },

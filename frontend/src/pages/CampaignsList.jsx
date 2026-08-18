@@ -6,19 +6,29 @@
    =============================================================================== */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import api, { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
+import { getUser } from '../services/auth';
+import CampaignAssistant from '../components/campaigns/CampaignAssistant';
 
 export default function CampaignsList({ onNavigateCampaign }) {
   const { campaigns, projects, setCampaigns } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
-  const [view, setView] = useState('campaigns');
+  const user = getUser();
+  // Non-admins get the campaign assistant only — no tab switcher, no campaign-list/autopilot
+  // management views (matches this app's existing "simplified UI for non-admins" principle
+  // elsewhere, e.g. Layout.jsx's simplified sidebar).
+  const isAdmin = !user?.teamRole || user.teamRole === 'admin';
+  // CTAs relocated from the old /chat flow (Dashboard, Performance, onboarding, Deal Coach)
+  // land here with state.openAssistant to pre-select the Assistant tab instead of an extra click.
+  const [view, setView] = useState(location.state?.openAssistant ? 'assistant' : 'campaigns');
   const [actionLoading, setActionLoading] = useState({});
 
   const [filter, setFilter] = useState('active');
@@ -134,20 +144,11 @@ export default function CampaignsList({ onNavigateCampaign }) {
     setActionLoading(prev => ({ ...prev, [campaign.id]: null }));
   }, [setCampaigns, t, en]);
 
-  /* ── Empty state ── */
-  if (isEmpty) {
+  /* ── Non-admins: campaign assistant only, no tab switcher ── */
+  if (!isAdmin) {
     return (
       <div id="campaigns-list-view">
-        <div className="empty-state">
-          <div className="empty-state-icon">🎯</div>
-          <div className="empty-state-title">{t('campaigns.noCampaigns')}</div>
-          <div className="empty-state-desc">
-            {t('campaigns.noCampaignsDesc')}
-          </div>
-          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
-            {t('campaigns.createFirst')}
-          </button>
-        </div>
+        <CampaignAssistant />
       </div>
     );
   }
@@ -170,6 +171,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
         {[
           { key: 'campaigns', label: t('campaigns.title') || 'Campaigns' },
           { key: 'autopilot', label: en ? 'Autopilot' : 'Autopilot' },
+          { key: 'assistant', label: t('campaigns.tabAssistant') },
         ].map(tab => (
           <button key={tab.key} onClick={() => setView(tab.key)} style={{
             padding: '10px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
@@ -184,7 +186,20 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
       {view === 'autopilot' && <ProspectionAutopilotSection lang={lang} />}
 
-      {view === 'campaigns' && <>
+      {view === 'assistant' && <CampaignAssistant />}
+
+      {view === 'campaigns' && (isEmpty ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">\uD83C\uDFAF</div>
+          <div className="empty-state-title">{t('campaigns.noCampaigns')}</div>
+          <div className="empty-state-desc">
+            {t('campaigns.noCampaignsDesc')}
+          </div>
+          <button className="btn btn-primary" onClick={() => setView('assistant')}>
+            {t('campaigns.createFirst')}
+          </button>
+        </div>
+      ) : <>
       {/* Header bar */}
       <div
         style={{
@@ -394,7 +409,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
           </div>
         )}
       </div>
-      </>}
+      </>)}
     </div>
   );
 }

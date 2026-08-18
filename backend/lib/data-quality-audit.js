@@ -30,6 +30,31 @@ function snapshotContact(provider, normalizedCrmContact, opportunityRow, product
   };
 }
 
+// Fields POST /enrich-field can touch, in the same precedence it writes them (one field per
+// call, so at most one of these ever actually differs between before_data.local/after_data.local
+// for a given 'enrichment' row).
+const ENRICHABLE_FIELDS = [
+  { key: 'sector', getValue: (o) => o?.data?.sector },
+  { key: 'dealValue', getValue: (o) => o?.deal_value },
+  { key: 'email', getValue: (o) => o?.email },
+  { key: 'company', getValue: (o) => o?.company },
+  { key: 'name', getValue: (o) => o?.name },
+];
+
+/** For an 'enrichment' change, identify which field actually changed and its before/after value. */
+function describeFieldChange(row) {
+  if (row.change_type !== 'enrichment') return null;
+  const before = row.before_data?.local;
+  const after = row.after_data?.local;
+  if (!before || !after) return null;
+  for (const { key, getValue } of ENRICHABLE_FIELDS) {
+    const a = getValue(after);
+    const b = getValue(before);
+    if (a !== undefined && a !== b) return { field: key, before: b ?? null, after: a };
+  }
+  return null;
+}
+
 // Child tables that reference opportunities(id) and hold real activity/relationship history —
 // merging a duplicate must re-link these onto the surviving contact rather than let them go
 // orphaned (SET NULL) or be destroyed (CASCADE, for churn_external_signals) when the duplicate
@@ -214,6 +239,15 @@ async function undoGroup(userId, groupId) {
     await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [userId, provider]);
   }
 
+  // Enrichments (sector/dealValue/...) are cached under a strate-level sentinel, not a real
+  // provider — invalidate those too, or an undone fix (e.g. deal value reverted to empty)
+  // would keep looking "resolved" on the Deal/Client Quality list until the 24h cache expires.
+  const touchedStrates = [...new Set(rows.map(r => r.strate).filter(s => s === 'deal_quality' || s === 'client_quality'))];
+  for (const strate of touchedStrates) {
+    const sentinelProvider = strate === 'client_quality' ? '__client_quality__' : '__deal_quality__';
+    await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [userId, sentinelProvider]);
+  }
+
   return { ok: results.every(r => r.ok), results };
 }
 
@@ -262,6 +296,7 @@ async function listHistory(userId, { strate, limit = 50 } = {}) {
       status: row.status,
       name: row.before_data?.local?.name || row.before_data?.crm?.name || null,
       company: row.before_data?.local?.company || row.before_data?.crm?.company || null,
+      fieldChange: describeFieldChange(row),
     });
   }
 

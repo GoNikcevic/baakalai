@@ -216,7 +216,10 @@ function getAdapter(provider) {
       return {
         async listPersons(_token, userId) {
           const opps = await db.opportunities.listByUser(userId, 500);
-          return opps;
+          // listByUser returns every local opportunity regardless of source — scope strictly to
+          // contacts actually from this provider. Contacts with no known CRM origin at all get
+          // their own separate "__no_crm__" bucket instead (see below), not folded in here.
+          return opps.filter(o => o.crm_provider === provider);
         },
         normalizePerson(raw) {
           return {
@@ -232,6 +235,33 @@ function getAdapter(provider) {
         },
         async updatePerson() { /* no external CRM update for these — scan only */ },
         async deletePerson() { /* no external CRM delete for these — scan only */ },
+      };
+    }
+
+    case '__no_crm__': {
+      // Pseudo-provider (not a real integration, never in CONNECTABLE_PROVIDERS) for contacts
+      // with no known CRM origin — manually created, or imported before owner-mapping existed.
+      // Always scanned regardless of which real CRMs are connected, same local-DB-only,
+      // no-remote-write shape as Notion/Airtable.
+      return {
+        async listPersons(_token, userId) {
+          const opps = await db.opportunities.listByUser(userId, 500);
+          return opps.filter(o => !o.crm_provider);
+        },
+        normalizePerson(raw) {
+          return {
+            id: raw.id,
+            name: raw.name || '',
+            email: raw.email ? raw.email.toLowerCase().trim() : null,
+            phone: raw.phone || null,
+            title: raw.title || '',
+            company: raw.company || '',
+            updatedAt: raw.updated_at || raw.created_at || null,
+            raw,
+          };
+        },
+        async updatePerson() { /* no CRM to update — local contact only */ },
+        async deletePerson() { /* no CRM to delete from — local contact only */ },
       };
     }
 
@@ -294,7 +324,7 @@ function computeMergeDiff(contacts) {
  * @returns {{ score, totalContacts, issues[], summary }}
  */
 async function scanCRM(userId, provider) {
-  const dbBasedProviders = ['notion', 'airtable'];
+  const dbBasedProviders = ['notion', 'airtable', '__no_crm__'];
   const token = await getProviderCredentials(userId, provider);
   if (!token && !dbBasedProviders.includes(provider)) {
     throw new Error(`No ${provider} API key configured`);
@@ -527,8 +557,9 @@ async function scanCRM(userId, provider) {
  * @param {{ type, action, contactIds, data }[]} fixes
  */
 async function applyFixes(userId, provider, fixes) {
+  const dbBasedProviders = ['notion', 'airtable', '__no_crm__'];
   const token = await getProviderCredentials(userId, provider);
-  if (!token) throw new Error(`No ${provider} API key configured`);
+  if (!token && !dbBasedProviders.includes(provider)) throw new Error(`No ${provider} API key configured`);
 
   const adapter = getAdapter(provider);
   let applied = 0;

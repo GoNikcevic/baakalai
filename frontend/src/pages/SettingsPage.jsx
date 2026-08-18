@@ -794,7 +794,7 @@ export default function SettingsPage() {
                   <ul style={{ margin: '8px 0 0 0', paddingLeft: 16 }}>
                     <li>Identify <strong>conversion patterns</strong> (what wins vs. what loses)</li>
                     <li>Build your <strong>ideal customer profile</strong> from real data</li>
-                    <li>Detect <strong>stagnant deals</strong> and suggest next actions</li>
+                    <li>Detect <strong>stagnant leads</strong> and suggest next actions</li>
                     <li>Score <strong>churn risk</strong> for each contact</li>
                     <li>Find <strong>data quality issues</strong> (duplicates, missing emails, formatting)</li>
                   </ul>
@@ -805,7 +805,7 @@ export default function SettingsPage() {
                   <ul style={{ margin: '8px 0 0 0', paddingLeft: 16 }}>
                     <li>Identifier les <strong>patterns de conversion</strong> (ce qui gagne vs. ce qui perd)</li>
                     <li>Construire votre <strong>profil client id\u00e9al</strong> depuis vos donn\u00e9es r\u00e9elles</li>
-                    <li>D\u00e9tecter les <strong>deals stagnants</strong> et sugg\u00e9rer des actions</li>
+                    <li>D\u00e9tecter les <strong>leads stagnants</strong> et sugg\u00e9rer des actions</li>
                     <li>Scorer le <strong>risque de churn</strong> par contact</li>
                     <li>Trouver les <strong>probl\u00e8mes de qualit\u00e9</strong> (doublons, emails manquants, formatage)</li>
                   </ul>

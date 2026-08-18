@@ -53,8 +53,10 @@ function Banner({ titleKey, descKey, ctaKey, onDismiss }) {
 export default function DataQualityBanners() {
   const [noCrmDismissed, dismissNoCrm] = useDismissible('bakal_dq_crm_banner_dismissed');
   const [noEmailDismissed, dismissNoEmail] = useDismissible('bakal_dq_email_banner_dismissed');
+  const [stageMappingDismissed, dismissStageMapping] = useDismissible('bakal_dq_stagemapping_banner_dismissed');
   const [hasCrm, setHasCrm] = useState(true);
   const [hasEmail, setHasEmail] = useState(true);
+  const [hasStageMappingIssue, setHasStageMappingIssue] = useState(false);
 
   useEffect(() => {
     request('/crm/providers').then(d => {
@@ -63,12 +65,20 @@ export default function DataQualityBanners() {
     request('/nurture/email-accounts').then(d => {
       setHasEmail((d.accounts || []).length > 0);
     }).catch(() => {});
+    // One general banner regardless of how many connected CRMs lack a status mapping — never
+    // named per-provider (a config issue, not a per-deal data quality problem).
+    request('/data-quality/deal-quality').then(d => {
+      setHasStageMappingIssue((d.issues || []).some(i => i.type === 'stage_mapping_issue'));
+    }).catch(() => {});
   }, []);
 
   return (
     <>
       {!hasCrm && !noCrmDismissed && (
         <Banner titleKey="dataQuality.banners.noCrm.title" descKey="dataQuality.banners.noCrm.desc" ctaKey="dataQuality.banners.noCrm.cta" onDismiss={dismissNoCrm} />
+      )}
+      {hasCrm && hasStageMappingIssue && !stageMappingDismissed && (
+        <Banner titleKey="dataQuality.banners.stageMapping.title" descKey="dataQuality.banners.stageMapping.desc" ctaKey="dataQuality.banners.stageMapping.cta" onDismiss={dismissStageMapping} />
       )}
       {!hasEmail && !noEmailDismissed && (
         <Banner titleKey="dataQuality.banners.noEmail.title" descKey="dataQuality.banners.noEmail.desc" ctaKey="dataQuality.banners.noEmail.cta" onDismiss={dismissNoEmail} />

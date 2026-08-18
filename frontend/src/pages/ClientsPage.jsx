@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
@@ -46,11 +46,19 @@ export default function ClientsPage() {
   const [bulkAction, setBulkAction] = useState(null);
   const t = useT();
   const { lang } = useI18n();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightIds = useMemo(() => {
     const h = searchParams.get('highlight');
     return h ? new Set(h.split(',')) : null;
   }, [searchParams]);
+  // Set only when arriving from Data Quality's "Qualité des deals" strate — a deal (not yet a
+  // client) is never eligible for churn/upsell, so this drives a stripped-down, deal-only view
+  // instead of reusing every client-oriented option this page otherwise exposes.
+  const isDealQualityContext = searchParams.get('context') === 'deal_quality';
+  // Which specific issue the user clicked "Voir" on (e.g. missing_sector, missing_deal_value) —
+  // the fix UI must match that one issue only, never a different field than what was flagged.
+  const dealQualityIssue = searchParams.get('issue');
   const STATUS_LABELS = getStatusLabels(lang);
   const user = getUser();
   const isAdmin = !user?.teamRole || user.teamRole === 'admin';
@@ -220,7 +228,7 @@ export default function ClientsPage() {
       {highlightIds && (
         <div style={{ padding: '10px 16px', background: 'var(--accent-bg, #f3f0ff)', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 13, color: 'var(--accent, #6E57FA)' }}>
-            {lang === 'en' ? `Showing ${filtered.length} contacts from CRM health scan` : `${filtered.length} contacts du scan CRM affich\u00e9s`}
+            {isDealQualityContext ? t('dataQuality.dealQuality.filteredFromDataQuality') : (lang === 'en' ? `Showing ${filtered.length} contacts from CRM health scan` : `${filtered.length} contacts du scan CRM affich\u00e9s`)}
           </span>
           <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setSearchParams({})}>
             {lang === 'en' ? 'Show all' : 'Voir tout'}
@@ -229,31 +237,51 @@ export default function ClientsPage() {
       )}
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t('clients.title')}</h1>
+          {isDealQualityContext && (
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 12, padding: '4px 10px', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              onClick={() => navigate('/data-quality?tab=dealQuality')}
+            >
+              {'←'} {t('dataQuality.dealQuality.backToDataQuality')}
+            </button>
+          )}
+          <h1 className="page-title">{isDealQualityContext ? t('dataQuality.dealQuality.contextTitle') : t('clients.title')}</h1>
           <div className="page-subtitle">
-            {t('clients.contactsInCrm', { count: clients.length })}
+            {isDealQualityContext ? t('dataQuality.dealQuality.contextSubtitle', { count: filtered.length }) : t('clients.contactsInCrm', { count: clients.length })}
           </div>
         </div>
         {isAdmin && (connectedCrm ? (
-          <div style={{ display: 'flex', gap: 8 }}>
+          isDealQualityContext ? (
             <button
               className="btn btn-primary"
               style={{ fontSize: 12, padding: '8px 16px' }}
               onClick={handleImport}
               disabled={importing}
             >
-              {importing ? `\u23F3 ${t('clients.importing')}` : t('clients.importFrom', { crm: crmLabel })}
+              {importing ? `\u23F3 ${t('clients.importing')}` : t('dataQuality.dealQuality.refreshData')}
             </button>
-            {clients.length > 0 && (
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
-                className="btn btn-ghost"
+                className="btn btn-primary"
                 style={{ fontSize: 12, padding: '8px 16px' }}
-                onClick={() => setShowDiagnostic(true)}
+                onClick={handleImport}
+                disabled={importing}
               >
-                {'\uD83D\uDD0D'} Diagnostic
+                {importing ? `\u23F3 ${t('clients.importing')}` : t('clients.importFrom', { crm: crmLabel })}
               </button>
-            )}
-          </div>
+              {clients.length > 0 && (
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12, padding: '8px 16px' }}
+                  onClick={() => setShowDiagnostic(true)}
+                >
+                  {'\uD83D\uDD0D'} Diagnostic
+                </button>
+              )}
+            </div>
+          )
         ) : (
           <button
             className="btn btn-outline"
@@ -282,8 +310,8 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {/* Churn risk summary */}
-      {churnSummary && churnSummary.scored > 0 && (
+      {/* Churn risk summary — retention concept, meaningless for a not-yet-won deal */}
+      {!isDealQualityContext && churnSummary && churnSummary.scored > 0 && (
         <>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
           {t('clients.churnRiskTitle')}
@@ -331,7 +359,7 @@ export default function ClientsPage() {
         </>
       )}
 
-      {!churnSummary || churnSummary.scored === 0 ? (
+      {!isDealQualityContext && (!churnSummary || churnSummary.scored === 0) ? (
         <div style={{
           background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
           padding: '16px 20px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -380,7 +408,8 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {/* Search + filter */}
+      {/* Search + filter — no effect while a highlight filter is active, so hidden in that case */}
+      {!isDealQualityContext && (
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
         <input
           type="text" placeholder={lang === 'en' ? 'Search...' : 'Rechercher...'} value={search}
@@ -418,9 +447,10 @@ export default function ClientsPage() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Bulk action bar */}
-      {selected.size > 0 && (
+      {!isDealQualityContext && selected.size > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', marginBottom: 12,
           background: 'rgba(110,87,250,0.06)', border: '1px solid rgba(110,87,250,0.15)',
@@ -479,8 +509,8 @@ export default function ClientsPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {/* Select all header */}
-              {!selectedClient && filtered.length > 0 && (
+              {/* Select all header — bulk actions don't apply to a focused deal-quality drill-down */}
+              {!isDealQualityContext && !selectedClient && filtered.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', fontSize: 11, color: 'var(--text-muted)' }}>
                   <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
                     onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
@@ -495,7 +525,7 @@ export default function ClientsPage() {
                   <div key={c.id} style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                   }}>
-                    {!selectedClient && (
+                    {!isDealQualityContext && !selectedClient && (
                       <input type="checkbox" checked={isChecked}
                         onChange={() => toggleSelect(c.id)}
                         onClick={e => e.stopPropagation()}
@@ -503,7 +533,9 @@ export default function ClientsPage() {
                     )}
                     <div onClick={() => setSelectedClient(c)} style={{
                       flex: 1, display: 'grid',
-                      gridTemplateColumns: selectedClient ? '2fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px' : '2fr 1.2fr 1fr 60px'),
+                      gridTemplateColumns: selectedClient ? '2fr 80px' : (isDealQualityContext
+                        ? (owners.length > 1 ? '2fr 1fr 0.8fr 60px' : '2fr 1.2fr 1fr')
+                        : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px' : '2fr 1.2fr 1fr 60px')),
                       padding: '10px 14px', background: isChecked ? 'rgba(110,87,250,0.06)' : isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
                       border: `1px solid ${isChecked ? 'rgba(110,87,250,0.2)' : isSelected ? 'var(--accent)' : 'var(--border)'}`,
                       borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
@@ -529,7 +561,7 @@ export default function ClientsPage() {
                         {STATUS_LABELS[c.status] || c.status || '\u2014'}
                       </span>
                     )}
-                    {!selectedClient && (
+                    {!selectedClient && !isDealQualityContext && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {/* Churn risk is a retention concept \u2014 only meaningful once a deal has
                             actually become a client. Showing it on a still-active deal mixes
@@ -562,9 +594,229 @@ export default function ClientsPage() {
 
         {/* Detail panel */}
         {selectedClient && (
-          <ClientDetailPanel client={selectedClient} onClose={() => setSelectedClient(null)} />
+          isDealQualityContext ? (
+            <DealDetailPanel
+              client={selectedClient}
+              issueType={dealQualityIssue}
+              onClose={() => setSelectedClient(null)}
+              onFieldSaved={(id, patch) => {
+                setClients(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
+                setSelectedClient(prev => (prev && prev.id === id) ? { ...prev, ...patch } : prev);
+              }}
+            />
+          ) : (
+            <ClientDetailPanel client={selectedClient} onClose={() => setSelectedClient(null)} />
+          )
         )}
       </div>
+    </div>
+  );
+}
+
+/* ═══ Deal Detail Panel (Data Quality → Qualité des deals context) ═══
+   A deal isn't a client yet — no churn, no product lines, no "send email" quick action.
+   Just the deal's own info plus a fix box for the ONE issue the user actually clicked into
+   (issueType) — never a different field than what was flagged (e.g. clicking "Valeur du deal
+   non renseignée" must never surface the sector field, and vice versa). */
+
+function SectorFixBox({ client, t, onSaved }) {
+  const currentSector = client.data?.sector && client.data.sector !== 'non_determine' ? client.data.sector : '';
+  const [value, setValue] = useState(currentSector);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const v = value.trim();
+    if (!v) return;
+    setSaving(true);
+    try {
+      const result = await request('/data-quality/enrich-field', {
+        method: 'POST',
+        body: JSON.stringify({ opportunityId: client.id, field: 'sector', value: v }),
+      });
+      const saved = result.sector;
+      if (saved === 'non_determine') {
+        showToast({ type: 'info', title: t('dataQuality.dealQuality.sectorSaveTitle'), message: t('dataQuality.dealQuality.sectorNotClassified') });
+        setValue('');
+      } else {
+        showToast({ type: 'success', title: t('dataQuality.dealQuality.sectorSaveTitle'), message: t('dataQuality.dealQuality.sectorSaved', { sector: saved }) });
+        setValue(saved);
+      }
+      onSaved?.(client.id, { data: { ...(client.data || {}), sector: saved } });
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{t('dataQuality.dealQuality.sectorLabel')}</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder={t('dataQuality.dealQuality.sectorPlaceholder')}
+          style={{
+            flex: 1, padding: '8px 12px', border: '1px solid var(--border)',
+            borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13,
+          }}
+        />
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '8px 16px', whiteSpace: 'nowrap' }}
+          disabled={saving || !value.trim()}
+          onClick={handleSave}
+        >
+          {saving ? '⏳' : t('dataQuality.dealQuality.saveButton')}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+        {t('dataQuality.dealQuality.sectorLocalOnlyNote')}
+      </div>
+    </div>
+  );
+}
+
+function DealValueFixBox({ client, t, onSaved }) {
+  const [value, setValue] = useState(client.deal_value != null ? String(client.deal_value) : '');
+  const [saving, setSaving] = useState(false);
+  const numValue = parseFloat(value);
+  const isValid = value.trim() !== '' && !isNaN(numValue) && numValue >= 0;
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    try {
+      await request('/data-quality/enrich-field', {
+        method: 'POST',
+        body: JSON.stringify({ opportunityId: client.id, field: 'dealValue', value: numValue }),
+      });
+      showToast({
+        type: 'success', title: t('dataQuality.dealQuality.dealValueSaveTitle'),
+        message: t('dataQuality.dealQuality.dealValueSaved', { value: numValue.toLocaleString('fr-FR') }),
+      });
+      onSaved?.(client.id, { deal_value: numValue });
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{t('dataQuality.dealQuality.dealValueLabel')}</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder={t('dataQuality.dealQuality.dealValuePlaceholder')}
+          style={{
+            flex: 1, padding: '8px 12px', border: '1px solid var(--border)',
+            borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13,
+          }}
+        />
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '8px 16px', whiteSpace: 'nowrap' }}
+          disabled={saving || !isValid}
+          onClick={handleSave}
+        >
+          {saving ? '⏳' : t('dataQuality.dealQuality.saveButton')}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+        {t('dataQuality.dealQuality.dealValueLocalOnlyNote')}
+      </div>
+    </div>
+  );
+}
+
+function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const STATUS_LABELS = getStatusLabels(lang);
+  const [timeline, setTimeline] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
+
+  useEffect(() => {
+    setTimelineLoading(true);
+    setTimelineExpanded(false);
+    request(`/crm/client/${client.id}/timeline`)
+      .then(data => setTimeline(data.timeline || []))
+      .catch(() => setTimeline([]))
+      .finally(() => setTimelineLoading(false));
+  }, [client.id]);
+
+  const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
+
+  return (
+    <div style={{
+      flex: '0 0 44%', background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 12, padding: 20, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{client.name}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
+            {client.title && <span>{client.title}</span>}
+            {client.company && <span>{client.title ? ' @ ' : ''}{client.company}</span>}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{client.email}</div>
+        </div>
+        <button onClick={onClose} className="btn btn-ghost" style={{ fontSize: 14, padding: '4px 8px' }}>{'✕'}</button>
+      </div>
+
+      {/* Status + deal info badges */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, padding: '4px 14px', borderRadius: 8, background: `${color}15`, color, fontWeight: 600 }}>
+          {STATUS_LABELS[client.status] || client.status}
+        </span>
+        {client.score != null && (
+          <span style={{
+            fontSize: 12, padding: '4px 14px', borderRadius: 8,
+            background: 'var(--bg-elevated)', fontWeight: 700,
+            color: client.score >= 70 ? 'var(--success)' : client.score >= 40 ? 'var(--warning)' : 'var(--text-muted)',
+          }}>
+            Score : {client.score}/100
+          </span>
+        )}
+        {client.deal_value != null && (
+          <span style={{ fontSize: 12, padding: '4px 14px', borderRadius: 8, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontWeight: 600 }}>
+            {Math.round(client.deal_value).toLocaleString('fr-FR')} €
+          </span>
+        )}
+        {client.owner_email && (
+          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+            {t('clients.owner')}: {client.owner_email.split('@')[0]}
+          </span>
+        )}
+        {client.crm_provider && (
+          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, background: 'var(--bg-elevated)', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+            {client.crm_provider}
+          </span>
+        )}
+      </div>
+
+      {/* Fix box — only the field matching the issue actually clicked into, never another one */}
+      {issueType === 'missing_sector' && <SectorFixBox client={client} t={t} onSaved={onFieldSaved} />}
+      {issueType === 'missing_deal_value' && <DealValueFixBox client={client} t={t} onSaved={onFieldSaved} />}
+
+      {/* Timeline */}
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Timeline</div>
+      <UnifiedTimeline
+        timeline={timeline}
+        loading={timelineLoading}
+        expanded={timelineExpanded}
+        onToggleExpand={() => setTimelineExpanded(e => !e)}
+        lang={lang}
+        t={t}
+      />
     </div>
   );
 }

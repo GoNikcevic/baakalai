@@ -22,7 +22,7 @@
     "openSidebar": "Open sidebar",
     "collapseSidebar": "Collapse sidebar",
     "logoutTitle": "Log out",
-    "dealsToReactivate": "Deals to reactivate",
+    "dealsToReactivate": "Leads to reactivate",
     "clientsToUpsell": "Clients to upsell",
     "churnRisk": "Clients at risk",
     "dataQuality": "Data Quality"
@@ -33,8 +33,8 @@
     "maxPerDay": "Max per day:"
   },
   "dealsToReactivate": {
-    "title": "Deals to reactivate",
-    "subtitle": "Stagnant deals, or overdue on their planned follow-up date — the email is drafted the moment you open it."
+    "title": "Leads to reactivate",
+    "subtitle": "Stagnant leads, or overdue on their planned follow-up date — the email is drafted the moment you open it."
   },
   "upsell": {
     "title": "Clients to upsell",
@@ -44,8 +44,8 @@
     "title": "Data Quality",
     "subtitle": "Want to improve Baakalai's performance? Improve the data you give it.",
     "tabs": {
-      "duplicates": "Duplicates",
-      "dealQuality": "Deal quality",
+      "general": "General",
+      "dealQuality": "Lead quality",
       "clientQuality": "Client quality",
       "history": "History"
     },
@@ -57,15 +57,22 @@
       },
       "noCrm": {
         "title": "No CRM connected",
-        "desc": "Connect a CRM so Baakalai can analyze your deals and clients.",
+        "desc": "Connect a CRM so Baakalai can analyze your leads and clients.",
         "cta": "Connect a CRM"
+      },
+      "stageMapping": {
+        "title": "In-between stages not configured",
+        "desc": "Won/Lost are detected automatically, but one or more of your connected CRMs don't have their in-between stages (interested, meeting, negotiation) mapped to Baakalai — the pipeline view depends on it.",
+        "cta": "Configure the mapping"
       }
     },
     "duplicates": {
       "rescan": "Rescan",
       "scanning": "Scanning...",
       "scanError": "Scan failed",
-      "noneFound": "No duplicates found on this CRM.",
+      "noneFound": "No issues detected on this CRM.",
+      "duplicatesSectionTitle": "Duplicates",
+      "noCrmProvider": "No CRM associated",
       "otherIssuesTitle": "Other issues detected",
       "mergeButton": "Merge",
       "reviewDiff": "Field comparison",
@@ -84,13 +91,28 @@
     },
     "dealQuality": {
       "missingSector": "Sector not filled in",
-      "missingDealValue": "Deal value not filled in",
-      "stageMappingIssue": "Status not configured for this CRM",
+      "missingDealValue": "Lead value not filled in",
       "missingWonLostDate": "Missing close date",
       "ownerNotMapped": "Owner not matched to a team member",
       "zeroActivity": "No CRM activity logged",
-      "configureMapping": "Configure",
-      "noneFound": "No quality issues detected on your active deals."
+      "noneFound": "No quality issues detected on your active leads.",
+      "contextTitle": "Leads",
+      "contextSubtitle": "{count} lead(s) to fix",
+      "refreshData": "Refresh data",
+      "filteredFromDataQuality": "Leads filtered from Data Quality",
+      "backToDataQuality": "Back to Data Quality",
+      "saveButton": "Save",
+      "sectorLabel": "Industry sector",
+      "sectorPlaceholder": "E.g. B2B SaaS, Commercial real estate...",
+      "sectorSaveTitle": "Sector",
+      "sectorSaved": "Sector saved: {sector}",
+      "sectorNotClassified": "Value saved, but not recognized as an industry sector",
+      "sectorLocalOnlyNote": "This value sharpens Baakalai's analysis (churn score, upsell). It isn't synced to your CRM yet: no standard sector field exists on the CRM side.",
+      "dealValueLabel": "Lead value",
+      "dealValuePlaceholder": "E.g. 15000",
+      "dealValueSaveTitle": "Lead value",
+      "dealValueSaved": "Lead value saved: {value}",
+      "dealValueLocalOnlyNote": "This value is saved in Baakalai. It isn't synced to your CRM yet."
     },
     "clientQuality": {
       "missingProductLines": "No product line assigned",
@@ -104,6 +126,13 @@
         "merge_keep": "Duplicate merge (contact kept)",
         "merge_delete": "Duplicate merge (contact removed)",
         "enrichment": "Field enriched"
+      },
+      "fieldLabel": {
+        "sector": "Sector",
+        "dealValue": "Lead value",
+        "email": "Email",
+        "company": "Company",
+        "name": "Name"
       },
       "remoteActionLabel": {
         "updated": "CRM updated",
@@ -235,6 +264,7 @@
     "noCampaigns": "No campaigns created",
     "noCampaignsDesc": "Create your first prospecting campaign. Choose your target, channel, and angle — Baakalai handles the rest.",
     "createFirst": "Create my first campaign",
+    "tabAssistant": "Assistant",
     "countSummary": "{campaigns} campaign{campaignPlural} · {projects} project{projectPlural}",
     "sortByReply": "Sort by reply",
     "sortByReplyAsc": "Sort by reply ↑",
@@ -532,14 +562,9 @@
   "onboarding": {
     "title": "Get started with Baakalai",
     "subtitle": "{done}/{total} steps completed",
-    "accountCreated": "Account created",
-    "crmConnected": "Connect a CRM (Pipedrive, HubSpot or Salesforce)",
-    "emailConnected": "Connect an email (Gmail or Outlook)",
-    "contactsImported": "Import contacts",
-    "firstCampaign": "Create your first campaign",
-    "firstLaunch": "Launch a campaign",
-    "continueChat": "Continue setup in chat →",
-    "allDone": "All set! You can start prospecting."
+    "crmConnected": "Connect a CRM",
+    "emailConnected": "Connect an email",
+    "continueSettings": "Go to Settings →"
   },
   "replies": {
     "title": "Prospect Activities",
@@ -567,7 +592,7 @@
     "previewing": "Analyzing...",
     "newTrigger": "+ New trigger",
     "newTriggerTitle": "New trigger",
-    "triggerName": "Trigger name (e.g. Stagnant deal follow-up)",
+    "triggerName": "Trigger name (e.g. Stagnant lead follow-up)",
     "create": "Create",
     "creating": "Creating...",
     "cancel": "Cancel",
@@ -593,9 +618,9 @@
     "won": "Won",
     "stagnant": "Stagnant",
     "churnRisk": "Churn risk",
-    "stagnantDeals": "Stagnant deals",
+    "stagnantDeals": "Stagnant leads",
     "churnRiskTitle": "Churn risk",
-    "noStagnant": "No stagnant deals",
+    "noStagnant": "No stagnant leads",
     "noRisk": "No risk detected",
     "emails30d": "Emails (30d)",
     "emailsSent": "Sent",
@@ -660,9 +685,9 @@
     "helpContactScore": "Score from 0 to 100 combining 3 signals: Activity (opens, clicks, replies in last 30 days), Fit (how well the contact matches your ICP), and Status (pipeline position).",
     "helpActivity": "Points based on email opens, clicks, replies, and how recent the last interaction was (last 30 days).",
     "helpFit": "How well this contact matches your Ideal Customer Profile: sector, company size, job title.",
-    "helpChurn": "Risk of losing this contact (0-100). Based on inactivity, stagnant deals, unanswered emails, and missing profile data.",
-    "helpForecast": "Revenue forecast adjusted by win probability at each stage. A $10k deal at 50% probability = $5k weighted.",
-    "helpSalesCycle": "Average number of days from first contact to closing a deal.",
+    "helpChurn": "Risk of losing this contact (0-100). Based on inactivity, stagnant leads, unanswered emails, and missing profile data.",
+    "helpForecast": "Revenue forecast adjusted by win probability at each stage. A $10k lead at 50% probability = $5k weighted.",
+    "helpSalesCycle": "Average number of days from first contact to closing a lead.",
     "trends": "Trends",
     "channels": "Channels",
     "crmHealth": "CRM Health",
@@ -721,7 +746,7 @@
     "tabDescScoring": "Unified score (0-100) combining activity, ICP fit, and pipeline status. Focus on the hottest contacts first.",
     "tabDescTrends": "How are your KPIs evolving week over week? Spot patterns in open rates, replies and more.",
     "tabDescChannels": "Email vs LinkedIn vs multi-channel — which channel performs best for your audience?",
-    "tabDescForecast": "Revenue projections based on your pipeline. Weighted forecast and top deals to watch.",
+    "tabDescForecast": "Revenue projections based on your pipeline. Weighted forecast and top leads to watch.",
     "tabDescSegments": "Your contacts grouped by behavior: champions, active, new, at-risk, dormant.",
     "tabDescEngagement": "How engaged are your contacts? Scored from 0-100 based on recent activity.",
     "tabDescRenewals": "Upcoming contract renewals and overdue ones. Never miss a renewal again.",
@@ -761,8 +786,8 @@
     "high": "High",
     "medium": "Medium",
     "low": "Low",
-    "dealCoachTitle": "Deals to follow up",
-    "dealCoachEmpty": "No stagnant deals detected. Good news!",
+    "dealCoachTitle": "Leads to follow up",
+    "dealCoachEmpty": "No stagnant leads detected. Good news!",
     "urgencyHigh": "Urgent",
     "urgencyMedium": "Medium",
     "urgencyLow": "Low",
@@ -849,28 +874,17 @@
     "chartsPlaceholder": "Charts will appear with campaign data."
   },
   "wizard": {
-    "step1Title": "Your company & target",
-    "step1Desc": "Tell us about yourself and who you're trying to reach.",
-    "step2Title": "Connect your tools",
-    "step2Desc": "Connect your main tools. You can add more later.",
-    "step3Title": "All set!",
-    "companyName": "Company name",
-    "website": "Website",
-    "teamSize": "Team size",
-    "selectPlaceholder": "-- Select --",
-    "targetSectors": "Target sectors",
-    "targetSize": "Target company size",
-    "targetZone": "Geographic zone",
-    "outreachTool": "Outreach tool",
-    "selectOutreach": "-- Select your tool --",
-    "crmOptional": "CRM (optional)",
+    "welcomeTitle": "Welcome to Baakalai",
+    "welcomeSubtitle": "Connect your CRM and your email to get started — you can set up everything else later.",
+    "crmCardTitle": "Connect a CRM",
+    "crmCardDesc": "Pipedrive, HubSpot, Salesforce or Odoo.",
+    "emailCardTitle": "Connect an email",
+    "emailCardDesc": "To send your follow-ups and campaigns from your own inbox.",
     "selectCrm": "-- Select your CRM --",
-    "allReady": "All set!",
+    "connect": "Connect",
+    "connected": "Connected ✓",
     "goToDashboard": "Go to dashboard",
-    "saving": "Saving...",
-    "continue": "Continue",
-    "back": "Back",
-    "skipOnboarding": "Skip onboarding"
+    "saving": "Saving..."
   },
   "settings": {
     "title": "Settings",
@@ -890,7 +904,7 @@
     "outreachSyncDesc": "Sync your campaigns and analyze performance patterns with baakalai",
     "syncLemlist": "Sync Lemlist",
     "crmSync": "CRM Analysis",
-    "crmSyncDesc": "Sync your CRM deals and analyze conversion patterns with baakalai",
+    "crmSyncDesc": "Sync your CRM leads and analyze conversion patterns with baakalai",
     "syncCrm": "Sync CRM",
     "preferences": "Preferences",
     "dailyLimit": "Daily Lemlist limit",
@@ -913,14 +927,14 @@
     "deleting": "Deleting..."
   },
   "triggers": {
-    "dealWon": "Deal won",
-    "dealWonDesc": "Welcome / onboarding email when a deal is won",
-    "dealStagnant": "Stagnant deal",
-    "dealStagnantDesc": "Follow up when a deal is inactive for X days",
+    "dealWon": "Lead won",
+    "dealWonDesc": "Welcome / onboarding email when a lead is won",
+    "dealStagnant": "Stagnant lead",
+    "dealStagnantDesc": "Follow up when a lead is inactive for X days",
     "inactiveContact": "Inactive contact",
     "inactiveContactDesc": "Re-engage a contact with no activity for X days",
-    "dealLost": "Deal lost",
-    "dealLostDesc": "Follow-up email after a lost deal (win-back)",
+    "dealLost": "Lead lost",
+    "dealLostDesc": "Follow-up email after a lost lead (win-back)",
     "onboardingCheck": "Onboarding check",
     "onboardingCheckDesc": "Check-in X days after signing",
     "renewalReminder": "Renewal",
@@ -929,5 +943,10 @@
     "upsellOpportunityDesc": "Propose an upgrade to active clients after X days",
     "feedbackRequest": "Feedback request",
     "feedbackRequestDesc": "Ask for a testimonial after X days"
+  },
+  "assistant": {
+    "conversations": "Conversations",
+    "welcomeTitle": "How can I help?",
+    "welcomeSubtitle": "Ask about a client, how Baakalai works, or get sales/prospecting advice."
   }
 }

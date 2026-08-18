@@ -1,10 +1,11 @@
 /* ===============================================================================
    BAKAL — Deal Quality Strate
    Surfaces missing/problematic deal fields that degrade "Deals à relancer" and churn
-   scoring. Every issue resolves to a "review" (go fix it on the client record) or
-   "configure_mapping" (deep-link Settings) action — nothing here is auto-fixable,
-   since Baakalai has no reliable way to infer a sector, deal value, or true close
-   date on its own (see backend/lib/data-quality-checks.js for why).
+   scoring. Every issue resolves to "review" (go fix it on the client record) — nothing
+   here is auto-fixable, since Baakalai has no reliable way to infer a sector, deal
+   value, or true close date on its own (see backend/lib/data-quality-checks.js for why).
+   stage_mapping_issue is a setup/config problem, not a per-deal issue — it's filtered
+   out here and surfaced as a general banner instead (DataQualityBanners.jsx).
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -15,7 +16,6 @@ import { useT } from '../../i18n';
 const ISSUE_ICONS = {
   missing_sector: '🏷️',
   missing_deal_value: '💰',
-  stage_mapping_issue: '⚙️',
   missing_won_lost_date: '📅',
   owner_not_mapped: '👤',
   zero_activity: '💤',
@@ -31,7 +31,9 @@ export default function DealQualityStrate() {
     setLoading(true);
     try {
       const data = await request('/data-quality/deal-quality');
-      setIssues(data.issues || []);
+      // stage_mapping_issue is a setup/config problem, not a per-deal data quality issue — it's
+      // surfaced as a general banner at the top of the page instead (DataQualityBanners.jsx).
+      setIssues((data.issues || []).filter(i => i.type !== 'stage_mapping_issue'));
     } catch {
       setIssues([]);
     }
@@ -58,9 +60,6 @@ export default function DealQualityStrate() {
                   {ISSUE_ICONS[issue.type] || '•'} {label}
                   {count > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{t('dataQuality.common.affectedCount', { count })}</span>}
                 </div>
-                {issue.type === 'stage_mapping_issue' && (
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{issue.provider}</div>
-                )}
                 {count > 0 && (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {(issue.contacts || []).slice(0, 3).map(c => c.name || c.company || '?').join(', ')}
@@ -72,15 +71,13 @@ export default function DealQualityStrate() {
                 className="btn btn-ghost"
                 style={{ fontSize: 11, padding: '4px 12px' }}
                 onClick={() => {
-                  if (issue.suggestedAction === 'configure_mapping') {
-                    navigate('/settings');
-                  } else {
-                    const ids = (issue.contacts || []).map(c => c.id).filter(Boolean).slice(0, 20);
-                    navigate(ids.length > 0 ? `/clients?highlight=${ids.join(',')}` : '/clients');
-                  }
+                  const ids = (issue.contacts || []).map(c => c.id).filter(Boolean).slice(0, 20);
+                  const params = new URLSearchParams({ context: 'deal_quality', issue: issue.type });
+                  if (ids.length > 0) params.set('highlight', ids.join(','));
+                  navigate(`/clients?${params.toString()}`);
                 }}
               >
-                {issue.suggestedAction === 'configure_mapping' ? t('dataQuality.dealQuality.configureMapping') : t('dataQuality.common.view')}
+                {t('dataQuality.common.view')}
               </button>
             </div>
           </div>

@@ -1,10 +1,10 @@
 /* ===============================================================================
-   BAKAL — Duplicates Strate
-   Scans every connected CRM independently (duplicates are a same-CRM concept only —
-   the same person legitimately existing in two different CRMs is normal, never
-   flagged). Each provider's duplicate groups get the new merge-review UX;
-   non-duplicate issues from the same scan (missing email, invalid format, etc.) are
-   shown underneath, unchanged from the previous flat card list.
+   BAKAL — General Strate (Data Quality's "Général" tab)
+   CRM hygiene issues that aren't specific to a lead or a client — duplicates, missing
+   fields, invalid formats, inactivity. Scans every connected CRM independently
+   (duplicates are a same-CRM concept only — the same person legitimately existing in
+   two different CRMs is normal, never flagged). Each provider's duplicate groups get
+   the merge-review UX; other general issues from the same scan are shown underneath.
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -28,36 +28,94 @@ function getOtherIssueConfig(en) { return {
   format_name_caps: { icon: 'Aa', label: en ? 'Names in ALL CAPS' : 'Noms en MAJUSCULES', color: 'var(--blue)' },
 }; }
 
+// Issue types correctable by typing in the right value for one field — same mechanism as the
+// Lead Quality sector/deal value fix (a text field + "Enregistrer", calling POST /enrich-field,
+// with full audit + undo). No AI guessing: predictable, and works even for data an enrichment
+// agent could never find (test contacts, unlisted companies, etc).
+const FIXABLE_FIELD_BY_ISSUE_TYPE = {
+  missing_email: 'email',
+  missing_name: 'name',
+  missing_company: 'company',
+  invalid_email_format: 'email',
+  invalid_email_domain: 'email',
+};
+
+function FieldFixRow({ provider, contact, field, en, t, onSaved }) {
+  const [value, setValue] = useState(contact[field] || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    const v = value.trim();
+    if (!v) return;
+    setSaving(true);
+    try {
+      await request('/data-quality/enrich-field', {
+        method: 'POST',
+        body: JSON.stringify({ provider, crmContactId: contact.id, field, value: v }),
+      });
+      setSaved(true);
+      onSaved?.();
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setSaving(false);
+  };
+
+  if (saved) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--success)', padding: '4px 0' }}>
+        ✅ {contact.name || contact.email || '?'} — {value}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0' }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {contact.name || contact.email || '?'}
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+      />
+      <button
+        className="btn btn-primary"
+        style={{ fontSize: 11, padding: '5px 10px', whiteSpace: 'nowrap' }}
+        disabled={saving || !value.trim()}
+        onClick={handleSave}
+      >
+        {saving ? '…' : (en ? 'Save' : 'Enregistrer')}
+      </button>
+    </div>
+  );
+}
+
 function OtherIssueCard({ provider, issue, onFixed }) {
   const { lang } = useI18n();
   const en = lang === 'en';
   const t = useT();
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState(null);
+  const [expanded, setExpanded] = useState(false);
   const config = getOtherIssueConfig(en)[issue.type] || { icon: '?', label: issue.type, color: 'var(--text-muted)' };
   const count = issue.count || issue.contacts?.length || 0;
+  const fixField = FIXABLE_FIELD_BY_ISSUE_TYPE[issue.type];
 
   const handleFix = async () => {
     setFixing(true);
     try {
-      if (issue.suggestedAction === 'enrich') {
-        const issueType = issue.type === 'missing_email' ? 'missing_email' : issue.type === 'missing_company' ? 'missing_company' : 'all';
-        const contactIds = (issue.contacts || []).map(c => c.id).filter(Boolean);
-        const result = await request('/crm/enrich', { method: 'POST', body: JSON.stringify({ issueType, contactIds, limit: 20 }) });
-        setFixResult({ message: en ? `${result.enriched} enriched` : `${result.enriched} enrichis` });
-      } else {
-        let fixes = [];
-        if (issue.type === 'format_name_caps' || issue.suggestedAction === 'auto_fix') {
-          fixes = [{ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts }];
-        } else if (issue.suggestedAction === 'archive') {
-          fixes = [{ type: issue.type, action: 'archive', contactIds: issue.contacts.map(c => c.id) }];
-        } else if (issue.suggestedAction === 'verify') {
-          fixes = [{ type: issue.type, action: 'verify_emails', contactIds: issue.contacts.map(c => c.id) }];
-        }
-        if (fixes.length > 0) {
-          const result = await request(`/crm/clean/${provider}`, { method: 'POST', body: JSON.stringify({ fixes }) });
-          setFixResult({ message: `${result.applied || 0} ${en ? 'fixed' : 'corrigé(s)'}` });
-        }
+      let fixes = [];
+      if (issue.type === 'format_name_caps' || issue.suggestedAction === 'auto_fix') {
+        fixes = [{ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts }];
+      } else if (issue.suggestedAction === 'archive') {
+        fixes = [{ type: issue.type, action: 'archive', contactIds: issue.contacts.map(c => c.id) }];
+      }
+      if (fixes.length > 0) {
+        const result = await request(`/crm/clean/${provider}`, { method: 'POST', body: JSON.stringify({ fixes }) });
+        setFixResult({ message: `${result.applied || 0} ${en ? 'fixed' : 'corrigé(s)'}` });
       }
       if (onFixed) onFixed();
     } catch (err) {
@@ -68,22 +126,36 @@ function OtherIssueCard({ provider, issue, onFixed }) {
 
   return (
     <div className="card" style={{ borderLeft: `3px solid ${config.color}` }}>
-      <div className="card-body" style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>
-            {config.icon} {config.label} <span style={{ fontSize: 11, color: config.color }}>{count}</span>
+      <div className="card-body" style={{ padding: '12px 16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {config.icon} {config.label} <span style={{ fontSize: 11, color: config.color }}>{count}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              {(issue.contacts || []).slice(0, 3).map(c => c.name || c.email || '?').join(', ')}
+              {count > 3 && ` +${count - 3}`}
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-            {(issue.contacts || []).slice(0, 3).map(c => c.name || c.email || '?').join(', ')}
-            {count > 3 && ` +${count - 3}`}
-          </div>
+          {fixResult ? (
+            <span style={{ fontSize: 11, color: 'var(--success)' }}>✅ {fixResult.message}</span>
+          ) : fixField ? (
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setExpanded(e => !e)}>
+              {en ? 'Fix' : 'Corriger'}
+            </button>
+          ) : issue.suggestedAction === 'review' ? null : (
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={fixing} onClick={handleFix}>
+              {fixing ? '…' : (en ? 'Fix' : 'Corriger')}
+            </button>
+          )}
         </div>
-        {fixResult ? (
-          <span style={{ fontSize: 11, color: 'var(--success)' }}>✅ {fixResult.message}</span>
-        ) : issue.suggestedAction === 'review' ? null : (
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={fixing} onClick={handleFix}>
-            {fixing ? '…' : (en ? 'Fix' : 'Corriger')}
-          </button>
+
+        {expanded && fixField && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {(issue.contacts || []).map((c, i) => (
+              <FieldFixRow key={c.id || i} provider={provider} contact={c} field={fixField} en={en} t={t} onSaved={onFixed} />
+            ))}
+          </div>
         )}
       </div>
     </div>
@@ -94,11 +166,13 @@ function ProviderBlock({ provider, data, onRescan }) {
   const t = useT();
   const [rescanning, setRescanning] = useState(false);
 
+  const providerLabel = provider === '__no_crm__' ? t('dataQuality.duplicates.noCrmProvider') : (PROVIDER_LABELS[provider] || provider);
+
   if (data.error) {
     return (
       <div className="card">
         <div className="card-body" style={{ padding: '14px 16px', fontSize: 12, color: 'var(--danger)' }}>
-          {PROVIDER_LABELS[provider] || provider}: {data.error}
+          {providerLabel}: {data.error}
         </div>
       </div>
     );
@@ -118,7 +192,7 @@ function ProviderBlock({ provider, data, onRescan }) {
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>{PROVIDER_LABELS[provider] || provider}</div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{providerLabel}</div>
         <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={rescanning} onClick={handleRescan}>
           {rescanning ? t('dataQuality.duplicates.scanning') : `🔄 ${t('dataQuality.duplicates.rescan')}`}
         </button>
@@ -128,6 +202,11 @@ function ProviderBlock({ provider, data, onRescan }) {
         <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>{t('dataQuality.duplicates.noneFound')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {data.duplicateGroups.length > 0 && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+              {t('dataQuality.duplicates.duplicatesSectionTitle')}
+            </div>
+          )}
           {data.duplicateGroups.map((group, i) => (
             <div key={i} className="card">
               <div className="card-body" style={{ padding: '12px 16px' }}>

@@ -34,7 +34,7 @@ export default function MembershipPage() {
         {[
           { label: en ? 'Total clients' : 'Clients total', value: k.total_won || 0, color: '#6E57FA' },
           { label: en ? 'At risk' : 'À risque', value: k.at_risk || 0, color: '#DC2626' },
-          { label: en ? 'Avg deal value' : 'Valeur moyenne', value: k.avg_deal_value ? `${k.avg_deal_value}€` : '—', color: '#16A34A' },
+          { label: en ? 'Avg lead value' : 'Valeur moyenne', value: k.avg_deal_value ? `${k.avg_deal_value}€` : '—', color: '#16A34A' },
           { label: en ? 'Total revenue' : 'Revenu total', value: k.total_revenue ? `${Number(k.total_revenue).toLocaleString()}€` : '—', color: '#16A34A' },
           { label: en ? 'Avg cycle' : 'Cycle moyen', value: k.avg_cycle_days ? `${k.avg_cycle_days}j` : '—' },
           { label: en ? 'Avg churn score' : 'Score churn moyen', value: k.avg_churn_score || '—', color: k.avg_churn_score >= 50 ? '#DC2626' : '#F59E0B' },

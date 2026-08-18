@@ -10,6 +10,23 @@ import { request } from '../../services/api-client';
 import { showToast } from '../../services/notifications';
 import { useT } from '../../i18n';
 
+function formatFieldValue(t, field, value) {
+  if (value == null || value === '') return '—';
+  if (field === 'dealValue') return `${Math.round(value).toLocaleString('fr-FR')} €`;
+  if (field === 'sector' && value === 'non_determine') return t('dataQuality.dealQuality.sectorNotClassified');
+  return value;
+}
+
+function FieldChangeDetail({ t, fieldChange }) {
+  if (!fieldChange) return null;
+  const label = t(`dataQuality.history.fieldLabel.${fieldChange.field}`);
+  return (
+    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+      {label} : {formatFieldValue(t, fieldChange.field, fieldChange.before)} → {formatFieldValue(t, fieldChange.field, fieldChange.after)}
+    </div>
+  );
+}
+
 export default function HistoryTab() {
   const t = useT();
   const [groups, setGroups] = useState(null);
@@ -68,6 +85,7 @@ export default function HistoryTab() {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                   {names.join(', ')} — {date}
                 </div>
+                <FieldChangeDetail t={t} fieldChange={g.rows[0]?.fieldChange} />
                 {g.rows.some(r => r.remoteAction === 'manual_required') && (
                   <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 2 }}>
                     {t('dataQuality.history.remoteActionLabel.manual_required')}

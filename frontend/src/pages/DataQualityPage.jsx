@@ -1,11 +1,13 @@
 /* ===============================================================================
    BAKAL — Data Quality Page
    Organized into 3 strates (one per data-quality need) + a change history tab:
-   Duplicates, Deal quality, Client quality, Historique. Every strate adapts to what
-   each connected CRM actually supports — see lib/crm-cleaning-agent.js.
+   General (CRM hygiene not specific to leads or clients — duplicates, missing/invalid
+   fields, inactivity), Lead quality, Client quality, Historique. Every strate adapts
+   to what each connected CRM actually supports — see lib/crm-cleaning-agent.js.
    =============================================================================== */
 
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useT } from '../i18n';
 import DataQualityBanners from '../components/dataQuality/DataQualityBanners';
 import DuplicatesStrate from '../components/dataQuality/DuplicatesStrate';
@@ -14,7 +16,7 @@ import ClientQualityStrate from '../components/dataQuality/ClientQualityStrate';
 import HistoryTab from '../components/dataQuality/HistoryTab';
 
 const TABS = [
-  { key: 'duplicates', labelKey: 'dataQuality.tabs.duplicates', Component: DuplicatesStrate },
+  { key: 'general', labelKey: 'dataQuality.tabs.general', Component: DuplicatesStrate },
   { key: 'dealQuality', labelKey: 'dataQuality.tabs.dealQuality', Component: DealQualityStrate },
   { key: 'clientQuality', labelKey: 'dataQuality.tabs.clientQuality', Component: ClientQualityStrate },
   { key: 'history', labelKey: 'dataQuality.tabs.history', Component: HistoryTab },
@@ -22,7 +24,9 @@ const TABS = [
 
 export default function DataQualityPage() {
   const t = useT();
-  const [tab, setTab] = useState('duplicates');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab');
+  const [tab, setTab] = useState(TABS.some(tb => tb.key === initialTab) ? initialTab : 'general');
   const ActiveComponent = TABS.find(tb => tb.key === tab)?.Component;
 
   return (

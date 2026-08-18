@@ -4,8 +4,42 @@ const claude = require('../api/claude');
 const { emitToThread, notifyUser } = require('../socket');
 const { sanitizeText } = require('../lib/sanitize');
 const { rateLimit } = require('../lib/rate-limit');
+const { getValidatedIntegrations } = require('../config');
 const emailLimit = rateLimit({ windowMs: 60000, max: 10 }); // 10 emails per minute
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 });
+
+const ASSISTANT_TYPES = ['general', 'campaign'];
+
+/**
+ * Lean context for the general assistant (first sidebar tab) — language + whether a CRM is
+ * genuinely connected, nothing else. Deliberately skips documents/campaigns/patterns/
+ * diagnostics/versions, all irrelevant to a non-campaign-creating assistant. Uses
+ * getValidatedIntegrations (decrypts to confirm a real, usable connection) rather than the
+ * plain access_token-exists check the campaign assistant's context still uses below — see this
+ * session's earlier fix for why a stale/placeholder token must not count as "connected."
+ */
+async function buildGeneralContext(userId) {
+  const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
+  const [userRow, connectedCrms] = await Promise.all([
+    db.query('SELECT language FROM users WHERE id = $1', [userId]),
+    getValidatedIntegrations(userId, CRM_PROVIDERS),
+  ]);
+  const userLang = userRow.rows?.[0]?.language || 'fr';
+
+  const contextParts = [];
+  contextParts.push(userLang === 'en'
+    ? 'CRITICAL LANGUAGE RULE: You MUST reply in ENGLISH. The user speaks English.'
+    : 'LANGUE: Réponds en français.');
+
+  if (connectedCrms.length > 0) {
+    const crmLines = connectedCrms.map(p => `- ${p.charAt(0).toUpperCase() + p.slice(1)}`);
+    contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}`);
+  } else {
+    contextParts.push("CRM: Aucun CRM connecté. Si l'utilisateur demande des infos sur un client, dis-lui de connecter un CRM dans Paramètres d'abord.");
+  }
+
+  return contextParts.join('\n\n');
+}
 
 const router = Router();
 
@@ -21,10 +55,11 @@ const MAX_VERSIONS_IN_CONTEXT = 5;
 const MAX_DOC_CHARS = 15000;
 const MAX_HISTORY_MESSAGES = 50;
 
-// GET /api/chat/threads
+// GET /api/chat/threads?assistantType=general|campaign
 router.get('/threads', async (req, res, next) => {
   try {
-    const threads = await db.chatThreads.list(req.user.id);
+    const assistantType = ASSISTANT_TYPES.includes(req.query.assistantType) ? req.query.assistantType : undefined;
+    const threads = await db.chatThreads.list(req.user.id, { assistantType });
     res.json({ threads });
   } catch (err) {
     next(err);
@@ -34,7 +69,8 @@ router.get('/threads', async (req, res, next) => {
 // POST /api/chat/threads
 router.post('/threads', async (req, res, next) => {
   try {
-    const thread = await db.chatThreads.create(req.body.title, req.user.id);
+    const assistantType = ASSISTANT_TYPES.includes(req.body.assistantType) ? req.body.assistantType : 'campaign';
+    const thread = await db.chatThreads.create(req.body.title, req.user.id, assistantType);
     res.status(201).json(thread);
   } catch (err) {
     next(err);
@@ -92,6 +128,10 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const history = await db.chatMessages.listByThread(thread.id, MAX_HISTORY_MESSAGES);
     const claudeMessages = history.map(m => ({ role: m.role, content: m.content }));
 
+    let context;
+    if (thread.assistant_type === 'general') {
+      context = await buildGeneralContext(req.user.id);
+    } else {
     // Build bounded context — all queries in parallel
     const { listUserSources } = require('../lib/prospect-sources');
     const [profile, docs, campaigns, patterns, prospectSources, userIntegrations] = await Promise.all([
@@ -270,14 +310,16 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       contextParts.unshift('LANGUE: Réponds en français. Tout le contenu (campagnes, séquences, suggestions, quick_replies) doit être en français.');
     }
 
-    const context = contextParts.join('\n\n');
+    context = contextParts.join('\n\n');
+    }
+
     const userId = req.user.id;
     const threadId = thread.id;
 
     // Stream Claude response via Socket.io
     const aiResponse = await claude.chatStream(claudeMessages, context, (chunk) => {
       notifyUser(userId, 'chat:stream', { threadId, chunk });
-    });
+    }, { assistantType: thread.assistant_type });
 
     let metadata = null;
     const jsonMatch = aiResponse.content.match(/```json\s*([\s\S]*?)```/);

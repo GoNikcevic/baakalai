@@ -47,7 +47,7 @@ export default function DashboardPage() {
   const { campaigns, globalKpis, opportunities, recommendations, chartData, setOpportunities } = useApp();
   const { setShowCreatorModal } = useOutletContext() || {};
   const navigate = useNavigate();
-  const openCreator = useCallback(() => navigate('/chat'), [navigate]);
+  const openCreator = useCallback(() => navigate('/campaigns', { state: { openAssistant: true } }), [navigate]);
   const { socket } = useSocket();
   const [syncStatus, setSyncStatus] = useState(null);
 

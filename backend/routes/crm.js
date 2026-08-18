@@ -17,6 +17,7 @@ const odoo = require('../api/odoo');
 const notionCrm = require('../api/notion-crm');
 const airtableCrm = require('../api/airtable-crm');
 const { decrypt, encrypt } = require('../config/crypto');
+const { getValidatedIntegrations } = require('../config');
 const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
 const logger = require('../lib/logger');
@@ -243,12 +244,10 @@ router.get('/providers', async (req, res, next) => {
     const providers = ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'folk', 'notion', 'airtable'];
     const labelMap = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', odoo: 'Odoo', folk: 'Folk', notion: 'Notion', airtable: 'Airtable' };
 
-    // Single query instead of 6
-    const result = await db.query(
-      `SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)`,
-      [req.user.id, providers]
-    );
-    const connectedSet = new Set(result.rows.map(r => r.provider));
+    // A row existing in user_integrations isn't enough on its own — only count providers whose
+    // stored access_token actually decrypts (excludes stale/placeholder rows, e.g. test data
+    // seeded directly in the DB, from silently appearing "connected" everywhere this is checked).
+    const connectedSet = new Set(await getValidatedIntegrations(req.user.id, providers));
 
     const statuses = providers.map(provider => ({
       provider,
@@ -1054,6 +1053,21 @@ router.get('/odoo/deals', async (req, res, next) => {
     try { creds = JSON.parse(token); } catch { return res.status(400).json({ error: 'Odoo credentials invalid' }); }
     const deals = await odoo.getDeals(creds);
     res.json({ deals });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/crm/client/search?q=... — Fuzzy name/email/company search (general assistant's
+// lookup_client action). Must stay registered BEFORE /client/:id below — both match a single
+// path segment, and Express tries routes in registration order, so /client/search would
+// otherwise be swallowed by /client/:id with id="search".
+router.get('/client/search', async (req, res, next) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    if (!q) return res.json({ clients: [] });
+    const clients = await db.opportunities.search(req.user.id, q, 8);
+    res.json({ clients });
   } catch (err) {
     next(err);
   }

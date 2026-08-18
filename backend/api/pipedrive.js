@@ -209,6 +209,9 @@ async function getDeals(apiToken, limit = 100) {
     createdAt: d.add_time,
     updatedAt: d.update_time || d.add_time,
     nextActivityDate: d.next_activity_date || null,
+    // close_time is Pipedrive's generic "when this deal closed" timestamp (set for both won
+    // and lost); won_time/lost_time are narrower fallbacks if it's ever absent.
+    closeDate: d.close_time || d.won_time || d.lost_time || null,
   }));
 }
 

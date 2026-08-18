@@ -47,8 +47,8 @@ export default function QuickWinCard() {
     const names = topStagnant?.slice(0, 3).map(s => s.company || s.name).join(', ');
     const days = topStagnant?.[0]?.daysSinceUpdate || 30;
     title = en
-      ? `${segments.stagnant} stagnant deal${segments.stagnant > 1 ? 's' : ''} found`
-      : `${segments.stagnant} deal${segments.stagnant > 1 ? 's' : ''} stagnant${segments.stagnant > 1 ? 's' : ''} detect\u00e9${segments.stagnant > 1 ? 's' : ''}`;
+      ? `${segments.stagnant} stagnant lead${segments.stagnant > 1 ? 's' : ''} found`
+      : `${segments.stagnant} lead${segments.stagnant > 1 ? 's' : ''} stagnant${segments.stagnant > 1 ? 's' : ''} detect\u00e9${segments.stagnant > 1 ? 's' : ''}`;
     desc = en
       ? `${names}${topStagnant.length > 3 ? ` +${segments.stagnant - 3} more` : ''} \u2014 inactive for ${days}+ days. A quick follow-up could reactivate them.`
       : `${names}${topStagnant.length > 3 ? ` +${segments.stagnant - 3} autres` : ''} \u2014 inactifs depuis ${days}+ jours. Une relance pourrait les r\u00e9activer.`;
@@ -73,8 +73,8 @@ export default function QuickWinCard() {
     type = 'clean';
     title = en ? 'Your CRM is in great shape' : 'Votre CRM est en pleine forme';
     desc = en
-      ? `${segments.total} contacts imported, ${segments.active} active, no stagnant deals. You\u2019re on top of your pipeline.`
-      : `${segments.total} contacts import\u00e9s, ${segments.active} actifs, aucun deal stagnant. Votre pipeline est bien suivi.`;
+      ? `${segments.total} contacts imported, ${segments.active} active, no stagnant leads. You\u2019re on top of your pipeline.`
+      : `${segments.total} contacts import\u00e9s, ${segments.active} actifs, aucun lead stagnant. Votre pipeline est bien suivi.`;
     cta = en ? 'Explore analytics' : 'Explorer les analytics';
     ctaAction = () => navigate('/analytics');
     accent = 'var(--success)';

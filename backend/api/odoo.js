@@ -162,25 +162,39 @@ async function upsertContact(creds, data) {
 // ── CRM Leads/Opportunities (crm.lead) ──
 
 async function getDeals(creds, { limit = 100 } = {}) {
-  const ids = await call(creds, 'crm.lead', 'search', [[]], { limit, order: 'write_date desc' });
+  // A bare [] domain implicitly filters active=true in Odoo's ORM, silently excluding lost
+  // leads (Odoo marks a lead "lost" by archiving it, active=false) — the '|' includes both.
+  const ids = await call(creds, 'crm.lead', 'search', [['|', ['active', '=', true], ['active', '=', false]]], { limit, order: 'write_date desc' });
   if (!ids || ids.length === 0) return [];
 
   const deals = await call(creds, 'crm.lead', 'read', [ids], {
-    fields: ['id', 'name', 'partner_id', 'stage_id', 'probability', 'expected_revenue', 'type', 'write_date', 'create_date'],
+    fields: ['id', 'name', 'partner_id', 'stage_id', 'probability', 'expected_revenue', 'type', 'write_date', 'create_date', 'active', 'date_closed'],
   });
-  return deals.map(d => ({
-    id: d.id,
-    name: d.name,
-    contactId: d.partner_id?.[0] || null,
-    contactName: d.partner_id?.[1] || null,
-    stage: d.stage_id?.[1] || null,
-    stageId: d.stage_id?.[0] || null,
-    probability: d.probability,
-    value: d.expected_revenue || 0,
-    type: d.type, // 'lead' or 'opportunity'
-    updatedAt: d.write_date,
-    createdAt: d.create_date,
-  }));
+
+  // is_won lives on crm.stage, not crm.lead itself — resolve once and cross-reference.
+  const stages = await getStages(creds);
+  const wonStageIds = new Set(stages.filter(s => s.isWon).map(s => s.id));
+
+  return deals.map(d => {
+    const stageId = d.stage_id?.[0] || null;
+    const isWon = stageId != null && wonStageIds.has(stageId);
+    const status = isWon ? 'won' : (d.active === false ? 'lost' : 'open');
+    return {
+      id: d.id,
+      name: d.name,
+      personId: d.partner_id?.[0] || null,
+      contactName: d.partner_id?.[1] || null,
+      stage: d.stage_id?.[1] || null,
+      stageId,
+      status,
+      probability: d.probability,
+      value: d.expected_revenue || 0,
+      type: d.type, // 'lead' or 'opportunity'
+      updatedAt: d.write_date,
+      createdAt: d.create_date,
+      closeDate: d.date_closed || null,
+    };
+  });
 }
 
 async function createDeal(creds, data) {

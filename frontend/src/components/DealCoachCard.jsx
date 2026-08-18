@@ -79,7 +79,7 @@ export default function DealCoachCard() {
     const msg = en
       ? `Send a follow-up email to ${suggestion.contactName} (${suggestion.company || ''}). Context: ${suggestion.reason}. Suggestion: ${suggestion.suggestion}`
       : `Envoie un email de relance \u00e0 ${suggestion.contactName} (${suggestion.company || ''}). Contexte: ${suggestion.reason}. Suggestion: ${suggestion.suggestion}`;
-    navigate('/chat', { state: { prefillMessage: msg } });
+    navigate('/campaigns', { state: { openAssistant: true, prefillMessage: msg } });
   }, [en, navigate]);
 
   if (dismissed || loading) return null;
@@ -98,10 +98,10 @@ export default function DealCoachCard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-            {'\uD83C\uDFAF'} {en ? 'Deals to follow up' : 'Deals \u00e0 relancer'}
+            {'\uD83C\uDFAF'} {en ? 'Leads to follow up' : 'Leads \u00e0 relancer'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-            {en ? `${suggestions.length} stagnant deal(s) detected` : `${suggestions.length} deal(s) stagnant(s) d\u00e9tect\u00e9(s)`}
+            {en ? `${suggestions.length} stagnant lead(s) detected` : `${suggestions.length} lead(s) stagnant(s) d\u00e9tect\u00e9(s)`}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>

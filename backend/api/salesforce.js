@@ -77,13 +77,20 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
 }
 
 async function getDeals(instanceUrl, accessToken, limit = 100) {
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  // IsWon/IsClosed are native Opportunity fields (true source of truth for won/lost — no need
+  // to cross-reference OpportunityStage). The OpportunityContactRoles subquery resolves the
+  // primary contact, since Opportunity has no direct contact lookup (only AccountId).
+  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, IsWon, IsClosed,
+    (SELECT ContactId FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
+    FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return (result.records || []).map(r => ({
     id: r.Id,
     name: r.Name,
     stage: r.StageName,
-    amount: r.Amount,
+    status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
+    value: r.Amount,
+    personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
     closeDate: r.CloseDate,
     createdAt: r.CreatedDate,
     updatedAt: r.LastModifiedDate,

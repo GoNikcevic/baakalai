@@ -22,7 +22,7 @@
     "openSidebar": "Ouvrir la sidebar",
     "collapseSidebar": "Réduire la sidebar",
     "logoutTitle": "Se déconnecter",
-    "dealsToReactivate": "Deals à relancer",
+    "dealsToReactivate": "Leads à relancer",
     "clientsToUpsell": "Clients à upseller",
     "churnRisk": "Clients à risque",
     "dataQuality": "Data Quality"
@@ -33,8 +33,8 @@
     "maxPerDay": "Max par jour :"
   },
   "dealsToReactivate": {
-    "title": "Deals à relancer",
-    "subtitle": "Deals stagnants ou en retard sur leur date de relance — l'email est rédigé au moment où vous l'ouvrez."
+    "title": "Leads à relancer",
+    "subtitle": "Leads stagnants ou en retard sur leur date de relance — l'email est rédigé au moment où vous l'ouvrez."
   },
   "upsell": {
     "title": "Clients à upseller",
@@ -44,8 +44,8 @@
     "title": "Data Quality",
     "subtitle": "Vous voulez améliorer les performances de Baakalai ? Améliorez les données que vous lui donnez.",
     "tabs": {
-      "duplicates": "Doublons",
-      "dealQuality": "Qualité des deals",
+      "general": "Général",
+      "dealQuality": "Qualité des leads",
       "clientQuality": "Qualité clients",
       "history": "Historique"
     },
@@ -57,15 +57,22 @@
       },
       "noCrm": {
         "title": "Aucun CRM connecté",
-        "desc": "Connectez un CRM pour que Baakalai puisse analyser vos deals et clients.",
+        "desc": "Connectez un CRM pour que Baakalai puisse analyser vos leads et clients.",
         "cta": "Connecter un CRM"
+      },
+      "stageMapping": {
+        "title": "Étapes intermédiaires non configurées",
+        "desc": "Gagné/Perdu sont détectés automatiquement, mais un ou plusieurs de vos CRM connectés n'ont pas leurs étapes intermédiaires (intéressé, RDV, négociation) mappées vers Baakalai — la vue pipeline en dépend.",
+        "cta": "Configurer le mapping"
       }
     },
     "duplicates": {
       "rescan": "Relancer le scan",
       "scanning": "Analyse en cours...",
       "scanError": "Erreur lors du scan",
-      "noneFound": "Aucun doublon détecté sur ce CRM.",
+      "noneFound": "Aucun problème détecté sur ce CRM.",
+      "duplicatesSectionTitle": "Doublons",
+      "noCrmProvider": "Pas de CRM associé",
       "otherIssuesTitle": "Autres problèmes détectés",
       "mergeButton": "Fusionner",
       "reviewDiff": "Comparaison des champs",
@@ -84,13 +91,28 @@
     },
     "dealQuality": {
       "missingSector": "Secteur d'activité non renseigné",
-      "missingDealValue": "Valeur du deal non renseignée",
-      "stageMappingIssue": "Statut non configuré pour ce CRM",
+      "missingDealValue": "Valeur du lead non renseignée",
       "missingWonLostDate": "Date de clôture manquante",
       "ownerNotMapped": "Propriétaire non associé à un membre de l'équipe",
       "zeroActivity": "Aucune activité CRM enregistrée",
-      "configureMapping": "Configurer",
-      "noneFound": "Aucun problème de qualité détecté sur vos deals actifs."
+      "noneFound": "Aucun problème de qualité détecté sur vos leads actifs.",
+      "contextTitle": "Leads",
+      "contextSubtitle": "{count} lead(s) à corriger",
+      "refreshData": "Actualiser les données",
+      "filteredFromDataQuality": "Leads filtrés depuis Data Quality",
+      "backToDataQuality": "Retour à Data Quality",
+      "saveButton": "Enregistrer",
+      "sectorLabel": "Secteur d'activité",
+      "sectorPlaceholder": "Ex : SaaS B2B, Immobilier commercial...",
+      "sectorSaveTitle": "Secteur",
+      "sectorSaved": "Secteur enregistré : {sector}",
+      "sectorNotClassified": "Valeur enregistrée, mais non reconnue comme un secteur d'activité",
+      "sectorLocalOnlyNote": "Cette valeur affine les analyses de Baakalai (score de churn, upsell). Elle n'est pas encore synchronisée vers votre CRM : aucun champ secteur standard n'existe côté CRM.",
+      "dealValueLabel": "Valeur du lead",
+      "dealValuePlaceholder": "Ex : 15000",
+      "dealValueSaveTitle": "Valeur du lead",
+      "dealValueSaved": "Valeur du lead enregistrée : {value} €",
+      "dealValueLocalOnlyNote": "Cette valeur est enregistrée dans Baakalai. Elle n'est pas encore synchronisée vers votre CRM."
     },
     "clientQuality": {
       "missingProductLines": "Aucune ligne de produit assignée",
@@ -104,6 +126,13 @@
         "merge_keep": "Fusion de doublon (contact conservé)",
         "merge_delete": "Fusion de doublon (contact supprimé)",
         "enrichment": "Champ enrichi"
+      },
+      "fieldLabel": {
+        "sector": "Secteur",
+        "dealValue": "Valeur du lead",
+        "email": "Email",
+        "company": "Société",
+        "name": "Nom"
       },
       "remoteActionLabel": {
         "updated": "CRM mis à jour",
@@ -235,6 +264,7 @@
     "noCampaigns": "Aucune campagne créée",
     "noCampaignsDesc": "Créez votre première campagne de prospection. Choisissez votre cible, votre canal et votre angle — Baakalai s'occupe du reste.",
     "createFirst": "Créer ma première campagne",
+    "tabAssistant": "Assistant",
     "countSummary": "{campaigns} campagne{campaignPlural} · {projects} projet{projectPlural}",
     "sortByReply": "Trier par réponse",
     "sortByReplyAsc": "Tri par réponse ↑",
@@ -532,14 +562,9 @@
   "onboarding": {
     "title": "Premiers pas avec Baakalai",
     "subtitle": "{done}/{total} étapes complétées",
-    "accountCreated": "Compte créé",
-    "crmConnected": "Connecter un CRM (Pipedrive, HubSpot ou Salesforce)",
-    "emailConnected": "Connecter un email (Gmail ou Outlook)",
-    "contactsImported": "Importer des contacts",
-    "firstCampaign": "Créer une première campagne",
-    "firstLaunch": "Lancer une campagne",
-    "continueChat": "Continuer la configuration dans le chat →",
-    "allDone": "Tout est prêt ! Vous pouvez commencer à prospecter."
+    "crmConnected": "Connecter un CRM",
+    "emailConnected": "Connecter un email",
+    "continueSettings": "Aller dans Paramètres →"
   },
   "replies": {
     "title": "Activités Prospects",
@@ -567,7 +592,7 @@
     "previewing": "Analyse...",
     "newTrigger": "+ Nouveau trigger",
     "newTriggerTitle": "Nouveau trigger",
-    "triggerName": "Nom du trigger (ex: Relance deals stagnants)",
+    "triggerName": "Nom du trigger (ex: Relance leads stagnants)",
     "create": "Cr\u00E9er",
     "creating": "Cr\u00E9ation...",
     "cancel": "Annuler",
@@ -593,9 +618,9 @@
     "won": "Gagn\u00E9s",
     "stagnant": "Stagnants",
     "churnRisk": "Risque churn",
-    "stagnantDeals": "Deals stagnants",
+    "stagnantDeals": "Leads stagnants",
     "churnRiskTitle": "Risque de churn",
-    "noStagnant": "Aucun deal stagnant",
+    "noStagnant": "Aucun lead stagnant",
     "noRisk": "Aucun risque",
     "emails30d": "Emails (30j)",
     "emailsSent": "Envoy\u00E9s",
@@ -660,9 +685,9 @@
     "helpContactScore": "Score de 0 \u00e0 100 combinant 3 signaux : Activit\u00e9 (ouvertures, clics, r\u00e9ponses sur 30 jours), Fit (correspondance avec votre profil client id\u00e9al), et Statut (position dans le pipeline).",
     "helpActivity": "Points bas\u00e9s sur les ouvertures, clics, r\u00e9ponses d'emails et r\u00e9cence de la derni\u00e8re interaction (30 derniers jours).",
     "helpFit": "Correspondance avec votre Profil Client Id\u00e9al : secteur, taille d'entreprise, poste.",
-    "helpChurn": "Risque de perdre ce contact (0-100). Bas\u00e9 sur l'inactivit\u00e9, les deals stagnants, les emails sans r\u00e9ponse et les donn\u00e9es manquantes.",
-    "helpForecast": "Pr\u00e9vision de revenus ajust\u00e9e par la probabilit\u00e9 de gain \u00e0 chaque \u00e9tape. Un deal de 10k\u20ac \u00e0 50% = 5k\u20ac pond\u00e9r\u00e9.",
-    "helpSalesCycle": "Nombre moyen de jours entre le premier contact et la conclusion d'un deal.",
+    "helpChurn": "Risque de perdre ce contact (0-100). Bas\u00e9 sur l'inactivit\u00e9, les leads stagnants, les emails sans r\u00e9ponse et les donn\u00e9es manquantes.",
+    "helpForecast": "Pr\u00e9vision de revenus ajust\u00e9e par la probabilit\u00e9 de gain \u00e0 chaque \u00e9tape. Un lead de 10k\u20ac \u00e0 50% = 5k\u20ac pond\u00e9r\u00e9.",
+    "helpSalesCycle": "Nombre moyen de jours entre le premier contact et la conclusion d'un lead.",
     "trends": "Tendances",
     "channels": "Canaux",
     "crmHealth": "Sant\u00E9 CRM",
@@ -721,7 +746,7 @@
     "tabDescScoring": "Score unifi\u00e9 (0-100) combinant activit\u00e9, fit ICP et position pipeline. Concentrez-vous sur les contacts les plus chauds.",
     "tabDescTrends": "Comment \u00e9voluent vos KPIs semaine apr\u00e8s semaine ? Rep\u00e9rez les tendances.",
     "tabDescChannels": "Email vs LinkedIn vs multi-canal \u2014 quel canal performe le mieux pour votre audience ?",
-    "tabDescForecast": "Projections de revenus bas\u00e9es sur votre pipeline. Pr\u00e9visions pond\u00e9r\u00e9es et deals \u00e0 suivre.",
+    "tabDescForecast": "Projections de revenus bas\u00e9es sur votre pipeline. Pr\u00e9visions pond\u00e9r\u00e9es et leads \u00e0 suivre.",
     "tabDescSegments": "Vos contacts group\u00e9s par comportement : champions, actifs, nouveaux, \u00e0 risque, dormants.",
     "tabDescEngagement": "Quel est le niveau d'engagement de vos contacts ? Score de 0 \u00e0 100 bas\u00e9 sur l'activit\u00e9 r\u00e9cente.",
     "tabDescRenewals": "Renouvellements \u00e0 venir et en retard. Ne ratez plus jamais un renouvellement.",
@@ -761,8 +786,8 @@
     "high": "\u00C9lev\u00E9",
     "medium": "Moyen",
     "low": "Faible",
-    "dealCoachTitle": "Deals \u00E0 relancer",
-    "dealCoachEmpty": "Aucun deal stagnant d\u00E9tect\u00E9. Bonne nouvelle !",
+    "dealCoachTitle": "Leads \u00E0 relancer",
+    "dealCoachEmpty": "Aucun lead stagnant d\u00E9tect\u00E9. Bonne nouvelle !",
     "urgencyHigh": "Urgent",
     "urgencyMedium": "Moyen",
     "urgencyLow": "Faible",
@@ -849,28 +874,17 @@
     "chartsPlaceholder": "Les graphiques appara\u00EEtront avec les donn\u00E9es de campagne."
   },
   "wizard": {
-    "step1Title": "Votre entreprise & cible",
-    "step1Desc": "Parlez-nous de vous et de qui vous cherchez \u00E0 atteindre.",
-    "step2Title": "Connexion aux outils",
-    "step2Desc": "Connectez vos outils principaux. Vous pourrez en ajouter d'autres plus tard.",
-    "step3Title": "Tout est pr\u00EAt !",
-    "companyName": "Nom de l'entreprise",
-    "website": "Site web",
-    "teamSize": "Taille d'\u00E9quipe",
-    "selectPlaceholder": "-- S\u00E9lectionner --",
-    "targetSectors": "Secteurs cibles",
-    "targetSize": "Taille d'entreprise cible",
-    "targetZone": "Zone g\u00E9ographique",
-    "outreachTool": "Outil d'outreach",
-    "selectOutreach": "-- S\u00E9lectionner votre outil --",
-    "crmOptional": "CRM (optionnel)",
+    "welcomeTitle": "Bienvenue sur Baakalai",
+    "welcomeSubtitle": "Connectez votre CRM et votre email pour commencer \u2014 vous pourrez configurer le reste plus tard.",
+    "crmCardTitle": "Connecter un CRM",
+    "crmCardDesc": "Pipedrive, HubSpot, Salesforce ou Odoo.",
+    "emailCardTitle": "Connecter un email",
+    "emailCardDesc": "Pour envoyer vos relances et campagnes depuis votre propre bo\u00EEte.",
     "selectCrm": "-- S\u00E9lectionner votre CRM --",
-    "allReady": "Tout est pr\u00EAt !",
+    "connect": "Connecter",
+    "connected": "Connect\u00E9 \u2713",
     "goToDashboard": "Acc\u00E9der au dashboard",
-    "saving": "Sauvegarde...",
-    "continue": "Continuer",
-    "back": "Retour",
-    "skipOnboarding": "Passer l'onboarding"
+    "saving": "Sauvegarde..."
   },
   "settings": {
     "title": "Param\u00E8tres",
@@ -890,7 +904,7 @@
     "outreachSyncDesc": "Synchronise vos campagnes et analyse les patterns de performance avec Baakal",
     "syncLemlist": "Synchroniser Lemlist",
     "crmSync": "Analyse CRM",
-    "crmSyncDesc": "Synchronise vos deals CRM et analyse les patterns de conversion avec Baakal",
+    "crmSyncDesc": "Synchronise vos leads CRM et analyse les patterns de conversion avec Baakal",
     "syncCrm": "Synchroniser CRM",
     "preferences": "Pr\u00E9f\u00E9rences",
     "dailyLimit": "Limite quotidienne Lemlist",
@@ -913,14 +927,14 @@
     "deleting": "Suppression..."
   },
   "triggers": {
-    "dealWon": "Deal gagn\u00E9",
-    "dealWonDesc": "Email de bienvenue / onboarding quand un deal est gagn\u00E9",
-    "dealStagnant": "Deal stagnant",
-    "dealStagnantDesc": "Relancer quand un deal est inactif depuis X jours",
+    "dealWon": "Lead gagn\u00E9",
+    "dealWonDesc": "Email de bienvenue / onboarding quand un lead est gagn\u00E9",
+    "dealStagnant": "Lead stagnant",
+    "dealStagnantDesc": "Relancer quand un lead est inactif depuis X jours",
     "inactiveContact": "Contact inactif",
     "inactiveContactDesc": "R\u00E9engager un contact sans activit\u00E9 depuis X jours",
-    "dealLost": "Deal perdu",
-    "dealLostDesc": "Email de suivi apr\u00E8s un deal perdu (win-back)",
+    "dealLost": "Lead perdu",
+    "dealLostDesc": "Email de suivi apr\u00E8s un lead perdu (win-back)",
     "onboardingCheck": "Check onboarding",
     "onboardingCheckDesc": "V\u00E9rifier la prise en main X jours apr\u00E8s signature",
     "renewalReminder": "Renouvellement",
@@ -929,5 +943,10 @@
     "upsellOpportunityDesc": "Proposer un upgrade aux clients actifs depuis X jours",
     "feedbackRequest": "Demande de feedback",
     "feedbackRequestDesc": "Demander un retour d'exp\u00E9rience apr\u00E8s X jours"
+  },
+  "assistant": {
+    "conversations": "Conversations",
+    "welcomeTitle": "Comment puis-je vous aider ?",
+    "welcomeSubtitle": "Posez une question sur un client, sur le fonctionnement de Baakalai, ou demandez un conseil de vente ou de prospection."
   }
 }

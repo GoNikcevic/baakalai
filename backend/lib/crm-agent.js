@@ -342,11 +342,27 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         } catch { /* mapping is optional */ }
       }
     }
-    // Sync deal values + lifecycle dates from CRM deals
+    // Sync deal values + lifecycle dates from CRM deals. Every provider's getDeals() is
+    // normalized to the same shape ({ personId, status: 'won'|'lost'|'open', value, updatedAt }),
+    // so this loop treats them identically — status is always taken from the CRM's own native
+    // won/lost signal (Pipedrive/Odoo: deal/stage flag; Salesforce: IsWon/IsClosed; HubSpot:
+    // hs_is_closed_won/hs_is_closed), authoritative regardless of the opportunity's current
+    // status — a deal the CRM now shows as lost must stop being treated as a client even if it
+    // was won before (manual correction in the CRM is the source of truth).
     try {
       let deals = [];
       if (crmProvider === 'pipedrive') deals = await pipedrive.getDeals(token, 500);
       else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
+      else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token, 100); }
+      else if (crmProvider === 'odoo') { const odooApi = require('../api/odoo'); deals = await odooApi.getDeals(token, { limit: 500 }); }
+
+      // Prefer the CRM's own close date over "now" — "now" is only a fair proxy for a
+      // transition happening in this very sync, never for backfilling an older won/lost deal.
+      const safeDateISO = (value) => {
+        if (!value) return null;
+        const d = new Date(value);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+      };
 
       for (const deal of deals) {
         const personId = deal.personId ? String(deal.personId) : null;
@@ -361,10 +377,23 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
 
         const updates = {};
         if (deal.value && deal.value !== parseFloat(o.deal_value)) updates.deal_value = deal.value;
-        if (deal.status === 'won' && o.status !== 'won') { updates.status = 'won'; updates.won_date = new Date().toISOString(); }
-        if (deal.status === 'lost' && o.status !== 'lost') { updates.status = 'lost'; updates.lost_date = new Date().toISOString(); }
+
+        const closeDate = safeDateISO(deal.closeDate);
+        if (deal.status === 'won' && o.status !== 'won') {
+          updates.status = 'won';
+          updates.won_date = closeDate || new Date().toISOString();
+        } else if (deal.status === 'won' && o.status === 'won' && !o.won_date && closeDate) {
+          // Backfill: already won locally, just never got a real close date recorded.
+          updates.won_date = closeDate;
+        }
+        if (deal.status === 'lost' && o.status !== 'lost') {
+          updates.status = 'lost';
+          updates.lost_date = closeDate || new Date().toISOString();
+        } else if (deal.status === 'lost' && o.status === 'lost' && !o.lost_date && closeDate) {
+          updates.lost_date = closeDate;
+        }
         // Pipedrive's native "next activity" date feeds planned_followup_date — never overwrite
-        // a manually-set date with null (Pipedrive is the only provider synced here today).
+        // a manually-set date with null (Pipedrive is the only provider that returns this today).
         if (deal.nextActivityDate && deal.nextActivityDate !== o.planned_followup_date) {
           updates.planned_followup_date = deal.nextActivityDate;
           updates.planned_followup_reason = 'crm_sync';

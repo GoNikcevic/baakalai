@@ -21,16 +21,23 @@ const db = require('../db');
 const crmCleaning = require('../lib/crm-cleaning-agent');
 const dataQualityChecks = require('../lib/data-quality-checks');
 const audit = require('../lib/data-quality-audit');
+const { classifySector } = require('../lib/sector-classifier');
+const { getValidatedIntegrations } = require('../config');
 
 const router = Router();
 
 const CONNECTABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 const REAL_WRITE_PROVIDERS = ['pipedrive', 'hubspot', 'odoo', 'salesforce'];
-// Notion/Airtable scan Baakalai's own imported opportunities rows (crm-cleaning-agent.js's
+// Notion/Airtable/__no_crm__ scan Baakalai's own imported opportunities rows (crm-cleaning-agent.js's
 // getAdapter()) — normalizePerson emits the opportunity's own UUID `id` directly there, not a
 // native CRM contact id. Every other provider's `id` is a real, native provider-side contact id,
 // looked up locally via crm_provider+crm_contact_id.
-const LOCAL_SCAN_PROVIDERS = ['notion', 'airtable'];
+const LOCAL_SCAN_PROVIDERS = ['notion', 'airtable', '__no_crm__'];
+// Pseudo-provider for contacts with no known CRM origin at all (crm_provider IS NULL) — not a
+// real integration, never in CONNECTABLE_PROVIDERS/user_integrations, but always scanned so
+// these contacts get their own "Pas de CRM associé" section instead of being hidden or folded
+// into whichever real CRM happens to be connected.
+const NO_CRM_PROVIDER = '__no_crm__';
 const DUPLICATE_ISSUE_TYPES = ['duplicate_email', 'duplicate_name'];
 
 /** Find the local opportunities mirror row for a contact id, branching per provider (see above). */
@@ -49,7 +56,7 @@ function isDuplicateIssue(issue) {
 }
 
 function validateProvider(provider) {
-  return CONNECTABLE_PROVIDERS.includes(provider);
+  return CONNECTABLE_PROVIDERS.includes(provider) || provider === NO_CRM_PROVIDER;
 }
 
 /** Find the duplicate group in a cached scan whose contacts exactly match the given ids. */
@@ -74,14 +81,24 @@ async function getOrRunScan(userId, provider) {
 // GET /api/data-quality/duplicates
 router.get('/duplicates', async (req, res, next) => {
   try {
-    const connectedResult = await db.query(
-      `SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)`,
-      [req.user.id, CONNECTABLE_PROVIDERS]
+    // A row existing in user_integrations isn't enough — a stale/placeholder access_token that
+    // doesn't actually decrypt (e.g. test data seeded directly in the DB) must not count as a
+    // real, established connection (see getValidatedIntegrations for why getUserKey's .env
+    // fallback can't be reused for this check).
+    const connectedProviders = await getValidatedIntegrations(req.user.id, CONNECTABLE_PROVIDERS);
+
+    // Contacts with no known CRM origin need somewhere to be scanned/fixed regardless of which
+    // (if any) real CRMs are connected — only worth the scan if any such contact actually exists.
+    const noCrmCount = await db.query(
+      `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_provider IS NULL LIMIT 1`,
+      [req.user.id]
     );
-    const connectedProviders = connectedResult.rows.map(r => r.provider);
+    const providersToScan = noCrmCount.rows.length > 0
+      ? [...connectedProviders, NO_CRM_PROVIDER]
+      : connectedProviders;
 
     const providerResults = [];
-    for (const provider of connectedProviders) {
+    for (const provider of providersToScan) {
       try {
         const report = await getOrRunScan(req.user.id, provider);
         providerResults.push({
@@ -236,11 +253,14 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
         }
       }
 
-      let remoteAction = 'manual_required';
+      // __no_crm__ contacts were never in an external CRM to begin with — deleting the local
+      // row (below) is the complete action, unlike Notion/Airtable where a manual checklist is
+      // needed because a real CRM record is left behind (no delete API for those providers).
+      let remoteAction = provider === NO_CRM_PROVIDER ? 'none' : 'manual_required';
       if (isRealWrite && token) {
         await adapter.deletePerson(token, delId);
         remoteAction = provider === 'odoo' ? 'archived' : 'deleted';
-      } else {
+      } else if (provider !== NO_CRM_PROVIDER) {
         manualChecklist.push({ name: delContact?.name || null, email: delContact?.email || null });
       }
 
@@ -321,34 +341,43 @@ router.get('/client-quality', async (req, res, next) => {
 });
 
 // POST /api/data-quality/enrich-field
+// Accepts either { opportunityId } (Deal/Client Quality — id is already a Baakalai
+// opportunities.id) or { provider, crmContactId } (General tab's "other issues" — id there is
+// the native CRM contact id for real-API providers, resolved via findLocalOpportunity like
+// preview-merge/confirm-merge already do).
 router.post('/enrich-field', async (req, res, next) => {
   try {
-    const { opportunityId, field, value } = req.body;
-    const SUPPORTED_FIELDS = ['sector', 'email', 'company', 'dealValue'];
-    if (!opportunityId || !SUPPORTED_FIELDS.includes(field)) {
-      return res.status(400).json({ error: `field must be one of: ${SUPPORTED_FIELDS.join(', ')}` });
+    const { opportunityId, provider, crmContactId, field, value } = req.body;
+    const SUPPORTED_FIELDS = ['sector', 'email', 'company', 'dealValue', 'name'];
+    if ((!opportunityId && !(provider && crmContactId)) || !SUPPORTED_FIELDS.includes(field)) {
+      return res.status(400).json({ error: `field must be one of: ${SUPPORTED_FIELDS.join(', ')}, and either opportunityId or provider+crmContactId is required` });
     }
 
-    const oppResult = await db.query(`SELECT * FROM opportunities WHERE id = $1 AND user_id = $2`, [opportunityId, req.user.id]);
-    const opp = oppResult.rows[0];
+    const opp = opportunityId
+      ? (await db.query(`SELECT * FROM opportunities WHERE id = $1 AND user_id = $2`, [opportunityId, req.user.id])).rows[0]
+      : await findLocalOpportunity(req.user.id, provider, crmContactId);
     if (!opp) return res.status(404).json({ error: 'Opportunity not found' });
 
     const beforeLocal = { ...opp };
     let afterLocal;
+    let classifiedSector;
     if (field === 'sector') {
-      const newData = { ...(opp.data || {}), sector: value };
-      await db.query(`UPDATE opportunities SET data = $1 WHERE id = $2`, [JSON.stringify(newData), opportunityId]);
+      // Run through the same sector-classifier agent churn-scoring uses (scope 'client_industry')
+      // so opportunities.data.sector always holds a canonical sector name, not raw free text.
+      classifiedSector = await classifySector(value, 'client_industry');
+      const newData = { ...(opp.data || {}), sector: classifiedSector };
+      await db.query(`UPDATE opportunities SET data = $1 WHERE id = $2`, [JSON.stringify(newData), opp.id]);
       afterLocal = { ...opp, data: newData };
     } else {
       const column = field === 'dealValue' ? 'deal_value' : field;
-      await db.query(`UPDATE opportunities SET ${column} = $1 WHERE id = $2`, [value, opportunityId]);
+      await db.query(`UPDATE opportunities SET ${column} = $1 WHERE id = $2`, [value, opp.id]);
       afterLocal = { ...opp, [column]: value };
     }
 
     // Push to the live CRM too — only for providers with real write support, and only for
     // fields the generic adapter interface actually recognizes (sector/dealValue are
     // Baakalai-only concepts with no CRM-side field mapping in updatePerson).
-    const CRM_RECOGNIZED_FIELDS = { email: 'email', company: 'company' };
+    const CRM_RECOGNIZED_FIELDS = { email: 'email', company: 'company', name: 'name' };
     let remoteAction = 'none';
     let beforeCrm = null;
     if (opp.crm_provider && REAL_WRITE_PROVIDERS.includes(opp.crm_provider) && opp.crm_contact_id && CRM_RECOGNIZED_FIELDS[field]) {
@@ -368,19 +397,40 @@ router.post('/enrich-field', async (req, res, next) => {
       }
     }
 
+    // sector/dealValue are Deal/Client Quality concepts; name/email/company corrections come
+    // from the General tab's "other issues" — general CRM hygiene, same strate as duplicates.
+    const strate = (field === 'sector' || field === 'dealValue')
+      ? (opp.status === 'won' ? 'client_quality' : 'deal_quality')
+      : 'duplicates';
+    // opp.crm_provider can be null for locally-created/seeded contacts that still surfaced via a
+    // provider's General-tab scan (the Notion/Airtable local-scan adapter isn't itself filtered
+    // by provider — it lists every local opportunity). The request's own `provider` param
+    // unambiguously identifies which scan needs to be invalidated; when it's absent
+    // (opportunityId-based Deal/Client Quality calls) opp.crm_provider is used as before.
+    const scanProvider = provider || opp.crm_provider;
     const groupId = randomUUID();
     await audit.recordChange(req.user.id, groupId, {
-      strate: opp.status === 'won' ? 'client_quality' : 'deal_quality',
+      strate,
       changeType: 'enrichment',
-      provider: opp.crm_provider || null,
+      provider: scanProvider || null,
       crmContactId: opp.crm_contact_id || null,
-      opportunityId,
+      opportunityId: opp.id,
       remoteAction,
       beforeData: audit.snapshotContact(opp.crm_provider, beforeCrm, beforeLocal, null),
       afterData: audit.snapshotContact(opp.crm_provider, null, afterLocal, null),
     });
 
-    res.json({ ok: true, remoteAction });
+    // Invalidate the cached issue list so the fixed contact stops showing up as still-flagged
+    // until the next scan (same gap this session already fixed for duplicates/merge). The
+    // 'duplicates' strate (General tab) is cached per real provider, not a sentinel.
+    const cacheProvider = strate === 'client_quality' ? '__client_quality__'
+      : strate === 'deal_quality' ? '__deal_quality__'
+      : scanProvider;
+    if (cacheProvider) {
+      await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [req.user.id, cacheProvider]);
+    }
+
+    res.json({ ok: true, remoteAction, sector: classifiedSector });
   } catch (err) {
     next(err);
   }

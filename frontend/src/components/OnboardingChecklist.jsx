@@ -1,29 +1,23 @@
 /* ===============================================================================
    BAKAL — Onboarding Checklist Component
-   Shows a progress card on the dashboard for new users (beta testers).
-   6-step guided tour to first campaign launch in <30 min.
-   Complements the OnboardingWizard (wizard = initial setup, checklist = ongoing guide).
+   Shows a progress card on the dashboard for new users. Mirrors the simplified
+   OnboardingWizard's two mandatory steps — connect a CRM, connect an email — and
+   nothing else. Purely informational, never blocking; self-hides once both are done.
    =============================================================================== */
 
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
 
 const STEP_CONFIG = [
-  { key: 'accountCreated', route: null },
   { key: 'crmConnected', route: '/settings' },
   { key: 'emailConnected', route: '/settings' },
-  { key: 'contactsImported', route: '/clients' },
-  { key: 'firstCampaign', route: '/chat' },
-  { key: 'firstLaunch', route: '/campaigns' },
 ];
 
 export default function OnboardingChecklist() {
   const t = useT();
   const navigate = useNavigate();
-  const { campaigns, opportunities } = useApp();
 
   const [keys, setKeys] = useState(null);
   const [emailAccounts, setEmailAccounts] = useState(null);
@@ -51,16 +45,10 @@ export default function OnboardingChecklist() {
     return () => { cancelled = true; };
   }, []);
 
-  const campaignsList = useMemo(() => Object.values(campaigns || {}), [campaigns]);
-  const contactsList = useMemo(() => Object.values(opportunities || {}), [opportunities]);
-
   const steps = useMemo(() => {
     if (loading) return null;
 
-    // 1. Account created — always true if they see this
-    const accountCreated = true;
-
-    // 2. CRM connected — any of Pipedrive/HubSpot/Salesforce/Odoo configured
+    // CRM connected — any of Pipedrive/HubSpot/Salesforce/Odoo/Notion/Airtable configured
     const crmConnected = !!(keys && (
       (keys.pipedriveKey && keys.pipedriveKey.configured) ||
       (keys.hubspotKey && keys.hubspotKey.configured) ||
@@ -70,23 +58,14 @@ export default function OnboardingChecklist() {
       (keys.airtableKey && keys.airtableKey.configured)
     ));
 
-    // 3. Email connected — any email account (SMTP/OAuth)
+    // Email connected — any email account (SMTP/OAuth)
     const emailConnected = !!(emailAccounts && emailAccounts.length > 0);
-
-    // 4. Contacts imported — at least one contact/opportunity exists
-    const contactsImported = contactsList.length > 0;
-
-    // 5. First campaign created
-    const firstCampaign = campaignsList.length > 0;
-
-    // 6. First campaign launched
-    const firstLaunch = campaignsList.some(c => c.status === 'active');
 
     return STEP_CONFIG.map((cfg, i) => ({
       ...cfg,
-      done: [accountCreated, crmConnected, emailConnected, contactsImported, firstCampaign, firstLaunch][i],
+      done: [crmConnected, emailConnected][i],
     }));
-  }, [loading, keys, emailAccounts, contactsList, campaignsList]);
+  }, [loading, keys, emailAccounts]);
 
   if (loading || !steps || dismissed) return null;
   const doneCount = steps.filter(s => s.done).length;
@@ -180,7 +159,7 @@ export default function OnboardingChecklist() {
                 fontWeight: isNext ? 600 : 400,
                 transition: 'background 0.2s',
               }}
-              onClick={() => { if (!step.done && step.route) navigate(step.route); }}
+              onClick={() => { if (!step.done && step.route) navigate(step.route, step.state ? { state: step.state } : undefined); }}
             >
               <span style={{
                 width: 20, height: 20, borderRadius: 6,
@@ -202,16 +181,13 @@ export default function OnboardingChecklist() {
         })}
       </div>
 
-      {/* CTA */}
+      {/* CTA — both remaining steps route to Settings, so this is always reachable while visible */}
       <button
         className="btn btn-primary"
         style={{ fontSize: 13, padding: '8px 18px', width: 'fit-content' }}
-        onClick={() => {
-          const nextStep = steps.find(s => !s.done && s.route);
-          navigate(nextStep ? nextStep.route : '/chat');
-        }}
+        onClick={() => navigate('/settings')}
       >
-        {t('onboarding.continueChat')}
+        {t('onboarding.continueSettings')}
       </button>
     </div>
   );

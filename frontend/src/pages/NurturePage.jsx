@@ -12,10 +12,10 @@ import { useT, useI18n } from '../i18n';
 function getTriggerTypes(lang) {
   const en = lang === 'en';
   return [
-    { value: 'deal_won', label: en ? 'Deal won' : 'Deal gagn\u00E9', desc: en ? 'Welcome/onboarding email when a deal is won' : 'Email de bienvenue quand un deal est gagn\u00E9', icon: '\uD83C\uDF89', defaultDays: 1, defaultName: en ? 'Welcome new client' : 'Bienvenue nouveau client' },
-    { value: 'deal_stagnant', label: en ? 'Stagnant deal' : 'Deal stagnant', desc: en ? 'Follow up when a deal is inactive for X days' : 'Relancer quand un deal est inactif depuis X jours', icon: '\u23F0', defaultDays: 30, defaultName: en ? 'Stagnant deal follow-up' : 'Relance deals stagnants' },
+    { value: 'deal_won', label: en ? 'Lead won' : 'Lead gagn\u00E9', desc: en ? 'Welcome/onboarding email when a lead is won' : 'Email de bienvenue quand un lead est gagn\u00E9', icon: '\uD83C\uDF89', defaultDays: 1, defaultName: en ? 'Welcome new client' : 'Bienvenue nouveau client' },
+    { value: 'deal_stagnant', label: en ? 'Stagnant lead' : 'Lead stagnant', desc: en ? 'Follow up when a lead is inactive for X days' : 'Relancer quand un lead est inactif depuis X jours', icon: '\u23F0', defaultDays: 30, defaultName: en ? 'Stagnant lead follow-up' : 'Relance leads stagnants' },
     { value: 'inactive_contact', label: en ? 'Inactive contact' : 'Contact inactif', desc: en ? 'Re-engage a contact with no activity for X days' : 'R\u00E9engager un contact sans activit\u00E9 depuis X jours', icon: '\uD83D\uDCA4', defaultDays: 60, defaultName: en ? 'Re-engage inactive contacts' : 'R\u00E9activation contacts inactifs' },
-    { value: 'deal_lost', label: en ? 'Deal lost' : 'Deal perdu', desc: en ? 'Win-back email after a lost deal' : 'Email de suivi apr\u00E8s un deal perdu', icon: '\uD83D\uDC94', defaultDays: 14, defaultName: en ? 'Win-back lost deals' : 'Win-back deals perdus' },
+    { value: 'deal_lost', label: en ? 'Lead lost' : 'Lead perdu', desc: en ? 'Win-back email after a lost lead' : 'Email de suivi apr\u00E8s un lead perdu', icon: '\uD83D\uDC94', defaultDays: 14, defaultName: en ? 'Win-back lost leads' : 'Win-back leads perdus' },
     { value: 'onboarding_check', label: en ? 'Onboarding check' : 'Check onboarding', desc: en ? 'Check adoption X days after signing' : 'V\u00E9rifier la prise en main X jours apr\u00E8s signature', icon: '\uD83D\uDE80', defaultDays: 7, defaultName: en ? 'Onboarding follow-up D+7' : 'Suivi onboarding J+7' },
     { value: 'renewal_reminder', label: en ? 'Renewal' : 'Renouvellement', desc: en ? 'Reminder X days before renewal date' : 'Rappel X jours avant la date de renouvellement', icon: '\uD83D\uDD14', defaultDays: 30, defaultName: en ? 'Renewal reminder' : 'Rappel renouvellement' },
     { value: 'upsell_opportunity', label: en ? 'Upsell opportunity' : 'Opportunit\u00E9 upsell', desc: en ? 'Suggest upgrade to active clients after X days' : 'Proposer un upgrade aux clients actifs depuis X jours', icon: '\u2B06\uFE0F', defaultDays: 90, defaultName: en ? 'Upsell proposal' : 'Proposition upsell' },
@@ -316,7 +316,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <input
                 type="text"
-                placeholder={lang === 'en' ? 'Trigger name (e.g., Stagnant deal follow-up)' : 'Nom du trigger (ex: Relance deals stagnants)'}
+                placeholder={lang === 'en' ? 'Trigger name (e.g., Stagnant lead follow-up)' : 'Nom du trigger (ex: Relance leads stagnants)'}
                 value={form.name}
                 onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                 className="form-input"
@@ -604,7 +604,7 @@ function ActivationDashboard({ metrics }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u23F0'} {en ? 'Stagnant deals' : 'Deals stagnants'}</div></div>
+          <div className="card-header"><div className="card-title">{'\u23F0'} {en ? 'Stagnant leads' : 'Leads stagnants'}</div></div>
           <div className="card-body">
             {(topStagnant || []).length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>{t('activation.noStagnant')}</div>

@@ -14,10 +14,10 @@ const FAQ_FR = [
   {
     category: 'Activation & Nurture',
     items: [
-      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger déclenche automatiquement un email personnalisé quand une condition est remplie (deal stagnant depuis 14j, contact inactif, deal gagné...). Configure-les dans Activation → Triggers.' },
+      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger déclenche automatiquement un email personnalisé quand une condition est remplie (lead stagnant depuis 14j, contact inactif, lead gagné...). Configure-les dans Activation → Triggers.' },
       { q: 'Quelle est la différence entre mode "auto" et "approbation" ?', a: 'En mode auto, l\'email est envoyé immédiatement. En mode approbation, il est mis en file d\'attente pour que tu le valides avant envoi.' },
       { q: 'Comment fonctionne le A/B testing ?', a: 'Active le A/B sur un trigger → Baakalai génère 2 variantes pour chaque email → après 7 jours, il déclare un gagnant statistiquement. Le système apprend et alloue plus de trafic à la variante gagnante.' },
-      { q: 'Qu\'est-ce que le churn score ?', a: 'Un score de 0 à 100 qui prédit le risque de perte d\'un client. Basé sur : inactivité, sentiment des derniers emails, durée du deal, et retard de paiement.' },
+      { q: 'Qu\'est-ce que le churn score ?', a: 'Un score de 0 à 100 qui prédit le risque de perte d\'un client. Basé sur : inactivité, sentiment des derniers emails, durée du lead, et retard de paiement.' },
     ],
   },
   {
@@ -59,10 +59,10 @@ const FAQ_EN = [
   {
     category: 'Activation & Nurture',
     items: [
-      { q: 'What is a trigger?', a: 'A trigger automatically sends a personalized email when a condition is met (deal stagnant for 14 days, inactive contact, deal won...). Configure them in Activation → Triggers.' },
+      { q: 'What is a trigger?', a: 'A trigger automatically sends a personalized email when a condition is met (lead stagnant for 14 days, inactive contact, lead won...). Configure them in Activation → Triggers.' },
       { q: 'What\'s the difference between "auto" and "approval" mode?', a: 'In auto mode, the email is sent immediately. In approval mode, it\'s queued for you to validate before sending.' },
       { q: 'How does A/B testing work?', a: 'Enable A/B on a trigger → Baakalai generates 2 variants per email → after 7 days, it declares a statistically significant winner. The system learns and allocates more traffic to the winning variant.' },
-      { q: 'What is the churn score?', a: 'A 0-100 score predicting client loss risk. Based on: inactivity, recent email sentiment, deal duration, and payment delays.' },
+      { q: 'What is the churn score?', a: 'A 0-100 score predicting client loss risk. Based on: inactivity, recent email sentiment, lead duration, and payment delays.' },
     ],
   },
   {

@@ -40,7 +40,7 @@ function getVocabulary(mode, en) {
     };
   }
   return {
-    deal: en ? 'Deal' : 'Deal',
+    deal: en ? 'Lead' : 'Lead',
     won: en ? 'Won' : 'Gagné',
     lost: en ? 'Lost' : 'Perdu',
     pipeline: 'Pipeline',
