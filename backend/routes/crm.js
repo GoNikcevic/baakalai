@@ -1978,7 +1978,15 @@ router.get('/salesforce/connect', async (req, res, next) => {
       } catch {}
     }
 
-    _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000, codeVerifier, loginHost });
+    _sfOauthStates.set(state, {
+      userId: req.user.id,
+      expiresAt: Date.now() + 600000,
+      codeVerifier,
+      loginHost,
+      // Retour wizard vs settings : le wizard restaure son brouillon via
+      // ?crm_connected=, comme pour hubspot/pipedrive.
+      from: req.query.from === 'wizard' ? 'wizard' : 'settings',
+    });
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -2077,13 +2085,16 @@ router.get('/salesforce/callback', async (req, res) => {
       [oauthData.userId]
     );
 
+    track(oauthData.userId, 'crm_connected', { provider: 'salesforce', oauth: true });
+
     // Auto-trigger CRM sync in background after OAuth connection
     const { syncCRM } = require('../lib/crm-sync');
     syncCRM(oauthData.userId).catch((err) => {
       logger.error('salesforce-oauth', `Background CRM sync failed for user ${oauthData.userId}: ${err.message}`);
     });
 
-    res.redirect(APP_URL + '/settings?crm_connected=salesforce');
+    const landing = oauthData.from === 'wizard' ? '/' : '/settings';
+    res.redirect(APP_URL + landing + '?crm_connected=salesforce');
   } catch (err) {
     logger.error('salesforce-oauth', `Salesforce OAuth failed: ${err.message}`);
     res.redirect(APP_URL + '/settings?crm_error=salesforce_failed');
@@ -2147,13 +2158,23 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Validate Salesforce instance URL to prevent SSRF
-function isValidSalesforceUrl(url) {
+// Validate + normalize Salesforce instance URL (SSRF guard). Returns the
+// https origin, or null si invalide. On ne garde jamais le chemin : un
+// utilisateur colle souvent l'URL de la page où il se trouve
+// (.../lightning/page/home) et les appels API concatènent /services/data
+// dessus. lightning.force.com est l'hôte de l'UI, pas de l'API — on le
+// convertit vers my.salesforce.com (même sous-domaine).
+function normalizeSalesforceUrl(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' &&
-      /^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com|force\.com|visual\.force\.com)$/.test(parsed.hostname);
-  } catch { return false; }
+    if (parsed.protocol !== 'https:') return null;
+    let host = parsed.hostname;
+    if (!/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com|force\.com|visual\.force\.com)$/.test(host)) {
+      return null;
+    }
+    host = host.replace(/\.lightning\.force\.com$/, '.my.salesforce.com');
+    return `https://${host}`;
+  } catch { return null; }
 }
 
 // POST /api/crm/salesforce/manual-connect — Store a manually provided Salesforce access token
@@ -2164,15 +2185,16 @@ router.post('/salesforce/manual-connect', async (req, res, next) => {
     if (!accessToken || !instanceUrl) {
       return res.status(400).json({ error: 'accessToken and instanceUrl are required' });
     }
-    if (!isValidSalesforceUrl(instanceUrl)) {
+    const normalizedUrl = normalizeSalesforceUrl(instanceUrl);
+    if (!normalizedUrl) {
       return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL (e.g. https://mycompany.my.salesforce.com)' });
     }
 
     const encryptedAccess = encrypt(accessToken);
     await db.userIntegrations.upsert(req.user.id, 'salesforce', {
       accessToken: encryptedAccess,
-      metadata: { instance_url: instanceUrl, oauth: false },
-      instanceUrl,
+      metadata: { instance_url: normalizedUrl, oauth: false },
+      instanceUrl: normalizedUrl,
     });
 
     // Auto-set as active CRM if none is set
@@ -2183,8 +2205,8 @@ router.post('/salesforce/manual-connect', async (req, res, next) => {
 
     // Test the connection
     try {
-      await salesforce.listContacts(instanceUrl, accessToken);
-      logger.info('salesforce-manual', `Salesforce connected for user ${req.user.id}: ${instanceUrl}`);
+      await salesforce.listContacts(normalizedUrl, accessToken);
+      logger.info('salesforce-manual', `Salesforce connected for user ${req.user.id}: ${normalizedUrl}`);
       res.json({ ok: true, status: 'connected' });
     } catch (testErr) {
       logger.warn('salesforce-manual', `Connection test failed: ${testErr.message}`);
@@ -2198,7 +2220,8 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
   try {
     const { instanceUrl } = req.body;
     if (!instanceUrl) return res.status(400).json({ error: 'instanceUrl is required' });
-    if (!isValidSalesforceUrl(instanceUrl)) {
+    const normalizedUrl = normalizeSalesforceUrl(instanceUrl);
+    if (!normalizedUrl) {
       return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL' });
     }
 
@@ -2213,10 +2236,10 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
 
     await db.query(
       `UPDATE user_integrations SET instance_url = $1, updated_at = NOW() WHERE user_id = $2 AND provider = 'salesforce'`,
-      [instanceUrl.replace(/\/$/, ''), req.user.id]
+      [normalizedUrl, req.user.id]
     );
 
-    logger.info('salesforce', `Instance URL updated for user ${req.user.id}: ${instanceUrl}`);
+    logger.info('salesforce', `Instance URL updated for user ${req.user.id}: ${normalizedUrl}`);
     res.json({ ok: true, status: 'updated' });
   } catch (err) { next(err); }
 });

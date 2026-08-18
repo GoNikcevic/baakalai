@@ -195,14 +195,16 @@ const CRM_GUIDES = {
   },
   salesforce: {
     guideFr: [
-      'Connectez-vous sur votre instance Salesforce',
-      'Allez dans Setup \u2192 Apps \u2192 Connected Apps',
-      'Cr\u00E9ez une connected app et copiez le consumer key',
+      'Dans Salesforce : Configuration \u2192 App Manager \u2192 New Connected App',
+      'Activez OAuth avec les scopes \u00AB api \u00BB et \u00AB refresh_token \u00BB',
+      'URL de rappel : https://app.baakal.ai/api/crm/salesforce/callback',
+      'Collez ci-dessous l\u2019URL de votre instance, la Consumer Key et le Secret',
     ],
     guideEn: [
-      'Sign in to your Salesforce instance',
-      'Go to Setup \u2192 Apps \u2192 Connected Apps',
-      'Create a connected app and copy the consumer key',
+      'In Salesforce: Setup \u2192 App Manager \u2192 New Connected App',
+      'Enable OAuth with the \u201Capi\u201D and \u201Crefresh_token\u201D scopes',
+      'Callback URL: https://app.baakal.ai/api/crm/salesforce/callback',
+      'Paste your instance URL, Consumer Key and Secret below',
     ],
     link: null,
   },
@@ -314,6 +316,11 @@ export default function OnboardingWizard({ onComplete }) {
   const [oauthUnavailable, setOauthUnavailable] = useState(false);
   const [showKeyField, setShowKeyField] = useState(false);
   const [keySaveStatus, setKeySaveStatus] = useState(null); // 'saved' | 'error' | null
+  // Salesforce : pas de clé API — Connected App du client (3 champs) puis OAuth.
+  const [sfInstanceUrl, setSfInstanceUrl] = useState('');
+  const [sfConsumerKey, setSfConsumerKey] = useState('');
+  const [sfConsumerSecret, setSfConsumerSecret] = useState('');
+  const [sfBusy, setSfBusy] = useState(false);
 
   // Step 3 — Target
   const [targetSectors, setTargetSectors] = useState('');
@@ -426,6 +433,38 @@ export default function OnboardingWizard({ onComplete }) {
       localStorage.removeItem('bakal_wizard_draft');
       setOauthUnavailable(true);
       setShowKeyField(true);
+    }
+  }
+
+  /* ─── OAuth Salesforce (Connected App du client) ─── */
+
+  async function handleConnectSalesforce() {
+    setSfBusy(true);
+    setCrmKeyError(null);
+    try {
+      localStorage.setItem('bakal_wizard_draft', JSON.stringify({
+        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
+      }));
+      await request('/crm/salesforce/manual-connect', {
+        method: 'POST',
+        body: JSON.stringify({
+          consumerKey: sfConsumerKey.trim(),
+          consumerSecret: sfConsumerSecret.trim(),
+          instanceUrl: sfInstanceUrl.trim(),
+        }),
+      });
+      const res = await request('/crm/salesforce/connect?from=wizard');
+      if (res.url) {
+        trackEvent('crm_oauth_started', { provider: 'salesforce' });
+        window.location.href = res.url;
+        return;
+      }
+      throw new Error('no url');
+    } catch {
+      localStorage.removeItem('bakal_wizard_draft');
+      setCrmKeyError(t('wizard.oauthFailed'));
+      setSfBusy(false);
     }
   }
 
@@ -792,6 +831,64 @@ export default function OnboardingWizard({ onComplete }) {
                         }}>
                           {'✅'} {t('wizard.oauthConnected').replace('{provider}', crmLabel)}
                         </div>
+                      );
+                    }
+
+                    // Salesforce ne se connecte pas par clé API : Connected App
+                    // du client (URL + Consumer Key + Secret) puis OAuth.
+                    if (crmProvider === 'salesforce') {
+                      const sfReady = sfInstanceUrl.trim().startsWith('https://')
+                        && sfConsumerKey.trim().length > 5
+                        && sfConsumerSecret.trim().length > 5;
+                      return (
+                        <>
+                          <div style={{
+                            fontSize: 12, background: 'var(--paper-2)', borderRadius: 8,
+                            padding: '10px 12px', marginBottom: 8, lineHeight: 1.6,
+                          }}>
+                            <ol style={{ margin: 0, paddingLeft: 16, color: 'var(--grey-700)' }}>
+                              {guide.map((s, i) => <li key={i}>{s}</li>)}
+                            </ol>
+                          </div>
+                          <input
+                            className="form-input"
+                            type="text"
+                            placeholder={t('wizard.sfInstanceUrlPlaceholder')}
+                            value={sfInstanceUrl}
+                            onChange={e => { setSfInstanceUrl(e.target.value); setCrmKeyError(null); }}
+                            style={{ marginBottom: 8 }}
+                          />
+                          <input
+                            className="form-input"
+                            type="password"
+                            placeholder="Consumer Key"
+                            value={sfConsumerKey}
+                            onChange={e => { setSfConsumerKey(e.target.value); setCrmKeyError(null); }}
+                            style={{ marginBottom: 8 }}
+                          />
+                          <input
+                            className="form-input"
+                            type="password"
+                            placeholder="Consumer Secret"
+                            value={sfConsumerSecret}
+                            onChange={e => { setSfConsumerSecret(e.target.value); setCrmKeyError(null); }}
+                            style={{ marginBottom: 8 }}
+                          />
+                          {crmKeyError && (
+                            <div style={{ fontSize: 12, color: 'var(--danger, #B42318)', marginBottom: 8 }}>
+                              {crmKeyError}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={handleConnectSalesforce}
+                            disabled={!sfReady || sfBusy}
+                            style={{ width: '100%' }}
+                          >
+                            {sfBusy ? t('wizard.sfConnecting') : t('wizard.sfConnect')}
+                          </button>
+                        </>
                       );
                     }
 
