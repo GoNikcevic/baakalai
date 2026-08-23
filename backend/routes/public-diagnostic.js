@@ -43,6 +43,18 @@ function computeReport(deals) {
     .slice(0, 3)
     .map(d => ({ name: d.name, company: d.company, dealValue: d.value, daysInactive: d.daysInactive }));
 
+  // Score de santé CRM /100 — « l'audit qu'un RevOps ferait » : complétude
+  // des trois champs qui conditionnent l'exploitabilité de la base. Donne de
+  // la valeur même aux CRM jeunes, là où le volet réactivation est maigre.
+  const n = deals.length;
+  const pct = (count) => (n > 0 ? Math.round((count / n) * 100) : 0);
+  const pctValue = pct(deals.filter(d => d.value > 0).length);
+  const pctActivity = pct(deals.filter(d => d.lastActivity).length);
+  const pctCompany = pct(deals.filter(d => d.company && String(d.company).trim()).length);
+  const healthScore = n > 0
+    ? Math.round(0.40 * pctValue + 0.35 * pctActivity + 0.25 * pctCompany)
+    : null;
+
   return {
     totalDeals: deals.length,
     openDeals: open.length,
@@ -56,6 +68,12 @@ function computeReport(deals) {
     },
     dataGaps: {
       missingValue: deals.filter(d => !(d.value > 0)).length,
+    },
+    health: healthScore == null ? null : {
+      score: healthScore,
+      pctValue,
+      pctActivity,
+      pctCompany,
     },
     benchmark: BENCHMARK,
     projection: { rate: REACTIVATION_RATE, value: Math.round(dormantValue * REACTIVATION_RATE) },

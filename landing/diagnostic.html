@@ -116,6 +116,11 @@
           benchTitle: 'Où vous situez-vous ?',
           benchMarket: 'PME moyenne : {low}-{high} % du pipeline sans activité',
           benchYou: 'Vous : {pct} %',
+          healthTitle: 'Santé de votre CRM',
+          healthValue: 'Montants renseignés',
+          healthActivity: 'Activité tracée',
+          healthCompany: 'Sociétés renseignées',
+          healthRevops: 'C’est l’audit qu’un RevOps ferait. Vous n’en avez pas ? baakalai fait ce travail 24/7, en continu — c’est le carburant de la relance.',
           topTitle: 'Les deals à relancer en premier :', topAnon: 'Deal',
           daysInactive: '{days} j sans activité',
           projTitle: 'Et si vous en récupériez ne serait-ce que 10 % ?',
@@ -159,6 +164,11 @@
           benchTitle: 'Where do you stand?',
           benchMarket: 'Average SMB: {low}-{high}% of pipeline dormant',
           benchYou: 'You: {pct}%',
+          healthTitle: 'Your CRM health',
+          healthValue: 'Amounts filled in',
+          healthActivity: 'Activity tracked',
+          healthCompany: 'Companies filled in',
+          healthRevops: 'This is the audit a RevOps would run. Don’t have one? baakalai does that job 24/7, continuously — it fuels the follow-ups.',
           topTitle: 'The deals to wake up first:', topAnon: 'Deal',
           daysInactive: '{days} days inactive',
           projTitle: 'What if you reactivated just 10% of them?',
@@ -265,6 +275,33 @@
           '</div></div>';
       }
 
+      function healthColor(score) {
+        return score >= 70 ? '#16A34A' : score >= 40 ? '#D97706' : '#DC2626';
+      }
+
+      function healthHtml(r) {
+        var h = r.health;
+        if (!h) return '';
+        function bar(label, pct) {
+          return '<div style="margin-top:10px;">' +
+            '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">' +
+              '<span>' + esc(label) + '</span><span style="font-weight:600;">' + pct + ' %</span></div>' +
+            '<div style="height:8px;background:var(--paper-2);border-radius:4px;">' +
+              '<div style="height:8px;width:' + Math.min(pct, 100) + '%;border-radius:4px;background:' + healthColor(pct) + ';"></div>' +
+            '</div></div>';
+        }
+        return '<div class="diag-card">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
+            '<div style="font-weight:600;">' + esc(t('healthTitle')) + '</div>' +
+            '<div style="font-size:26px;font-weight:800;color:' + healthColor(h.score) + ';">' + h.score + '<span style="font-size:14px;color:var(--grey-500);font-weight:400;">/100</span></div>' +
+          '</div>' +
+          bar(t('healthValue'), h.pctValue) +
+          bar(t('healthActivity'), h.pctActivity) +
+          bar(t('healthCompany'), h.pctCompany) +
+          '<div class="diag-note" style="margin-top:14px;">' + esc(t('healthRevops')) + '</div>' +
+        '</div>';
+      }
+
       function renderReport(shared) {
         renderHead();
         var r = state.report;
@@ -287,6 +324,7 @@
         '</div>';
 
         html += gaugeHtml(r);
+        html += healthHtml(r);
 
         if (r.dormant.top && r.dormant.top.length) {
           html += '<div class="diag-card"><div style="font-weight:600;margin-bottom:10px;">' + esc(t('topTitle')) + '</div>' +
@@ -347,6 +385,7 @@
           '<text x="80" y="260" font-family="Arial, sans-serif" font-size="84" font-weight="bold" fill="#1a1a1a">' + escXml(head) + '</text>' +
           '<text x="80" y="340" font-family="Arial, sans-serif" font-size="40" fill="#444">' + escXml(sub) + '</text>' +
           (noVal ? '<text x="80" y="410" font-family="Arial, sans-serif" font-size="32" fill="#DC2626">' + escXml(noVal) + '</text>' : '') +
+          (r.health ? '<text x="80" y="475" font-family="Arial, sans-serif" font-size="32" fill="#666">' + escXml(t('healthTitle') + ' : ' + r.health.score + '/100') + '</text>' : '') +
           '<text x="80" y="540" font-family="Arial, sans-serif" font-size="30" fill="#6E57FA" font-weight="bold">baakal.ai/diagnostic</text>' +
         '</svg>';
         var img = new Image();
