@@ -55,7 +55,11 @@ function renderReadingSummary(s, t) {
             {t('wizard.readDormant')
               .replace('{count}', s.dormant.count)
               .replace('{value}', moneyEUR(s.dormant.value))}
+            {s.dormant.sharePct != null && s.dormant.sharePct > 0 && (
+              <> {t('wizard.readDormantShare').replace('{pct}', s.dormant.sharePct)}</>
+            )}
           </div>
+          <div style={{ marginTop: 4 }}>{t('wizard.readTopIntro')}</div>
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {s.dormant.top.map(d => (
               <li key={d.id}>
@@ -69,6 +73,11 @@ function renderReadingSummary(s, t) {
         </>
       ) : (
         <div style={{ marginTop: 6 }}>{t('wizard.readNoDormant')}</div>
+      )}
+      {s.dormant.noValueCount > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {t('wizard.readDormantNoValue').replace('{count}', s.dormant.noValueCount)}
+        </div>
       )}
       {s.dataGaps.missingValue > 0 && (
         <div style={{ marginTop: 8, color: 'var(--grey-500)', fontSize: 12 }}>

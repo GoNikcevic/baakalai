@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
-import api, { request } from '../services/api-client';
+import api, { request, trackEvent } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 import Confetti from '../components/Confetti';
 import OnboardingChecklist from '../components/OnboardingChecklist';
@@ -1700,13 +1700,24 @@ function CrmReadingSummary({ onSuggestionClick }) {
         {summary.dormant.count > 0 && (
           <> {t('chat.readDormant').replace('{count}', summary.dormant.count)}</>
         )}
+        {summary.dormant.noValueCount > 0 && (
+          <> {t('chat.readDormantNoValue').replace('{count}', summary.dormant.noValueCount)}</>
+        )}
       </div>
+      {summary.dormant.top.length > 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
+          {t('chat.readStartWith')}
+        </div>
+      )}
       {summary.dormant.top.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
           {summary.dormant.top.map(d => (
             <button
               key={d.id}
-              onClick={() => onSuggestionClick(revivePrompt(d))}
+              onClick={() => {
+                trackEvent('reading_summary_revive_click', { daysInactive: d.daysInactive });
+                onSuggestionClick(revivePrompt(d));
+              }}
               style={{
                 background: 'var(--paper-2)', border: '1px solid var(--border)',
                 borderRadius: 8, padding: '8px 12px', textAlign: 'left',

@@ -2446,6 +2446,8 @@ router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
 // du chat : « voilà ce que j'ai lu, voilà ce qui dort, voilà ce qui manque ».
 // Pur SQL sur opportunities — aucune dépendance à l'analyse IA, donc
 // disponible dans la seconde qui suit l'import.
+// Seuil de dormance : 30 jours — le standard défendable du marché (14 j
+// classait « dormant » presque tout CRM à cycle long et diluait le chiffre).
 router.get('/reading-summary', async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -2461,41 +2463,62 @@ router.get('/reading-summary', async (req, res, next) => {
           COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0) as open_value,
           COUNT(*) FILTER (
             WHERE status NOT IN ('won', 'lost')
-              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
               AND deal_value IS NOT NULL AND deal_value > 0
           ) as dormant_count,
           COALESCE(SUM(deal_value) FILTER (
             WHERE status NOT IN ('won', 'lost')
-              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
               AND deal_value IS NOT NULL AND deal_value > 0
           ), 0) as dormant_value,
+          COUNT(*) FILTER (
+            WHERE status NOT IN ('won', 'lost')
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+              AND (deal_value IS NULL OR deal_value = 0)
+          ) as dormant_no_value,
           COUNT(*) FILTER (WHERE deal_value IS NULL OR deal_value = 0) as missing_value,
           COUNT(*) FILTER (WHERE last_activity_at IS NULL) as missing_activity,
           COUNT(*) FILTER (WHERE company IS NULL OR company = '') as missing_company
         FROM opportunities
         WHERE user_id = $1
       `, [userId]),
+      // Top 3 par valeur × ancienneté : un deal moyen oublié depuis 200 jours
+      // mérite de passer devant un gros deal calme depuis 31 jours.
       db.query(`
         SELECT id, name, company, deal_value,
                GREATEST(0, EXTRACT(DAY FROM NOW() - COALESCE(last_activity_at, created_at)))::int as days_inactive
         FROM opportunities
         WHERE user_id = $1 AND status NOT IN ('won', 'lost')
-          AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+          AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
           AND deal_value IS NOT NULL AND deal_value > 0
-        ORDER BY deal_value DESC
+        ORDER BY deal_value * GREATEST(1, EXTRACT(DAY FROM NOW() - COALESCE(last_activity_at, created_at))) DESC
         LIMIT 3
       `, [userId]),
     ]);
 
     const row = totals.rows[0];
+    const openValue = parseFloat(row.open_value) || 0;
+    const dormantValue = parseFloat(row.dormant_value) || 0;
+
+    const { track } = require('../lib/track');
+    track(userId, 'reading_summary_viewed', {
+      dormant: parseInt(row.dormant_count),
+      dormantNoValue: parseInt(row.dormant_no_value),
+      openDeals: parseInt(row.open_deals),
+    });
+
     res.json({
       totalDeals: parseInt(row.total_deals),
       totalValue: parseFloat(row.total_value) || 0,
       openDeals: parseInt(row.open_deals),
-      openValue: parseFloat(row.open_value) || 0,
+      openValue,
       dormant: {
         count: parseInt(row.dormant_count),
-        value: parseFloat(row.dormant_value) || 0,
+        value: dormantValue,
+        // Les deals dormants SANS montant : invisibles avant — or c'est le cas
+        // type du CRM de PME mal renseigné, le manque devient l'accroche.
+        noValueCount: parseInt(row.dormant_no_value),
+        sharePct: openValue > 0 ? Math.round((dormantValue / openValue) * 100) : null,
         top: topDormant.rows.map(d => ({
           id: d.id,
           name: d.name,
