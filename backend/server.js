@@ -145,6 +145,9 @@ app.use('/api/auth', authRouter);
 // Webhooks (public — validated via shared secret, not JWT)
 app.use('/api/webhooks', require('./routes/webhooks'));
 
+// Diagnostic CRM public (lead magnet, sans compte — rate-limité par IP dans la route)
+app.use('/api/public/diagnostic', require('./routes/public-diagnostic'));
+
 // OAuth email callbacks (public — user returns from Google/Microsoft redirect, no auth needed)
 const { gmailCallback, microsoftCallback } = require('./routes/nurture');
 app.get('/api/nurture/email-accounts/callback/gmail', gmailCallback);

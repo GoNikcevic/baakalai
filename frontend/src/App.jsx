@@ -38,9 +38,10 @@ const AnalyticsPage = lazyRetry(() => import('./pages/AnalyticsPage'))
 const SettingsWrapper = lazyRetry(() => import('./pages/SettingsWrapper'))
 const JoinTeamPage = lazyRetry(() => import('./pages/JoinTeamPage'))
 const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
+const DiagnosticPage = lazyRetry(() => import('./pages/DiagnosticPage'))
 
 // Public routes accessible without authentication
-const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy']
+const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy', '/diagnostic']
 
 export default function App() {
   const { initData } = useApp()
@@ -133,6 +134,8 @@ export default function App() {
         <Routes>
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal" element={<LegalPage />} />
+          <Route path="/diagnostic" element={<DiagnosticPage />} />
+          <Route path="/diagnostic/r/:id" element={<DiagnosticPage />} />
           <Route path="/terms" element={<Navigate to="/legal" replace />} />
           <Route path="/privacy" element={<Navigate to="/legal#privacy" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

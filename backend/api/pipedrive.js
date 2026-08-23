@@ -212,6 +212,32 @@ async function updateDeal(apiToken, dealId, data) {
   });
 }
 
+// Diagnostic public : liste paginée avec les champs d'activité — getDeals()
+// ne remonte ni last_activity_date ni org_name et ne pagine pas.
+async function listDealsForDiagnostic(apiToken, { maxDeals = 2000 } = {}) {
+  const deals = [];
+  let start = 0;
+  while (deals.length < maxDeals) {
+    const page = await pdFetch(apiToken, `/deals?limit=500&start=${start}`);
+    if (!page || page.length === 0) break;
+    for (const d of page) {
+      if (d.status === 'deleted') continue;
+      deals.push({
+        name: d.title,
+        company: d.org_name || d.org_id?.name || null,
+        value: parseFloat(d.value) || 0,
+        currency: d.currency || 'EUR',
+        status: d.status, // open | won | lost
+        addTime: d.add_time,
+        lastActivity: d.last_activity_date || null,
+      });
+    }
+    if (page.length < 500) break;
+    start += 500;
+  }
+  return deals;
+}
+
 async function getDeals(apiToken, limit = 100) {
   const deals = await pdFetch(apiToken, `/deals?limit=${limit}&sort=add_time DESC`);
   return (deals || []).map(d => ({
@@ -279,6 +305,7 @@ module.exports = {
   createDeal,
   updateDeal,
   getDeals,
+  listDealsForDiagnostic,
   createNote,
   getUsers,
   mapOpportunityToPerson,
