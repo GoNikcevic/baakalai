@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Diagnostic CRM gratuit — combien dort dans votre pipeline ? | baakalai</title>
-  <meta name="description" content="Connectez votre Pipedrive en lecture seule : en 30 secondes, découvrez combien de deals dorment dans votre CRM et ce qu'ils valent. Gratuit, sans compte.">
-  <meta property="og:title" content="Diagnostic CRM gratuit — combien dort dans votre pipeline ?">
-  <meta property="og:description" content="20 à 40 % des pipelines de PME dorment. Et le vôtre ? Diagnostic gratuit en 30 secondes, sans compte.">
+  <title>Diagnostic CRM gratuit — combien de CA attend une relance dans votre pipeline ? | baakalai</title>
+  <meta name="description" content="Connectez votre Pipedrive en lecture seule : en 30 secondes, découvrez combien de deals attendent une relance dans votre CRM et ce qu'ils valent. Gratuit, sans compte.">
+  <meta property="og:title" content="Diagnostic CRM gratuit — combien de CA attend une relance dans votre pipeline ?">
+  <meta property="og:description" content="20 à 40 % des deals d'une PME restent sans relance. Et les vôtres ? Diagnostic gratuit en 30 secondes, sans compte.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://baakal.ai/diagnostic">
   <link rel="icon" href="assets/favicon.svg">
@@ -93,9 +93,11 @@
       var T = {
         fr: {
           navCta: 'Rejoindre la beta',
-          title: 'Combien dort dans votre CRM ?',
-          subtitle: 'Connectez votre Pipedrive en lecture seule — diagnostic gratuit en 30 secondes, sans compte.',
+          title: 'Combien de CA attend une relance dans votre CRM ?',
+          subtitle: 'Connectez votre Pipedrive en lecture seule — le chiffre en 30 secondes, sans compte.',
           pipedrive: 'Pipedrive', hubspotSoon: 'HubSpot (bientôt)',
+          otherCrm: 'Sur HubSpot, Salesforce, Odoo, Notion, Airtable ou Folk ? Le même diagnostic vous attend dans l’app dès que votre CRM est connecté.',
+          otherCrmCta: 'Créer mon compte →',
           tokenLabel: 'Votre clé API Pipedrive (lecture seule)',
           tokenPlaceholder: 'Collez votre clé API ici',
           guideTitle: 'Où trouver ma clé API ?',
@@ -106,17 +108,17 @@
           errRate: 'Trop de diagnostics depuis cette adresse — réessayez dans quelques minutes.',
           errGeneric: 'Une erreur est survenue. Réessayez.',
           emptyTitle: 'Votre CRM ne contient aucun deal.',
-          emptyBody: "Le diagnostic a besoin d'un historique de deals pour trouver ce qui dort.",
+          emptyBody: "Le diagnostic a besoin d'un historique de deals pour trouver ce qui attend une relance.",
           openLine: '{deals} deals ouverts — {value} de pipeline',
-          dormantHeadline: 'dorment sans activité depuis plus de {days} jours.',
+          dormantHeadline: 'restés sans activité depuis plus de {days} jours.',
           dormantShare: 'Soit {pct} % de la valeur de votre pipeline ouvert.',
-          noValueHook: '+ {count} deals dormants sans montant renseigné — impossible de savoir ce qu’ils valent.',
+          noValueHook: '+ {count} deals inactifs sans montant renseigné — impossible de savoir ce qu’ils valent.',
           benchTitle: 'Où vous situez-vous ?',
-          benchMarket: 'PME moyenne : {low}-{high} % du pipeline dormant',
+          benchMarket: 'PME moyenne : {low}-{high} % du pipeline sans activité',
           benchYou: 'Vous : {pct} %',
-          topTitle: 'Les deals à réveiller en premier :', topAnon: 'Deal',
+          topTitle: 'Les deals à relancer en premier :', topAnon: 'Deal',
           daysInactive: '{days} j sans activité',
-          projTitle: 'Et si vous en réactiviez ne serait-ce que 10 % ?',
+          projTitle: 'Et si vous en récupériez ne serait-ce que 10 % ?',
           projValue: '{value} récupérables',
           projNote: 'Taux de réactivation prudent constaté sur les pipelines B2B.',
           cta: 'baakalai peut les relancer pour vous — Rejoindre la beta',
@@ -127,16 +129,18 @@
           runYours: 'Faire le diagnostic de mon CRM',
           notFound: 'Ce diagnostic a expiré ou n’existe pas.',
           imgTagline: 'Diagnostic CRM gratuit',
-          imgHeadPct: '{pct} % de mon pipeline dort',
-          imgHeadCount: '{count} deals dorment dans mon CRM',
+          imgHeadPct: '{pct} % de mon pipeline attend une relance',
+          imgHeadCount: '{count} deals attendent une relance dans mon CRM',
           imgSub: '{value} sans activité depuis plus de {days} jours',
-          imgNoValue: '+ {count} deals dormants sans montant renseigné',
+          imgNoValue: '+ {count} deals inactifs sans montant renseigné',
         },
         en: {
           navCta: 'Join the beta',
           title: 'How much is sleeping in your CRM?',
           subtitle: 'Connect your Pipedrive read-only — free diagnostic in 30 seconds, no account needed.',
           pipedrive: 'Pipedrive', hubspotSoon: 'HubSpot (soon)',
+          otherCrm: 'On HubSpot, Salesforce, Odoo, Notion, Airtable or Folk? The same diagnostic is waiting in the app once your CRM is connected.',
+          otherCrmCta: 'Create my account →',
           tokenLabel: 'Your Pipedrive API key (read-only)',
           tokenPlaceholder: 'Paste your API key here',
           guideTitle: 'Where do I find my API key?',
@@ -208,6 +212,8 @@
         body.innerHTML =
           '<form class="diag-card" id="diagForm">' +
             '<div class="diag-provider"><span class="on">' + esc(t('pipedrive')) + '</span><span class="off">' + esc(t('hubspotSoon')) + '</span></div>' +
+            '<div class="diag-note" style="margin:-4px 0 14px;">' + esc(t('otherCrm')) +
+              ' <a href="https://app.baakal.ai/?ref=diagnostic" style="color:var(--primary);font-weight:600;text-decoration:none;">' + esc(t('otherCrmCta')) + '</a></div>' +
             '<label class="diag-label" for="diagToken">' + esc(t('tokenLabel')) + '</label>' +
             '<input class="diag-input" id="diagToken" type="password" placeholder="' + esc(t('tokenPlaceholder')) + '" autocomplete="off">' +
             '<details class="diag-guide"><summary>' + esc(t('guideTitle')) + '</summary><ol>' +
