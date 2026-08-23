@@ -13,7 +13,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="site.css">
   <style>
-    .diag-wrap { max-width: 660px; margin: 0 auto; padding: 48px 20px 80px; }
+    /* La nav est fixe (pilule flottante, top:16px) : le contenu doit démarrer
+       nettement en dessous pour ne pas passer dessous. */
+    .diag-wrap { max-width: 660px; margin: 0 auto; padding: 150px 20px 80px; }
+    @media (max-width: 720px) { .diag-wrap { padding-top: 120px; } }
     .diag-card {
       background: var(--paper); border: 1px solid var(--border); border-radius: 14px;
       padding: 24px 26px; margin-bottom: 16px;
