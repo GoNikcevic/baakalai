@@ -5,7 +5,7 @@
 
 const I18N = {
   fr: {
-    nav: { how: "Comment ça marche", features: "Ce que fait l'agent", pricing: "Pricing", faq: "FAQ", blog: "Blog", book: "Rejoindre la beta", signin: "Se connecter" },
+    nav: { how: "Comment ça marche", features: "Ce que fait l'agent", pricing: "Pricing", faq: "FAQ", blog: "Blog", diag: "Diagnostic gratuit", book: "Rejoindre la beta", signin: "Se connecter" },
     hero: {
       eyebrow: "",
       title_a: "Ton CRM sait déjà qui relancer. ",
@@ -139,7 +139,7 @@ const I18N = {
     },
   },
   en: {
-    nav: { how: "How it works", features: "What the agent does", pricing: "Pricing", faq: "FAQ", blog: "Blog", book: "Join the beta", signin: "Sign in" },
+    nav: { how: "How it works", features: "What the agent does", pricing: "Pricing", faq: "FAQ", blog: "Blog", diag: "Free diagnostic", book: "Join the beta", signin: "Sign in" },
     hero: {
       eyebrow: "",
       title_a: "Your CRM already knows who to call back. ",

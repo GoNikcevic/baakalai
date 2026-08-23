@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diagnostic CRM gratuit — combien dort dans votre pipeline ? | baakalai</title>
+  <meta name="description" content="Connectez votre Pipedrive en lecture seule : en 30 secondes, découvrez combien de deals dorment dans votre CRM et ce qu'ils valent. Gratuit, sans compte.">
+  <meta property="og:title" content="Diagnostic CRM gratuit — combien dort dans votre pipeline ?">
+  <meta property="og:description" content="20 à 40 % des pipelines de PME dorment. Et le vôtre ? Diagnostic gratuit en 30 secondes, sans compte.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://baakal.ai/diagnostic">
+  <link rel="icon" href="assets/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="site.css">
+  <style>
+    .diag-wrap { max-width: 660px; margin: 0 auto; padding: 48px 20px 80px; }
+    .diag-card {
+      background: var(--paper); border: 1px solid var(--border); border-radius: 14px;
+      padding: 24px 26px; margin-bottom: 16px;
+    }
+    .diag-head { text-align: center; margin-bottom: 30px; }
+    .diag-head h1 { font-size: clamp(26px, 4vw, 34px); margin: 0 0 10px; }
+    .diag-head p { color: var(--grey-500); font-size: 15px; margin: 0; }
+    .diag-input {
+      width: 100%; padding: 11px 13px; border-radius: 9px; font-size: 14px;
+      border: 1px solid var(--border-strong); box-sizing: border-box;
+      font-family: var(--font-mono); background: #fff;
+    }
+    .diag-input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+    .diag-label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
+    .diag-note { font-size: 11.5px; color: var(--grey-500); line-height: 1.55; margin-top: 12px; }
+    .diag-err { color: #DC2626; font-size: 13px; margin-top: 10px; }
+    .diag-big { font-size: 46px; font-weight: 800; color: #DC2626; margin: 10px 0 4px; letter-spacing: -0.02em; }
+    .diag-provider { display: inline-flex; gap: 8px; margin-bottom: 16px; }
+    .diag-provider span { padding: 6px 14px; border-radius: 8px; font-size: 13px; }
+    .diag-provider .on { background: var(--primary); color: #fff; font-weight: 600; }
+    .diag-provider .off { background: var(--paper-2); color: var(--grey-400); }
+    .diag-gauge { position: relative; height: 14px; background: var(--paper-2); border-radius: 7px; }
+    .diag-gauge .band { position: absolute; top: 0; bottom: 0; background: rgba(34,197,94,.25); border-radius: 7px; }
+    .diag-gauge .you {
+      position: absolute; top: -3px; width: 14px; height: 20px; border-radius: 4px;
+      border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    }
+    .diag-top-row {
+      display: flex; justify-content: space-between; gap: 10px; padding: 9px 0;
+      font-size: 14px; border-top: 1px solid var(--paper-3);
+    }
+    .diag-top-row:first-of-type { border-top: none; }
+    .diag-share { display: flex; gap: 8px; flex-wrap: wrap; }
+    .diag-cta-card { border: 1px solid var(--primary); text-align: center; }
+    .diag-proj { font-size: 30px; font-weight: 800; color: var(--primary); margin: 8px 0; }
+    .diag-center { text-align: center; }
+    .diag-muted { color: var(--grey-500); font-size: 13px; }
+    details.diag-guide { margin-top: 10px; font-size: 13px; color: var(--grey-500); }
+    details.diag-guide summary { cursor: pointer; }
+    details.diag-guide ol { margin: 8px 0 0; padding-left: 18px; }
+    .diag-spin { text-align: center; padding: 48px 24px; color: var(--grey-500); }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/favicon.svg" width="22" height="22" alt="">
+      <span>baakalai</span>
+    </a>
+    <div class="links"></div>
+    <div class="lang-toggle">
+      <button data-lang="fr" class="active">FR</button>
+      <button data-lang="en">EN</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <a href="https://app.baakal.ai/?ref=diagnostic" class="btn btn-primary" style="padding:9px 16px;font-size:13px;" id="navCta">Rejoindre la beta</a>
+    </div>
+  </nav>
+
+  <main class="diag-wrap">
+    <div class="diag-head">
+      <h1 id="diagTitle"></h1>
+      <p id="diagSub"></p>
+    </div>
+    <div id="diagBody"></div>
+  </main>
+
+  <script>
+    (function () {
+      var API = 'https://app.baakal.ai';
+      var STORE_KEY = 'baakalai-lang';
+      var lang = localStorage.getItem(STORE_KEY) || 'fr';
+
+      var T = {
+        fr: {
+          navCta: 'Rejoindre la beta',
+          title: 'Combien dort dans votre CRM ?',
+          subtitle: 'Connectez votre Pipedrive en lecture seule — diagnostic gratuit en 30 secondes, sans compte.',
+          pipedrive: 'Pipedrive', hubspotSoon: 'HubSpot (bientôt)',
+          tokenLabel: 'Votre clé API Pipedrive (lecture seule)',
+          tokenPlaceholder: 'Collez votre clé API ici',
+          guideTitle: 'Où trouver ma clé API ?',
+          guide: ['Connectez-vous sur app.pipedrive.com', 'Cliquez sur votre avatar → Paramètres personnels → API', 'Copiez la clé affichée et collez-la ci-dessus'],
+          gdpr: "Votre clé n'est jamais stockée : elle sert à une seule lecture de vos deals. Seuls les chiffres agrégés du rapport sont conservés, et supprimés automatiquement après 30 jours.",
+          scanBtn: 'Lire mon CRM', scanning: 'Lecture de votre CRM en cours…',
+          errToken: 'Clé invalide ou Pipedrive injoignable — vérifiez la clé et réessayez.',
+          errRate: 'Trop de diagnostics depuis cette adresse — réessayez dans quelques minutes.',
+          errGeneric: 'Une erreur est survenue. Réessayez.',
+          emptyTitle: 'Votre CRM ne contient aucun deal.',
+          emptyBody: "Le diagnostic a besoin d'un historique de deals pour trouver ce qui dort.",
+          openLine: '{deals} deals ouverts — {value} de pipeline',
+          dormantHeadline: 'dorment sans activité depuis plus de {days} jours.',
+          dormantShare: 'Soit {pct} % de la valeur de votre pipeline ouvert.',
+          noValueHook: '+ {count} deals dormants sans montant renseigné — impossible de savoir ce qu’ils valent.',
+          benchTitle: 'Où vous situez-vous ?',
+          benchMarket: 'PME moyenne : {low}-{high} % du pipeline dormant',
+          benchYou: 'Vous : {pct} %',
+          topTitle: 'Les deals à réveiller en premier :', topAnon: 'Deal',
+          daysInactive: '{days} j sans activité',
+          projTitle: 'Et si vous en réactiviez ne serait-ce que 10 % ?',
+          projValue: '{value} récupérables',
+          projNote: 'Taux de réactivation prudent constaté sur les pipelines B2B.',
+          cta: 'baakalai peut les relancer pour vous — Rejoindre la beta',
+          shareTitle: 'Partagez votre diagnostic',
+          copyLink: 'Copier le lien', copied: 'Copié !',
+          shareLinkedin: 'Partager sur LinkedIn', downloadImg: 'Télécharger l’image',
+          sharedBadge: 'Diagnostic partagé — les noms de deals sont masqués.',
+          runYours: 'Faire le diagnostic de mon CRM',
+          notFound: 'Ce diagnostic a expiré ou n’existe pas.',
+          imgTagline: 'Diagnostic CRM gratuit',
+          imgHeadPct: '{pct} % de mon pipeline dort',
+          imgHeadCount: '{count} deals dorment dans mon CRM',
+          imgSub: '{value} sans activité depuis plus de {days} jours',
+          imgNoValue: '+ {count} deals dormants sans montant renseigné',
+        },
+        en: {
+          navCta: 'Join the beta',
+          title: 'How much is sleeping in your CRM?',
+          subtitle: 'Connect your Pipedrive read-only — free diagnostic in 30 seconds, no account needed.',
+          pipedrive: 'Pipedrive', hubspotSoon: 'HubSpot (soon)',
+          tokenLabel: 'Your Pipedrive API key (read-only)',
+          tokenPlaceholder: 'Paste your API key here',
+          guideTitle: 'Where do I find my API key?',
+          guide: ['Sign in at app.pipedrive.com', 'Click your avatar → Personal preferences → API', 'Copy the key shown and paste it above'],
+          gdpr: 'Your key is never stored: it is used for a single read of your deals. Only the report’s aggregated numbers are kept, and automatically deleted after 30 days.',
+          scanBtn: 'Read my CRM', scanning: 'Reading your CRM…',
+          errToken: 'Invalid key or Pipedrive unreachable — check the key and try again.',
+          errRate: 'Too many diagnostics from this address — try again in a few minutes.',
+          errGeneric: 'Something went wrong. Please try again.',
+          emptyTitle: 'Your CRM has no deals.',
+          emptyBody: 'The diagnostic needs deal history to find what is sleeping.',
+          openLine: '{deals} open deals — {value} in pipeline',
+          dormantHeadline: 'sleeping with no activity for {days}+ days.',
+          dormantShare: 'That is {pct}% of your open pipeline value.',
+          noValueHook: '+ {count} dormant deals with no amount set — impossible to know what they are worth.',
+          benchTitle: 'Where do you stand?',
+          benchMarket: 'Average SMB: {low}-{high}% of pipeline dormant',
+          benchYou: 'You: {pct}%',
+          topTitle: 'The deals to wake up first:', topAnon: 'Deal',
+          daysInactive: '{days} days inactive',
+          projTitle: 'What if you reactivated just 10% of them?',
+          projValue: '{value} recoverable',
+          projNote: 'Conservative reactivation rate observed on B2B pipelines.',
+          cta: 'baakalai can follow them up for you — Join the beta',
+          shareTitle: 'Share your diagnostic',
+          copyLink: 'Copy link', copied: 'Copied!',
+          shareLinkedin: 'Share on LinkedIn', downloadImg: 'Download image',
+          sharedBadge: 'Shared diagnostic — deal names are hidden.',
+          runYours: 'Run the diagnostic on my CRM',
+          notFound: 'This diagnostic has expired or does not exist.',
+          imgTagline: 'Free CRM diagnostic',
+          imgHeadPct: '{pct}% of my pipeline is asleep',
+          imgHeadCount: '{count} deals are asleep in my CRM',
+          imgSub: '{value} with no activity for {days}+ days',
+          imgNoValue: '+ {count} dormant deals with no amount set',
+        },
+      };
+
+      function t(key, vars) {
+        var s = (T[lang] || T.fr)[key] || key;
+        if (vars) Object.keys(vars).forEach(function (k) { s = s.split('{' + k + '}').join(vars[k]); });
+        return s;
+      }
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+      function money(n) {
+        if (!n) return '0 €';
+        if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M €';
+        if (n >= 1000) return Math.round(n / 1000) + 'k €';
+        return Math.round(n) + ' €';
+      }
+
+      var body = document.getElementById('diagBody');
+      var state = { report: null, id: null };
+
+      function renderHead() {
+        document.documentElement.lang = lang;
+        document.getElementById('diagTitle').textContent = t('title');
+        document.getElementById('diagSub').textContent = t('subtitle');
+        document.getElementById('navCta').textContent = t('navCta');
+        document.querySelectorAll('.lang-toggle button').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.lang === lang);
+        });
+      }
+
+      function renderForm(err) {
+        renderHead();
+        body.innerHTML =
+          '<form class="diag-card" id="diagForm">' +
+            '<div class="diag-provider"><span class="on">' + esc(t('pipedrive')) + '</span><span class="off">' + esc(t('hubspotSoon')) + '</span></div>' +
+            '<label class="diag-label" for="diagToken">' + esc(t('tokenLabel')) + '</label>' +
+            '<input class="diag-input" id="diagToken" type="password" placeholder="' + esc(t('tokenPlaceholder')) + '" autocomplete="off">' +
+            '<details class="diag-guide"><summary>' + esc(t('guideTitle')) + '</summary><ol>' +
+              (T[lang] || T.fr).guide.map(function (g) { return '<li>' + esc(g) + '</li>'; }).join('') +
+            '</ol></details>' +
+            (err ? '<div class="diag-err">' + esc(err) + '</div>' : '') +
+            '<button type="submit" class="btn btn-accent" style="width:100%;margin-top:14px;padding:12px;font-size:15px;justify-content:center;">' + esc(t('scanBtn')) + '</button>' +
+            '<div class="diag-note">' + esc(t('gdpr')) + '</div>' +
+          '</form>';
+        document.getElementById('diagForm').addEventListener('submit', onScan);
+      }
+
+      function onScan(e) {
+        e.preventDefault();
+        var token = document.getElementById('diagToken').value.trim();
+        if (token.length < 8) return;
+        renderHead();
+        body.innerHTML = '<div class="diag-card diag-spin">' + esc(t('scanning')) + '</div>';
+        fetch(API + '/api/public/diagnostic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'pipedrive', apiToken: token, lang: lang }),
+        }).then(function (res) {
+          if (!res.ok) {
+            return res.json().catch(function () { return {}; }).then(function (b) {
+              renderForm(b.error === 'rate_limited' ? t('errRate') : b.error === 'invalid_token' ? t('errToken') : t('errGeneric'));
+            });
+          }
+          return res.json().then(function (data) {
+            state.report = data.report; state.id = data.id;
+            renderReport(false);
+          });
+        }).catch(function () { renderForm(t('errGeneric')); });
+      }
+
+      function gaugeHtml(r) {
+        var pct = r.dormant.sharePct;
+        if (pct == null) return '';
+        var over = pct > r.benchmark.high;
+        return '<div class="diag-card">' +
+          '<div style="font-weight:600;margin-bottom:12px;">' + esc(t('benchTitle')) + '</div>' +
+          '<div class="diag-gauge">' +
+            '<div class="band" style="left:' + r.benchmark.low + '%;width:' + (r.benchmark.high - r.benchmark.low) + '%;"></div>' +
+            '<div class="you" style="left:calc(' + Math.min(pct, 100) + '% - 7px);background:' + (over ? '#DC2626' : '#22c55e') + ';"></div>' +
+          '</div>' +
+          '<div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;" class="diag-muted">' +
+            '<span>' + esc(t('benchMarket', { low: r.benchmark.low, high: r.benchmark.high })) + '</span>' +
+            '<span style="font-weight:700;color:' + (over ? '#DC2626' : '#22c55e') + ';">' + esc(t('benchYou', { pct: pct })) + '</span>' +
+          '</div></div>';
+      }
+
+      function renderReport(shared) {
+        renderHead();
+        var r = state.report;
+        var html = '';
+        if (shared) html += '<div class="diag-center diag-muted" style="font-size:12px;margin-bottom:12px;">' + esc(t('sharedBadge')) + '</div>';
+
+        if (!r.totalDeals) {
+          html += '<div class="diag-card diag-center"><div style="font-weight:600;margin-bottom:6px;">' + esc(t('emptyTitle')) + '</div>' +
+                  '<div class="diag-muted">' + esc(t('emptyBody')) + '</div></div>';
+          body.innerHTML = html;
+          return;
+        }
+
+        html += '<div class="diag-card diag-center">' +
+          '<div class="diag-muted">' + esc(t('openLine', { deals: r.openDeals, value: money(r.openValue) })) + '</div>' +
+          '<div class="diag-big">' + esc(money(r.dormant.value)) + '</div>' +
+          '<div style="font-size:15px;">' + esc(t('dormantHeadline', { days: r.dormantDays })) +
+            (r.dormant.sharePct ? ' ' + esc(t('dormantShare', { pct: r.dormant.sharePct })) : '') + '</div>' +
+          (r.dormant.noValueCount ? '<div style="margin-top:10px;font-size:13px;color:#DC2626;">' + esc(t('noValueHook', { count: r.dormant.noValueCount })) + '</div>' : '') +
+        '</div>';
+
+        html += gaugeHtml(r);
+
+        if (r.dormant.top && r.dormant.top.length) {
+          html += '<div class="diag-card"><div style="font-weight:600;margin-bottom:10px;">' + esc(t('topTitle')) + '</div>' +
+            r.dormant.top.map(function (d) {
+              return '<div class="diag-top-row">' +
+                '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><strong>' + esc(d.name || t('topAnon')) + '</strong>' + (d.company ? ' · ' + esc(d.company) : '') + '</span>' +
+                '<span style="white-space:nowrap;" class="diag-muted">' + esc(money(d.dealValue)) + ' · ' + esc(t('daysInactive', { days: d.daysInactive })) + '</span>' +
+              '</div>';
+            }).join('') + '</div>';
+        }
+
+        html += '<div class="diag-card diag-cta-card">' +
+          '<div style="font-weight:600;">' + esc(t('projTitle')) + '</div>' +
+          '<div class="diag-proj">' + esc(t('projValue', { value: money(r.projection.value) })) + '</div>' +
+          '<div class="diag-muted" style="font-size:12px;margin-bottom:14px;">' + esc(t('projNote')) + '</div>' +
+          '<a href="https://app.baakal.ai/?ref=diagnostic" class="btn btn-accent" style="padding:12px 22px;font-size:15px;">' + esc(t('cta')) + '</a>' +
+        '</div>';
+
+        if (!shared && state.id) {
+          html += '<div class="diag-card"><div style="font-weight:600;margin-bottom:10px;">' + esc(t('shareTitle')) + '</div>' +
+            '<div class="diag-share">' +
+              '<button class="btn btn-ghost" id="diagCopy" style="font-size:13px;">' + esc(t('copyLink')) + '</button>' +
+              '<a class="btn btn-ghost" style="font-size:13px;" target="_blank" rel="noreferrer" id="diagLi">' + esc(t('shareLinkedin')) + '</a>' +
+              '<button class="btn btn-ghost" id="diagPng" style="font-size:13px;">' + esc(t('downloadImg')) + '</button>' +
+            '</div></div>';
+        }
+        if (shared) {
+          html += '<div class="diag-center" style="margin-top:4px;"><a href="diagnostic.html" class="btn btn-accent">' + esc(t('runYours')) + '</a></div>';
+        }
+
+        body.innerHTML = html;
+
+        if (!shared && state.id) {
+          var shareUrl = 'https://baakal.ai/diagnostic?r=' + state.id;
+          document.getElementById('diagLi').href = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(shareUrl);
+          document.getElementById('diagCopy').addEventListener('click', function () {
+            var btn = this;
+            navigator.clipboard.writeText(shareUrl).then(function () {
+              btn.textContent = t('copied');
+              setTimeout(function () { btn.textContent = t('copyLink'); }, 2000);
+            }).catch(function () {});
+          });
+          document.getElementById('diagPng').addEventListener('click', function () { downloadImage(r); });
+        }
+      }
+
+      function downloadImage(r) {
+        function escXml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        var head = r.dormant.sharePct != null
+          ? t('imgHeadPct', { pct: r.dormant.sharePct })
+          : t('imgHeadCount', { count: r.dormant.count + r.dormant.noValueCount });
+        var sub = t('imgSub', { value: money(r.dormant.value), days: r.dormantDays });
+        var noVal = r.dormant.noValueCount ? t('imgNoValue', { count: r.dormant.noValueCount }) : '';
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">' +
+          '<rect width="1200" height="630" fill="#FAFAF9"/>' +
+          '<rect width="1200" height="8" fill="#6E57FA"/>' +
+          '<text x="80" y="120" font-family="Arial, sans-serif" font-size="34" fill="#666">' + escXml(t('imgTagline')) + '</text>' +
+          '<text x="80" y="260" font-family="Arial, sans-serif" font-size="84" font-weight="bold" fill="#1a1a1a">' + escXml(head) + '</text>' +
+          '<text x="80" y="340" font-family="Arial, sans-serif" font-size="40" fill="#444">' + escXml(sub) + '</text>' +
+          (noVal ? '<text x="80" y="410" font-family="Arial, sans-serif" font-size="32" fill="#DC2626">' + escXml(noVal) + '</text>' : '') +
+          '<text x="80" y="540" font-family="Arial, sans-serif" font-size="30" fill="#6E57FA" font-weight="bold">baakal.ai/diagnostic</text>' +
+        '</svg>';
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          canvas.width = 1200; canvas.height = 630;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          var a = document.createElement('a');
+          a.href = canvas.toDataURL('image/png');
+          a.download = 'diagnostic-crm-baakal.png';
+          a.click();
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      }
+
+      function loadShared(id) {
+        renderHead();
+        body.innerHTML = '<div class="diag-card diag-spin">' + esc(t('scanning')) + '</div>';
+        fetch(API + '/api/public/diagnostic/' + encodeURIComponent(id)).then(function (res) {
+          if (!res.ok) {
+            body.innerHTML = '<div class="diag-card diag-center"><p>' + esc(t('notFound')) + '</p>' +
+              '<a href="diagnostic.html" class="btn btn-accent">' + esc(t('runYours')) + '</a></div>';
+            return;
+          }
+          return res.json().then(function (data) {
+            state.report = data.report;
+            renderReport(true);
+          });
+        }).catch(function () {
+          body.innerHTML = '<div class="diag-card diag-center"><p>' + esc(t('notFound')) + '</p></div>';
+        });
+      }
+
+      document.querySelectorAll('.lang-toggle button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          lang = b.dataset.lang;
+          localStorage.setItem(STORE_KEY, lang);
+          init();
+        });
+      });
+
+      var sharedId = new URLSearchParams(window.location.search).get('r');
+      function init() {
+        if (sharedId && /^[0-9a-f-]{36}$/i.test(sharedId)) loadShared(sharedId);
+        else if (state.report && state.id) renderReport(false);
+        else renderForm(null);
+      }
+      init();
+    })();
+  </script>
+</body>
+</html>

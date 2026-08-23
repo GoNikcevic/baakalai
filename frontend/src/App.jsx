@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from './context/useApp'
 import { isLoggedIn, validateToken } from './services/auth'
 import { SocketProvider } from './context/SocketContext'
@@ -38,10 +38,19 @@ const AnalyticsPage = lazyRetry(() => import('./pages/AnalyticsPage'))
 const SettingsWrapper = lazyRetry(() => import('./pages/SettingsWrapper'))
 const JoinTeamPage = lazyRetry(() => import('./pages/JoinTeamPage'))
 const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
-const DiagnosticPage = lazyRetry(() => import('./pages/DiagnosticPage'))
 
 // Public routes accessible without authentication
 const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy', '/diagnostic']
+
+// Le diagnostic public vit sur la landing (baakal.ai/diagnostic) — l'app ne
+// garde que l'API ; on redirige les anciens liens (dont les partages /r/:id).
+function DiagnosticRedirect() {
+  const { id } = useParams()
+  useEffect(() => {
+    window.location.replace(id ? `https://baakal.ai/diagnostic?r=${id}` : 'https://baakal.ai/diagnostic')
+  }, [id])
+  return null
+}
 
 export default function App() {
   const { initData } = useApp()
@@ -134,8 +143,8 @@ export default function App() {
         <Routes>
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal" element={<LegalPage />} />
-          <Route path="/diagnostic" element={<DiagnosticPage />} />
-          <Route path="/diagnostic/r/:id" element={<DiagnosticPage />} />
+          <Route path="/diagnostic" element={<DiagnosticRedirect />} />
+          <Route path="/diagnostic/r/:id" element={<DiagnosticRedirect />} />
           <Route path="/terms" element={<Navigate to="/legal" replace />} />
           <Route path="/privacy" element={<Navigate to="/legal#privacy" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
