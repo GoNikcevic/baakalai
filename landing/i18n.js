@@ -39,6 +39,15 @@ const I18N = {
         "Nettoyage de données — qualité et complétude du CRM en continu, le carburant des trois autres",
       ],
     },
+    diagcta: {
+      eyebrow: "DIAGNOSTIC GRATUIT",
+      title_a: "Sur Pipedrive ? ",
+      title_em: "Découvrez combien dort",
+      title_b: " dans votre pipeline.",
+      sub: "20 à 40 % des pipelines de PME dorment. Collez votre clé API, obtenez le chiffre du vôtre en 30 secondes — sans compte.",
+      cta: "Lire mon CRM gratuitement",
+      trust: "Lecture seule · clé jamais stockée · rapport supprimé après 30 jours",
+    },
     activation: {
       eyebrow: "L'AGENT AGIT", title_a: "Pas un dashboard de plus. ", title_em: "Un agent", title_b: " qui exécute.",
       sub: "baakalai ne te montre pas des graphiques. Il envoie le bon email, au bon contact, au bon moment — depuis ta boîte mail.",
@@ -172,6 +181,15 @@ const I18N = {
         "Churn prediction — scores the risk before it materializes, triggers the outreach",
         "Data cleaning — CRM quality and completeness on autopilot, the fuel for the other three",
       ],
+    },
+    diagcta: {
+      eyebrow: "FREE DIAGNOSTIC",
+      title_a: "On Pipedrive? ",
+      title_em: "Find out how much is sleeping",
+      title_b: " in your pipeline.",
+      sub: "20-40% of SMB pipelines are dormant. Paste your API key, get your own number in 30 seconds — no account needed.",
+      cta: "Read my CRM for free",
+      trust: "Read-only · key never stored · report deleted after 30 days",
     },
     activation: {
       eyebrow: "THE AGENT ACTS", title_a: "Not another dashboard. ", title_em: "An agent", title_b: " that executes.",
