@@ -3,7 +3,7 @@
    Merges Nurture (activation triggers/emails) + Signals into one nav entry.
    =============================================================================== */
 
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useT } from '../i18n';
 import NurturePage from './NurturePage';
 import SignalsPage from './SignalsPage';
@@ -15,7 +15,11 @@ const SECTIONS = [
 
 export default function ActivationPage() {
   const t = useT();
-  const [section, setSection] = useState('nurture');
+  // La section active vit dans l'URL (?section=) pour rester deep-linkable
+  // depuis la TodayCard et le chat.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSection = searchParams.get('section');
+  const section = SECTIONS.some(s => s.key === urlSection) ? urlSection : 'nurture';
 
   return (
     <div>
@@ -28,7 +32,7 @@ export default function ActivationPage() {
         {SECTIONS.map(s => (
           <button
             key={s.key}
-            onClick={() => setSection(s.key)}
+            onClick={() => setSearchParams({ section: s.key }, { replace: true })}
             style={{
               padding: '7px 18px', border: 'none', borderRadius: 8,
               background: section === s.key ? 'var(--bg-card, white)' : 'transparent',

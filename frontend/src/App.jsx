@@ -189,7 +189,7 @@ export default function App() {
             <Route path="/join/:code" element={<JoinTeamPage />} />
             {/* Redirects for old routes */}
             <Route path="/nurture" element={<Navigate to="/activation" replace />} />
-            <Route path="/signals" element={<Navigate to="/activation" replace />} />
+            <Route path="/signals" element={<Navigate to="/activation?section=signals" replace />} />
             <Route path="/crm-analytics" element={<Navigate to="/analytics" replace />} />
             <Route path="/membership" element={<Navigate to="/analytics" replace />} />
             <Route path="/profil" element={<Navigate to="/settings" replace />} />

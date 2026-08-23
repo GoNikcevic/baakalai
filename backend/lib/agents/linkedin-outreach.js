@@ -143,7 +143,7 @@ Return JSON: { "note": "..." }`;
     // ── Step 3: Follow up with message for accepted connections (J+2) ──
     const pendingFollowups = await db.query(
       `SELECT lo.id, lo.signal_id, lo.linkedin_url, lo.message AS connection_note,
-              s.signal_title, s.signal_desc, s.contact_name, s.contact_title, s.company_name
+              s.title AS signal_title, s.description AS signal_desc, s.contact_name, s.contact_title, s.company_name
        FROM linkedin_outreach lo
        JOIN signals s ON s.id = lo.signal_id
        WHERE lo.user_id = $1 AND lo.type = 'connection' AND lo.status = 'sent'

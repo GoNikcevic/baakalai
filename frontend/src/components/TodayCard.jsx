@@ -231,7 +231,7 @@ export default function TodayCard() {
                 )}
                 {item.type === 'signal' && (
                   <Link
-                    to="/signals"
+                    to="/activation?section=signals"
                     className="btn btn-ghost"
                     style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap', textDecoration: 'none' }}
                   >

@@ -1155,11 +1155,15 @@ function SignalSearchCard({ metadata }) {
     setScanning(true);
     try {
       // Create a temporary config and scan
-      const config = await request('/signals/configs', {
+      // signal_types must come from the fixed set understood by the signal-agent
+      // (SIGNAL_QUERIES) — free-text keywords go in targetKeywords only.
+      const VALID_SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
+      const requestedTypes = (metadata.signalTypes || []).filter(k => VALID_SIGNAL_TYPES.includes(k));
+      await request('/signals/configs', {
         method: 'POST',
         body: JSON.stringify({
           name: `Chat scan ${new Date().toLocaleDateString()}`,
-          signalTypes: metadata.keywords || ['funding', 'hiring', 'news'],
+          signalTypes: requestedTypes.length > 0 ? requestedTypes : ['funding', 'hiring', 'news'],
           targetSectors: metadata.sectors || [],
           targetTitles: metadata.titles || [],
           targetKeywords: metadata.keywords || metadata.sectors || [],
@@ -1198,7 +1202,7 @@ function SignalSearchCard({ metadata }) {
           <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>
             ✅ {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
           </div>
-          <a href="/activation" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
+          <a href="/activation?section=signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
             {en ? 'View signals →' : 'Voir les signaux →'}
           </a>
         </div>
