@@ -91,11 +91,12 @@ export default function TodayCard() {
     const params = {
       name: item.contactName || item.contactEmail || '',
       company: item.company || '',
-      reason: item.reason || '',
+      reason: item.reason || item.title || '',
       suggestion: item.suggestion || '',
     };
     const key = item.type === 'churn_risk' ? 'today.chatChurnPrefill'
       : item.type === 'upsell' ? 'today.chatUpsellPrefill'
+      : item.type === 'signal' ? 'today.chatSignalPrefill'
       : 'today.chatDealPrefill';
     navigate('/chat', { state: { prefillMessage: t(key, params) } });
   }, [navigate, t]);
@@ -230,13 +231,24 @@ export default function TodayCard() {
                   </button>
                 )}
                 {item.type === 'signal' && (
-                  <Link
-                    to="/activation?section=signals"
-                    className="btn btn-ghost"
-                    style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap', textDecoration: 'none' }}
-                  >
-                    {t('today.openSignals')}
-                  </Link>
+                  <>
+                    {(item.contactName || item.contactEmail) && (
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}
+                        onClick={() => handleChat(item)}
+                      >
+                        {t('today.prepareEmail')}
+                      </button>
+                    )}
+                    <Link
+                      to="/activation?section=signals"
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap', textDecoration: 'none' }}
+                    >
+                      {t('today.openSignals')}
+                    </Link>
+                  </>
                 )}
               </div>
             </div>

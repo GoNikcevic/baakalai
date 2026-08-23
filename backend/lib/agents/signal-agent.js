@@ -215,6 +215,155 @@ async function run(userId) {
   return report;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CRM Watch — signaux recentrés sur les comptes du CRM (P4, 23/08)
+// ═══════════════════════════════════════════════════════════════
+//
+// Au lieu de prospecter de nouvelles sociétés par secteur/mots-clés, on
+// surveille l'actualité des sociétés déjà présentes dans les opportunities
+// de l'utilisateur. Un signal détecté est rattaché à l'opportunité la plus
+// pertinente (contact + email inclus → actionnable sans enrichissement).
+
+const CRM_WATCH_MAX_PER_DAY = 25;
+const VALID_SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
+
+// Rotation hebdo déterministe sans état : chaque société est scannée un jour
+// fixe de la semaine (hash du nom % 7). freshness=pw côté Brave couvre la
+// semaine écoulée → aucune actu manquée entre deux passages.
+function companyDayBucket(company) {
+  let h = 0;
+  for (let i = 0; i < company.length; i++) h = (h * 31 + company.charCodeAt(i)) >>> 0;
+  return h % 7;
+}
+
+async function runCrmWatch(userId) {
+  const report = { detected: 0, companiesScanned: 0, errors: [] };
+
+  try {
+    // Meilleure opportunité par société (ouverte avant won, puis valeur) —
+    // c'est elle qui porte le contact et recevra le rattachement du signal.
+    const companies = await db.query(
+      `SELECT DISTINCT ON (company)
+         company, id AS opportunity_id, name AS contact_name, email AS contact_email,
+         title AS contact_title, status, deal_value,
+         (EXTRACT(EPOCH FROM (now() - COALESCE(last_activity_at, created_at))) / 86400)::int AS days_dormant
+       FROM opportunities
+       WHERE user_id = $1 AND company IS NOT NULL AND TRIM(company) <> '' AND status <> 'lost'
+       ORDER BY company, (status = 'won') ASC, deal_value DESC NULLS LAST`,
+      [userId]
+    );
+    if (companies.rows.length === 0) return report;
+
+    const today = new Date().getUTCDay();
+    const toScan = companies.rows
+      .filter(c => companyDayBucket(c.company.toLowerCase()) === today)
+      .sort((a, b) => (b.deal_value || 0) - (a.deal_value || 0))
+      .slice(0, CRM_WATCH_MAX_PER_DAY);
+    if (toScan.length === 0) return report;
+
+    // Dédup par (société, type) sur 14 jours — la dédup par titre laissait
+    // passer la même actu reformulée (Vivodyne 2×, Absolute 2×).
+    const recent = await db.query(
+      `SELECT DISTINCT company_name, signal_type FROM signals
+       WHERE user_id = $1 AND detected_at > now() - interval '14 days'`,
+      [userId]
+    );
+    const recentSet = new Set(recent.rows.map(r => `${r.company_name}::${r.signal_type}`.toLowerCase()));
+
+    for (const acct of toScan) {
+      try {
+        const query = `"${acct.company}" ("levée de fonds" OR financement OR recrute OR recrutement OR funding OR raises OR hiring OR expansion OR acquisition OR partenariat OR partnership OR lancement OR launch OR nomination OR "new CEO")`;
+        const results = await searchBrave(query);
+        report.companiesScanned++;
+        if (!results || results.length === 0) continue;
+
+        const signals = await extractCrmSignals(results, acct);
+        for (const signal of signals) {
+          const key = `${acct.company}::${signal.signalType}`.toLowerCase();
+          if (recentSet.has(key)) continue;
+          recentSet.add(key);
+
+          try {
+            await db.query(`
+              INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
+                company_name, contact_name, contact_title, contact_email, relevance_score, opportunity_id)
+              VALUES ($1, NULL, $2, $3, $4, $5, 'crm_watch', $6, $7, $8, $9, $10, $11)
+            `, [
+              userId, signal.signalType, signal.title, signal.description, signal.sourceUrl,
+              acct.company, acct.contact_name || null, acct.contact_title || null,
+              acct.contact_email || null, signal.relevance || 50, acct.opportunity_id,
+            ]);
+            report.detected++;
+          } catch (insertErr) {
+            logger.warn('signal-agent', `crm-watch insert failed for "${signal.title}": ${insertErr.message}`);
+          }
+        }
+      } catch (err) {
+        report.errors.push(`${acct.company}: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    report.errors.push(err.message);
+    logger.error('signal-agent', `crm-watch: ${err.message}`);
+  }
+
+  if (report.detected > 0) {
+    logger.info('signal-agent', `User ${userId}: crm-watch ${report.detected} signaux sur ${report.companiesScanned} comptes scannés`);
+    try {
+      const { notifyUser } = require('../../socket');
+      notifyUser(userId, 'signals', {
+        type: 'new_signals',
+        count: report.detected,
+        message: `${report.detected} signal(s) détecté(s) sur vos comptes CRM`,
+      });
+    } catch { /* notifications are optional */ }
+  }
+
+  return report;
+}
+
+/**
+ * Extraction Claude pour le CRM watch : les résultats concernent une société
+ * précise du CRM — la pertinence mesure « à quel point c'est une bonne raison
+ * de relancer ce compte maintenant », pas un score de prospection.
+ */
+async function extractCrmSignals(results, acct) {
+  const resultsText = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description}`).join('\n\n');
+  const dealCtx = acct.status === 'won'
+    ? `client existant (deal gagné${acct.deal_value ? `, ${acct.deal_value}€` : ''})`
+    : `deal ouvert${acct.deal_value ? ` de ${acct.deal_value}€` : ''}, sans activité depuis ${acct.days_dormant} jours`;
+
+  const prompt = `Extract news signals about the company "${acct.company}" ONLY (skip results about other companies, homonyms, or generic articles).
+
+CRM context: ${dealCtx}. A good signal is a concrete reason to re-engage this account NOW (funding, hiring push, expansion, new leadership, product launch...).
+
+Search results:
+${resultsText}
+
+For each RELEVANT result about "${acct.company}", extract:
+- title: short signal description (e.g., "${acct.company} raises $15M Series A")
+- description: 1-2 sentences on why this is a good reason to re-engage, given the CRM context
+- signalType: one of ${VALID_SIGNAL_TYPES.join('|')}
+- sourceUrl: the URL
+- relevance: 0-100 — how strong a reason to re-engage this account now
+
+Return JSON array: [{ title, description, signalType, sourceUrl, relevance }]
+Return [] if nothing is clearly about this company.`;
+
+  try {
+    const result = await claude.callClaude('Return only valid JSON array.', prompt, 1200, 'signal_extraction');
+    const parsed = safeParseClaudeArray(result);
+    if (!Array.isArray(parsed)) {
+      logger.warn('signal-agent', `crm-watch extraction: reponse non parsable pour ${acct.company}`);
+      return [];
+    }
+    return parsed.filter(s => s.title && s.relevance >= 30 && VALID_SIGNAL_TYPES.includes(s.signalType));
+  } catch (err) {
+    logger.warn('signal-agent', `crm-watch extraction echouee (${acct.company}): ${err.message}`);
+    return [];
+  }
+}
+
 /**
  * Search Brave and return raw results.
  */
@@ -326,4 +475,4 @@ async function enrichContact(signal, userId) {
   }
 }
 
-module.exports = { run };
+module.exports = { run, runCrmWatch };

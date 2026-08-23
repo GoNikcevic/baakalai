@@ -137,7 +137,7 @@ async function buildTodayList(userId) {
 
   // 5. Signaux externes récents non traités (décote 20 %)
   const signals = await db.query(
-    `SELECT id, title, company_name, contact_name, contact_email, relevance_score, signal_type
+    `SELECT id, title, company_name, contact_name, contact_email, relevance_score, signal_type, opportunity_id, source_url
      FROM signals
      WHERE user_id = $1 AND status = 'new' AND relevance_score >= 60
        AND detected_at > now() - interval '14 days'
@@ -154,6 +154,9 @@ async function buildTodayList(userId) {
       contactEmail: s.contact_email || null,
       company: s.company_name || null,
       signalType: s.signal_type,
+      // crm_watch : signal rattaché à une opportunité → relance actionnable
+      opportunityId: s.opportunity_id || null,
+      sourceUrl: s.source_url || null,
     });
   }
 

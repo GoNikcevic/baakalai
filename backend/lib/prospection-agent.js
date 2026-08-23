@@ -80,23 +80,27 @@ async function runProspectionAgent() {
     logger.error('prospection-agent', `Deliverability failed: ${err.message}`);
   }
 
-  // ── Step 4: Signal-based prospecting ──
+  // ── Step 4: Signaux sur les comptes CRM (P4 recentrage, 23/08) ──
+  // Le cron ne prospecte plus de nouvelles sociétés par secteur/mots-clés :
+  // il surveille l'actu des sociétés déjà en CRM (rotation hebdo, signaux
+  // rattachés à l'opportunité → contact/email déjà connus). Le scan par
+  // config reste accessible en manuel (POST /api/signals/scan).
   try {
-    const { run: runSignalAgent } = require('./agents/signal-agent');
+    const { runCrmWatch } = require('./agents/signal-agent');
     const users = await db.query(
-      `SELECT DISTINCT user_id FROM signal_configs WHERE enabled = true`
+      `SELECT DISTINCT user_id FROM opportunities WHERE company IS NOT NULL AND TRIM(company) <> ''`
     );
     let totalSignals = 0;
     for (const { user_id } of users.rows) {
       try {
-        const signalReport = await runSignalAgent(user_id);
+        const signalReport = await runCrmWatch(user_id);
         totalSignals += signalReport.detected;
       } catch (err) {
-        logger.warn('prospection-agent', `Signal scan failed for ${user_id}: ${err.message}`);
+        logger.warn('prospection-agent', `CRM watch failed for ${user_id}: ${err.message}`);
       }
     }
     report.signals = totalSignals;
-    if (totalSignals > 0) logger.info('prospection-agent', `Signal agent: ${totalSignals} signals detected`);
+    if (totalSignals > 0) logger.info('prospection-agent', `CRM watch: ${totalSignals} signals detected`);
   } catch (err) {
     report.errors.push({ step: 'signals', error: err.message });
   }

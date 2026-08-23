@@ -809,6 +809,7 @@
     "prepareEmail": "Prepare email",
     "chatChurnPrefill": "Prepare an email to retain {name} ({company}) — high churn risk detected by the CRM.",
     "chatUpsellPrefill": "Prepare an upsell email for {name} ({company}). Context: {reason}",
-    "chatDealPrefill": "Send a follow-up email to {name} ({company}). Context: {reason}. Suggestion: {suggestion}"
+    "chatDealPrefill": "Send a follow-up email to {name} ({company}). Context: {reason}. Suggestion: {suggestion}",
+    "chatSignalPrefill": "Prepare a follow-up for {name} ({company}) — signal detected: {reason}"
   }
 }
