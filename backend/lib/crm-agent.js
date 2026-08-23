@@ -270,7 +270,13 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       });
     } catch { /* never block cleanup */ }
 
-    logger.info('crm-agent', `User ${userId} [${trigger}]: sync +${report.sync.imported}/${report.sync.updated}, nurture ${report.nurture.sent}/${report.nurture.queued}, alerts ${report.alerts.length} (${report.duration}ms)`);
+    logger.info('crm-agent', `User ${userId} [${trigger}]: sync +${report.sync.imported}/${report.sync.updated}, nurture ${report.nurture.sent}/${report.nurture.queued}, alerts ${report.alerts.length}, errors ${report.errors.length} (${report.duration}ms)`);
+    if (report.errors.length > 0) {
+      // Les erreurs par étape/contact étaient totalement invisibles : le run
+      // loggait « nurture 0/0 » sans trace de la cause (ex. violation de la
+      // contrainte unique pending avalée contact par contact pendant 4 jours).
+      logger.warn('crm-agent', `User ${userId}: ${report.errors.slice(0, 5).join(' | ')}`);
+    }
 
     _running.delete(userId);
   }
@@ -493,6 +499,19 @@ function findDuplicates(opps) {
 // n'a jamais pu générer un seul email de nurture.
 async function stepNurture(userId, token, report, { teamId = null, crmProvider = null } = {}) {
   try {
+    // Expiration : un brouillon pending de plus de 14 jours est périmé.
+    // L'annuler libère le contact (contrainte unique 067 : un seul pending
+    // par contact) — sans quoi la file saturée bloque toute génération.
+    const expired = await db.query(
+      `UPDATE nurture_emails SET status = 'cancelled'
+       WHERE user_id = $1 AND status = 'pending' AND created_at < now() - interval '14 days'`,
+      [userId]
+    );
+    if (expired.rowCount > 0) {
+      report.nurture.expired = expired.rowCount;
+      logger.info('crm-agent', `Nurture: ${expired.rowCount} brouillons pending > 14j expirés (cancelled)`);
+    }
+
     // Get triggers
     const triggersResult = await db.query(
       `SELECT * FROM nurture_triggers WHERE user_id = $1 AND enabled = true`,
@@ -503,9 +522,14 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
     const opps = await db.opportunities.listByUser(userId, 10000, 0);
     const now = Date.now();
 
-    // Get recently emailed contacts to avoid duplication
+    // Get recently emailed contacts to avoid duplication. Inclut tout pending
+    // restant quel que soit son âge : la contrainte unique 067 rejette l'INSERT
+    // pour ces contacts — sans ce filtre, chaque run brûlait ~10 générations
+    // Claude puis échouait en silence (queued 0) dès que les brouillons
+    // sortaient de la fenêtre de 7 jours en restant pending.
     const recentEmails = await db.query(
-      `SELECT DISTINCT to_email FROM nurture_emails WHERE user_id = $1 AND created_at > now() - interval '7 days'`,
+      `SELECT DISTINCT to_email FROM nurture_emails
+       WHERE user_id = $1 AND (created_at > now() - interval '7 days' OR status = 'pending')`,
       [userId]
     );
     const recentSet = new Set(recentEmails.rows.map(r => r.to_email?.toLowerCase()));
