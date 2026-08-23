@@ -2177,17 +2177,43 @@ function normalizeSalesforceUrl(url) {
   } catch { return null; }
 }
 
-// POST /api/crm/salesforce/manual-connect — Store a manually provided Salesforce access token
-// (session/bearer token + instance URL, pasted directly — no per-user Connected App required).
+// POST /api/crm/salesforce/manual-connect — Two payload shapes:
+// { consumerKey, consumerSecret, instanceUrl } — save the user's External Client App
+//   credentials, then the client calls GET /salesforce/connect to run the OAuth flow.
+// { accessToken, instanceUrl } — store a session/bearer token pasted directly
+//   (fallback: expires in 2-24h, never auto-refreshed).
 router.post('/salesforce/manual-connect', async (req, res, next) => {
   try {
-    const { accessToken, instanceUrl } = req.body;
-    if (!accessToken || !instanceUrl) {
-      return res.status(400).json({ error: 'accessToken and instanceUrl are required' });
+    const { accessToken, consumerKey, consumerSecret, instanceUrl } = req.body;
+    const hasCredentials = consumerKey && consumerSecret;
+    if (!instanceUrl || (!accessToken && !hasCredentials)) {
+      return res.status(400).json({ error: 'instanceUrl plus either accessToken or consumerKey+consumerSecret are required' });
     }
     const normalizedUrl = normalizeSalesforceUrl(instanceUrl);
     if (!normalizedUrl) {
       return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL (e.g. https://mycompany.my.salesforce.com)' });
+    }
+
+    if (hasCredentials) {
+      // access_token is NOT NULL in schema: placeholder on first insert,
+      // replaced by the OAuth callback; existing token kept on update.
+      const existing = await db.userIntegrations.get(req.user.id, 'salesforce');
+      await db.userIntegrations.upsert(req.user.id, 'salesforce', {
+        ...(existing ? {} : { accessToken: '' }),
+        // Wipe any previous OAuth state: a stale refresh_token would be
+        // replayed against the new Connected App credentials and fail.
+        refreshToken: null,
+        expiresAt: null,
+        metadata: {
+          consumerKey: String(consumerKey).trim(),
+          encryptedConsumerSecret: encrypt(String(consumerSecret).trim()),
+          instance_url: normalizedUrl,
+          oauth: false,
+        },
+        instanceUrl: normalizedUrl,
+      });
+      logger.info('salesforce-manual', `Connected App credentials saved for user ${req.user.id}: ${normalizedUrl}`);
+      return res.json({ ok: true, status: 'credentials_saved' });
     }
 
     const encryptedAccess = encrypt(accessToken);

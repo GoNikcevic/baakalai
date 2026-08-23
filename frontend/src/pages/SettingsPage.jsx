@@ -39,7 +39,7 @@ function getMainTools(lang) {
     { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM', oauth: 'hubspot',
       guide: en ? ['Go to app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Create an app or copy the token (pat-)'] : ['Allez dans app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Cr\u00E9ez une app ou copiez le token (pat-)'], link: 'https://app.hubspot.com/settings/integrations' },
     { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce Consumer Key' : 'Votre Cl\u00E9 consommateur Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
-      guide: en ? ['Create a Connected App in your Salesforce (Setup > External Client Apps)', 'Enable OAuth with "Full access" scope', 'Copy Consumer Key + Secret below, then authorize'] : ['Cr\u00E9ez une app connect\u00E9e dans votre Salesforce (Param\u00E8tres > Apps clientes externes)', 'Activez OAuth avec "Acc\u00E8s complet"', 'Copiez Cl\u00E9 + Secret ci-dessous, puis autorisez'] },
+      guide: en ? ['Create a Connected App in your Salesforce (Setup > External Client Apps)', 'Enable OAuth with scopes "api" + "refresh_token, offline_access"', 'Copy Consumer Key + Secret below, then authorize'] : ['Cr\u00E9ez une app connect\u00E9e dans votre Salesforce (Param\u00E8tres > Apps clientes externes)', 'Activez OAuth avec les scopes "api" + "refresh_token, offline_access"', 'Copiez Cl\u00E9 + Secret ci-dessous, puis autorisez'] },
     { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM', oauth: 'pipedrive',
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
@@ -1381,7 +1381,33 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
   const en = lang === 'en';
   const [accessToken, setAccessToken] = useState('');
   const [instanceUrl, setInstanceUrl] = useState('');
+  const [consumerKey, setConsumerKey] = useState('');
+  const [consumerSecret, setConsumerSecret] = useState('');
+  const [useTokenFallback, setUseTokenFallback] = useState(false);
   const [status, setStatus] = useState(null);
+
+  const handleOAuthConnect = async () => {
+    if (!consumerKey.trim() || !consumerSecret.trim() || !instanceUrl) return;
+    setStatus('connecting');
+    try {
+      await request('/crm/salesforce/manual-connect', {
+        method: 'POST',
+        body: JSON.stringify({
+          consumerKey: consumerKey.trim(),
+          consumerSecret: consumerSecret.trim(),
+          instanceUrl: instanceUrl.trim().replace(/\/$/, ''),
+        }),
+      });
+      const res = await request('/crm/salesforce/connect');
+      if (res.url) {
+        window.location.assign(res.url);
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  };
 
   const handleConnect = async () => {
     if (!accessToken || !instanceUrl) return;
@@ -1425,7 +1451,9 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
 
   const isValid = isConnected
     ? instanceUrl.startsWith('http')
-    : accessToken.length > 10 && instanceUrl.startsWith('http');
+    : useTokenFallback
+      ? accessToken.length > 10 && instanceUrl.startsWith('http')
+      : consumerKey.trim().length > 5 && consumerSecret.trim().length > 5 && instanceUrl.startsWith('https://');
 
   return (
     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
@@ -1449,7 +1477,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
                 1. Setup &gt; Open Advanced Setup &gt; Platform Tools &gt; External Client Apps &gt; External Client App Manager<br/>
                 2. Click "New External Client App"<br/>
                 3. Fill in the basic information<br/>
-                4. Enable OAuth, add scope "Full access (full)"<br/>
+                4. Enable OAuth, add scopes "Manage user data via APIs (api)" and "Perform requests at any time (refresh_token, offline_access)"<br/>
                 5. Callback URL: <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
                 6. Create<br/>
                 7. From the app list, select baakalai<br/>
@@ -1463,7 +1491,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
                 1. Param{'\u00E8'}tres &gt; Ouvrir la configuration avanc{'\u00E9'}e &gt; Outils de la plate-forme &gt; Applications clientes externes &gt; Gestionnaire des applications externes<br/>
                 2. Cliquez "Nouvelle application cliente externe"<br/>
                 3. Remplissez les infos de base<br/>
-                4. Activez OAuth, ajoutez "Acc{'\u00E8'}s complet (full)"<br/>
+                4. Activez OAuth, ajoutez "G{'\u00E9'}rer les donn{'\u00E9'}es utilisateur via des API (api)" et "Effectuer des requ{'\u00EA'}tes {'\u00E0'} tout moment (refresh_token, offline_access)"<br/>
                 5. URL de rappel : <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
                 6. Cr{'\u00E9'}er<br/>
                 7. {'\u00C0'} partir de la liste des applications, s{'\u00E9'}lectionnez baakalai<br/>
@@ -1479,7 +1507,19 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           placeholder={en ? "Instance URL (e.g., https://mycompany.my.salesforce.com)" : "URL de l'instance (ex: https://mycompany.my.salesforce.com)"}
           value={instanceUrl} onChange={e => setInstanceUrl(e.target.value)} autoFocus
           style={{ fontSize: 11, padding: '5px 8px' }} />
-        {!isConnected && (
+        {!isConnected && !useTokenFallback && (
+          <>
+            <input className="form-input" type="text"
+              placeholder="Consumer Key"
+              value={consumerKey} onChange={e => setConsumerKey(e.target.value)}
+              style={{ fontSize: 11, padding: '5px 8px' }} />
+            <input className="form-input" type="password"
+              placeholder="Consumer Secret"
+              value={consumerSecret} onChange={e => setConsumerSecret(e.target.value)}
+              style={{ fontSize: 11, padding: '5px 8px' }} />
+          </>
+        )}
+        {!isConnected && useTokenFallback && (
           <input className="form-input" type="password"
             placeholder={en ? "Access token" : "Access token"}
             value={accessToken} onChange={e => setAccessToken(e.target.value)}
@@ -1497,12 +1537,25 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
       )}
       <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
         <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
-          onClick={isConnected ? handleUpdateUrl : handleConnect} disabled={saving || status === 'connecting' || !isValid}>
-          {status === 'connecting' ? (en ? 'Saving...' : 'Sauvegarde...') : isConnected ? (en ? 'Save URL' : 'Sauvegarder') : (en ? 'Connect' : 'Connecter')}
+          onClick={isConnected ? handleUpdateUrl : useTokenFallback ? handleConnect : handleOAuthConnect}
+          disabled={saving || status === 'connecting' || !isValid}>
+          {status === 'connecting'
+            ? (useTokenFallback || isConnected ? (en ? 'Saving...' : 'Sauvegarde...') : (en ? 'Redirecting...' : 'Redirection...'))
+            : isConnected ? (en ? 'Save URL' : 'Sauvegarder')
+            : useTokenFallback ? (en ? 'Connect' : 'Connecter')
+            : (en ? 'Connect with Salesforce' : 'Connecter via Salesforce')}
         </button>
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
           onClick={onCancel}>{'\u2715'}</button>
       </div>
+      {!isConnected && (
+        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, width: '100%', color: 'var(--text-muted)' }}
+          onClick={() => { setUseTokenFallback(v => !v); setStatus(null); }}>
+          {useTokenFallback
+            ? (en ? 'Use OAuth instead (Consumer Key + Secret)' : 'Utiliser OAuth (Consumer Key + Secret)')
+            : (en ? 'Or paste a session token (expires within hours)' : 'Ou coller un token de session (expire en quelques heures)')}
+        </button>
+      )}
       {isConnected && (
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, color: 'var(--danger)', width: '100%' }}
           onClick={onRemove} disabled={saving}>{t('settings.delete')}</button>
