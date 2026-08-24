@@ -100,6 +100,11 @@
           tokenPlaceholderHubspot: 'Collez votre token ici (pat-…)',
           guideTitleHubspot: 'Où trouver mon token ?',
           guideHubspot: ['Connectez-vous sur app.hubspot.com', 'Roue Paramètres → Intégrations → Applications privées → Créer une application privée', 'Onglet Périmètres : cochez crm.objects.deals.read et crm.objects.companies.read', 'Créez l’application, copiez le token (pat-…) et collez-le ci-dessus'],
+          oauthPipedrive: 'Continuer avec Pipedrive',
+          oauthHubspot: 'Continuer avec HubSpot',
+          oauthGdpr: 'Connexion en lecture : le jeton d’accès sert à une seule lecture de vos deals, il n’est jamais stocké. Seuls les chiffres agrégés du rapport sont conservés, supprimés après 30 jours.',
+          orApiKey: 'Ou coller une clé API',
+          errOauth: 'La connexion a échoué — réessayez ou utilisez une clé API.',
           otherCrm: 'Sur Salesforce, Odoo, Notion, Airtable ou Folk ? Le même diagnostic vous attend dans l’app dès que votre CRM est connecté.',
           otherCrmCta: 'Créer mon compte →',
           tokenLabel: 'Votre clé API Pipedrive (lecture seule)',
@@ -152,6 +157,11 @@
           tokenPlaceholderHubspot: 'Paste your token here (pat-…)',
           guideTitleHubspot: 'Where do I find my token?',
           guideHubspot: ['Sign in at app.hubspot.com', 'Settings gear → Integrations → Private apps → Create a private app', 'Scopes tab: check crm.objects.deals.read and crm.objects.companies.read', 'Create the app, copy the token (pat-…) and paste it above'],
+          oauthPipedrive: 'Continue with Pipedrive',
+          oauthHubspot: 'Continue with HubSpot',
+          oauthGdpr: 'Read-only connection: the access token is used for a single read of your deals and is never stored. Only the report’s aggregated numbers are kept, deleted after 30 days.',
+          orApiKey: 'Or paste an API key',
+          errOauth: 'Connection failed — try again or use an API key.',
           otherCrm: 'On Salesforce, Odoo, Notion, Airtable or Folk? The same diagnostic is waiting in the app once your CRM is connected.',
           otherCrmCta: 'Create my account →',
           tokenLabel: 'Your Pipedrive API key (read-only)',
@@ -228,19 +238,29 @@
       function renderForm(err) {
         var hs = state.provider === 'hubspot';
         renderHead();
+        var oauthBtn = function (p) {
+          return '<a class="btn btn-accent" style="width:100%;justify-content:center;padding:12px;font-size:15px;margin-bottom:10px;" href="' + API + '/api/public/diagnostic/oauth/' + p + '/start?lang=' + lang + '">' +
+            esc(t(p === 'pipedrive' ? 'oauthPipedrive' : 'oauthHubspot')) + '</a>';
+        };
         body.innerHTML =
           '<form class="diag-card" id="diagForm">' +
-            '<div class="diag-provider">' + ['pipedrive', 'hubspot'].map(function (p) { return '<span class="' + (state.provider === p ? 'on' : 'off') + '" data-provider="' + p + '">' + esc(t(p)) + '</span>'; }).join('') + '</div>' +
-            '<div class="diag-note" style="margin:-4px 0 14px;">' + esc(t('otherCrm')) +
-              ' <a href="https://app.baakal.ai/?ref=diagnostic" style="color:var(--primary);font-weight:600;text-decoration:none;">' + esc(t('otherCrmCta')) + '</a></div>' +
-            '<label class="diag-label" for="diagToken">' + esc(t(hs ? 'tokenLabelHubspot' : 'tokenLabel')) + '</label>' +
-            '<input class="diag-input" id="diagToken" type="password" placeholder="' + esc(t(hs ? 'tokenPlaceholderHubspot' : 'tokenPlaceholder')) + '" autocomplete="off">' +
-            '<details class="diag-guide"><summary>' + esc(t(hs ? 'guideTitleHubspot' : 'guideTitle')) + '</summary><ol>' +
-              (T[lang] || T.fr)[hs ? 'guideHubspot' : 'guide'].map(function (g) { return '<li>' + esc(g) + '</li>'; }).join('') +
-            '</ol></details>' +
+            oauthBtn('pipedrive') + oauthBtn('hubspot') +
+            '<div class="diag-note" style="margin-top:0;">' + esc(t('oauthGdpr')) + '</div>' +
             (err ? '<div class="diag-err">' + esc(err) + '</div>' : '') +
-            '<button type="submit" class="btn btn-accent" style="width:100%;margin-top:14px;padding:12px;font-size:15px;justify-content:center;">' + esc(t('scanBtn')) + '</button>' +
-            '<div class="diag-note">' + esc(t('gdpr')) + '</div>' +
+            '<details class="diag-guide" style="margin-top:14px;"><summary>' + esc(t('orApiKey')) + '</summary>' +
+              '<div style="margin-top:12px;">' +
+              '<div class="diag-provider">' + ['pipedrive', 'hubspot'].map(function (p) { return '<span class="' + (state.provider === p ? 'on' : 'off') + '" data-provider="' + p + '">' + esc(t(p)) + '</span>'; }).join('') + '</div>' +
+              '<label class="diag-label" for="diagToken">' + esc(t(hs ? 'tokenLabelHubspot' : 'tokenLabel')) + '</label>' +
+              '<input class="diag-input" id="diagToken" type="password" placeholder="' + esc(t(hs ? 'tokenPlaceholderHubspot' : 'tokenPlaceholder')) + '" autocomplete="off">' +
+              '<details class="diag-guide"><summary>' + esc(t(hs ? 'guideTitleHubspot' : 'guideTitle')) + '</summary><ol>' +
+                (T[lang] || T.fr)[hs ? 'guideHubspot' : 'guide'].map(function (g) { return '<li>' + esc(g) + '</li>'; }).join('') +
+              '</ol></details>' +
+              '<button type="submit" class="btn btn-accent" style="width:100%;margin-top:14px;padding:12px;font-size:15px;justify-content:center;">' + esc(t('scanBtn')) + '</button>' +
+              '<div class="diag-note">' + esc(t('gdpr')) + '</div>' +
+              '</div>' +
+            '</details>' +
+            '<div class="diag-note" style="margin-top:14px;">' + esc(t('otherCrm')) +
+              ' <a href="https://app.baakal.ai/?ref=diagnostic" style="color:var(--primary);font-weight:600;text-decoration:none;">' + esc(t('otherCrmCta')) + '</a></div>' +
           '</form>';
         document.getElementById('diagForm').addEventListener('submit', onScan);
         document.querySelectorAll('.diag-provider span').forEach(function (el) {
@@ -415,10 +435,10 @@
         img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
       }
 
-      function loadShared(id) {
+      function loadShared(id, k) {
         renderHead();
         body.innerHTML = '<div class="diag-card diag-spin">' + esc(t('scanning')) + '</div>';
-        fetch(API + '/api/public/diagnostic/' + encodeURIComponent(id)).then(function (res) {
+        fetch(API + '/api/public/diagnostic/' + encodeURIComponent(id) + (k ? '?k=' + encodeURIComponent(k) : '')).then(function (res) {
           if (!res.ok) {
             body.innerHTML = '<div class="diag-card diag-center"><p>' + esc(t('notFound')) + '</p>' +
               '<a href="diagnostic.html" class="btn btn-accent">' + esc(t('runYours')) + '</a></div>';
@@ -426,7 +446,8 @@
           }
           return res.json().then(function (data) {
             state.report = data.report;
-            renderReport(true);
+            if (data.isOwner) { state.id = id; renderReport(false); }
+            else renderReport(true);
           });
         }).catch(function () {
           body.innerHTML = '<div class="diag-card diag-center"><p>' + esc(t('notFound')) + '</p></div>';
@@ -441,11 +462,14 @@
         });
       });
 
-      var sharedId = new URLSearchParams(window.location.search).get('r');
+      var qs = new URLSearchParams(window.location.search);
+      var sharedId = qs.get('r');
+      var ownerKey = qs.get('k');
+      var oauthError = qs.get('oauth_error');
       function init() {
-        if (sharedId && /^[0-9a-f-]{36}$/i.test(sharedId)) loadShared(sharedId);
+        if (sharedId && /^[0-9a-f-]{36}$/i.test(sharedId)) loadShared(sharedId, ownerKey);
         else if (state.report && state.id) renderReport(false);
-        else renderForm(null);
+        else renderForm(oauthError ? t('errOauth') : null);
       }
       init();
     })();

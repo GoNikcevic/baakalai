@@ -2351,14 +2351,8 @@ router.get('/reactivation-stats', async (req, res, next) => {
 // SECRET). Tant qu'elles ne sont pas posées, /connect répond 501 et le
 // frontend retombe sur le champ clé API.
 
-const _crmOauthStates = new Map();
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of _crmOauthStates) {
-    if (val.expiresAt < now) _crmOauthStates.delete(key);
-  }
-}, 300000).unref();
+const _crmOauthStates = require('../lib/oauth-states');
+const LANDING_URL = process.env.LANDING_URL || 'https://baakal.ai';
 
 // GET /api/crm/:provider/connect — démarre le flow OAuth (hubspot|pipedrive)
 router.get('/:provider(hubspot|pipedrive)/connect', async (req, res, next) => {
@@ -2390,8 +2384,10 @@ router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
 
   const oauthData = _crmOauthStates.get(state);
   const from = oauthData?.from || 'settings';
-  const fail = (reason) => res.redirect(
-    `${APP_URL}${from === 'wizard' ? '/' : '/settings'}?crm_error=${encodeURIComponent(reason)}`);
+  // Les states du diagnostic public (sans compte) reviennent sur la landing.
+  const fail = (reason) => res.redirect(oauthData?.diagnostic
+    ? `${LANDING_URL}/diagnostic?oauth_error=${encodeURIComponent(reason)}`
+    : `${APP_URL}${from === 'wizard' ? '/' : '/settings'}?crm_error=${encodeURIComponent(reason)}`);
 
   if (req.query.error) {
     logger.warn('crm-oauth', `${provider} OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
@@ -2408,6 +2404,15 @@ router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
       code,
       redirectUri: `${APP_URL}/api/crm/${provider}/callback`,
     });
+
+    // Diagnostic public : le token sert à UNE lecture puis est jeté — rien
+    // n'est stocké hors le rapport agrégé. Require paresseux (cycle sinon).
+    if (oauthData.diagnostic) {
+      const { runOauthDiagnostic } = require('./public-diagnostic');
+      const { id, ownerKey } = await runOauthDiagnostic(provider, tokens, oauthData.lang);
+      logger.info('crm-oauth', `${provider} diagnostic public via OAuth: rapport ${id}`);
+      return res.redirect(`${LANDING_URL}/diagnostic?r=${id}&k=${ownerKey}`);
+    }
 
     // Marge de 60 s sur l'expiration pour que le refresh parte avant le 401.
     const expiresAt = new Date(Date.now() + Math.max(60, (tokens.expires_in || 1800) - 60) * 1000).toISOString();
