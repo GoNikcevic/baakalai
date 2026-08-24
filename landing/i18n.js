@@ -5,7 +5,7 @@
 
 const I18N = {
   fr: {
-    nav: { how: "Comment ça marche", features: "Ce que fait l'agent", pricing: "Pricing", faq: "FAQ", blog: "Blog", diag: "Diagnostic gratuit", book: "Rejoindre la beta", signin: "Se connecter" },
+    nav: { how: "Comment ça marche", features: "Ce que fait l'agent", pricing: "Beta", faq: "FAQ", blog: "Blog", diag: "Diagnostic gratuit", book: "Rejoindre la beta", signin: "Se connecter" },
     hero: {
       eyebrow: "",
       title_a: "Ton CRM sait déjà qui relancer. ",
@@ -14,7 +14,7 @@ const I18N = {
       sub: "baakalai lit ton CRM 24/7, repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner — et agit. Un deal récupéré rembourse l'outil pour des mois.",
       cta: "Rejoindre la beta",
       cta_2: "Voir ce que fait l'agent",
-      tag_1: "Opérationnel en 30 min", tag_2: "À partir de 49 €/mois",
+      tag_1: "Opérationnel en 30 min", tag_2: "Beta sur candidature",
       beta_badge: "EARLY ACCESS",
     },
     integrations: { label: "Se connecte à ton CRM" },
@@ -83,12 +83,12 @@ const I18N = {
       ],
     },
     pricing: {
-      eyebrow: "PRICING", title_a: "Le prix de l'outil est inférieur ", title_em: "à un seul deal", title_b: " récupéré.",
-      sub: "Se positionner 10 à 50× sous les solutions enterprise (Gong, Clari : 40–150 k€/an), tout en servant les PME que personne ne sert.",
+      eyebrow: "PROGRAMME BETA — EN COURS", title_a: "On teste baakalai ", title_em: "avec une poignée d'équipes", title_b: ".",
+      sub: "Pas de plans, pas de prix public — pour l'instant. On ouvre la beta à un petit groupe d'équipes commerciales pour affiner le produit avec elles. Les beta testers gardent un tarif préférentiel à la sortie publique.",
       perks: [
-        "Starter · 49 €/mois — 1 CRM connecté, réactivation de deals + nettoyage de données",
-        "Growth · 149 €/mois — multi-agents (churn + upsell + activation), multi-sièges",
-        "Scale · 349 €/mois — multi-CRM, priorisation, support dédié",
+        "Accès complet au produit pendant toute la beta",
+        "Onboarding accompagné — opérationnel en 30 minutes",
+        "Tarif préférentiel garanti à la sortie publique",
       ],
       expect: [
         "Un CRM avec ≥ 12 mois d'historique — l'agent a besoin de matière",
@@ -117,7 +117,7 @@ const I18N = {
         { q: "En quoi c'est différent de ce que fait déjà mon CRM ?",
           a: "Ton CRM stocke la donnée. baakalai la lit. L'IA native de Pipedrive ou HubSpot est pensée pour le haut de marché et reste mono-CRM. baakalai est multi-CRM, focalisé PME, et surtout il agit : il envoie la relance, pas juste le dashboard." },
         { q: "En quoi c'est différent de Gong ou Clari ?",
-          a: "Même catégorie (revenue intelligence), segment différent. Gong/Clari : 40–150 k€/an, 3–5 semaines d'implémentation, équipe RevOps requise. baakalai : à partir de 49 €/mois, opérationnel en 30 minutes, zéro RevOps." },
+          a: "Même catégorie (revenue intelligence), segment différent. Gong/Clari : 40–150 k€/an, 3–5 semaines d'implémentation, équipe RevOps requise. baakalai : pensé et tarifé pour les PME, opérationnel en 30 minutes, zéro RevOps." },
         { q: "Et la prospection ?",
           a: "baakalai sait aussi faire de l'outbound — créer des campagnes, déployer sur Lemlist/Apollo. Mais ce n'est pas le produit. Le produit, c'est exploiter la donnée que tu as déjà payée. La prospection est une porte d'entrée, pas le héros." },
         { q: "Mon CRM est à moitié vide, ça marche quand même ?",
@@ -143,12 +143,12 @@ const I18N = {
     footer: {
       blurb: "L'agent qui exploite ton CRM pour générer du CA — réactivation, upsell, churn, nettoyage.",
       product: "PRODUIT", company: "ENTREPRISE", legal: "LÉGAL",
-      links: { how: "Comment ça marche", prosp: "Prospection", crm: "Ce que fait l'agent", activation: "L'agent agit", synapse: "Sous le capot", pricing: "Pricing", about: "À propos", blog: "Blog", contact: "Contact", careers: "Recrutement", terms: "CGU", privacy: "Confidentialité", dpa: "DPA · RGPD" },
+      links: { how: "Comment ça marche", prosp: "Prospection", crm: "Ce que fait l'agent", activation: "L'agent agit", synapse: "Sous le capot", pricing: "Beta", about: "À propos", blog: "Blog", contact: "Contact", careers: "Recrutement", terms: "CGU", privacy: "Confidentialité", dpa: "DPA · RGPD" },
       copy: "\u00a9 2026 BAAKALAI \u00b7 BAAKAL.AI \u00b7 PARIS",
     },
   },
   en: {
-    nav: { how: "How it works", features: "What the agent does", pricing: "Pricing", faq: "FAQ", blog: "Blog", diag: "Free diagnostic", book: "Join the beta", signin: "Sign in" },
+    nav: { how: "How it works", features: "What the agent does", pricing: "Beta", faq: "FAQ", blog: "Blog", diag: "Free diagnostic", book: "Join the beta", signin: "Sign in" },
     hero: {
       eyebrow: "",
       title_a: "Your CRM already knows who to call back. ",
@@ -157,7 +157,7 @@ const I18N = {
       sub: "baakalai reads your CRM 24/7, spots dying deals, upsell-ready clients, accounts about to churn — and acts. One recovered deal pays for the tool for months.",
       cta: "Join the beta",
       cta_2: "See what the agent does",
-      tag_1: "Operational in 30 min", tag_2: "From \u20ac49/month",
+      tag_1: "Operational in 30 min", tag_2: "Beta by application",
       beta_badge: "EARLY ACCESS",
     },
     integrations: { label: "Connects to your CRM" },
@@ -226,12 +226,12 @@ const I18N = {
       ],
     },
     pricing: {
-      eyebrow: "PRICING", title_a: "The tool costs less ", title_em: "than one recovered", title_b: " deal.",
-      sub: "Positioned 10 to 50\u00d7 below enterprise solutions (Gong, Clari: \u20ac40\u2013150k/year), while serving the SMBs nobody serves.",
+      eyebrow: "BETA PROGRAM — NOW OPEN", title_a: "We are testing baakalai ", title_em: "with a handful of teams", title_b: ".",
+      sub: "No plans, no public pricing — for now. We are opening the beta to a small group of sales teams to refine the product with them. Beta testers keep a preferential rate at public launch.",
       perks: [
-        "Starter \u00b7 \u20ac49/mo — 1 CRM connected, deal reactivation + data cleaning",
-        "Growth \u00b7 \u20ac149/mo — multi-agent (churn + upsell + activation), multi-seat",
-        "Scale \u00b7 \u20ac349/mo — multi-CRM, prioritization, dedicated support",
+        "Full product access for the whole beta",
+        "Guided onboarding — operational in 30 minutes",
+        "Preferential rate guaranteed at public launch",
       ],
       expect: [
         "A CRM with \u226512 months of history — the agent needs substance",
@@ -260,7 +260,7 @@ const I18N = {
         { q: "How is this different from what my CRM already does?",
           a: "Your CRM stores data. baakalai reads it. Native AI in Pipedrive or HubSpot is built for enterprise and stays mono-CRM. baakalai is multi-CRM, SMB-focused, and most importantly it acts: it sends the follow-up, not just the dashboard." },
         { q: "How is this different from Gong or Clari?",
-          a: "Same category (revenue intelligence), different segment. Gong/Clari: \u20ac40\u2013150k/year, 3\u20135 weeks implementation, RevOps team required. baakalai: from \u20ac49/month, operational in 30 minutes, zero RevOps." },
+          a: "Same category (revenue intelligence), different segment. Gong/Clari: \u20ac40\u2013150k/year, 3\u20135 weeks implementation, RevOps team required. baakalai: built and priced for SMBs, operational in 30 minutes, zero RevOps." },
         { q: "What about prospection?",
           a: "baakalai can also do outbound — build campaigns, deploy to Lemlist/Apollo. But that's not the product. The product is exploiting the data you already paid for. Prospection is a door, not the hero." },
         { q: "My CRM is half-empty, does it still work?",
@@ -286,7 +286,7 @@ const I18N = {
     footer: {
       blurb: "The agent that exploits your CRM to generate revenue — reactivation, upsell, churn, cleaning.",
       product: "PRODUCT", company: "COMPANY", legal: "LEGAL",
-      links: { how: "How it works", prosp: "Prospection", crm: "What the agent does", activation: "The agent acts", synapse: "Under the hood", pricing: "Pricing", about: "About", blog: "Blog", contact: "Contact", careers: "Careers", terms: "Terms", privacy: "Privacy", dpa: "DPA \u00b7 GDPR" },
+      links: { how: "How it works", prosp: "Prospection", crm: "What the agent does", activation: "The agent acts", synapse: "Under the hood", pricing: "Beta", about: "About", blog: "Blog", contact: "Contact", careers: "Careers", terms: "Terms", privacy: "Privacy", dpa: "DPA \u00b7 GDPR" },
       copy: "\u00a9 2026 BAAKALAI \u00b7 BAAKAL.AI \u00b7 PARIS",
     },
   },

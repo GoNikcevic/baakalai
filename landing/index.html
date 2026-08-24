@@ -232,7 +232,7 @@
         <div style="margin-top:40px; display:flex; gap:24px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--grey-500);">
           <span data-i18n="hero.tag_1">Opérationnel en 30 min</span>
           <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_2">À partir de 49 €/mois</span>
+          <span data-i18n="hero.tag_2">Beta sur candidature</span>
         </div>
       </div>
 
@@ -700,7 +700,7 @@
       document.getElementById('beta-grid').innerHTML = `
         <div class="beta-card reveal">
           <div class="beta-card-head">
-            <span class="beta-tag">${lang === 'en' ? 'PLANS' : 'PALIERS'}</span>
+            <span class="beta-tag">${lang === 'en' ? 'WHAT YOU GET' : 'CE QUE TU OBTIENS'}</span>
           </div>
           <ul class="feats">${d.pricing.perks.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
         </div>
