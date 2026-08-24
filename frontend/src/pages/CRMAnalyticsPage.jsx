@@ -429,6 +429,90 @@ function PipelineSection({ data, statusLabels, vocab }) {
 
 /* ═══ Attribution Section ═══ */
 
+function DealTouchBlock({ dt }) {
+  const t = useT();
+  const navigate = useNavigate();
+  if (!dt) return null;
+
+  const empty = dt.touched.count === 0;
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-title">
+        {t('analytics.dealTouchTitle')}
+        <HelpTip text={t('analytics.dealTouchHelp')} />
+      </div>
+      <div className="card-body">
+        {empty ? (
+          <div style={{ padding: '12px 0' }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('analytics.dealTouchEmptyTitle')}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+              {t('analytics.dealTouchEmptyBody', { count: dt.untouched.count })}
+            </div>
+            <button className="btn btn-accent" onClick={() => navigate('/activation')}>
+              {t('analytics.dealTouchEmptyCta')}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="crm-kpi-row">
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value">{dt.touched.count}</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchTouched')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>${(dt.touched.value || 0).toLocaleString()}</div>
+              </div>
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value" style={{ color: 'var(--blue)' }}>{dt.touched.replyRate}%</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchReplyRate')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('analytics.dealTouchReplied', { count: dt.touched.replied })}
+                </div>
+              </div>
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{dt.reactivated.count}</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchReactivated')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>${(dt.reactivated.value || 0).toLocaleString()}</div>
+              </div>
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>{dt.touched.won}</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchWon')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('analytics.dealTouchWonVs', { count: dt.untouched.won })}
+                </div>
+              </div>
+            </div>
+            <div className="crm-table" style={{ marginTop: 12 }}>
+              <div className="crm-table-header">
+                <span style={{ flex: 2 }}>{t('analytics.dealTouchDeal')}</span>
+                <span>{t('analytics.dealTouchEmails')}</span>
+                <span>{t('analytics.dealTouchLastTouch')}</span>
+                <span>{t('analytics.dealTouchOutcome')}</span>
+              </div>
+              {dt.deals.map((d, i) => (
+                <div className="crm-table-row" key={i}>
+                  <span style={{ flex: 2, fontWeight: 600 }}>
+                    {d.name}{d.company ? ` · ${d.company}` : ''}
+                    {d.dealValue > 0 && (
+                      <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — ${d.dealValue.toLocaleString()}</span>
+                    )}
+                  </span>
+                  <span>{d.emailsSent}</span>
+                  <span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span>
+                  <span style={{ fontWeight: 600, color: d.reactivatedAt ? 'var(--success)' : d.replied ? 'var(--blue)' : 'var(--text-muted)' }}>
+                    {d.reactivatedAt ? t('analytics.dealTouchOutcomeReactivated')
+                      : d.replied ? t('analytics.dealTouchOutcomeReplied')
+                      : t('analytics.dealTouchOutcomePending')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AttributionSection({ data }) {
   const t = useT();
   const sorted = useMemo(() =>
@@ -438,6 +522,9 @@ function AttributionSection({ data }) {
 
   return (
     <div className="crm-section">
+      {/* Deals touchés par l'agent — la preuve ROI côté CRM */}
+      <DealTouchBlock dt={data.dealTouch} />
+
       {/* Totals */}
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">

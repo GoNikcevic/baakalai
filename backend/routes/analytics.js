@@ -162,9 +162,49 @@ router.get('/pipeline', async (req, res, next) => {
 router.get('/attribution', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const [allCampaigns, allOpportunities] = await Promise.all([
+    const [allCampaigns, allOpportunities, touchAgg, touchedDeals] = await Promise.all([
       db.campaigns.list({ userId }),
       db.opportunities.listByUser(userId, 10000, 0),
+      // Attribution deals touchés/non touchés : un deal est « touché » dès
+      // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé.
+      // Périmètre plus large que /crm/reactivation-stats (chains seules).
+      db.query(`
+        WITH touch AS (
+          SELECT o.id, o.deal_value, o.status, o.reactivated_at,
+                 COUNT(ne.id) AS emails_sent,
+                 BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+          FROM opportunities o
+          LEFT JOIN nurture_emails ne
+            ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
+          WHERE o.user_id = $1
+          GROUP BY o.id
+        )
+        SELECT
+          COUNT(*) FILTER (WHERE emails_sent > 0) AS touched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0), 0) AS touched_value,
+          COUNT(*) FILTER (WHERE emails_sent = 0) AS untouched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent = 0), 0) AS untouched_value,
+          COUNT(*) FILTER (WHERE emails_sent > 0 AND status = 'won') AS touched_won,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0 AND status = 'won'), 0) AS touched_won_value,
+          COUNT(*) FILTER (WHERE emails_sent = 0 AND status = 'won') AS untouched_won,
+          COUNT(*) FILTER (WHERE emails_sent > 0 AND replied) AS touched_replied,
+          COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL) AS reactivated_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE reactivated_at IS NOT NULL), 0) AS reactivated_value
+        FROM touch
+      `, [userId]),
+      db.query(`
+        SELECT o.name, o.company, o.deal_value, o.status, o.reactivated_at,
+               COUNT(ne.id) AS emails_sent,
+               MAX(ne.sent_at) AS last_touch_at,
+               BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+        FROM opportunities o
+        JOIN nurture_emails ne
+          ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
+        WHERE o.user_id = $1
+        GROUP BY o.id, o.name, o.company, o.deal_value, o.status, o.reactivated_at
+        ORDER BY MAX(ne.sent_at) DESC
+        LIMIT 50
+      `, [userId]),
     ]);
 
     // Group opportunities by campaign_id
@@ -213,7 +253,37 @@ router.get('/attribution', async (req, res, next) => {
       ? Math.round((totals.meetings / totals.prospects) * 1000) / 10
       : 0;
 
-    res.json({ campaigns, totals });
+    const ta = touchAgg.rows[0];
+    const num = (v) => parseFloat(v) || 0;
+    const dealTouch = {
+      touched: {
+        count: parseInt(ta.touched_count),
+        value: num(ta.touched_value),
+        won: parseInt(ta.touched_won),
+        wonValue: num(ta.touched_won_value),
+        replied: parseInt(ta.touched_replied),
+        replyRate: ta.touched_count > 0
+          ? Math.round((ta.touched_replied / ta.touched_count) * 100) : 0,
+      },
+      untouched: {
+        count: parseInt(ta.untouched_count),
+        value: num(ta.untouched_value),
+        won: parseInt(ta.untouched_won),
+      },
+      reactivated: { count: parseInt(ta.reactivated_count), value: num(ta.reactivated_value) },
+      deals: touchedDeals.rows.map(d => ({
+        name: d.name,
+        company: d.company,
+        dealValue: num(d.deal_value),
+        status: d.status,
+        emailsSent: parseInt(d.emails_sent),
+        lastTouchAt: d.last_touch_at,
+        replied: d.replied,
+        reactivatedAt: d.reactivated_at,
+      })),
+    };
+
+    res.json({ campaigns, totals, dealTouch });
   } catch (err) {
     next(err);
   }
