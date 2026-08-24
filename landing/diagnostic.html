@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Diagnostic CRM gratuit — combien de CA attend une relance dans votre pipeline ? | baakalai</title>
-  <meta name="description" content="Connectez votre Pipedrive en lecture seule : en 30 secondes, découvrez combien de deals attendent une relance dans votre CRM et ce qu'ils valent. Gratuit, sans compte.">
+  <meta name="description" content="Connectez votre Pipedrive ou HubSpot en lecture seule : en 30 secondes, découvrez combien de deals attendent une relance dans votre CRM et ce qu'ils valent. Gratuit, sans compte.">
   <meta property="og:title" content="Diagnostic CRM gratuit — combien de CA attend une relance dans votre pipeline ?">
   <meta property="og:description" content="20 à 40 % des deals d'une PME restent sans relance. Et les vôtres ? Diagnostic gratuit en 30 secondes, sans compte.">
   <meta property="og:type" content="website">
@@ -35,7 +35,7 @@
     .diag-err { color: #DC2626; font-size: 13px; margin-top: 10px; }
     .diag-big { font-size: 46px; font-weight: 800; color: #DC2626; margin: 10px 0 4px; letter-spacing: -0.02em; }
     .diag-provider { display: inline-flex; gap: 8px; margin-bottom: 16px; }
-    .diag-provider span { padding: 6px 14px; border-radius: 8px; font-size: 13px; }
+    .diag-provider span { padding: 6px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; user-select: none; }
     .diag-provider .on { background: var(--primary); color: #fff; font-weight: 600; }
     .diag-provider .off { background: var(--paper-2); color: var(--grey-400); }
     .diag-gauge { position: relative; height: 14px; background: var(--paper-2); border-radius: 7px; }
@@ -94,9 +94,13 @@
         fr: {
           navCta: 'Rejoindre la beta',
           title: 'Combien de CA attend une relance dans votre CRM ?',
-          subtitle: 'Connectez votre Pipedrive en lecture seule — le chiffre en 30 secondes, sans compte.',
-          pipedrive: 'Pipedrive', hubspotSoon: 'HubSpot (bientôt)',
-          otherCrm: 'Sur HubSpot, Salesforce, Odoo, Notion, Airtable ou Folk ? Le même diagnostic vous attend dans l’app dès que votre CRM est connecté.',
+          subtitle: 'Connectez votre Pipedrive ou HubSpot en lecture seule — le chiffre en 30 secondes, sans compte.',
+          pipedrive: 'Pipedrive', hubspot: 'HubSpot',
+          tokenLabelHubspot: 'Votre token d’application privée HubSpot (lecture seule)',
+          tokenPlaceholderHubspot: 'Collez votre token ici (pat-…)',
+          guideTitleHubspot: 'Où trouver mon token ?',
+          guideHubspot: ['Connectez-vous sur app.hubspot.com', 'Roue Paramètres → Intégrations → Applications privées → Créer une application privée', 'Onglet Périmètres : cochez crm.objects.deals.read et crm.objects.companies.read', 'Créez l’application, copiez le token (pat-…) et collez-le ci-dessus'],
+          otherCrm: 'Sur Salesforce, Odoo, Notion, Airtable ou Folk ? Le même diagnostic vous attend dans l’app dès que votre CRM est connecté.',
           otherCrmCta: 'Créer mon compte →',
           tokenLabel: 'Votre clé API Pipedrive (lecture seule)',
           tokenPlaceholder: 'Collez votre clé API ici',
@@ -104,7 +108,7 @@
           guide: ['Connectez-vous sur app.pipedrive.com', 'Cliquez sur votre avatar → Paramètres personnels → API', 'Copiez la clé affichée et collez-la ci-dessus'],
           gdpr: "Votre clé n'est jamais stockée : elle sert à une seule lecture de vos deals. Seuls les chiffres agrégés du rapport sont conservés, et supprimés automatiquement après 30 jours.",
           scanBtn: 'Lire mon CRM', scanning: 'Lecture de votre CRM en cours…',
-          errToken: 'Clé invalide ou Pipedrive injoignable — vérifiez la clé et réessayez.',
+          errToken: 'Clé invalide ou CRM injoignable — vérifiez la clé et réessayez.',
           errRate: 'Trop de diagnostics depuis cette adresse — réessayez dans quelques minutes.',
           errGeneric: 'Une erreur est survenue. Réessayez.',
           emptyTitle: 'Votre CRM ne contient aucun deal.',
@@ -142,9 +146,13 @@
         en: {
           navCta: 'Join the beta',
           title: 'How much is sleeping in your CRM?',
-          subtitle: 'Connect your Pipedrive read-only — free diagnostic in 30 seconds, no account needed.',
-          pipedrive: 'Pipedrive', hubspotSoon: 'HubSpot (soon)',
-          otherCrm: 'On HubSpot, Salesforce, Odoo, Notion, Airtable or Folk? The same diagnostic is waiting in the app once your CRM is connected.',
+          subtitle: 'Connect your Pipedrive or HubSpot read-only — free diagnostic in 30 seconds, no account needed.',
+          pipedrive: 'Pipedrive', hubspot: 'HubSpot',
+          tokenLabelHubspot: 'Your HubSpot private app token (read-only)',
+          tokenPlaceholderHubspot: 'Paste your token here (pat-…)',
+          guideTitleHubspot: 'Where do I find my token?',
+          guideHubspot: ['Sign in at app.hubspot.com', 'Settings gear → Integrations → Private apps → Create a private app', 'Scopes tab: check crm.objects.deals.read and crm.objects.companies.read', 'Create the app, copy the token (pat-…) and paste it above'],
+          otherCrm: 'On Salesforce, Odoo, Notion, Airtable or Folk? The same diagnostic is waiting in the app once your CRM is connected.',
           otherCrmCta: 'Create my account →',
           tokenLabel: 'Your Pipedrive API key (read-only)',
           tokenPlaceholder: 'Paste your API key here',
@@ -152,7 +160,7 @@
           guide: ['Sign in at app.pipedrive.com', 'Click your avatar → Personal preferences → API', 'Copy the key shown and paste it above'],
           gdpr: 'Your key is never stored: it is used for a single read of your deals. Only the report’s aggregated numbers are kept, and automatically deleted after 30 days.',
           scanBtn: 'Read my CRM', scanning: 'Reading your CRM…',
-          errToken: 'Invalid key or Pipedrive unreachable — check the key and try again.',
+          errToken: 'Invalid key or CRM unreachable — check the key and try again.',
           errRate: 'Too many diagnostics from this address — try again in a few minutes.',
           errGeneric: 'Something went wrong. Please try again.',
           emptyTitle: 'Your CRM has no deals.',
@@ -205,7 +213,7 @@
       }
 
       var body = document.getElementById('diagBody');
-      var state = { report: null, id: null };
+      var state = { report: null, id: null, provider: 'pipedrive' };
 
       function renderHead() {
         document.documentElement.lang = lang;
@@ -218,22 +226,28 @@
       }
 
       function renderForm(err) {
+        var hs = state.provider === 'hubspot';
         renderHead();
         body.innerHTML =
           '<form class="diag-card" id="diagForm">' +
-            '<div class="diag-provider"><span class="on">' + esc(t('pipedrive')) + '</span><span class="off">' + esc(t('hubspotSoon')) + '</span></div>' +
+            '<div class="diag-provider">' + ['pipedrive', 'hubspot'].map(function (p) { return '<span class="' + (state.provider === p ? 'on' : 'off') + '" data-provider="' + p + '">' + esc(t(p)) + '</span>'; }).join('') + '</div>' +
             '<div class="diag-note" style="margin:-4px 0 14px;">' + esc(t('otherCrm')) +
               ' <a href="https://app.baakal.ai/?ref=diagnostic" style="color:var(--primary);font-weight:600;text-decoration:none;">' + esc(t('otherCrmCta')) + '</a></div>' +
-            '<label class="diag-label" for="diagToken">' + esc(t('tokenLabel')) + '</label>' +
-            '<input class="diag-input" id="diagToken" type="password" placeholder="' + esc(t('tokenPlaceholder')) + '" autocomplete="off">' +
-            '<details class="diag-guide"><summary>' + esc(t('guideTitle')) + '</summary><ol>' +
-              (T[lang] || T.fr).guide.map(function (g) { return '<li>' + esc(g) + '</li>'; }).join('') +
+            '<label class="diag-label" for="diagToken">' + esc(t(hs ? 'tokenLabelHubspot' : 'tokenLabel')) + '</label>' +
+            '<input class="diag-input" id="diagToken" type="password" placeholder="' + esc(t(hs ? 'tokenPlaceholderHubspot' : 'tokenPlaceholder')) + '" autocomplete="off">' +
+            '<details class="diag-guide"><summary>' + esc(t(hs ? 'guideTitleHubspot' : 'guideTitle')) + '</summary><ol>' +
+              (T[lang] || T.fr)[hs ? 'guideHubspot' : 'guide'].map(function (g) { return '<li>' + esc(g) + '</li>'; }).join('') +
             '</ol></details>' +
             (err ? '<div class="diag-err">' + esc(err) + '</div>' : '') +
             '<button type="submit" class="btn btn-accent" style="width:100%;margin-top:14px;padding:12px;font-size:15px;justify-content:center;">' + esc(t('scanBtn')) + '</button>' +
             '<div class="diag-note">' + esc(t('gdpr')) + '</div>' +
           '</form>';
         document.getElementById('diagForm').addEventListener('submit', onScan);
+        document.querySelectorAll('.diag-provider span').forEach(function (el) {
+          el.addEventListener('click', function () {
+            if (state.provider !== el.dataset.provider) { state.provider = el.dataset.provider; renderForm(); }
+          });
+        });
       }
 
       function onScan(e) {
@@ -245,7 +259,7 @@
         fetch(API + '/api/public/diagnostic', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: 'pipedrive', apiToken: token, lang: lang }),
+          body: JSON.stringify({ provider: state.provider, apiToken: token, lang: lang }),
         }).then(function (res) {
           if (!res.ok) {
             return res.json().catch(function () { return {}; }).then(function (b) {

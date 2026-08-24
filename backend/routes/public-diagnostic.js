@@ -13,7 +13,13 @@ const express = require('express');
 const db = require('../db');
 const logger = require('../lib/logger');
 const { track } = require('../lib/track');
-const { listDealsForDiagnostic } = require('../api/pipedrive');
+const pipedrive = require('../api/pipedrive');
+const hubspot = require('../api/hubspot');
+
+const PROVIDERS = {
+  pipedrive: pipedrive.listDealsForDiagnostic,
+  hubspot: hubspot.listDealsForDiagnostic,
+};
 const { publicDiagLimiter } = require('../middleware/rate-limit');
 
 const router = express.Router();
@@ -84,26 +90,28 @@ function computeReport(deals) {
 router.post('/', publicDiagLimiter, async (req, res, next) => {
   try {
     const { provider, apiToken, lang } = req.body || {};
-    if (provider !== 'pipedrive') return res.status(400).json({ error: 'provider_not_supported' });
+    const listDeals = PROVIDERS[provider];
+    if (!listDeals) return res.status(400).json({ error: 'provider_not_supported' });
     if (typeof apiToken !== 'string' || apiToken.trim().length < 8 || apiToken.length > 300) {
       return res.status(400).json({ error: 'invalid_token' });
     }
 
     let deals;
     try {
-      deals = await listDealsForDiagnostic(apiToken.trim());
+      deals = await listDeals(apiToken.trim());
     } catch (err) {
-      logger.warn('public-diagnostic', `fetch pipedrive échoué: ${err.message}`);
+      logger.warn('public-diagnostic', `fetch ${provider} échoué: ${err.message}`);
       return res.status(400).json({ error: 'invalid_token' });
     }
 
     const report = computeReport(deals);
     const saved = await db.query(
       `INSERT INTO public_diagnostics (provider, lang, report) VALUES ($1, $2, $3) RETURNING id`,
-      ['pipedrive', lang === 'en' ? 'en' : 'fr', JSON.stringify(report)]
+      [provider, lang === 'en' ? 'en' : 'fr', JSON.stringify(report)]
     );
 
     track(null, 'diagnostic_public_done', {
+      provider,
       deals: report.totalDeals,
       dormant: report.dormant.count,
       noValue: report.dormant.noValueCount,

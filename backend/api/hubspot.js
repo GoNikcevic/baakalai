@@ -244,6 +244,63 @@ async function archiveContact(accessToken, contactId) {
   });
 }
 
+// Diagnostic public : liste paginée des deals au format attendu par
+// computeReport (routes/public-diagnostic.js), aligné sur la version
+// Pipedrive. notes_last_updated est la « Last Activity Date » des deals.
+// Scopes requis du token private app : crm.objects.deals.read
+// (+ crm.objects.companies.read pour les noms de sociétés, optionnel).
+async function listDealsForDiagnostic(accessToken, { maxDeals = 2000 } = {}) {
+  const raw = [];
+  let after;
+  while (raw.length < maxDeals) {
+    let url = '/crm/v3/objects/deals?limit=100&associations=companies'
+      + '&properties=dealname,amount,createdate,notes_last_updated,hs_is_closed,hs_is_closed_won';
+    if (after) url += `&after=${after}`;
+    const data = await hubspotFetch(accessToken, url);
+    const results = data.results || [];
+    for (const d of results) {
+      const p = d.properties || {};
+      raw.push({
+        name: p.dealname || null,
+        companyId: d.associations?.companies?.results?.[0]?.id || null,
+        value: parseFloat(p.amount) || 0,
+        currency: 'EUR',
+        status: p.hs_is_closed_won === 'true' ? 'won' : p.hs_is_closed === 'true' ? 'lost' : 'open',
+        addTime: p.createdate,
+        lastActivity: p.notes_last_updated || null,
+      });
+    }
+    if (!data.paging?.next?.after || results.length === 0) break;
+    after = data.paging.next.after;
+  }
+
+  // Noms de sociétés en batch (100 max/appel). Best-effort : un token sans le
+  // scope companies donne un diagnostic valide, seuls les noms manquent.
+  const companyNames = {};
+  const ids = [...new Set(raw.map(d => d.companyId).filter(Boolean))];
+  try {
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = await hubspotFetch(accessToken, '/crm/v3/objects/companies/batch/read', {
+        method: 'POST',
+        body: JSON.stringify({
+          inputs: ids.slice(i, i + 100).map(id => ({ id })),
+          properties: ['name'],
+        }),
+      });
+      for (const c of batch.results || []) companyNames[c.id] = c.properties?.name || null;
+    }
+  } catch (err) {
+    if (err.status !== 403) throw err;
+  }
+
+  // Fallback « — » : société associée mais nom illisible (scope manquant) —
+  // compte dans pctCompany sans afficher un nom bidon dans le top 3.
+  return raw.map(({ companyId, ...d }) => ({
+    ...d,
+    company: companyId ? (companyNames[companyId] || '—') : null,
+  }));
+}
+
 module.exports = {
   // Contacts
   createContact,
@@ -256,6 +313,7 @@ module.exports = {
   createDeal,
   updateDeal,
   getDeal,
+  listDealsForDiagnostic,
   // Associations
   associateContactToDeal,
   // Notes
