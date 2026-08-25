@@ -91,4 +91,22 @@ async function refreshTokens(provider, refreshToken) {
   }));
 }
 
-module.exports = { isConfigured, authorizeUrl, exchangeCode, refreshTokens, PROVIDERS };
+// Salesforce n'est pas dans PROVIDERS (host de login dynamique, app par
+// client possible) : credentials de la Connected App du client (metadata de
+// user_integrations) sinon l'app centrale Baakalai (org Developer Edition,
+// env SALESFORCE_CLIENT_ID/SECRET) — le un-clic sans rien créer côté client.
+function salesforceCredentials(metadata) {
+  const meta = metadata || {};
+  if (meta.consumerKey && meta.encryptedConsumerSecret) {
+    try {
+      const { decrypt } = require('../config/crypto');
+      return { clientId: meta.consumerKey, clientSecret: decrypt(meta.encryptedConsumerSecret), central: false };
+    } catch { /* secret illisible → tente l'app centrale */ }
+  }
+  if (process.env.SALESFORCE_CLIENT_ID && process.env.SALESFORCE_CLIENT_SECRET) {
+    return { clientId: process.env.SALESFORCE_CLIENT_ID, clientSecret: process.env.SALESFORCE_CLIENT_SECRET, central: true };
+  }
+  return null;
+}
+
+module.exports = { isConfigured, authorizeUrl, exchangeCode, refreshTokens, salesforceCredentials, PROVIDERS };

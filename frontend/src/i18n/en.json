@@ -789,7 +789,9 @@
     "oauthFailed": "The connection didn't complete. Try again or paste an API key.",
     "sfInstanceUrlPlaceholder": "Instance URL (e.g. https://mycompany.my.salesforce.com)",
     "sfConnect": "Connect Salesforce →",
-    "sfConnecting": "Connecting to Salesforce…"
+    "sfConnecting": "Connecting to Salesforce…",
+    "sfOneClickNote": "One-click connection: sign in to Salesforce and authorize baakalai. Nothing to create on your side.",
+    "sfManualLink": "Or use your own Connected App (Consumer Key + Secret)"
   },
   "triggers": {
     "dealWon": "Deal won",

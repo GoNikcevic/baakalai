@@ -334,6 +334,7 @@ export default function OnboardingWizard({ onComplete }) {
   const [sfConsumerKey, setSfConsumerKey] = useState('');
   const [sfConsumerSecret, setSfConsumerSecret] = useState('');
   const [sfBusy, setSfBusy] = useState(false);
+  const [sfShowManual, setSfShowManual] = useState(false);
 
   // Step 3 — Target
   const [targetSectors, setTargetSectors] = useState('');
@@ -478,6 +479,31 @@ export default function OnboardingWizard({ onComplete }) {
       localStorage.removeItem('bakal_wizard_draft');
       setCrmKeyError(t('wizard.oauthFailed'));
       setSfBusy(false);
+    }
+  }
+
+  // Un-clic via l'app centrale Baakalai (env backend) : rien à créer côté
+  // client. En cas d'échec (app centrale absente), repli sur la Connected
+  // App du client.
+  async function handleConnectSalesforceCentral() {
+    setSfBusy(true);
+    setCrmKeyError(null);
+    try {
+      localStorage.setItem('bakal_wizard_draft', JSON.stringify({
+        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
+      }));
+      const res = await request('/crm/salesforce/connect?from=wizard');
+      if (res.url) {
+        trackEvent('crm_oauth_started', { provider: 'salesforce' });
+        window.location.href = res.url;
+        return;
+      }
+      throw new Error('no url');
+    } catch {
+      localStorage.removeItem('bakal_wizard_draft');
+      setSfBusy(false);
+      setSfShowManual(true);
     }
   }
 
@@ -847,8 +873,43 @@ export default function OnboardingWizard({ onComplete }) {
                       );
                     }
 
-                    // Salesforce ne se connecte pas par clé API : Connected App
-                    // du client (URL + Consumer Key + Secret) puis OAuth.
+                    // Salesforce : un-clic via l'app centrale Baakalai, repli
+                    // Connected App du client (URL + Consumer Key + Secret).
+                    if (crmProvider === 'salesforce' && !sfShowManual) {
+                      return (
+                        <>
+                          <div style={{
+                            fontSize: 12, background: 'var(--paper-2)', borderRadius: 8,
+                            padding: '10px 12px', marginBottom: 8, lineHeight: 1.6, color: 'var(--grey-700)',
+                          }}>
+                            {t('wizard.sfOneClickNote')}
+                          </div>
+                          {crmKeyError && (
+                            <div style={{ fontSize: 12, color: 'var(--danger, #B42318)', marginBottom: 8 }}>
+                              {crmKeyError}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={handleConnectSalesforceCentral}
+                            disabled={sfBusy}
+                            style={{ width: '100%' }}
+                          >
+                            {sfBusy ? t('wizard.sfConnecting') : t('wizard.sfConnect')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => setSfShowManual(true)}
+                            style={{ width: '100%', marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}
+                          >
+                            {t('wizard.sfManualLink')}
+                          </button>
+                        </>
+                      );
+                    }
+
                     if (crmProvider === 'salesforce') {
                       const sfReady = sfInstanceUrl.trim().startsWith('https://')
                         && sfConsumerKey.trim().length > 5

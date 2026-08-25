@@ -1955,13 +1955,15 @@ router.get('/salesforce/connect', async (req, res, next) => {
   try {
     if (_sfOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
-    // Read per-user Connected App credentials from DB
+    // Connected App du client (DB) sinon app centrale Baakalai (env) —
+    // le un-clic marche alors sans aucune intégration préexistante.
     const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
     const metadata = typeof integration?.metadata === 'string' ? JSON.parse(integration.metadata) : (integration?.metadata || {});
-    const clientId = metadata.consumerKey;
-    if (!clientId) {
+    const creds = crmOauth.salesforceCredentials(metadata);
+    if (!creds) {
       return res.status(400).json({ error: 'No Salesforce Connected App configured. Save your Consumer Key and Secret first.' });
     }
+    const clientId = creds.clientId;
 
     const state = crypto.randomBytes(16).toString('hex');
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
@@ -1969,7 +1971,7 @@ router.get('/salesforce/connect', async (req, res, next) => {
 
     // Derive login host from stored instance URL
     let loginHost = 'login.salesforce.com';
-    if (integration.instance_url) {
+    if (integration?.instance_url) {
       try {
         const host = new URL(integration.instance_url).hostname;
         if (/\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com)$/.test(host)) {
@@ -2027,15 +2029,15 @@ router.get('/salesforce/callback', async (req, res) => {
   const tokenHost = oauthData.loginHost || 'login.salesforce.com';
 
   try {
-    // Read per-user Connected App credentials from DB
+    // Connected App du client (DB) sinon app centrale Baakalai (env)
     const integration = await db.userIntegrations.get(oauthData.userId, 'salesforce');
     const prevMetadata = typeof integration?.metadata === 'string' ? JSON.parse(integration.metadata) : (integration?.metadata || {});
-    const clientId = prevMetadata.consumerKey;
-    const clientSecret = prevMetadata.encryptedConsumerSecret ? decrypt(prevMetadata.encryptedConsumerSecret) : null;
-    if (!clientId || !clientSecret) {
+    const creds = crmOauth.salesforceCredentials(prevMetadata);
+    if (!creds) {
       logger.error('salesforce-oauth', `No Connected App credentials found for user ${oauthData.userId}`);
       return res.redirect(APP_URL + '/settings?crm_error=salesforce_no_credentials');
     }
+    const { clientId, clientSecret } = creds;
 
     const tokenRes = await fetch(`https://${tokenHost}/services/oauth2/token`, {
       method: 'POST',
@@ -2062,13 +2064,15 @@ router.get('/salesforce/callback', async (req, res) => {
     const encryptedRefresh = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
-    // Preserve Connected App credentials in metadata
+    // Preserve Connected App credentials in metadata (absent en central :
+    // le refresh retombera sur les env vars via salesforceCredentials)
     await db.userIntegrations.upsert(oauthData.userId, 'salesforce', {
       accessToken: encryptedAccess,
       refreshToken: encryptedRefresh,
       metadata: {
         consumerKey: prevMetadata.consumerKey,
         encryptedConsumerSecret: prevMetadata.encryptedConsumerSecret,
+        central: creds.central || undefined,
         instance_url: tokens.instance_url,
         oauth: true,
         loginHost: tokenHost,
@@ -2113,12 +2117,12 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
     const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
     const refreshHost = metadata.loginHost || 'login.salesforce.com';
 
-    // Use per-user Connected App credentials
-    const clientId = metadata.consumerKey;
-    const clientSecret = metadata.encryptedConsumerSecret ? decrypt(metadata.encryptedConsumerSecret) : null;
-    if (!clientId || !clientSecret) {
+    // Connected App du client (metadata) sinon app centrale Baakalai (env)
+    const creds = crmOauth.salesforceCredentials(metadata);
+    if (!creds) {
       return res.status(400).json({ error: 'No Connected App credentials found. Please reconnect Salesforce.' });
     }
+    const { clientId, clientSecret } = creds;
 
     const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
       method: 'POST',
@@ -2141,8 +2145,11 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
     const encryptedAccess = encrypt(tokens.access_token);
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
+    // Si Salesforce fait tourner le refresh token (rotation), persister le
+    // nouveau — l'ancien devient invalide.
     await db.userIntegrations.upsert(req.user.id, 'salesforce', {
       accessToken: encryptedAccess,
+      ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
       expiresAt,
     });
 

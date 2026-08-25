@@ -1384,7 +1384,21 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
   const [consumerKey, setConsumerKey] = useState('');
   const [consumerSecret, setConsumerSecret] = useState('');
   const [useTokenFallback, setUseTokenFallback] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [status, setStatus] = useState(null);
+
+  // Un-clic via l'app centrale Baakalai : aucun setup côté client. Si le
+  // backend n'a pas l'app centrale (400), repli sur le formulaire manuel.
+  const handleCentralConnect = async () => {
+    setStatus('connecting');
+    try {
+      const res = await request('/crm/salesforce/connect');
+      if (res.url) { window.location.assign(res.url); return; }
+      setStatus(null); setShowManual(true);
+    } catch {
+      setStatus(null); setShowManual(true);
+    }
+  };
 
   const handleOAuthConnect = async () => {
     if (!consumerKey.trim() || !consumerSecret.trim() || !instanceUrl) return;
@@ -1454,6 +1468,33 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
     : useTokenFallback
       ? accessToken.length > 10 && instanceUrl.startsWith('http')
       : consumerKey.trim().length > 5 && consumerSecret.trim().length > 5 && instanceUrl.startsWith('https://');
+
+  if (!isConnected && !useTokenFallback && !showManual) {
+    return (
+      <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+        <div style={{
+          fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
+          background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+        }}>
+          {en
+            ? 'One-click connection: sign in to Salesforce and authorize baakalai (read/write via API). Nothing to create on your side.'
+            : 'Connexion en un clic : identifiez-vous sur Salesforce et autorisez baakalai (lecture/écriture via API). Rien à créer de votre côté.'}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
+            onClick={handleCentralConnect} disabled={status === 'connecting'}>
+            {status === 'connecting' ? (en ? 'Redirecting...' : 'Redirection...') : (en ? 'Connect with Salesforce' : 'Connecter via Salesforce')}
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
+            onClick={onCancel}>{'✕'}</button>
+        </div>
+        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, width: '100%', color: 'var(--text-muted)' }}
+          onClick={() => setShowManual(true)}>
+          {en ? 'Or use your own Connected App (Consumer Key + Secret)' : 'Ou utiliser votre propre Connected App (Consumer Key + Secret)'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>

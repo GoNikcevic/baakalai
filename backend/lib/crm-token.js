@@ -19,10 +19,13 @@ async function getUserCrmToken(userId, provider) {
     const integration = await db.userIntegrations.get(userId, 'salesforce');
     if (!integration) return null;
     try {
-      // Auto-refresh if token expires within 5 minutes and we have a refresh_token
+      // Auto-refresh if token expires within 5 minutes and we have a refresh_token.
+      // Credentials : Connected App du client, sinon app centrale (env vars).
       const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
-      const clientId = metadata.consumerKey;
-      const clientSecret = metadata.encryptedConsumerSecret ? decrypt(metadata.encryptedConsumerSecret) : null;
+      const { salesforceCredentials } = require('./crm-oauth');
+      const creds = salesforceCredentials(metadata);
+      const clientId = creds?.clientId;
+      const clientSecret = creds?.clientSecret;
       if (integration.refresh_token && clientId && clientSecret) {
         const shouldRefresh = integration.expires_at
           ? new Date(integration.expires_at).getTime() < Date.now() + 5 * 60 * 1000
@@ -38,7 +41,12 @@ async function getUserCrmToken(userId, provider) {
             const tokens = await tokenRes.json();
             const encryptedAccess = encrypt(tokens.access_token);
             const expiresAtNew = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-            await db.userIntegrations.upsert(userId, 'salesforce', { accessToken: encryptedAccess, expiresAt: expiresAtNew });
+            // Rotation éventuelle du refresh token : persister le nouveau
+            await db.userIntegrations.upsert(userId, 'salesforce', {
+              accessToken: encryptedAccess,
+              ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
+              expiresAt: expiresAtNew,
+            });
             return tokens.access_token;
           }
         }

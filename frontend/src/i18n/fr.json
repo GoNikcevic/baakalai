@@ -789,7 +789,9 @@
     "oauthFailed": "La connexion n'a pas abouti. Réessayez ou collez une clé API.",
     "sfInstanceUrlPlaceholder": "URL de l'instance (ex : https://monentreprise.my.salesforce.com)",
     "sfConnect": "Connecter Salesforce →",
-    "sfConnecting": "Connexion à Salesforce…"
+    "sfConnecting": "Connexion à Salesforce…",
+    "sfOneClickNote": "Connexion en un clic : identifiez-vous sur Salesforce et autorisez baakalai. Rien à créer de votre côté.",
+    "sfManualLink": "Ou utiliser votre propre Connected App (Consumer Key + Secret)"
   },
   "triggers": {
     "dealWon": "Deal gagné",
