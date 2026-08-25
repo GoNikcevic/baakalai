@@ -95,6 +95,31 @@ async function getDeals(instanceUrl, accessToken, limit = 100) {
   }));
 }
 
+// Diagnostic public (lead magnet) : lecture unique et anonyme des
+// opportunités via OAuth central — même forme de retour que
+// pipedrive/hubspot.listDealsForDiagnostic (routes/public-diagnostic.js).
+async function listDealsForDiagnostic({ accessToken, instanceUrl }, { maxDeals = 2000 } = {}) {
+  const soql = `SELECT Name, Amount, CreatedDate, LastActivityDate, LastModifiedDate, IsClosed, IsWon, Account.Name FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${maxDeals}`;
+  const deals = [];
+  let result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(soql)}`);
+  for (;;) {
+    for (const r of result.records || []) {
+      deals.push({
+        name: r.Name,
+        company: r.Account?.Name || null,
+        value: parseFloat(r.Amount) || 0,
+        currency: 'EUR',
+        status: r.IsClosed ? (r.IsWon ? 'won' : 'lost') : 'open',
+        addTime: r.CreatedDate,
+        lastActivity: extractActivityDate('salesforce', r),
+      });
+    }
+    if (result.done || !result.nextRecordsUrl || deals.length >= maxDeals) break;
+    result = await sfFetch(instanceUrl, accessToken, result.nextRecordsUrl.replace('/services/data/v58.0', ''));
+  }
+  return deals;
+}
+
 // ── Notes ──
 
 async function createNote(instanceUrl, accessToken, data) {
@@ -742,6 +767,7 @@ module.exports = {
   updateDeal,
   getDeal,
   getDeals,
+  listDealsForDiagnostic,
   getStages,
   getUsers,
   getActivities,

@@ -98,21 +98,41 @@ function computeReport(deals) {
 // GET /oauth/:provider/start — diagnostic sans compte via le bouton OAuth.
 // Réutilise le callback produit (/api/crm/:provider/callback, seul redirect
 // enregistré chez les fournisseurs) avec un state marqué diagnostic:true.
-router.get('/oauth/:provider(hubspot|pipedrive)/start', publicDiagLimiter, (req, res) => {
+// Salesforce passe par l'app centrale Baakalai (org DE) et le scope api
+// seul : une lecture, pas de refresh token à demander.
+router.get('/oauth/:provider(hubspot|pipedrive|salesforce)/start', publicDiagLimiter, (req, res) => {
   const { provider } = req.params;
-  if (!crmOauth.isConfigured(provider)) {
+  const sf = provider === 'salesforce';
+  const sfCreds = sf ? crmOauth.salesforceCredentials(null) : null;
+  if (sf ? !sfCreds : !crmOauth.isConfigured(provider)) {
     return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=unavailable`);
   }
   if (oauthStates.size >= 1000) {
     return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=busy`);
   }
   const state = crypto.randomBytes(16).toString('hex');
-  oauthStates.set(state, {
+  const stateData = {
     provider,
     diagnostic: true,
     lang: req.query.lang === 'en' ? 'en' : 'fr',
     expiresAt: Date.now() + 600000,
-  });
+  };
+  if (sf) {
+    stateData.codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(stateData.codeVerifier).digest('base64url');
+    oauthStates.set(state, stateData);
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: sfCreds.clientId,
+      redirect_uri: `${APP_URL}/api/crm/salesforce/callback`,
+      scope: 'api',
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+    return res.redirect(`https://login.salesforce.com/services/oauth2/authorize?${params}`);
+  }
+  oauthStates.set(state, stateData);
   res.redirect(crmOauth.authorizeUrl(provider, {
     redirectUri: `${APP_URL}/api/crm/${provider}/callback`,
     state,
@@ -124,10 +144,16 @@ router.get('/oauth/:provider(hubspot|pipedrive)/start', publicDiagLimiter, (req,
 // owner_key distingue la vue propriétaire (redirect ?r=&k=) de la vue
 // partagée anonymisée.
 async function runOauthDiagnostic(provider, tokens, lang) {
+  const salesforceApi = require('../api/salesforce');
   const token = provider === 'pipedrive'
     ? { oauth: true, accessToken: tokens.access_token, apiDomain: tokens.api_domain }
-    : tokens.access_token;
-  const deals = await PROVIDERS[provider](token);
+    : provider === 'salesforce'
+      ? { accessToken: tokens.access_token, instanceUrl: tokens.instance_url }
+      : tokens.access_token;
+  // Salesforce n'est pas dans PROVIDERS : pas de chemin clé API (le POST
+  // public ne peut pas fournir l'instance_url), OAuth uniquement.
+  const listDeals = provider === 'salesforce' ? salesforceApi.listDealsForDiagnostic : PROVIDERS[provider];
+  const deals = await listDeals(token);
   const report = computeReport(deals);
   const saved = await db.query(
     `INSERT INTO public_diagnostics (provider, lang, report) VALUES ($1, $2, $3) RETURNING id, owner_key`,

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Diagnostic CRM gratuit — combien de CA attend une relance dans votre pipeline ? | baakalai</title>
-  <meta name="description" content="Connectez votre Pipedrive ou HubSpot en lecture seule : en 30 secondes, découvrez combien de deals attendent une relance dans votre CRM et ce qu'ils valent. Gratuit, sans compte.">
+  <meta name="description" content="Connectez votre Pipedrive, HubSpot ou Salesforce en lecture seule : en 30 secondes, découvrez combien de deals attendent une relance dans votre CRM et ce qu'ils valent. Gratuit, sans compte.">
   <meta property="og:title" content="Diagnostic CRM gratuit — combien de CA attend une relance dans votre pipeline ?">
   <meta property="og:description" content="20 à 40 % des deals d'une PME restent sans relance. Et les vôtres ? Diagnostic gratuit en 30 secondes, sans compte.">
   <meta property="og:type" content="website">
@@ -99,7 +99,7 @@
         fr: {
           navCta: 'Rejoindre la beta',
           title: 'Combien de CA attend une relance dans votre CRM ?',
-          subtitle: 'Connectez votre Pipedrive ou HubSpot en lecture seule — le chiffre en 30 secondes, sans compte.',
+          subtitle: 'Connectez votre Pipedrive, HubSpot ou Salesforce en lecture seule — le chiffre en 30 secondes, sans compte.',
           pipedrive: 'Pipedrive', hubspot: 'HubSpot',
           tokenLabelHubspot: 'Votre token d’application privée HubSpot (lecture seule)',
           tokenPlaceholderHubspot: 'Collez votre token ici (pat-…)',
@@ -107,10 +107,11 @@
           guideHubspot: ['Connectez-vous sur app.hubspot.com', 'Roue Paramètres → Intégrations → Applications privées → Créer une application privée', 'Onglet Périmètres : cochez crm.objects.deals.read et crm.objects.companies.read', 'Créez l’application, copiez le token (pat-…) et collez-le ci-dessus'],
           oauthPipedrive: 'Continuer avec Pipedrive',
           oauthHubspot: 'Continuer avec HubSpot',
+          oauthSalesforce: 'Continuer avec Salesforce',
           oauthGdpr: 'Connexion en lecture : le jeton d’accès sert à une seule lecture de vos deals, il n’est jamais stocké. Seuls les chiffres agrégés du rapport sont conservés, supprimés après 30 jours.',
           orApiKey: 'Ou coller une clé API',
           errOauth: 'La connexion a échoué — réessayez ou utilisez une clé API.',
-          otherCrm: 'Sur Salesforce, Odoo, Notion, Airtable ou Folk ? Le même diagnostic vous attend dans l’app dès que votre CRM est connecté.',
+          otherCrm: 'Sur Odoo, Notion, Airtable ou Folk ? Le même diagnostic vous attend dans l’app dès que votre CRM est connecté.',
           otherCrmCta: 'Créer mon compte →',
           tokenLabel: 'Votre clé API Pipedrive (lecture seule)',
           tokenPlaceholder: 'Collez votre clé API ici',
@@ -156,7 +157,7 @@
         en: {
           navCta: 'Join the beta',
           title: 'How much is sleeping in your CRM?',
-          subtitle: 'Connect your Pipedrive or HubSpot read-only — free diagnostic in 30 seconds, no account needed.',
+          subtitle: 'Connect your Pipedrive, HubSpot or Salesforce read-only — free diagnostic in 30 seconds, no account needed.',
           pipedrive: 'Pipedrive', hubspot: 'HubSpot',
           tokenLabelHubspot: 'Your HubSpot private app token (read-only)',
           tokenPlaceholderHubspot: 'Paste your token here (pat-…)',
@@ -164,10 +165,11 @@
           guideHubspot: ['Sign in at app.hubspot.com', 'Settings gear → Integrations → Private apps → Create a private app', 'Scopes tab: check crm.objects.deals.read and crm.objects.companies.read', 'Create the app, copy the token (pat-…) and paste it above'],
           oauthPipedrive: 'Continue with Pipedrive',
           oauthHubspot: 'Continue with HubSpot',
+          oauthSalesforce: 'Continue with Salesforce',
           oauthGdpr: 'Read-only connection: the access token is used for a single read of your deals and is never stored. Only the report’s aggregated numbers are kept, deleted after 30 days.',
           orApiKey: 'Or paste an API key',
           errOauth: 'Connection failed — try again or use an API key.',
-          otherCrm: 'On Salesforce, Odoo, Notion, Airtable or Folk? The same diagnostic is waiting in the app once your CRM is connected.',
+          otherCrm: 'On Odoo, Notion, Airtable or Folk? The same diagnostic is waiting in the app once your CRM is connected.',
           otherCrmCta: 'Create my account →',
           tokenLabel: 'Your Pipedrive API key (read-only)',
           tokenPlaceholder: 'Paste your API key here',
@@ -245,11 +247,11 @@
         renderHead();
         var oauthBtn = function (p) {
           return '<a class="btn btn-accent" style="width:100%;justify-content:center;padding:12px;font-size:15px;margin-bottom:10px;" href="' + API + '/api/public/diagnostic/oauth/' + p + '/start?lang=' + lang + '">' +
-            esc(t(p === 'pipedrive' ? 'oauthPipedrive' : 'oauthHubspot')) + '</a>';
+            esc(t({ pipedrive: 'oauthPipedrive', hubspot: 'oauthHubspot', salesforce: 'oauthSalesforce' }[p])) + '</a>';
         };
         body.innerHTML =
           '<form class="diag-card" id="diagForm">' +
-            oauthBtn('pipedrive') + oauthBtn('hubspot') +
+            oauthBtn('pipedrive') + oauthBtn('hubspot') + oauthBtn('salesforce') +
             '<div class="diag-note" style="margin-top:0;">' + esc(t('oauthGdpr')) + '</div>' +
             (err ? '<div class="diag-err">' + esc(err) + '</div>' : '') +
             '<details class="diag-guide" style="margin-top:14px;"><summary>' + esc(t('orApiKey')) + '</summary>' +

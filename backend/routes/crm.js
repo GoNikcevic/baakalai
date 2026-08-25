@@ -2008,15 +2008,61 @@ router.get('/salesforce/connect', async (req, res, next) => {
 router.get('/salesforce/callback', async (req, res) => {
   logger.info('salesforce-oauth', `Callback hit: ${req.originalUrl}, APP_URL=${APP_URL}`);
 
+  // États du diagnostic public (lead magnet, lib/oauth-states) : le refus
+  // comme le succès repartent vers la landing, jamais vers /settings.
+  const sharedStates = require('../lib/oauth-states');
+  const LANDING_URL = process.env.LANDING_URL || 'https://baakal.ai';
+  const diagData = req.query.state ? sharedStates.get(req.query.state) : null;
+  const isDiagnostic = diagData && diagData.diagnostic && diagData.provider === 'salesforce';
+
   // Handle user denial or Salesforce error
   if (req.query.error) {
     logger.warn('salesforce-oauth', `OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
+    if (isDiagnostic) {
+      sharedStates.delete(req.query.state);
+      return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=` + encodeURIComponent(req.query.error));
+    }
     return res.redirect(APP_URL + '/settings?crm_error=' + encodeURIComponent(req.query.error));
   }
 
   const { code, state } = req.query;
   if (!code) {
     return res.redirect(APP_URL + '/settings?crm_error=missing_code');
+  }
+
+  if (isDiagnostic) {
+    sharedStates.delete(state);
+    if (diagData.expiresAt < Date.now()) {
+      return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=expired`);
+    }
+    try {
+      const creds = crmOauth.salesforceCredentials(null);
+      if (!creds) return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=unavailable`);
+      const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          client_id: creds.clientId,
+          client_secret: creds.clientSecret,
+          redirect_uri: APP_URL + '/api/crm/salesforce/callback',
+          code_verifier: diagData.codeVerifier,
+        }),
+      });
+      if (!tokenRes.ok) {
+        logger.warn('salesforce-oauth', `Diagnostic token exchange failed: ${(await tokenRes.text()).slice(0, 200)}`);
+        return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=token`);
+      }
+      const tokens = await tokenRes.json();
+      // Une seule lecture avec le token, jamais stocké — seul le rapport reste.
+      const { runOauthDiagnostic } = require('./public-diagnostic');
+      const { id, ownerKey } = await runOauthDiagnostic('salesforce', tokens, diagData.lang);
+      return res.redirect(`${LANDING_URL}/diagnostic?r=${id}&k=${ownerKey}`);
+    } catch (err) {
+      logger.error('salesforce-oauth', `Diagnostic salesforce failed: ${err.message}`);
+      return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=failed`);
+    }
   }
 
   const oauthData = _sfOauthStates.get(state);

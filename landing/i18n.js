@@ -41,7 +41,7 @@ const I18N = {
     },
     diagcta: {
       eyebrow: "DIAGNOSTIC GRATUIT",
-      title_a: "Sur Pipedrive ou HubSpot ? ",
+      title_a: "Sur Pipedrive, HubSpot ou Salesforce ? ",
       title_em: "Mesurez le CA qui attend une relance",
       title_b: " dans votre pipeline.",
       sub: "20 à 40 % des deals d'une PME restent sans suite. Collez votre clé API, obtenez le chiffre des vôtres en 30 secondes — sans compte. Autre CRM ? Le même diagnostic vous attend dans l'app.",
@@ -184,7 +184,7 @@ const I18N = {
     },
     diagcta: {
       eyebrow: "FREE DIAGNOSTIC",
-      title_a: "On Pipedrive or HubSpot? ",
+      title_a: "On Pipedrive, HubSpot or Salesforce? ",
       title_em: "Find out how much is sleeping",
       title_b: " in your pipeline.",
       sub: "20-40% of SMB pipelines are dormant. Paste your API key, get your own number in 30 seconds — no account needed. On another CRM? The same diagnostic awaits in the app.",
