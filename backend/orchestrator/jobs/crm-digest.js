@@ -112,6 +112,7 @@ function buildDigestHTML(user, list, lang) {
     { label: isEN ? 'Stagnant deals' : 'Deals stagnants', value: c.dealCoach, color: '#f59e0b' },
     { label: 'Upsells', value: c.upsell, color: '#22c55e' },
     { label: isEN ? 'Churn risks' : 'Risques churn', value: c.churnRisks, color: '#ef4444' },
+    { label: isEN ? 'Signals' : 'Signaux', value: c.signals, color: '#3b82f6' },
   ].filter((chip) => chip.value > 0);
 
   const chipsHTML = chips.map((chip) => `

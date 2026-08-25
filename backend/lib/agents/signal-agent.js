@@ -21,6 +21,26 @@ const claude = require('../../api/claude');
 const logger = require('../logger');
 const { safeParseClaudeArray } = require('../utils/safe-json-parse');
 
+// Notification persistée (cloche + socket) : le cron tourne à 8h, l'utilisateur
+// n'est en général pas connecté — un événement socket seul serait perdu.
+async function notifyNewSignals(userId, count) {
+  try {
+    const { createNotification } = require('../notify');
+    const r = await db.query(`SELECT language FROM users WHERE id = $1`, [userId]);
+    const en = r.rows[0]?.language === 'en';
+    await createNotification(userId, {
+      type: 'signals',
+      title: en
+        ? `${count} new signal(s) on your accounts`
+        : `${count} nouveau(x) signal(aux) sur vos comptes`,
+      body: en
+        ? 'Review them in Activation → Signals.'
+        : 'À traiter dans Activation → Signaux.',
+      metadata: { count },
+    });
+  } catch { /* notifications are optional */ }
+}
+
 const SIGNAL_QUERIES = {
   funding: (config) => {
     const sectors = config.target_sectors?.join(' OR ') || '';
@@ -170,14 +190,7 @@ async function run(userId) {
         [userId]
       );
       const count = parseInt(highRelevance.rows[0]?.count || 0);
-      if (count > 0) {
-        const { notifyUser } = require('../../socket');
-        notifyUser(userId, 'signals', {
-          type: 'new_signals',
-          count,
-          message: `${count} high-relevance signal(s) detected`,
-        });
-      }
+      if (count > 0) await notifyNewSignals(userId, count);
     } catch { /* notifications are optional */ }
 
     // Auto-prospecting: if user has no outreach tool, auto-add top signals to CRM
@@ -309,14 +322,7 @@ async function runCrmWatch(userId) {
 
   if (report.detected > 0) {
     logger.info('signal-agent', `User ${userId}: crm-watch ${report.detected} signaux sur ${report.companiesScanned} comptes scannés`);
-    try {
-      const { notifyUser } = require('../../socket');
-      notifyUser(userId, 'signals', {
-        type: 'new_signals',
-        count: report.detected,
-        message: `${report.detected} signal(s) détecté(s) sur vos comptes CRM`,
-      });
-    } catch { /* notifications are optional */ }
+    await notifyNewSignals(userId, report.detected);
   }
 
   return report;
