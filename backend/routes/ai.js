@@ -721,14 +721,22 @@ router.post('/score-leads', async (req, res, next) => {
 });
 
 // POST /api/ai/export-scores-crm
+// { dryRun: true } calcule tout et n'écrit rien — à utiliser pour vérifier ce
+// qui partirait avant d'écrire dans le CRM d'un client. Une écriture sortante
+// ne s'annule pas d'un clic.
 router.post('/export-scores-crm', async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { exportScoresToCRM } = require('../lib/crm-export');
-    const opps = await db.opportunities.listByUser(userId, 100, 0);
-    const result = await exportScoresToCRM(userId, opps);
+    const opps = await db.opportunities.listByUser(userId, 500, 0);
+    const result = await exportScoresToCRM(userId, opps, { dryRun: req.body?.dryRun === true });
     res.json(result);
   } catch (err) {
+    // Un CRM cible non inscriptible n'est pas une panne serveur : c'est une
+    // configuration que l'utilisateur peut corriger, avec un message qui le dit.
+    if (err.code && ['active_crm_not_writable', 'active_crm_not_connected', 'no_crm_connected'].includes(err.code)) {
+      return res.status(422).json({ error: err.message, code: err.code });
+    }
     next(err);
   }
 });
