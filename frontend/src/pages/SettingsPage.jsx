@@ -1115,9 +1115,68 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Écriture Baakalai → CRM (opt-in) */}
+      <CrmWritebackSection t={t} showToast={showToast} lang={lang} />
+
       {/* Danger Zone */}
       <DeleteAccountSection t={t} showToast={showToast} lang={lang} />
       </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ CRM Write-back Section (opt-in) ═══ */
+// Off par défaut : écrire dans le CRM du client est un acte sortant sur sa
+// base de production. Le composant est autonome (GET/PATCH propres) comme
+// DeleteAccountSection, pour ne pas alourdir le chargement de la page.
+
+function CrmWritebackSection({ t, showToast, lang }) {
+  const en = lang === 'en';
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    request('/settings/crm-writeback').then(d => setEnabled(!!d.enabled)).catch(() => {});
+  }, []);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const d = await request('/settings/crm-writeback', {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: !enabled }),
+      });
+      setEnabled(!!d.enabled);
+      showToast({
+        type: 'success',
+        title: d.enabled ? t('settings.writebackOnToast') : t('settings.writebackOffToast'),
+      });
+    } catch (err) {
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="card" style={{ marginTop: 24, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            {t('settings.writebackTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 560 }}>
+            {t('settings.writebackDesc')}
+          </div>
+        </div>
+        <button
+          className={enabled ? 'btn btn-primary' : 'btn btn-ghost'}
+          onClick={toggle}
+          disabled={busy}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {busy ? '…' : enabled ? t('settings.writebackEnabled') : t('settings.writebackDisabled')}
+        </button>
       </div>
     </div>
   );

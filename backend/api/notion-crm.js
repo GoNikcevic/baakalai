@@ -316,6 +316,47 @@ async function queryContacts(notionToken, databaseId) {
   return contacts;
 }
 
+/**
+ * Écrit une note baakalai sur la page d'un contact.
+ *
+ * Bloc callout ajouté en fin de page — et non commentaire Notion : les
+ * commentaires demandent la capability « comment » que les intégrations des
+ * utilisateurs n'ont pas forcément accordée, alors que l'append de contenu
+ * utilise la même capability « insert content » que pushProspectToNotion,
+ * déjà requise pour que le connecteur fonctionne. Aucun nouveau scope à
+ * demander aux utilisateurs existants.
+ *
+ * Le texte est découpé en lignes → un paragraphe par ligne dans le callout,
+ * la première ligne servant de titre. Limite rich_text : 2000 chars par
+ * segment, largement au-dessus de nos contenus.
+ *
+ * @param {string} notionToken
+ * @param {{ pageId: string, content: string }} data  pageId = crm_contact_id
+ */
+async function createNote(notionToken, { pageId, content }) {
+  const notion = new Client({ auth: notionToken });
+  const lines = String(content || '').split('\n').filter(Boolean);
+  if (!lines.length) return { ok: true, skipped: true };
+
+  const [title, ...body] = lines;
+  await notion.blocks.children.append({
+    block_id: pageId,
+    children: [{
+      type: 'callout',
+      callout: {
+        icon: { type: 'emoji', emoji: '🤖' },
+        color: 'purple_background',
+        rich_text: [{ type: 'text', text: { content: title }, annotations: { bold: true } }],
+        children: body.map(line => ({
+          type: 'paragraph',
+          paragraph: { rich_text: [{ type: 'text', text: { content: line.slice(0, 2000) } }] },
+        })),
+      },
+    }],
+  });
+  return { ok: true, pageId };
+}
+
 module.exports = {
   pushProspectToNotion,
   pushProspectsToNotion,
@@ -324,4 +365,5 @@ module.exports = {
   buildProperties,
   queryContacts,
   normalizeNotionStatus,
+  createNote,
 };

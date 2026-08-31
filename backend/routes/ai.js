@@ -734,7 +734,7 @@ router.post('/export-scores-crm', async (req, res, next) => {
   } catch (err) {
     // Un CRM cible non inscriptible n'est pas une panne serveur : c'est une
     // configuration que l'utilisateur peut corriger, avec un message qui le dit.
-    if (err.code && ['active_crm_not_writable', 'active_crm_not_connected', 'no_crm_connected'].includes(err.code)) {
+    if (err.code && ['active_crm_not_writable', 'active_crm_not_connected', 'no_crm_connected', 'writeback_not_enabled'].includes(err.code)) {
       return res.status(422).json({ error: err.message, code: err.code });
     }
     next(err);

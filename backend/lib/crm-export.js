@@ -32,11 +32,10 @@ const db = require('../db');
 const logger = require('./logger');
 const { getUserCrmToken } = require('./crm-token');
 
-// Providers sachant écrire une note sur un contact existant. Notion et Airtable
-// en sont absents volontairement : leurs connecteurs sont en création seule
-// (voir api/notion-crm.js, api/airtable-crm.js), il n'existe aucune primitive
-// de mise à jour à appeler.
-const WRITABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'folk'];
+// Providers sachant écrire une note sur un contact existant. Airtable en est
+// absent volontairement : son connecteur est en création seule (voir
+// api/airtable-crm.js), il n'existe aucune primitive de mise à jour à appeler.
+const WRITABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'folk', 'notion'];
 
 /**
  * Résout le CRM cible.
@@ -163,6 +162,12 @@ async function writeNote(provider, creds, userId, opp, content) {
         personId: opp.crm_contact_id,
         content,
       });
+    case 'notion':
+      // crm_contact_id = page ID Notion (posé par l'import queryContacts).
+      return require('../api/notion-crm').createNote(creds, {
+        pageId: opp.crm_contact_id,
+        content,
+      });
     default:
       throw new Error(`Écriture non supportée pour ${provider}`);
   }
@@ -177,6 +182,25 @@ async function writeNote(provider, creds, userId, opp, content) {
  *        à utiliser pour vérifier ce qui partirait avant d'écrire chez un client.
  */
 async function exportScoresToCRM(userId, opportunities, { dryRun = false } = {}) {
+  // ── Opt-in ──
+  // Écrire dans le CRM du client est un acte sortant sur SA base de production,
+  // pas une feature qu'on active pour lui. Off par défaut ; le dry-run reste
+  // permis sans opt-in — c'est justement la preview qui permet de décider en
+  // connaissance de cause ce que l'activation écrirait.
+  if (!dryRun) {
+    const row = await db.query(
+      `SELECT COALESCE((settings->>'crm_writeback_enabled')::boolean, false) AS enabled
+         FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (!row.rows[0]?.enabled) {
+      throw Object.assign(
+        new Error("L'écriture vers le CRM n'est pas activée. Activez-la dans Réglages, ou lancez un dry-run pour prévisualiser."),
+        { code: 'writeback_not_enabled' }
+      );
+    }
+  }
+
   const { provider, creds, reason, activeCrm } = await resolveTargetCrm(userId);
   if (!provider) {
     const messages = {

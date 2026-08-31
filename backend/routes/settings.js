@@ -415,6 +415,37 @@ router.patch('/keys/metadata', async (req, res, next) => {
   }
 });
 
+// GET/PATCH /api/settings/crm-writeback — opt-in d'écriture Baakalai → CRM.
+//
+// Off par défaut : écrire dans le CRM du client (notes d'analyse churn,
+// stagnation) est un acte sortant sur sa base de production — il doit le
+// vouloir explicitement. Le dry-run de /api/ai/export-scores-crm reste
+// accessible sans opt-in : c'est la preview qui sert à décider.
+router.get('/crm-writeback', async (req, res, next) => {
+  try {
+    const row = await db.query(
+      `SELECT COALESCE((settings->>'crm_writeback_enabled')::boolean, false) AS enabled
+         FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    res.json({ enabled: row.rows[0]?.enabled || false });
+  } catch (err) { next(err); }
+});
+
+router.patch('/crm-writeback', async (req, res, next) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled (boolean) is required' });
+    }
+    await db.query(
+      `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ crm_writeback_enabled: enabled }), req.user.id]
+    );
+    res.json({ enabled });
+  } catch (err) { next(err); }
+});
+
 // PATCH /api/settings/language — update user's UI language preference
 router.patch('/language', async (req, res, next) => {
   try {
