@@ -40,7 +40,10 @@ export async function request(path, opts = {}) {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(body.error || `HTTP ${res.status}`), { status: res.status });
+    // `code` remonte le motif machine quand la route en fournit un (ex.
+    // 'no_email_account') : l'appelant peut alors proposer l'action
+    // corrective au lieu d'afficher le message brut du serveur.
+    throw Object.assign(new Error(body.error || `HTTP ${res.status}`), { status: res.status, code: body.code });
   }
   return res.json();
 }

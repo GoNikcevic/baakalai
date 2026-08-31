@@ -32,6 +32,8 @@ export default function TodayCard() {
   const [approving, setApproving] = useState(false);
   const [batchNote, setBatchNote] = useState(null);
   const [busyIds, setBusyIds] = useState(new Set());
+  // Motif du dernier échec d'envoi, affiché en bandeau tant qu'il n'est pas levé.
+  const [blocker, setBlocker] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -62,9 +64,15 @@ export default function TodayCard() {
       if (res.failed > 0) note += ' · ' + t('today.approvedFailed', { failed: res.failed });
       if (remaining > 0) note += ' · ' + t('today.remaining', { count: remaining });
       setBatchNote(note);
+      // La route batch répond 200 même quand tout échoue (elle rend un compte
+      // rendu par email) : sans lire `results`, un « 0 envoyé · 20 échoués »
+      // n'explique pas pourquoi. On remonte le premier motif rencontré.
+      const firstFailure = (res.results || []).find((r) => !r.success && r.error);
+      setBlocker(res.failed > 0 && firstFailure ? firstFailure.error : null);
       await load();
-    } catch {
+    } catch (err) {
       setBatchNote(null);
+      setBlocker(err.message);
     }
     setApproving(false);
   }, [data, load, t]);
@@ -73,8 +81,14 @@ export default function TodayCard() {
     setBusyIds((prev) => new Set(prev).add(emailId));
     try {
       await request(`/nurture/emails/${emailId}/approve`, { method: 'POST' });
+      setBlocker(null);
       await load();
-    } catch { /* l'item reste affiché */ }
+    } catch (err) {
+      // Un échec d'envoi doit se voir. Avant, ce catch était vide ET jamais
+      // atteint (la route répondait 200 sur échec) : le clic n'avait aucun
+      // effet visible.
+      setBlocker(err.message);
+    }
     setBusyIds((prev) => { const s = new Set(prev); s.delete(emailId); return s; });
   }, [load]);
 
@@ -145,6 +159,20 @@ export default function TodayCard() {
           </button>
         </div>
       </div>
+
+      {/* Blocage d'envoi — visible tant qu'il n'est pas levé */}
+      {blocker && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          background: 'var(--danger-soft)', border: '1px solid var(--danger)', borderRadius: 8,
+          padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--text)',
+        }}>
+          <span>{'⚠️'} {t('today.sendBlocked')} — {blocker}</span>
+          <Link to="/settings" className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+            {t('today.connectMailbox')}
+          </Link>
+        </div>
+      )}
 
       {/* Items */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

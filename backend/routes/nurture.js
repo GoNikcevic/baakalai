@@ -233,6 +233,14 @@ router.get('/emails', async (req, res, next) => {
 });
 
 // POST /api/nurture/emails/:id/approve — Approve and send a pending email
+//
+// Un échec d'envoi doit sortir en NON-2xx. Avant ce correctif la route
+// répondait 200 avec `{ success: false, error }` : le client (`services/
+// api-client.js`) ne lève que sur `!res.ok`, donc le `catch` des appelants
+// n'était jamais atteint et le clic « Approuver » ne produisait ni envoi ni
+// message — l'email restait pending, puis mourait 14 jours plus tard sur
+// l'expiration de `stepNurture`. C'est la cause du « 0 email envoyé » :
+// aucune boîte mail n'a jamais été connectée et rien ne le disait.
 router.post('/emails/:id/approve', async (req, res, next) => {
   try {
     const email = await db.query(
@@ -251,6 +259,13 @@ router.post('/emails/:id/approve', async (req, res, next) => {
       body: e.body,
       existingEmailId: e.id,
     });
+
+    if (!result.success) {
+      // 422 plutôt que 500 : la requête est valide, c'est l'envoi qui n'aboutit
+      // pas (config manquante ou refus du serveur SMTP). `code` permet au front
+      // de proposer l'action corrective au lieu d'afficher un message brut.
+      return res.status(422).json({ error: result.error, code: result.code || 'send_failed' });
+    }
 
     res.json(result);
   } catch (err) {

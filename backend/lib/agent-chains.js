@@ -163,28 +163,105 @@ async function runDealReactivation(userId) {
   let chainCfg = config.deal_reactivation;
   if (typeof chainCfg === 'string') { try { chainCfg = JSON.parse(chainCfg); } catch { chainCfg = { enabled: false }; } }
 
-  if (!chainCfg.enabled) return { skipped: true, reason: 'disabled' };
+  if (!chainCfg.enabled) {
+    logger.info('agent-chains', `deal_reactivation user=${userId} — désactivée pour ce compte`);
+    return { skipped: true, reason: 'disabled' };
+  }
 
   const todayCount = await countTodayExecutions(userId, 'deal_reactivation');
-  if (todayCount >= chainCfg.max_per_day) return { skipped: true, reason: 'daily_limit_reached', count: todayCount };
+  if (todayCount >= chainCfg.max_per_day) {
+    logger.info('agent-chains', `deal_reactivation user=${userId} — quota du jour atteint (${todayCount}/${chainCfg.max_per_day})`);
+    return { skipped: true, reason: 'daily_limit_reached', count: todayCount };
+  }
 
   const remaining = chainCfg.max_per_day - todayCount;
-  const report = { chain: 'deal_reactivation', executed: 0, pending: 0, skipped: 0, errors: [] };
+  const report = { chain: 'deal_reactivation', executed: 0, pending: 0, skipped: 0, skipReasons: {}, errors: [] };
+
+  // Les rejets étaient jusqu'ici muets — `logChainExecution` n'écrit qu'en cas
+  // de mise en file ou d'envoi, donc une chaîne qui écartait tous ses candidats
+  // rendait « 0 » sans qu'aucune trace n'explique pourquoi. Compter par motif
+  // rend le diagnostic possible depuis les logs.
+  const skip = (reason) => {
+    report.skipped++;
+    report.skipReasons[reason] = (report.skipReasons[reason] || 0) + 1;
+  };
 
   try {
-    // Step 1: Run Deal Coach to find stagnant deals
-    const dealCoach = require('./agents/deal-coach');
-    const coachReport = await dealCoach.run(userId);
+    // Step 1 : constituer la liste des deals stagnants à relancer.
+    //
+    // Historiquement cette étape déléguait entièrement à Deal Coach et ne
+    // gardait que les suggestions `action === 'email'`. L'entonnoir se fermait
+    // presque toujours : Deal Coach plafonne à 10 suggestions par jour, ~1 seule
+    // porte l'action 'email', et si ce contact-là n'a pas d'adresse (45 % des
+    // deals au statut 'new') la chaîne rendait 'no_email_suggestions'. Résultat
+    // mesuré en prod : zéro exécution depuis la mise en service.
+    //
+    // La détection se fait donc directement en SQL — critère de stagnation
+    // identique à celui de Deal Coach (`min_stagnant_days`), sur `last_activity_at`
+    // qui porte la date réelle côté CRM, et en exigeant une adresse email
+    // puisque c'est le prérequis de l'action. Deal Coach reste appelé, mais
+    // comme *enrichissement* (angle de relance) et non plus comme filtre.
+    const stagnantDays = chainCfg.min_stagnant_days || 14;
 
-    if (!coachReport.suggestions || coachReport.suggestions.length === 0) {
+    const dealCoach = require('./agents/deal-coach');
+    let coachByContact = new Map();
+    try {
+      const coachReport = await dealCoach.run(userId);
+      coachByContact = new Map(
+        (coachReport.suggestions || []).map(s => [s.contactId, s])
+      );
+    } catch (err) {
+      // L'enrichissement est optionnel : son échec ne doit plus stopper la chaîne.
+      logger.warn('agent-chains', `deal_coach enrichment failed for ${userId}: ${err.message}`);
+    }
+
+    // Les exclusions (brouillon déjà en file, contact déjà sollicité) sont dans
+    // la requête et non dans la boucle : le quota `max_per_day` tronque la liste
+    // à 3, donc filtrer après aurait consommé le quota en écartant les 3 plus
+    // gros deals — précisément ceux qui ont déjà un pending — sans jamais
+    // atteindre le 4e candidat éligible. Les gardes équivalentes restent dans
+    // la boucle comme filet (course entre deux chaînes du même run).
+    const stagnantResult = await db.query(
+      `SELECT o.id, o.name, o.company, o.email, o.deal_value, o.churn_score,
+              EXTRACT(DAY FROM now() - COALESCE(o.last_activity_at, o.created_at))::int AS days_since_activity
+         FROM opportunities o
+        WHERE o.user_id = $1
+          AND o.status NOT IN ('won', 'lost')
+          AND o.email IS NOT NULL AND o.email <> ''
+          AND COALESCE(o.last_activity_at, o.created_at) < now() - ($2 || ' days')::interval
+          AND NOT EXISTS (
+            SELECT 1 FROM nurture_emails ne
+             WHERE ne.user_id = o.user_id AND ne.opportunity_id = o.id AND ne.status = 'pending'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM nurture_emails ne
+             WHERE ne.user_id = o.user_id AND LOWER(ne.to_email) = LOWER(o.email)
+               AND (ne.created_at > now() - interval '7 days' OR ne.sent_at > now() - interval '2 hours')
+          )
+        ORDER BY o.deal_value DESC NULLS LAST, COALESCE(o.last_activity_at, o.created_at) ASC`,
+      [userId, String(stagnantDays)]
+    );
+
+    if (stagnantResult.rows.length === 0) {
+      logger.info('agent-chains', `deal_reactivation user=${userId} — aucun deal stagnant (>${stagnantDays}j) avec email`);
       return { ...report, skipped: true, reason: 'no_stagnant_deals' };
     }
 
-    // Filter to email-actionable suggestions only
-    const emailSuggestions = coachReport.suggestions.filter(s => s.action === 'email');
-    if (emailSuggestions.length === 0) {
-      return { ...report, skipped: true, reason: 'no_email_suggestions' };
-    }
+    // Forme attendue par le reste de la chaîne. La suggestion de Deal Coach est
+    // reprise si elle existe pour ce contact, sinon un motif factuel suffit.
+    const emailSuggestions = stagnantResult.rows.map(opp => {
+      const coached = coachByContact.get(opp.id);
+      return {
+        contactId: opp.id,
+        contactName: opp.name,
+        daysSinceUpdate: opp.days_since_activity,
+        action: 'email',
+        urgency: coached?.urgency || (opp.churn_score >= 50 ? 'high' : 'normal'),
+        suggestion: coached?.suggestion || `Relancer ce deal sans activité depuis ${opp.days_since_activity} jours.`,
+        reason: coached?.reason || `Aucune activité CRM depuis ${opp.days_since_activity} jours.`,
+      };
+    });
+    report.candidates = emailSuggestions.length;
 
     // Step 2: Get enrichment context
     const [recentlyEmailed, timing, copyCtx, teamId] = await Promise.all([
@@ -205,14 +282,14 @@ async function runDealReactivation(userId) {
           [suggestion.contactId, userId]
         );
         const opp = oppResult.rows[0];
-        if (!opp || !opp.email) { report.skipped++; continue; }
+        if (!opp || !opp.email) { skip('no_email'); continue; }
 
         // Skip if recently emailed
-        if (recentlyEmailed.has(opp.email.toLowerCase())) { report.skipped++; continue; }
+        if (recentlyEmailed.has(opp.email.toLowerCase())) { skip('recently_emailed'); continue; }
 
         // Skip if deal value exceeds threshold
         if (chainCfg.exclude_above_value && opp.deal_value > chainCfg.exclude_above_value) {
-          report.skipped++;
+          skip('above_value_threshold');
           continue;
         }
 
@@ -253,7 +330,7 @@ Return JSON: { "subject": "...", "body": "..." }`;
             `SELECT id FROM nurture_emails WHERE user_id = $1 AND opportunity_id = $2 AND status = 'pending' LIMIT 1`,
             [userId, opp.id]
           );
-          if (existingPending.rows.length > 0) { report.skipped++; continue; }
+          if (existingPending.rows.length > 0) { skip('already_pending'); continue; }
 
           // Queue as pending — user sees it in nurture dashboard
           await db.query(
@@ -302,6 +379,11 @@ Return JSON: { "subject": "...", "body": "..." }`;
     report.errors.push(err.message);
     logger.error('agent-chains', `deal_reactivation failed for ${userId}: ${err.message}`);
   }
+
+  // Trace systématique, y compris quand la chaîne n'a rien produit : c'est
+  // précisément le cas qu'on n'arrivait pas à diagnostiquer.
+  const reasons = Object.entries(report.skipReasons).map(([r, n]) => `${r}:${n}`).join(' ');
+  logger.info('agent-chains', `deal_reactivation user=${userId} candidats=${report.candidates ?? 0} quota=${remaining} exec=${report.executed} pending=${report.pending} skip=${report.skipped}${reasons ? ` (${reasons})` : ''}${report.errors.length ? ` err=${report.errors.length}` : ''}`);
 
   return report;
 }

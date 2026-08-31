@@ -502,14 +502,39 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
     // Expiration : un brouillon pending de plus de 14 jours est périmé.
     // L'annuler libère le contact (contrainte unique 067 : un seul pending
     // par contact) — sans quoi la file saturée bloque toute génération.
-    const expired = await db.query(
-      `UPDATE nurture_emails SET status = 'cancelled'
-       WHERE user_id = $1 AND status = 'pending' AND created_at < now() - interval '14 days'`,
+    //
+    // Sauf si l'utilisateur n'a aucune boîte mail connectée : le brouillon
+    // n'est alors pas « périmé », il est *inenvoyable*, et l'expirer punit
+    // l'utilisateur pour une étape de configuration manquante. Constaté en
+    // prod : 80 brouillons annulés en août, 80 régénérés derrière, aucun
+    // envoyé — une boucle qui consommait des tokens tous les 14 jours sans
+    // qu'aucun email ne puisse partir. On gèle donc l'horloge tant que la
+    // boîte manque ; la file repart intacte dès la connexion.
+    const mailbox = await db.query(
+      `SELECT 1 FROM email_accounts WHERE user_id = $1 AND status = 'active' LIMIT 1`,
       [userId]
     );
-    if (expired.rowCount > 0) {
-      report.nurture.expired = expired.rowCount;
-      logger.info('crm-agent', `Nurture: ${expired.rowCount} brouillons pending > 14j expirés (cancelled)`);
+    const hasMailbox = mailbox.rows.length > 0;
+
+    if (!hasMailbox) {
+      const stuck = await db.query(
+        `SELECT count(*)::int AS n FROM nurture_emails WHERE user_id = $1 AND status = 'pending'`,
+        [userId]
+      );
+      if (stuck.rows[0].n > 0) {
+        report.nurture.blockedNoMailbox = stuck.rows[0].n;
+        logger.warn('crm-agent', `Nurture: ${stuck.rows[0].n} brouillons en attente mais aucune boîte mail connectée (user ${userId}) — expiration gelée`);
+      }
+    } else {
+      const expired = await db.query(
+        `UPDATE nurture_emails SET status = 'cancelled'
+         WHERE user_id = $1 AND status = 'pending' AND created_at < now() - interval '14 days'`,
+        [userId]
+      );
+      if (expired.rowCount > 0) {
+        report.nurture.expired = expired.rowCount;
+        logger.info('crm-agent', `Nurture: ${expired.rowCount} brouillons pending > 14j expirés (cancelled)`);
+      }
     }
 
     // Get triggers

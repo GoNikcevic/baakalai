@@ -821,6 +821,8 @@
     "approvedOk": "{sent} sent",
     "approvedFailed": "{failed} failed",
     "remaining": "{count} remaining — click again to continue",
+    "sendBlocked": "Cannot send",
+    "connectMailbox": "Connect a mailbox",
     "approve": "Approve",
     "dismiss": "Dismiss",
     "waitingDays": "waiting for {days}d",

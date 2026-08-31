@@ -183,14 +183,22 @@ async function getDefaultAccount(userId) {
 /**
  * Send a personal email via user's own email account.
  *
+ * `code` accompagne chaque échec : les appelants (route /approve, TodayCard)
+ * en ont besoin pour distinguer « rien à configurer » d'une vraie panne SMTP
+ * et proposer l'action corrective. Le message texte reste destiné aux logs.
+ *
  * @param {string} userId
  * @param {{ to, toName, subject, body, replyTo }} options
- * @returns {{ success, messageId, error }}
+ * @returns {{ success, messageId, error, code }}
  */
 async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo }) {
   let account = await getDefaultAccount(userId);
   if (!account) {
-    return { success: false, error: 'No email account configured. Connect Gmail or SMTP in Settings.' };
+    return {
+      success: false,
+      code: 'no_email_account',
+      error: 'No email account configured. Connect Gmail or SMTP in Settings.',
+    };
   }
 
   // Refresh OAuth token if needed
@@ -198,7 +206,7 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
     try {
       account = await refreshTokenIfNeeded(account);
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, code: 'token_refresh_failed', error: err.message };
     }
   }
 
@@ -228,9 +236,13 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
         [account.id]
       );
       _transportCache.delete(account.id);
+      // Le compte vient de passer 'expired' : getDefaultAccount ne le renverra
+      // plus, l'utilisateur doit reconnecter — c'est la même action corrective
+      // que l'absence de compte, d'où le même code.
+      return { success: false, code: 'no_email_account', error: err.message };
     }
 
-    return { success: false, error: err.message };
+    return { success: false, code: 'smtp_error', error: err.message };
   }
 }
 
@@ -287,6 +299,18 @@ async function sendNurtureEmail(userId, {
         logger.warn('email-outbound', `Pipedrive note failed: ${err.message}`);
       }
     }
+  } else if (result.code === 'no_email_account') {
+    // Aucune boîte mail connectée : rien ne cloche avec CET email, c'est le
+    // compte qui n'est pas configuré. Le passer en 'failed' le sortirait de la
+    // file — or la contrainte unique 067 (un seul pending par contact) libère
+    // alors le contact, et le cron du lendemain regénère un brouillon tout
+    // aussi inenvoyable, à nouveau facturé en tokens. On laisse donc la ligne
+    // en 'pending' : on enregistre juste la raison, la file est préservée et
+    // les emails partiront tels quels dès la boîte connectée.
+    await db.query(
+      `UPDATE nurture_emails SET error = $1 WHERE id = $2`,
+      [result.error, nurture.id]
+    );
   } else {
     await db.query(
       `UPDATE nurture_emails SET status = 'failed', error = $1 WHERE id = $2`,
