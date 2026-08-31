@@ -1,3 +1,9 @@
+// ⚠️ EXTENSION PARQUÉE — ne pas publier. Voir README.md pour la décision et
+// ses raisons. En particulier : getLinkedInCookie() plus bas capture le cookie
+// de session `li_at`, ce qui donne un accès complet et permanent au compte
+// LinkedIn de l'utilisateur. Interdit par les CGU LinkedIn, et le compte banni
+// serait celui du client. Ne pas réactiver sans avoir tranché ce point.
+
 const API_BASE = 'https://app.baakal.ai/api';
 const STORAGE_KEY = 'baakalai_token';
 const REFRESH_KEY = 'baakalai_refresh';
@@ -270,14 +276,22 @@ async function sendCookie(cookie) {
 async function disconnectLinkedIn() {
   try {
     const token = await getToken();
-    await fetch(`${API_BASE}/settings/keys`, {
+    const res = await fetch(`${API_BASE}/settings/keys`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ keys: { linkedinKey: '' } }),
     });
+    // Sans cette vérification, un refus du serveur affichait quand même
+    // « Disconnected » : l'utilisateur croyait son cookie de session LinkedIn
+    // supprimé alors qu'il restait en base. C'est le chemin où un faux positif
+    // coûte le plus cher.
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
     showMsg('success', 'Disconnected.');
     setTimeout(init, 1500);
-  } catch (err) { showMsg('error', err.message); }
+  } catch (err) { showMsg('error', `Disconnect failed: ${err.message}`); }
 }
 
 function showMsg(type, text) {
