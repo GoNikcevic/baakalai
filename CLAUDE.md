@@ -4,7 +4,9 @@
 
 ## 1. What is Baakalai
 
-baakalai is the agent that exploits your CRM to generate revenue. It connects to existing CRMs (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable, Folk) and reads data 24/7 — spotting stagnant deals to reactivate, clients ready to upsell, accounts about to churn. It sends the right follow-up, at the right time, from the user's own email. 12 AI agents build a collective memory that compounds.
+baakalai is the AI system that exploits your CRM to generate revenue. It connects to existing CRMs (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable, Folk) and reads data 24/7 — spotting stagnant deals to reactivate, clients ready to upsell, accounts about to churn. It sends the right follow-up, at the right time, from the user's own email. 12 AI agents build a collective memory that compounds.
+
+**Naming rule:** baakalai is *a system* (singular, the product identity), made of *12 agents* (plural, the architecture). Never call the product "the agent" — the singular contradicts the multi-agent architecture we sell, and "system" is only credible because the 12 agents are real. Category anchor is **RevOps** (a function nobody owns), never "revenue intelligence" (the category Gong defined and owns). Never claim baakalai *is* a RevOps platform — no consolidated forecasting, territories, comp or CPQ. Always "the job a RevOps would do".
 
 **3 pillars:** CRM Intelligence > Activation > Prospection (prospection = door, not the product).
 

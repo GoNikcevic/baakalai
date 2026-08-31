@@ -1,11 +1,11 @@
 // ============================================================
 // BAAKALAI MARKETING SITE — i18n + interactivity
-// Pivot juin 2026 : l'agent qui exploite ton CRM
+// Pivot juin 2026 : le système IA qui exploite ton CRM
 // ============================================================
 
 const I18N = {
   fr: {
-    nav: { how: "Comment ça marche", features: "Ce que fait l'agent", pricing: "Beta", faq: "FAQ", blog: "Blog", diag: "Diagnostic gratuit", book: "Rejoindre la beta", signin: "Se connecter" },
+    nav: { how: "Comment ça marche", features: "Ce que fait le système", pricing: "Beta", faq: "FAQ", blog: "Blog", diag: "Diagnostic gratuit", book: "Rejoindre la beta", signin: "Se connecter" },
     hero: {
       eyebrow: "",
       title_a: "Ton CRM sait déjà qui relancer. ",
@@ -13,7 +13,7 @@ const I18N = {
       title_b: " ne le lit.",
       sub: "baakalai lit ton CRM 24/7, repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner — et agit. Un deal récupéré rembourse l'outil pour des mois.",
       cta: "Rejoindre la beta",
-      cta_2: "Voir ce que fait l'agent",
+      cta_2: "Voir ce que fait le système",
       tag_1: "Opérationnel en 30 min", tag_2: "Beta sur candidature",
       beta_badge: "EARLY ACCESS",
     },
@@ -21,16 +21,16 @@ const I18N = {
     how: {
       eyebrow: "COMMENT ÇA MARCHE",
       title_a: "Branche ton CRM. ",
-      title_em: "L'agent fait le reste.",
+      title_em: "Le système fait le reste.",
       sub: "Pas d'implémentation. Pas d'équipe RevOps. 30 minutes entre la connexion et le premier deal détecté.",
       steps: [
-        { t: "Connecte ton CRM", d: "Pipedrive, HubSpot, Salesforce, Odoo — l'agent lit tes deals, contacts, historique. Tes données restent chez toi." },
-        { t: "L'agent scanne ta base", d: "Deals stagnants, comptes à risque, upsells ratés, données sales. Il apprend tes patterns de conversion en continu." },
+        { t: "Connecte ton CRM", d: "Pipedrive, HubSpot, Salesforce, Odoo — le système lit tes deals, contacts, historique. Tes données restent chez toi." },
+        { t: "Le système scanne ta base", d: "Deals stagnants, comptes à risque, upsells ratés, données sales. Il apprend tes patterns de conversion en continu." },
         { t: "Tu valides, il agit", d: "Relance le bon deal, au bon moment, avec l'angle qui a déjà marché. Depuis ton email, pas le nôtre." },
       ],
     },
     crm: {
-      eyebrow: "CE QUE FAIT L'AGENT", title_a: "La donnée que tu as déjà payée ", title_em: "génère du CA", title_b: " — sans nouveau lead.",
+      eyebrow: "CE QUE FAIT LE SYSTÈME", title_a: "La donnée que tu as déjà payée ", title_em: "génère du CA", title_b: " — sans nouveau lead.",
       sub: "Réactiver un deal, détecter un upsell, prévenir un churn : trois gestes qui génèrent du revenu sans coût d'acquisition, à partir de ta base existante.",
       list: [
         "Réactivation de deals — repère les deals stagnants, propose le follow-up qui a déjà marché, envoie sur ta validation",
@@ -49,24 +49,24 @@ const I18N = {
       trust: "Lecture seule · clé jamais stockée · rapport supprimé après 30 jours",
     },
     activation: {
-      eyebrow: "L'AGENT AGIT", title_a: "Pas un dashboard de plus. ", title_em: "Un agent", title_b: " qui exécute.",
+      eyebrow: "LE SYSTÈME AGIT", title_a: "Pas un dashboard de plus. ", title_em: "12 agents", title_b: " qui exécutent.",
       sub: "baakalai ne te montre pas des graphiques. Il envoie le bon email, au bon contact, au bon moment — depuis ta boîte mail.",
       list: [
         "8 triggers automatiques : deal stagnant, deal gagné, inactif, churn, upsell, renouvellement, onboarding, feedback",
         "Emails personnalisés basés sur ton historique CRM — pas des templates génériques",
         "Envoi depuis TON email — le client ne voit jamais baakalai",
-        "Mode approbation : tu valides avant envoi, ou tu laisses l'agent agir seul",
+        "Mode approbation : tu valides avant envoi, ou tu laisses le système agir seul",
         "Chaque action nourrit la mémoire — la prochaine relance sera meilleure",
       ],
     },
     prosp: {
-      eyebrow: "PROSPECTION", title_a: "Et quand tu veux prospecter, ", title_em: "l'agent gère", title_b: " aussi.",
+      eyebrow: "PROSPECTION", title_a: "Et quand tu veux prospecter, ", title_em: "le système gère", title_b: " aussi.",
       sub: "Campagnes outbound par chat, A/B test automatique, déploiement multi-canal. Et chaque réponse nourrit la mémoire qui améliore tout le reste.",
       list: [
         "Séquences email + LinkedIn générées par chat",
         "A/B test auto sur les 200 premiers envois",
         "Deploy en 1 clic sur Lemlist, Apollo ou Smartlead",
-        "Chaque réponse nourrit la mémoire de l'agent",
+        "Chaque réponse nourrit la mémoire du système",
       ],
     },
     synapse: {
@@ -74,7 +74,7 @@ const I18N = {
       title_a: "Plus tu l'utilises, ",
       title_em: "plus il est précis.",
       title_b: "",
-      sub: "L'agent apprend de chaque interaction. Chaque deal relancé, chaque churn évité, chaque upsell détecté crée un pattern réutilisable. Cette mémoire ne se transfère pas — elle crée un avantage qui se renforce avec le temps.",
+      sub: "Le système apprend de chaque interaction. Chaque deal relancé, chaque churn évité, chaque upsell détecté crée un pattern réutilisable. Cette mémoire ne se transfère pas — elle crée un avantage qui se renforce avec le temps.",
       agents: [
         { tag: "4 AGENTS QUOTIDIENS", t: "Le moteur", d: "Scannent tes deals à 9h, refinent tes campagnes à 8h. Chaque jour, sans intervention." },
         { tag: "7 AGENTS STRATÉGIQUES", t: "L'intelligence", d: "Deal Coach, Upsell, Win/Loss, Copy, ICP, Timing, Veille concurrentielle." },
@@ -91,7 +91,7 @@ const I18N = {
         "Tarif préférentiel garanti à la sortie publique",
       ],
       expect: [
-        "Un CRM avec ≥ 12 mois d'historique — l'agent a besoin de matière",
+        "Un CRM avec ≥ 12 mois d'historique — le système a besoin de matière",
         "30 min de feedback par semaine pendant 1 mois",
         "Du franc-parler — on veut ce qui casse",
       ],
@@ -113,7 +113,7 @@ const I18N = {
       title_em: "Réponses.",
       items: [
         { q: "C'est quoi baakalai en une phrase ?",
-          a: "Un agent IA qui lit ton CRM en continu, repère les deals à réactiver, les upsells à saisir, les churns à prévenir — et agit. Sans changer de CRM, sans équipe RevOps." },
+          a: "Un système IA — 12 agents spécialisés — qui lit ton CRM en continu, repère les deals à réactiver, les upsells à saisir, les churns à prévenir — et agit. Sans changer de CRM, sans équipe RevOps." },
         { q: "En quoi c'est différent de ce que fait déjà mon CRM ?",
           a: "Ton CRM stocke la donnée. baakalai la lit. L'IA native de Pipedrive ou HubSpot est pensée pour le haut de marché et reste mono-CRM. baakalai est multi-CRM, focalisé PME, et surtout il agit : il envoie la relance, pas juste le dashboard." },
         { q: "En quoi c'est différent de Gong ou Clari ?",
@@ -121,13 +121,13 @@ const I18N = {
         { q: "Et la prospection ?",
           a: "baakalai sait aussi faire de l'outbound — créer des campagnes, déployer sur Lemlist/Apollo. Mais ce n'est pas le produit. Le produit, c'est exploiter la donnée que tu as déjà payée. La prospection est une porte d'entrée, pas le héros." },
         { q: "Mon CRM est à moitié vide, ça marche quand même ?",
-          a: "On a besoin d'au moins 12 mois d'historique pour que l'agent ait de la matière. Le premier geste de l'agent est de nettoyer et enrichir ta base — c'est la condition d'existence des trois autres (réactivation, upsell, churn). Si ton CRM est trop pauvre, on te le dit." },
-        { q: "L'agent envoie des emails tout seul ?",
-          a: "Toi qui décides. Mode approbation : tu valides avant chaque envoi. Mode auto : l'agent agit seul sur les triggers que tu as activés. Les emails partent depuis TON compte, jamais depuis baakalai." },
+          a: "On a besoin d'au moins 12 mois d'historique pour que le système ait de la matière. Son premier geste est de nettoyer et enrichir ta base — c'est la condition d'existence des trois autres (réactivation, upsell, churn). Si ton CRM est trop pauvre, on te le dit." },
+        { q: "Le système envoie des emails tout seul ?",
+          a: "Toi qui décides. Mode approbation : tu valides avant chaque envoi. Mode auto : le système agit seul sur les triggers que tu as activés. Les emails partent depuis TON compte, jamais depuis baakalai." },
         { q: "Comment prouver que baakalai a récupéré le deal ?",
-          a: "On instrumente l'attribution dès le départ : deals touchés par l'agent vs deals non touchés, avec comparaison de taux de conversion. Pas de ROI déclaratif — du mesurable." },
+          a: "On instrumente l'attribution dès le départ : deals touchés par le système vs deals non touchés, avec comparaison de taux de conversion. Pas de ROI déclaratif — du mesurable." },
         { q: "Combien de temps pour être opérationnel ?",
-          a: "30 minutes pour connecter ton CRM. L'agent commence à scanner tout de suite. Premiers deals détectés dans l'heure." },
+          a: "30 minutes pour connecter ton CRM. Le système commence à scanner tout de suite. Premiers deals détectés dans l'heure." },
       ],
     },
     blog: {
@@ -141,14 +141,14 @@ const I18N = {
       read: "Lire",
     },
     footer: {
-      blurb: "L'agent qui exploite ton CRM pour générer du CA — réactivation, upsell, churn, nettoyage.",
+      blurb: "Le système IA qui exploite ton CRM pour générer du CA — réactivation, upsell, churn, nettoyage.",
       product: "PRODUIT", company: "ENTREPRISE", legal: "LÉGAL",
-      links: { how: "Comment ça marche", prosp: "Prospection", crm: "Ce que fait l'agent", activation: "L'agent agit", synapse: "Sous le capot", pricing: "Beta", about: "À propos", blog: "Blog", contact: "Contact", careers: "Recrutement", terms: "CGU", privacy: "Confidentialité", dpa: "DPA · RGPD" },
+      links: { how: "Comment ça marche", prosp: "Prospection", crm: "Ce que fait le système", activation: "Le système agit", synapse: "Sous le capot", pricing: "Beta", about: "À propos", blog: "Blog", contact: "Contact", careers: "Recrutement", terms: "CGU", privacy: "Confidentialité", dpa: "DPA · RGPD" },
       copy: "\u00a9 2026 BAAKALAI \u00b7 BAAKAL.AI \u00b7 PARIS",
     },
   },
   en: {
-    nav: { how: "How it works", features: "What the agent does", pricing: "Beta", faq: "FAQ", blog: "Blog", diag: "Free diagnostic", book: "Join the beta", signin: "Sign in" },
+    nav: { how: "How it works", features: "What the system does", pricing: "Beta", faq: "FAQ", blog: "Blog", diag: "Free diagnostic", book: "Join the beta", signin: "Sign in" },
     hero: {
       eyebrow: "",
       title_a: "Your CRM already knows who to call back. ",
@@ -156,7 +156,7 @@ const I18N = {
       title_b: " reads it.",
       sub: "baakalai reads your CRM 24/7, spots dying deals, upsell-ready clients, accounts about to churn — and acts. One recovered deal pays for the tool for months.",
       cta: "Join the beta",
-      cta_2: "See what the agent does",
+      cta_2: "See what the system does",
       tag_1: "Operational in 30 min", tag_2: "Beta by application",
       beta_badge: "EARLY ACCESS",
     },
@@ -164,16 +164,16 @@ const I18N = {
     how: {
       eyebrow: "HOW IT WORKS",
       title_a: "Plug in your CRM. ",
-      title_em: "The agent does the rest.",
+      title_em: "The system does the rest.",
       sub: "No implementation. No RevOps team. 30 minutes between connection and first deal detected.",
       steps: [
-        { t: "Connect your CRM", d: "Pipedrive, HubSpot, Salesforce, Odoo — the agent reads your deals, contacts, history. Your data stays with you." },
-        { t: "The agent scans your base", d: "Stagnant deals, at-risk accounts, missed upsells, dirty data. It learns your conversion patterns continuously." },
+        { t: "Connect your CRM", d: "Pipedrive, HubSpot, Salesforce, Odoo — the system reads your deals, contacts, history. Your data stays with you." },
+        { t: "The system scans your base", d: "Stagnant deals, at-risk accounts, missed upsells, dirty data. It learns your conversion patterns continuously." },
         { t: "You approve, it acts", d: "Reactivates the right deal, at the right time, with the angle that already worked. From your email, not ours." },
       ],
     },
     crm: {
-      eyebrow: "WHAT THE AGENT DOES", title_a: "The data you already paid for ", title_em: "generates revenue", title_b: " — no new leads needed.",
+      eyebrow: "WHAT THE SYSTEM DOES", title_a: "The data you already paid for ", title_em: "generates revenue", title_b: " — no new leads needed.",
       sub: "Reactivate a deal, detect an upsell, prevent a churn: three moves that generate revenue without acquisition cost, from your existing base.",
       list: [
         "Deal reactivation — spots stagnant deals, proposes the follow-up that already worked, sends on your approval",
@@ -192,24 +192,24 @@ const I18N = {
       trust: "Read-only · key never stored · report deleted after 30 days",
     },
     activation: {
-      eyebrow: "THE AGENT ACTS", title_a: "Not another dashboard. ", title_em: "An agent", title_b: " that executes.",
+      eyebrow: "THE SYSTEM ACTS", title_a: "Not another dashboard. ", title_em: "12 agents", title_b: " that execute.",
       sub: "baakalai doesn't show you charts. It sends the right email, to the right contact, at the right time — from your inbox.",
       list: [
         "8 automatic triggers: stagnant deal, deal won, inactive, churn, upsell, renewal, onboarding, feedback",
         "Personalized emails based on your CRM history — not generic templates",
         "Sent from YOUR email — the client never sees baakalai",
-        "Approval mode: you validate before sending, or let the agent act alone",
+        "Approval mode: you validate before sending, or let the system act alone",
         "Every action feeds the memory — next follow-up will be better",
       ],
     },
     prosp: {
-      eyebrow: "PROSPECTION", title_a: "And when you want to prospect, ", title_em: "the agent handles", title_b: " that too.",
+      eyebrow: "PROSPECTION", title_a: "And when you want to prospect, ", title_em: "the system handles", title_b: " that too.",
       sub: "Outbound campaigns via chat, automatic A/B testing, multi-channel deployment. And every reply feeds the memory that improves everything else.",
       list: [
         "Email + LinkedIn sequences generated by chat",
         "Auto A/B test on the first 200 sends",
         "One-click deploy to Lemlist, Apollo, or Smartlead",
-        "Every reply feeds the agent's memory",
+        "Every reply feeds the system's memory",
       ],
     },
     synapse: {
@@ -217,7 +217,7 @@ const I18N = {
       title_a: "The more you use it, ",
       title_em: "the sharper it gets.",
       title_b: "",
-      sub: "The agent learns from every interaction. Every reactivated deal, every prevented churn, every detected upsell creates a reusable pattern. This memory doesn't transfer — it creates a compounding advantage over time.",
+      sub: "The system learns from every interaction. Every reactivated deal, every prevented churn, every detected upsell creates a reusable pattern. This memory doesn't transfer — it creates a compounding advantage over time.",
       agents: [
         { tag: "4 DAILY AGENTS", t: "The engine", d: "Scan your deals at 9AM, refine campaigns at 8AM. Every day, without asking." },
         { tag: "7 STRATEGIC AGENTS", t: "The intelligence", d: "Deal Coach, Upsell, Win/Loss, Copy, ICP, Timing, Competitor Watch." },
@@ -234,7 +234,7 @@ const I18N = {
         "Preferential rate guaranteed at public launch",
       ],
       expect: [
-        "A CRM with \u226512 months of history — the agent needs substance",
+        "A CRM with \u226512 months of history — the system needs substance",
         "30 min of feedback per week for 1 month",
         "Straight talk — we want what breaks",
       ],
@@ -256,7 +256,7 @@ const I18N = {
       title_em: "Answers.",
       items: [
         { q: "What is baakalai in one sentence?",
-          a: "An AI agent that reads your CRM continuously, spots deals to reactivate, upsells to seize, churns to prevent — and acts. Without switching CRM, without a RevOps team." },
+          a: "An AI system — 12 specialised agents — that reads your CRM continuously, spots deals to reactivate, upsells to seize, churns to prevent — and acts. Without switching CRM, without a RevOps team." },
         { q: "How is this different from what my CRM already does?",
           a: "Your CRM stores data. baakalai reads it. Native AI in Pipedrive or HubSpot is built for enterprise and stays mono-CRM. baakalai is multi-CRM, SMB-focused, and most importantly it acts: it sends the follow-up, not just the dashboard." },
         { q: "How is this different from Gong or Clari?",
@@ -264,13 +264,13 @@ const I18N = {
         { q: "What about prospection?",
           a: "baakalai can also do outbound — build campaigns, deploy to Lemlist/Apollo. But that's not the product. The product is exploiting the data you already paid for. Prospection is a door, not the hero." },
         { q: "My CRM is half-empty, does it still work?",
-          a: "We need at least 12 months of history for the agent to have substance. The agent's first move is to clean and enrich your base — that's the prerequisite for the other three (reactivation, upsell, churn). If your CRM is too thin, we'll tell you." },
-        { q: "Does the agent send emails on its own?",
-          a: "Your call. Approval mode: you validate before each send. Auto mode: the agent acts alone on triggers you've activated. Emails send from YOUR account, never from baakalai." },
+          a: "We need at least 12 months of history for the system to have substance. Its first move is to clean and enrich your base — that's the prerequisite for the other three (reactivation, upsell, churn). If your CRM is too thin, we'll tell you." },
+        { q: "Does the system send emails on its own?",
+          a: "Your call. Approval mode: you validate before each send. Auto mode: the system acts alone on triggers you've activated. Emails send from YOUR account, never from baakalai." },
         { q: "How do you prove baakalai recovered the deal?",
-          a: "We instrument attribution from day one: deals touched by the agent vs untouched deals, with conversion rate comparison. No declarative ROI — measurable." },
+          a: "We instrument attribution from day one: deals touched by the system vs untouched deals, with conversion rate comparison. No declarative ROI — measurable." },
         { q: "How long until I'm operational?",
-          a: "30 minutes to connect your CRM. The agent starts scanning immediately. First deals detected within the hour." },
+          a: "30 minutes to connect your CRM. The system starts scanning immediately. First deals detected within the hour." },
       ],
     },
     blog: {
@@ -284,9 +284,9 @@ const I18N = {
       read: "Read",
     },
     footer: {
-      blurb: "The agent that exploits your CRM to generate revenue — reactivation, upsell, churn, cleaning.",
+      blurb: "The AI system that exploits your CRM to generate revenue — reactivation, upsell, churn, cleaning.",
       product: "PRODUCT", company: "COMPANY", legal: "LEGAL",
-      links: { how: "How it works", prosp: "Prospection", crm: "What the agent does", activation: "The agent acts", synapse: "Under the hood", pricing: "Beta", about: "About", blog: "Blog", contact: "Contact", careers: "Careers", terms: "Terms", privacy: "Privacy", dpa: "DPA \u00b7 GDPR" },
+      links: { how: "How it works", prosp: "Prospection", crm: "What the system does", activation: "The system acts", synapse: "Under the hood", pricing: "Beta", about: "About", blog: "Blog", contact: "Contact", careers: "Careers", terms: "Terms", privacy: "Privacy", dpa: "DPA \u00b7 GDPR" },
       copy: "\u00a9 2026 BAAKALAI \u00b7 BAAKAL.AI \u00b7 PARIS",
     },
   },
