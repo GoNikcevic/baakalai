@@ -75,7 +75,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 ## 6. Current Gaps
 
-- [ ] Stripe billing + paywall (blocker for paid beta)
+- [x] Stripe billing + paywall — socle livré (routes /api/billing, webhook, migration 078, section Réglages, paywall d'essai expiré). Inerte tant que STRIPE_SECRET_KEY + price IDs ne sont pas posés sur Railway ; comptes existants exemptés (trial_ends_at NULL).
 - [ ] Microsoft OAuth publisher verification (beta testers can't consent Outlook)
 - [ ] Salesforce campaigns (contacts + deals done, missing campaigns)
 - [ ] A/B testing on activation emails (only prospection currently)

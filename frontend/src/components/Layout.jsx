@@ -3,8 +3,9 @@
    React equivalent of the vanilla app's sidebar navigation and page shell.
    =============================================================================== */
 
-import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { request } from '../services/api-client';
 import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { logout, getUser } from '../services/auth';
@@ -139,8 +140,33 @@ export default function Layout() {
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
 
+  // Paywall : GET /billing renvoie locked:true uniquement quand Stripe est
+  // branché ET l'essai expiré sans abonnement. Inerte pour tous les comptes
+  // actuels (trial_ends_at NULL = exempté).
+  const [billingLocked, setBillingLocked] = useState(false);
+  const location = useLocation();
+  useEffect(() => {
+    request('/billing').then(d => setBillingLocked(!!d.locked)).catch(() => {});
+  }, []);
+
   return (
     <div className="app-shell">
+      {billingLocked && !location.pathname.startsWith('/settings') && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'color-mix(in srgb, var(--paper) 92%, transparent)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div className="card" style={{ maxWidth: 420, padding: '32px 36px', textAlign: 'center' }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{t('billing.lockedTitle')}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 10 }}>{t('billing.lockedBody')}</div>
+            <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => navigate('/settings')}>
+              {t('billing.lockedCta')}
+            </button>
+          </div>
+        </div>
+      )}
       {/* ═══ Sidebar ═══ */}
       <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
         {/* Brand */}

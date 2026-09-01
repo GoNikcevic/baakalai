@@ -82,6 +82,10 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // allows loading external fonts/images
 }));
 
+// Webhook Stripe — corps BRUT exigé pour vérifier la signature, donc monté
+// avant express.json (public, validé par STRIPE_WEBHOOK_SECRET).
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), require('./routes/billing').stripeWebhook);
+
 // Limit request body size
 app.use(express.json({ limit: '2mb' }));
 
@@ -166,6 +170,7 @@ app.use('/api/dashboard', requireAuth, dashboardRouter);
 app.use('/api/ai', requireAuth, aiLimiter, aiRouter);
 app.use('/api/chat', requireAuth, chatLimiter, chatRouter);
 app.use('/api/settings', requireAuth, settingsRouter);
+app.use('/api/billing', requireAuth, require('./routes/billing'));
 app.use('/api/documents', requireAuth, documentsRouter);
 app.use('/api/profile', requireAuth, profileRouter);
 app.use('/api/stats', requireAuth, statsRouter);
