@@ -48,10 +48,29 @@ function scoreOpportunity(opp, { deals = [], activities = [], emails = [] } = {}
   }
 
   // ── 2. Deal stagnation (max 25 pts) ──
+  // `deals` ne vient que des APIs Pipedrive/Salesforce. Pour les 5 autres
+  // providers il est toujours vide, ce qui plafonnait mécaniquement le score
+  // à 45/100 (mesuré : max=45 sur 373 opps Notion). Fallback : l'opportunité
+  // elle-même est le deal — un statut 'open' qui vieillit sans conclusion
+  // est le même signal, quel que soit le CRM.
   const oppDeals = deals.filter(d =>
     d.person_id === opp.crm_contact_id || d.personId === opp.crm_contact_id
   );
   const openDeals = oppDeals.filter(d => d.status === 'open');
+
+  if (oppDeals.length === 0 && opp.status === 'open' && opp.created_at) {
+    const dealAge = (now - new Date(opp.created_at).getTime()) / DAY_MS;
+    if (dealAge >= 90) {
+      score += 25;
+      factors.push({ signal: 'deal_stagnant', weight: 25, detail: `Deal ouvert depuis ${Math.round(dealAge)}d sans conclusion` });
+    } else if (dealAge >= 60) {
+      score += 18;
+      factors.push({ signal: 'deal_stagnant', weight: 18, detail: `Deal ouvert depuis ${Math.round(dealAge)}d` });
+    } else if (dealAge >= 30) {
+      score += 10;
+      factors.push({ signal: 'deal_stagnant', weight: 10, detail: `Deal ouvert depuis ${Math.round(dealAge)}d` });
+    }
+  }
 
   if (openDeals.length > 0) {
     const stalestDeal = openDeals.reduce((oldest, d) => {
@@ -130,10 +149,16 @@ function scoreOpportunity(opp, { deals = [], activities = [], emails = [] } = {}
     score += 15;
     factors.push({ signal: 'status_lost', weight: 15, detail: 'Statut: perdu' });
   } else if (opp.status === 'won') {
-    // Won contacts can still churn — but base risk is lower
-    score = Math.max(0, score - 15);
-    if (score > 0) {
-      factors.push({ signal: 'status_won_offset', weight: -15, detail: 'Client actif (won) — risque réduit' });
+    // Un client (won) silencieux est LE signal de churn du produit — l'alourdir,
+    // pas le réduire. L'offset -15 ne s'applique qu'aux clients encore actifs.
+    if (daysSinceActivity >= 90) {
+      score += 20;
+      factors.push({ signal: 'client_silent', weight: 20, detail: `Client sans contact depuis ${Math.round(daysSinceActivity)}d` });
+    } else {
+      score = Math.max(0, score - 15);
+      if (score > 0) {
+        factors.push({ signal: 'status_won_offset', weight: -15, detail: 'Client actif (won) — risque réduit' });
+      }
     }
   }
 

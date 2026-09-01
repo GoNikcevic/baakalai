@@ -18,13 +18,21 @@ const DAY_MS = 86400000;
 
 const STATUS_POINTS = {
   'new': 0,
+  'open': 10,
+  'qualified': 15,
+  'qualifie': 15,
+  'qualifié': 15,
   'interesse': 15,
   'intéressé': 15,
   'interested': 15,
+  'proposal': 20,
+  'proposition': 20,
   'call planifie': 25,
   'call planifié': 25,
   'meeting': 25,
   'negotiation': 28,
+  'négociation': 28,
+  'negociation': 28,
   'won': 30,
   'rappeler': 12,
   'lost': 3,
@@ -67,7 +75,24 @@ function computeFit(opportunity, campaign, profile) {
 
 // ── Activity scoring (max 40) ──
 
-function computeActivity(activities) {
+function computeActivity(activities, opportunity = null) {
+  // Sans campagne d'outreach, prospect_activities est vide pour un compte
+  // 100 % CRM — l'activité côté CRM (last_activity_at, posée par
+  // lib/crm-activity-date.js) reste le seul signal de chaleur disponible.
+  if ((!activities || activities.length === 0) && opportunity) {
+    const last = opportunity.last_activity_at || null;
+    if (!last) return { score: 0, factors: [] };
+    const days = (Date.now() - new Date(last).getTime()) / DAY_MS;
+    let pts = 0;
+    if (days < 7) pts = 12;
+    else if (days < 30) pts = 8;
+    else if (days < 90) pts = 3;
+    if (pts === 0) return { score: 0, factors: [] };
+    return {
+      score: pts,
+      factors: [{ signal: 'crm_recency', weight: pts, detail: `Activité CRM il y a ${Math.round(days)}d` }],
+    };
+  }
   if (!activities || activities.length === 0) return { score: 0, factors: [] };
 
   const now = Date.now();
@@ -144,7 +169,7 @@ function computeStatus(opportunity, campaign) {
 // ── Main scoring function ──
 
 function scoreContact(opportunity, { campaign, profile, activities } = {}) {
-  const activityResult = computeActivity(activities || []);
+  const activityResult = computeActivity(activities || [], opportunity);
   const fitResult = computeFit(opportunity, campaign, profile);
   const statusScore = computeStatus(opportunity, campaign);
 

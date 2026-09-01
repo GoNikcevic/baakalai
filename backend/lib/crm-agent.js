@@ -248,6 +248,32 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       report.errors.push(`Enrich: ${err.message}`);
     }
 
+    // ── Step 5c: Lead Scoring (persist unified contact score) ──
+    try {
+      const { scoreAllContacts } = require('./contact-scoring');
+      const { contacts, avgScore, distribution } = await scoreAllContacts(userId);
+      if (contacts.length > 0) {
+        const payload = JSON.stringify(contacts.map(c => ({
+          id: c.id,
+          score: c.score,
+          breakdown: { ...c.breakdown, factors: c.factors },
+        })));
+        const updated = await db.query(
+          `UPDATE opportunities o
+           SET score = v.score, score_breakdown = v.breakdown
+           FROM jsonb_to_recordset($1::jsonb) AS v(id uuid, score int, breakdown jsonb)
+           WHERE o.id = v.id AND o.user_id = $2
+             AND o.score IS DISTINCT FROM v.score
+           RETURNING o.id`,
+          [payload, userId]
+        );
+        report.leadScoring = { scored: contacts.length, updated: updated.rows.length, avgScore, distribution };
+        logger.info('crm-agent', `Lead scoring user ${userId}: ${contacts.length} scored, ${updated.rows.length} updated, avg=${avgScore}`);
+      }
+    } catch (err) {
+      report.errors.push(`Lead scoring: ${err.message}`);
+    }
+
     // ── Step 6: AI Analysis (if significant changes) ──
     if (report.sync.imported > 0 || report.alerts.length > 0 || trigger === 'manual') {
       await stepAnalysis(userId, report, teamId);
