@@ -899,7 +899,7 @@
     "title": "Signals",
     "subtitle": "Detect buying signals and find the right prospects at the right time",
     "howTitle": "How it works",
-    "howStep1": "baakalai monitors the web continuously throughout the day: your configurations (funding rounds, hiring, leadership changes…) and your CRM accounts — hot accounts (big deals, at-risk clients, a deal that just moved) get checked first.",
+    "howStep1": "baakalai monitors the web continuously (checks every 30 minutes): your configurations (funding rounds, hiring, leadership changes…) and your CRM accounts. Hot accounts — big deals, at-risk clients — are re-checked several times a day, and a deal moving in your CRM triggers a check within the half hour.",
     "howStep2": "Every detected signal lands in this feed with its source and type — the Configuration tab controls what gets monitored, and \"Run scan\" forces an immediate check.",
     "howStep3": "One click to act: add to CRM, send the suggested email, create a sequence, or dismiss. Nothing goes out without your approval.",
     "scan": "🔍 Scan for signals",

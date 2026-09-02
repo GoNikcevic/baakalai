@@ -899,7 +899,7 @@
     "title": "Signaux",
     "subtitle": "Détectez les signaux d'achat et trouvez les bons prospects au bon moment",
     "howTitle": "Comment ça marche",
-    "howStep1": "baakalai surveille le web en continu, au fil de la journée : vos configurations (levées de fonds, recrutements, changements de direction…) et les comptes de votre CRM — les comptes chauds (deals importants, clients à risque, deal qui vient de bouger) sont vérifiés en priorité.",
+    "howStep1": "baakalai surveille le web en continu (vérifications toutes les 30 minutes) : vos configurations (levées de fonds, recrutements, changements de direction…) et les comptes de votre CRM. Les comptes chauds — deals importants, clients à risque — sont revus plusieurs fois par jour, et un deal qui bouge dans votre CRM déclenche une vérification dans la demi-heure.",
     "howStep2": "Chaque signal détecté arrive dans ce fil avec sa source et son type — l'onglet Configuration règle ce qui est surveillé, et « Lancer le scan » force une vérification immédiate.",
     "howStep3": "Un clic suffit pour agir : ajouter au CRM, envoyer l'email proposé, créer une séquence, ou ignorer. Rien ne part sans votre validation.",
     "scan": "🔍 Lancer le scan",
