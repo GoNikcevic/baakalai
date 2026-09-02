@@ -707,11 +707,23 @@ router.get('/forecast', async (req, res, next) => {
     const atRiskRevenue = wonDeals.filter(o => (o.churn_score || 0) >= 50).reduce((sum, o) => sum + Number(o.deal_value || 0), 0);
     const totalWonRevenue = wonDeals.reduce((sum, o) => sum + Number(o.deal_value || 0), 0);
 
+    // Forecast intelligent : probabilité PAR DEAL calibrée sur l'historique
+    // réel du tenant (cycle appris, activité, lead score, calibration) —
+    // best-effort, l'ancien forecast par stage reste le repli d'affichage.
+    let memoryForecast = null;
+    try {
+      const { computeForecast } = require('../lib/forecast-engine');
+      memoryForecast = await computeForecast(userId);
+    } catch (err) {
+      require('../lib/logger').warn('analytics', `memoryForecast failed: ${err.message}`);
+    }
+
     res.json({
       revenueHistory,
       pipeline: { byStage: pipelineByStage, totalValue: totalPipeline, weightedForecast: totalWeighted },
       salesCycle: { avgDays: avgSalesCycle, closedDeals: closedDeals.length },
       projectedDeals,
+      memoryForecast,
       retention: {
         totalWonRevenue: Math.round(totalWonRevenue),
         atRiskRevenue: Math.round(atRiskRevenue),

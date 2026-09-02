@@ -83,6 +83,12 @@ async function sendDigestToUser(userId, userRow = null) {
     logger.warn('crm-digest', `Weekly DQ scan failed for ${user.email}: ${err.message}`));
   const dqTrend = await computeDqTrend(user.id).catch(() => null);
 
+  // Photo hebdo du forecast — matière première de la calibration dominicale
+  // (forecast-engine.calibrate). Avant les early returns, même logique que DQ.
+  const { takeSnapshot } = require('../../lib/forecast-engine');
+  await takeSnapshot(user.id).catch((err) =>
+    logger.warn('crm-digest', `Forecast snapshot failed for ${user.email}: ${err.message}`));
+
   const profile = await db.profiles.get(user.id).catch(() => null);
   if (profile && profile.weekly_report === false) {
     return { sent: false, reason: 'opted_out' };

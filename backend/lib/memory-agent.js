@@ -120,8 +120,28 @@ async function runMemoryAgent() {
     }
 
     report.feedback.registryPattern = !!(await learnFromRegistrySignals());
+
+    // Calibration des forecasts : photos hebdo de 30+ jours comparées aux
+    // résultats réels — l'écart devient un facteur appliqué aux suivants.
+    report.feedback.forecastCalibrations = 0;
+    const { calibrate } = require('./forecast-engine');
+    const forecastUsers = await db.query(
+      `SELECT DISTINCT user_id FROM forecast_snapshots
+       WHERE evaluated_at IS NULL AND taken_at < now() - interval '30 days'`
+    );
+    for (const { user_id } of forecastUsers.rows) {
+      try {
+        const team = await db.teams.getByUser(user_id).catch(() => null);
+        const tenant = team?.id ? { teamId: team.id } : { userId: user_id };
+        const result = await calibrate(user_id, tenant);
+        if (result) report.feedback.forecastCalibrations++;
+      } catch (err) {
+        logger.warn('memory-agent', `Forecast calibration failed for ${user_id}: ${err.message}`);
+      }
+    }
+
     logger.info('memory-agent',
-      `Feedback: ${report.feedback.sectorWeights} poids ajustés, ${report.feedback.reactivationPatterns} patterns réactivation, registre: ${report.feedback.registryPattern}`);
+      `Feedback: ${report.feedback.sectorWeights} poids ajustés, ${report.feedback.reactivationPatterns} patterns réactivation, registre: ${report.feedback.registryPattern}, ${report.feedback.forecastCalibrations} calibrations forecast`);
   } catch (err) {
     report.errors.push({ step: 'feedback', error: err.message });
   }

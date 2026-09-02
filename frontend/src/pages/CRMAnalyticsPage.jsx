@@ -790,6 +790,130 @@ function ChannelsSection({ data }) {
   );
 }
 
+/* ═══ Intelligent Forecast (memory-calibrated) ═══ */
+
+const MF_GROUPS = [
+  { key: 'commit', color: 'var(--success)' },
+  { key: 'probable', color: 'var(--warning)' },
+  { key: 'possible', color: 'var(--text-muted)' },
+];
+
+function MemoryForecastBlock({ mf }) {
+  const { t, lang } = useI18n();
+  const en = lang === 'en';
+  const fmtEur = useMemo(
+    () => new Intl.NumberFormat(en ? 'en-US' : 'fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }),
+    [en]
+  );
+
+  const deals = Array.isArray(mf?.deals) ? mf.deals : [];
+  const grouped = useMemo(() => {
+    const g = { commit: [], probable: [], possible: [] };
+    deals.forEach(d => { (g[d.category] || g.possible).push(d); });
+    return g;
+  }, [deals]);
+
+  if (!mf || deals.length === 0) return null;
+
+  const scenarios = mf.scenarios || {};
+  const counts = mf.counts || {};
+  const ctx = mf.context || {};
+  const calibration = typeof ctx.calibration === 'number' ? ctx.calibration : 1;
+  const calibrationPct = Math.round(Math.abs(1 - calibration) * 100);
+
+  const groupLabels = {
+    commit: t('analytics.mfGroupCommit'),
+    probable: t('analytics.mfGroupProbable'),
+    possible: t('analytics.mfGroupPossible'),
+  };
+
+  const tiles = [
+    { key: 'commit', label: t('analytics.mfScenarioCommit'), sub: t('analytics.mfScenarioCommitSub', { count: counts.commit || 0 }), value: scenarios.commit || 0, featured: false },
+    { key: 'weighted', label: t('analytics.mfScenarioWeighted'), sub: t('analytics.mfScenarioWeightedSub'), value: scenarios.weighted || 0, featured: true },
+    { key: 'optimistic', label: t('analytics.mfScenarioOptimistic'), sub: t('analytics.mfScenarioOptimisticSub'), value: scenarios.optimistic || 0, featured: false },
+  ];
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-primary)' }}>{t('analytics.mfTitle')}</div>
+
+      {/* Scenario tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        {tiles.map(tile => (
+          <div key={tile.key} className="card" style={{
+            padding: 16,
+            border: tile.featured ? '1.5px solid var(--accent)' : undefined,
+            background: tile.featured ? 'var(--accent-glow)' : undefined,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: tile.featured ? 'var(--accent)' : 'var(--text-muted)' }}>
+              {tile.label}
+            </div>
+            <div style={{ fontSize: tile.featured ? 26 : 21, fontWeight: 700, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: tile.featured ? 'var(--accent)' : 'var(--text-primary)' }}>
+              {fmtEur.format(tile.value)}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{tile.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Honest context line */}
+      <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        {ctx.reliable ? (
+          <span>
+            {t('analytics.mfContextReliable', { days: ctx.avgCycleDays != null ? ctx.avgCycleDays : '—', winRate: Math.round((ctx.winRate || 0) * 100) })}
+            {calibrationPct > 0 && (
+              <> {calibration < 1 ? t('analytics.mfCalibrationOver', { pct: calibrationPct }) : t('analytics.mfCalibrationUnder', { pct: calibrationPct })}</>
+            )}
+          </span>
+        ) : (
+          <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+            {t('analytics.mfContextUnreliable', { count: ctx.wonSample || 0 })}
+            {calibrationPct > 0 && (
+              <> {calibration < 1 ? t('analytics.mfCalibrationOver', { pct: calibrationPct }) : t('analytics.mfCalibrationUnder', { pct: calibrationPct })}</>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* Commit / Probable / Possible breakdown */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 12 }}>
+        {MF_GROUPS.map(g => {
+          const list = grouped[g.key] || [];
+          if (list.length === 0) return null;
+          const shown = list.slice(0, 8);
+          const extra = list.length - shown.length;
+          return (
+            <div key={g.key} className="card" style={{ padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: g.color, display: 'inline-block', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{groupLabels[g.key]}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({list.length})</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {shown.map(d => (
+                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontWeight: 600 }}>{d.name}</span>
+                      {d.company ? <span style={{ color: 'var(--text-muted)' }}>{' — '}{d.company}</span> : null}
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0 }}>{fmtEur.format(d.value || 0)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 10, color: 'var(--text-on-color)', background: g.color, flexShrink: 0 }}>
+                      {t('analytics.mfProbBadge', { pct: Math.round((d.probability || 0) * 100) })}
+                    </span>
+                  </div>
+                ))}
+                {extra > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('analytics.mfMoreDeals', { count: extra })}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Forecast Section ═══ */
 
 function ForecastSection({ data: initialData, statusLabels, vocab }) {
@@ -833,6 +957,9 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
         <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
           className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
       </div>
+
+      {/* Intelligent forecast (memory-calibrated) — renders nothing when memoryForecast is null/empty */}
+      <MemoryForecastBlock mf={data.memoryForecast} />
 
       {/* KPI row */}
       <div className="crm-kpi-row">
