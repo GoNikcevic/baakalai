@@ -115,13 +115,14 @@ async function buildTodayList(userId) {
     }
   }
 
-  // 4. Clients à risque de churn (échelle native 0-100, seuil 60)
+  // 4. Clients à risque de churn (échelle native 0-100, seuil partagé)
+  const { AT_RISK_THRESHOLD } = require('./churn-scoring');
   const churn = await db.query(
     `SELECT id, name, company, email, churn_score, deal_value
      FROM opportunities
-     WHERE user_id = $1 AND status = 'won' AND churn_score >= 60
+     WHERE user_id = $1 AND status = 'won' AND churn_score >= $2
      ORDER BY churn_score DESC LIMIT 10`,
-    [userId]
+    [userId, AT_RISK_THRESHOLD]
   );
   for (const c of churn.rows) {
     items.push({

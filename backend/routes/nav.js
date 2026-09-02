@@ -10,6 +10,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { listDealsToReactivate, listClientsToUpsell } = require('../lib/reactivation-queue');
+const { AT_RISK_THRESHOLD } = require('../lib/churn-scoring');
 
 // GET /api/nav/counts
 router.get('/counts', async (req, res, next) => {
@@ -21,8 +22,8 @@ router.get('/counts', async (req, res, next) => {
       listClientsToUpsell(userId),
       db.query(
         `SELECT count(*)::int AS n FROM opportunities
-         WHERE user_id = $1 AND status = 'won' AND churn_score >= 60`,
-        [userId]
+         WHERE user_id = $1 AND status = 'won' AND churn_score >= $2`,
+        [userId, AT_RISK_THRESHOLD]
       ),
       db.query(
         `SELECT count(*)::int AS n FROM nurture_emails

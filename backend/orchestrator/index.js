@@ -208,11 +208,16 @@ function start() {
     console.log('[churn-signals] Starting weekly external signal scan...');
     try {
       const { scanExternalSignalsForUser } = require('../lib/churn-external-signals');
+      const { scanFinancialHealthForUser } = require('../lib/financial-health');
       const db = require('../db');
       const users = await db.query('SELECT id FROM users WHERE onboarding_complete = true');
       let scanned = 0, signalsFound = 0;
       for (const { id } of users.rows) {
         try {
+          // Registres officiels d'abord (gratuit, signaux durs — toutes les sociétés
+          // clientes), puis le scan news Brave (payant — clients déjà à risque only).
+          const registryReport = await scanFinancialHealthForUser(id);
+          signalsFound += registryReport.signalsFound;
           const report = await scanExternalSignalsForUser(id);
           scanned += report.scanned;
           signalsFound += report.signalsFound;

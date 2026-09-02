@@ -22,6 +22,12 @@ const { getSectorMultiplier } = require('./sector-classifier');
 
 const DAY_MS = 86400000;
 
+// Seuil unique « client à risque » — utilisé par le badge de nav, la liste
+// « À traiter aujourd'hui » et le compteur atRisk. Le scan de signaux externes
+// (churn-external-signals.js) reste volontairement plus large (>= 50) : on
+// surveille dès le risque moyen, on n'alerte qu'à partir d'ici.
+const AT_RISK_THRESHOLD = 60;
+
 /**
  * Score a single opportunity for churn risk.
  * `ownSectorMultiplier`/`clientSectorMultiplier` are pre-resolved by scoreAllForUser
@@ -33,7 +39,7 @@ const DAY_MS = 86400000;
 function scoreOpportunity(opp, {
   deals = [], activities = [], emails = [],
   ownSectorMultiplier = 1.0, clientSectorMultiplier = 1.0, clientSectorLabel = null,
-  upsellEmails = [], externalSignals = [],
+  upsellEmails = [], externalSignals = [], registrySignals = [],
 } = {}) {
   const now = Date.now();
   const factors = [];
@@ -203,11 +209,42 @@ function scoreOpportunity(opp, {
   }
 
   // ── 8. External web signals (last 30 days) ──
-  if (externalSignals.length > 0) {
-    const distinctTypes = [...new Set(externalSignals.map(s => s.signal_type))];
-    const bump = Math.min(distinctTypes.length * 10, 20);
+  // Dédup avec le facteur 9 : si un registre officiel a confirmé une procédure,
+  // le « financial_distress » attrapé par mots-clés Brave est le même événement
+  // en moins fiable — il ne doit pas s'empiler.
+  const registryTypes = new Set(registrySignals.map(s => s.signal_type));
+  const registryConfirmedDistress = registryTypes.has('insolvency_proceeding')
+    || registryTypes.has('insolvency_safeguard') || registryTypes.has('company_dissolved');
+  const braveTypes = [...new Set(externalSignals.map(s => s.signal_type))]
+    .filter(type => !(type === 'financial_distress' && registryConfirmedDistress));
+  if (braveTypes.length > 0) {
+    const bump = Math.min(braveTypes.length * 10, 20);
     score += bump;
-    factors.push({ signal: 'external_signals', weight: bump, detail: `Signal(aux) externe(s) détecté(s) : ${distinctTypes.join(', ')}` });
+    factors.push({ signal: 'external_signals', weight: bump, detail: `Signal(aux) externe(s) détecté(s) : ${braveTypes.join(', ')}` });
+  }
+
+  // ── 9. Santé financière — registres officiels (90 jours) ──
+  // BODACC / Companies House / CourtListener / OpenCorporates. Signaux durs et datés,
+  // volontairement NON pondérés par le secteur (facteur 6) : une liquidation
+  // judiciaire est critique quel que soit le secteur.
+  if (registrySignals.length > 0) {
+    const detail = registrySignals[0].detail || '';
+    if (registryTypes.has('insolvency_proceeding') || registryTypes.has('company_dissolved')) {
+      score += 30;
+      factors.push({
+        signal: registryTypes.has('insolvency_proceeding') ? 'insolvency_proceeding' : 'company_dissolved',
+        weight: 30, detail,
+      });
+      // Procédure collective ou radiation = bande critique d'office.
+      score = Math.max(score, 76);
+    } else if (registryTypes.has('insolvency_safeguard')) {
+      score += 15;
+      factors.push({ signal: 'insolvency_safeguard', weight: 15, detail });
+    }
+    if (registryTypes.has('revenue_drop')) {
+      score += 8;
+      factors.push({ signal: 'revenue_drop', weight: 8, detail });
+    }
   }
 
   return {
@@ -243,17 +280,27 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
     upsellEmailsByOpp.get(e.opportunity_id).push(e);
   }
 
-  // Load external signals from the last 30 days, grouped by opportunity
+  // Load external signals grouped by opportunity, split by source :
+  // Brave (news, 30 jours — périmé vite) vs registres officiels (90 jours —
+  // une procédure collective reste un risque des mois durant).
   const externalSignalsByOpp = new Map();
+  const registrySignalsByOpp = new Map();
   try {
     const sigResult = await db.query(
-      `SELECT opportunity_id, signal_type FROM churn_external_signals
-       WHERE user_id = $1 AND detected_at > now() - interval '30 days'`,
+      `SELECT opportunity_id, signal_type, source, detail, detected_at FROM churn_external_signals
+       WHERE user_id = $1 AND detected_at > now() - interval '90 days'`,
       [userId]
     );
+    const DAY30 = 30 * DAY_MS;
     for (const s of sigResult.rows) {
-      if (!externalSignalsByOpp.has(s.opportunity_id)) externalSignalsByOpp.set(s.opportunity_id, []);
-      externalSignalsByOpp.get(s.opportunity_id).push(s);
+      const isRegistry = (s.source || '').startsWith('registry_');
+      if (isRegistry) {
+        if (!registrySignalsByOpp.has(s.opportunity_id)) registrySignalsByOpp.set(s.opportunity_id, []);
+        registrySignalsByOpp.get(s.opportunity_id).push(s);
+      } else if (Date.now() - new Date(s.detected_at).getTime() <= DAY30) {
+        if (!externalSignalsByOpp.has(s.opportunity_id)) externalSignalsByOpp.set(s.opportunity_id, []);
+        externalSignalsByOpp.get(s.opportunity_id).push(s);
+      }
     }
   } catch { /* table may be empty — fine */ }
 
@@ -293,10 +340,11 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
       clientSectorLabel: clientSector?.sector ?? null,
       upsellEmails: upsellEmailsByOpp.get(opp.id) || [],
       externalSignals: externalSignalsByOpp.get(opp.id) || [],
+      registrySignals: registrySignalsByOpp.get(opp.id) || [],
     });
     results.push({ id: opp.id, score, factors: JSON.stringify(factors) });
     scored++;
-    if (score >= 50) atRisk++;
+    if (score >= AT_RISK_THRESHOLD) atRisk++;
   }
 
   // Bulk UPDATE in batches of 500
@@ -332,4 +380,4 @@ function getChurnBand(score) {
   return { band: 'low', color: 'var(--success)' };
 }
 
-module.exports = { scoreOpportunity, scoreAllForUser, getChurnBand };
+module.exports = { scoreOpportunity, scoreAllForUser, getChurnBand, AT_RISK_THRESHOLD };
