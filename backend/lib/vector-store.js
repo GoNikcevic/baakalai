@@ -151,12 +151,30 @@ async function upsertPatternEmbedding(patternId, text, _metadata = {}, precomput
 /**
  * Patterns les plus pertinents pour un contexte donné (secteur, cible…).
  * Utilisé pour l'injection contextuelle à la génération d'email.
+ *
+ * Corrections audit 02/09 :
+ * - le tri commençait par `applied DESC`, qui passait DEVANT la distance
+ *   vectorielle — tout pattern épinglé écrasait le classement sémantique.
+ *   `applied` reste un bonus (+0.10 de similarité), plus un tri prioritaire ;
+ * - seuil de similarité 0.60 : en dessous, injecter du bruit est pire que rien ;
+ * - filtre tenant : ce chemin (le nominal quand pgvector est actif) contournait
+ *   la porte `shared` — il lisait la table entière, tous tenants confondus.
  */
-async function findRelevantPatterns(contextText, limit = 10) {
+async function findRelevantPatterns(contextText, limit = 10, { teamId = null, userId = null } = {}) {
   if (!ENABLED) return [];
 
   const embedding = await generateEmbedding(contextText);
   if (!embedding) return [];
+
+  let tenantFilter = `AND shared = true AND confidence = 'Haute'`;
+  const params = [JSON.stringify(embedding), limit];
+  if (teamId) {
+    tenantFilter = `AND (team_id = $3 OR (shared = true AND confidence = 'Haute'))`;
+    params.push(teamId);
+  } else if (userId) {
+    tenantFilter = `AND (user_id = $3 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $3) OR (shared = true AND confidence = 'Haute'))`;
+    params.push(userId);
+  }
 
   try {
     const result = await db.query(
@@ -164,9 +182,11 @@ async function findRelevantPatterns(contextText, limit = 10) {
               1 - (embedding <=> $1::vector) AS similarity
        FROM memory_patterns
        WHERE embedding IS NOT NULL AND dismissed_at IS NULL
-       ORDER BY applied DESC, embedding <=> $1::vector
+         AND 1 - (embedding <=> $1::vector) >= 0.60
+         ${tenantFilter}
+       ORDER BY (1 - (embedding <=> $1::vector)) + (CASE WHEN applied THEN 0.10 ELSE 0 END) DESC
        LIMIT $2`,
-      [JSON.stringify(embedding), limit]
+      params
     );
     return result.rows;
   } catch (err) {

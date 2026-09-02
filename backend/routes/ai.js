@@ -201,8 +201,9 @@ router.post('/regenerate', async (req, res, next) => {
   try {
     const { campaignId, diagnostic, originalMessages, clientParams, regenerationInstructions } = req.body;
 
-    // Bounded: only load relevant patterns (limit 30)
-    const memory = await db.memoryPatterns.list({ limit: 30 });
+    // Bounded: only load relevant patterns (limit 30), scoped to the tenant —
+    // sans userId, le DAO ne renverrait plus que le pool global partagé.
+    const memory = await db.memoryPatterns.list({ limit: 30, userId: req.user.id });
 
     const result = isDryRun(req)
       ? dryRun.regenerateSequence({ diagnostic, originalMessages, memory, clientParams })
@@ -244,7 +245,8 @@ router.post('/run-refinement', async (req, res, next) => {
 
     const [sequence, memory] = await Promise.all([
       db.touchpoints.listByCampaign(campaignId),
-      db.memoryPatterns.list({ limit: 30 }),
+      // Scopé au tenant — sans userId, le DAO ne renvoie que le pool global.
+      db.memoryPatterns.list({ limit: 30, userId: req.user.id }),
     ]);
 
     const originalMessages = sequence.map(tp => ({
@@ -335,16 +337,28 @@ router.post('/consolidate-memory', async (req, res, next) => {
   try {
     // Use JOIN to load diagnostics with campaign info in a single query
     const allDiagnostics = await db.diagnostics.listByUserCampaigns(req.user.id, 100);
-    const existingMemory = await db.memoryPatterns.list({ limit: 200 });
+    const existingMemory = await db.memoryPatterns.list({ limit: 200, userId: req.user.id });
 
     const result = isDryRun(req)
       ? dryRun.consolidateMemory(allDiagnostics, existingMemory)
       : await claude.consolidateMemory(allDiagnostics, existingMemory);
 
+    // Tenant des patterns : les diagnostics consolidés ici sont ceux de
+    // l'appelant — le pattern appartient à son équipe si elle existe, sinon à
+    // lui (jamais les deux, règle DAO migration 089). Avant, ces créations
+    // étaient sans tenant : invisibles pour lui, curables par personne.
+    let tenant = { userId: req.user.id };
+    try {
+      const team = await db.teams.getByUser(req.user.id);
+      if (team) tenant = { teamId: team.id };
+    } catch { /* solo user */ }
+
     const saved = [];
     if (result.parsed?.patterns) {
       for (const pattern of result.parsed.patterns) {
-        const created = await db.memoryPatterns.create({
+        // replaceOrCreate : dédup au sein du tenant (l'endpoint est rejouable).
+        const created = await db.memoryPatterns.replaceOrCreate({
+          ...tenant,
           pattern: pattern.pattern,
           category: pattern.categorie,
           data: pattern.donnees,
@@ -352,6 +366,7 @@ router.post('/consolidate-memory', async (req, res, next) => {
           sectors: pattern.secteurs || [],
           targets: pattern.cibles || [],
         });
+        if (!created) continue; // pattern écarté récemment par l'utilisateur
         saved.push(created.id);
         notionSync.syncMemoryPattern(created.id).catch(console.error);
       }
@@ -378,9 +393,36 @@ router.post('/consolidate-memory', async (req, res, next) => {
   }
 });
 
+/**
+ * Contrôle de propriété pour la curation mémoire (audit 02/09 — avant ce
+ * check, n'importe quel utilisateur authentifié pouvait modifier/écarter les
+ * patterns de tous les tenants). Autorisé si :
+ * - le pattern appartient à l'utilisateur (user_id), ou
+ * - le pattern appartient à une équipe dont il est membre, ou
+ * - le pattern est sans tenant (legacy/global) ET l'utilisateur est admin
+ *   (même règle que le middleware requireAdmin : req.user.role === 'admin').
+ */
+async function canCuratePattern(pattern, user) {
+  if (pattern.user_id && pattern.user_id === user.id) return true;
+  if (pattern.team_id) {
+    const member = await db.query(
+      'SELECT 1 FROM team_members WHERE user_id = $1 AND team_id = $2 LIMIT 1',
+      [user.id, pattern.team_id]
+    );
+    if (member.rows.length > 0) return true;
+  }
+  if (!pattern.user_id && !pattern.team_id) return user.role === 'admin';
+  return false;
+}
+
 // POST /api/ai/memory/:id/toggle-apply — toggle pattern applied status
 router.post('/memory/:id/toggle-apply', async (req, res, next) => {
   try {
+    const pattern = await db.memoryPatterns.get(req.params.id);
+    if (!pattern) return res.status(404).json({ error: 'Pattern not found' });
+    if (!(await canCuratePattern(pattern, req.user))) {
+      return res.status(403).json({ error: 'This pattern belongs to another workspace (global patterns require admin role)' });
+    }
     const result = await db.query(
       `UPDATE memory_patterns SET applied = NOT COALESCE(applied, false) WHERE id = $1 RETURNING id, applied`,
       [req.params.id]
@@ -506,6 +548,11 @@ router.get('/memory/recommendations', async (req, res, next) => {
 // Pattern won't be recreated by agents for 7 days
 router.delete('/memory/:id', async (req, res, next) => {
   try {
+    const pattern = await db.memoryPatterns.get(req.params.id);
+    if (!pattern) return res.status(404).json({ error: 'Pattern not found' });
+    if (!(await canCuratePattern(pattern, req.user))) {
+      return res.status(403).json({ error: 'This pattern belongs to another workspace (global patterns require admin role)' });
+    }
     await db.query(
       `UPDATE memory_patterns SET dismissed_at = now() WHERE id = $1`,
       [req.params.id]
@@ -521,15 +568,13 @@ router.get('/memory', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
-    // Resolve team for pattern scoping
-    let teamId = null;
-    try {
-      const team = await db.teams.getByUser(req.user.id);
-      if (team) teamId = team.id;
-    } catch { /* solo user */ }
+    // Tenant via userId : le filtre DAO couvre les patterns de l'utilisateur,
+    // ceux de ses équipes (sous-requête team_members) et le pool global — plus
+    // besoin de résoudre teamId ici. count() reçoit le MÊME filtre pour que le
+    // total colle au tableau affiché (avant, il comptait tous les tenants).
     const [patterns, count] = await Promise.all([
-      db.memoryPatterns.list({ limit, offset, teamId }),
-      db.memoryPatterns.count(),
+      db.memoryPatterns.list({ limit, offset, userId: req.user.id }),
+      db.memoryPatterns.count({ userId: req.user.id }),
     ]);
     res.json({ patterns, count, limit, offset });
   } catch (err) {

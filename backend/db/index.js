@@ -663,9 +663,15 @@ const memoryPatterns = {
       conditions.push(`(team_id = $${i++} OR (shared = true AND confidence = 'Haute'))`);
       params.push(filter.teamId);
     } else if (filter.userId) {
-      // Solo user: show only patterns they created or shared best practices
-      conditions.push(`(team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i++}) OR (shared = true AND confidence = 'Haute'))`);
+      // Solo/own patterns (user_id, migration 089) + patterns de ses équipes + pool partagé
+      conditions.push(`(user_id = $${i} OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i}) OR (shared = true AND confidence = 'Haute'))`);
       params.push(filter.userId);
+      i++;
+    } else {
+      // Sans tenant : UNIQUEMENT le pool global anonymisé. L'ancien comportement
+      // (aucun filtre → patterns de tous les tenants) fuitait la mémoire privée
+      // de chaque client vers les prompts des autres (audit du 02/09).
+      conditions.push(`shared = true AND confidence = 'Haute'`);
     }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY date_discovered DESC';
@@ -682,8 +688,10 @@ const memoryPatterns = {
   },
 
   async count(filter = {}) {
+    // Mêmes conditions que list() (dismissed + tenant) — l'ancienne version comptait
+    // tout, dismissés et autres tenants inclus, et divergeait du tableau affiché.
     let sql = 'SELECT COUNT(*) as total FROM memory_patterns';
-    const conditions = [];
+    const conditions = ['dismissed_at IS NULL'];
     const params = [];
     let i = 1;
     if (filter.category) {
@@ -694,7 +702,17 @@ const memoryPatterns = {
       conditions.push(`confidence = $${i++}`);
       params.push(filter.confidence);
     }
-    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    if (filter.teamId) {
+      conditions.push(`(team_id = $${i++} OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.teamId);
+    } else if (filter.userId) {
+      conditions.push(`(user_id = $${i} OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i}) OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.userId);
+      i++;
+    } else {
+      conditions.push(`shared = true AND confidence = 'Haute'`);
+    }
+    sql += ' WHERE ' + conditions.join(' AND ');
     const result = await query(sql, params);
     return parseInt(result.rows[0].total, 10);
   },
@@ -715,8 +733,8 @@ const memoryPatterns = {
 
     const result = await query(`
       INSERT INTO memory_patterns (pattern, category, data, confidence, confidence_score, date_discovered, sectors, targets,
-        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source, shared)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source, shared, user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
       data.pattern,
@@ -741,6 +759,8 @@ const memoryPatterns = {
       // structurellement jamais se remplir. La valeur transmise est deja
       // passee par anonymizeBeforeWrite, qui ne sait que la retirer.
       data.shared === true,
+      // Tenant solo (migration 089) — un pattern naît scopé à son propriétaire.
+      data.userId || data.user_id || null,
     ]);
     return result.rows[0];
   },
@@ -762,7 +782,9 @@ const memoryPatterns = {
       sample_size: 'sample_size', sampleSize: 'sample_size',
       improvement_pct: 'improvement_pct', improvementPct: 'improvement_pct',
       confirmations: 'confirmations',
+      last_confirmed_at: 'last_confirmed_at', lastConfirmedAt: 'last_confirmed_at',
       team_id: 'team_id', teamId: 'team_id',
+      user_id: 'user_id', userId: 'user_id',
       shared: 'shared',
       source: 'source',
     };
@@ -804,7 +826,7 @@ const memoryPatterns = {
       teamFilter = `AND (team_id = $2 OR (shared = true AND confidence = 'Haute'))`;
       params.push(teamId);
     } else if (userId) {
-      teamFilter = `AND (team_id IN (SELECT team_id FROM team_members WHERE user_id = $2) OR (shared = true AND confidence = 'Haute'))`;
+      teamFilter = `AND (user_id = $2 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $2) OR (shared = true AND confidence = 'Haute'))`;
       params.push(userId);
     } else {
       teamFilter = `AND shared = true AND confidence = 'Haute'`;
@@ -825,15 +847,38 @@ const memoryPatterns = {
    * or create a new one. Prevents pattern explosion from repeated agent runs.
    */
   async replaceOrCreate(data) {
+    // Scoping tenant (audit 02/09) : toutes les recherches de doublon/dismissed de
+    // cette fonction sont restreintes au tenant du pattern. Avant, un pattern
+    // écarté par UN client bloquait sa re-création chez TOUS, et un update de
+    // dédup pouvait écraser le pattern d'un autre tenant. Sans tenant fourni
+    // (écrivain legacy), on ne matche que les lignes elles-mêmes sans tenant.
+    const tenantTeam = data.teamId || data.team_id || null;
+    const tenantUser = data.userId || data.user_id || null;
+    const tenantClause = (offset) => tenantTeam ? { sql: `AND team_id = $${offset}`, params: [tenantTeam] }
+      : tenantUser ? { sql: `AND user_id = $${offset}`, params: [tenantUser] }
+      : { sql: 'AND team_id IS NULL AND user_id IS NULL', params: [] };
+
     // Check if a similar pattern was dismissed within the last 7 days — respect user's choice
     const prefix = (data.pattern || '').slice(0, 30);
     if (prefix.length >= 10) {
+      const tc = tenantClause(3);
       const dismissed = await query(
-        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at > now() - interval '7 days' LIMIT 1`,
-        [data.category, prefix + '%']
+        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at > now() - interval '7 days' ${tc.sql} LIMIT 1`,
+        [data.category, prefix + '%', ...tc.params]
       );
       if (dismissed.rows[0]) return null; // User dismissed this recently, don't recreate
     }
+
+    // Une ré-observation par un agent EST une confirmation : sans ce bump, un
+    // pattern reconfirmé chaque semaine restait à confirmations=1 avec
+    // last_confirmed_at NULL — décoté à 60 j et jamais promouvable (audit 02/09).
+    const confirmAndUpdate = async (id) => {
+      await query(
+        `UPDATE memory_patterns SET confirmations = COALESCE(confirmations, 0) + 1, last_confirmed_at = now() WHERE id = $1`,
+        [id]
+      );
+      return (await this.update(id, data)) || (await this.get(id));
+    };
 
     // Exclusion mutuelle entre agents concurrents écrivant la même catégorie
     // (Timing Agent + Copy Optimizer, par exemple).
@@ -856,21 +901,23 @@ const memoryPatterns = {
       releaseLock = await acquire(lockName, { ttlSeconds: 60 });
 
       // Try to find existing active pattern with same category and content
+      const tcExact = tenantClause(3);
       const existing = await query(
-        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL LIMIT 1`,
-        [data.category, data.pattern]
+        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL ${tcExact.sql} LIMIT 1`,
+        [data.category, data.pattern, ...tcExact.params]
       );
       if (existing.rows[0]) {
-        return await this.update(existing.rows[0].id, data);
+        return await confirmAndUpdate(existing.rows[0].id);
       }
       // Also check by partial match (text prefix)
       if (prefix.length >= 10) {
+        const tcPartial = tenantClause(3);
         const partial = await query(
-          `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL LIMIT 1`,
-          [data.category, prefix + '%']
+          `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL ${tcPartial.sql} LIMIT 1`,
+          [data.category, prefix + '%', ...tcPartial.params]
         );
         if (partial.rows[0]) {
-          return await this.update(partial.rows[0].id, data);
+          return await confirmAndUpdate(partial.rows[0].id);
         }
       }
 
@@ -884,9 +931,15 @@ const memoryPatterns = {
           const similar = await findSimilarPattern(data.pattern, 0.85);
           precomputedEmbedding = similar?.embedding || null;
           if (similar?.sourceId) {
-            const active = await query('SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL', [similar.sourceId]);
+            // Le match vectoriel est global — on ne fusionne que si la ligne
+            // appartient au MÊME tenant, sinon on crée (pas d'écrasement croisé).
+            const tcVec = tenantClause(2);
+            const active = await query(
+              `SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL ${tcVec.sql}`,
+              [similar.sourceId, ...tcVec.params]
+            );
             if (active.rows[0]) {
-              const updated = await this.update(active.rows[0].id, data);
+              const updated = await confirmAndUpdate(active.rows[0].id);
               await upsertPatternEmbedding(active.rows[0].id, data.pattern, null, precomputedEmbedding);
               return updated;
             }
@@ -933,12 +986,15 @@ const memoryPatterns = {
        RETURNING id`
     );
 
-    // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days
+    // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days.
+    // COALESCE sur date_discovered : sans lui, tout pattern jamais « confirmé par
+    // réponse » (last_confirmed_at NULL, cas de 100 % des créations d'agents)
+    // était à jamais impromouvable — la promotion était un chemin mort (audit 02/09).
     const promoteToMoyenne = await query(
       `UPDATE memory_patterns SET confidence = 'Moyenne', confidence_score = 0.60
        WHERE confidence = 'Faible' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 3
-         AND last_confirmed_at > now() - interval '30 days'
+         AND COALESCE(last_confirmed_at, date_discovered) > now() - interval '30 days'
        RETURNING id`
     );
     // Promote: Moyenne → Haute if confirmations >= 8 and confirmed in last 30 days
@@ -946,7 +1002,7 @@ const memoryPatterns = {
       `UPDATE memory_patterns SET confidence = 'Haute', confidence_score = 0.90
        WHERE confidence = 'Moyenne' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 8
-         AND last_confirmed_at > now() - interval '30 days'
+         AND COALESCE(last_confirmed_at, date_discovered) > now() - interval '30 days'
        RETURNING id`
     );
 

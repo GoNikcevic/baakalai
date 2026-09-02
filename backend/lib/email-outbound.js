@@ -343,11 +343,29 @@ async function sendNurtureEmail(userId, {
 
     // Bounce définitif : tamponner le contact — lu par le scan data quality
     // (issue email_bounced) et par le scoring churn (contact probablement parti).
-    if (result.code === 'recipient_bounced' && opportunityId) {
-      await db.query(
-        `UPDATE opportunities SET email_bounced_at = now(), email_bounce_reason = $1 WHERE id = $2`,
-        [(result.error || '').slice(0, 500), opportunityId]
-      ).catch(() => {});
+    if (result.code === 'recipient_bounced') {
+      if (opportunityId) {
+        await db.query(
+          `UPDATE opportunities SET email_bounced_at = now(), email_bounce_reason = $1 WHERE id = $2`,
+          [(result.error || '').slice(0, 500), opportunityId]
+        ).catch(() => {});
+      }
+
+      // Pénalité mémoire : un bounce n'est PAS un échec du copy (le contenu
+      // n'a jamais été lu), mais laisser l'envoi compter comme neutre-positif
+      // fausserait la boucle — les patterns de cet email seraient crédités
+      // d'un « envoi » vers une adresse morte. On décrémente donc d'un cran,
+      // plancher à 0. Best-effort : la pénalité ne doit jamais faire échouer
+      // le traitement du bounce lui-même.
+      const bouncedPatternIds = nurture.pattern_ids || [];
+      if (bouncedPatternIds.length > 0) {
+        await db.query(
+          `UPDATE memory_patterns
+           SET confirmations = GREATEST(COALESCE(confirmations, 1) - 1, 0)
+           WHERE id = ANY($1)`,
+          [bouncedPatternIds]
+        ).catch((err) => logger.warn('email-outbound', `Pattern bounce penalty failed: ${err.message}`));
+      }
     }
   }
 

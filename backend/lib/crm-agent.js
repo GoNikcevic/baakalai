@@ -456,7 +456,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           // Attribution: if deal moves to 'won' from lost/stagnant, check for reactivation email in last 90 days
           if (updates.status === 'won' && ['lost', 'stagnant', 'imported', 'new'].includes(o.status)) {
             const reactivationEmail = await db.query(
-              `SELECT id FROM nurture_emails
+              `SELECT id, pattern_ids FROM nurture_emails
                WHERE opportunity_id = $1 AND user_id = $2 AND status = 'sent'
                  AND metadata->>'chain' = 'deal_reactivation'
                  AND created_at > NOW() - INTERVAL '90 days'
@@ -468,6 +468,26 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
               updates.reactivated_from_email_id = reactivationEmail.rows[0].id;
               report.reactivations = (report.reactivations || 0) + 1;
               logger.info('crm-agent', `Deal reactivated: ${o.id} (email ${reactivationEmail.rows[0].id})`);
+
+              // Renforcement de la boucle d'apprentissage : deal mort → gagné
+              // avec email causal identifié, c'est LE signal le plus fort du
+              // produit. Les patterns utilisés pour rédiger cet email gagnent
+              // une confirmation. Best-effort : ne doit jamais faire échouer
+              // le sync.
+              const causalPatternIds = reactivationEmail.rows[0].pattern_ids || [];
+              if (causalPatternIds.length > 0) {
+                try {
+                  await db.query(
+                    `UPDATE memory_patterns
+                     SET confirmations = COALESCE(confirmations, 0) + 1, last_confirmed_at = now()
+                     WHERE id = ANY($1)`,
+                    [causalPatternIds]
+                  );
+                  logger.info('crm-agent', `Reactivation win: +1 confirmation on ${causalPatternIds.length} pattern(s)`);
+                } catch (err) {
+                  logger.warn('crm-agent', `Pattern reinforcement failed: ${err.message}`);
+                }
+              }
             }
           }
           await db.opportunities.update(o.id, updates);
@@ -705,11 +725,14 @@ async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = nul
     const { findRelevantPatterns, ENABLED: pgvEnabled } = require('./vector-store');
     if (pgvEnabled) {
       const context = `${trigger.trigger_type} ${opp.company || ''} ${opp.title || ''} ${(trigger.conditions?.sectors || []).join(' ')}`;
-      allPatterns = await findRelevantPatterns(context, 10);
+      // Tenant obligatoire : sans lui, la recherche pgvector piochait dans la
+      // mémoire de TOUS les clients (audit du 02/09). trigger.user_id est le
+      // propriétaire du trigger — même utilisateur que celui du run.
+      allPatterns = await findRelevantPatterns(context, 10, { teamId, userId: trigger.user_id });
     }
-    // Fallback to recency-based
+    // Fallback to recency-based — même scoping tenant que la recherche pgvector
     if (!allPatterns || allPatterns.length === 0) {
-      allPatterns = await db.memoryPatterns.listForPrompt(10, teamId);
+      allPatterns = await db.memoryPatterns.listForPrompt(10, teamId, trigger.user_id);
     }
     if (allPatterns.length > 0) {
       patternIds = allPatterns.map(p => p.id);
@@ -822,8 +845,17 @@ async function stepAnalysis(userId, report, teamId = null) {
  * Only creates patterns when there's statistically meaningful signal.
  */
 async function generateCrmPatterns(userId, opps, teamId = null) {
-  // Wrap create to auto-inject teamId
-  const createPattern = (data) => db.memoryPatterns.create({ ...data, teamId });
+  // Wrap create to auto-inject the tenant. userId en repli quand l'utilisateur
+  // n'a pas d'équipe : sans lui, le pattern naissait orphelin (ni team_id ni
+  // user_id) et devenait invisible pour son propre créateur avec le DAO scopé.
+  const createPattern = (data) => db.memoryPatterns.create({ ...data, teamId, userId: teamId ? null : userId });
+  // Les gardes anti-doublon doivent chercher dans la mémoire DU tenant.
+  // Historiquement list() sans tenant renvoyait les patterns de TOUS les
+  // clients : dès qu'un client avait son « taux de conversion CRM », plus
+  // aucun autre ne l'obtenait jamais. Avec le DAO scopé (audit 02/09), sans
+  // tenant on ne verrait plus que le pool global partagé — garde cassée dans
+  // l'autre sens (doublons quotidiens). D'où le tenant explicite ici.
+  const listExisting = (category) => db.memoryPatterns.list({ category, limit: 50, teamId, userId: teamId ? null : userId });
   const now = Date.now();
   const won = opps.filter(o => o.status === 'won');
   const lost = opps.filter(o => o.status === 'lost');
@@ -834,7 +866,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Pattern 1: Win rate
   if (won.length + lost.length >= 5) {
     const winRate = Math.round((won.length / (won.length + lost.length)) * 100);
-    const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+    const existing = await listExisting('Cible');
     const hasWinRate = existing.some(p => p.pattern.includes('taux de conversion CRM'));
     if (!hasWinRate) {
       await createPattern({
@@ -855,7 +887,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (velocities.length >= 3) {
       const avgDays = Math.round(velocities.reduce((s, v) => s + v, 0) / velocities.length);
-      const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+      const existing = await listExisting('Timing');
       const hasVelocity = existing.some(p => p.pattern.includes('cycle de vente moyen'));
       if (!hasVelocity) {
         await createPattern({
@@ -877,7 +909,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (stagnation.length >= 3) {
       const avgStagnation = Math.round(stagnation.reduce((s, v) => s + v, 0) / stagnation.length);
-      const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+      const existing = await listExisting('Timing');
       const hasStagnation = existing.some(p => p.pattern.includes('deals perdus stagnent'));
       if (!hasStagnation) {
         await createPattern({
@@ -902,7 +934,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
     const topSize = Object.entries(sizeGroups).sort((a, b) => b[1] - a[1])[0];
     if (topSize && topSize[1] >= 3) {
-      const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+      const existing = await listExisting('Cible');
       const hasSizePattern = existing.some(p => p.pattern.includes('taille d\'entreprise qui convertit'));
       if (!hasSizePattern) {
         await createPattern({
@@ -932,7 +964,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     );
     if (responded.rows.length > 0) {
       const topTitle = responded.rows[0];
-      const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+      const existing = await listExisting('Cible');
       const hasTitle = existing.some(p => p.pattern.includes('fonction qui r\u00E9pond le mieux'));
       if (!hasTitle) {
         await createPattern({
@@ -960,7 +992,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       const withResponse = touchCounts.rows.filter(r => r.got_response);
       if (withResponse.length >= 3) {
         const avgTouches = Math.round(withResponse.reduce((s, r) => s + parseInt(r.touches, 10), 0) / withResponse.length * 10) / 10;
-        const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+        const existing = await listExisting('Timing');
         const hasTouch = existing.some(p => p.pattern.includes('touches avant r\u00E9ponse'));
         if (!hasTouch) {
           await createPattern({

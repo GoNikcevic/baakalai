@@ -35,15 +35,15 @@ async function runMemoryAgent() {
 
   // ── Step 1: Check if consolidation is needed ──
   try {
-    // Count diagnostics since last consolidation
-    const lastConsolidation = await db.query(
-      `SELECT MAX(date_discovered) as last_date FROM memory_patterns`
-    );
-    const lastDate = lastConsolidation.rows[0]?.last_date || '2020-01-01';
-
+    // Critère NON auto-référentiel (audit 02/09). L'ancien déclencheur comptait
+    // les diagnostics postérieurs à MAX(memory_patterns.date_discovered) — or
+    // les agents du matin écrivent des patterns le jour même, donc lastDate
+    // valait toujours « aujourd'hui » et le count retombait systématiquement à
+    // 0 : la consolidation ne tournait jamais. Le job étant hebdomadaire, le
+    // critère devient « au moins 3 nouveaux diagnostics sur les 7 derniers
+    // jours », indépendant des écritures de patterns.
     const newDiagnostics = await db.query(
-      `SELECT COUNT(*) as count FROM diagnostics WHERE date_analyse > $1`,
-      [lastDate]
+      `SELECT COUNT(*) as count FROM diagnostics WHERE date_analyse > now() - interval '7 days'`
     );
     const newCount = parseInt(newDiagnostics.rows[0]?.count || 0, 10);
 

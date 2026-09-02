@@ -13,6 +13,7 @@ const { Router } = require('express');
 const db = require('../db');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('../lib/email-outbound');
+const { getPatternContext } = require('../lib/email-context');
 const logger = require('../lib/logger');
 
 const router = Router();
@@ -112,6 +113,9 @@ router.post('/:id/preview', async (req, res, next) => {
     // Get matching contacts
     const contacts = await getTargetContacts(tc);
 
+    // Même mémoire que le launch — la preview doit montrer ce qui partira vraiment
+    const patternCtx = await getCampaignPatternContext(tc);
+
     // Group by owner
     const byOwner = new Map();
     for (const c of contacts) {
@@ -128,7 +132,7 @@ router.post('/:id/preview', async (req, res, next) => {
 
       if (tc.email_prompt && sample) {
         try {
-          const prompt = buildEmailPrompt(tc, sample);
+          const prompt = buildEmailPrompt(tc, sample, patternCtx);
           const result = await claude.callClaude('Return only valid JSON.', prompt, 500);
           if (result.parsed) sampleEmail = result.parsed;
           else {
@@ -177,6 +181,12 @@ router.post('/:id/launch', async (req, res, next) => {
       try {
         const contacts = await getTargetContacts(tc);
 
+        // Mémoire résolue une fois pour toute la campagne (mêmes patterns
+        // pour chaque contact) — injectée dans les prompts et tracée en base
+        // via patternIds pour que les réponses/réactivations créditent les
+        // bons patterns.
+        const patternCtx = await getCampaignPatternContext(tc);
+
         const recentEmails = await db.query(
           `SELECT DISTINCT to_email FROM nurture_emails WHERE team_campaign_id IS NOT NULL AND created_at > now() - interval '7 days'`
         );
@@ -194,7 +204,7 @@ router.post('/:id/launch', async (req, res, next) => {
 
           const batch = toProcess.slice(i, i + 5);
           const results = await Promise.allSettled(batch.map(async (contact) => {
-            const prompt = buildEmailPrompt(tc, contact);
+            const prompt = buildEmailPrompt(tc, contact, patternCtx);
             const result = await claude.callClaude('Return only valid JSON.', prompt, 500);
             let email = result.parsed;
             if (!email) {
@@ -207,6 +217,7 @@ router.post('/:id/launch', async (req, res, next) => {
               to: contact.email, toName: contact.name,
               subject: email.subject, body: email.body,
               opportunityId: contact.id, teamCampaignId: tc.id,
+              patternIds: patternCtx.ids,
             });
           }));
 
@@ -289,7 +300,19 @@ async function getTargetContacts(tc) {
   return result.rows;
 }
 
-function buildEmailPrompt(tc, contact) {
+/**
+ * Mémoire de l'équipe (c'est une campagne d'ÉQUIPE : le tenant est tc.team_id).
+ * Best-effort — sans mémoire la campagne part quand même, elle n'apprend rien.
+ */
+async function getCampaignPatternContext(tc) {
+  try {
+    return await getPatternContext(tc.team_id);
+  } catch {
+    return { text: '', ids: [] };
+  }
+}
+
+function buildEmailPrompt(tc, contact, patternCtx = null) {
   const context = [
     `Contact: ${contact.name}`,
     contact.title ? `Title: ${contact.title}` : null,
@@ -300,10 +323,14 @@ function buildEmailPrompt(tc, contact) {
 
   const customPrompt = tc.email_prompt || 'Write a professional follow-up email.';
 
+  const patternsBlock = patternCtx?.text
+    ? `\nPATTERNS THAT WORK (cross-campaign memory):\n${patternCtx.text}\nApply the APPROVED patterns first.\n`
+    : '';
+
   return `Generate a personal email for this contact.
 
 ${context}
-
+${patternsBlock}
 Instructions: ${customPrompt}
 Tone: ${tc.email_tone || 'professional'}
 Max 6 lines, plain text, no HTML.

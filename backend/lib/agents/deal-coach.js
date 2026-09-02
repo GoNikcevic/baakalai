@@ -149,7 +149,7 @@ async function coachAndDraftOne(userId, opportunityId) {
   const [timing, copyCtx, patternCtx] = await Promise.all([
     getTimingContext(userId),
     getCopyContext(userId),
-    getPatternContext(teamId),
+    getPatternContext(teamId, userId),
   ]);
 
   const contactEmails = emails.rows;

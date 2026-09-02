@@ -5,6 +5,7 @@ const { emitToThread, notifyUser } = require('../socket');
 const { sanitizeText } = require('../lib/sanitize');
 const { rateLimit } = require('../lib/rate-limit');
 const { getValidatedIntegrations } = require('../config');
+const { getPatternContext, getTeamId } = require('../lib/email-context');
 const emailLimit = rateLimit({ windowMs: 60000, max: 10 }); // 10 emails per minute
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 });
 
@@ -774,6 +775,14 @@ router.post('/threads/:id/send-reactivation', async (req, res, next) => {
       return res.status(409).json({ error: 'A reactivation email was already sent to this contact in the last 7 days' });
     }
 
+    // Mémoire cross-campagne : mêmes patterns que le moteur de nurture, pour
+    // que les réactivations lancées depuis le chat apprennent (et nourrissent
+    // la boucle via pattern_ids) au lieu de générer « à froid ». Best-effort.
+    let patternCtx = { text: '', ids: [] };
+    try {
+      patternCtx = await getPatternContext(await getTeamId(req.user.id), req.user.id);
+    } catch { /* mémoire optionnelle */ }
+
     // Generate email with Claude
     const daysStagnant = Math.floor((Date.now() - new Date(opp.updated_at || opp.created_at).getTime()) / 86400000);
     const prompt = `Generate a personal reactivation email for a stagnant deal.
@@ -784,6 +793,7 @@ CONTEXT:
 - Churn score: ${opp.churn_score || 'N/A'}/100
 - Status: ${opp.status}
 ${opp.deal_value ? `- Deal value: ${opp.deal_value}` : ''}
+${patternCtx.text ? `\nPATTERNS THAT WORK (cross-campaign memory):\n${patternCtx.text}\nApply the APPROVED patterns first.` : ''}
 
 RULES:
 - Max 6 lines, must sound human and personal (NOT marketing)
@@ -805,10 +815,10 @@ Return JSON: { "subject": "...", "body": "..." }`;
 
     // Queue as pending for approval
     const inserted = await db.query(
-      `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7) RETURNING id`,
+      `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, metadata, pattern_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8) RETURNING id`,
       [req.user.id, opp.id, opp.email, opp.name, email.subject, email.body,
-       JSON.stringify({ chain: 'deal_reactivation', source: 'chat' })]
+       JSON.stringify({ chain: 'deal_reactivation', source: 'chat' }), patternCtx.ids]
     );
 
     res.json({

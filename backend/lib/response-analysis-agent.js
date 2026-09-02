@@ -413,17 +413,21 @@ async function scoreTrigger(triggerId, outcome) {
 /**
  * Create a memory pattern from accumulated response data.
  *
- * NOTE: `userId` n'est pas transmis à replaceOrCreate — sa signature est
- * replaceOrCreate(data), à un seul argument. Les trois appels ci-dessous
- * passaient (userId, {...}), ce qui décalait tout : `data` valait la chaîne
- * userId, `data.pattern` était undefined, l'INSERT violait le NOT NULL et
- * l'exception était avalée par les catch. Aucun de ces trois patterns n'a
- * jamais été écrit. L'attribution au tenant passe par team_id (non renseigné
- * par les agents aujourd'hui) — à traiter avec le chantier mémoire.
+ * Historique : les trois appels ci-dessous passaient (userId, {...}) à
+ * replaceOrCreate — signature à un seul argument — donc `data.pattern` était
+ * undefined et aucun de ces patterns n'a jamais été écrit (corrigé). Depuis la
+ * migration 089, chaque écriture porte son tenant : l'équipe de l'utilisateur
+ * si elle existe, sinon l'utilisateur lui-même (jamais les deux).
  */
-// eslint-disable-next-line no-unused-vars
 async function createMemoryPattern(userId, report) {
   if (report.analyzed < 5) return;
+
+  // Tenant des patterns — résolu une seule fois pour les trois écritures.
+  let tenant = { userId };
+  try {
+    const team = await db.teams.getByUser(userId);
+    if (team) tenant = { teamId: team.id };
+  } catch { /* résolution d'équipe indisponible : le pattern reste scopé user */ }
 
   const successRate = report.analyzed > 0
     ? Math.round((report.positive / report.analyzed) * 100)
@@ -442,6 +446,7 @@ async function createMemoryPattern(userId, report) {
       : `Les emails d'activation ont un taux de r\u00E9ponse positive de ${emailRate}% \u2014 envisager d'ajuster le ton ou le timing`;
     try {
       await db.memoryPatterns.replaceOrCreate({
+        ...tenant,
         pattern: emailPattern,
         category: 'Corps',
         source: 'response_analysis_email',
@@ -463,6 +468,7 @@ async function createMemoryPattern(userId, report) {
       : `LinkedIn : taux de r\u00E9ponse positive ${liRate}%. ${connectAccepted} connexions accept\u00E9es sur ${linkedinActions.length} actions.`;
     try {
       await db.memoryPatterns.replaceOrCreate({
+        ...tenant,
         pattern: liPattern,
         category: 'Canal',
         source: 'response_analysis_linkedin',
@@ -480,6 +486,7 @@ async function createMemoryPattern(userId, report) {
     : `Activation : taux de r\u00E9ponse positive de ${successRate}% (${report.positive}/${report.analyzed})`;
   try {
     await db.memoryPatterns.replaceOrCreate({
+      ...tenant,
       pattern,
       category: 'Corps',
       source: 'response_analysis_global',
