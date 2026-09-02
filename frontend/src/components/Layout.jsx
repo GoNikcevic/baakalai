@@ -3,7 +3,7 @@
    React equivalent of the vanilla app's sidebar navigation and page shell.
    =============================================================================== */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { useApp } from '../context/useApp';
@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   {
     i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'refinement',
     children: [
-      { i18nKey: 'nav.toReactivate',    to: '/deals-to-reactivate', icon: 'refinement' },
+      { i18nKey: 'nav.toReactivate',    to: '/deals-to-reactivate', icon: 'refinement', countKey: 'reactivation' },
       { i18nKey: 'nav.campaigns',       to: '/campaigns',           icon: 'campaigns' },
     ],
   },
@@ -33,18 +33,18 @@ const NAV_ITEMS = [
     i18nKey: 'nav.sectionClients', section: 'clients', icon: 'clients',
     children: [
       { i18nKey: 'nav.globalView',      to: '/clients',             icon: 'clients' },
-      { i18nKey: 'nav.toUpsell',        to: '/clients-to-upsell',   icon: 'upsell' },
-      { i18nKey: 'nav.atRisk',          to: '/churn-risk',          icon: 'churn' },
+      { i18nKey: 'nav.toUpsell',        to: '/clients-to-upsell',   icon: 'upsell', countKey: 'upsell' },
+      { i18nKey: 'nav.atRisk',          to: '/churn-risk',          icon: 'churn', countKey: 'churn' },
     ],
   },
   {
     i18nKey: 'nav.sectionCrm', section: 'crm', icon: 'crm',
     children: [
-      { i18nKey: 'nav.dataQuality',     to: '/data-quality',        icon: 'crm' },
+      { i18nKey: 'nav.dataQuality',     to: '/data-quality',        icon: 'crm', countKey: 'dataQuality' },
       { i18nKey: 'nav.analytics',       to: '/analytics',           icon: 'reports', adminOnly: true },
     ],
   },
-  { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture' },
+  { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture', countKey: 'nurturePending' },
   { i18nKey: 'nav.performance',         to: '/performance',         icon: 'dashboard', adminOnly: true },
   { i18nKey: 'nav.settings',            to: '/settings',            icon: 'settings', adminOnly: true },
 ];
@@ -222,6 +222,30 @@ export default function Layout() {
     }
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Action counters for the nav badges — refreshed on navigation (throttled)
+  // so approving emails or postponing a deal updates the numbers, plus a slow
+  // interval for long-lived tabs. The endpoint is cheap (DB-only) by contract.
+  const [navCounts, setNavCounts] = useState({});
+  const lastCountsFetchRef = useRef(0);
+  useEffect(() => {
+    function fetchCounts(force = false) {
+      if (!force && Date.now() - lastCountsFetchRef.current < 10_000) return;
+      lastCountsFetchRef.current = Date.now();
+      request('/nav/counts').then(setNavCounts).catch(() => {});
+    }
+    fetchCounts(true);
+    const interval = setInterval(() => fetchCounts(true), 120_000);
+    return () => clearInterval(interval);
+  }, []);
+  useEffect(() => {
+    if (Date.now() - lastCountsFetchRef.current >= 10_000) {
+      lastCountsFetchRef.current = Date.now();
+      request('/nav/counts').then(setNavCounts).catch(() => {});
+    }
+  }, [location.pathname]);
+
+  const countFor = (item) => (item.countKey ? navCounts[item.countKey] || 0 : 0);
+
   return (
     <div className="app-shell">
       {billingLocked && !location.pathname.startsWith('/settings') && (
@@ -270,6 +294,7 @@ export default function Layout() {
         <nav className="sidebar-nav">
           {NAV_ITEMS.filter(isVisibleToUser).map((item) => {
             if (!item.children) {
+              const count = countFor(item);
               return (
                 <NavLink
                   key={item.to}
@@ -281,6 +306,7 @@ export default function Layout() {
                 >
                   <NavIcon name={item.icon} />
                   <span className="nav-label">{t(item.i18nKey)}</span>
+                  {count > 0 && !sidebarCollapsed && <span className="badge">{count}</span>}
                 </NavLink>
               );
             }
@@ -289,6 +315,8 @@ export default function Layout() {
             if (!children.length) return null;
             const isOpen = !!openSections[item.section];
             const childActive = children.some(c => routeMatches(location.pathname, c.to));
+            const sectionCount = children.reduce((sum, c) => sum + countFor(c), 0);
+            const showHeaderBadge = !isOpen && sectionCount > 0;
 
             // Collapsed sidebar: no room for headers — surface the children as icons.
             if (sidebarCollapsed) {
@@ -315,28 +343,33 @@ export default function Layout() {
                 >
                   <NavIcon name={item.icon} />
                   <span className="nav-label">{t(item.i18nKey)}</span>
+                  {showHeaderBadge && <span className="badge">{sectionCount}</span>}
                   <svg
                     width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                     style={{
-                      marginLeft: 'auto', flexShrink: 0, opacity: 0.6,
+                      marginLeft: showHeaderBadge ? 8 : 'auto', flexShrink: 0, opacity: 0.6,
                       transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease',
                     }}
                   >
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
-                {isOpen && children.map(child => (
-                  <NavLink
-                    key={child.to}
-                    to={child.to}
-                    className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
-                    style={{ paddingLeft: 34 }}
-                  >
-                    <NavIcon name={child.icon} />
-                    <span className="nav-label">{t(child.i18nKey)}</span>
-                  </NavLink>
-                ))}
+                {isOpen && children.map(child => {
+                  const count = countFor(child);
+                  return (
+                    <NavLink
+                      key={child.to}
+                      to={child.to}
+                      className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+                      style={{ paddingLeft: 34 }}
+                    >
+                      <NavIcon name={child.icon} />
+                      <span className="nav-label">{t(child.i18nKey)}</span>
+                      {count > 0 && <span className="badge">{count}</span>}
+                    </NavLink>
+                  );
+                })}
               </div>
             );
           })}

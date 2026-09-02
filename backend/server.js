@@ -181,6 +181,7 @@ app.use('/api/crm', requireAuth, crmRouter);
 app.use('/api/churn', requireAuth, require('./routes/churn'));
 app.use('/api/reactivation', requireAuth, require('./routes/reactivation'));
 app.use('/api/data-quality', requireAuth, require('./routes/data-quality'));
+app.use('/api/nav', requireAuth, require('./routes/nav'));
 app.use('/api/team-campaigns', requireAuth, require('./routes/team-campaigns'));
 app.use('/api/strategic', requireAuth, require('./routes/strategic'));
 app.use('/api/signals', requireAuth, require('./routes/signals'));
