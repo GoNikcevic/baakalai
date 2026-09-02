@@ -85,7 +85,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 ## 7. Business Context
 
-- **ICP**: PME B2B 5-50 pers, ≥12 mois historique CRM, pas de RevOps
+- **ICP** (élargi 2026-09-02): PME B2B 5-200 pers, ≥12 mois historique CRM, base clients existante, pas d'équipe RevOps constituée, ≤5 personnes sur le CRM (plafond produit actuel). L'effectif est un proxy — qualifier sur ces 4 critères.
 - **Wedge**: Revenue intelligence for SMBs — structurally inaccessible to Gong/Clari
 - **Hero job**: Deal reactivation ("1 deal recovered = tool paid for itself")
 - **4 jobs**: Reactivation > Upsell > Churn > Data cleaning
