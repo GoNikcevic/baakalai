@@ -192,7 +192,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
       {view === 'campaigns' && (isEmpty ? (
         <div className="empty-state">
-          <div className="empty-state-icon">\uD83C\uDFAF</div>
+          <div className="empty-state-icon">{'\uD83C\uDFAF'}</div>
           <div className="empty-state-title">{t('campaigns.noCampaigns')}</div>
           <div className="empty-state-desc">
             {t('campaigns.noCampaignsDesc')}
