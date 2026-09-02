@@ -92,6 +92,12 @@ router.post('/generate-sequence', async (req, res, next) => {
       return res.status(400).json({ error: 'Au moins sector ou position requis' });
     }
 
+    // Mémoire cross-campagne dans le prompt de génération — le masterPrompt
+    // demandait au modèle de citer la mémoire sans jamais la lui donner.
+    try {
+      params.memory = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
+    } catch { params.memory = []; }
+
     const result = isDryRun(req)
       ? dryRun.generateSequence(params)
       : await claude.generateSequence(params);
@@ -577,6 +583,28 @@ router.get('/memory', async (req, res, next) => {
       db.memoryPatterns.count({ userId: req.user.id }),
     ]);
     res.json({ patterns, count, limit, offset });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/memory/labels — résout des pattern_ids en libellés pour le bandeau
+// « patterns appliqués » des brouillons. Scopé : ne renvoie que les patterns
+// visibles par l'appelant (les siens, ceux de ses équipes, ou le pool partagé).
+router.post('/memory/labels', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.json({ patterns: [] });
+    const result = await db.query(
+      `SELECT id, pattern, category, confidence, applied FROM memory_patterns
+       WHERE id = ANY($1) AND dismissed_at IS NULL
+         AND (user_id = $2
+              OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $2)
+              OR shared = true)
+       LIMIT 20`,
+      [ids.slice(0, 20), req.user.id]
+    );
+    res.json({ patterns: result.rows });
   } catch (err) {
     next(err);
   }

@@ -435,7 +435,19 @@
     "positiveReplies": "positive replies",
     "negativeReplies": "negative replies",
     "successRate": "success rate",
-    "recentEmails": "Recent influenced emails"
+    "recentEmails": "Recent influenced emails",
+    "appliedBanner": "{count} pattern(s) from your memory applied",
+    "appliedBadge": "APPROVED",
+    "sequence": "Sequence",
+    "channel": "Channel",
+    "shownOfTotal": "{shown} shown of {total}",
+    "sharedBadge": "Shared",
+    "sharedTooltip": "This anonymized pattern is published to the shared pool",
+    "confirmedCount": "×{count} confirmed",
+    "active": "Active",
+    "applyTooltip": "An active pattern is applied with priority in emails and never decays over time",
+    "sourceLine": "Source: {source}",
+    "abBasedOn": "✨ Based on learned memory: {memory}"
   },
   "legal": {
     "terms": "Terms",

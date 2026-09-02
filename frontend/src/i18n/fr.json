@@ -435,7 +435,19 @@
     "positiveReplies": "réponses positives",
     "negativeReplies": "réponses négatives",
     "successRate": "taux de succès",
-    "recentEmails": "Derniers emails influencés"
+    "recentEmails": "Derniers emails influencés",
+    "appliedBanner": "{count} pattern(s) de votre mémoire appliqué(s)",
+    "appliedBadge": "APPROUVÉ",
+    "sequence": "Séquence",
+    "channel": "Canal",
+    "shownOfTotal": "{shown} affichés sur {total}",
+    "sharedBadge": "Partagé",
+    "sharedTooltip": "Ce pattern anonymisé est publié dans le pool commun",
+    "confirmedCount": "×{count} confirmé",
+    "active": "Actif",
+    "applyTooltip": "Un pattern actif est appliqué en priorité dans les emails et n'est jamais dégradé par le temps",
+    "sourceLine": "Source : {source}",
+    "abBasedOn": "✨ Basé sur la mémoire apprise : {memory}"
   },
   "legal": {
     "terms": "CGU",

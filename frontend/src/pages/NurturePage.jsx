@@ -9,6 +9,7 @@ import { getUser } from '../services/auth';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 import { useConfirm } from '../components/ConfirmModal';
+import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
 
 function getTriggerTypes(lang) {
   const en = lang === 'en';
@@ -540,6 +541,11 @@ function EmailsSection({ emails, type, onRefresh }) {
                 >
                   {email.body}
                 </div>
+                {/* Mémoire visible : bandeau des patterns appliqués, uniquement quand le
+                    brouillon est déplié (le composant ne fetch qu'une fois monté). */}
+                {type === 'pending' && expandedIds.has(email.id) && (
+                  <AppliedPatternsBanner patternIds={email.pattern_ids} />
+                )}
                 {!expandedIds.has(email.id) && email.body && email.body.length > 200 && (
                   <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2, cursor: 'pointer' }}
                     onClick={() => toggleExpanded(email.id, true)}

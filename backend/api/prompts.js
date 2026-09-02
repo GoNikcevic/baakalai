@@ -30,7 +30,15 @@ function masterPrompt(params) {
     signaturePhrases = '',
     objections = '',
     documentContext = '',
+    memory = [],
   } = params;
+
+  // Le prompt demande au modèle de remplir ab_config.memory_used / recommendation_source
+  // « memory » — sans cette section, il citait une mémoire qu'on ne lui donnait jamais
+  // (champ au mieux null, au pire halluciné — audit mémoire 02/09).
+  const memorySection = memory && memory.length > 0
+    ? `\nMÉMOIRE CROSS-CAMPAGNE (patterns appris — applique en priorité les [APPROVED], cite le pattern utilisé dans ab_config.memory_used) :\n${memory.map(m => `- ${m.applied ? '[APPROVED]' : `[${m.confidence}]`} ${m.category}: ${m.pattern}`).join('\n')}\n`
+    : '';
 
   const channelInstructions = {
     email: `Génère une séquence EMAIL uniquement avec ${touchpointCount} touchpoints (E1 à E${touchpointCount}). Tous les types doivent être "email".`,
@@ -74,7 +82,7 @@ Tu génères des séquences de prospection complètes, personnalisées et prête
 - Longueur : ${length}
 - Langue : ${language === 'fr' ? 'Français' : 'English'}
 
-${avoidWords ? `### Contraintes de vocabulaire\n- Mots/expressions à éviter : ${avoidWords}\n` : ''}${signaturePhrases ? `### Vocabulaire maison\n- Expressions à privilégier : ${signaturePhrases}\n` : ''}${objections ? `### Objections fréquentes à anticiper\n${objections}\n` : ''}${documentContext ? `### Contexte business (extraits de documents)\n${documentContext.slice(0, 4000)}\n` : ''}### Séquence
+${avoidWords ? `### Contraintes de vocabulaire\n- Mots/expressions à éviter : ${avoidWords}\n` : ''}${signaturePhrases ? `### Vocabulaire maison\n- Expressions à privilégier : ${signaturePhrases}\n` : ''}${objections ? `### Objections fréquentes à anticiper\n${objections}\n` : ''}${documentContext ? `### Contexte business (extraits de documents)\n${documentContext.slice(0, 4000)}\n` : ''}${memorySection}### Séquence
 - Canal : ${channel}
 - ${channelInstructions[channel] || channelInstructions.email}
 - Angle d'approche : ${angle}

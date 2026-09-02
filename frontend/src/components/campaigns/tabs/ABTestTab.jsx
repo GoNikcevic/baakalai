@@ -8,7 +8,7 @@ import { sanitizeHtml } from '../../../services/sanitize';
 import { useI18n } from '../../../i18n';
 
 export default function ABTestTab({ campaign: c, setCampaigns }) {
-  const { lang } = useI18n(); const en = lang === 'en';
+  const { lang, t } = useI18n(); const en = lang === 'en';
   const [promoting, setPromoting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -137,7 +137,7 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
             ))}
           </div>
         )}
-        {abConfig.memory_used && abConfig.memory_used !== 'null' && (
+        {typeof abConfig.memory_used === 'string' && abConfig.memory_used && abConfig.memory_used !== 'null' && (
           <div
             style={{
               fontSize: 11,
@@ -146,9 +146,11 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
               padding: '8px 12px',
               borderRadius: 8,
               border: '1px dashed rgba(108, 92, 231, 0.25)',
+              lineHeight: 1.5,
+              overflowWrap: 'break-word',
             }}
           >
-            ✨ Basé sur la mémoire apprise : {abConfig.memory_used}
+            {t('memory.abBasedOn', { memory: abConfig.memory_used })}
           </div>
         )}
       </div>

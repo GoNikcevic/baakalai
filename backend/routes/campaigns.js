@@ -391,7 +391,9 @@ router.post('/:id/optimize', async (req, res, next) => {
       painPoints: '',
       originalMessages,
       diagnostic: hypothesis || 'Optimisation manuelle déclenchée par l\'utilisateur',
-      memory: [],
+      // Mémoire réelle du tenant — était [] en dur alors que regenerationPrompt
+      // sait la consommer (audit mémoire 02/09).
+      memory: await db.memoryPatterns.listForPrompt(8, null, req.user.id).catch(() => []),
       touchpointsToRegenerate: touchpointSteps,
     });
 

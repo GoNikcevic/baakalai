@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api, { request } from '../services/api-client';
 import { useT } from '../i18n';
 
-const CATEGORY_COLORS = { Objets: '#3b82f6', Corps: '#16a34a', Timing: '#f59e0b', LinkedIn: '#8b5cf6', Secteur: '#ef4444', Cible: '#eab308' };
+const CATEGORY_COLORS = { Objets: '#3b82f6', Corps: '#16a34a', Timing: '#f59e0b', LinkedIn: '#8b5cf6', Secteur: '#ef4444', Cible: '#eab308', 'Séquence': '#0ea5e9', Canal: '#14b8a6' };
 const CONFIDENCE_COLORS = { Haute: '#16a34a', Moyenne: '#f59e0b', Faible: '#9ca3af' };
 
 export default function MemoryExplorerPage() {
@@ -26,6 +26,8 @@ export default function MemoryExplorerPage() {
     { key: 'LinkedIn', label: t('memory.linkedin') },
     { key: 'Secteur', label: t('memory.sector') },
     { key: 'Cible', label: t('memory.target') },
+    { key: 'Séquence', label: t('memory.sequence') },
+    { key: 'Canal', label: t('memory.channel') },
   ], [t]);
 
   const CONFIDENCES = useMemo(() => [
@@ -35,13 +37,20 @@ export default function MemoryExplorerPage() {
     { key: 'Faible', label: t('memory.low') },
   ], [t]);
 
+  const [totalCount, setTotalCount] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await api.getMemory();
-        if (!cancelled) setPatterns(res.patterns || []);
-      } catch { if (!cancelled) setPatterns([]); }
+        // limit=200 (max API) : la vue par défaut plafonnait à 50 lignes et les
+        // stats mentaient. `count` = total réel côté serveur pour la tuile.
+        const res = await request('/ai/memory?limit=200');
+        if (!cancelled) {
+          setPatterns(res.patterns || []);
+          setTotalCount(typeof res.count === 'number' ? res.count : (res.patterns || []).length);
+        }
+      } catch { if (!cancelled) { setPatterns([]); setTotalCount(0); } }
       finally { if (!cancelled) setLoading(false); }
     }
     load();
@@ -58,11 +67,11 @@ export default function MemoryExplorerPage() {
   }, [patterns, categoryFilter, confidenceFilter, searchText]);
 
   const stats = useMemo(() => ({
-    total: patterns.length,
+    total: totalCount || patterns.length,
     haute: patterns.filter(p => p.confidence === 'Haute').length,
     categories: new Set(patterns.map(p => p.category)).size,
     sectors: new Set(patterns.flatMap(p => p.sectors || [])).size,
-  }), [patterns]);
+  }), [patterns, totalCount]);
 
   const timelineData = useMemo(() => {
     const months = {};
@@ -108,6 +117,20 @@ export default function MemoryExplorerPage() {
 
   const [undoPattern, setUndoPattern] = useState(null);
   const undoTimerRef = useRef(null);
+  const pendingDeleteIdRef = useRef(null);
+
+  // Fuite du timer d'undo : sans cleanup, le setState du timeout tombait après
+  // démontage. On flush aussi la suppression en attente (l'UI l'a déjà retirée).
+  useEffect(() => () => {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+      if (pendingDeleteIdRef.current) {
+        api.request(`/ai/memory/${pendingDeleteIdRef.current}`, { method: 'DELETE' }).catch(() => {});
+        pendingDeleteIdRef.current = null;
+      }
+    }
+  }, []);
 
   const handleDelete = useCallback((patternId) => {
     // Soft delete: remove from UI immediately, show undo toast for 5s
@@ -117,9 +140,11 @@ export default function MemoryExplorerPage() {
 
     // Clear any existing timer
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    pendingDeleteIdRef.current = patternId;
 
     // After 5s, actually delete from DB
     undoTimerRef.current = setTimeout(async () => {
+      pendingDeleteIdRef.current = null;
       try {
         await api.request(`/ai/memory/${patternId}`, { method: 'DELETE' });
       } catch (err) {
@@ -133,6 +158,7 @@ export default function MemoryExplorerPage() {
   const handleUndo = useCallback(() => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     undoTimerRef.current = null;
+    pendingDeleteIdRef.current = null;
     if (undoPattern) {
       setPatterns(prev => [...prev, undoPattern].sort((a, b) =>
         (b.date_discovered || '').localeCompare(a.date_discovered || '')));
@@ -197,6 +223,12 @@ export default function MemoryExplorerPage() {
           </div>
         ))}
       </div>
+
+      {totalCount > patterns.length && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '-8px 0 16px', textAlign: 'right' }}>
+          {t('memory.shownOfTotal', { shown: patterns.length, total: totalCount })}
+        </div>
+      )}
 
       {showTimeline && timelineData.length > 0 && (
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
@@ -295,6 +327,30 @@ export default function MemoryExplorerPage() {
                     border: '1px solid var(--border)',
                   }}>{s}</span>
                 ))}
+                {p.source && (
+                  <span style={{
+                    fontSize: 10, padding: '2px 8px', borderRadius: 20,
+                    background: 'var(--bg-elevated, rgba(255,255,255,0.06))',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                  }} title={t('memory.sourceLine', { source: p.source })}>{p.source}</span>
+                )}
+                {p.shared === true && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+                    background: 'rgba(110,87,250,0.08)',
+                    color: 'var(--accent, #6E57FA)',
+                    border: '1px solid rgba(110,87,250,0.25)',
+                  }} title={t('memory.sharedTooltip')}>{t('memory.sharedBadge')}</span>
+                )}
+                {p.confirmations > 1 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+                    background: 'rgba(22,163,74,0.08)',
+                    color: '#16a34a',
+                    border: '1px solid rgba(22,163,74,0.25)',
+                  }}>{t('memory.confirmedCount', { count: p.confirmations })}</span>
+                )}
               </div>
 
               {/* Footer: date + actions */}
@@ -319,8 +375,9 @@ export default function MemoryExplorerPage() {
                     }}
                     onClick={() => handleApply(p)}
                     disabled={applyingId === p.id}
+                    title={t('memory.applyTooltip')}
                   >
-                    {applyingId === p.id ? '...' : p.applied ? '\u2705 Actif' : t('memory.applyPattern')}
+                    {applyingId === p.id ? '...' : p.applied ? `\u2705 ${t('memory.active')}` : t('memory.applyPattern')}
                   </button>
                   <button
                     className="btn btn-ghost"
@@ -352,7 +409,7 @@ export default function MemoryExplorerPage() {
                         <div style={{ marginBottom: 8, lineHeight: 1.6 }}>
                           {t('memory.discoveredDaysAgo', { days: story.story?.discoveredDaysAgo }) || `Découvert il y a ${story.story?.discoveredDaysAgo || '?'} jours`}
                           {story.story?.confirmations > 0 && ` · ${t('memory.confirmedTimes', { count: story.story.confirmations }) || `Confirmé ${story.story.confirmations} fois`}`}
-                          {story.story?.source && ` · Source : ${story.story.source}`}
+                          {story.story?.source && ` · ${t('memory.sourceLine', { source: story.story.source })}`}
                         </div>
 
                         {/* Effectiveness stats */}
