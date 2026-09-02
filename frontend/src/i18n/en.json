@@ -975,7 +975,8 @@
       "general": "General",
       "dealQuality": "Deal quality",
       "clientQuality": "Client quality",
-      "history": "History"
+      "history": "History",
+      "gdpr": "Compliance"
     },
     "banners": {
       "noEmail": {
@@ -1015,7 +1016,8 @@
       "activityRow": "Activity (emails · exchanges · product lines)",
       "historyMergedNote": "Emails, exchanges, and other activity from removed contacts are automatically re-linked to the kept contact — nothing is lost.",
       "mergeSuccess": "Merge completed",
-      "mergeError": "Merge failed"
+      "mergeError": "Merge failed",
+      "typoSuggestion": "Did you mean {fix}?"
     },
     "dealQuality": {
       "missingSector": "Sector not filled in",
@@ -1053,7 +1055,8 @@
       "groupLabel": {
         "merge_keep": "Duplicate merge (contact kept)",
         "merge_delete": "Duplicate merge (contact removed)",
-        "enrichment": "Field enriched"
+        "enrichment": "Field enriched",
+        "gdpr_purge": "GDPR purge"
       },
       "fieldLabel": {
         "sector": "Sector",
@@ -1074,6 +1077,24 @@
       "undoSuccess": "Change undone",
       "undoFailed": "Undo failed",
       "undone": "Undone"
+    },
+    "scoreTrend": {
+      "title": "Quality score",
+      "deltaBadge": "{delta} pts / 30 d"
+    },
+    "gdpr": {
+      "explanation": "Contacts with no activity for more than {months} months, excluding active clients — candidates for a GDPR purge (data minimisation).",
+      "selectAll": "Select all",
+      "selectedCount": "{selected}/{total} selected",
+      "exportCsv": "Export as CSV",
+      "purgeSelection": "Purge selection",
+      "purgeLockedHint": "Export the selection as CSV first — a record is kept before anything is deleted.",
+      "confirmPurge": "Permanently delete {count} contact(s)? This can still be undone from the History tab.",
+      "purgeSuccessTitle": "Purge complete",
+      "purgeSuccessMessage": "{count} contact(s) deleted — undoable from the History tab.",
+      "empty": "No contacts to purge — your database complies with data minimisation.",
+      "monthsInactive": "{months} months inactive",
+      "lastActivity": "Last activity: {date}"
     },
     "common": {
       "view": "View",

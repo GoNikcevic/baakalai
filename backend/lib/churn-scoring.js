@@ -154,6 +154,14 @@ function scoreOpportunity(opp, {
     factors.push({ signal: 'no_emails', weight: 5, detail: 'Aucun email envoyé' });
   }
 
+  // Adresse bouncée définitivement (posé par email-outbound sur rejet 5xx) :
+  // le contact a probablement quitté la société — précurseur classique de churn,
+  // surtout si c'était le champion du compte.
+  if (opp.email_bounced_at) {
+    score += 10;
+    factors.push({ signal: 'email_bounced', weight: 10, detail: `Email invalide depuis le ${new Date(opp.email_bounced_at).toLocaleDateString('fr-FR')} — contact probablement parti` });
+  }
+
   // ── 4. Contact completeness (max 10 pts) ──
   let missingFields = 0;
   if (!opp.email) missingFields++;

@@ -76,6 +76,13 @@ async function sendDigestToUser(userId, userRow = null) {
     if (!user) return { sent: false, reason: 'user_not_found' };
   }
 
+  // Scan data quality hebdo AVANT les early returns : l'historique du score doit
+  // s'accumuler même pour un utilisateur opted-out ou sans action en attente.
+  const { runWeeklyScans } = require('../../lib/crm-cleaning-agent');
+  await runWeeklyScans(user.id).catch((err) =>
+    logger.warn('crm-digest', `Weekly DQ scan failed for ${user.email}: ${err.message}`));
+  const dqTrend = await computeDqTrend(user.id).catch(() => null);
+
   const profile = await db.profiles.get(user.id).catch(() => null);
   if (profile && profile.weekly_report === false) {
     return { sent: false, reason: 'opted_out' };
@@ -97,15 +104,56 @@ async function sendDigestToUser(userId, userRow = null) {
   await sendEmail({
     to: user.email,
     subject,
-    html: buildDigestHTML(user, list, lang),
+    html: buildDigestHTML(user, list, lang, dqTrend),
   });
 
   return { sent: true, count };
 }
 
-function buildDigestHTML(user, list, lang) {
+/**
+ * Score data quality : moyenne des derniers scores par provider (hors lignes
+ * sentinelles `__*__` qui portent score 0 par construction), comparée à la
+ * même moyenne il y a ~7 jours. Renvoie null sans historique exploitable.
+ */
+async function computeDqTrend(userId) {
+  const r = await db.query(
+    `SELECT provider, score, created_at FROM crm_cleaning_reports
+     WHERE user_id = $1 AND provider NOT LIKE '\\_\\_%'
+       AND created_at > now() - interval '60 days'
+     ORDER BY created_at ASC`,
+    [userId]
+  );
+  if (r.rows.length === 0) return null;
+
+  const avgAt = (cutoff) => {
+    const latestPerProvider = new Map();
+    for (const row of r.rows) {
+      if (new Date(row.created_at) <= cutoff) latestPerProvider.set(row.provider, row.score);
+    }
+    if (latestPerProvider.size === 0) return null;
+    const scores = [...latestPerProvider.values()];
+    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  };
+
+  const current = avgAt(new Date());
+  const previous = avgAt(new Date(Date.now() - 7 * 24 * 3600 * 1000));
+  return { current, previous, delta: current != null && previous != null ? current - previous : null };
+}
+
+function buildDigestHTML(user, list, lang, dqTrend = null) {
   const isEN = lang === 'en';
   const c = list.counts;
+
+  // Alerte uniquement sur une vraie dégradation (> 5 pts en une semaine) —
+  // un score stable ou en hausse ne mérite pas de place dans le digest.
+  const dqWarningHTML = (dqTrend && dqTrend.delta != null && dqTrend.delta < -5) ? `
+    <tr><td style="padding:10px 24px;">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;color:#991b1b;">
+        ${isEN
+          ? `⚠️ Your CRM data quality score dropped from ${dqTrend.previous} to ${dqTrend.current} this week — check the Data Quality page.`
+          : `⚠️ Votre score de qualité CRM est passé de ${dqTrend.previous} à ${dqTrend.current} cette semaine — jetez un œil à la page Data Quality.`}
+      </div>
+    </td></tr>` : '';
 
   const chips = [
     { label: isEN ? 'Emails ready' : 'Emails prêts', value: c.nurturePending, color: '#6E57FA' },
@@ -183,6 +231,9 @@ function buildDigestHTML(user, list, lang) {
       <tr>${chipsHTML}</tr>
     </table>
   </td></tr>` : ''}
+
+  <!-- Data quality drop warning -->
+  ${dqWarningHTML}
 
   <!-- Items -->
   <tr><td style="padding:0 32px 16px;">

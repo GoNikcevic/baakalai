@@ -242,6 +242,16 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
       return { success: false, code: 'no_email_account', error: err.message };
     }
 
+    // Rejet DÉFINITIF du destinataire (5xx « user unknown ») ≠ erreur transitoire :
+    // l'adresse n'existe plus — la personne a probablement quitté la société.
+    // Code distinct pour que l'appelant tamponne le contact (data quality + churn).
+    const permanentCodes = [550, 551, 553];
+    const bounceText = /user unknown|no such user|does not exist|recipient .*(rejected|not found)|mailbox (unavailable|not found|does not exist)|address rejected|invalid recipient/i;
+    if (permanentCodes.includes(err.responseCode)
+      || (err.responseCode >= 500 && bounceText.test(err.message || ''))) {
+      return { success: false, code: 'recipient_bounced', error: err.message };
+    }
+
     return { success: false, code: 'smtp_error', error: err.message };
   }
 }
@@ -285,6 +295,15 @@ async function sendNurtureEmail(userId, {
       [nurture.id]
     );
 
+    // L'envoi passe : si l'adresse était marquée bouncée, elle re-marche.
+    if (opportunityId) {
+      await db.query(
+        `UPDATE opportunities SET email_bounced_at = NULL, email_bounce_reason = NULL
+         WHERE id = $1 AND email_bounced_at IS NOT NULL`,
+        [opportunityId]
+      ).catch(() => {});
+    }
+
     // 4. Log in Pipedrive as activity/note
     if (crmProvider === 'pipedrive') {
       try {
@@ -321,6 +340,15 @@ async function sendNurtureEmail(userId, {
       `UPDATE nurture_emails SET status = 'failed', error = $1 WHERE id = $2`,
       [result.error, nurture.id]
     );
+
+    // Bounce définitif : tamponner le contact — lu par le scan data quality
+    // (issue email_bounced) et par le scoring churn (contact probablement parti).
+    if (result.code === 'recipient_bounced' && opportunityId) {
+      await db.query(
+        `UPDATE opportunities SET email_bounced_at = now(), email_bounce_reason = $1 WHERE id = $2`,
+        [(result.error || '').slice(0, 500), opportunityId]
+      ).catch(() => {});
+    }
   }
 
   return { ...result, emailId: nurture.id };

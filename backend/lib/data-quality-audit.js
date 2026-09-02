@@ -202,10 +202,10 @@ async function undoGroup(userId, groupId) {
       }
       // 'manual_required' / 'none': no remote call to make.
 
-      // 2. Local opportunities mirror row. merge_delete is the only change type in this
-      // feature that hard-deletes a local row — everything else only updates fields.
+      // 2. Local opportunities mirror row. merge_delete and gdpr_purge are the only
+      // change types that hard-delete a local row — everything else only updates fields.
       if (before.local) {
-        if (row.change_type === 'merge_delete') {
+        if (row.change_type === 'merge_delete' || row.change_type === 'gdpr_purge') {
           const existing = await db.query(`SELECT id FROM opportunities WHERE id = $1`, [before.local.id]);
           if (existing.rows.length === 0) await reinsertOpportunityRow(before.local);
           // Move the emails/activities/etc. that confirm-merge re-linked onto the kept contact

@@ -195,6 +195,18 @@ function start() {
       const { runMemoryAgent } = require('../lib/memory-agent');
       const report = await runMemoryAgent();
       console.log(`[agent:memory] Done in ${report.duration}ms — skipped: [${report.skipped.join(', ')}], errors: ${report.errors.length}`);
+
+      // RGPD — minimisation : les snapshots d'historique data quality contiennent
+      // des données personnelles (before_data complet) ; on ne les garde pas plus
+      // de 12 mois. Conséquence assumée : ces changements ne sont plus annulables.
+      try {
+        const db = require('../db');
+        const purged = await db.query(
+          `DELETE FROM data_quality_changes WHERE created_at < now() - interval '12 months'`);
+        if (purged.rowCount > 0) console.log(`[agent:memory] RGPD: ${purged.rowCount} snapshots data quality > 12 mois purgés`);
+      } catch (err) {
+        logger.warn('orchestrator', 'Purge snapshots data quality: ' + err.message);
+      }
     } catch (err) {
       logger.error('orchestrator', 'Memory Agent failed: ' + err.message);
     }

@@ -975,7 +975,8 @@
       "general": "Général",
       "dealQuality": "Qualité des deals",
       "clientQuality": "Qualité clients",
-      "history": "Historique"
+      "history": "Historique",
+      "gdpr": "Conformité"
     },
     "banners": {
       "noEmail": {
@@ -1015,7 +1016,8 @@
       "activityRow": "Activité (emails · échanges · lignes de produit)",
       "historyMergedNote": "Les emails, échanges et autres activités des contacts supprimés sont automatiquement rattachés au contact conservé — rien n'est perdu.",
       "mergeSuccess": "Fusion effectuée",
-      "mergeError": "Erreur lors de la fusion"
+      "mergeError": "Erreur lors de la fusion",
+      "typoSuggestion": "Vouliez-vous dire {fix} ?"
     },
     "dealQuality": {
       "missingSector": "Secteur d'activité non renseigné",
@@ -1053,7 +1055,8 @@
       "groupLabel": {
         "merge_keep": "Fusion de doublon (contact conservé)",
         "merge_delete": "Fusion de doublon (contact supprimé)",
-        "enrichment": "Champ enrichi"
+        "enrichment": "Champ enrichi",
+        "gdpr_purge": "Purge RGPD"
       },
       "fieldLabel": {
         "sector": "Secteur",
@@ -1074,6 +1077,24 @@
       "undoSuccess": "Modification annulée",
       "undoFailed": "Échec de l'annulation",
       "undone": "Annulé"
+    },
+    "scoreTrend": {
+      "title": "Score de qualité",
+      "deltaBadge": "{delta} pts / 30 j"
+    },
+    "gdpr": {
+      "explanation": "Contacts sans aucune activité depuis plus de {months} mois, hors clients actifs — candidats à la purge RGPD (minimisation des données).",
+      "selectAll": "Tout sélectionner",
+      "selectedCount": "{selected}/{total} sélectionné(s)",
+      "exportCsv": "Exporter en CSV",
+      "purgeSelection": "Purger la sélection",
+      "purgeLockedHint": "Exportez d'abord la sélection en CSV — une trace est conservée avant toute suppression.",
+      "confirmPurge": "Supprimer définitivement {count} contact(s) ? L'action reste annulable depuis l'onglet Historique.",
+      "purgeSuccessTitle": "Purge effectuée",
+      "purgeSuccessMessage": "{count} contact(s) supprimé(s) — annulable dans l'onglet Historique.",
+      "empty": "Aucun contact à purger — votre base respecte la minimisation des données.",
+      "monthsInactive": "{months} mois d'inactivité",
+      "lastActivity": "Dernière activité : {date}"
     },
     "common": {
       "view": "Voir",

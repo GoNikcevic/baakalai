@@ -26,6 +26,9 @@ function getOtherIssueConfig(en) { return {
   invalid_email_domain: { icon: '⚠️', label: en ? 'Invalid email domain' : 'Domaine email invalide', color: 'var(--danger)' },
   inactive: { icon: '💤', label: en ? 'Inactive contacts (6+ months)' : 'Contacts inactifs (6+ mois)', color: 'var(--text-muted)' },
   format_name_caps: { icon: 'Aa', label: en ? 'Names in ALL CAPS' : 'Noms en MAJUSCULES', color: 'var(--blue)' },
+  email_bounced: { icon: '📛', label: en ? 'Bounced emails' : 'Emails en rebond (bounce)', color: 'var(--danger)' },
+  disposable_email: { icon: '🗑️', label: en ? 'Disposable email addresses' : 'Adresses email jetables', color: 'var(--warning)' },
+  email_typo: { icon: '✏️', label: en ? 'Probable email typo' : 'Faute de frappe probable dans l\'email', color: 'var(--blue)' },
 }; }
 
 // Issue types correctable by typing in the right value for one field — same mechanism as the
@@ -38,10 +41,13 @@ const FIXABLE_FIELD_BY_ISSUE_TYPE = {
   missing_company: 'company',
   invalid_email_format: 'email',
   invalid_email_domain: 'email',
+  email_typo: 'email',
 };
 
-function FieldFixRow({ provider, contact, field, en, t, onSaved }) {
-  const [value, setValue] = useState(contact[field] || '');
+function FieldFixRow({ provider, contact, field, en, t, onSaved, suggestedValue }) {
+  // For email_typo issues the input is pre-filled with the scan's suggested fix,
+  // so one click on "Enregistrer" applies it through the standard enrich-field circuit.
+  const [value, setValue] = useState(suggestedValue || contact[field] || '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -71,24 +77,31 @@ function FieldFixRow({ provider, contact, field, en, t, onSaved }) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0' }}>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {contact.name || contact.email || '?'}
-      </span>
-      <input
-        type="text"
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text-primary)' }}
-      />
-      <button
-        className="btn btn-primary"
-        style={{ fontSize: 11, padding: '5px 10px', whiteSpace: 'nowrap' }}
-        disabled={saving || !value.trim()}
-        onClick={handleSave}
-      >
-        {saving ? '…' : (en ? 'Save' : 'Enregistrer')}
-      </button>
+    <div style={{ padding: '4px 0' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {contact.name || contact.email || '?'}
+        </span>
+        <input
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+        />
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 11, padding: '5px 10px', whiteSpace: 'nowrap' }}
+          disabled={saving || !value.trim()}
+          onClick={handleSave}
+        >
+          {saving ? '…' : (en ? 'Save' : 'Enregistrer')}
+        </button>
+      </div>
+      {suggestedValue && (
+        <div style={{ fontSize: 11, color: 'var(--blue)', marginTop: 2, paddingLeft: 168 }}>
+          {t('dataQuality.duplicates.typoSuggestion', { fix: suggestedValue })}
+        </div>
+      )}
     </div>
   );
 }
@@ -143,7 +156,7 @@ function OtherIssueCard({ provider, issue, onFixed }) {
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setExpanded(e => !e)}>
               {en ? 'Fix' : 'Corriger'}
             </button>
-          ) : issue.suggestedAction === 'review' ? null : (
+          ) : (issue.suggestedAction === 'review' || issue.suggestedAction === 'verify') ? null : (
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={fixing} onClick={handleFix}>
               {fixing ? '…' : (en ? 'Fix' : 'Corriger')}
             </button>
@@ -153,7 +166,16 @@ function OtherIssueCard({ provider, issue, onFixed }) {
         {expanded && fixField && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {(issue.contacts || []).map((c, i) => (
-              <FieldFixRow key={c.id || i} provider={provider} contact={c} field={fixField} en={en} t={t} onSaved={onFixed} />
+              <FieldFixRow
+                key={c.id || i}
+                provider={provider}
+                contact={c}
+                field={fixField}
+                en={en}
+                t={t}
+                onSaved={onFixed}
+                suggestedValue={issue.type === 'email_typo' ? c.suggestedFix : undefined}
+              />
             ))}
           </div>
         )}
