@@ -125,8 +125,21 @@ export default function ClientsPage() {
   }, [loadData, connectedCrm, clients.length]);
 
   const filtered = useMemo(() => clients.filter(c => {
-    // If highlight param is set, only show those contacts
-    if (highlightIds) return highlightIds.has(c.id);
+    // If highlight param is set, only show those contacts — et, en contexte deal quality,
+    // seulement tant que le problème est ENCORE présent : un contact corrigé (secteur
+    // renseigné, valeur saisie…) sort de la liste immédiatement, sans attendre un re-scan.
+    // owner_not_mapped / zero_activity n'ont pas de re-test local fiable → URL seule.
+    if (highlightIds) {
+      if (!highlightIds.has(c.id)) return false;
+      if (isDealQualityContext) {
+        if (dealQualityIssue === 'missing_sector') return !c.data?.sector || c.data.sector === 'non_determine';
+        if (dealQualityIssue === 'missing_deal_value') return c.deal_value == null;
+        if (dealQualityIssue === 'missing_won_lost_date') {
+          return (c.status === 'won' && !c.won_date) || (c.status === 'lost' && !c.lost_date);
+        }
+      }
+      return true;
+    }
     if (filter === 'churn_risk' && (c.status !== 'won' || c.churn_score == null || c.churn_score < 50)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
@@ -141,7 +154,7 @@ export default function ClientsPage() {
   }).sort((a, b) => {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
     return 0;
-  }), [clients, filter, ownerFilter, crmFilter, search, highlightIds]);
+  }), [clients, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
@@ -830,9 +843,11 @@ function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
         )}
       </div>
 
-      {/* Fix box — only the field matching the issue actually clicked into, never another one */}
-      {issueType === 'missing_sector' && <SectorFixBox client={client} t={t} onSaved={onFieldSaved} />}
-      {issueType === 'missing_deal_value' && <DealValueFixBox client={client} t={t} onSaved={onFieldSaved} />}
+      {/* Fix box — only the field matching the issue actually clicked into, never another one.
+          key={client.id} : sans elle React réutilise l'instance en changeant de client et le
+          useState initial ne se rejoue pas — l'input affichait le secteur du client précédent. */}
+      {issueType === 'missing_sector' && <SectorFixBox key={client.id} client={client} t={t} onSaved={onFieldSaved} />}
+      {issueType === 'missing_deal_value' && <DealValueFixBox key={client.id} client={client} t={t} onSaved={onFieldSaved} />}
 
       {/* Timeline */}
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Timeline</div>
