@@ -806,7 +806,7 @@ export default function CopyEditorPage() {
       if (tpIndex === -1) return prev;
 
       const original = c.touchpoints[tpIndex];
-      const copy = { ...JSON.parse(JSON.stringify(original)), id: tpId + '-copy', label: original.label + ' (copie)', suggestion: null };
+      const copy = { ...structuredClone(original), id: tpId + '-copy', label: original.label + ' (copie)', suggestion: null };
       const newTouchpoints = [...c.touchpoints];
       newTouchpoints.splice(tpIndex + 1, 0, copy);
 
@@ -1026,7 +1026,7 @@ export default function CopyEditorPage() {
           <div className="empty-state-desc">
             {en ? 'Create your first campaign to start editing your sequences and touchpoints.' : 'Créez votre première campagne pour commencer à éditer vos séquences et touchpoints.'}
           </div>
-          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
+          <button className="btn btn-primary" onClick={() => navigate('/campaigns', { state: { openAssistant: true } })}>
             {en ? 'Create my first campaign' : 'Créer ma première campagne'}
           </button>
         </div>

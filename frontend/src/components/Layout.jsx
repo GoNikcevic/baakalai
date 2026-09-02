@@ -18,21 +18,25 @@ import HelpWidget from './HelpWidget';
 /* ─── Sidebar nav items (keys reference i18n nav.* keys) ─── */
 // adminOnly: only visible to admins and solo users
 const NAV_ITEMS = [
-  { i18nKey: 'nav.assistant',    to: '/chat',          icon: 'chat' },
-  { i18nKey: 'nav.dashboard',    to: '/dashboard',     icon: 'dashboard',  end: true },
-  { i18nKey: 'nav.campaigns',    to: '/campaigns',     icon: 'campaigns', adminOnly: true },
-  { i18nKey: 'nav.clients',      to: '/clients',       icon: 'clients' },
-  { i18nKey: 'nav.activation',   to: '/activation',    icon: 'nurture' },
-  { i18nKey: 'nav.analytics',    to: '/analytics',     icon: 'crm', adminOnly: true },
-  { i18nKey: 'nav.performance',  to: '/performance',   icon: 'dashboard', adminOnly: true },
-  { i18nKey: 'nav.settings',     to: '/settings',      icon: 'settings', adminOnly: true },
+  { i18nKey: 'nav.assistant',           to: '/chat',                icon: 'chat' },
+  { i18nKey: 'nav.dashboard',           to: '/dashboard',           icon: 'dashboard',  end: true },
+  { i18nKey: 'nav.dealsToReactivate',   to: '/deals-to-reactivate', icon: 'refinement' },
+  { i18nKey: 'nav.clientsToUpsell',     to: '/clients-to-upsell',   icon: 'upsell' },
+  { i18nKey: 'nav.churnRisk',           to: '/churn-risk',          icon: 'churn' },
+  { i18nKey: 'nav.dataQuality',         to: '/data-quality',        icon: 'crm' },
+  { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
+  { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture' },
+  { i18nKey: 'nav.analytics',           to: '/analytics',           icon: 'crm', adminOnly: true },
+  { i18nKey: 'nav.performance',         to: '/performance',         icon: 'dashboard', adminOnly: true },
+  { i18nKey: 'nav.settings',            to: '/settings',            icon: 'settings', adminOnly: true },
 ];
 
 /* ─── Mobile bottom nav (subset) ─── */
 const MOBILE_NAV = [
   { i18nKey: 'nav.chat',        to: '/chat',        icon: 'chat' },
   { i18nKey: 'nav.dashboard',   to: '/dashboard',   icon: 'dashboard' },
-  { i18nKey: 'nav.clients',     to: '/clients',     icon: 'clients' },
+  { i18nKey: 'nav.campaigns',   to: '/campaigns',   icon: 'campaigns' },
+  { i18nKey: 'nav.churnRisk',   to: '/churn-risk',  icon: 'churn' },
   { i18nKey: 'nav.activation',  to: '/activation',  icon: 'nurture' },
   { i18nKey: 'nav.settings',    to: '/settings',    icon: 'settings', adminOnly: true },
 ];
@@ -76,6 +80,17 @@ function NavIcon({ name }) {
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+      </svg>
+    ),
+    upsell: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 17 9 11 13 15 21 6" /><polyline points="14 6 21 6 21 13" />
+      </svg>
+    ),
+    churn: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
     ),
     profil: (

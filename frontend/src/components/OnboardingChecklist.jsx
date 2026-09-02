@@ -19,7 +19,7 @@ const STEP_CONFIG = [
   { key: 'crmConnected', route: '/settings' },
   { key: 'contactsImported', route: '/clients' },
   { key: 'emailConnected', route: '/settings' },
-  { key: 'firstCampaign', route: '/chat' },
+  { key: 'firstCampaign', route: '/campaigns', state: { openAssistant: true } },
   { key: 'firstLaunch', route: '/campaigns' },
 ];
 
@@ -198,7 +198,7 @@ export default function OnboardingChecklist() {
                 fontWeight: isNext ? 600 : 400,
                 transition: 'background 0.2s',
               }}
-              onClick={() => { if (!step.done && step.route) navigate(step.route); }}
+              onClick={() => { if (!step.done && step.route) navigate(step.route, step.state ? { state: step.state } : undefined); }}
             >
               <span style={{
                 width: 20, height: 20, borderRadius: 6,
@@ -226,7 +226,8 @@ export default function OnboardingChecklist() {
         style={{ fontSize: 13, padding: '8px 18px', width: 'fit-content' }}
         onClick={() => {
           const nextStep = steps.find(s => !s.done && s.route);
-          navigate(nextStep ? nextStep.route : '/chat');
+          if (nextStep) navigate(nextStep.route, nextStep.state ? { state: nextStep.state } : undefined);
+          else navigate('/campaigns', { state: { openAssistant: true } });
         }}
       >
         {t('onboarding.continueChat')}

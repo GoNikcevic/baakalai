@@ -77,7 +77,7 @@ export default function DealCoachCard() {
     const msg = en
       ? `Send a follow-up email to ${suggestion.contactName} (${suggestion.company || ''}). Context: ${suggestion.reason}. Suggestion: ${suggestion.suggestion}`
       : `Envoie un email de relance \u00e0 ${suggestion.contactName} (${suggestion.company || ''}). Contexte: ${suggestion.reason}. Suggestion: ${suggestion.suggestion}`;
-    navigate('/chat', { state: { prefillMessage: msg } });
+    navigate('/campaigns', { state: { openAssistant: true, prefillMessage: msg } });
   }, [en, navigate]);
 
   if (dismissed || loading) return null;

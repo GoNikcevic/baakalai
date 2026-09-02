@@ -21,7 +21,11 @@
     "newCampaign": "+ Nouvelle campagne",
     "openSidebar": "Ouvrir la sidebar",
     "collapseSidebar": "Réduire la sidebar",
-    "logoutTitle": "Se déconnecter"
+    "logoutTitle": "Se déconnecter",
+    "dealsToReactivate": "Deals à relancer",
+    "clientsToUpsell": "Clients à upseller",
+    "churnRisk": "Clients à risque",
+    "dataQuality": "Data Quality"
   },
   "auth": {
     "login": "Se connecter",
@@ -160,7 +164,8 @@
     "enrichDoneTitle": "{count} prospect(s) enrichi(s)",
     "enrichDoneDesc": "{skipped} ignoré(s) · {errors} erreur(s)",
     "enrichFailed": "Échec de la personnalisation",
-    "enrichFailedDesc": "Erreur inconnue — vérifiez votre clé API Brave Search."
+    "enrichFailedDesc": "Erreur inconnue — vérifiez votre clé API Brave Search.",
+    "tabAssistant": "Assistant"
   },
   "prospectGen": {
     "title": "Générer des prospects",
@@ -440,7 +445,8 @@
     "firstCampaign": "Créer une première campagne",
     "firstLaunch": "Lancer une campagne",
     "continueChat": "Continuer la configuration dans le chat →",
-    "allDone": "Tout est prêt ! Vous pouvez commencer à prospecter."
+    "allDone": "Tout est prêt ! Vous pouvez commencer à prospecter.",
+    "continueSettings": "Aller dans Paramètres →"
   },
   "replies": {
     "title": "Activités Prospects",
@@ -813,7 +819,15 @@
     "sfConnect": "Connecter Salesforce →",
     "sfConnecting": "Connexion à Salesforce…",
     "sfOneClickNote": "Connexion en un clic : identifiez-vous sur Salesforce et autorisez baakalai. Rien à créer de votre côté.",
-    "sfManualLink": "Ou utiliser votre propre Connected App (Consumer Key + Secret)"
+    "sfManualLink": "Ou utiliser votre propre Connected App (Consumer Key + Secret)",
+    "welcomeTitle": "Bienvenue sur Baakalai",
+    "welcomeSubtitle": "Connectez votre CRM et votre email pour commencer — vous pourrez configurer le reste plus tard.",
+    "crmCardTitle": "Connecter un CRM",
+    "crmCardDesc": "Pipedrive, HubSpot, Salesforce ou Odoo.",
+    "emailCardTitle": "Connecter un email",
+    "emailCardDesc": "Pour envoyer vos relances et campagnes depuis votre propre boîte.",
+    "connect": "Connecter",
+    "connected": "Connecté ✓"
   },
   "triggers": {
     "dealWon": "Deal gagné",
@@ -931,5 +945,177 @@
       "expansion": "Expansion",
       "tech_adoption": "Adoption tech"
     }
+  },
+  "chainConfig": {
+    "enabled": "Relance automatique : Activée",
+    "disabled": "Relance automatique : Désactivée",
+    "maxPerDay": "Max par jour :"
+  },
+  "dealsToReactivate": {
+    "title": "Deals à relancer",
+    "subtitle": "Deals stagnants ou en retard sur leur date de relance — l'email est rédigé au moment où vous l'ouvrez."
+  },
+  "upsell": {
+    "title": "Clients à upseller",
+    "subtitle": "Clients prêts pour un upsell selon leurs offres actuelles et signaux d'engagement — l'email est rédigé au moment où vous l'ouvrez."
+  },
+  "dataQuality": {
+    "title": "Data Quality",
+    "subtitle": "Vous voulez améliorer les performances de Baakalai ? Améliorez les données que vous lui donnez.",
+    "tabs": {
+      "general": "Général",
+      "dealQuality": "Qualité des deals",
+      "clientQuality": "Qualité clients",
+      "history": "Historique"
+    },
+    "banners": {
+      "noEmail": {
+        "title": "Aucun compte email connecté",
+        "desc": "Sans compte email connecté, Baakalai ne peut envoyer aucune relance ni proposition d'upsell.",
+        "cta": "Connecter un compte email"
+      },
+      "noCrm": {
+        "title": "Aucun CRM connecté",
+        "desc": "Connectez un CRM pour que Baakalai puisse analyser vos deals et clients.",
+        "cta": "Connecter un CRM"
+      },
+      "stageMapping": {
+        "title": "Étapes intermédiaires non configurées",
+        "desc": "Gagné/Perdu sont détectés automatiquement, mais un ou plusieurs de vos CRM connectés n'ont pas leurs étapes intermédiaires (intéressé, RDV, négociation) mappées vers Baakalai — la vue pipeline en dépend.",
+        "cta": "Configurer le mapping"
+      }
+    },
+    "duplicates": {
+      "rescan": "Relancer le scan",
+      "scanning": "Analyse en cours...",
+      "scanError": "Erreur lors du scan",
+      "noneFound": "Aucun problème détecté sur ce CRM.",
+      "duplicatesSectionTitle": "Doublons",
+      "noCrmProvider": "Pas de CRM associé",
+      "otherIssuesTitle": "Autres problèmes détectés",
+      "mergeButton": "Fusionner",
+      "reviewDiff": "Comparaison des champs",
+      "keepThis": "Conserver ce contact",
+      "willBeRemoved": "Seront supprimés au profit du contact conservé :",
+      "confirmMerge": "Confirmer la fusion",
+      "cancel": "Annuler",
+      "manualChecklistTitle": "Suppression manuelle requise",
+      "manualChecklistNote": "Ce CRM ne permet pas la suppression automatique — merci de supprimer vous-même ces contacts directement dans votre CRM :",
+      "fieldFromContact": "Contact {n}",
+      "conflictBadge": "Valeurs différentes",
+      "activityRow": "Activité (emails · échanges · lignes de produit)",
+      "historyMergedNote": "Les emails, échanges et autres activités des contacts supprimés sont automatiquement rattachés au contact conservé — rien n'est perdu.",
+      "mergeSuccess": "Fusion effectuée",
+      "mergeError": "Erreur lors de la fusion"
+    },
+    "dealQuality": {
+      "missingSector": "Secteur d'activité non renseigné",
+      "missingDealValue": "Valeur du deal non renseignée",
+      "missingWonLostDate": "Date de clôture manquante",
+      "ownerNotMapped": "Propriétaire non associé à un membre de l'équipe",
+      "zeroActivity": "Aucune activité CRM enregistrée",
+      "noneFound": "Aucun problème de qualité détecté sur vos deals actifs.",
+      "contextTitle": "Deals",
+      "contextSubtitle": "{count} deal(s) à corriger",
+      "refreshData": "Actualiser les données",
+      "filteredFromDataQuality": "Deals filtrés depuis Data Quality",
+      "backToDataQuality": "Retour à Data Quality",
+      "saveButton": "Enregistrer",
+      "sectorLabel": "Secteur d'activité",
+      "sectorPlaceholder": "Ex : SaaS B2B, Immobilier commercial...",
+      "sectorSaveTitle": "Secteur",
+      "sectorSaved": "Secteur enregistré : {sector}",
+      "sectorNotClassified": "Valeur enregistrée, mais non reconnue comme un secteur d'activité",
+      "sectorLocalOnlyNote": "Cette valeur affine les analyses de Baakalai (score de churn, upsell). Elle n'est pas encore synchronisée vers votre CRM : aucun champ secteur standard n'existe côté CRM.",
+      "dealValueLabel": "Valeur du deal",
+      "dealValuePlaceholder": "Ex : 15000",
+      "dealValueSaveTitle": "Valeur du deal",
+      "dealValueSaved": "Valeur du deal enregistrée : {value} €",
+      "dealValueLocalOnlyNote": "Cette valeur est enregistrée dans Baakalai. Elle n'est pas encore synchronisée vers votre CRM."
+    },
+    "clientQuality": {
+      "missingProductLines": "Aucune ligne de produit assignée",
+      "noProductLinesConfigured": "Aucune ligne de produit configurée pour votre équipe",
+      "configureProductLines": "Configurer les lignes de produits",
+      "noneFound": "Aucun problème de qualité détecté sur vos clients."
+    },
+    "history": {
+      "noneFound": "Aucun historique pour l'instant.",
+      "groupLabel": {
+        "merge_keep": "Fusion de doublon (contact conservé)",
+        "merge_delete": "Fusion de doublon (contact supprimé)",
+        "enrichment": "Champ enrichi"
+      },
+      "fieldLabel": {
+        "sector": "Secteur",
+        "dealValue": "Valeur du deal",
+        "email": "Email",
+        "company": "Société",
+        "name": "Nom"
+      },
+      "remoteActionLabel": {
+        "updated": "CRM mis à jour",
+        "deleted": "Supprimé du CRM",
+        "archived": "Archivé dans le CRM",
+        "manual_required": "Suppression manuelle requise",
+        "none": "Local uniquement"
+      },
+      "undo": "Annuler",
+      "undoConfirm": "Restaurer l'état initial ?",
+      "undoSuccess": "Modification annulée",
+      "undoFailed": "Échec de l'annulation",
+      "undone": "Annulé"
+    },
+    "common": {
+      "view": "Voir",
+      "affectedCount": "{count} concerné(s)",
+      "lastScanAt": "Dernier scan : {date}"
+    }
+  },
+  "reactivation": {
+    "sortByValue": "Trier par valeur",
+    "sortByOverdue": "Trier par retard",
+    "viewEmail": "Voir le mail",
+    "postpone": "Reporter",
+    "noCandidates": "Aucun candidat pour l'instant.",
+    "back": "Retour",
+    "send": "Envoyer",
+    "regenerate": "Régénérer",
+    "subjectLabel": "Objet",
+    "bodyLabel": "Message",
+    "sent": "Envoyé",
+    "generating": "Rédaction de l'email en cours...",
+    "generatingHint": "Merci de patienter quelques secondes, ne quittez pas cette page.",
+    "crmHygieneBanner": "💡 Pensez à noter vos échanges avec ces contacts directement dans votre CRM (ou en note) — Baakalai s'appuie dessus pour savoir automatiquement s'il faut relancer, et quand.",
+    "tabPending": "En attente",
+    "tabHistory": "Historique",
+    "historyEmpty": "Aucun historique pour l'instant.",
+    "historySentOn": "Email envoyé le {date}",
+    "historyPostponedManualOn": "Reporté manuellement au {date}",
+    "historyPostponedAutoOn": "Reporté automatiquement au {date}",
+    "historyWonOn": "Gagné le {date}",
+    "historyLostOn": "Perdu le {date}",
+    "sendFailedBadge": "⚠ Dernier envoi échoué"
+  },
+  "churn": {
+    "title": "Clients à risque de churn",
+    "subtitle": "Score de risque pondéré et explicable, avec facteurs détaillés par client.",
+    "markChurned": "Marquer comme churned",
+    "markStillClient": "Toujours client",
+    "markMissedChurn": "Signaler churn manqué",
+    "reasonPrompt": "Raison (optionnel)",
+    "reasonPrix": "Prix",
+    "reasonConcurrent": "Concurrent",
+    "reasonSupport": "Support",
+    "reasonProduitInadapte": "Produit inadapté",
+    "reasonBudgetCoupe": "Budget coupé",
+    "reasonAutre": "Autre",
+    "outcomeSaved": "Enregistré",
+    "outcomeSaveError": "Erreur lors de l'enregistrement"
+  },
+  "assistant": {
+    "conversations": "Conversations",
+    "welcomeTitle": "Comment puis-je vous aider ?",
+    "welcomeSubtitle": "Posez une question sur un client, sur le fonctionnement de Baakalai, ou demandez un conseil de vente ou de prospection."
   }
 }

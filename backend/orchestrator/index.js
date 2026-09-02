@@ -170,27 +170,6 @@ function start() {
   });
 
   // ═══════════════════════════════════════════════════
-  // Agent Chains — Daily 9:45 AM
-  // Autonomous action chains (deal reactivation, auto-upsell)
-  // Runs after strategic agents so data is fresh
-  // ═══════════════════════════════════════════════════
-  schedule('agent-chains', '45 9 * * *', async () => {
-    console.log('[agent:chains] Starting autonomous chains...');
-    try {
-      const { runAllChains } = require('../lib/agent-chains');
-      const results = await runAllChains();
-      const summary = results.map(r => {
-        const re = r.reactivation?.executed || r.reactivation?.pending || 0;
-        const up = r.upsell?.executed || r.upsell?.pending || 0;
-        return re + up > 0 ? `user:${r.userId} reactivation:${re} upsell:${up}` : null;
-      }).filter(Boolean);
-      console.log(`[agent:chains] Done — ${summary.length > 0 ? summary.join(', ') : 'no actions triggered'}`);
-    } catch (err) {
-      logger.error('orchestrator', 'Agent chains failed: ' + err.message);
-    }
-  });
-
-  // ═══════════════════════════════════════════════════
   // Lifecycle Emails — Daily 10:00 AM
   // Onboarding sequences + retention re-engagement
   // ═══════════════════════════════════════════════════
@@ -218,6 +197,32 @@ function start() {
       console.log(`[agent:memory] Done in ${report.duration}ms — skipped: [${report.skipped.join(', ')}], errors: ${report.errors.length}`);
     } catch (err) {
       logger.error('orchestrator', 'Memory Agent failed: ' + err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // Churn External Signals — Weekly Sunday 11:00 AM
+  // Brave Search scan for medium+ risk clients only (cost control)
+  // ═══════════════════════════════════════════════════
+  schedule('churn-signals', '0 11 * * 0', async () => {
+    console.log('[churn-signals] Starting weekly external signal scan...');
+    try {
+      const { scanExternalSignalsForUser } = require('../lib/churn-external-signals');
+      const db = require('../db');
+      const users = await db.query('SELECT id FROM users WHERE onboarding_complete = true');
+      let scanned = 0, signalsFound = 0;
+      for (const { id } of users.rows) {
+        try {
+          const report = await scanExternalSignalsForUser(id);
+          scanned += report.scanned;
+          signalsFound += report.signalsFound;
+        } catch (err) {
+          logger.error('orchestrator', `Churn signals failed for user ${id}: ${err.message}`);
+        }
+      }
+      console.log(`[churn-signals] Done — ${scanned} opportunit${scanned === 1 ? 'y' : 'ies'} scanned, ${signalsFound} signal(s) found`);
+    } catch (err) {
+      logger.error('orchestrator', 'Churn external signals job failed: ' + err.message);
     }
   });
 
@@ -256,11 +261,12 @@ function start() {
   console.log('  Prospection:      daily 8AM + evening batch 8PM');
   console.log('  CRM:              daily 9AM');
   console.log('  Strategic (fast): daily 9:30AM (deal_coach, upsell, copy_optimizer)');
-  console.log('  Agent Chains:     daily 9:45AM (deal reactivation, auto-upsell)');
   console.log('  Lifecycle:        daily 10AM');
   console.log('  Memory:           Sunday 10AM (+ heavy strategic agents)');
+  console.log('  Churn signals:    Sunday 11AM (external web scan, medium+ risk clients only)');
   console.log('  CRM Digest:       Monday 8:45AM (à traiter cette semaine)');
   console.log('  Reporting:        Monday 9AM');
+  console.log('  (Deal reactivation / auto-upsell now generate on demand — no background cron)');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate, runBatchOrchestrator };

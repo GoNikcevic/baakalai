@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/useApp';
 import { useSocket } from '../../context/SocketContext';
-import api, { request } from '../../services/api-client';
+import api, { request, trackEvent } from '../../services/api-client';
 import { sanitizeHtml } from '../../services/sanitize';
 import Confetti from '../Confetti';
 import OnboardingChecklist from '../OnboardingChecklist';
@@ -23,10 +23,16 @@ function getDefaultSuggestions(lang) {
     : ['🎯 Cr\u00e9er une campagne de prospection', '📡 Scanner les signaux d\'achat', '🔍 Analyser la sant\u00e9 de mon CRM', '📊 Voir les performances de mes campagnes'];
 }
 
+// Suggestions du tout premier ecran (campaignCount === 0).
+// Elles etaient exclusivement orientees prospection — profil, premiere campagne,
+// ICP — alors que c'est precisement l'utilisateur dont le time-to-wow compte le
+// plus. Les actions CRM n'apparaissaient qu'une fois une campagne creee
+// (getReturningSuggestions) : le chemin qui porte la proposition de valeur ne se
+// debloquait donc qu'apres le chemin secondaire.
 function getOnboardingSuggestions(lang) {
   return lang === 'en'
-    ? ['📄 Help me set up my profile', '🎯 Create my first campaign', '❓ How does baakalai work?', '🧠 Help me define my ICP']
-    : ['📄 Aide-moi \u00e0 configurer mon profil', '🎯 Cr\u00e9er ma premi\u00e8re campagne', '❓ Comment fonctionne baakalai ?', '🧠 Aide-moi \u00e0 d\u00e9finir mon ICP'];
+    ? ['⚡ Show me my dormant deals', '🔍 Analyze my CRM health', '🎯 Create my first campaign', '❓ How does baakalai work?']
+    : ['⚡ Montre-moi mes deals dormants', '🔍 Analyser la santé de mon CRM', '🎯 Créer ma première campagne', '❓ Comment fonctionne baakalai ?'];
 }
 
 function getReturningSuggestions(lang) {
@@ -67,10 +73,11 @@ function getCampaignTemplates(t) {
 /* ─── Sub-components ─── */
 
 function AiStatusBadge({ online }) {
+  const { lang } = useI18n();
   return (
     <div className={`ai-status${online ? '' : ' offline'}`}>
       <span className="ai-pulse"></span>
-      {online ? 'Online' : 'Offline'}
+      {online ? (lang === 'en' ? 'Online' : 'En ligne') : (lang === 'en' ? 'Offline' : 'Hors ligne')}
     </div>
   );
 }
@@ -1072,11 +1079,15 @@ function SignalSearchCard({ metadata }) {
     setScanning(true);
     try {
       // Create a temporary config and scan
-      const config = await request('/signals/configs', {
+      // signal_types must come from the fixed set understood by the signal-agent
+      // (SIGNAL_QUERIES) — free-text keywords go in targetKeywords only.
+      const VALID_SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
+      const requestedTypes = (metadata.signalTypes || []).filter(k => VALID_SIGNAL_TYPES.includes(k));
+      await request('/signals/configs', {
         method: 'POST',
         body: JSON.stringify({
           name: `Chat scan ${new Date().toLocaleDateString()}`,
-          signalTypes: metadata.keywords || ['funding', 'hiring', 'news'],
+          signalTypes: requestedTypes.length > 0 ? requestedTypes : ['funding', 'hiring', 'news'],
           targetSectors: metadata.sectors || [],
           targetTitles: metadata.titles || [],
           targetKeywords: metadata.keywords || metadata.sectors || [],
@@ -1115,7 +1126,7 @@ function SignalSearchCard({ metadata }) {
           <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>
             ✅ {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
           </div>
-          <a href="/activation" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
+          <a href="/activation?section=signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
             {en ? 'View signals →' : 'Voir les signaux →'}
           </a>
         </div>
@@ -1455,6 +1466,87 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
   );
 }
 
+/* Premier dialogue : ce que baakalai a lu dans le CRM, avec les deals
+   dormants cliquables — un clic lance la conversation sur un vrai deal.
+   Rendu uniquement quand l'utilisateur a un profil mais aucune campagne. */
+function CrmReadingSummary({ onSuggestionClick }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    request('/crm/reading-summary')
+      .then(setSummary)
+      .catch((err) => { console.warn('reading-summary failed:', err.message); });
+  }, []);
+
+  if (!summary || !summary.totalDeals) return null;
+
+  const money = (n) => {
+    if (!n) return '0 €';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M €`;
+    if (n >= 1000) return `${Math.round(n / 1000)}k €`;
+    return `${Math.round(n)} €`;
+  };
+
+  const revivePrompt = (d) => (lang === 'en'
+    ? `Draft a follow-up for the deal "${d.name}"${d.company ? ` (${d.company})` : ''} — no activity for ${d.daysInactive} days.`
+    : `Prépare une relance pour le deal « ${d.name} »${d.company ? ` (${d.company})` : ''} — sans activité depuis ${d.daysInactive} jours.`);
+
+  return (
+    <div style={{
+      background: 'var(--paper)', border: '1px solid var(--border)',
+      borderRadius: 12, padding: '14px 18px', marginBottom: 20,
+      textAlign: 'left', maxWidth: 520, width: '100%',
+    }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        {t('chat.readSummary')
+          .replace('{count}', summary.totalDeals)
+          .replace('{value}', money(summary.openValue))}
+        {summary.dormant.count > 0 && (
+          <> {t('chat.readDormant').replace('{count}', summary.dormant.count)}</>
+        )}
+        {summary.dormant.noValueCount > 0 && (
+          <> {t('chat.readDormantNoValue').replace('{count}', summary.dormant.noValueCount)}</>
+        )}
+      </div>
+      {summary.dormant.top.length > 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
+          {t('chat.readStartWith')}
+        </div>
+      )}
+      {summary.dormant.top.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+          {summary.dormant.top.map(d => (
+            <button
+              key={d.id}
+              onClick={() => {
+                trackEvent('reading_summary_revive_click', { daysInactive: d.daysInactive });
+                onSuggestionClick(revivePrompt(d));
+              }}
+              style={{
+                background: 'var(--paper-2)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: '8px 12px', textAlign: 'left',
+                cursor: 'pointer', fontSize: 13, color: 'var(--ink)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <strong>{d.name}</strong>{d.company ? ` · ${d.company}` : ''}
+              </span>
+              <span style={{ flexShrink: 0, color: 'var(--text-secondary)', fontSize: 12 }}>
+                {money(d.dealValue)} · {t('chat.readDays').replace('{days}', d.daysInactive)} →
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) {
   const { userName, campaignCount, hasProfile, activeCampaigns, topCampaign, insights } = userState || {};
   const t = useT();
@@ -1478,7 +1570,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
       { key: 'create', label: t('chat.createFirst') },
     ];
   } else if (hasProfile && campaignCount === 0) {
-    title = userName ? t('chat.readyToProspect', { name: userName }) : (lang === 'en' ? 'Ready to prospect?' : 'Pr\u00EAt \u00E0 prospecter ?');
+    title = userName ? t('chat.readyToProspect', { name: userName }) : (lang === 'en' ? 'Which deals shall we revive today?' : 'On relance quels deals aujourd\u2019hui ?');
     subtitle = t('chat.chooseTemplate');
     actions = [];
     suggestions = [];
@@ -1553,6 +1645,11 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
               {t('chat.createFromInsights')} →
             </button>
           </div>
+        )}
+
+        {/* Premier dialogue : compte-rendu de lecture du CRM, deals cliquables */}
+        {(hasProfile && campaignCount === 0) && (
+          <CrmReadingSummary onSuggestionClick={onSuggestionClick} />
         )}
 
         {/* Campaign templates — shown when user has profile but no/few campaigns */}
@@ -1896,7 +1993,7 @@ export default function CampaignAssistant() {
             cta: '',
             volume: { sent: 0, planned: 0 },
             iteration: 0,
-            startDate: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+            startDate: new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' }),
             lemlistRef: null,
             nextAction: null,
             kpis: { contacts: 0, openRate: null, replyRate: null, interested: null, meetings: null },
@@ -1964,7 +2061,7 @@ export default function CampaignAssistant() {
       ]);
       scrollToBottom();
     }
-  }, [currentThreadId, backendAvailable, setCampaigns, scrollToBottom]);
+  }, [currentThreadId, backendAvailable, setCampaigns, scrollToBottom, lang]);
 
   /* ─── Send message ─── */
   const sendMessage = useCallback(async (overrideText) => {

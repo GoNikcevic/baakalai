@@ -38,9 +38,9 @@ const EXPECTED_JOBS = {
   'evening-batch': 26,
   'crm-agent': 26,
   'strategic-daily': 26,
-  'agent-chains': 26,
   'lifecycle-emails': 26,
   'memory-agent': 8 * 24,
+  'churn-signals': 180,
   'crm-digest': 8 * 24,
   'reporting-agent': 8 * 24,
 };

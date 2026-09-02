@@ -260,7 +260,12 @@ async function sendNurtureEmail(userId, {
   // 1. Create the email record as pending (or reuse the queued one)
   let nurture;
   if (existingEmailId) {
-    nurture = { id: existingEmailId };
+    const existing = await db.query(
+      `SELECT * FROM nurture_emails WHERE id = $1 AND user_id = $2`,
+      [existingEmailId, userId]
+    );
+    nurture = existing.rows[0];
+    if (!nurture) throw new Error(`nurture_emails row ${existingEmailId} not found`);
   } else {
     const emailRecord = await db.query(`
       INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, team_campaign_id, pattern_ids)

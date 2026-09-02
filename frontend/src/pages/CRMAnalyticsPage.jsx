@@ -9,7 +9,6 @@ import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api-client';
 import { useI18n, useT } from '../i18n';
-import { showToast } from '../services/notifications';
 import EngagementChart from '../components/charts/EngagementChart';
 import FunnelChart from '../components/charts/FunnelChart';
 import LoadingTips from '../components/LoadingTips';
@@ -112,20 +111,6 @@ function HelpTip({ text }) {
   );
 }
 
-function HealthGauge({ score, label }) {
-  const color = score > 80 ? 'var(--success)' : score > 60 ? 'var(--blue)' : score > 40 ? 'var(--warning)' : 'var(--danger)';
-  const pct = Math.min(score, 100);
-  return (
-    <div className="crm-health-gauge">
-      <div className="crm-health-score" style={{ color }}>{score}</div>
-      <div className="crm-health-label">{label}</div>
-      <div className="crm-health-bar">
-        <div className="crm-health-fill" style={{ width: `${pct}%`, background: color }} />
-      </div>
-    </div>
-  );
-}
-
 /* ─── Sections ─── */
 
 // Essential tabs shown by default; advanced tabs behind "More"
@@ -133,7 +118,6 @@ function getTabs(t, vocab) { return [
   { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline'), essential: true },
   { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring'), essential: true },
   { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments'), essential: true },
-  { key: 'health', label: t('analytics.crmHealth'), desc: t('analytics.tabDescHealth'), essential: true },
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
@@ -313,7 +297,7 @@ export default function CRMAnalyticsPage() {
       {loading && <LoadingTips />}
 
       {/* Empty state — no data */}
-      {!loading && !tabData && activeTab !== 'health' && (
+      {!loading && !tabData && (
         <div style={{
           textAlign: 'center', padding: '60px 20px',
           color: 'var(--text-muted)',
@@ -342,7 +326,7 @@ export default function CRMAnalyticsPage() {
       )}
 
       {/* CSV Export button */}
-      {!loading && activeTab !== 'health' && tabData && (
+      {!loading && tabData && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             className="btn btn-ghost"
@@ -362,7 +346,6 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
       {!loading && activeTab === 'segments' && tabData && <SegmentsSection data={tabData} />}
       {!loading && activeTab === 'renewals' && tabData && <RenewalsSection data={tabData} />}
-      {!loading && activeTab === 'health' && <CRMHealthSection />}
     </div>
   );
 }
@@ -1222,305 +1205,6 @@ function RenewalsSection({ data }) {
             : `${data.later.count} renouvellement(s) suppl\u00e9mentaire(s) au-del\u00e0 de 90 jours`}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ═══ CRM Health Section — Live Data Cleaning ═══ */
-
-function getIssueConfig(en) { return {
-  duplicate_email: { icon: '\uD83D\uDD04', label: en ? 'Duplicates (email)' : 'Doublons (email)', severity: 'high', color: 'var(--danger)' },
-  duplicate_name: { icon: '\uD83D\uDC65', label: en ? 'Duplicates (name+company)' : 'Doublons (nom+entreprise)', severity: 'medium', color: 'var(--warning)' },
-  missing_email: { icon: '\uD83D\uDCE7', label: en ? 'Missing email' : 'Email manquant', severity: 'high', color: 'var(--danger)' },
-  missing_name: { icon: '\uD83D\uDC64', label: en ? 'Missing name' : 'Nom manquant', severity: 'medium', color: 'var(--warning)' },
-  missing_company: { icon: '\uD83C\uDFE2', label: en ? 'Missing company' : 'Entreprise manquante', severity: 'low', color: 'var(--text-muted)' },
-  invalid_email: { icon: '\u26A0\uFE0F', label: en ? 'Invalid email' : 'Email invalide', severity: 'high', color: 'var(--danger)' },
-  inactive: { icon: '\uD83D\uDCA4', label: en ? 'Inactive contacts (6+ months)' : 'Contacts inactifs (6+ mois)', severity: 'low', color: 'var(--text-muted)' },
-  format_name_caps: { icon: 'Aa', label: en ? 'Names in ALL CAPS' : 'Noms en MAJUSCULES', severity: 'low', color: 'var(--blue)' },
-}; }
-
-function CRMHealthSection() {
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const navigate = useNavigate();
-  const ISSUE_CONFIG = getIssueConfig(en);
-  const [report, setReport] = useState(null);
-  const [scanning, setScanning] = useState(true);
-  const [fixing, setFixing] = useState(null);
-  const [fixResults, setFixResults] = useState(null);
-  const [provider, setProvider] = useState(null);
-
-  // Auto-detect connected CRM provider
-  useEffect(() => {
-    api.request('/crm/providers').then(data => {
-      if (data.activeCrm) { setProvider(data.activeCrm); return; }
-      const connected = (data.providers || []).find(p => ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'].includes(p.provider) && p.connected);
-      setProvider(connected ? connected.provider : 'pipedrive');
-    }).catch(() => setProvider('pipedrive'));
-  }, []);
-
-  // Load cached report (GET) — returns DB cache if <24h, otherwise runs fresh scan server-side
-  const loadReport = useCallback(async () => {
-    if (!provider) return;
-    setScanning(true);
-    setReport(null);
-    setFixResults(null);
-    try {
-      const result = await api.request(`/crm/scan/${provider}`);
-      setReport(result);
-    } catch (err) {
-      setReport({ error: err.message });
-    }
-    setScanning(false);
-  }, [provider]);
-
-  // Force fresh scan (POST) — always runs a new scan
-  const handleScan = useCallback(async () => {
-    if (!provider) return;
-    setScanning(true);
-    setReport(null);
-    setFixResults(null);
-    try {
-      const result = await api.request(`/crm/scan/${provider}`, { method: 'POST' });
-      setReport(result);
-    } catch (err) {
-      setReport({ error: err.message });
-    }
-    setScanning(false);
-  }, [provider]);
-
-  // Auto-load cached report once provider is detected
-  useEffect(() => { if (provider) loadReport(); }, [provider, loadReport]);
-
-  const handleFix = useCallback(async (issue) => {
-    // Review action — navigate to Clients page with filter
-    if (issue.suggestedAction === 'review') {
-      const ids = (issue.contacts || []).map(c => c.id).filter(Boolean).slice(0, 20);
-      navigate(ids.length > 0 ? `/clients?highlight=${ids.join(',')}` : '/clients');
-      return;
-    }
-    // Enrich action — call enrich agent
-    if (issue.suggestedAction === 'enrich') {
-      setFixing(issue.type);
-      try {
-        const issueType = issue.type === 'missing_email' ? 'missing_email' : issue.type === 'missing_company' ? 'missing_company' : 'all';
-        const contactIds = (issue.contacts || []).map(c => c.id).filter(Boolean);
-        const result = await api.request('/crm/enrich', {
-          method: 'POST',
-          body: JSON.stringify({ issueType, contactIds, limit: 20 }),
-        });
-        setFixResults(prev => ({ ...(prev || {}), [issue.type]: {
-          applied: result.enriched || 0,
-          message: en
-            ? `${result.enriched} enriched, ${result.notFound} not found (${result.total} processed)`
-            : `${result.enriched} enrichis, ${result.notFound} non trouvés (${result.total} traités)`,
-        }}));
-        showToast({ type: 'success', title: en ? 'Enriched' : 'Enrichi', message: `${result.enriched} contact(s)` });
-      } catch (err) {
-        setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
-        showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
-      }
-      setFixing(null);
-      return;
-    }
-    // Fix actions — apply via backend
-    setFixing(issue.type);
-    try {
-      let fixes = [];
-      if (issue.type === 'format_name_caps' || issue.suggestedAction === 'auto_fix') {
-        fixes = [{ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts }];
-      } else if (issue.suggestedAction === 'merge' && issue.contacts?.length >= 2) {
-        fixes = [{ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) }];
-      } else if (issue.suggestedAction === 'archive') {
-        fixes = [{ type: issue.type, action: 'archive', contactIds: issue.contacts.map(c => c.id) }];
-      } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'fix') {
-        fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
-      } else if (issue.suggestedAction === 'verify') {
-        fixes = [{ type: issue.type, action: 'verify_emails', contactIds: issue.contacts.map(c => c.id) }];
-      }
-      if (fixes.length > 0) {
-        const result = await api.request(`/crm/clean/${provider}`, {
-          method: 'POST',
-          body: JSON.stringify({ reportId: report?.reportId, fixes }),
-        });
-        setFixResults(prev => ({ ...(prev || {}), [issue.type]: result }));
-        showToast({ type: 'success', title: en ? 'Fixed' : 'Corrigé', message: `${result.applied || 0} ${en ? 'contact(s) fixed' : 'contact(s) corrigé(s)'}` });
-      }
-    } catch (err) {
-      setFixResults(prev => ({ ...(prev || {}), [issue.type]: { error: err.message } }));
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
-    }
-    setFixing(null);
-  }, [provider, report, handleScan, navigate, en]);
-
-  if (scanning) {
-    return (
-      <div className="crm-section">
-        <LoadingTips
-          title={en ? 'CRM scan in progress...' : 'Scan CRM en cours...'}
-          subtitle={en ? `Analyzing ${provider} contacts` : `Analyse des contacts ${provider}`}
-        />
-      </div>
-    );
-  }
-
-  if (report?.error) {
-    return (
-      <div className="crm-section">
-        <div className="card">
-          <div className="card-body" style={{ textAlign: 'center', padding: 40 }}>
-            <div style={{ fontSize: 14, color: 'var(--danger)' }}>{report.error}</div>
-            <button className="btn btn-primary" style={{ marginTop: 16, fontSize: 12 }} onClick={handleScan}>
-              {en ? 'Retry' : 'R\u00E9essayer'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!report) return null;
-
-  const scoreColor = report.score >= 80 ? 'var(--success)' : report.score >= 50 ? 'var(--warning)' : 'var(--danger)';
-  const scoreLabel = report.score >= 80 ? 'Excellent' : report.score >= 50 ? (en ? 'Good' : 'Bon') : report.score < 30 ? (en ? 'Critical' : 'Critique') : (en ? 'Needs work' : '\u00C0 am\u00E9liorer');
-  const summary = report.summary || {};
-
-  return (
-    <div className="crm-section">
-      {/* Score + Summary */}
-      <div className="crm-grid-2">
-        <div className="card">
-          <div className="card-title">{en ? 'CRM Health Score' : 'Score de sant\u00E9 CRM'}</div>
-          <div className="card-body" style={{ display: 'flex', justifyContent: 'center' }}>
-            <HealthGauge score={report.score} label={scoreLabel} />
-          </div>
-          <div style={{ textAlign: 'center', padding: '0 16px 16px', fontSize: 12, color: 'var(--text-muted)' }}>
-            {report.totalContacts} {en ? 'contacts analyzed' : 'contacts analys\u00E9s'}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-title">{en ? 'Summary' : 'R\u00E9sum\u00E9'}</div>
-          <div className="card-body">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { label: en ? 'Email duplicates' : 'Doublons email', value: summary.duplicateEmails || 0, color: 'var(--danger)' },
-                { label: en ? 'Name duplicates' : 'Doublons nom', value: summary.duplicateNames || 0, color: 'var(--warning)' },
-                { label: en ? 'Missing emails' : 'Emails manquants', value: summary.missingEmails || 0, color: 'var(--danger)' },
-                { label: en ? 'Invalid emails' : 'Emails invalides', value: summary.invalidEmails || 0, color: 'var(--danger)' },
-                { label: en ? 'Inactive contacts' : 'Contacts inactifs', value: summary.inactive || 0, color: 'var(--text-muted)' },
-                { label: en ? 'Format issues' : 'Probl\u00e8mes de format', value: summary.formatIssues || 0, color: 'var(--blue)' },
-              ].map(item => (
-                <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13 }}>{item.label}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: item.value > 0 ? item.color : 'var(--success)' }}>
-                    {item.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Fix all + Issues list */}
-      {(report.issues || []).length > 0 && (
-        <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Fix all button */}
-          {report.issues.some(i => i.suggestedAction && i.suggestedAction !== 'review' && !fixResults?.[i.type]) && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-primary btn-sm"
-                disabled={fixing}
-                onClick={async () => {
-                  const fixable = report.issues.filter(i => i.suggestedAction && i.suggestedAction !== 'review' && !fixResults?.[i.type]);
-                  for (const issue of fixable) {
-                    await handleFix(issue);
-                  }
-                }}
-              >
-                {fixing ? (en ? 'Fixing...' : 'Correction...') : (en ? 'Fix all' : 'Tout corriger')}
-              </button>
-            </div>
-          )}
-          {report.issues.map((issue, i) => {
-            const config = ISSUE_CONFIG[issue.type] || { icon: '?', label: issue.type, color: 'var(--text-muted)' };
-            const count = issue.count || issue.contacts?.length || 0;
-            const fixResult = fixResults?.[issue.type];
-            const isFixing = fixing === issue.type;
-
-            return (
-              <div key={i} className="card" style={{ borderLeft: `3px solid ${config.color}` }}>
-                <div className="card-body" style={{ padding: '14px 18px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>
-                        {config.icon} {config.label}
-                        <span style={{ fontSize: 12, color: config.color, marginLeft: 8 }}>{count} contact{count > 1 ? 's' : ''}</span>
-                      </div>
-                      {/* Preview of affected contacts */}
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                        {(issue.contacts || []).slice(0, 3).map(c => c.name || c.email || '?').join(', ')}
-                        {count > 3 && ` +${count - 3} autres`}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      {fixResult && !fixResult.error && (
-                        <span style={{ fontSize: 11, color: 'var(--success)' }}>
-                          {'\u2705'} {fixResult.message || `${fixResult.applied} corrigé${fixResult.applied > 1 ? 's' : ''}`}
-                        </span>
-                      )}
-                      {fixResult?.error && (
-                        <span style={{ fontSize: 11, color: 'var(--danger)' }}>{fixResult.error}</span>
-                      )}
-                      {issue.suggestedAction && !fixResult && (
-                        <button
-                          className="btn btn-ghost"
-                          style={{
-                            fontSize: 11,
-                            padding: '4px 12px',
-                            border: `1px solid ${config.color}`,
-                            color: config.color,
-                          }}
-                          disabled={isFixing}
-                          onClick={() => handleFix(issue)}
-                        >
-                          {isFixing ? '\u23F3...' :
-                            issue.suggestedAction === 'merge' ? (en ? 'Merge' : 'Fusionner') :
-                            issue.suggestedAction === 'auto_fix' ? (en ? 'Fix' : 'Corriger') :
-                            issue.suggestedAction === 'enrich' ? (en ? 'Enrich' : 'Enrichir') :
-                            issue.suggestedAction === 'archive' ? (en ? 'Archive' : 'Archiver') :
-                            issue.suggestedAction === 'fix' ? (en ? 'Fix' : 'Corriger') :
-                            (en ? 'View' : 'Voir')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {(report.issues || []).length === 0 && (
-        <div className="card" style={{ marginTop: 20, textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\u2705'}</div>
-          <div style={{ fontSize: 14, color: 'var(--success)', fontWeight: 600 }}>{en ? 'CRM clean — no issues detected' : 'CRM propre — aucun probl\u00E8me d\u00E9tect\u00E9'}</div>
-        </div>
-      )}
-
-      {/* Rescan button */}
-      <div style={{ textAlign: 'center', marginTop: 20 }}>
-        <button
-          className="btn btn-ghost"
-          style={{ fontSize: 12, padding: '8px 20px', color: 'var(--text-muted)' }}
-          onClick={handleScan}
-        >
-          {'\uD83D\uDD04'} {en ? 'Run scan again' : 'Relancer le scan'}
-        </button>
-      </div>
     </div>
   );
 }

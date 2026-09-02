@@ -12,6 +12,7 @@ const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
 const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
+const { getTimingContext, getCopyContext, getPatternContext, getTeamId } = require('../email-context');
 
 const DAY_MS = 86400000;
 
@@ -120,4 +121,81 @@ function formatChurnFactors(raw) {
   }
 }
 
-module.exports = { run };
+/**
+ * On-demand coaching + email draft for a SINGLE deal, combined into one Claude call
+ * (used by the "Voir le mail" on-demand flow — no daily batch, no separate coach-then-draft
+ * pass). Returns { opportunity, subject, body, reason, urgency } or { error }.
+ */
+async function coachAndDraftOne(userId, opportunityId) {
+  const oppResult = await db.query(
+    'SELECT * FROM opportunities WHERE id = $1 AND user_id = $2',
+    [opportunityId, userId]
+  );
+  const deal = oppResult.rows[0];
+  if (!deal) return { error: 'not_found' };
+  if (deal.status === 'won' || deal.status === 'lost') return { error: 'not_eligible' };
+  if (!deal.email) return { error: 'no_email' };
+
+  const [patterns, emails, teamId] = await Promise.all([
+    db.memoryPatterns.list({ confidence: 'Haute', limit: 10 }),
+    db.query(
+      `SELECT to_email, subject, sentiment, status, created_at FROM nurture_emails
+       WHERE user_id = $1 AND to_email = $2 AND created_at > now() - interval '60 days'
+       ORDER BY created_at DESC`,
+      [userId, deal.email]
+    ),
+    getTeamId(userId),
+  ]);
+  const [timing, copyCtx, patternCtx] = await Promise.all([
+    getTimingContext(userId),
+    getCopyContext(userId),
+    getPatternContext(teamId),
+  ]);
+
+  const contactEmails = emails.rows;
+  const patternCtxText = patterns.map(p => `- ${p.pattern}`).join('\n');
+  const daysSinceUpdate = Math.round((Date.now() - new Date(deal.last_activity_at || deal.created_at).getTime()) / DAY_MS);
+
+  const prompt = `You are a B2B sales coach and copywriter. For this stagnant deal, decide the
+best next action AND draft a personal reactivation email in one pass.
+
+Contact: ${deal.name} (${deal.title || 'N/A'}) at ${deal.company || 'N/A'}
+Status: ${deal.status || 'open'}
+Days since last activity: ${daysSinceUpdate}
+Churn risk score: ${deal.churn_score || 'N/A'}/100
+Churn factors: ${formatChurnFactors(deal.churn_factors)}
+Emails sent (60d): ${contactEmails.length}
+Last email sentiment: ${contactEmails[0]?.sentiment || 'N/A'}
+
+${patternCtxText ? `PATTERNS THAT WORK:\n${patternCtxText}` : ''}
+${copyCtx ? `\nCOPY PATTERNS THAT WORK:\n${copyCtx}` : ''}
+${patternCtx.text ? `\nMEMORY PATTERNS:\n${patternCtx.text}` : ''}
+${timing.bestDay ? `\nBEST SEND TIMING: ${timing.bestDay}${timing.bestHour != null ? ` at ${timing.bestHour}h` : ''}` : ''}
+
+RULES:
+- "reason" explains briefly, in French, why this deal needs reactivating now
+- Email: max 6 lines, must sound human and personal (NOT marketing)
+- Tone: professional but warm — the goal is to re-engage, not to sell aggressively
+
+Return JSON:
+{ "reason": "...", "urgency": "high|medium|low", "subject": "...", "body": "..." }`;
+
+  const result = await claude.callClaude('Return only valid JSON.', prompt, 600, 'deal_coach_draft_one');
+  let draft = result.parsed;
+  if (!draft) {
+    const m = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
+    if (m) { try { draft = JSON.parse(m[0]); } catch { draft = null; } }
+  }
+  if (!draft?.subject || !draft?.body) return { error: 'generation_failed' };
+
+  return {
+    opportunity: deal,
+    patternIds: patternCtx.ids,
+    subject: draft.subject,
+    body: draft.body,
+    reason: draft.reason || '',
+    urgency: draft.urgency || 'medium',
+  };
+}
+
+module.exports = { run, coachAndDraftOne };

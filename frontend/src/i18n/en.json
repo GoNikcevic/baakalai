@@ -21,7 +21,11 @@
     "newCampaign": "+ New campaign",
     "openSidebar": "Open sidebar",
     "collapseSidebar": "Collapse sidebar",
-    "logoutTitle": "Log out"
+    "logoutTitle": "Log out",
+    "dealsToReactivate": "Deals to reactivate",
+    "clientsToUpsell": "Clients to upsell",
+    "churnRisk": "Clients at risk",
+    "dataQuality": "Data Quality"
   },
   "auth": {
     "login": "Sign in",
@@ -160,7 +164,8 @@
     "enrichDoneTitle": "{count} prospect(s) enriched",
     "enrichDoneDesc": "{skipped} skipped · {errors} error(s)",
     "enrichFailed": "Personalization failed",
-    "enrichFailedDesc": "Unknown error — check your Brave Search API key."
+    "enrichFailedDesc": "Unknown error — check your Brave Search API key.",
+    "tabAssistant": "Assistant"
   },
   "prospectGen": {
     "title": "Generate prospects",
@@ -440,7 +445,8 @@
     "firstCampaign": "Create your first campaign",
     "firstLaunch": "Launch a campaign",
     "continueChat": "Continue setup in chat →",
-    "allDone": "All set! You can start prospecting."
+    "allDone": "All set! You can start prospecting.",
+    "continueSettings": "Go to Settings →"
   },
   "replies": {
     "title": "Prospect Activities",
@@ -813,7 +819,15 @@
     "sfConnect": "Connect Salesforce →",
     "sfConnecting": "Connecting to Salesforce…",
     "sfOneClickNote": "One-click connection: sign in to Salesforce and authorize baakalai. Nothing to create on your side.",
-    "sfManualLink": "Or use your own Connected App (Consumer Key + Secret)"
+    "sfManualLink": "Or use your own Connected App (Consumer Key + Secret)",
+    "welcomeTitle": "Welcome to Baakalai",
+    "welcomeSubtitle": "Connect your CRM and your email to get started — you can set up everything else later.",
+    "crmCardTitle": "Connect a CRM",
+    "crmCardDesc": "Pipedrive, HubSpot, Salesforce or Odoo.",
+    "emailCardTitle": "Connect an email",
+    "emailCardDesc": "To send your follow-ups and campaigns from your own inbox.",
+    "connect": "Connect",
+    "connected": "Connected ✓"
   },
   "triggers": {
     "dealWon": "Deal won",
@@ -931,5 +945,177 @@
       "expansion": "Expansion",
       "tech_adoption": "Tech adoption"
     }
+  },
+  "chainConfig": {
+    "enabled": "Auto-reactivation: Enabled",
+    "disabled": "Auto-reactivation: Disabled",
+    "maxPerDay": "Max per day:"
+  },
+  "dealsToReactivate": {
+    "title": "Deals to reactivate",
+    "subtitle": "Stagnant deals, or overdue on their planned follow-up date — the email is drafted the moment you open it."
+  },
+  "upsell": {
+    "title": "Clients to upsell",
+    "subtitle": "Clients ready for an upsell based on their current offers and engagement signals — the email is drafted the moment you open it."
+  },
+  "dataQuality": {
+    "title": "Data Quality",
+    "subtitle": "Want to improve Baakalai's performance? Improve the data you give it.",
+    "tabs": {
+      "general": "General",
+      "dealQuality": "Deal quality",
+      "clientQuality": "Client quality",
+      "history": "History"
+    },
+    "banners": {
+      "noEmail": {
+        "title": "No email account connected",
+        "desc": "Without a connected email account, Baakalai can't send any follow-up or upsell proposal.",
+        "cta": "Connect an email account"
+      },
+      "noCrm": {
+        "title": "No CRM connected",
+        "desc": "Connect a CRM so Baakalai can analyze your deals and clients.",
+        "cta": "Connect a CRM"
+      },
+      "stageMapping": {
+        "title": "In-between stages not configured",
+        "desc": "Won/Lost are detected automatically, but one or more of your connected CRMs don't have their in-between stages (interested, meeting, negotiation) mapped to Baakalai — the pipeline view depends on it.",
+        "cta": "Configure the mapping"
+      }
+    },
+    "duplicates": {
+      "rescan": "Rescan",
+      "scanning": "Scanning...",
+      "scanError": "Scan failed",
+      "noneFound": "No issues detected on this CRM.",
+      "duplicatesSectionTitle": "Duplicates",
+      "noCrmProvider": "No CRM associated",
+      "otherIssuesTitle": "Other issues detected",
+      "mergeButton": "Merge",
+      "reviewDiff": "Field comparison",
+      "keepThis": "Keep this contact",
+      "willBeRemoved": "Will be removed in favor of the kept contact:",
+      "confirmMerge": "Confirm merge",
+      "cancel": "Cancel",
+      "manualChecklistTitle": "Manual deletion required",
+      "manualChecklistNote": "This CRM doesn't support automatic deletion — please delete these contacts yourself directly in your CRM:",
+      "fieldFromContact": "Contact {n}",
+      "conflictBadge": "Different values",
+      "activityRow": "Activity (emails · exchanges · product lines)",
+      "historyMergedNote": "Emails, exchanges, and other activity from removed contacts are automatically re-linked to the kept contact — nothing is lost.",
+      "mergeSuccess": "Merge completed",
+      "mergeError": "Merge failed"
+    },
+    "dealQuality": {
+      "missingSector": "Sector not filled in",
+      "missingDealValue": "Deal value not filled in",
+      "missingWonLostDate": "Missing close date",
+      "ownerNotMapped": "Owner not matched to a team member",
+      "zeroActivity": "No CRM activity logged",
+      "noneFound": "No quality issues detected on your active deals.",
+      "contextTitle": "Deals",
+      "contextSubtitle": "{count} deal(s) to fix",
+      "refreshData": "Refresh data",
+      "filteredFromDataQuality": "Deals filtered from Data Quality",
+      "backToDataQuality": "Back to Data Quality",
+      "saveButton": "Save",
+      "sectorLabel": "Industry sector",
+      "sectorPlaceholder": "E.g. B2B SaaS, Commercial real estate...",
+      "sectorSaveTitle": "Sector",
+      "sectorSaved": "Sector saved: {sector}",
+      "sectorNotClassified": "Value saved, but not recognized as an industry sector",
+      "sectorLocalOnlyNote": "This value sharpens Baakalai's analysis (churn score, upsell). It isn't synced to your CRM yet: no standard sector field exists on the CRM side.",
+      "dealValueLabel": "Deal value",
+      "dealValuePlaceholder": "E.g. 15000",
+      "dealValueSaveTitle": "Deal value",
+      "dealValueSaved": "Deal value saved: {value}",
+      "dealValueLocalOnlyNote": "This value is saved in Baakalai. It isn't synced to your CRM yet."
+    },
+    "clientQuality": {
+      "missingProductLines": "No product line assigned",
+      "noProductLinesConfigured": "No product lines configured for your team",
+      "configureProductLines": "Configure product lines",
+      "noneFound": "No quality issues detected on your clients."
+    },
+    "history": {
+      "noneFound": "No history yet.",
+      "groupLabel": {
+        "merge_keep": "Duplicate merge (contact kept)",
+        "merge_delete": "Duplicate merge (contact removed)",
+        "enrichment": "Field enriched"
+      },
+      "fieldLabel": {
+        "sector": "Sector",
+        "dealValue": "Deal value",
+        "email": "Email",
+        "company": "Company",
+        "name": "Name"
+      },
+      "remoteActionLabel": {
+        "updated": "CRM updated",
+        "deleted": "Deleted from CRM",
+        "archived": "Archived in CRM",
+        "manual_required": "Manual deletion required",
+        "none": "Local only"
+      },
+      "undo": "Undo",
+      "undoConfirm": "Restore the original state?",
+      "undoSuccess": "Change undone",
+      "undoFailed": "Undo failed",
+      "undone": "Undone"
+    },
+    "common": {
+      "view": "View",
+      "affectedCount": "{count} affected",
+      "lastScanAt": "Last scan: {date}"
+    }
+  },
+  "reactivation": {
+    "sortByValue": "Sort by value",
+    "sortByOverdue": "Sort by overdue",
+    "viewEmail": "View email",
+    "postpone": "Postpone",
+    "noCandidates": "No candidates yet.",
+    "back": "Back",
+    "send": "Send",
+    "regenerate": "Regenerate",
+    "subjectLabel": "Subject",
+    "bodyLabel": "Message",
+    "sent": "Sent",
+    "generating": "Writing the email...",
+    "generatingHint": "This takes a few seconds — please don't leave this page.",
+    "crmHygieneBanner": "💡 Log your exchanges with these contacts directly in your CRM (or as a note) — Baakalai relies on that to know automatically whether and when to follow up.",
+    "tabPending": "Pending",
+    "tabHistory": "History",
+    "historyEmpty": "No history yet.",
+    "historySentOn": "Email sent on {date}",
+    "historyPostponedManualOn": "Manually postponed to {date}",
+    "historyPostponedAutoOn": "Automatically postponed to {date}",
+    "historyWonOn": "Won on {date}",
+    "historyLostOn": "Lost on {date}",
+    "sendFailedBadge": "⚠ Last send failed"
+  },
+  "churn": {
+    "title": "Clients at churn risk",
+    "subtitle": "Explainable weighted risk score, with detailed factors per client.",
+    "markChurned": "Mark as churned",
+    "markStillClient": "Still a client",
+    "markMissedChurn": "Flag missed churn",
+    "reasonPrompt": "Reason (optional)",
+    "reasonPrix": "Price",
+    "reasonConcurrent": "Competitor",
+    "reasonSupport": "Support",
+    "reasonProduitInadapte": "Product mismatch",
+    "reasonBudgetCoupe": "Budget cut",
+    "reasonAutre": "Other",
+    "outcomeSaved": "Saved",
+    "outcomeSaveError": "Failed to save"
+  },
+  "assistant": {
+    "conversations": "Conversations",
+    "welcomeTitle": "How can I help?",
+    "welcomeSubtitle": "Ask about a client, how Baakalai works, or get sales/prospecting advice."
   }
 }

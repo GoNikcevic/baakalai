@@ -1,8 +1,8 @@
 /* ===============================================================================
    BAKAL — Data Quality Page
    Organized into 3 strates (one per data-quality need) + a change history tab:
-   General (CRM hygiene not specific to leads or clients — duplicates, missing/invalid
-   fields, inactivity), Lead quality, Client quality, Historique. Every strate adapts
+   General (CRM hygiene not specific to deals or clients — duplicates, missing/invalid
+   fields, inactivity), Deal quality, Client quality, Historique. Every strate adapts
    to what each connected CRM actually supports — see lib/crm-cleaning-agent.js.
    =============================================================================== */
 

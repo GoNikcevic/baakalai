@@ -17,6 +17,7 @@ const odoo = require('../api/odoo');
 const notionCrm = require('../api/notion-crm');
 const airtableCrm = require('../api/airtable-crm');
 const { decrypt, encrypt } = require('../config/crypto');
+const { getValidatedIntegrations } = require('../config');
 const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
 const logger = require('../lib/logger');
@@ -279,12 +280,14 @@ router.get('/providers', async (req, res, next) => {
     const providers = ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'folk', 'notion', 'airtable'];
     const labelMap = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', odoo: 'Odoo', folk: 'Folk', notion: 'Notion', airtable: 'Airtable' };
 
-    // Single query: connected providers + user's active CRM
-    const [intResult, userResult] = await Promise.all([
-      db.query(`SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)`, [req.user.id, providers]),
+    // A row existing in user_integrations isn't enough on its own — only count providers whose
+    // stored access_token actually decrypts (excludes stale/placeholder rows, e.g. test data
+    // seeded directly in the DB, from silently appearing "connected" everywhere this is checked).
+    const [validated, userResult] = await Promise.all([
+      getValidatedIntegrations(req.user.id, providers),
       db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [req.user.id]),
     ]);
-    const connectedSet = new Set(intResult.rows.map(r => r.provider));
+    const connectedSet = new Set(validated);
     const activeCrm = userResult.rows[0]?.active_crm_provider || null;
 
     const statuses = providers.map(provider => ({
@@ -651,6 +654,12 @@ router.post('/clean/:provider', cleanLimit, async (req, res, next) => {
         fixesApplied: result,
       });
     }
+
+    // Invalidate the cached scan for this provider regardless — a fix just changed contact
+    // data (caps corrected, contact archived/deleted, emails verified), so the next scan read
+    // (e.g. Data Quality's Duplicates tab, which doesn't pass reportId) must not keep serving
+    // the pre-fix snapshot.
+    await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [req.user.id, provider]);
 
     res.json(result);
   } catch (err) {
@@ -1162,6 +1171,21 @@ router.get('/odoo/deals', async (req, res, next) => {
   }
 });
 
+// GET /api/crm/client/search?q=... — Fuzzy name/email/company search (general assistant's
+// lookup_client action). Must stay registered BEFORE /client/:id below — both match a single
+// path segment, and Express tries routes in registration order, so /client/search would
+// otherwise be swallowed by /client/:id with id="search".
+router.get('/client/search', async (req, res, next) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    if (!q) return res.json({ clients: [] });
+    const clients = await db.opportunities.search(req.user.id, q, 8);
+    res.json({ clients });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/crm/client/:id — Get full client detail (opportunity + nurture emails + CRM activities)
 router.get('/client/:id', async (req, res, next) => {
   try {
@@ -1249,6 +1273,9 @@ router.post('/churn/score', async (req, res, next) => {
 // =============================================
 router.get('/churn/summary', async (req, res, next) => {
   try {
+    // Churn risk is a retention concept scoped to won clients — an active deal isn't a client
+    // yet, so it must never be counted here (see ChurnPage.jsx / ClientsPage.jsx for the
+    // matching frontend filters).
     const result = await db.query(
       `SELECT
         COUNT(*) FILTER (WHERE churn_score >= 76) AS critical,
@@ -1257,7 +1284,7 @@ router.get('/churn/summary', async (req, res, next) => {
         COUNT(*) FILTER (WHERE churn_score < 26 OR churn_score IS NULL) AS low,
         COUNT(*) FILTER (WHERE churn_score IS NOT NULL) AS scored,
         ROUND(AVG(churn_score) FILTER (WHERE churn_score IS NOT NULL)) AS avg_score
-      FROM opportunities WHERE user_id = $1`,
+      FROM opportunities WHERE user_id = $1 AND status = 'won'`,
       [req.user.id]
     );
     const row = result.rows[0] || {};

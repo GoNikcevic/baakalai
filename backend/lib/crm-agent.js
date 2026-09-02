@@ -18,8 +18,7 @@
  */
 
 const db = require('../db');
-const { getUserKey } = require('../config');
-const { getUserCrmToken } = require('./crm-token');
+const { resolveCrmForUser } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
@@ -65,51 +64,11 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
   } catch { /* solo user, no team */ }
 
   // Detect connected CRM provider — use user's active CRM preference, fallback to first connected
-  let crmProvider = null;
-  let token = null;
-
-  // 1. Try user's explicitly chosen active CRM
-  try {
-    const userRow = await db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [userId]);
-    const activeCrm = userRow.rows[0]?.active_crm_provider;
-    if (activeCrm) {
-      token = await getUserCrmToken(userId, activeCrm);
-      if (token) crmProvider = activeCrm;
-    }
-  } catch { /* fallback below */ }
-
-  // 2. Fallback: try all providers if no active CRM set or its token is missing
-  if (!token) {
-    for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo']) {
-      token = await getUserCrmToken(userId, p);
-      if (token) { crmProvider = p; break; }
-    }
-  }
-  if (!token) {
+  const { provider: crmProvider, creds: crmCreds } = await resolveCrmForUser(userId);
+  if (!crmProvider) {
     _running.delete(userId);
     report.errors.push('No CRM connected');
     return report;
-  }
-
-  // Salesforce needs instanceUrl + accessToken as credentials object
-  let crmCreds = token;
-  if (crmProvider === 'salesforce') {
-    const { decrypt } = require('../config/crypto');
-    const integration = await db.query(
-      `SELECT access_token, instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
-      [userId]
-    );
-    if (integration.rows[0]) {
-      if (!integration.rows[0].instance_url) {
-        _running.delete(userId);
-        report.errors.push('Salesforce instance URL not configured');
-        return report;
-      }
-      crmCreds = {
-        accessToken: typeof token === 'string' ? token : decrypt(integration.rows[0].access_token),
-        instanceUrl: integration.rows[0].instance_url,
-      };
-    }
   }
 
   // Notify user that agent is working
@@ -123,10 +82,10 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     const _opps = await db.opportunities.listByUser(userId, 10000, 0);
 
     // ── Step 2: Quick Data Quality Check ──
-    await stepDataQuality(userId, token, report, _opps);
+    await stepDataQuality(userId, crmCreds, report, _opps);
 
     // ── Step 3: Nurture Evaluation ──
-    await stepNurture(userId, token, report, { teamId, crmProvider });
+    await stepNurture(userId, crmCreds, report, { teamId, crmProvider });
 
     // ── Step 3b: LinkedIn Response Sync ──
     try {
@@ -426,18 +385,34 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         } catch { /* mapping is optional */ }
       }
     }
-    // Sync deal values + lifecycle dates from CRM deals
+    // Sync deal values + lifecycle dates from CRM deals. Every provider's getDeals() is
+    // normalized to the same shape ({ personId, status: 'won'|'lost'|'open', value, updatedAt }),
+    // so this loop treats them identically — status is always taken from the CRM's own native
+    // won/lost signal (Pipedrive/Odoo: deal/stage flag; Salesforce: IsWon/IsClosed; HubSpot:
+    // hs_is_closed_won/hs_is_closed), authoritative regardless of the opportunity's current
+    // status — a deal the CRM now shows as lost must stop being treated as a client even if it
+    // was won before (manual correction in the CRM is the source of truth).
     try {
       let deals = [];
       if (crmProvider === 'pipedrive') deals = await pipedrive.getDeals(token, 500);
       else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
+      else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token, 100); }
+      else if (crmProvider === 'odoo') { const odooApi = require('../api/odoo'); deals = await odooApi.getDeals(token, { limit: 500 }); }
+
+      // Prefer the CRM's own close date over "now" — "now" is only a fair proxy for a
+      // transition happening in this very sync, never for backfilling an older won/lost deal.
+      const safeDateISO = (value) => {
+        if (!value) return null;
+        const d = new Date(value);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+      };
 
       for (const deal of deals) {
         const personId = deal.personId ? String(deal.personId) : null;
         if (!personId) continue;
 
         const opp = await db.query(
-          `SELECT id, status, won_date, lost_date, deal_value FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
           [userId, personId]
         );
         if (!opp.rows[0]) continue;
@@ -445,8 +420,37 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
 
         const updates = {};
         if (deal.value && deal.value !== parseFloat(o.deal_value)) updates.deal_value = deal.value;
-        if (deal.status === 'won' && o.status !== 'won') { updates.status = 'won'; updates.won_date = new Date().toISOString(); }
-        if (deal.status === 'lost' && o.status !== 'lost') { updates.status = 'lost'; updates.lost_date = new Date().toISOString(); }
+
+        const closeDate = safeDateISO(deal.closeDate);
+        if (deal.status === 'won' && o.status !== 'won') {
+          updates.status = 'won';
+          updates.won_date = closeDate || new Date().toISOString();
+        } else if (deal.status === 'won' && o.status === 'won' && !o.won_date && closeDate) {
+          // Backfill: already won locally, just never got a real close date recorded.
+          updates.won_date = closeDate;
+        }
+        if (deal.status === 'lost' && o.status !== 'lost') {
+          updates.status = 'lost';
+          updates.lost_date = closeDate || new Date().toISOString();
+        } else if (deal.status === 'lost' && o.status === 'lost' && !o.lost_date && closeDate) {
+          updates.lost_date = closeDate;
+        }
+        // Pipedrive's native "next activity" date feeds planned_followup_date — never overwrite
+        // a manually-set date with null (Pipedrive is the only provider that returns this today).
+        if (deal.nextActivityDate && deal.nextActivityDate !== o.planned_followup_date) {
+          updates.planned_followup_date = deal.nextActivityDate;
+          updates.planned_followup_reason = 'crm_sync';
+        }
+        // The CRM's own "last modified" timestamp is the real activity signal — `updated_at`
+        // gets reset to now() by a DB trigger on every internal write (e.g. churn scoring),
+        // so it can't be trusted for staleness. Only advance last_activity_at forward, never back.
+        if (deal.updatedAt) {
+          const crmUpdated = new Date(deal.updatedAt);
+          const stored = o.last_activity_at ? new Date(o.last_activity_at) : null;
+          if (!isNaN(crmUpdated.getTime()) && (!stored || crmUpdated > stored)) {
+            updates.last_activity_at = crmUpdated.toISOString();
+          }
+        }
 
         if (Object.keys(updates).length > 0) {
           // Attribution: if deal moves to 'won' from lost/stagnant, check for reactivation email in last 90 days

@@ -97,6 +97,32 @@ async function getDeal(accessToken, dealId) {
   return hubspotFetch(accessToken, `/crm/v3/objects/deals/${dealId}`);
 }
 
+async function getDeals(accessToken, limit = 100) {
+  // hs_is_closed / hs_is_closed_won are default calculated properties on every HubSpot portal —
+  // the native won/lost signal, independent of the pipeline's (fully customizable) dealstage IDs.
+  const params = new URLSearchParams({
+    limit: String(Math.min(limit, 100)),
+    associations: 'contacts',
+    properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate',
+  });
+  const data = await hubspotFetch(accessToken, `/crm/v3/objects/deals?${params.toString()}`);
+  return (data.results || []).map(d => {
+    const p = d.properties || {};
+    const isWon = p.hs_is_closed_won === 'true';
+    const isClosed = p.hs_is_closed === 'true';
+    return {
+      id: d.id,
+      name: p.dealname || '',
+      stage: p.dealstage || '',
+      status: isWon ? 'won' : (isClosed ? 'lost' : 'open'),
+      value: p.amount ? parseFloat(p.amount) : null,
+      personId: d.associations?.contacts?.results?.[0]?.id || null,
+      closeDate: p.closedate || null,
+      updatedAt: p.hs_lastmodifieddate || null,
+    };
+  });
+}
+
 // =============================================
 // Associations (link contact ↔ deal)
 // =============================================
@@ -313,6 +339,7 @@ module.exports = {
   createDeal,
   updateDeal,
   getDeal,
+  getDeals,
   listDealsForDiagnostic,
   // Associations
   associateContactToDeal,

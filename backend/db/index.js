@@ -1034,8 +1034,18 @@ async function dashboardKpis(userId) {
 // =============================================
 
 const chatThreads = {
-  async list(userId, limit = 50) {
+  // assistantType filters to one of the two independent assistants ('general' | 'campaign')
+  // sharing this table — omit it to list across both (used nowhere today, kept for flexibility
+  // matching the unfiltered no-userId branch below).
+  async list(userId, { assistantType, limit = 50 } = {}) {
     if (userId) {
+      if (assistantType) {
+        const result = await query(
+          'SELECT * FROM chat_threads WHERE user_id = $1 AND assistant_type = $2 ORDER BY updated_at DESC LIMIT $3',
+          [userId, assistantType, limit]
+        );
+        return result.rows;
+      }
       const result = await query(
         'SELECT * FROM chat_threads WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2',
         [userId, limit]
@@ -1051,10 +1061,10 @@ const chatThreads = {
     return result.rows[0] || null;
   },
 
-  async create(title, userId) {
+  async create(title, userId, assistantType = 'campaign') {
     const result = await query(
-      'INSERT INTO chat_threads (title, user_id) VALUES ($1, $2) RETURNING *',
-      [title || 'Nouvelle conversation', userId || null]
+      'INSERT INTO chat_threads (title, user_id, assistant_type) VALUES ($1, $2, $3) RETURNING *',
+      [title || 'Nouvelle conversation', userId || null, assistantType]
     );
     return result.rows[0];
   },
@@ -1536,6 +1546,8 @@ const opportunities = {
       lost_date: 'lost_date', lostDate: 'lost_date',
       renewal_date: 'renewal_date', renewalDate: 'renewal_date',
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
+      planned_followup_date: 'planned_followup_date', plannedFollowupDate: 'planned_followup_date',
+      planned_followup_reason: 'planned_followup_reason', plannedFollowupReason: 'planned_followup_reason',
       reactivated_at: 'reactivated_at', reactivatedAt: 'reactivated_at',
       reactivated_from_email_id: 'reactivated_from_email_id', reactivatedFromEmailId: 'reactivated_from_email_id',
       data: 'data',
@@ -1587,6 +1599,23 @@ const opportunities = {
       [userId, email]
     );
     return result.rows[0] || null;
+  },
+
+  // Fuzzy name/email/company search for the general assistant's lookup_client action — prefix
+  // matches on name ranked first (most likely intent when a user just types a name), everything
+  // else after. escapeLike prevents a literal % or _ in the query from acting as a wildcard.
+  async search(userId, q, limit = 8) {
+    if (!q || !q.trim()) return [];
+    const escapeLike = (s) => s.replace(/[%_\\]/g, (c) => `\\${c}`);
+    const term = escapeLike(q.trim());
+    const result = await query(
+      `SELECT *, (name ILIKE $2) AS name_prefix_match FROM opportunities
+       WHERE user_id = $1 AND (name ILIKE $3 OR email ILIKE $3 OR company ILIKE $3)
+       ORDER BY name_prefix_match DESC, updated_at DESC
+       LIMIT $4`,
+      [userId, `${term}%`, `%${term}%`, limit]
+    );
+    return result.rows;
   },
 
   async findByLinkedinUrl(userId, linkedinUrl) {

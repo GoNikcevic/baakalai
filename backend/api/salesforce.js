@@ -81,15 +81,23 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
 async function getDeals(instanceUrl, accessToken, limit = 100) {
   // LastActivityDate / LastModifiedDate : sans elles, la récence d'un deal est
   // inconnue et rien ne peut être signalé comme dormant. Voir lib/crm-activity-date.js.
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  // IsWon/IsClosed are native Opportunity fields (true source of truth for won/lost — no need
+  // to cross-reference OpportunityStage). The OpportunityContactRoles subquery resolves the
+  // primary contact, since Opportunity has no direct contact lookup (only AccountId).
+  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed,
+    (SELECT ContactId FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
+    FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return (result.records || []).map(r => ({
     id: r.Id,
     name: r.Name,
     stage: r.StageName,
-    amount: r.Amount,
+    status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
+    value: r.Amount,
+    personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
     closeDate: r.CloseDate,
     createdAt: r.CreatedDate,
+    updatedAt: r.LastModifiedDate,
     // Sans ces deux champs le deal remonte sans recence, donc jamais dormant.
     lastActivityAt: extractActivityDate('salesforce', r),
   }));
@@ -174,6 +182,16 @@ async function updateContact(instanceUrl, accessToken, contactId, data) {
   return { id: contactId };
 }
 
+// ── Delete Contact ──
+// Hard delete via REST (Salesforce retains it in the Recycle Bin ~15 days server-side, but from
+// our API's perspective it's gone). Undo recreates a NEW Contact via createContact — it gets a
+// new Salesforce Id, a known limitation of this approach vs. the Recycle Bin's `undelete`
+// composite API, which could restore the exact same Id within the 15-day window if ever needed.
+async function deleteContact(instanceUrl, accessToken, contactId) {
+  await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}`, { method: 'DELETE' });
+  return { id: contactId };
+}
+
 // ── Upsert Contact (search by email, update or create) ──
 
 async function upsertContact(instanceUrl, accessToken, data) {
@@ -234,6 +252,11 @@ async function getActivities(instanceUrl, accessToken, contactId) {
     status: a.Status,
     date: a.ActivityDate,
     description: a.Description,
+    // Aliases matching Pipedrive/Odoo's getActivities shape, for callers that consume
+    // multiple providers generically (e.g. response-analysis-agent.js).
+    dueDate: a.ActivityDate,
+    note: a.Description,
+    type: 'task',
   }));
 }
 
@@ -242,7 +265,7 @@ async function getActivities(instanceUrl, accessToken, contactId) {
 async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
   const all = [];
   let result = await sfFetch(instanceUrl, accessToken,
-    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Title, Account.Name, OwnerId, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
+    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Phone, Title, Account.Name, OwnerId, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
   );
   const mapRecords = (records) => {
     for (const c of (records || [])) {
@@ -250,9 +273,11 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
         id: c.Id,
         name: `${c.FirstName || ''} ${c.LastName || ''}`.trim(),
         email: c.Email,
+        phone: c.Phone || null,
         title: c.Title,
         company: c.Account?.Name || '',
         ownerId: c.OwnerId,
+        updatedAt: c.LastModifiedDate,
         // C'est ce chemin-ci qu'emprunte la synchro (stepSync), pas getDeals.
         lastActivityAt: extractActivityDate('salesforce', c),
       });
@@ -760,6 +785,7 @@ async function bulkQuery(instanceUrl, accessToken, soqlQuery) {
 module.exports = {
   createContact,
   updateContact,
+  deleteContact,
   upsertContact,
   searchContacts,
   listContacts,

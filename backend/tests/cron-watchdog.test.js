@@ -54,6 +54,6 @@ test('tolere les dates invalides et les entrees nulles', () => {
     findStaleJobs([{ job: 'crm-agent', last_started: 'pas une date' }], NOW), []);
 });
 
-test('le catalogue couvre les 8 jobs de l orchestrateur', () => {
-  assert.strictEqual(Object.keys(EXPECTED_JOBS).length, 8);
+test('le catalogue couvre les 9 jobs de l orchestrateur', () => {
+  assert.strictEqual(Object.keys(EXPECTED_JOBS).length, 9);
 });

@@ -1,6 +1,6 @@
 /* ===============================================================================
    BAKAL — General Strate (Data Quality's "Général" tab)
-   CRM hygiene issues that aren't specific to a lead or a client — duplicates, missing
+   CRM hygiene issues that aren't specific to a deal or a client — duplicates, missing
    fields, invalid formats, inactivity. Scans every connected CRM independently
    (duplicates are a same-CRM concept only — the same person legitimately existing in
    two different CRMs is normal, never flagged). Each provider's duplicate groups get
@@ -29,7 +29,7 @@ function getOtherIssueConfig(en) { return {
 }; }
 
 // Issue types correctable by typing in the right value for one field — same mechanism as the
-// Lead Quality sector/deal value fix (a text field + "Enregistrer", calling POST /enrich-field,
+// Deal Quality sector/deal value fix (a text field + "Enregistrer", calling POST /enrich-field,
 // with full audit + undo). No AI guessing: predictable, and works even for data an enrichment
 // agent could never find (test contacts, unlisted companies, etc).
 const FIXABLE_FIELD_BY_ISSUE_TYPE = {

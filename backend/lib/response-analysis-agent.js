@@ -1,11 +1,12 @@
 /**
  * Response Analysis Agent
  *
- * Reads replies/activities from CRM (Pipedrive), analyzes them with Claude,
- * and tracks nurture campaign effectiveness.
+ * Reads replies/activities from the user's connected CRM (Pipedrive, Salesforce, or
+ * Odoo — HubSpot and the no-activity-feed providers Notion/Airtable/Folk aren't
+ * supported yet), analyzes them with Claude, and tracks nurture campaign effectiveness.
  *
  * Flow:
- * 1. Fetch recent activities from Pipedrive (emails received, notes)
+ * 1. Fetch recent activities from the connected CRM (emails received, notes)
  * 2. Match to nurture emails we sent (by contact + time window)
  * 3. Claude analyzes each reply → sentiment, intent, suggested action
  * 4. Update opportunity status + score
@@ -16,26 +17,37 @@
  */
 
 const db = require('../db');
-const { getUserKey } = require('../config');
-const { getUserCrmToken } = require('./crm-token');
+const { resolveCrmForUser } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const logger = require('./logger');
 
 const DAY_MS = 86400000;
 
+// Providers with a getActivities-equivalent feed. HubSpot has none today, and
+// Notion/Airtable/Folk have no activity concept at all (same as the deal-sync gap).
+async function fetchActivities(crmProvider, creds, contactId) {
+  if (!contactId) return [];
+  if (crmProvider === 'pipedrive') {
+    return pipedrive.getActivities(creds, parseInt(contactId, 10));
+  }
+  if (crmProvider === 'salesforce') {
+    const salesforce = require('../api/salesforce');
+    return salesforce.getActivities(creds.instanceUrl, creds.accessToken, contactId);
+  }
+  if (crmProvider === 'odoo') {
+    const odoo = require('../api/odoo');
+    return odoo.getActivities(creds, parseInt(contactId, 10));
+  }
+  return [];
+}
+
 /**
  * Analyze responses for a user's nurture campaigns.
  */
 async function analyzeResponses(userId) {
-  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
-  const activeCrm = userRow.rows[0]?.active_crm_provider || 'pipedrive';
-  const token = await getUserCrmToken(userId, activeCrm);
-  if (!token) return { analyzed: 0, positive: 0, negative: 0 };
-  if (activeCrm !== 'pipedrive') {
-    logger.info('response-agent', `CRM activity analysis not yet supported for ${activeCrm}, skipping (user ${userId})`);
-    return { analyzed: 0, positive: 0, negative: 0 };
-  }
+  const { provider: crmProvider, creds } = await resolveCrmForUser(userId);
+  if (!crmProvider) return { analyzed: 0, positive: 0, negative: 0 };
 
   const report = { analyzed: 0, positive: 0, negative: 0, neutral: 0, actions: [] };
 
@@ -61,7 +73,7 @@ async function analyzeResponses(userId) {
     if (!email.crm_contact_id) continue;
 
     try {
-      const activities = await pipedrive.getActivities(token, parseInt(email.crm_contact_id, 10));
+      const activities = await fetchActivities(crmProvider, creds, email.crm_contact_id);
 
       // Find activities that happened AFTER our email was sent
       const sentAt = new Date(email.sent_at).getTime();
@@ -78,6 +90,15 @@ async function analyzeResponses(userId) {
         .filter(t => t.length > 10);
 
       if (activityTexts.length === 0) continue;
+
+      // A genuine reply/activity is real prospect-side signal — record it as the
+      // opportunity's real last activity (only advancing forward, never backward).
+      if (email.opp_id) {
+        const latestActivityDate = new Date(Math.max(...recentActivities.map(a => new Date(a.dueDate || 0).getTime())));
+        if (!isNaN(latestActivityDate.getTime())) {
+          await db.opportunities.update(email.opp_id, { last_activity_at: latestActivityDate.toISOString() });
+        }
+      }
 
       const analysis = await analyzeWithClaude(email, activityTexts);
       report.analyzed++;
@@ -96,6 +117,14 @@ async function analyzeResponses(userId) {
           sentiment: analysis.sentiment,
           action: analysis.suggestedAction,
           newStatus: analysis.suggestedStatus,
+        });
+      } else if (email.opp_id && analysis.sentiment === 'negative') {
+        // Negative signal, but Claude wasn't confident enough to call the deal lost —
+        // stop suggesting reactivation for a while rather than nagging on a cold trail,
+        // without auto-declaring the deal dead (that stays a human call).
+        await db.opportunities.update(email.opp_id, {
+          planned_followup_date: new Date(Date.now() + 90 * DAY_MS).toISOString(),
+          planned_followup_reason: 'negative_sentiment',
         });
       }
 
@@ -166,6 +195,12 @@ async function analyzeResponses(userId) {
       try {
         const content = typeof activity.content === 'string' ? JSON.parse(activity.content) : (activity.content || {});
 
+        // Any LinkedIn activity (accepted connection or reply) is genuine prospect-side
+        // signal — same last_activity_at treatment as email replies above.
+        if (activity.opp_id && activity.created_at) {
+          await db.opportunities.update(activity.opp_id, { last_activity_at: new Date(activity.created_at).toISOString() });
+        }
+
         if (activity.type === 'linkedin_connect_accepted') {
           // Connection accepted → positive signal
           report.analyzed++;
@@ -195,6 +230,11 @@ async function analyzeResponses(userId) {
 
           if (activity.opp_id && analysis.suggestedStatus) {
             await db.opportunities.update(activity.opp_id, { status: analysis.suggestedStatus });
+          } else if (activity.opp_id && analysis.sentiment === 'negative') {
+            await db.opportunities.update(activity.opp_id, {
+              planned_followup_date: new Date(Date.now() + 90 * DAY_MS).toISOString(),
+              planned_followup_reason: 'negative_sentiment',
+            });
           }
 
           report.actions.push({
