@@ -898,6 +898,10 @@
   "signals": {
     "title": "Signaux",
     "subtitle": "Détectez les signaux d'achat et trouvez les bons prospects au bon moment",
+    "howTitle": "Comment ça marche",
+    "howStep1": "Chaque matin, baakalai surveille le web selon vos configurations (levées de fonds, recrutements, changements de direction…) et garde un œil sur les comptes de votre CRM.",
+    "howStep2": "Chaque signal détecté arrive dans ce fil avec sa source et son type — l'onglet Configuration règle ce qui est surveillé, et « Lancer le scan » force une vérification immédiate.",
+    "howStep3": "Un clic suffit pour agir : ajouter au CRM, envoyer l'email proposé, créer une séquence, ou ignorer. Rien ne part sans votre validation.",
     "scan": "🔍 Lancer le scan",
     "scanning": "Scan...",
     "scanDone": "Scan terminé",

@@ -21,12 +21,22 @@ const SIGNAL_COLORS = {
   product_launch: '#EA580C', expansion: '#0D9488', tech_adoption: '#6D28D9',
 };
 
+const HOWTO_KEY = 'bakal_signals_howto';
+
 export default function SignalsPage() {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
 
   const [activeTab, setActiveTab] = useState('feed');
+  // « Comment ça marche » : fermable définitivement (même patron que la file de réactivation)
+  const [showHowTo, setShowHowTo] = useState(() => {
+    try { return !localStorage.getItem(HOWTO_KEY); } catch { return true; }
+  });
+  const dismissHowTo = () => {
+    setShowHowTo(false);
+    try { localStorage.setItem(HOWTO_KEY, '1'); } catch { /* ignore */ }
+  };
   const [signals, setSignals] = useState([]);
   const [counts, setCounts] = useState({});
   const [configs, setConfigs] = useState([]);
@@ -217,6 +227,32 @@ export default function SignalsPage() {
           </button>
         ))}
       </div>
+
+      {activeTab === 'feed' && showHowTo && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-body" style={{ padding: '14px 18px', position: 'relative' }}>
+            <button
+              className="btn btn-ghost"
+              style={{ position: 'absolute', top: 8, right: 8, fontSize: 12, padding: '2px 8px' }}
+              onClick={dismissHowTo}
+              aria-label={t('common.close')}
+            >
+              ×
+            </button>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('signals.howTitle')}</div>
+            {[t('signals.howStep1'), t('signals.howStep2'), t('signals.howStep3')].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{
+                  flexShrink: 0, width: 18, height: 18, borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                  background: 'var(--accent-glow)', color: 'var(--accent)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>{i + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
