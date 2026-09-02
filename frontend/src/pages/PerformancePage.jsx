@@ -16,7 +16,7 @@ export default function PerformancePage() {
   const { lang } = useI18n();
   const en = lang === 'en';
   const navigate = useNavigate();
-  const openCreator = useCallback(() => navigate('/chat'), [navigate]);
+  const openCreator = useCallback(() => navigate('/campaigns', { state: { openAssistant: true } }), [navigate]);
 
   const campaignsList = useMemo(() => Object.values(campaigns), [campaigns]);
   const isEmpty = campaignsList.length === 0;
