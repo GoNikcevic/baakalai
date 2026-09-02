@@ -25,7 +25,14 @@
     "dealsToReactivate": "Deals à relancer",
     "clientsToUpsell": "Clients à upseller",
     "churnRisk": "Clients à risque",
-    "dataQuality": "Data Quality"
+    "dataQuality": "Data Quality",
+    "sectionDeals": "Deals",
+    "sectionClients": "Clients",
+    "sectionCrm": "CRM",
+    "globalView": "Vue globale",
+    "toReactivate": "À relancer",
+    "toUpsell": "À upseller",
+    "atRisk": "À risque"
   },
   "auth": {
     "login": "Se connecter",

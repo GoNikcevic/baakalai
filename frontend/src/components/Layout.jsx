@@ -17,19 +17,50 @@ import HelpWidget from './HelpWidget';
 
 /* ─── Sidebar nav items (keys reference i18n nav.* keys) ─── */
 // adminOnly: only visible to admins and solo users
+// section + children: collapsible group. Open state persisted per section id;
+// the section holding the active route is forced open on navigation.
 const NAV_ITEMS = [
   { i18nKey: 'nav.assistant',           to: '/chat',                icon: 'chat' },
   { i18nKey: 'nav.dashboard',           to: '/dashboard',           icon: 'dashboard',  end: true },
-  { i18nKey: 'nav.dealsToReactivate',   to: '/deals-to-reactivate', icon: 'refinement' },
-  { i18nKey: 'nav.clientsToUpsell',     to: '/clients-to-upsell',   icon: 'upsell' },
-  { i18nKey: 'nav.churnRisk',           to: '/churn-risk',          icon: 'churn' },
-  { i18nKey: 'nav.dataQuality',         to: '/data-quality',        icon: 'crm' },
-  { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
+  {
+    i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'refinement',
+    children: [
+      { i18nKey: 'nav.toReactivate',    to: '/deals-to-reactivate', icon: 'refinement' },
+      { i18nKey: 'nav.campaigns',       to: '/campaigns',           icon: 'campaigns' },
+    ],
+  },
+  {
+    i18nKey: 'nav.sectionClients', section: 'clients', icon: 'clients',
+    children: [
+      { i18nKey: 'nav.globalView',      to: '/clients',             icon: 'clients' },
+      { i18nKey: 'nav.toUpsell',        to: '/clients-to-upsell',   icon: 'upsell' },
+      { i18nKey: 'nav.atRisk',          to: '/churn-risk',          icon: 'churn' },
+    ],
+  },
+  {
+    i18nKey: 'nav.sectionCrm', section: 'crm', icon: 'crm',
+    children: [
+      { i18nKey: 'nav.dataQuality',     to: '/data-quality',        icon: 'crm' },
+      { i18nKey: 'nav.analytics',       to: '/analytics',           icon: 'reports', adminOnly: true },
+    ],
+  },
   { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture' },
-  { i18nKey: 'nav.analytics',           to: '/analytics',           icon: 'crm', adminOnly: true },
   { i18nKey: 'nav.performance',         to: '/performance',         icon: 'dashboard', adminOnly: true },
   { i18nKey: 'nav.settings',            to: '/settings',            icon: 'settings', adminOnly: true },
 ];
+
+const NAV_SECTIONS_STORAGE_KEY = 'nav_open_sections';
+
+// '/clients' must not match '/clients-to-upsell' — exact segment boundary only.
+function routeMatches(pathname, to) {
+  return pathname === to || pathname.startsWith(to + '/');
+}
+
+function isVisibleToUser(item) {
+  if (!item.adminOnly) return true;
+  const u = getUser();
+  return !u?.teamRole || u.teamRole === 'admin';
+}
 
 /* ─── Mobile bottom nav (subset) ─── */
 const MOBILE_NAV = [
@@ -143,6 +174,24 @@ export default function Layout() {
   const [showCreatorModal, setShowCreatorModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Collapsible nav sections — all open by default, state persisted per section.
+  const [openSections, setOpenSections] = useState(() => {
+    const defaults = { deals: true, clients: true, crm: true };
+    try {
+      return { ...defaults, ...JSON.parse(localStorage.getItem(NAV_SECTIONS_STORAGE_KEY) || '{}') };
+    } catch {
+      return defaults;
+    }
+  });
+
+  function toggleSection(id) {
+    setOpenSections(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem(NAV_SECTIONS_STORAGE_KEY, JSON.stringify(next)); } catch { /* quota/private mode */ }
+      return next;
+    });
+  }
+
   // Wire socket events to app state + notifications
   useSocketEvents();
 
@@ -163,6 +212,15 @@ export default function Layout() {
   useEffect(() => {
     request('/billing').then(d => setBillingLocked(!!d.locked)).catch(() => {});
   }, []);
+
+  // The section holding the active page always ends up open (without closing others).
+  useEffect(() => {
+    const owner = NAV_ITEMS.find(item =>
+      item.children?.some(child => routeMatches(location.pathname, child.to)));
+    if (owner && !openSections[owner.section]) {
+      setOpenSections(prev => ({ ...prev, [owner.section]: true }));
+    }
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="app-shell">
@@ -210,23 +268,78 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          {NAV_ITEMS.filter(item => {
-            if (!item.adminOnly) return true;
-            const u = getUser();
-            return !u?.teamRole || u.teamRole === 'admin';
-          }).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end || false}
-              className={({ isActive }) =>
-                'nav-item' + (isActive ? ' active' : '')
-              }
-            >
-              <NavIcon name={item.icon} />
-              <span className="nav-label">{t(item.i18nKey)}</span>
-            </NavLink>
-          ))}
+          {NAV_ITEMS.filter(isVisibleToUser).map((item) => {
+            if (!item.children) {
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end || false}
+                  className={({ isActive }) =>
+                    'nav-item' + (isActive ? ' active' : '')
+                  }
+                >
+                  <NavIcon name={item.icon} />
+                  <span className="nav-label">{t(item.i18nKey)}</span>
+                </NavLink>
+              );
+            }
+
+            const children = item.children.filter(isVisibleToUser);
+            if (!children.length) return null;
+            const isOpen = !!openSections[item.section];
+            const childActive = children.some(c => routeMatches(location.pathname, c.to));
+
+            // Collapsed sidebar: no room for headers — surface the children as icons.
+            if (sidebarCollapsed) {
+              return children.map(child => (
+                <NavLink
+                  key={child.to}
+                  to={child.to}
+                  className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+                >
+                  <NavIcon name={child.icon} />
+                  <span className="nav-label">{t(child.i18nKey)}</span>
+                </NavLink>
+              ));
+            }
+
+            return (
+              <div key={item.section}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection(item.section)}
+                  className={'nav-item' + (!isOpen && childActive ? ' active' : '')}
+                  aria-expanded={isOpen}
+                  style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', font: 'inherit', textAlign: 'left' }}
+                >
+                  <NavIcon name={item.icon} />
+                  <span className="nav-label">{t(item.i18nKey)}</span>
+                  <svg
+                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    style={{
+                      marginLeft: 'auto', flexShrink: 0, opacity: 0.6,
+                      transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease',
+                    }}
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+                {isOpen && children.map(child => (
+                  <NavLink
+                    key={child.to}
+                    to={child.to}
+                    className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
+                    style={{ paddingLeft: 34 }}
+                  >
+                    <NavIcon name={child.icon} />
+                    <span className="nav-label">{t(child.i18nKey)}</span>
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Sidebar collapse toggle */}
