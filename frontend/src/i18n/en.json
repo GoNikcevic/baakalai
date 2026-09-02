@@ -960,11 +960,13 @@
   },
   "dealsToReactivate": {
     "title": "Deals to reactivate",
-    "subtitle": "Stagnant deals, or overdue on their planned follow-up date — the email is drafted the moment you open it."
+    "subtitle": "Deals with no CRM activity for 14 days, or past their planned follow-up date.",
+    "howStep1": "baakalai detects deals with no logged exchange (note, email, call) for 14 days — or whose planned follow-up date has arrived."
   },
   "upsell": {
     "title": "Clients to upsell",
-    "subtitle": "Clients ready for an upsell based on their current offers and engagement signals — the email is drafted the moment you open it."
+    "subtitle": "Won clients with upsell potential — uncovered offers, tenure, engagement signals.",
+    "howStep1": "baakalai spots won clients with upsell potential: offers they don't have yet, tenure, engagement signals."
   },
   "dataQuality": {
     "title": "Data Quality",
@@ -1093,7 +1095,13 @@
     "sent": "Sent",
     "generating": "Writing the email...",
     "generatingHint": "This takes a few seconds — please don't leave this page.",
-    "crmHygieneBanner": "💡 Log your exchanges with these contacts directly in your CRM (or as a note) — Baakalai relies on that to know automatically whether and when to follow up.",
+    "crmHygieneBanner": "📝 Your CRM notes drive this list: every logged exchange (call, email, meeting) resets the activity clock — the contact leaves the queue and won't be chased by mistake. With no note for 14 days, they come back.",
+    "howTitle": "How it works",
+    "howStep2": "\"View email\" drafts a personalized email from your CRM data — nothing is sent without your approval.",
+    "howStep3": "\"Postpone\" sets the next follow-up date: the contact leaves the queue and comes back that day.",
+    "noCandidatesNoCrm": "Connect your CRM so baakalai can read your deals and detect which ones to reactivate.",
+    "connectCrmCta": "Connect my CRM",
+    "noCandidatesAllClear": "All caught up ✓ Contacts with no activity for 14 days, or reaching their follow-up date, will show up here.",
     "tabPending": "Pending",
     "tabHistory": "History",
     "historyEmpty": "No history yet.",

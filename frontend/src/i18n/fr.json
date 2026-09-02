@@ -960,11 +960,13 @@
   },
   "dealsToReactivate": {
     "title": "Deals à relancer",
-    "subtitle": "Deals stagnants ou en retard sur leur date de relance — l'email est rédigé au moment où vous l'ouvrez."
+    "subtitle": "Deals sans aucune activité CRM depuis 14 jours, ou dont la date de relance est dépassée.",
+    "howStep1": "baakalai détecte les deals restés sans échange (note, email, appel) depuis 14 jours — ou dont la date de relance prévue est arrivée."
   },
   "upsell": {
     "title": "Clients à upseller",
-    "subtitle": "Clients prêts pour un upsell selon leurs offres actuelles et signaux d'engagement — l'email est rédigé au moment où vous l'ouvrez."
+    "subtitle": "Clients gagnés avec un potentiel d'upsell — offres non couvertes, ancienneté, signaux d'engagement.",
+    "howStep1": "baakalai repère vos clients gagnés avec un potentiel d'upsell : offres qu'ils n'ont pas encore, ancienneté, signaux d'engagement."
   },
   "dataQuality": {
     "title": "Data Quality",
@@ -1093,7 +1095,13 @@
     "sent": "Envoyé",
     "generating": "Rédaction de l'email en cours...",
     "generatingHint": "Merci de patienter quelques secondes, ne quittez pas cette page.",
-    "crmHygieneBanner": "💡 Pensez à noter vos échanges avec ces contacts directement dans votre CRM (ou en note) — Baakalai s'appuie dessus pour savoir automatiquement s'il faut relancer, et quand.",
+    "crmHygieneBanner": "📝 Vos notes CRM pilotent cette liste : chaque échange noté (appel, email, rendez-vous) remet le compteur d'activité à zéro — le contact sort de la file et ne sera pas relancé à tort. Sans note depuis 14 jours, il y revient.",
+    "howTitle": "Comment ça marche",
+    "howStep2": "« Voir le mail » rédige un brouillon personnalisé à partir de votre CRM — rien ne part sans votre validation.",
+    "howStep3": "« Reporter » fixe la prochaine date de relance : le contact disparaît de la file et reviendra ce jour-là.",
+    "noCandidatesNoCrm": "Connectez votre CRM pour que baakalai lise vos deals et détecte ceux à relancer.",
+    "connectCrmCta": "Connecter mon CRM",
+    "noCandidatesAllClear": "Tout est à jour ✓ Les contacts sans activité depuis 14 jours, ou arrivés à leur date de relance, apparaîtront ici.",
     "tabPending": "En attente",
     "tabHistory": "Historique",
     "historyEmpty": "Aucun historique pour l'instant.",
