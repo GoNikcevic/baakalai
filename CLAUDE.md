@@ -67,9 +67,10 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 | Env | URL | DB (Supabase) | Branch |
 |-----|-----|---------------|--------|
 | **Production** | app.baakal.ai | `wbxmdchrsceaibhjtwxl` | main |
-| **Staging** | baakal-staging.up.railway.app | `eomzkghixlgtnadsgfuc` | main |
+| **Staging** | baakal-staging.up.railway.app | `eomzkghixlgtnadsgfuc` | staging |
 
-- Railway auto-deploys on push to `main`
+- Railway auto-deploys: `main` → production, `staging` → staging (same service, two environments)
+- Workflow (depuis 2026-09-02): push sur `staging` d'abord → validation Goran → push sur `main`
 - Staging has `ORCHESTRATOR_ENABLED=false` (no agent crons)
 - Never share `DATABASE_URL`, `JWT_SECRET`, or `ENCRYPTION_SECRET` between envs
 
