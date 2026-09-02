@@ -92,6 +92,40 @@ async function runMemoryAgent() {
     report.errors.push({ step: 'decay', error: err.message });
   }
 
+  // ── Step 2c: Feedback loops (phase 2 audit mémoire 02/09) ──
+  // Les résultats réels nourrissent la mémoire : verdicts churn → poids
+  // sectoriels, réactivations attribuées → patterns tactiques par tenant,
+  // signaux registres → corrélation churn. Chaque boucle est best-effort.
+  report.feedback = { sectorWeights: 0, reactivationPatterns: 0, registryPattern: false };
+  try {
+    const { recalibrateSectorWeights, learnFromReactivations, learnFromRegistrySignals } = require('./memory-feedback');
+
+    const weights = await recalibrateSectorWeights();
+    report.feedback.sectorWeights = weights.adjusted.length;
+
+    // Réactivations : par utilisateur ayant au moins un deal réactivé sur 90 j.
+    const reactivators = await db.query(
+      `SELECT DISTINCT user_id FROM opportunities
+       WHERE reactivated_at > now() - interval '90 days' AND reactivated_from_email_id IS NOT NULL`
+    );
+    for (const { user_id } of reactivators.rows) {
+      try {
+        const team = await db.teams.getByUser(user_id).catch(() => null);
+        const tenant = team?.id ? { teamId: team.id } : { userId: user_id };
+        const created = await learnFromReactivations(user_id, tenant);
+        if (created) report.feedback.reactivationPatterns++;
+      } catch (err) {
+        logger.warn('memory-agent', `Reactivation feedback failed for ${user_id}: ${err.message}`);
+      }
+    }
+
+    report.feedback.registryPattern = !!(await learnFromRegistrySignals());
+    logger.info('memory-agent',
+      `Feedback: ${report.feedback.sectorWeights} poids ajustés, ${report.feedback.reactivationPatterns} patterns réactivation, registre: ${report.feedback.registryPattern}`);
+  } catch (err) {
+    report.errors.push({ step: 'feedback', error: err.message });
+  }
+
   // ── Step 3: Template generation ──
   // Only generate if we have high-performing campaigns not yet templated
   try {
