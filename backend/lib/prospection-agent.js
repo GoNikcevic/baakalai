@@ -80,30 +80,12 @@ async function runProspectionAgent() {
     logger.error('prospection-agent', `Deliverability failed: ${err.message}`);
   }
 
-  // ── Step 4: Signaux sur les comptes CRM (P4 recentrage, 23/08) ──
-  // Le cron ne prospecte plus de nouvelles sociétés par secteur/mots-clés :
-  // il surveille l'actu des sociétés déjà en CRM (rotation hebdo, signaux
-  // rattachés à l'opportunité → contact/email déjà connus). Le scan par
-  // config reste accessible en manuel (POST /api/signals/scan).
-  try {
-    const { runCrmWatch } = require('./agents/signal-agent');
-    const users = await db.query(
-      `SELECT DISTINCT user_id FROM opportunities WHERE company IS NOT NULL AND TRIM(company) <> ''`
-    );
-    let totalSignals = 0;
-    for (const { user_id } of users.rows) {
-      try {
-        const signalReport = await runCrmWatch(user_id);
-        totalSignals += signalReport.detected;
-      } catch (err) {
-        logger.warn('prospection-agent', `CRM watch failed for ${user_id}: ${err.message}`);
-      }
-    }
-    report.signals = totalSignals;
-    if (totalSignals > 0) logger.info('prospection-agent', `CRM watch: ${totalSignals} signals detected`);
-  } catch (err) {
-    report.errors.push({ step: 'signals', error: err.message });
-  }
+  // ── Step 4 (retiré le 02/09) : la veille des comptes CRM est passée du
+  // batch unique de 8 h au scheduler continu (lib/signal-scheduler.js, cron
+  // toutes les 30 min, budget Brave quotidien) — configs actives incluses,
+  // qu'aucun cron ne scannait. La garder ici aurait doublé la consommation
+  // de quota pour les mêmes sociétés. runCrmWatch reste exporté pour le
+  // scan manuel (POST /api/signals/scan).
 
   // ── Step 5: LinkedIn outreach (for users with LinkedIn cookie) ──
   try {

@@ -41,6 +41,7 @@ const EXPECTED_JOBS = {
   'lifecycle-emails': 26,
   'memory-agent': 8 * 24,
   'churn-signals': 180,
+  'signal-scheduler': 3, // tick 30 min — 3h de retard = vraiment mort
   'crm-digest': 8 * 24,
   'reporting-agent': 8 * 24,
 };

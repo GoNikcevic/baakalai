@@ -134,6 +134,17 @@ async function handleDealEvent(userId, action, current, previous) {
     const dealStatus = current.status; // open, won, lost
     const newStatus = dealStatus === 'won' ? 'won' : dealStatus === 'lost' ? 'lost' : null;
 
+    // Un deal qui bouge = bonne raison de re-vérifier l'actu de la société :
+    // boost dans la file du signal-scheduler (scan au prochain tick <= 30 min,
+    // pas d'appel Brave immédiat — le budget quotidien reste maître).
+    try {
+      const oppCompany = await db.query('SELECT company FROM opportunities WHERE id = $1', [opp.id]);
+      if (oppCompany.rows[0]?.company) {
+        const { boostCompany } = require('../lib/signal-scheduler');
+        await boostCompany(userId, oppCompany.rows[0].company);
+      }
+    } catch { /* boost best-effort */ }
+
     if (newStatus && newStatus !== opp.status) {
       await db.opportunities.update(opp.id, { status: newStatus });
       logger.info('webhook-pipedrive', `Deal ${current.id}: ${opp.status} → ${newStatus}`);

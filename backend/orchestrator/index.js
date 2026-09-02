@@ -189,6 +189,18 @@ function start() {
   // Agent 3: Memory Agent — Sunday 10:00 AM
   // Consolidation + pruning + templates (when needed)
   // ═══════════════════════════════════════════════════
+  // File tournante des signaux : toutes les 30 min, cibles les plus dues
+  // (configs + sociétés CRM), sous budget Brave quotidien. Remplace le
+  // passage crm-watch du batch de 8 h (retiré de prospection-agent).
+  schedule('signal-scheduler', '*/30 * * * *', async () => {
+    try {
+      const { runTick } = require('../lib/signal-scheduler');
+      await runTick();
+    } catch (err) {
+      logger.error('orchestrator', 'Signal scheduler tick failed: ' + err.message);
+    }
+  });
+
   schedule('memory-agent', '0 10 * * 0', async () => {
     console.log('[agent:memory] Starting...');
     try {
