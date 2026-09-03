@@ -750,10 +750,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-      </div>
 
-      {/* Right column */}
-      <div>
       {/* Lemlist Sync */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -934,7 +931,10 @@ export default function SettingsPage() {
 
       {/* Email sortant */}
       <EmailAccountSettings />
+      </div>
 
+      {/* Right column */}
+      <div>
       {/* Preferences */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">

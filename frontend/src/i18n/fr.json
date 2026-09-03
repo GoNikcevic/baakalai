@@ -329,6 +329,7 @@
     "monSat": "Lun-Sam",
     "everyday": "Tous les jours",
     "languageTitle": "Langue",
+    "language": "Langue",
     "languageDesc": "Langue de l'interface",
     "writebackTitle": "Écriture dans ton CRM",
     "writebackDesc": "Autorise baakalai à déposer ses analyses (risque de churn et ses facteurs, deals à relancer) en note sur tes contacts, directement dans ton CRM. Désactivé par défaut — rien n'est écrit sans ton accord. Une note n'est réécrite que si l'analyse a changé.",

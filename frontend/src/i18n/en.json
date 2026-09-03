@@ -329,6 +329,7 @@
     "monSat": "Mon-Sat",
     "everyday": "Every day",
     "languageTitle": "Language",
+    "language": "Language",
     "languageDesc": "Interface language",
     "writebackTitle": "Write to your CRM",
     "writebackDesc": "Allow baakalai to leave its analyses (churn risk with factors, deals due for follow-up) as notes on your contacts, directly in your CRM. Off by default — nothing is written without your consent. A note is only rewritten when the analysis has changed.",
