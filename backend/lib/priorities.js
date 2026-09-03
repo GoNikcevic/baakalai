@@ -12,6 +12,7 @@
  * | Upsell (Upsell Detector)      | 20 + 0.7×score brut (plafonné à 88)       |
  * | Risque churn (client won)     | churn_score tel quel (seuil d'entrée 60)  |
  * | Signal externe (status new)   | 0.8×relevance_score (seuil d'entrée 60)   |
+ * | Violation SLA (opt-in admin)  | 70 + 2×jours de retard (plafonné à 90)   |
  *
  * Logique du barème : un email déjà rédigé qui n'attend qu'un clic vaut plus
  * que fouiller un signal externe incertain, mais moins qu'un deal urgent ; le
@@ -160,6 +161,25 @@ async function buildTodayList(userId) {
       sourceUrl: s.source_url || null,
     });
   }
+  // 6. Violations SLA (seuils admin, opt-in — lib/sla.js, SQL pur sans IA).
+  // Un SLA est une promesse explicite de l'admin : sa violation prime sur les
+  // suggestions heuristiques (base 70) et grimpe avec le retard, sans jamais
+  // écraser un churn critique (plafond 90).
+  const { findSlaBreaches } = require('./sla');
+  const slaBreaches = await findSlaBreaches(userId);
+  for (const b of slaBreaches) {
+    items.push({
+      type: 'sla_breach',
+      score: Math.min(90, 70 + 2 * b.days),
+      contactName: b.name,
+      contactEmail: b.email,
+      company: b.company,
+      dealValue: b.dealValue,
+      opportunityId: b.id,
+      slaKind: b.kind,
+      daysOverdue: b.days,
+    });
+  }
 
   // Dédup par contact : garde le score max, trace les autres sources
   const byContact = new Map();
@@ -187,6 +207,7 @@ async function buildTodayList(userId) {
       upsell: upsell?.result?.opportunities?.length || 0,
       churnRisks: churn.rows.length,
       signals: signals.rows.length,
+      slaBreaches: slaBreaches.length,
       total: deduped.length,
     },
     pendingEmailIds: pending.rows.map((e) => e.id),

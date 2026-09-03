@@ -28,8 +28,21 @@ const TYPE_LABELS = {
   upsell: { fr: 'Upsell', en: 'Upsell', color: '#22c55e' },
   churn_risk: { fr: 'Risque churn', en: 'Churn risk', color: '#ef4444' },
   signal: { fr: 'Signal', en: 'Signal', color: '#3b82f6' },
+  sla_breach: { fr: 'SLA dépassé', en: 'SLA breach', color: '#dc2626' },
 };
 
+// Détail lisible d'une violation SLA — le digest est le seul rendu backend
+// bilingue, les items ne portent que slaKind/daysOverdue (le front traduit).
+function slaDetail(item, isEN) {
+  const d = item.daysOverdue;
+  if (item.slaKind === 'new_lead') {
+    return isEN ? `New lead never contacted for ${d} days` : `Lead entrant jamais contacté depuis ${d} jours`;
+  }
+  if (item.slaKind === 'followup_overdue') {
+    return isEN ? `Planned follow-up overdue by ${d} days` : `Relance prévue dépassée de ${d} jours`;
+  }
+  return isEN ? `Open deal with no activity for ${d} days` : `Deal ouvert sans activité depuis ${d} jours`;
+}
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -167,6 +180,7 @@ function buildDigestHTML(user, list, lang, dqTrend = null) {
     { label: 'Upsells', value: c.upsell, color: '#22c55e' },
     { label: isEN ? 'Churn risks' : 'Risques churn', value: c.churnRisks, color: '#ef4444' },
     { label: isEN ? 'Signals' : 'Signaux', value: c.signals, color: '#3b82f6' },
+    { label: isEN ? 'SLA breaches' : 'SLA dépassés', value: c.slaBreaches, color: '#dc2626' },
   ].filter((chip) => chip.value > 0);
 
   const chipsHTML = chips.map((chip) => `
@@ -180,7 +194,9 @@ function buildDigestHTML(user, list, lang, dqTrend = null) {
     const meta = TYPE_LABELS[item.type] || TYPE_LABELS.deal_stagnant;
     const who = [item.contactName || item.contactEmail || item.title, item.company]
       .filter(Boolean).join(' @ ');
-    const detail = item.type === 'nurture_approval' ? item.subject : (item.reason || item.title || '');
+    const detail = item.type === 'nurture_approval' ? item.subject
+      : item.type === 'sla_breach' ? slaDetail(item, isEN)
+      : (item.reason || item.title || '');
     return `
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;white-space:nowrap;">

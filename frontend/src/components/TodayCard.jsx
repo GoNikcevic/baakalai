@@ -16,6 +16,14 @@ const TYPE_META = {
   upsell: { icon: '📈', labelKey: 'today.typeUpsell', color: '#22c55e' },
   churn_risk: { icon: '⚠️', labelKey: 'today.typeChurn', color: '#ef4444' },
   signal: { icon: '📡', labelKey: 'today.typeSignal', color: '#3b82f6' },
+  sla_breach: { icon: '⏱️', labelKey: 'today.typeSla', color: '#dc2626' },
+};
+
+// Les items SLA ne portent que slaKind/daysOverdue — la phrase se traduit ici.
+const SLA_REASON_KEYS = {
+  new_lead: 'today.slaReasonNewLead',
+  followup_overdue: 'today.slaReasonFollowup',
+  inactive: 'today.slaReasonInactive',
 };
 
 function scoreColor(score) {
@@ -102,15 +110,19 @@ export default function TodayCard() {
   }, [load]);
 
   const handleChat = useCallback((item) => {
+    const slaReason = item.type === 'sla_breach'
+      ? t(SLA_REASON_KEYS[item.slaKind] || SLA_REASON_KEYS.inactive, { days: item.daysOverdue })
+      : null;
     const params = {
       name: item.contactName || item.contactEmail || '',
       company: item.company || '',
-      reason: item.reason || item.title || '',
+      reason: slaReason || item.reason || item.title || '',
       suggestion: item.suggestion || '',
     };
     const key = item.type === 'churn_risk' ? 'today.chatChurnPrefill'
       : item.type === 'upsell' ? 'today.chatUpsellPrefill'
       : item.type === 'signal' ? 'today.chatSignalPrefill'
+      : item.type === 'sla_breach' ? 'today.chatSlaPrefill'
       : 'today.chatDealPrefill';
     navigate('/chat', { state: { prefillMessage: t(key, params) } });
   }, [navigate, t]);
@@ -213,7 +225,8 @@ export default function TodayCard() {
                       {item.daysWaiting > 0 && <span> · {t('today.waitingDays', { days: item.daysWaiting })}</span>}
                     </>
                   )}
-                  {item.type !== 'nurture_approval' && (item.reason || item.title)}
+                  {item.type === 'sla_breach' && t(SLA_REASON_KEYS[item.slaKind] || SLA_REASON_KEYS.inactive, { days: item.daysOverdue })}
+                  {item.type !== 'nurture_approval' && item.type !== 'sla_breach' && (item.reason || item.title)}
                   {item.suggestion && (
                     <div style={{ color: 'var(--text)', fontStyle: 'italic', marginTop: 2 }}>{item.suggestion}</div>
                   )}
@@ -249,7 +262,7 @@ export default function TodayCard() {
                     </button>
                   </>
                 )}
-                {(item.type === 'deal_stagnant' || item.type === 'upsell' || item.type === 'churn_risk') && (
+                {(item.type === 'deal_stagnant' || item.type === 'upsell' || item.type === 'churn_risk' || item.type === 'sla_breach') && (
                   <button
                     className="btn btn-primary"
                     style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}

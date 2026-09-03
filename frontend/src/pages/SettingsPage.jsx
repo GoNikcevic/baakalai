@@ -1121,6 +1121,9 @@ export default function SettingsPage() {
       {/* Écriture Baakalai → CRM (opt-in) */}
       <CrmWritebackSection t={t} showToast={showToast} lang={lang} />
 
+      {/* SLA de réactivité */}
+      <SlaSection t={t} showToast={showToast} lang={lang} />
+
       {/* Danger Zone */}
       <DeleteAccountSection t={t} showToast={showToast} lang={lang} />
       </div>
@@ -1270,6 +1273,93 @@ function CrmWritebackSection({ t, showToast, lang }) {
           {busy ? '…' : enabled ? t('settings.writebackEnabled') : t('settings.writebackDisabled')}
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ═══ SLA Section ═══ */
+// Seuils de réactivité évalués dans « À traiter aujourd'hui » et le digest du
+// lundi (backend lib/sla.js). Off par défaut : un SLA est une promesse que
+// l'admin déclare. Composant autonome (GET/PATCH propres), comme la section
+// write-back.
+
+function SlaSection({ t, showToast, lang }) {
+  const en = lang === 'en';
+  const [cfg, setCfg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    request('/settings/sla').then(setCfg).catch(() => {});
+  }, []);
+
+  const save = async (patch) => {
+    setBusy(true);
+    try {
+      const d = await request('/settings/sla', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      setCfg(d);
+      if ('enabled' in patch) {
+        showToast({ type: 'success', title: d.enabled ? t('settings.slaOnToast') : t('settings.slaOffToast') });
+      }
+    } catch (err) {
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+    }
+    setBusy(false);
+  };
+
+  if (!cfg) return null;
+
+  const FIELDS = [
+    { key: 'newLeadDays', labelKey: 'settings.slaNewLead', min: 1, max: 30 },
+    { key: 'followupGraceDays', labelKey: 'settings.slaFollowup', min: 0, max: 30 },
+    { key: 'inactiveDays', labelKey: 'settings.slaInactive', min: 7, max: 365 },
+  ];
+
+  return (
+    <div className="card" style={{ marginTop: 24, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            {t('settings.slaTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 560 }}>
+            {t('settings.slaDesc')}
+          </div>
+        </div>
+        <button
+          className={cfg.enabled ? 'btn btn-primary' : 'btn btn-ghost'}
+          onClick={() => save({ enabled: !cfg.enabled })}
+          disabled={busy}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {busy ? '…' : cfg.enabled ? t('settings.slaEnabled') : t('settings.slaDisabled')}
+        </button>
+      </div>
+      {cfg.enabled && (
+        <div style={{ display: 'flex', gap: 20, marginTop: 16, flexWrap: 'wrap' }}>
+          {FIELDS.map((f) => (
+            <label key={f.key} style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {t(f.labelKey)}
+              <input
+                type="number"
+                min={f.min}
+                max={f.max}
+                value={cfg[f.key]}
+                disabled={busy}
+                onChange={(e) => setCfg((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (Number.isInteger(v) && v >= f.min && v <= f.max) save({ [f.key]: v });
+                  else request('/settings/sla').then(setCfg).catch(() => {});
+                }}
+                style={{ width: 90, padding: '6px 10px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--paper)', color: 'var(--text)' }}
+              />
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

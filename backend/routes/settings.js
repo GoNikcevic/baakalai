@@ -446,6 +446,46 @@ router.patch('/crm-writeback', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET/PATCH /api/settings/sla — seuils de réactivité (SLA), évalués dans
+// « À traiter aujourd'hui » et le digest du lundi. Off par défaut : un SLA est
+// une promesse que l'admin déclare, pas une heuristique imposée (lib/sla.js).
+router.get('/sla', async (req, res, next) => {
+  try {
+    const { getSlaConfig } = require('../lib/sla');
+    res.json(await getSlaConfig(req.user.id));
+  } catch (err) { next(err); }
+});
+
+router.patch('/sla', async (req, res, next) => {
+  try {
+    const { getSlaConfig, SLA_BOUNDS } = require('../lib/sla');
+    const patch = {};
+    if ('enabled' in req.body) {
+      if (typeof req.body.enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled must be a boolean' });
+      }
+      patch.enabled = req.body.enabled;
+    }
+    for (const [field, [min, max]] of Object.entries(SLA_BOUNDS)) {
+      if (!(field in req.body)) continue;
+      const v = Number(req.body[field]);
+      if (!Number.isInteger(v) || v < min || v > max) {
+        return res.status(400).json({ error: `${field} must be an integer between ${min} and ${max}` });
+      }
+      patch[field] = v;
+    }
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ error: 'No valid SLA field in body' });
+    }
+    const merged = { ...(await getSlaConfig(req.user.id)), ...patch };
+    await db.query(
+      `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ sla: merged }), req.user.id]
+    );
+    res.json(merged);
+  } catch (err) { next(err); }
+});
+
 // PATCH /api/settings/language — update user's UI language preference
 router.patch('/language', async (req, res, next) => {
   try {
