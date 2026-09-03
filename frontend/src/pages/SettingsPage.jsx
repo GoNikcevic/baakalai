@@ -1155,7 +1155,7 @@ function BillingSection({ t, showToast, lang }) {
       });
       if (d.url) window.location.href = d.url;
     } catch (err) {
-      showToast({ type: 'error', title: t('settings.billingSoon'), message: err.message });
+      showToast(err.message || t('settings.billingSoon'), 'error');
     }
     setBusy(false);
   };
@@ -1166,7 +1166,7 @@ function BillingSection({ t, showToast, lang }) {
       const d = await request('/billing/portal', { method: 'POST' });
       if (d.url) window.location.href = d.url;
     } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
     }
     setBusy(false);
   };
@@ -1243,12 +1243,9 @@ function CrmWritebackSection({ t, showToast, lang }) {
         body: JSON.stringify({ enabled: !enabled }),
       });
       setEnabled(!!d.enabled);
-      showToast({
-        type: 'success',
-        title: d.enabled ? t('settings.writebackOnToast') : t('settings.writebackOffToast'),
-      });
+      showToast(d.enabled ? t('settings.writebackOnToast') : t('settings.writebackOffToast'));
     } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
     }
     setBusy(false);
   };
@@ -1301,10 +1298,10 @@ function SlaSection({ t, showToast, lang }) {
       });
       setCfg(d);
       if ('enabled' in patch) {
-        showToast({ type: 'success', title: d.enabled ? t('settings.slaOnToast') : t('settings.slaOffToast') });
+        showToast(d.enabled ? t('settings.slaOnToast') : t('settings.slaOffToast'));
       }
     } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
     }
     setBusy(false);
   };
