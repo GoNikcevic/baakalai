@@ -260,16 +260,16 @@
     "seeCampaigns": "Voir mes campagnes",
     "insightsTitle": "Insights de vos campagnes",
     "createFromInsights": "Créer une campagne basée sur ces insights",
-    "templateSaas": "Prospection SaaS B2B",
-    "templateSaasDesc": "Séquence email + LinkedIn pour décideurs tech",
+    "templateDormant": "Réactiver mes deals dormants",
+    "templateDormantDesc": "Relance des deals stagnants du CRM, priorisés par valeur",
     "templateMeeting": "Prise de RDV",
     "templateMeetingDesc": "Séquence courte orientée rendez-vous",
     "templateReactivation": "Relance clients existants",
     "templateReactivationDesc": "Réactiver des clients inactifs",
-    "templateRecruiting": "Recrutement",
-    "templateRecruitingDesc": "Approche candidats via LinkedIn + email",
-    "templatePartnership": "Partenariat / Co-marketing",
-    "templatePartnershipDesc": "Proposer une collaboration à des pairs"
+    "templateUpsell": "Upsell clients existants",
+    "templateUpsellDesc": "Proposer une offre complémentaire aux clients actuels",
+    "templateProspection": "Prospection nouvelle cible",
+    "templateProspectionDesc": "Séquence email construite sur votre profil et votre ICP"
   },
   "common": {
     "tagline": "Le système IA qui exploite ton CRM",
