@@ -47,10 +47,12 @@ function formatMarkdown(text) {
   return '<p>' + html + '</p>';
 }
 
+// Réactivation d'abord (hero job du produit) — la création de campagne reste
+// accessible via les boutons d'action du WelcomeScreen, inutile de la dupliquer ici.
 function getDefaultSuggestions(lang) {
   return lang === 'en'
-    ? ['🎯 Create a prospecting campaign', '📡 Scan for buying signals', '🔍 Analyze my CRM health', '📊 Show my campaign performance']
-    : ['🎯 Cr\u00e9er une campagne de prospection', '📡 Scanner les signaux d\'achat', '🔍 Analyser la sant\u00e9 de mon CRM', '📊 Voir les performances de mes campagnes'];
+    ? ['⚡ Reactivate my dormant deals', '📡 Scan for buying signals', '🔍 Analyze my CRM health', '📊 Show my campaign performance']
+    : ['⚡ Relancer mes deals dormants', '📡 Scanner les signaux d\'achat', '🔍 Analyser la santé de mon CRM', '📊 Voir les performances de mes campagnes'];
 }
 
 // Suggestions du tout premier ecran (campaignCount === 0).
@@ -67,13 +69,13 @@ function getOnboardingSuggestions(lang) {
 
 function getReturningSuggestions(lang) {
   return lang === 'en'
-    ? ['🎯 Create a new campaign', '⚡ Activate stagnant deals', '🔍 Scan my CRM health', '📊 Analyze my performance']
-    : ['🎯 Nouvelle campagne', '⚡ Relancer les deals stagnants', '🔍 Scanner la santé de mon CRM', '📊 Analyser mes performances'];
+    ? ['⚡ Activate stagnant deals', '🎯 Create a new campaign', '🔍 Scan my CRM health', '📊 Analyze my performance']
+    : ['⚡ Relancer les deals stagnants', '🎯 Nouvelle campagne', '🔍 Scanner la santé de mon CRM', '📊 Analyser mes performances'];
 }
 
 function getActionPrompts(lang) {
   if (lang === 'en') return {
-    create: 'I want to create a new prospecting campaign. Guide me step by step.',
+    create: 'I want to create a new campaign. Based on my CRM, suggest the best type first (dormant deal reactivation, client re-engagement, upsell, or prospecting), then guide me step by step.',
     refine: 'I want to refine one of my underperforming campaigns. Which ones can I improve?',
     analyze: 'Can you analyze the performance of my active campaigns and give me a diagnostic?',
     setup_profile: 'I just signed up. Help me set up my company profile to personalize my campaigns.',
@@ -81,7 +83,7 @@ function getActionPrompts(lang) {
     create_from_insights: 'You\'ve analyzed my previous campaigns and identified patterns that work. Create a new refined campaign based on these insights and cross-campaign memory. Suggest the best angle, tone and sequence based on what worked.',
   };
   return {
-    create: 'Je veux cr\u00E9er une nouvelle campagne de prospection. Guide-moi \u00E9tape par \u00E9tape.',
+    create: 'Je veux créer une nouvelle campagne. Propose-moi d\'abord le type le plus pertinent selon mon CRM (réactivation de deals dormants, relance clients, upsell ou prospection), puis guide-moi étape par étape.',
     refine: 'Je veux affiner une de mes campagnes existantes qui sous-performe. Quelles campagnes puis-je am\u00E9liorer ?',
     analyze: 'Peux-tu analyser les performances de mes campagnes actives et me donner un diagnostic ?',
     setup_profile: 'Je viens de m\'inscrire. Aide-moi \u00E0 configurer mon profil entreprise pour personnaliser mes campagnes.',
@@ -90,13 +92,17 @@ function getActionPrompts(lang) {
   };
 }
 
+// Templates alignés sur les jobs du produit : réactivation (hero) > relance clients
+// > upsell, prospection en porte d'entrée. Recrutement et partenariat retirés —
+// hors produit (baakalai exploite le CRM, il ne fait ni RH ni co-marketing).
+// La prospection s'appuie sur le profil/ICP de l'utilisateur, pas sur une cible inventée.
 function getCampaignTemplates(t) {
   return [
-    { label: t('chat.templateSaas'), desc: t('chat.templateSaasDesc'), prompt: 'Create a B2B SaaS prospecting campaign. Target: CTO and VP Engineering at startups/scale-ups 50-500 employees. Channel: multi (email + LinkedIn). Tone: professional but casual. Angle: ROI and time saved. Generate the full sequence.' },
-    { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
+    { label: t('chat.templateDormant'), desc: t('chat.templateDormantDesc'), prompt: 'Look at my CRM and create a reactivation campaign for my dormant deals, prioritized by deal value. Warm, personal tone that references the previous conversation — never a cold pitch. 3 touchpoints spaced 5-7 days apart.' },
     { label: t('chat.templateReactivation'), desc: t('chat.templateReactivationDesc'), prompt: 'Create an email reactivation sequence for existing clients who haven\'t been contacted in 3+ months. Warm tone, not salesy. Goal: re-establish contact and propose a check-in. 3 touchpoints spaced 7 days apart.' },
-    { label: t('chat.templateRecruiting'), desc: t('chat.templateRecruitingDesc'), prompt: 'Create a multi-channel sequence (LinkedIn + email) to recruit tech profiles. Start with a personalized LinkedIn invite (max 300 chars), then a LinkedIn message, then an email. Tone: informal, appreciative. No corporate HR tone.' },
-    { label: t('chat.templatePartnership'), desc: t('chat.templatePartnershipDesc'), prompt: 'Create an email sequence to propose a partnership or collaboration with complementary companies. Tone: peer-to-peer, not salesy. Goal: an exploratory call. 3 emails spaced 5 days apart. Highlight mutual benefit.' },
+    { label: t('chat.templateUpsell'), desc: t('chat.templateUpsellDesc'), prompt: 'Create an upsell campaign for my existing clients. Use my CRM data to identify which clients could benefit from an additional product or an upgrade. Peer-to-peer tone, lead with the value for them, no hard sell. 2-3 touchpoints.' },
+    { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
+    { label: t('chat.templateProspection'), desc: t('chat.templateProspectionDesc'), prompt: 'Create a prospecting campaign based on my company profile and ICP. If my profile is incomplete, ask me who I want to target — don\'t invent a target. Channel: email. Professional, direct tone. Generate the full sequence.' },
   ];
 }
 

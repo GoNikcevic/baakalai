@@ -23,6 +23,10 @@ export default function CampaignsList({ onNavigateCampaign }) {
   const [view, setView] = useState('campaigns');
   const [actionLoading, setActionLoading] = useState({});
 
+  // Arriving scrolled down (long campaign list, or a « Nouvelle campagne » CTA from
+  // another page) left the Campagnes/Autopilot/Assistant tabs off-screen above.
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
+
   const [filter, setFilter] = useState('active');
   const [sortByReply, setSortByReply] = useState(false);
   const [sortAsc, setSortAsc] = useState(false);
