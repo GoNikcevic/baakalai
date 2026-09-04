@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api, { request } from '../services/api-client';
-import { useT } from '../i18n';
+import { useT, useI18n } from '../i18n';
 
 const CATEGORY_COLORS = { Objets: '#3b82f6', Corps: '#16a34a', Timing: '#f59e0b', LinkedIn: '#8b5cf6', Secteur: '#ef4444', Cible: '#eab308', 'Séquence': '#0ea5e9', Canal: '#14b8a6' };
 const CONFIDENCE_COLORS = { Haute: '#16a34a', Moyenne: '#f59e0b', Faible: '#9ca3af' };
 
 export default function MemoryExplorerPage() {
   const t = useT();
+  const { lang } = useI18n();
   const navigate = useNavigate();
   const [patterns, setPatterns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -166,6 +167,38 @@ export default function MemoryExplorerPage() {
     }
   }, [undoPattern]);
 
+  // Playbook à la demande — jamais en cron, un clic = une génération.
+  const [playbook, setPlaybook] = useState(null);
+  const [playbookLoading, setPlaybookLoading] = useState(false);
+  const [playbookError, setPlaybookError] = useState(null);
+
+  const generatePlaybook = useCallback(async () => {
+    if (playbookLoading) return;
+    setPlaybookLoading(true);
+    setPlaybookError(null);
+    try {
+      const res = await request('/ai/memory/playbook', {
+        method: 'POST',
+        body: JSON.stringify({ lang }),
+      });
+      setPlaybook(res);
+    } catch (err) {
+      setPlaybookError(err?.message?.includes('no_patterns') ? t('memory.playbookEmpty') : t('memory.playbookError'));
+    }
+    setPlaybookLoading(false);
+  }, [playbookLoading, lang, t]);
+
+  const downloadPlaybook = useCallback(() => {
+    if (!playbook?.markdown) return;
+    const blob = new Blob([playbook.markdown], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'baakalai-playbook-' + (playbook.generatedAt || '').slice(0, 10) + '.md';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [playbook]);
+
   const handleExport = useCallback(() => {
     const headers = ['pattern', 'category', 'confidence', 'sectors', 'date_discovered', 'sample_size'];
     const rows = filtered.map(p => [
@@ -207,8 +240,32 @@ export default function MemoryExplorerPage() {
           <button className="btn btn-ghost" onClick={handleExport} style={{ fontSize: 12, padding: '6px 12px' }}>
             {t('memory.exportCsv')}
           </button>
+          <button
+            className="btn btn-primary"
+            onClick={generatePlaybook}
+            disabled={playbookLoading}
+            style={{ fontSize: 12, padding: '6px 14px' }}
+          >
+            {playbookLoading ? t('memory.playbookGenerating') : t('memory.playbookButton')}
+          </button>
         </div>
       </div>
+
+      {playbookError && (
+        <div style={{
+          margin: '0 0 14px', padding: '10px 14px', borderRadius: 8, fontSize: 13,
+          background: 'var(--danger-bg, #fef2f2)', color: 'var(--danger, #b91c1c)',
+          border: '1px solid var(--danger, #fca5a5)',
+        }}>{playbookError}</div>
+      )}
+
+      {playbook && (
+        <PlaybookModal
+          playbook={playbook}
+          onClose={() => setPlaybook(null)}
+          onDownload={downloadPlaybook}
+        />
+      )}
 
       <div className="memory-stats">
         {[
@@ -502,6 +559,95 @@ export default function MemoryExplorerPage() {
         @keyframes fadeInUp { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
         @keyframes shrinkBar { from { width: 100%; } to { width: 0%; } }
       `}</style>
+    </div>
+  );
+}
+
+/* ═══ Playbook Modal — aperçu + téléchargement du playbook généré ═══ */
+
+function renderMarkdownLine(line, i) {
+  const bold = (text) => {
+    const parts = String(text).split('**');
+    return parts.map((p, j) => (j % 2 === 1 ? <strong key={j}>{p}</strong> : p));
+  };
+  if (line.startsWith('# ')) {
+    return <div key={i} style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 12px' }}>{bold(line.slice(2))}</div>;
+  }
+  if (line.startsWith('## ')) {
+    return <div key={i} style={{ fontSize: 15, fontWeight: 700, margin: '18px 0 8px' }}>{bold(line.slice(3))}</div>;
+  }
+  if (line.startsWith('### ')) {
+    return <div key={i} style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 6px' }}>{bold(line.slice(4))}</div>;
+  }
+  if (line.startsWith('> ')) {
+    return (
+      <div key={i} style={{
+        borderLeft: '3px solid var(--warning, #f59e0b)', padding: '8px 12px', margin: '8px 0',
+        background: 'var(--bg-secondary, #fffbeb)', borderRadius: '0 6px 6px 0', fontSize: 13,
+      }}>{bold(line.slice(2))}</div>
+    );
+  }
+  if (line.startsWith('- ')) {
+    return (
+      <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, lineHeight: 1.6, margin: '3px 0 3px 6px' }}>
+        <span style={{ color: 'var(--purple, #6E57FA)' }}>{'•'}</span>
+        <span>{bold(line.slice(2))}</span>
+      </div>
+    );
+  }
+  if (line.trim() === '') return <div key={i} style={{ height: 6 }} />;
+  return <div key={i} style={{ fontSize: 13, lineHeight: 1.6, margin: '3px 0' }}>{bold(line)}</div>;
+}
+
+function PlaybookModal({ playbook, onClose, onDownload }) {
+  const t = useT();
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--bg-card, white)', borderRadius: 14, width: 'min(760px, 100%)',
+          maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
+        }}
+      >
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '14px 20px', borderBottom: '1px solid var(--border)',
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{t('memory.playbookTitle')}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              {t('memory.playbookMeta', { patterns: playbook.patternsUsed, confirmed: playbook.confirmedPatterns })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={onDownload} style={{ fontSize: 12, padding: '6px 14px' }}>
+              {t('memory.playbookDownload')}
+            </button>
+            <button className="btn btn-ghost" onClick={onClose} style={{ fontSize: 12, padding: '6px 12px' }}>
+              {t('memory.playbookClose')}
+            </button>
+          </div>
+        </div>
+        {playbook.maturity === 'young' && (
+          <div style={{
+            padding: '8px 20px', fontSize: 12, color: 'var(--warning, #b45309)',
+            background: 'var(--bg-secondary, #fffbeb)', borderBottom: '1px solid var(--border)',
+          }}>
+            {t('memory.playbookYoung')}
+          </div>
+        )}
+        <div style={{ overflowY: 'auto', padding: '16px 24px 24px' }}>
+          {(playbook.markdown || '').split('\n').map(renderMarkdownLine)}
+        </div>
+      </div>
     </div>
   );
 }

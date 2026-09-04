@@ -112,6 +112,9 @@ const ACTIONS = {
   // ---- Chat analytique (page Analytics) ----
   analytics_ask:           { tier: 'balanced', thinking: 'disabled' },
 
+  // ---- Playbook à la demande (page Mémoire) ----
+  playbook_generation:     { tier: 'deep' },
+
   // ---- Newsletter ----
   newsletter:              { tier: 'balanced' },
   newsletter_content:      { tier: 'balanced' },

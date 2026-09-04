@@ -588,6 +588,92 @@ router.get('/memory', async (req, res, next) => {
   }
 });
 
+// POST /api/ai/memory/playbook — playbook commercial généré À LA DEMANDE depuis
+// la mémoire du tenant (jamais en cron : décision Goran 03/09, coût tokens).
+// Sources : patterns du tenant (pas le pool mutualisé — c'est SON playbook),
+// agrégats CRM (mêmes requêtes que le chat analytique), profil entreprise.
+router.post('/memory/playbook', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const lang = req.body?.lang === 'en' ? 'en' : 'fr';
+
+    const patterns = await db.query(
+      `SELECT pattern, category, confidence, COALESCE(confirmations, 0) AS confirmations, source
+       FROM memory_patterns
+       WHERE dismissed_at IS NULL
+         AND (user_id = $1 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $1))
+       ORDER BY (confidence = 'Haute') DESC, COALESCE(confirmations, 0) DESC,
+                COALESCE(last_confirmed_at, created_at) DESC
+       LIMIT 40`,
+      [userId]
+    );
+
+    if (patterns.rows.length === 0) {
+      return res.status(422).json({ error: 'no_patterns' });
+    }
+
+    // Maturité honnête : des patterns confirmés par des résultats réels
+    // (réponses, deals ressuscités) valent plus que des patterns d'import.
+    const confirmedCount = patterns.rows.filter(p => p.confirmations > 0).length;
+    const maturity = (confirmedCount >= 5 && patterns.rows.length >= 10) ? 'ok' : 'young';
+
+    const { buildAnalyticsContext } = require('./analytics');
+    const context = await buildAnalyticsContext(userId);
+
+    const [profile, userRow] = await Promise.all([
+      db.profiles.get(userId).catch(() => null),
+      db.query('SELECT name, company FROM users WHERE id = $1', [userId]),
+    ]);
+    const company = profile?.company || userRow.rows[0]?.company || '';
+
+    const patternsText = patterns.rows.map(p =>
+      `- [${p.category} | confiance ${p.confidence}${p.confirmations > 0 ? ` | ${p.confirmations} confirmation(s) réelle(s)` : ''}] ${p.pattern}`
+    ).join('\n');
+
+    const isEN = lang === 'en';
+    const systemPrompt = `Tu rédiges le playbook commercial d'une PME B2B à partir de sa mémoire baakalai (patterns appris) et de ses chiffres CRM réels. Le lecteur est un commercial ou un dirigeant qui veut savoir QUOI faire.
+
+Règles strictes :
+- Tout doit venir des patterns et des chiffres fournis. Aucun conseil générique de vente qui pourrait s'écrire sans ces données. Si une section manque de matière, dis-le en une phrase plutôt que de remplir.
+- Les patterns « confiance Haute » ou avec confirmations réelles portent le document ; les « Faible » vont uniquement en section « À tester ».
+- Format : markdown propre (titres ##, listes -), pas de tableau, pas d'emoji.
+- Concret et directif (« Relancez à J+X », « Priorisez le secteur Y ») avec le chiffre qui justifie à chaque fois.
+${maturity === 'young' ? `- IMPORTANT : la mémoire de ce compte est jeune (${confirmedCount} pattern(s) confirmé(s) par des résultats réels sur ${patterns.rows.length}). L'avertissement en tête du document doit le dire clairement : ce playbook s'affinera avec l'usage.` : ''}
+- Langue : ${isEN ? 'anglais' : 'français'}.
+
+Structure imposée :
+# ${isEN ? 'Sales playbook' : 'Playbook commercial'}${company ? ` — ${company}` : ''}
+${maturity === 'young' ? `> ${isEN ? 'Note on maturity (young memory)' : 'Avertissement maturité (mémoire jeune)'}` : ''}
+## ${isEN ? '1. What works for you' : '1. Ce qui marche chez vous'}
+## ${isEN ? '2. Your reference numbers' : '2. Vos chiffres de référence'}
+## ${isEN ? '3. How to follow up' : '3. Comment relancer'}
+## ${isEN ? '4. Warning signals' : '4. Signaux d’alerte'}
+## ${isEN ? '5. To test next' : '5. À tester ensuite'}
+
+Retourne UNIQUEMENT le markdown du playbook, rien d'autre.`;
+
+    const userContent = `PATTERNS DU COMPTE (${patterns.rows.length}) :
+${patternsText}
+
+CHIFFRES CRM RÉELS :
+${JSON.stringify(context)}`;
+
+    const result = await claude.callClaude(systemPrompt, userContent, 3500, 'playbook_generation');
+    const markdown = (result.raw || '').trim();
+    if (!markdown) return res.status(502).json({ error: 'generation_failed' });
+
+    res.json({
+      markdown,
+      generatedAt: new Date().toISOString(),
+      patternsUsed: patterns.rows.length,
+      confirmedPatterns: confirmedCount,
+      maturity,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/ai/memory/labels — résout des pattern_ids en libellés pour le bandeau
 // « patterns appliqués » des brouillons. Scopé : ne renvoie que les patterns
 // visibles par l'appelant (les siens, ceux de ses équipes, ou le pool partagé).

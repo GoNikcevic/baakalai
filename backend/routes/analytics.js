@@ -1327,3 +1327,6 @@ Règles strictes :
 });
 
 module.exports = router;
+// Réutilisé par le playbook à la demande (routes/ai.js) — mêmes agrégats,
+// même garantie : rien qui ne vienne pas de la base.
+module.exports.buildAnalyticsContext = buildAnalyticsContext;
