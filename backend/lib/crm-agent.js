@@ -399,6 +399,11 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
       else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token, 100); }
       else if (crmProvider === 'odoo') { const odooApi = require('../api/odoo'); deals = await odooApi.getDeals(token, { limit: 500 }); }
 
+      // Étapes de pipeline (migration 092) : carte id → libellé résolue une fois
+      // par sync pour les providers qui ne renvoient qu'un id d'étape.
+      const { getStageLabelMap, extractStage, trackStage } = require('./stage-tracking');
+      const stageLabelMap = await getStageLabelMap(crmProvider, token);
+
       // Prefer the CRM's own close date over "now" — "now" is only a fair proxy for a
       // transition happening in this very sync, never for backfilling an older won/lost deal.
       const safeDateISO = (value) => {
@@ -412,7 +417,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         if (!personId) continue;
 
         const opp = await db.query(
-          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
           [userId, personId]
         );
         if (!opp.rows[0]) continue;
@@ -451,6 +456,16 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
             updates.last_activity_at = crmUpdated.toISOString();
           }
         }
+
+        // Étape de pipeline réelle : transition historisée quand l'id change,
+        // simple rafraîchissement de libellé sinon (renommage côté CRM).
+        try {
+          const stageUpdates = await trackStage(
+            userId, o, extractStage(crmProvider, deal, stageLabelMap),
+            { status: deal.status, source: 'delta_sync' }
+          );
+          Object.assign(updates, stageUpdates);
+        } catch { /* stage tracking best-effort */ }
 
         if (Object.keys(updates).length > 0) {
           // Attribution: if deal moves to 'won' from lost/stagnant, check for reactivation email in last 90 days

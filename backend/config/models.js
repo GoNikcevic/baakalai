@@ -109,6 +109,9 @@ const ACTIONS = {
   // ---- Analyse de synchronisation CRM ----
   sync_analysis:           { tier: 'balanced' },
 
+  // ---- Chat analytique (page Analytics) ----
+  analytics_ask:           { tier: 'balanced', thinking: 'disabled' },
+
   // ---- Newsletter ----
   newsletter:              { tier: 'balanced' },
   newsletter_content:      { tier: 'balanced' },

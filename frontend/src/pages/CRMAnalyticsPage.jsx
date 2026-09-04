@@ -258,6 +258,9 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
+      {/* Question libre sur les données — réponses ancrées sur les agrégats SQL */}
+      {backendAvailable && hasData && <AnalyticsAsk />}
+
       {/* Tab bar — essential tabs + expandable advanced tabs */}
       <div className="crm-tabs">
         {TABS.filter(tab => tab.essential || showAllTabs || activeTab === tab.key).map(tab => (
@@ -338,7 +341,12 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {!loading && activeTab === 'pipeline' && tabData && <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
+      {!loading && activeTab === 'pipeline' && tabData && (
+        <>
+          <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />
+          <StagesBlock />
+        </>
+      )}
       {!loading && activeTab === 'attribution' && tabData && <AttributionSection data={tabData} />}
       {!loading && activeTab === 'scoring' && tabData && <ScoringSection data={tabData} statusLabels={STATUS_LABELS} />}
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
@@ -1332,6 +1340,183 @@ function RenewalsSection({ data }) {
             : `${data.later.count} renouvellement(s) suppl\u00e9mentaire(s) au-del\u00e0 de 90 jours`}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ═══ Real CRM Stages (migration 092) ═══ */
+
+function StageBars({ rows, color, showValue }) {
+  const max = Math.max(1, ...rows.map(r => r.count));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {rows.map((r, i) => (
+        <div key={i}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
+            <span style={{ fontWeight: 600 }}>{r.stage}</span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              {r.count}
+              {showValue && r.value > 0 ? ' · ' + Math.round(r.value).toLocaleString() + ' €' : ''}
+            </span>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 4, width: Math.round((r.count / max) * 100) + '%', background: color }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StagesBlock() {
+  const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [stagesData, setStagesData] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.request('/analytics/stages')
+      .then(d => { if (alive) setStagesData(d); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  if (!stagesData?.available) return null;
+  const hasOpen = (stagesData.stages || []).length > 0;
+  const hasLost = (stagesData.lostByStage || []).length > 0;
+  if (!hasOpen && !hasLost) return null;
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div className="crm-grid-2">
+        {hasOpen && (
+          <div className="card">
+            <div className="card-title">
+              {t('analytics.crmStagesTitle')}
+              <HelpTip text={t('analytics.crmStagesHelp')} />
+            </div>
+            <div className="card-body">
+              <StageBars rows={stagesData.stages} color="var(--purple)" showValue />
+            </div>
+          </div>
+        )}
+        {hasLost && (
+          <div className="card">
+            <div className="card-title">
+              {t('analytics.crmStagesLostTitle')}
+              <HelpTip text={t('analytics.crmStagesLostHelp')} />
+            </div>
+            <div className="card-body">
+              <StageBars rows={stagesData.lostByStage} color="var(--danger)" />
+            </div>
+          </div>
+        )}
+      </div>
+      {stagesData.historySince && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'right' }}>
+          {t('analytics.crmStagesSince', { date: new Date(stagesData.historySince).toLocaleDateString(en ? 'en-US' : 'fr-FR') })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ Analytics Ask — question libre sur les données ═══ */
+
+function AnalyticsAsk() {
+  const t = useT();
+  const { lang } = useI18n();
+  const [question, setQuestion] = useState('');
+  const [history, setHistory] = useState([]);
+  const [asking, setAsking] = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    if (history.length > 0) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [history]);
+
+  const ask = async (raw) => {
+    const q = (raw || '').trim();
+    if (!q || asking) return;
+    setAsking(true);
+    setQuestion('');
+    try {
+      const r = await api.request('/analytics/ask', {
+        method: 'POST',
+        body: JSON.stringify({ question: q, lang }),
+      });
+      setHistory(h => [...h, { q, a: r.answer || t('analytics.askError') }]);
+    } catch {
+      setHistory(h => [...h, { q, a: t('analytics.askError') }]);
+    }
+    setAsking(false);
+  };
+
+  const suggestions = [t('analytics.askSuggest1'), t('analytics.askSuggest2'), t('analytics.askSuggest3')];
+
+  return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-title">
+        {t('analytics.askTitle')}
+        <HelpTip text={t('analytics.askHelp')} />
+      </div>
+      <div className="card-body">
+        {history.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14, maxHeight: 320, overflowY: 'auto' }}>
+            {history.map((item, i) => (
+              <div key={i}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{item.q}</div>
+                <div style={{
+                  fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                  background: 'var(--bg-secondary, #f5f5f4)', borderRadius: 8, padding: '10px 12px',
+                }}>{item.a}</div>
+              </div>
+            ))}
+            <div ref={endRef} />
+          </div>
+        )}
+        {history.length === 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => ask(s)}
+                disabled={asking}
+                style={{
+                  fontSize: 12, padding: '6px 12px', borderRadius: 16, cursor: 'pointer',
+                  border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+                }}
+              >{s}</button>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') ask(question); }}
+            placeholder={t('analytics.askPlaceholder')}
+            disabled={asking}
+            style={{
+              flex: 1, padding: '9px 12px', borderRadius: 8, fontSize: 13,
+              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+            }}
+          />
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 13, padding: '8px 18px' }}
+            onClick={() => ask(question)}
+            disabled={asking || !question.trim()}
+          >
+            {asking ? '…' : t('analytics.askButton')}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+          {t('analytics.askDisclaimer')}
+        </div>
+      </div>
     </div>
   );
 }

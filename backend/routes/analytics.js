@@ -1137,4 +1137,193 @@ router.get('/renewals/csv', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// =============================================
+// GET /api/analytics/stages — étapes de pipeline CRM réelles (migration 092)
+// =============================================
+// Contrairement à /pipeline (statuts canoniques dérivés de `status`), ici ce
+// sont les étapes telles que l'utilisateur les a nommées dans SON CRM,
+// rapatriées par le delta sync. L'historique des transitions ne démarre qu'à
+// l'installation du tracking — le front doit l'afficher honnêtement.
+
+router.get('/stages', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const dist = await db.query(
+      `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
+       FROM opportunities
+       WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won', 'lost')
+       GROUP BY crm_stage`,
+      [userId]
+    );
+
+    if (dist.rows.length === 0) {
+      const any = await db.query(
+        `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_stage IS NOT NULL LIMIT 1`,
+        [userId]
+      );
+      if (!any.rows[0]) return res.json({ available: false });
+    }
+
+    // Ordre naturel du pipeline quand le CRM le fournit (Pipedrive/HubSpot) ;
+    // sinon tri par volume décroissant.
+    let order = null;
+    try {
+      const { resolveCrmForUser } = require('../lib/crm-token');
+      const { getStageLabelMap } = require('../lib/stage-tracking');
+      const { provider, creds } = await resolveCrmForUser(userId);
+      const map = provider ? await getStageLabelMap(provider, creds) : null;
+      if (map && map.size > 0) order = [...map.values()];
+    } catch { /* best-effort */ }
+
+    const stages = dist.rows.sort((a, b) => {
+      if (order) {
+        const ia = order.indexOf(a.stage);
+        const ib = order.indexOf(b.stage);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      }
+      return b.count - a.count;
+    });
+
+    // Où meurent les deals : l'étape d'origine de la DERNIÈRE transition d'un
+    // deal perdu (from_stage) — pas son étape courante, qui est souvent une
+    // étape terminale type « Closed lost » sans valeur diagnostique.
+    const lost = await db.query(
+      `SELECT COALESCE(h.from_stage, o.crm_stage) AS stage, COUNT(*)::int AS count
+       FROM opportunities o
+       LEFT JOIN LATERAL (
+         SELECT from_stage FROM opportunity_stage_history h
+         WHERE h.opportunity_id = o.id AND h.from_stage IS NOT NULL
+         ORDER BY h.changed_at DESC LIMIT 1
+       ) h ON true
+       WHERE o.user_id = $1 AND o.status = 'lost' AND COALESCE(h.from_stage, o.crm_stage) IS NOT NULL
+       GROUP BY 1 ORDER BY count DESC LIMIT 12`,
+      [userId]
+    );
+
+    const transitions = await db.query(
+      `SELECT from_stage AS "from", to_stage AS "to", COUNT(*)::int AS count
+       FROM opportunity_stage_history
+       WHERE user_id = $1 AND from_stage IS NOT NULL
+       GROUP BY from_stage, to_stage ORDER BY count DESC LIMIT 15`,
+      [userId]
+    );
+
+    const since = await db.query(
+      `SELECT MIN(changed_at) AS since FROM opportunity_stage_history WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({
+      available: true,
+      stages,
+      lostByStage: lost.rows,
+      transitions: transitions.rows,
+      historySince: since.rows[0]?.since || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// POST /api/analytics/ask — question libre sur les données du tenant
+// =============================================
+// Un seul appel Claude, ancré sur un paquet d'agrégats SQL calculés à la
+// volée : la réponse ne peut citer que ce que la base contient vraiment.
+
+async function buildAnalyticsContext(userId) {
+  const ctx = {};
+
+  const totals = await db.query(
+    `SELECT
+       COUNT(*)::int AS contacts,
+       COUNT(*) FILTER (WHERE status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals,
+       COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won','lost')), 0)::float AS open_value,
+       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '365 days')::int AS won_365d,
+       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '365 days')::int AS lost_365d,
+       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '90 days')::int AS won_90d,
+       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '90 days')::int AS lost_90d,
+       COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL)::int AS deals_reactivated,
+       ROUND(AVG(EXTRACT(EPOCH FROM (won_date - created_at)) / 86400)
+         FILTER (WHERE status = 'won' AND won_date > created_at))::int AS avg_cycle_days,
+       COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS clients_at_churn_risk,
+       COUNT(*) FILTER (WHERE last_activity_at < now() - interval '30 days'
+         AND status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals_quiet_30d
+     FROM opportunities WHERE user_id = $1`,
+    [userId]
+  );
+  ctx.totals = totals.rows[0];
+  const w = ctx.totals.won_365d, l = ctx.totals.lost_365d;
+  ctx.totals.win_rate_365d = (w + l) > 0 ? Math.round((w / (w + l)) * 100) : null;
+
+  const stages = await db.query(
+    `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
+     FROM opportunities
+     WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won','lost')
+     GROUP BY crm_stage ORDER BY count DESC LIMIT 15`,
+    [userId]
+  );
+  if (stages.rows.length > 0) ctx.open_deals_by_crm_stage = stages.rows;
+
+  const emails = await db.query(
+    `SELECT COUNT(*) FILTER (WHERE status = 'sent' AND created_at > now() - interval '30 days')::int AS sent_30d,
+            COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_approval
+     FROM nurture_emails WHERE user_id = $1`,
+    [userId]
+  );
+  ctx.activation_emails = emails.rows[0];
+
+  try {
+    const { computeForecast } = require('../lib/forecast-engine');
+    const f = await computeForecast(userId);
+    ctx.forecast = { scenarios: f.scenarios, counts: f.counts, context: f.context };
+  } catch { /* forecast optionnel */ }
+
+  try {
+    let teamId = null;
+    const team = await db.teams.getByUser(userId);
+    if (team) teamId = team.id;
+    const patterns = await db.memoryPatterns.listForPrompt(5, teamId, userId);
+    if (patterns.length > 0) {
+      ctx.learned_patterns = patterns.map(p => p.pattern).filter(Boolean);
+    }
+  } catch { /* mémoire optionnelle */ }
+
+  return ctx;
+}
+
+router.post('/ask', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const question = String(req.body?.question || '').trim().slice(0, 500);
+    const lang = req.body?.lang === 'en' ? 'en' : 'fr';
+    if (!question) return res.status(400).json({ error: 'Question required' });
+
+    const context = await buildAnalyticsContext(userId);
+    const claude = require('../api/claude');
+
+    const systemPrompt = `Tu es l'analyste données de baakalai. On te fournit un paquet d'agrégats calculés depuis le CRM de l'utilisateur (JSON) et une question libre.
+
+Règles strictes :
+- Réponds UNIQUEMENT à partir des chiffres fournis. N'invente jamais un chiffre, une tendance ou une cause qui n'est pas dans les données.
+- Si les données ne permettent pas de répondre, dis-le clairement et indique ce qui permettrait d'y répondre (ex. « l'historique des étapes est trop récent »).
+- Réponse courte et concrète : 2 à 6 phrases, les chiffres cités tels quels, une recommandation actionnable quand elle découle des données.
+- Montants en euros (symbole €), pas de jargon.
+- win_rate_365d null = pas assez de deals clos pour un taux fiable.
+- Réponds en ${lang === 'en' ? 'anglais' : 'français'}. Pas de markdown lourd : du texte simple, éventuellement des tirets.`;
+
+    const result = await claude.callClaude(
+      systemPrompt,
+      `Question : ${question}\n\nDonnées du tenant :\n${JSON.stringify(context)}`,
+      1200,
+      'analytics_ask'
+    );
+
+    res.json({ answer: (result.raw || '').trim() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

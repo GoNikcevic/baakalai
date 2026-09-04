@@ -97,6 +97,18 @@ async function getDeal(accessToken, dealId) {
   return hubspotFetch(accessToken, `/crm/v3/objects/deals/${dealId}`);
 }
 
+async function getDealStageLabels(accessToken) {
+  // dealstage renvoie l'id interne d'étape (ex. "appointmentscheduled"), pas le libellé
+  // que l'utilisateur voit — /crm/v3/pipelines/deals donne la correspondance, tous
+  // pipelines confondus (les ids d'étape sont uniques au portail).
+  const data = await hubspotFetch(accessToken, '/crm/v3/pipelines/deals');
+  const map = new Map();
+  for (const p of (data.results || [])) {
+    for (const s of (p.stages || [])) map.set(String(s.id), s.label);
+  }
+  return map;
+}
+
 async function getDeals(accessToken, limit = 100) {
   // hs_is_closed / hs_is_closed_won are default calculated properties on every HubSpot portal —
   // the native won/lost signal, independent of the pipeline's (fully customizable) dealstage IDs.
@@ -340,6 +352,7 @@ module.exports = {
   updateDeal,
   getDeal,
   getDeals,
+  getDealStageLabels,
   listDealsForDiagnostic,
   // Associations
   associateContactToDeal,
