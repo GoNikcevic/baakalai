@@ -93,7 +93,7 @@ export function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew
         threads.map((t) => {
           const active = t.id === currentThreadId ? ' active' : '';
           const date = new Date(t.updated_at || t.created_at);
-          const dateStr = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+          const dateStr = date.toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
           return (
             <div
               key={t.id}
@@ -164,7 +164,7 @@ export function InlineSuggestions({ suggestions, onSend }) {
 export function ChatMessage({ role, content, metadata, animate, isLast, onCreateCampaign, onSendMessage, onActionExecute, onPreview, ActionCardComponent }) {
   const { lang } = useI18n();
   const avatar = role === 'assistant' ? 'b' : '~';
-  const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'fr-FR', { hour: '2-digit', minute: '2-digit' });
 
   let formattedContent = content;
   if (role === 'assistant') {

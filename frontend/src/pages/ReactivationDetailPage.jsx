@@ -9,6 +9,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT } from '../i18n';
+import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
 
 export default function ReactivationDetailPage({ kind, detailRouteBase }) {
   const t = useT();
@@ -106,6 +107,7 @@ export default function ReactivationDetailPage({ kind, detailRouteBase }) {
                 onBlur={(e) => saveField('body', e.target.value)}
               />
             </div>
+            <AppliedPatternsBanner patternIds={email.pattern_ids} />
           </div>
           <div style={{ display: 'flex', gap: 8, padding: '0 20px 20px' }}>
             <button className="btn btn-primary" style={{ fontSize: 12, padding: '8px 16px' }} disabled={sending} onClick={handleSend}>

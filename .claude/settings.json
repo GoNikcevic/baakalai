@@ -9,6 +9,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/i18n-check.js",
+            "timeout": 10,
+            "statusMessage": "i18n check..."
+          }
+        ]
+      }
     ]
   }
 }

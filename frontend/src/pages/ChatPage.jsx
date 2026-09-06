@@ -8,6 +8,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
 import api, { request } from '../services/api-client';
@@ -66,6 +67,7 @@ function ClientResultRow({ client, lang, t }) {
 function GeneralActionCard({ metadata }) {
   const { lang } = useI18n();
   const t = useT();
+  const navigate = useNavigate();
   const en = lang === 'en';
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState([]);
@@ -82,6 +84,24 @@ function GeneralActionCard({ metadata }) {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [metadata]);
+
+  // Création de campagne : l'assistant général ne la fait pas lui-même — bouton
+  // de bascule vers l'assistant de l'onglet Campagnes, brief pré-rempli.
+  if (metadata?.action === 'open_campaign_assistant') {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '8px 16px' }}
+          onClick={() => navigate('/campaigns', {
+            state: { openAssistant: true, prefillMessage: metadata.prompt || undefined },
+          })}
+        >
+          {t('chat.openCampaignAssistant')}
+        </button>
+      </div>
+    );
+  }
 
   if (metadata?.action !== 'lookup_client') return null;
 

@@ -112,6 +112,14 @@ router.post('/keys', async (req, res, next) => {
       }
       try {
         await db.userIntegrations.upsert(req.user.id, provider, { accessToken: encrypted });
+        // Auto-set as active CRM if this is a CRM provider and none is set yet
+        const crmProviders = ['hubspot', 'pipedrive', 'salesforce', 'odoo', 'folk', 'notion', 'airtable'];
+        if (crmProviders.includes(provider)) {
+          await db.query(
+            `UPDATE users SET active_crm_provider = $1 WHERE id = $2 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+            [provider, req.user.id]
+          );
+        }
       } catch (dbErr) {
         console.error(`[settings] DB upsert failed for ${field}/${provider}:`, dbErr.message);
         errors.push(`${field}: save failed`);
@@ -151,6 +159,24 @@ router.post('/keys/test', async (req, res, next) => {
     }
 
     res.json({ results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/settings/keys/test-one — teste une clé AVANT de la sauvegarder.
+// Utilisé par le wizard : refuser une clé invalide au moment où l'utilisateur
+// la colle, au lieu de la laisser découvrir un import raté avec une coche
+// verte mensongère. Ne persiste rien.
+router.post('/keys/test-one', async (req, res, next) => {
+  try {
+    const { field, key } = req.body;
+    if (!field || !key || !PROVIDER_MAP[field]) {
+      return res.status(400).json({ error: 'field and key are required' });
+    }
+    const result = await testKey(field, String(key));
+    require('../lib/track').track(req.user.id, 'crm_key_tested', { field, status: result?.status || 'unknown' });
+    res.json({ result });
   } catch (err) {
     next(err);
   }
@@ -387,6 +413,77 @@ router.patch('/keys/metadata', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// GET/PATCH /api/settings/crm-writeback — opt-in d'écriture Baakalai → CRM.
+//
+// Off par défaut : écrire dans le CRM du client (notes d'analyse churn,
+// stagnation) est un acte sortant sur sa base de production — il doit le
+// vouloir explicitement. Le dry-run de /api/ai/export-scores-crm reste
+// accessible sans opt-in : c'est la preview qui sert à décider.
+router.get('/crm-writeback', async (req, res, next) => {
+  try {
+    const row = await db.query(
+      `SELECT COALESCE((settings->>'crm_writeback_enabled')::boolean, false) AS enabled
+         FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    res.json({ enabled: row.rows[0]?.enabled || false });
+  } catch (err) { next(err); }
+});
+
+router.patch('/crm-writeback', async (req, res, next) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled (boolean) is required' });
+    }
+    await db.query(
+      `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ crm_writeback_enabled: enabled }), req.user.id]
+    );
+    res.json({ enabled });
+  } catch (err) { next(err); }
+});
+
+// GET/PATCH /api/settings/sla — seuils de réactivité (SLA), évalués dans
+// « À traiter aujourd'hui » et le digest du lundi. Off par défaut : un SLA est
+// une promesse que l'admin déclare, pas une heuristique imposée (lib/sla.js).
+router.get('/sla', async (req, res, next) => {
+  try {
+    const { getSlaConfig } = require('../lib/sla');
+    res.json(await getSlaConfig(req.user.id));
+  } catch (err) { next(err); }
+});
+
+router.patch('/sla', async (req, res, next) => {
+  try {
+    const { getSlaConfig, SLA_BOUNDS } = require('../lib/sla');
+    const patch = {};
+    if ('enabled' in req.body) {
+      if (typeof req.body.enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled must be a boolean' });
+      }
+      patch.enabled = req.body.enabled;
+    }
+    for (const [field, [min, max]] of Object.entries(SLA_BOUNDS)) {
+      if (!(field in req.body)) continue;
+      const v = Number(req.body[field]);
+      if (!Number.isInteger(v) || v < min || v > max) {
+        return res.status(400).json({ error: `${field} must be an integer between ${min} and ${max}` });
+      }
+      patch[field] = v;
+    }
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ error: 'No valid SLA field in body' });
+    }
+    const merged = { ...(await getSlaConfig(req.user.id)), ...patch };
+    await db.query(
+      `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ sla: merged }), req.user.id]
+    );
+    res.json(merged);
+  } catch (err) { next(err); }
 });
 
 // PATCH /api/settings/language — update user's UI language preference

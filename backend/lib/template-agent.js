@@ -18,6 +18,7 @@
 const db = require('../db');
 const claude = require('../api/claude');
 const logger = require('./logger');
+const { safeParseClaudeJSON } = require('./utils/safe-json-parse');
 
 // Sectors to generate templates for
 const TARGET_SECTORS = [
@@ -36,7 +37,7 @@ async function runTemplateAgent({ sectors = null, force = false } = {}) {
 
   try {
     // 1. Load memory patterns (user-applied + high confidence)
-    const patterns = await db.memoryPatterns.listForPrompt(30);
+    const patterns = await db.memoryPatterns.listForPrompt(30, null, null);
 
     // 2. Load campaign stats for sector analysis
     const campaigns = await db.query(`
@@ -163,11 +164,10 @@ Return ONLY valid JSON:
     'template_generation'
   );
 
-  let template = result.parsed;
-  if (!template) {
-    const match = (result.content || '').match(/\{[\s\S]*"name"[\s\S]*"sequence"[\s\S]*\}/);
-    if (match) template = JSON.parse(match[0]);
-  }
+  // safeParseClaudeJSON fait la même extraction par marqueur, mais avec le
+  // JSON.parse enveloppé : ici un modèle qui tronquait sa réponse faisait
+  // remonter une SyntaxError jusqu'à l'appelant au lieu d'un simple `null`.
+  const template = safeParseClaudeJSON(result, 'sequence');
 
   if (!template?.name || !template?.sequence?.length) return null;
   return template;
@@ -179,9 +179,15 @@ Return ONLY valid JSON:
 function buildPatternContext(patterns) {
   if (!patterns || patterns.length === 0) return '';
 
-  const relevant = patterns.filter(p =>
-    ['Cible', 'Canaux', 'Objection', 'S\u00e9quence'].includes(p.category)
-  );
+  // La liste blanche portait 'Canaux', cat\u00e9gorie qu'aucun agent n'\u00e9crit (ils
+  // \u00e9crivent 'Canal'), et omettait 'Corps' / 'Objets' / 'Timing' \u2014 soit
+  // pr\u00e9cis\u00e9ment les insights de copy utiles \u00e0 la g\u00e9n\u00e9ration de templates.
+  // R\u00e9sultat : le filtre vidait le contexte m\u00eame quand des patterns existaient.
+  const RELEVANT_CATEGORIES = [
+    'Cible', 'Canal', 'Objection', 'S\u00e9quence',
+    'Corps', 'Objets', 'Timing', 'Secteur', 'LinkedIn',
+  ];
+  const relevant = patterns.filter(p => RELEVANT_CATEGORIES.includes(p.category));
 
   if (relevant.length === 0) return '';
 

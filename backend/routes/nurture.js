@@ -25,6 +25,7 @@ const db = require('../db');
 const { encrypt } = require('../config/crypto');
 const { sendPersonalEmail, sendNurtureEmail, testEmailAccount } = require('../lib/email-outbound');
 const { runNurtureEngine } = require('../lib/nurture-engine');
+const { matchContacts } = require('../lib/trigger-matching');
 const logger = require('../lib/logger');
 
 const router = Router();
@@ -237,6 +238,14 @@ router.get('/emails', async (req, res, next) => {
 });
 
 // POST /api/nurture/emails/:id/approve — Approve and send a pending email
+//
+// Un échec d'envoi doit sortir en NON-2xx. Avant ce correctif la route
+// répondait 200 avec `{ success: false, error }` : le client (`services/
+// api-client.js`) ne lève que sur `!res.ok`, donc le `catch` des appelants
+// n'était jamais atteint et le clic « Approuver » ne produisait ni envoi ni
+// message — l'email restait pending, puis mourait 14 jours plus tard sur
+// l'expiration de `stepNurture`. C'est la cause du « 0 email envoyé » :
+// aucune boîte mail n'a jamais été connectée et rien ne le disait.
 router.post('/emails/:id/approve', async (req, res, next) => {
   try {
     const email = await db.query(
@@ -257,7 +266,8 @@ router.post('/emails/:id/approve', async (req, res, next) => {
     });
 
     // If this email came from an autonomous chain (deal_reactivation/auto_upsell),
-    // keep agent_chain_executions in sync with the real send outcome.
+    // keep agent_chain_executions in sync with the real send outcome — before any
+    // early return, so a failed send is recorded too.
     await db.query(
       `UPDATE agent_chain_executions SET status = $1, executed_at = now()
        WHERE nurture_email_id = $2 AND status = 'pending'`,
@@ -276,7 +286,84 @@ router.post('/emails/:id/approve', async (req, res, next) => {
       );
     }
 
+    if (!result.success) {
+      // 422 plutôt que 500 : la requête est valide, c'est l'envoi qui n'aboutit
+      // pas (config manquante ou refus du serveur SMTP). `code` permet au front
+      // de proposer l'action corrective au lieu d'afficher un message brut.
+      return res.status(422).json({ error: result.error, code: result.code || 'send_failed' });
+    }
+
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/nurture/emails/approve-batch — Approve and send up to 20 pending
+// emails in one call. Envois séquentiels (un compte SMTP perso n'aime pas les
+// rafales) ; au-delà de 20, le front ré-appelle avec le reste.
+const APPROVE_BATCH_MAX = 20;
+router.post('/emails/approve-batch', async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.slice(0, APPROVE_BATCH_MAX) : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids (array) is required' });
+
+    const rows = await db.query(
+      `SELECT * FROM nurture_emails WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'`,
+      [ids, req.user.id]
+    );
+
+    let sent = 0;
+    let failed = 0;
+    const results = [];
+    for (const e of rows.rows) {
+      const result = await sendNurtureEmail(req.user.id, {
+        triggerId: e.trigger_id,
+        opportunityId: e.opportunity_id,
+        to: e.to_email,
+        toName: e.to_name,
+        subject: e.subject,
+        body: e.body,
+        existingEmailId: e.id,
+      });
+
+      // Même synchro que /emails/:id/approve : refléter l'issue réelle de l'envoi
+      // dans agent_chain_executions, puis cooldown 7j sur l'opportunité pour les
+      // chaînes reactivation/upsell.
+      await db.query(
+        `UPDATE agent_chain_executions SET status = $1, executed_at = now()
+         WHERE nurture_email_id = $2 AND status = 'pending'`,
+        [result.success ? 'executed' : 'failed', e.id]
+      );
+      const chain = e.metadata?.chain;
+      if (result.success && e.opportunity_id && (chain === 'deal_reactivation' || chain === 'auto_upsell')) {
+        await db.query(
+          `UPDATE opportunities SET planned_followup_date = now() + interval '7 days', planned_followup_reason = 'post_send_cooldown' WHERE id = $1`,
+          [e.opportunity_id]
+        );
+      }
+
+      if (result.success) sent++; else failed++;
+      results.push({ id: e.id, success: result.success, error: result.error || null });
+    }
+
+    res.json({ sent, failed, skipped: ids.length - rows.rows.length, results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/nurture/emails/cancel-batch — Cancel pending emails in bulk
+// (purge d'un backlog obsolète sans cliquer 70 fois).
+router.post('/emails/cancel-batch', async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+    if (!ids.length) return res.status(400).json({ error: 'ids (array) is required' });
+    const result = await db.query(
+      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'`,
+      [ids, req.user.id]
+    );
+    res.json({ ok: true, cancelled: result.rowCount });
   } catch (err) {
     next(err);
   }
@@ -318,11 +405,12 @@ router.post('/run', async (req, res, next) => {
 // POST /api/nurture/preview — Preview what would happen without sending
 router.post('/preview', async (req, res, next) => {
   try {
-    const { getUserKey } = require('../config');
-    const pipedrive = require('../api/pipedrive');
+    const { getUserCrmToken } = require('../lib/crm-token');
     const claude = require('../api/claude');
 
-    const token = await getUserKey(req.user.id, 'pipedrive');
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const activeCrm = userRow.rows[0]?.active_crm_provider || 'pipedrive';
+    const token = await getUserCrmToken(req.user.id, activeCrm);
     if (!token) return res.status(400).json({ error: 'CRM non connect\u00E9' });
 
     // Get triggers
@@ -334,7 +422,6 @@ router.post('/preview', async (req, res, next) => {
 
     const opps = await db.opportunities.listByUser(req.user.id, 10000, 0);
     const now = Date.now();
-    const DAY = 86400000;
 
     // Get recently emailed to exclude
     const recent = await db.query(
@@ -346,18 +433,25 @@ router.post('/preview', async (req, res, next) => {
     const previews = [];
 
     for (const trigger of triggers.rows) {
-      const conditions = trigger.conditions || {};
-      const days = conditions.days || 30;
-      let matched = [];
+      // Même logique de matching que le cron (lib/trigger-matching.js) —
+      // la preview affichait des contacts calculés sur updated_at alors que
+      // le cron déclenchait sur last_activity_at.
+      let matched = matchContacts(trigger, opps, now);
 
-      switch (trigger.trigger_type) {
-        case 'deal_won': matched = opps.filter(o => o.status === 'won'); break;
-        case 'deal_lost': matched = opps.filter(o => o.status === 'lost' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY < days + 7); break;
-        case 'deal_stagnant': matched = opps.filter(o => o.status !== 'won' && o.status !== 'lost' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days); break;
-        case 'inactive_contact': matched = opps.filter(o => o.status !== 'lost' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days); break;
-        case 'onboarding_check': matched = opps.filter(o => o.status === 'won' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY < days + 3); break;
-        case 'renewal_reminder': case 'upsell_opportunity': matched = opps.filter(o => o.status === 'won' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days); break;
-        case 'feedback_request': matched = opps.filter(o => o.status === 'won' && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY >= days && (now - new Date(o.updated_at || o.created_at).getTime()) / DAY < days + 7); break;
+      // Types évalués uniquement en run manuel (newsletter_*) : signaler
+      // plutôt que d'ignorer silencieusement.
+      if (matched === null) {
+        previews.push({
+          triggerId: trigger.id,
+          triggerName: trigger.name,
+          triggerType: trigger.trigger_type,
+          mode: trigger.mode,
+          contactsCount: null,
+          contacts: [],
+          sampleEmail: null,
+          manualOnly: true,
+        });
+        continue;
       }
 
       matched = matched.filter(o => o.email && !recentSet.has(o.email.toLowerCase()));
@@ -372,7 +466,7 @@ router.post('/preview', async (req, res, next) => {
         // Load memory patterns for better email generation
         let patternsCtx = '';
         try {
-          const patterns = await db.memoryPatterns.listForPrompt(8);
+          const patterns = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
           if (patterns.length > 0) {
             patternsCtx = '\n\nPATTERNS QUI FONCTIONNENT :\n' +
               patterns.map(p => `- ${p.applied ? '[APPROUV\u00c9]' : ''} ${p.pattern}`).join('\n') +
@@ -426,7 +520,7 @@ setInterval(() => {
   for (const [key, val] of _oauthStates) {
     if (val.expiresAt < now) _oauthStates.delete(key);
   }
-}, 300000);
+}, 300000).unref();
 
 // GET /api/nurture/email-accounts/connect/gmail — Start Gmail OAuth flow
 router.get('/email-accounts/connect/gmail', (req, res, next) => {

@@ -8,6 +8,7 @@ const regenerateJob = require('../orchestrator/jobs/regenerate');
 const logger = require('../lib/logger');
 const icpAgent = require('../lib/icp-agent');
 const { validateId } = require('../middleware/validate-params');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = Router();
 router.param('id', (req, res, next, id) => validateId(req, res, next));
@@ -90,6 +91,12 @@ router.post('/generate-sequence', async (req, res, next) => {
     if (!params.sector && !params.position) {
       return res.status(400).json({ error: 'Au moins sector ou position requis' });
     }
+
+    // Mémoire cross-campagne dans le prompt de génération — le masterPrompt
+    // demandait au modèle de citer la mémoire sans jamais la lui donner.
+    try {
+      params.memory = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
+    } catch { params.memory = []; }
 
     const result = isDryRun(req)
       ? dryRun.generateSequence(params)
@@ -200,8 +207,9 @@ router.post('/regenerate', async (req, res, next) => {
   try {
     const { campaignId, diagnostic, originalMessages, clientParams, regenerationInstructions } = req.body;
 
-    // Bounded: only load relevant patterns (limit 30)
-    const memory = await db.memoryPatterns.list({ limit: 30 });
+    // Bounded: only load relevant patterns (limit 30), scoped to the tenant —
+    // sans userId, le DAO ne renverrait plus que le pool global partagé.
+    const memory = await db.memoryPatterns.list({ limit: 30, userId: req.user.id });
 
     const result = isDryRun(req)
       ? dryRun.regenerateSequence({ diagnostic, originalMessages, memory, clientParams })
@@ -243,7 +251,8 @@ router.post('/run-refinement', async (req, res, next) => {
 
     const [sequence, memory] = await Promise.all([
       db.touchpoints.listByCampaign(campaignId),
-      db.memoryPatterns.list({ limit: 30 }),
+      // Scopé au tenant — sans userId, le DAO ne renvoie que le pool global.
+      db.memoryPatterns.list({ limit: 30, userId: req.user.id }),
     ]);
 
     const originalMessages = sequence.map(tp => ({
@@ -334,16 +343,28 @@ router.post('/consolidate-memory', async (req, res, next) => {
   try {
     // Use JOIN to load diagnostics with campaign info in a single query
     const allDiagnostics = await db.diagnostics.listByUserCampaigns(req.user.id, 100);
-    const existingMemory = await db.memoryPatterns.list({ limit: 200 });
+    const existingMemory = await db.memoryPatterns.list({ limit: 200, userId: req.user.id });
 
     const result = isDryRun(req)
       ? dryRun.consolidateMemory(allDiagnostics, existingMemory)
       : await claude.consolidateMemory(allDiagnostics, existingMemory);
 
+    // Tenant des patterns : les diagnostics consolidés ici sont ceux de
+    // l'appelant — le pattern appartient à son équipe si elle existe, sinon à
+    // lui (jamais les deux, règle DAO migration 089). Avant, ces créations
+    // étaient sans tenant : invisibles pour lui, curables par personne.
+    let tenant = { userId: req.user.id };
+    try {
+      const team = await db.teams.getByUser(req.user.id);
+      if (team) tenant = { teamId: team.id };
+    } catch { /* solo user */ }
+
     const saved = [];
     if (result.parsed?.patterns) {
       for (const pattern of result.parsed.patterns) {
-        const created = await db.memoryPatterns.create({
+        // replaceOrCreate : dédup au sein du tenant (l'endpoint est rejouable).
+        const created = await db.memoryPatterns.replaceOrCreate({
+          ...tenant,
           pattern: pattern.pattern,
           category: pattern.categorie,
           data: pattern.donnees,
@@ -351,6 +372,7 @@ router.post('/consolidate-memory', async (req, res, next) => {
           sectors: pattern.secteurs || [],
           targets: pattern.cibles || [],
         });
+        if (!created) continue; // pattern écarté récemment par l'utilisateur
         saved.push(created.id);
         notionSync.syncMemoryPattern(created.id).catch(console.error);
       }
@@ -377,9 +399,36 @@ router.post('/consolidate-memory', async (req, res, next) => {
   }
 });
 
+/**
+ * Contrôle de propriété pour la curation mémoire (audit 02/09 — avant ce
+ * check, n'importe quel utilisateur authentifié pouvait modifier/écarter les
+ * patterns de tous les tenants). Autorisé si :
+ * - le pattern appartient à l'utilisateur (user_id), ou
+ * - le pattern appartient à une équipe dont il est membre, ou
+ * - le pattern est sans tenant (legacy/global) ET l'utilisateur est admin
+ *   (même règle que le middleware requireAdmin : req.user.role === 'admin').
+ */
+async function canCuratePattern(pattern, user) {
+  if (pattern.user_id && pattern.user_id === user.id) return true;
+  if (pattern.team_id) {
+    const member = await db.query(
+      'SELECT 1 FROM team_members WHERE user_id = $1 AND team_id = $2 LIMIT 1',
+      [user.id, pattern.team_id]
+    );
+    if (member.rows.length > 0) return true;
+  }
+  if (!pattern.user_id && !pattern.team_id) return user.role === 'admin';
+  return false;
+}
+
 // POST /api/ai/memory/:id/toggle-apply — toggle pattern applied status
 router.post('/memory/:id/toggle-apply', async (req, res, next) => {
   try {
+    const pattern = await db.memoryPatterns.get(req.params.id);
+    if (!pattern) return res.status(404).json({ error: 'Pattern not found' });
+    if (!(await canCuratePattern(pattern, req.user))) {
+      return res.status(403).json({ error: 'This pattern belongs to another workspace (global patterns require admin role)' });
+    }
     const result = await db.query(
       `UPDATE memory_patterns SET applied = NOT COALESCE(applied, false) WHERE id = $1 RETURNING id, applied`,
       [req.params.id]
@@ -390,7 +439,9 @@ router.post('/memory/:id/toggle-apply', async (req, res, next) => {
 });
 
 // POST /api/ai/memory/:id/toggle-share — toggle pattern shared (cross-team) status
-router.post('/memory/:id/toggle-share', async (req, res, next) => {
+// Admin-only: publishing a pattern to the global pool exposes it to every tenant,
+// so this is a curation action on shared state, not a per-user preference.
+router.post('/memory/:id/toggle-share', requireAdmin, async (req, res, next) => {
   try {
     const result = await db.query(
       `UPDATE memory_patterns SET shared = NOT COALESCE(shared, false) WHERE id = $1 RETURNING id, shared`,
@@ -503,6 +554,11 @@ router.get('/memory/recommendations', async (req, res, next) => {
 // Pattern won't be recreated by agents for 7 days
 router.delete('/memory/:id', async (req, res, next) => {
   try {
+    const pattern = await db.memoryPatterns.get(req.params.id);
+    if (!pattern) return res.status(404).json({ error: 'Pattern not found' });
+    if (!(await canCuratePattern(pattern, req.user))) {
+      return res.status(403).json({ error: 'This pattern belongs to another workspace (global patterns require admin role)' });
+    }
     await db.query(
       `UPDATE memory_patterns SET dismissed_at = now() WHERE id = $1`,
       [req.params.id]
@@ -518,17 +574,123 @@ router.get('/memory', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
-    // Resolve team for pattern scoping
-    let teamId = null;
-    try {
-      const team = await db.teams.getByUser(req.user.id);
-      if (team) teamId = team.id;
-    } catch { /* solo user */ }
+    // Tenant via userId : le filtre DAO couvre les patterns de l'utilisateur,
+    // ceux de ses équipes (sous-requête team_members) et le pool global — plus
+    // besoin de résoudre teamId ici. count() reçoit le MÊME filtre pour que le
+    // total colle au tableau affiché (avant, il comptait tous les tenants).
     const [patterns, count] = await Promise.all([
-      db.memoryPatterns.list({ limit, offset, teamId }),
-      db.memoryPatterns.count(),
+      db.memoryPatterns.list({ limit, offset, userId: req.user.id }),
+      db.memoryPatterns.count({ userId: req.user.id }),
     ]);
     res.json({ patterns, count, limit, offset });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/memory/playbook — playbook commercial généré À LA DEMANDE depuis
+// la mémoire du tenant (jamais en cron : décision Goran 03/09, coût tokens).
+// Sources : patterns du tenant (pas le pool mutualisé — c'est SON playbook),
+// agrégats CRM (mêmes requêtes que le chat analytique), profil entreprise.
+router.post('/memory/playbook', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const lang = req.body?.lang === 'en' ? 'en' : 'fr';
+
+    const patterns = await db.query(
+      `SELECT pattern, category, confidence, COALESCE(confirmations, 0) AS confirmations, source
+       FROM memory_patterns
+       WHERE dismissed_at IS NULL
+         AND (user_id = $1 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $1))
+       ORDER BY (confidence = 'Haute') DESC, COALESCE(confirmations, 0) DESC,
+                COALESCE(last_confirmed_at, created_at) DESC
+       LIMIT 40`,
+      [userId]
+    );
+
+    if (patterns.rows.length === 0) {
+      return res.status(422).json({ error: 'no_patterns' });
+    }
+
+    // Maturité honnête : des patterns confirmés par des résultats réels
+    // (réponses, deals ressuscités) valent plus que des patterns d'import.
+    const confirmedCount = patterns.rows.filter(p => p.confirmations > 0).length;
+    const maturity = (confirmedCount >= 5 && patterns.rows.length >= 10) ? 'ok' : 'young';
+
+    const { buildAnalyticsContext } = require('./analytics');
+    const context = await buildAnalyticsContext(userId);
+
+    const [profile, userRow] = await Promise.all([
+      db.profiles.get(userId).catch(() => null),
+      db.query('SELECT name, company FROM users WHERE id = $1', [userId]),
+    ]);
+    const company = profile?.company || userRow.rows[0]?.company || '';
+
+    const patternsText = patterns.rows.map(p =>
+      `- [${p.category} | confiance ${p.confidence}${p.confirmations > 0 ? ` | ${p.confirmations} confirmation(s) réelle(s)` : ''}] ${p.pattern}`
+    ).join('\n');
+
+    const isEN = lang === 'en';
+    const systemPrompt = `Tu rédiges le playbook commercial d'une PME B2B à partir de sa mémoire baakalai (patterns appris) et de ses chiffres CRM réels. Le lecteur est un commercial ou un dirigeant qui veut savoir QUOI faire.
+
+Règles strictes :
+- Tout doit venir des patterns et des chiffres fournis. Aucun conseil générique de vente qui pourrait s'écrire sans ces données. Si une section manque de matière, dis-le en une phrase plutôt que de remplir.
+- Les patterns « confiance Haute » ou avec confirmations réelles portent le document ; les « Faible » vont uniquement en section « À tester ».
+- Format : markdown propre (titres ##, listes -), pas de tableau, pas d'emoji.
+- Concret et directif (« Relancez à J+X », « Priorisez le secteur Y ») avec le chiffre qui justifie à chaque fois.
+${maturity === 'young' ? `- IMPORTANT : la mémoire de ce compte est jeune (${confirmedCount} pattern(s) confirmé(s) par des résultats réels sur ${patterns.rows.length}). L'avertissement en tête du document doit le dire clairement : ce playbook s'affinera avec l'usage.` : ''}
+- Langue : ${isEN ? 'anglais' : 'français'}.
+
+Structure imposée :
+# ${isEN ? 'Sales playbook' : 'Playbook commercial'}${company ? ` — ${company}` : ''}
+${maturity === 'young' ? `> ${isEN ? 'Note on maturity (young memory)' : 'Avertissement maturité (mémoire jeune)'}` : ''}
+## ${isEN ? '1. What works for you' : '1. Ce qui marche chez vous'}
+## ${isEN ? '2. Your reference numbers' : '2. Vos chiffres de référence'}
+## ${isEN ? '3. How to follow up' : '3. Comment relancer'}
+## ${isEN ? '4. Warning signals' : '4. Signaux d’alerte'}
+## ${isEN ? '5. To test next' : '5. À tester ensuite'}
+
+Retourne UNIQUEMENT le markdown du playbook, rien d'autre.`;
+
+    const userContent = `PATTERNS DU COMPTE (${patterns.rows.length}) :
+${patternsText}
+
+CHIFFRES CRM RÉELS :
+${JSON.stringify(context)}`;
+
+    const result = await claude.callClaude(systemPrompt, userContent, 3500, 'playbook_generation');
+    const markdown = (result.raw || '').trim();
+    if (!markdown) return res.status(502).json({ error: 'generation_failed' });
+
+    res.json({
+      markdown,
+      generatedAt: new Date().toISOString(),
+      patternsUsed: patterns.rows.length,
+      confirmedPatterns: confirmedCount,
+      maturity,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/memory/labels — résout des pattern_ids en libellés pour le bandeau
+// « patterns appliqués » des brouillons. Scopé : ne renvoie que les patterns
+// visibles par l'appelant (les siens, ceux de ses équipes, ou le pool partagé).
+router.post('/memory/labels', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.json({ patterns: [] });
+    const result = await db.query(
+      `SELECT id, pattern, category, confidence, applied FROM memory_patterns
+       WHERE id = ANY($1) AND dismissed_at IS NULL
+         AND (user_id = $2
+              OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $2)
+              OR shared = true)
+       LIMIT 20`,
+      [ids.slice(0, 20), req.user.id]
+    );
+    res.json({ patterns: result.rows });
   } catch (err) {
     next(err);
   }
@@ -686,7 +848,7 @@ router.post('/deploy-to-outreach', async (req, res, next) => {
 router.post('/score-leads', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { scoreOpportunities } = require('../lib/contact-scoring');
+    const { scoreOpportunities, buildSectorContext } = require('../lib/contact-scoring');
 
     const [opps, profile] = await Promise.all([
       db.opportunities.listByUser(userId, 100, 0),
@@ -704,7 +866,9 @@ router.post('/score-leads', async (req, res, next) => {
       try { campaignMap[cid] = await db.campaigns.get(cid); } catch {}
     }
 
-    const scored = scoreOpportunities(opps, profile, campaignMap);
+    // Match sectoriel ICP normalisé (cache DB — coûteux uniquement au 1er passage)
+    const sectorCtx = await buildSectorContext(profile, opps).catch(() => null);
+    const scored = scoreOpportunities(opps, profile, campaignMap, sectorCtx);
 
     // Persist scores
     for (const opp of scored) {
@@ -718,14 +882,22 @@ router.post('/score-leads', async (req, res, next) => {
 });
 
 // POST /api/ai/export-scores-crm
+// { dryRun: true } calcule tout et n'écrit rien — à utiliser pour vérifier ce
+// qui partirait avant d'écrire dans le CRM d'un client. Une écriture sortante
+// ne s'annule pas d'un clic.
 router.post('/export-scores-crm', async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { exportScoresToCRM } = require('../lib/crm-export');
-    const opps = await db.opportunities.listByUser(userId, 100, 0);
-    const result = await exportScoresToCRM(userId, opps);
+    const opps = await db.opportunities.listByUser(userId, 500, 0);
+    const result = await exportScoresToCRM(userId, opps, { dryRun: req.body?.dryRun === true });
     res.json(result);
   } catch (err) {
+    // Un CRM cible non inscriptible n'est pas une panne serveur : c'est une
+    // configuration que l'utilisateur peut corriger, avec un message qui le dit.
+    if (err.code && ['active_crm_not_writable', 'active_crm_not_connected', 'no_crm_connected', 'writeback_not_enabled'].includes(err.code)) {
+      return res.status(422).json({ error: err.message, code: err.code });
+    }
     next(err);
   }
 });

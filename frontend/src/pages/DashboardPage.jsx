@@ -9,17 +9,18 @@ import { useOutletContext, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import { useSocket } from '../context/SocketContext';
-import { ProgressCard, CumulativeValueBanner, BenchmarkBadge } from '../components/RetentionBiases';
+import { CumulativeValueBanner, BenchmarkBadge } from '../components/RetentionBiases';
 import PerformanceChart from '../components/charts/PerformanceChart';
 import { sanitizeHtml } from '../services/sanitize';
 import ScoreBadge from '../components/ScoreBadge';
 import AnimatedCounter from '../components/AnimatedCounter';
 import OnboardingChecklist from '../components/OnboardingChecklist';
-import DealCoachCard from '../components/DealCoachCard';
+import TodayCard from '../components/TodayCard';
 import QuickWinCard from '../components/QuickWinCard';
+import ReactivationCard from '../components/ReactivationCard';
 import ICPInsightsCard from '../components/ICPInsightsCard';
 import DeliverabilityCard from '../components/DeliverabilityCard';
-import { scoreLeads, exportScoresToCRM, downloadScoresCSV, sendRecoFeedback } from '../services/api-client';
+import { request, scoreLeads, exportScoresToCRM, downloadScoresCSV, sendRecoFeedback } from '../services/api-client';
 
 const KPI_LABELS = {
   fr: {
@@ -50,6 +51,17 @@ export default function DashboardPage() {
   const openCreator = useCallback(() => navigate('/campaigns', { state: { openAssistant: true } }), [navigate]);
   const { socket } = useSocket();
   const [syncStatus, setSyncStatus] = useState(null);
+  // Stats CRM (pipeline, dormants, récupéré) — fetch unique, partagé entre la
+  // grille RevenueKpis et la ReactivationCard.
+  const [crmStats, setCrmStats] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    request('/crm/reactivation-stats').then(d => {
+      if (!cancelled) setCrmStats(d);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -116,26 +128,25 @@ export default function DashboardPage() {
       {/* Onboarding checklist for new users */}
       <OnboardingChecklist />
 
+      {/* KPIs revenue — le langage du produit : pipeline, dormants, récupéré.
+          Les KPIs d'emailing descendent dans la section campagnes. */}
+      <RevenueKpis stats={crmStats} />
+
+      {/* Reactivation KPIs — hero metric */}
+      <ReactivationCard stats={crmStats} />
+
       {/* Quick Win — immediate CRM insight after sync */}
       <QuickWinCard />
 
-      {/* Deal Coach — stagnant deal suggestions with action buttons */}
-      {!isEmpty && <DealCoachCard />}
+      {/* À traiter aujourd'hui — liste unifiée (nurture à approuver, deals
+          stagnants, upsells, churn, signaux) ; absorbe l'ancien DealCoachCard */}
+      <TodayCard />
 
       {/* Deliverability — show if user has >= 1 campaign */}
       {campaignsList.length >= 1 && <DeliverabilityCard />}
 
       {/* ICP Insights — only show if user has >= 3 campaigns */}
       {campaignsList.length >= 3 && <ICPInsightsCard />}
-
-      {/* Weekly report link */}
-      {!isEmpty && (
-        <div style={{ marginBottom: 16, textAlign: 'right' }}>
-          <Link to="/performance" style={{ fontSize: 13, color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>
-            {en ? 'Weekly report & trends' : 'Rapport hebdo & tendances'} {'\u2192'}
-          </Link>
-        </div>
-      )}
 
       {/* Overview content */}
       <OverviewSection
@@ -204,9 +215,11 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
     }
   }, []);
   if (isEmpty) {
+    // Pas de ProgressCard ici : l'OnboardingChecklist au-dessus guide déjà les
+    // premiers pas — deux jauges de progression concurrentes brouillaient le
+    // message (constat de l'audit UX du 2026-08-05).
     return (
       <div id="section-overview">
-        <ProgressCard />
         <EmptyKpis />
         <EmptyOverviewGrid onCreateCampaign={onCreateCampaign} />
       </div>
@@ -233,11 +246,6 @@ function OverviewSection({ isEmpty, globalKpis, campaigns, opportunities, recomm
       {/* Retention: Cumulative value banner + benchmark */}
       <CumulativeValueBanner />
       <BenchmarkBadge />
-
-      {/* Progress card — full width */}
-      <div style={{ marginBottom: 16 }}>
-        <ProgressCard />
-      </div>
 
       {/* Section grid — 2x2 */}
       <div className="section-grid">
@@ -554,24 +562,82 @@ function WelcomeBanner({ onCreateCampaign }) {
   );
 }
 
+/* \u2500\u2500 KPIs revenue \u2014 la langue du produit \u2500\u2500
+   Pipeline ouvert, deals dormants, revenu r\u00e9cup\u00e9r\u00e9, relances : le
+   \u00ab 1 deal r\u00e9cup\u00e9r\u00e9 = l'outil est pay\u00e9 \u00bb en chiffres, au-dessus des
+   m\u00e9triques d'emailing. Rend null tant que le CRM n'a rien donn\u00e9. */
+function RevenueKpis({ stats }) {
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  if (!stats) return null;
+  const { pipeline = {}, reactivated = {}, emails = {} } = stats;
+  if (!pipeline.openDeals && !reactivated.count) return null;
+
+  const money = (n) => {
+    if (!n) return '0\u00a0\u20ac';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M\u00a0\u20ac`;
+    if (n >= 1000) return `${Math.round(n / 1000)}k\u00a0\u20ac`;
+    return `${Math.round(n)}\u00a0\u20ac`;
+  };
+
+  const cards = [
+    {
+      label: en ? '\u{1F4BC} Open pipeline' : '\u{1F4BC} Pipeline ouvert',
+      value: money(pipeline.totalValue),
+      trend: en ? `${pipeline.openDeals} open deals` : `${pipeline.openDeals} deals ouverts`,
+    },
+    {
+      label: en ? '\u{1F4A4} Dormant deals' : '\u{1F4A4} Deals dormants',
+      value: String(pipeline.stagnantDeals || 0),
+      trend: en ? `${money(pipeline.potentialRevenue)} to revive` : `${money(pipeline.potentialRevenue)} \u00e0 r\u00e9veiller`,
+    },
+    {
+      label: en ? '\u{1F4B0} Revenue recovered' : '\u{1F4B0} Revenu r\u00e9cup\u00e9r\u00e9',
+      value: money(reactivated.revenue),
+      trend: en
+        ? `${reactivated.count} deal${reactivated.count > 1 ? 's' : ''} reactivated`
+        : `${reactivated.count} deal${reactivated.count > 1 ? 's' : ''} r\u00e9activ\u00e9${reactivated.count > 1 ? 's' : ''}`,
+    },
+    {
+      label: en ? '\u{1F4E8} Follow-ups sent' : '\u{1F4E8} Relances envoy\u00e9es',
+      value: String(emails.sent || 0),
+      trend: en ? `${emails.replyRate || 0}% replies` : `${emails.replyRate || 0}% de r\u00e9ponses`,
+    },
+  ];
+
+  return (
+    <div className="kpi-grid" style={{ marginBottom: 16 }}>
+      {cards.map((k, i) => (
+        <div className="kpi-card" key={i}>
+          <div className="kpi-label">{k.label}</div>
+          <div className="kpi-value">{k.value}</div>
+          <div className="kpi-trend">{k.trend}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EmptyKpis() {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  // Langage revenue m\u00eame \u00e0 vide : on annonce ce que le CRM va remplir,
+  // pas des m\u00e9triques d'emailing.
   const items = en ? [
-    { label: '\u{1F4E4} Contacts reached' },
-    { label: '\u{1F4EC} Open rate' },
+    { label: '\u{1F4BC} Open pipeline' },
+    { label: '\u{1F4A4} Dormant deals' },
+    { label: '\u{1F4B0} Revenue recovered' },
+    { label: '\u{1F4E8} Follow-ups sent' },
     { label: '\u{1F4AC} Reply rate' },
-    { label: '\u{1F525} Interested prospects' },
     { label: '\u{1F4C5} Qualified meetings' },
-    { label: '\u{1F6AB} Stops' },
   ] : [
-    { label: '\u{1F4E4} Contacts atteints' },
-    { label: "\u{1F4EC} Taux d'ouverture" },
+    { label: '\u{1F4BC} Pipeline ouvert' },
+    { label: '\u{1F4A4} Deals dormants' },
+    { label: '\u{1F4B0} Revenu r\u00e9cup\u00e9r\u00e9' },
+    { label: '\u{1F4E8} Relances envoy\u00e9es' },
     { label: '\u{1F4AC} Taux de r\u00e9ponse' },
-    { label: '\u{1F525} Prospects int\u00e9ress\u00e9s' },
     { label: '\u{1F4C5} RDV qualifi\u00e9s' },
-    { label: '\u{1F6AB} Stops' },
   ];
 
   return (

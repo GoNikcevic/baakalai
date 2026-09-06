@@ -23,6 +23,27 @@ const dropcontact = require('../api/dropcontact');
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
+// Domaines jetables les plus répandus — liste statique volontairement courte
+// (les gros services) : un faux positif ici coûte plus cher qu'un raté.
+const DISPOSABLE_DOMAINS = new Set([
+  'mailinator.com', 'yopmail.com', 'yopmail.fr', 'guerrillamail.com', '10minutemail.com',
+  'tempmail.com', 'temp-mail.org', 'throwaway.email', 'maildrop.cc', 'getnada.com',
+  'trashmail.com', 'trashmail.fr', 'jetable.org', 'mail-temporaire.fr', 'sharklasers.com',
+]);
+
+// Typos courantes des grands fournisseurs → domaine corrigé. Uniquement des
+// fautes non ambiguës (un vrai domaine d'entreprise ne matche jamais ces formes).
+const TYPO_DOMAINS = {
+  'gmial.com': 'gmail.com', 'gamil.com': 'gmail.com', 'gmal.com': 'gmail.com',
+  'gmai.com': 'gmail.com', 'gmail.co': 'gmail.com', 'gmail.con': 'gmail.com',
+  'gmail.cm': 'gmail.com', 'gnail.com': 'gmail.com',
+  'hotmial.com': 'hotmail.com', 'hotmal.com': 'hotmail.com', 'hotmail.con': 'hotmail.com',
+  'hotmail.fr.': 'hotmail.fr', 'hotmai.com': 'hotmail.com',
+  'outlok.com': 'outlook.com', 'outloook.com': 'outlook.com', 'outlook.con': 'outlook.com',
+  'yahooo.com': 'yahoo.com', 'yaho.com': 'yahoo.com', 'yahoo.con': 'yahoo.com',
+  'orage.fr': 'orange.fr', 'ornage.fr': 'orange.fr', 'wanado.fr': 'wanadoo.fr',
+};
+
 // ── Credentials resolution ──
 
 /**
@@ -477,20 +498,81 @@ async function scanCRM(userId, provider) {
     });
   }
 
+  // 4c. Disposable email domains — a throwaway address is never a real buyer contact.
+  const disposable = validFormatEmails.filter(p => DISPOSABLE_DOMAINS.has(p.email.split('@')[1].toLowerCase()));
+  if (disposable.length > 0) {
+    issues.push({
+      type: 'disposable_email',
+      severity: 'medium',
+      contacts: disposable.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email })),
+      count: disposable.length,
+      suggestedAction: 'archive',
+    });
+  }
+
+  // 4d. Typo'd provider domains (gmial.com…) — fixable in one click, so worth
+  // its own issue type with the corrected address precomputed.
+  const typos = [];
+  for (const p of validFormatEmails) {
+    const domain = p.email.split('@')[1].toLowerCase();
+    const fixed = TYPO_DOMAINS[domain];
+    if (fixed) typos.push({ id: p.id, name: p.name, email: p.email, suggestedFix: p.email.split('@')[0] + '@' + fixed });
+  }
+  if (typos.length > 0) {
+    issues.push({
+      type: 'email_typo',
+      severity: 'high',
+      contacts: typos.slice(0, 50),
+      count: typos.length,
+      suggestedAction: 'fix',
+    });
+  }
+
+  // 4e. Emails ayant bouncé à l'envoi (tamponnés par email-outbound sur rejet 5xx
+  // définitif) — le signal le plus fiable : l'adresse n'existe plus, la personne
+  // a probablement quitté la société.
+  const bounced = [];
+  try {
+    const bouncedRows = await db.query(
+      `SELECT id, name, email, email_bounced_at, email_bounce_reason FROM opportunities
+       WHERE user_id = $1 AND email_bounced_at IS NOT NULL
+         AND (crm_provider = $2 OR ($2 = '__no_crm__' AND crm_provider IS NULL))`,
+      [userId, provider]
+    );
+    const personEmails = new Set(persons.map(p => (p.email || '').toLowerCase()).filter(Boolean));
+    for (const r of bouncedRows.rows) {
+      if (personEmails.has((r.email || '').toLowerCase())) {
+        bounced.push({ id: r.id, name: r.name, email: r.email, bouncedAt: r.email_bounced_at, reason: r.email_bounce_reason });
+      }
+    }
+  } catch { /* colonne absente (migration 088 pas encore appliquée) — check silencieux */ }
+  if (bounced.length > 0) {
+    issues.push({
+      type: 'email_bounced',
+      severity: 'high',
+      contacts: bounced.slice(0, 50),
+      count: bounced.length,
+      suggestedAction: 'verify',
+    });
+  }
+
   // Combine for score calculation (backward compat)
   const invalidEmails = [...invalidFormatEmails, ...invalidDomainContacts];
 
-  // 5. Inactive contacts (no update in 6+ months)
+  // 5. Inactive contacts (no genuine activity in 6+ months)
+  // lastActivityAt (vraie activité CRM) en priorité — updatedAt est réécrit par
+  // les synchros et surestime l'activité ; on ne le garde qu'en repli faute de mieux.
   const now = Date.now();
   const inactive = persons.filter(p => {
-    if (!p.updatedAt) return false;
-    return (now - new Date(p.updatedAt).getTime()) > SIX_MONTHS_MS;
+    const ref = p.lastActivityAt || p.updatedAt;
+    if (!ref) return false;
+    return (now - new Date(ref).getTime()) > SIX_MONTHS_MS;
   });
   if (inactive.length > 0) {
     issues.push({
       type: 'inactive',
       severity: 'low',
-      contacts: inactive.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email, lastUpdate: p.updatedAt })),
+      contacts: inactive.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email, lastUpdate: p.lastActivityAt || p.updatedAt })),
       count: inactive.length,
       suggestedAction: 'archive',
     });
@@ -678,4 +760,41 @@ async function applyFixes(userId, provider, fixes) {
   return { applied, skipped, errors };
 }
 
-module.exports = { scanCRM, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials };
+/**
+ * Scan hebdomadaire persistant — appelé par le job digest du lundi pour que le
+ * score data quality ait un historique même si personne ne visite la page
+ * (le GET de la page se contente du cache 24h). Force un scan frais par
+ * provider connecté (+ le bucket hors-CRM), persiste chaque rapport, n'échoue
+ * jamais globalement : une erreur par provider est collectée, pas propagée.
+ */
+async function runWeeklyScans(userId) {
+  const { getValidatedIntegrations } = require('../config');
+  const CONNECTABLE = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
+  const report = { scanned: [], errors: [] };
+
+  let providers = [];
+  try {
+    providers = await getValidatedIntegrations(userId, CONNECTABLE);
+  } catch { /* aucun provider validé */ }
+  try {
+    const orphans = await db.query(
+      `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_provider IS NULL LIMIT 1`, [userId]);
+    if (orphans.rows.length > 0) providers = [...providers, '__no_crm__'];
+  } catch { /* ignore */ }
+
+  for (const provider of providers) {
+    try {
+      const scan = await scanCRM(userId, provider);
+      await db.crmCleaningReports.create({
+        userId, provider, score: scan.score, totalContacts: scan.totalContacts,
+        summary: scan.summary, issues: scan.issues,
+      });
+      report.scanned.push({ provider, score: scan.score });
+    } catch (err) {
+      report.errors.push(`${provider}: ${err.message}`);
+    }
+  }
+  return report;
+}
+
+module.exports = { scanCRM, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials, runWeeklyScans };

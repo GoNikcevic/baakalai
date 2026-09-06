@@ -8,6 +8,8 @@ import { request } from '../services/api-client';
 import { getUser } from '../services/auth';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
+import { useConfirm } from '../components/ConfirmModal';
+import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
 
 function getTriggerTypes(lang) {
   const en = lang === 'en';
@@ -185,7 +187,9 @@ export default function NurturePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{p.triggerName}</div>
                 <span style={{ fontSize: 11, color: 'var(--grey-500)' }}>
-                  {p.contactsCount} contact{p.contactsCount > 1 ? 's' : ''} {'\u00B7'} {lang === 'en' ? 'mode' : 'mode'} {p.mode === 'auto' ? 'auto' : (lang === 'en' ? 'approval' : 'approbation')}
+                  {p.manualOnly
+                    ? t('activation.manualOnlyTrigger')
+                    : <>{p.contactsCount} contact{p.contactsCount > 1 ? 's' : ''} {'\u00B7'} mode {p.mode === 'auto' ? 'auto' : (lang === 'en' ? 'approval' : 'approbation')}</>}
                 </span>
               </div>
 
@@ -253,6 +257,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  const confirm = useConfirm();
   const TRIGGER_TYPES = getTriggerTypes(lang);
   const [form, setForm] = useState({
     name: '',
@@ -299,7 +304,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(en ? 'Delete this trigger?' : 'Supprimer ce trigger ?')) return;
+    if (!await confirm(en ? 'Delete this trigger?' : 'Supprimer ce trigger ?', { danger: true })) return;
     try {
       await request(`/nurture/triggers/${id}`, { method: 'DELETE' });
       onRefresh();
@@ -466,6 +471,16 @@ function EmailsSection({ emails, type, onRefresh }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  // emails est une prop : l'état déplié/replié vit ici, pas chez le parent.
+  const [expandedIds, setExpandedIds] = useState(new Set());
+  const toggleExpanded = (id, value) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      const expand = value !== undefined ? value : !next.has(id);
+      if (expand) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
   const handleApprove = async (id) => {
     try {
       await request(`/nurture/emails/${id}/approve`, { method: 'POST' });
@@ -514,13 +529,30 @@ function EmailsSection({ emails, type, onRefresh }) {
                   )}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>{email.subject}</div>
-                <div style={{
-                  fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
-                  whiteSpace: 'pre-wrap', lineHeight: 1.5,
-                  maxHeight: 80, overflow: 'hidden',
-                }}>
+                <div
+                  style={{
+                    fontSize: 12, color: 'var(--text-secondary)', marginTop: 6,
+                    whiteSpace: 'pre-wrap', lineHeight: 1.5,
+                    maxHeight: expandedIds.has(email.id) ? 'none' : 80, overflow: 'hidden',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => toggleExpanded(email.id)}
+                  title={en ? 'Click to expand/collapse' : 'Cliquer pour d\u00E9plier/replier'}
+                >
                   {email.body}
                 </div>
+                {/* Mémoire visible : bandeau des patterns appliqués, uniquement quand le
+                    brouillon est déplié (le composant ne fetch qu'une fois monté). */}
+                {type === 'pending' && expandedIds.has(email.id) && (
+                  <AppliedPatternsBanner patternIds={email.pattern_ids} />
+                )}
+                {!expandedIds.has(email.id) && email.body && email.body.length > 200 && (
+                  <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2, cursor: 'pointer' }}
+                    onClick={() => toggleExpanded(email.id, true)}
+                  >
+                    {en ? 'Show full email' : 'Voir l\'email complet'}
+                  </div>
+                )}
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
                   {email.to_email}
                   {email.sent_at && ` \u00B7 ${en ? 'Sent on' : 'Envoy\u00E9 le'} ${new Date(email.sent_at).toLocaleString(en ? 'en-US' : 'fr-FR')}`}
@@ -788,6 +820,7 @@ function CampaignsSection({ campaigns }) {
 
 function TeamCampaignsSection({ lang }) {
   const en = lang === 'en';
+  const confirm = useConfirm();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -847,7 +880,7 @@ function TeamCampaignsSection({ lang }) {
   };
 
   const handleLaunch = async (id) => {
-    if (!window.confirm(en ? 'Launch this campaign? Emails will be sent from each rep\'s inbox.' : 'Lancer cette campagne ? Les emails seront envoy\u00E9s depuis la bo\u00EEte de chaque commercial.')) return;
+    if (!await confirm(en ? 'Launch this campaign? Emails will be sent from each rep\'s inbox.' : 'Lancer cette campagne ? Les emails seront envoy\u00E9s depuis la bo\u00EEte de chaque commercial.')) return;
     setLaunching(id);
     try {
       await request(`/team-campaigns/${id}/launch`, { method: 'POST' });

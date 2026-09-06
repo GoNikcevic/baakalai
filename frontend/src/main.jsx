@@ -6,6 +6,7 @@ import { NotificationProvider } from './context/NotificationContext'
 import { I18nProvider } from './i18n'
 import ErrorBoundary from './components/ErrorBoundary'
 import ToastContainer from './components/ToastContainer'
+import { ConfirmProvider } from './components/ConfirmModal'
 import App from './App.jsx'
 import './index.css'
 
@@ -20,8 +21,10 @@ createRoot(document.getElementById('root')).render(
         <I18nProvider>
           <NotificationProvider>
             <AppProvider>
-              <App />
-              <ToastContainer />
+              <ConfirmProvider>
+                <App />
+                <ToastContainer />
+              </ConfirmProvider>
             </AppProvider>
           </NotificationProvider>
         </I18nProvider>

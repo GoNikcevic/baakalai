@@ -23,9 +23,9 @@ async function run(userId) {
     const opps = await db.opportunities.listByUser(userId, 500, 0);
     const now = Date.now();
 
-    // Find stagnant deals (open, no real CRM activity in 14+ days). `last_activity_at`
-    // reflects genuine CRM changes — `updated_at` is reset by a DB trigger on every
-    // internal write (including this agent's own updates) and can't measure staleness.
+    // Find stagnant deals (open, no activity in 14+ days)
+    // `updated_at` est réécrit à chaque synchro CRM (cf. churn-scoring.js) :
+    // seul `last_activity_at` reflète la vraie dernière activité côté CRM.
     const stagnant = opps.filter(o => {
       if (o.status === 'won' || o.status === 'lost') return false;
       const age = (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY_MS;
@@ -93,6 +93,12 @@ Suggest ONE specific action. Return JSON:
             ...coaching,
           });
           report.coached++;
+        } else {
+          // Sans cette branche, un deal dont la reponse etait illisible
+          // disparaissait du rapport sans laisser de trace : `coached: 3` sur
+          // 10 deals avec `errors: []` se lisait comme "7 deals n'avaient rien
+          // a signaler", alors que 7 appels avaient echoue au parsing.
+          report.errors.push(`${deal.name}: reponse Claude non parsable`);
         }
       } catch (err) {
         report.errors.push(`${deal.name}: ${err.message}`);
@@ -143,7 +149,7 @@ async function coachAndDraftOne(userId, opportunityId) {
   const [timing, copyCtx, patternCtx] = await Promise.all([
     getTimingContext(userId),
     getCopyContext(userId),
-    getPatternContext(teamId),
+    getPatternContext(teamId, userId),
   ]);
 
   const contactEmails = emails.rows;

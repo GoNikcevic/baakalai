@@ -8,26 +8,28 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/useApp';
 import api, { sendRecoFeedback } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
+import { useI18n } from '../i18n';
 
-/* ─── Filter definitions ─── */
+/* ─── Filter definitions (keyed by internal ID, labels are i18n'd in render) ─── */
 
-const PRIORITY_FILTERS = ['Toutes', 'Critiques', 'Importantes', 'Suggestions', 'Appliquées'];
+const FILTER_KEYS = ['all', 'critical', 'important', 'suggestion', 'applied'];
 
-const PRIORITY_MAP = {
-  'Critiques': 'critical',
-  'Importantes': 'important',
-  'Suggestions': 'suggestion',
-  'Appliquées': 'applied',
+const FILTER_LABELS = {
+  en: { all: 'All', critical: 'Critical', important: 'Important', suggestion: 'Suggestions', applied: 'Applied' },
+  fr: { all: 'Toutes', critical: 'Critiques', important: 'Importantes', suggestion: 'Suggestions', applied: 'Appliqu\u00E9es' },
 };
 
 /* ─── Component ─── */
 
 export default function RecosPage() {
   const { campaigns, backendAvailable } = useApp();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const labels = FILTER_LABELS[en ? 'en' : 'fr'];
 
   const [recos, setRecos] = useState([]);
   const [insights, setInsights] = useState([]);
-  const [activeFilter, setActiveFilter] = useState('Toutes');
+  const [activeFilter, setActiveFilter] = useState('all');
   const [activeCampaign, setActiveCampaign] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
@@ -61,10 +63,10 @@ export default function RecosPage() {
             priority: d.priority === 'high' ? 'critical' : d.priority === 'medium' ? 'important' : 'suggestion',
             campaign: c.name,
             step: d.step || `Touchpoint ${j + 1}`,
-            title: d.title || d.summary || 'Recommandation',
+            title: d.title || d.summary || (en ? 'Recommendation' : 'Recommandation'),
             desc: d.text || d.description || '',
             impact: d.impact || '',
-            date: d.created_at ? new Date(d.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '',
+            date: d.created_at ? new Date(d.created_at).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' }) : '',
             before: d.before || '',
             after: d.after || '',
           });
@@ -82,7 +84,7 @@ export default function RecosPage() {
           text: p.data || p.description || '',
           confidence: (p.confidence || '').toLowerCase() === 'haute' ? 'high'
             : (p.confidence || '').toLowerCase() === 'moyenne' ? 'medium' : 'low',
-          confidenceLabel: `Confiance ${p.confidence || 'inconnue'}`,
+          confidenceLabel: en ? `Confidence: ${p.confidence || 'unknown'}` : `Confiance ${p.confidence || 'inconnue'}`,
         }))
       );
 
@@ -123,8 +125,8 @@ export default function RecosPage() {
   const filteredRecos = useMemo(() => {
     return recos.filter(r => {
       // Priority filter
-      if (activeFilter !== 'Toutes') {
-        const targetPriority = PRIORITY_MAP[activeFilter];
+      if (activeFilter !== 'all') {
+        const targetPriority = activeFilter;
         if (targetPriority === 'applied') {
           if (r.status !== 'applied' && r.priority !== 'applied') return false;
         } else {
@@ -141,16 +143,13 @@ export default function RecosPage() {
   // Count per priority filter
   const filterCounts = useMemo(() => {
     const counts = {};
-    PRIORITY_FILTERS.forEach(f => {
-      if (f === 'Toutes') {
+    FILTER_KEYS.forEach(f => {
+      if (f === 'all') {
         counts[f] = recos.length;
+      } else if (f === 'applied') {
+        counts[f] = recos.filter(r => r.status === 'applied' || r.priority === 'applied').length;
       } else {
-        const targetPriority = PRIORITY_MAP[f];
-        if (targetPriority === 'applied') {
-          counts[f] = recos.filter(r => r.status === 'applied' || r.priority === 'applied').length;
-        } else {
-          counts[f] = recos.filter(r => r.priority === targetPriority && r.status !== 'applied' && r.status !== 'dismissed').length;
-        }
+        counts[f] = recos.filter(r => r.priority === f && r.status !== 'applied' && r.status !== 'dismissed').length;
       }
     });
     return counts;
@@ -160,14 +159,16 @@ export default function RecosPage() {
 
   const applyReco = useCallback((id) => {
     const now = new Date();
-    const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    const dateStr = now.toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
     setRecos(prev => prev.map(r => {
       if (r.id !== id) return r;
       return {
         ...r,
         status: 'applied',
         priority: 'applied',
-        appliedNote: `Appliquée le ${dateStr} · En attente de données${r.impact ? ' · Impact attendu : ' + r.impact : ''}`,
+        appliedNote: en
+          ? `Applied ${dateStr} · Awaiting data${r.impact ? ' · Expected impact: ' + r.impact : ''}`
+          : `Appliqu\u00E9e le ${dateStr} · En attente de donn\u00E9es${r.impact ? ' · Impact attendu : ' + r.impact : ''}`,
       };
     }));
     setEditingId(null);
@@ -235,7 +236,7 @@ export default function RecosPage() {
 
   function renderBadge(reco) {
     if (reco.status === 'applied' || reco.priority === 'applied') {
-      return <span className="reco-priority-badge applied">Appliquée</span>;
+      return <span className="reco-priority-badge applied">{en ? 'Applied' : 'Appliqu\u00E9e'}</span>;
     }
     if (reco.status === 'dismissed') {
       return (
@@ -243,12 +244,12 @@ export default function RecosPage() {
           className="reco-priority-badge"
           style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
         >
-          Ignorée
+          {en ? 'Dismissed' : 'Ignor\u00E9e'}
         </span>
       );
     }
     return <span className={`reco-priority-badge ${reco.priority}`}>{
-      reco.priority === 'critical' ? 'Critique' :
+      reco.priority === 'critical' ? (en ? 'Critical' : 'Critique') :
       reco.priority === 'important' ? 'Important' :
       'Suggestion'
     }</span>;
@@ -293,12 +294,12 @@ export default function RecosPage() {
             {(reco.before || reco.after) && !isApplied && (
               <div className="reco-diff">
                 <div className="reco-diff-panel">
-                  <div className="reco-diff-label before">Actuel</div>
+                  <div className="reco-diff-label before">{en ? 'Current' : 'Actuel'}</div>
                   <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: sanitizeHtml(reco.before) }} />
                 </div>
                 <div className="reco-diff-panel">
                   <div className={`reco-diff-label ${isEditing ? 'after' : 'after'}`}>
-                    {isEditing ? 'Votre version (modifiable)' : 'Proposition Baakalai'}
+                    {isEditing ? (en ? 'Your version (editable)' : 'Votre version (modifiable)') : (en ? 'Baakalai suggestion' : 'Proposition Baakalai')}
                   </div>
                   {isEditing ? (
                     <textarea
@@ -331,7 +332,7 @@ export default function RecosPage() {
             {isApplied && reco.after && (
               <div className="reco-diff">
                 <div className="reco-diff-panel">
-                  <div className="reco-diff-label after">Version appliquée</div>
+                  <div className="reco-diff-label after">{en ? 'Applied version' : 'Version appliqu\u00E9e'}</div>
                   <div className="reco-diff-text" dangerouslySetInnerHTML={{ __html: sanitizeHtml(reco.after) }} />
                 </div>
               </div>
@@ -350,17 +351,17 @@ export default function RecosPage() {
                 {isEditing ? (
                   <>
                     <button className="reco-btn accept" onClick={() => applyModified(reco.id)}>
-                      Appliquer la version modifiée
+                      {en ? 'Apply modified version' : 'Appliquer la version modifi\u00E9e'}
                     </button>
-                    <button className="reco-btn dismiss" onClick={cancelModify}>Annuler</button>
+                    <button className="reco-btn dismiss" onClick={cancelModify}>{en ? 'Cancel' : 'Annuler'}</button>
                   </>
                 ) : (
                   <>
-                    <button className="reco-btn accept" onClick={() => applyReco(reco.id)}>Appliquer</button>
+                    <button className="reco-btn accept" onClick={() => applyReco(reco.id)}>{en ? 'Apply' : 'Appliquer'}</button>
                     <button className="reco-btn modify" onClick={() => startModify(reco.id)}>
-                      Modifier{reco.priority === 'critical' ? " avant d'appliquer" : ''}
+                      {en ? 'Modify' : 'Modifier'}{reco.priority === 'critical' ? (en ? ' before applying' : " avant d'appliquer") : ''}
                     </button>
-                    <button className="reco-btn dismiss" onClick={() => dismissReco(reco.id)}>Ignorer</button>
+                    <button className="reco-btn dismiss" onClick={() => dismissReco(reco.id)}>{en ? 'Dismiss' : 'Ignorer'}</button>
                   </>
                 )}
               </div>
@@ -378,18 +379,18 @@ export default function RecosPage() {
       {/* Header */}
       <div className="reco-page-header">
         <div>
-          <div className="reco-page-title">Recommandations IA</div>
+          <div className="reco-page-title">{en ? 'AI Recommendations' : 'Recommandations IA'}</div>
           <div className="reco-page-subtitle" style={analysisRunning ? { color: 'var(--text-secondary)' } : undefined}>
             {analysisRunning
-              ? 'Baakalai analyse vos campagnes... Veuillez patienter.'
-              : "Baakalai analyse vos campagnes et propose des affinages \u00B7 Mis \u00E0 jour il y a 2h"
+              ? (en ? 'Baakalai is analyzing your campaigns... Please wait.' : 'Baakalai analyse vos campagnes... Veuillez patienter.')
+              : (en ? 'Baakalai analyzes your campaigns and suggests refinements' : 'Baakalai analyse vos campagnes et propose des affinages')
             }
           </div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-ghost">Historique</button>
+          <button className="btn btn-ghost">{en ? 'History' : 'Historique'}</button>
           <button className="btn btn-primary" onClick={rerunAnalysis} disabled={analysisRunning}>
-            Relancer l'analyse
+            {en ? 'Re-run analysis' : 'Relancer l\'analyse'}
           </button>
         </div>
       </div>
@@ -398,37 +399,37 @@ export default function RecosPage() {
       <div className="reco-stats">
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--text-primary)' }}>{stats.total}</div>
-          <div className="reco-stat-label">Recommandations totales</div>
-          <div className="reco-stat-trend up">4 nouvelles cette semaine</div>
+          <div className="reco-stat-label">{en ? 'Total recommendations' : 'Recommandations totales'}</div>
+          <div className="reco-stat-trend up">{en ? `${stats.total} total` : `${stats.total} au total`}</div>
         </div>
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--success)' }}>{stats.applied}</div>
-          <div className="reco-stat-label">Appliquées</div>
-          <div className="reco-stat-trend up">{'▲'} +4.2pts réponse en moyenne</div>
+          <div className="reco-stat-label">{en ? 'Applied' : 'Appliqu\u00E9es'}</div>
+          <div className="reco-stat-trend up">{' '}</div>
         </div>
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--warning)' }}>{stats.pending}</div>
-          <div className="reco-stat-label">En attente</div>
+          <div className="reco-stat-label">{en ? 'Pending' : 'En attente'}</div>
           <div className="reco-stat-trend" style={{ color: 'var(--warning)' }}>
-            {stats.pending > 0 ? '1 critique' : '—'}
+            {stats.pending > 0 ? (en ? `${stats.pending} pending` : `${stats.pending} en attente`) : '\u2014'}
           </div>
         </div>
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--text-muted)' }}>{stats.ignored}</div>
-          <div className="reco-stat-label">Ignorées</div>
+          <div className="reco-stat-label">{en ? 'Dismissed' : 'Ignor\u00E9es'}</div>
           <div className="reco-stat-trend" style={{ color: 'var(--text-muted)' }}>{'—'}</div>
         </div>
       </div>
 
       {/* Filters */}
       <div className="reco-filters">
-        {PRIORITY_FILTERS.map(f => (
+        {FILTER_KEYS.map(f => (
           <button
             key={f}
             className={`reco-filter${activeFilter === f ? ' active' : ''}`}
             onClick={() => { setActiveFilter(f); setActiveCampaign(null); }}
           >
-            {f} <span className="count">{filterCounts[f]}</span>
+            {labels[f]} <span className="count">{filterCounts[f]}</span>
           </button>
         ))}
         <span style={{ borderLeft: '1px solid var(--border)', margin: '0 4px' }} />
@@ -438,7 +439,7 @@ export default function RecosPage() {
             className={`reco-filter${activeCampaign === name ? ' active' : ''}`}
             onClick={() => {
               setActiveCampaign(activeCampaign === name ? null : name);
-              setActiveFilter('Toutes');
+              setActiveFilter('all');
             }}
           >
             {name}
@@ -453,7 +454,7 @@ export default function RecosPage() {
 
       {/* Cross-campaign insights */}
       <div className="reco-insight-card">
-        <div className="reco-insight-title">Patterns cross-campagne détectés</div>
+        <div className="reco-insight-title">{en ? 'Cross-campaign patterns detected' : 'Patterns cross-campagne d\u00E9tect\u00E9s'}</div>
         <div className="reco-insight-grid">
           {insights.map((ins, i) => (
             <div key={i} className="reco-insight-item">
@@ -463,18 +464,18 @@ export default function RecosPage() {
                 <div className={`reco-insight-item-confidence ${ins.confidence}`}>{ins.confidenceLabel}</div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   {ratedInsights[i] ? (
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Merci</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{en ? 'Thanks' : 'Merci'}</span>
                   ) : (
                     <>
                       <button
                         onClick={() => handleInsightFeedback(i, ins, 'useful')}
                         style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
-                        title="Utile"
+                        title={en ? 'Useful' : 'Utile'}
                       >{'\uD83D\uDC4D'}</button>
                       <button
                         onClick={() => handleInsightFeedback(i, ins, 'not_useful')}
                         style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
-                        title="Pas utile"
+                        title={en ? 'Not useful' : 'Pas utile'}
                       >{'\uD83D\uDC4E'}</button>
                     </>
                   )}

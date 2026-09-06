@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<!--
+  Gabarit de l'image Open Graph de la page d'accueil (1200×630).
+
+  Rendu en PNG par Chrome en headless, dimensions exactes, aucune dépendance :
+
+    chrome --headless --disable-gpu --hide-scrollbars \
+           --window-size=1200,630 \
+           --screenshot=landing/assets/og-home.png \
+           landing/assets/og-home.html
+
+  (sous Windows : "/c/Program Files/Google/Chrome/Application/chrome.exe")
+
+  Le gabarit est versionné exprès : og-diagnostic.png avait été produit à la
+  main hors du dépôt, donc impossible à retoucher ou à décliner. Ici la
+  prochaine image se fait en changeant deux lignes et en relançant la commande.
+
+  Les polices sont embarquées via Google Fonts : la commande a besoin d'un
+  accès réseau, sinon Chrome retombe sur la police système et le rendu change.
+  Vérifier l'image après génération.
+
+  Couleurs reprises telles quelles de colors_and_type.css — ne pas les
+  redéfinir à la main, elles doivent suivre le site.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FAFAF9;
+    --ink: #0A0A0A;
+    --grey-400: #A1A19F;
+    --primary: #6E57FA;
+    --primary-on-dark: #A998FF;
+    --lavender: #C4B5FD;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: 'Geist', system-ui, sans-serif;
+    background: var(--ink);
+    color: var(--paper);
+    position: relative;
+    /* Halo violet en bas à droite — même traitement que les sections sombres
+       du site, il évite l'aplat noir mort sans distraire du texte. */
+    background-image:
+      radial-gradient(900px 500px at 88% 106%, rgba(110,87,250,0.30), transparent 62%),
+      radial-gradient(600px 380px at 4% -12%, rgba(110,87,250,0.10), transparent 60%);
+  }
+  .frame {
+    position: absolute; inset: 0;
+    padding: 62px 72px 58px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+
+  /* ── Bandeau haut : marque + catégorie ── */
+  .top { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 15px; }
+  .mark {
+    width: 46px; height: 46px; border-radius: 11px;
+    background: var(--paper); color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 27px; font-weight: 700; line-height: 1;
+  }
+  .wordmark { font-size: 25px; font-weight: 600; letter-spacing: -0.015em; }
+  .wordmark .dot { color: var(--primary-on-dark); }
+  .eyebrow {
+    font-size: 15px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--primary-on-dark);
+  }
+
+  /* ── Accroche ── */
+  h1 {
+    font-size: 66px; line-height: 1.1; font-weight: 700;
+    letter-spacing: -0.032em; max-width: 985px;
+  }
+  h1 em { font-style: normal; color: var(--primary-on-dark); }
+  .sub {
+    margin-top: 26px; max-width: 830px;
+    font-size: 25px; line-height: 1.45; font-weight: 400;
+    color: var(--grey-400);
+  }
+
+  /* ── Pastilles ── */
+  .pills { display: flex; gap: 12px; align-items: center; }
+  .pill {
+    font-size: 17px; font-weight: 500;
+    padding: 12px 22px; border-radius: 999px;
+    border: 1px solid rgba(250,250,249,0.22);
+    color: rgba(250,250,249,0.88);
+  }
+  .pill.solid {
+    background: var(--primary); border-color: var(--primary);
+    color: #fff; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="top">
+      <div class="brand">
+        <div class="mark">b</div>
+        <div class="wordmark">baaka<span class="dot">l</span>.ai</div>
+      </div>
+      <div class="eyebrow">Le RevOps de la PME</div>
+    </div>
+
+    <div>
+      <h1>Ton CRM sait déjà qui relancer.<br><em>Personne ne le lit.</em></h1>
+      <p class="sub">
+        Le système IA qui lit ton CRM 24/7 — réactivation, upsell, churn,
+        nettoyage. Opérationnel en 30 minutes.
+      </p>
+    </div>
+
+    <div class="pills">
+      <div class="pill solid">baakal.ai</div>
+      <div class="pill">Pipedrive</div>
+      <div class="pill">HubSpot</div>
+      <div class="pill">Salesforce</div>
+      <div class="pill">Sans changer de CRM</div>
+    </div>
+  </div>
+</body>
+</html>

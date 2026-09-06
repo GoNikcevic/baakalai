@@ -22,6 +22,12 @@ const { getSectorMultiplier } = require('./sector-classifier');
 
 const DAY_MS = 86400000;
 
+// Seuil unique « client à risque » — utilisé par le badge de nav, la liste
+// « À traiter aujourd'hui » et le compteur atRisk. Le scan de signaux externes
+// (churn-external-signals.js) reste volontairement plus large (>= 50) : on
+// surveille dès le risque moyen, on n'alerte qu'à partir d'ici.
+const AT_RISK_THRESHOLD = 60;
+
 /**
  * Score a single opportunity for churn risk.
  * `ownSectorMultiplier`/`clientSectorMultiplier` are pre-resolved by scoreAllForUser
@@ -33,16 +39,17 @@ const DAY_MS = 86400000;
 function scoreOpportunity(opp, {
   deals = [], activities = [], emails = [],
   ownSectorMultiplier = 1.0, clientSectorMultiplier = 1.0, clientSectorLabel = null,
-  upsellEmails = [], externalSignals = [],
+  upsellEmails = [], externalSignals = [], registrySignals = [],
 } = {}) {
   const now = Date.now();
   const factors = [];
   let score = 0;
 
   // ── 1. Inactivity (max 30 pts) ──
-  // `last_activity_at` reflects genuine CRM changes; `updated_at` is reset to now() by a
-  // DB trigger on every internal write (including this very scoring pass), so it can't
-  // be trusted to measure staleness.
+  // `updated_at` est réécrit à chaque synchro CRM : s'en servir ici rendait le
+  // critère d'inactivité — 30 points sur 100, le plus lourd — impossible à
+  // déclencher. Mesuré avant correction : 286 scores à 0, aucun au-dessus de 40.
+  // `last_activity_at` porte la date réelle côté CRM (lib/crm-activity-date.js).
   const lastActivity = opp.last_activity_at || opp.created_at;
   const daysSinceActivity = lastActivity ? (now - new Date(lastActivity).getTime()) / DAY_MS : 999;
 
@@ -61,10 +68,29 @@ function scoreOpportunity(opp, {
   }
 
   // ── 2. Deal stagnation (max 25 pts) ──
+  // `deals` ne vient que des APIs Pipedrive/Salesforce. Pour les 5 autres
+  // providers il est toujours vide, ce qui plafonnait mécaniquement le score
+  // à 45/100 (mesuré : max=45 sur 373 opps Notion). Fallback : l'opportunité
+  // elle-même est le deal — un statut 'open' qui vieillit sans conclusion
+  // est le même signal, quel que soit le CRM.
   const oppDeals = deals.filter(d =>
     d.person_id === opp.crm_contact_id || d.personId === opp.crm_contact_id
   );
   const openDeals = oppDeals.filter(d => d.status === 'open');
+
+  if (oppDeals.length === 0 && opp.status === 'open' && opp.created_at) {
+    const dealAge = (now - new Date(opp.created_at).getTime()) / DAY_MS;
+    if (dealAge >= 90) {
+      score += 25;
+      factors.push({ signal: 'deal_stagnant', weight: 25, detail: `Deal ouvert depuis ${Math.round(dealAge)}d sans conclusion` });
+    } else if (dealAge >= 60) {
+      score += 18;
+      factors.push({ signal: 'deal_stagnant', weight: 18, detail: `Deal ouvert depuis ${Math.round(dealAge)}d` });
+    } else if (dealAge >= 30) {
+      score += 10;
+      factors.push({ signal: 'deal_stagnant', weight: 10, detail: `Deal ouvert depuis ${Math.round(dealAge)}d` });
+    }
+  }
 
   if (openDeals.length > 0) {
     const stalestDeal = openDeals.reduce((oldest, d) => {
@@ -128,6 +154,14 @@ function scoreOpportunity(opp, {
     factors.push({ signal: 'no_emails', weight: 5, detail: 'Aucun email envoyé' });
   }
 
+  // Adresse bouncée définitivement (posé par email-outbound sur rejet 5xx) :
+  // le contact a probablement quitté la société — précurseur classique de churn,
+  // surtout si c'était le champion du compte.
+  if (opp.email_bounced_at) {
+    score += 10;
+    factors.push({ signal: 'email_bounced', weight: 10, detail: `Email invalide depuis le ${new Date(opp.email_bounced_at).toLocaleDateString('fr-FR')} — contact probablement parti` });
+  }
+
   // ── 4. Contact completeness (max 10 pts) ──
   let missingFields = 0;
   if (!opp.email) missingFields++;
@@ -143,10 +177,16 @@ function scoreOpportunity(opp, {
     score += 15;
     factors.push({ signal: 'status_lost', weight: 15, detail: 'Statut: perdu' });
   } else if (opp.status === 'won') {
-    // Won contacts can still churn — but base risk is lower
-    score = Math.max(0, score - 15);
-    if (score > 0) {
-      factors.push({ signal: 'status_won_offset', weight: -15, detail: 'Client actif (won) — risque réduit' });
+    // Un client (won) silencieux est LE signal de churn du produit — l'alourdir,
+    // pas le réduire. L'offset -15 ne s'applique qu'aux clients encore actifs.
+    if (daysSinceActivity >= 90) {
+      score += 20;
+      factors.push({ signal: 'client_silent', weight: 20, detail: `Client sans contact depuis ${Math.round(daysSinceActivity)}d` });
+    } else {
+      score = Math.max(0, score - 15);
+      if (score > 0) {
+        factors.push({ signal: 'status_won_offset', weight: -15, detail: 'Client actif (won) — risque réduit' });
+      }
     }
   }
 
@@ -177,11 +217,42 @@ function scoreOpportunity(opp, {
   }
 
   // ── 8. External web signals (last 30 days) ──
-  if (externalSignals.length > 0) {
-    const distinctTypes = [...new Set(externalSignals.map(s => s.signal_type))];
-    const bump = Math.min(distinctTypes.length * 10, 20);
+  // Dédup avec le facteur 9 : si un registre officiel a confirmé une procédure,
+  // le « financial_distress » attrapé par mots-clés Brave est le même événement
+  // en moins fiable — il ne doit pas s'empiler.
+  const registryTypes = new Set(registrySignals.map(s => s.signal_type));
+  const registryConfirmedDistress = registryTypes.has('insolvency_proceeding')
+    || registryTypes.has('insolvency_safeguard') || registryTypes.has('company_dissolved');
+  const braveTypes = [...new Set(externalSignals.map(s => s.signal_type))]
+    .filter(type => !(type === 'financial_distress' && registryConfirmedDistress));
+  if (braveTypes.length > 0) {
+    const bump = Math.min(braveTypes.length * 10, 20);
     score += bump;
-    factors.push({ signal: 'external_signals', weight: bump, detail: `Signal(aux) externe(s) détecté(s) : ${distinctTypes.join(', ')}` });
+    factors.push({ signal: 'external_signals', weight: bump, detail: `Signal(aux) externe(s) détecté(s) : ${braveTypes.join(', ')}` });
+  }
+
+  // ── 9. Santé financière — registres officiels (90 jours) ──
+  // BODACC / Companies House / CourtListener / OpenCorporates. Signaux durs et datés,
+  // volontairement NON pondérés par le secteur (facteur 6) : une liquidation
+  // judiciaire est critique quel que soit le secteur.
+  if (registrySignals.length > 0) {
+    const detail = registrySignals[0].detail || '';
+    if (registryTypes.has('insolvency_proceeding') || registryTypes.has('company_dissolved')) {
+      score += 30;
+      factors.push({
+        signal: registryTypes.has('insolvency_proceeding') ? 'insolvency_proceeding' : 'company_dissolved',
+        weight: 30, detail,
+      });
+      // Procédure collective ou radiation = bande critique d'office.
+      score = Math.max(score, 76);
+    } else if (registryTypes.has('insolvency_safeguard')) {
+      score += 15;
+      factors.push({ signal: 'insolvency_safeguard', weight: 15, detail });
+    }
+    if (registryTypes.has('revenue_drop')) {
+      score += 8;
+      factors.push({ signal: 'revenue_drop', weight: 8, detail });
+    }
   }
 
   return {
@@ -217,17 +288,27 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
     upsellEmailsByOpp.get(e.opportunity_id).push(e);
   }
 
-  // Load external signals from the last 30 days, grouped by opportunity
+  // Load external signals grouped by opportunity, split by source :
+  // Brave (news, 30 jours — périmé vite) vs registres officiels (90 jours —
+  // une procédure collective reste un risque des mois durant).
   const externalSignalsByOpp = new Map();
+  const registrySignalsByOpp = new Map();
   try {
     const sigResult = await db.query(
-      `SELECT opportunity_id, signal_type FROM churn_external_signals
-       WHERE user_id = $1 AND detected_at > now() - interval '30 days'`,
+      `SELECT opportunity_id, signal_type, source, detail, detected_at FROM churn_external_signals
+       WHERE user_id = $1 AND detected_at > now() - interval '90 days'`,
       [userId]
     );
+    const DAY30 = 30 * DAY_MS;
     for (const s of sigResult.rows) {
-      if (!externalSignalsByOpp.has(s.opportunity_id)) externalSignalsByOpp.set(s.opportunity_id, []);
-      externalSignalsByOpp.get(s.opportunity_id).push(s);
+      const isRegistry = (s.source || '').startsWith('registry_');
+      if (isRegistry) {
+        if (!registrySignalsByOpp.has(s.opportunity_id)) registrySignalsByOpp.set(s.opportunity_id, []);
+        registrySignalsByOpp.get(s.opportunity_id).push(s);
+      } else if (Date.now() - new Date(s.detected_at).getTime() <= DAY30) {
+        if (!externalSignalsByOpp.has(s.opportunity_id)) externalSignalsByOpp.set(s.opportunity_id, []);
+        externalSignalsByOpp.get(s.opportunity_id).push(s);
+      }
     }
   } catch { /* table may be empty — fine */ }
 
@@ -267,10 +348,11 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
       clientSectorLabel: clientSector?.sector ?? null,
       upsellEmails: upsellEmailsByOpp.get(opp.id) || [],
       externalSignals: externalSignalsByOpp.get(opp.id) || [],
+      registrySignals: registrySignalsByOpp.get(opp.id) || [],
     });
     results.push({ id: opp.id, score, factors: JSON.stringify(factors) });
     scored++;
-    if (score >= 50) atRisk++;
+    if (score >= AT_RISK_THRESHOLD) atRisk++;
   }
 
   // Bulk UPDATE in batches of 500
@@ -306,4 +388,4 @@ function getChurnBand(score) {
   return { band: 'low', color: 'var(--success)' };
 }
 
-module.exports = { scoreOpportunity, scoreAllForUser, getChurnBand };
+module.exports = { scoreOpportunity, scoreAllForUser, getChurnBand, AT_RISK_THRESHOLD };

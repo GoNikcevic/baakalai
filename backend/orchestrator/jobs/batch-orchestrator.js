@@ -412,12 +412,13 @@ async function notifyUserMessage(userId, campaign, message) {
 
   // 2. Persist as a chat message in the user's most recent thread
   try {
-    const threads = await db.chatThreads.list(userId, 1);
+    // Batch notifications concern campaigns → target the campaign assistant's threads only.
+    const threads = await db.chatThreads.list(userId, { assistantType: 'campaign', limit: 1 });
     let threadId;
     if (threads.length > 0) {
       threadId = threads[0].id;
     } else {
-      const newThread = await db.chatThreads.create('Notifications Baakalai', userId);
+      const newThread = await db.chatThreads.create('Notifications Baakalai', userId, 'campaign');
       threadId = newThread.id;
     }
 

@@ -82,6 +82,10 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // allows loading external fonts/images
 }));
 
+// Webhook Stripe — corps BRUT exigé pour vérifier la signature, donc monté
+// avant express.json (public, validé par STRIPE_WEBHOOK_SECRET).
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), require('./routes/billing').stripeWebhook);
+
 // Limit request body size
 app.use(express.json({ limit: '2mb' }));
 
@@ -116,6 +120,10 @@ app.get('/api/health', async (_req, res) => {
     'notion.token',
     'claude.apiKey',
   ]);
+  // État des crons (dernier run par job + retard éventuel). Informative
+  // seulement : ne dégrade pas le status, sinon Railway redémarrerait le
+  // service en boucle pour une panne que le restart ne répare pas.
+  const crons = await require('./lib/cron-watchdog').healthSummary(db);
   res.json({
     status: dbHealth.ok ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
@@ -127,6 +135,7 @@ app.get('/api/health', async (_req, res) => {
     database: dbHealth,
     sockets: socketServer.getConnectedUserCount(),
     configComplete: configOk,
+    ...(crons ? { crons } : {}),
   });
 });
 
@@ -139,6 +148,9 @@ app.use('/api/auth', authRouter);
 
 // Webhooks (public — validated via shared secret, not JWT)
 app.use('/api/webhooks', require('./routes/webhooks'));
+
+// Diagnostic CRM public (lead magnet, sans compte — rate-limité par IP dans la route)
+app.use('/api/public/diagnostic', require('./routes/public-diagnostic'));
 
 // OAuth email callbacks (public — user returns from Google/Microsoft redirect, no auth needed)
 const { gmailCallback, microsoftCallback } = require('./routes/nurture');
@@ -158,6 +170,7 @@ app.use('/api/dashboard', requireAuth, dashboardRouter);
 app.use('/api/ai', requireAuth, aiLimiter, aiRouter);
 app.use('/api/chat', requireAuth, chatLimiter, chatRouter);
 app.use('/api/settings', requireAuth, settingsRouter);
+app.use('/api/billing', requireAuth, require('./routes/billing'));
 app.use('/api/documents', requireAuth, documentsRouter);
 app.use('/api/profile', requireAuth, profileRouter);
 app.use('/api/stats', requireAuth, statsRouter);
@@ -168,6 +181,7 @@ app.use('/api/crm', requireAuth, crmRouter);
 app.use('/api/churn', requireAuth, require('./routes/churn'));
 app.use('/api/reactivation', requireAuth, require('./routes/reactivation'));
 app.use('/api/data-quality', requireAuth, require('./routes/data-quality'));
+app.use('/api/nav', requireAuth, require('./routes/nav'));
 app.use('/api/team-campaigns', requireAuth, require('./routes/team-campaigns'));
 app.use('/api/strategic', requireAuth, require('./routes/strategic'));
 app.use('/api/signals', requireAuth, require('./routes/signals'));
@@ -177,7 +191,9 @@ app.use('/api/analytics/membership', requireAuth, require('./routes/analytics-me
 app.use('/api/notifications', requireAuth, require('./routes/notifications'));
 app.use('/api/templates', requireAuth, require('./routes/templates'));
 app.use('/api/nurture', requireAuth, require('./routes/nurture'));
+app.use('/api/priorities', requireAuth, require('./routes/priorities'));
 app.use('/api/ext', requireAuth, require('./routes/extension'));
+app.use('/api/events', requireAuth, require('./routes/events'));
 
 // SPA catch-all — serve React index.html for non-API routes
 app.get('*', (req, res, next) => {
@@ -218,11 +234,6 @@ server.listen(config.port, '0.0.0.0', () => {
     try { await db.refreshTokens.deleteExpired(); } catch { /* ignore */ }
   }, 60 * 60 * 1000);
 
-  // Clean up completed jobs every 6 hours
-  const jobCleanupInterval = setInterval(async () => {
-    try { await db.jobQueue.cleanup(7); } catch { /* ignore */ }
-  }, 6 * 60 * 60 * 1000);
-
   // Data retention cleanup — runs daily at startup + every 24h
   const { runRetentionCleanup } = require('./lib/retention-cleanup');
   runRetentionCleanup().catch(() => {});
@@ -233,6 +244,12 @@ server.listen(config.port, '0.0.0.0', () => {
   // Start orchestrator (cron jobs) if enabled
   orchestrator.start();
 
+  // Dead-man's switch des crons — démarre TOUJOURS, sans condition sur
+  // ORCHESTRATOR_ENABLED : c'est précisément quand ce flag casse (cf. les
+  // trois mois d'extinction silencieuse d'avril-juillet 2026) que le
+  // processus web doit donner l'alerte.
+  require('./lib/cron-watchdog').startWatchdog(db);
+
   // ── Graceful Shutdown ──
   let shuttingDown = false;
   async function shutdown(signal) {
@@ -241,7 +258,6 @@ server.listen(config.port, '0.0.0.0', () => {
     logger.info('shutdown', `${signal} received — graceful shutdown starting...`);
 
     clearInterval(tokenCleanupInterval);
-    clearInterval(jobCleanupInterval);
     clearInterval(retentionInterval);
 
     // Stop accepting new connections

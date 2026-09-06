@@ -24,7 +24,9 @@ const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const { notifyUser } = require('../socket');
 const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
+const { extractActivityDate } = require('./crm-activity-date');
 const { applyMappings } = require('./crm-field-mapper');
+const { matchContacts } = require('./trigger-matching');
 const logger = require('./logger');
 
 const DAY_MS = 86400000;
@@ -83,7 +85,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     await stepDataQuality(userId, crmCreds, report, _opps);
 
     // ── Step 3: Nurture Evaluation ──
-    await stepNurture(userId, crmCreds, report);
+    await stepNurture(userId, crmCreds, report, { teamId, crmProvider });
 
     // ── Step 3b: LinkedIn Response Sync ──
     try {
@@ -205,6 +207,32 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       report.errors.push(`Enrich: ${err.message}`);
     }
 
+    // ── Step 5c: Lead Scoring (persist unified contact score) ──
+    try {
+      const { scoreAllContacts } = require('./contact-scoring');
+      const { contacts, avgScore, distribution } = await scoreAllContacts(userId);
+      if (contacts.length > 0) {
+        const payload = JSON.stringify(contacts.map(c => ({
+          id: c.id,
+          score: c.score,
+          breakdown: { ...c.breakdown, factors: c.factors },
+        })));
+        const updated = await db.query(
+          `UPDATE opportunities o
+           SET score = v.score, score_breakdown = v.breakdown
+           FROM jsonb_to_recordset($1::jsonb) AS v(id uuid, score int, breakdown jsonb)
+           WHERE o.id = v.id AND o.user_id = $2
+             AND o.score IS DISTINCT FROM v.score
+           RETURNING o.id`,
+          [payload, userId]
+        );
+        report.leadScoring = { scored: contacts.length, updated: updated.rows.length, avgScore, distribution };
+        logger.info('crm-agent', `Lead scoring user ${userId}: ${contacts.length} scored, ${updated.rows.length} updated, avg=${avgScore}`);
+      }
+    } catch (err) {
+      report.errors.push(`Lead scoring: ${err.message}`);
+    }
+
     // ── Step 6: AI Analysis (if significant changes) ──
     if (report.sync.imported > 0 || report.alerts.length > 0 || trigger === 'manual') {
       await stepAnalysis(userId, report, teamId);
@@ -227,7 +255,13 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       });
     } catch { /* never block cleanup */ }
 
-    logger.info('crm-agent', `User ${userId} [${trigger}]: sync +${report.sync.imported}/${report.sync.updated}, nurture ${report.nurture.sent}/${report.nurture.queued}, alerts ${report.alerts.length} (${report.duration}ms)`);
+    logger.info('crm-agent', `User ${userId} [${trigger}]: sync +${report.sync.imported}/${report.sync.updated}, nurture ${report.nurture.sent}/${report.nurture.queued}, alerts ${report.alerts.length}, errors ${report.errors.length} (${report.duration}ms)`);
+    if (report.errors.length > 0) {
+      // Les erreurs par étape/contact étaient totalement invisibles : le run
+      // loggait « nurture 0/0 » sans trace de la cause (ex. violation de la
+      // contrainte unique pending avalée contact par contact pendant 4 jours).
+      logger.warn('crm-agent', `User ${userId}: ${report.errors.slice(0, 5).join(' | ')}`);
+    }
 
     _running.delete(userId);
   }
@@ -281,8 +315,40 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
 
       const existing = existingByEmail.get(email.toLowerCase());
 
+      // Date de dernière activité réelle chez le client. À NE PAS confondre
+      // avec `updated_at`, qui est réécrit à chaque synchro et ne dit donc rien
+      // de la fraîcheur du deal. Voir lib/crm-activity-date.js.
+      const lastActivityAt = extractActivityDate(crmProvider, raw);
+
+      // Géo rapatriée du CRM (migration 093). Odoo renvoie country_id = [id, libellé] ;
+      // Pipedrive n'a pas d'adresse standard sur les personnes → reste null (fallback
+      // TLD email côté analytics).
+      const country = raw.country || (Array.isArray(raw.country_id) ? raw.country_id[1] : null) || null;
+      const city = raw.city || null;
+
+      // Field mappings CRM (lignes produit, statut, renouvellement) — factorisé pour
+      // s'appliquer aussi aux NOUVEAUX contacts : avant, seule la branche update les
+      // appliquait, donc un import frais n'avait jamais de ligne produit.
+      const applyFieldMappings = async (oppId, currentStatus) => {
+        try {
+          const mapped = await applyMappings(userId, crmProvider, raw);
+          for (const plId of mapped.productLineIds) {
+            await db.query(
+              `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+              [oppId, plId]
+            );
+          }
+          const fieldUpdates = {};
+          if (mapped.customFields.status && mapped.customFields.status !== currentStatus) fieldUpdates.status = mapped.customFields.status;
+          if (mapped.customFields.renewal_date) fieldUpdates.renewal_date = mapped.customFields.renewal_date;
+          if (Object.keys(fieldUpdates).length > 0) {
+            await db.opportunities.update(oppId, fieldUpdates);
+          }
+        } catch { /* mapping is optional */ }
+      };
+
       if (!existing) {
-        await db.opportunities.create({
+        const created = await db.opportunities.create({
           userId,
           name: raw.name || 'Unknown',
           email,
@@ -294,8 +360,12 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           crmOwnerId,
           ownerEmail,
           ownerId,
+          lastActivityAt,
+          country,
+          city,
         });
         report.sync.imported++;
+        await applyFieldMappings(created.id, created.status);
       } else {
         // Update if CRM data is different
         const updates = {};
@@ -306,40 +376,28 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         const company = raw.org_name || raw.org_id?.name || '';
         if (company && company !== existing.company) updates.company = company;
         if (!existing.crm_contact_id) updates.crm_contact_id = String(raw.id);
+        // On n'écrit que si la date avance : une resynchronisation ne doit
+        // jamais faire « rajeunir » un deal, sinon on efface le signal de
+        // dormance qu'on cherche précisément à détecter.
+        if (lastActivityAt && (!existing.last_activity_at
+            || new Date(lastActivityAt) > new Date(existing.last_activity_at))) {
+          updates.last_activity_at = lastActivityAt;
+        }
         // Sync owner
         if (crmOwnerId && crmOwnerId !== existing.crm_owner_id) {
           updates.crm_owner_id = crmOwnerId;
           if (ownerEmail) updates.owner_email = ownerEmail;
           if (ownerId) updates.owner_id = ownerId;
         }
+        if (country && country !== existing.country) updates.country = country;
+        if (city && city !== existing.city) updates.city = city;
 
         if (Object.keys(updates).length > 0) {
-          // A genuine field diff means the CRM record actually changed since last sync —
-          // use this as the "real activity" signal instead of the DB's own `updated_at`
-          // (which a trigger resets on every internal write, including this one).
-          updates.last_activity_at = new Date().toISOString();
           await db.opportunities.update(existing.id, updates);
           report.sync.updated++;
         }
 
-        // Apply field mappings (product lines, etc.)
-        try {
-          const mapped = await applyMappings(userId, crmProvider, raw);
-          if (mapped.productLineIds.length > 0) {
-            for (const plId of mapped.productLineIds) {
-              await db.query(
-                `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-                [existing.id, plId]
-              );
-            }
-          }
-          const fieldUpdates = {};
-          if (mapped.customFields.status && mapped.customFields.status !== existing.status) fieldUpdates.status = mapped.customFields.status;
-          if (mapped.customFields.renewal_date) fieldUpdates.renewal_date = mapped.customFields.renewal_date;
-          if (Object.keys(fieldUpdates).length > 0) {
-            await db.opportunities.update(existing.id, fieldUpdates);
-          }
-        } catch { /* mapping is optional */ }
+        await applyFieldMappings(existing.id, existing.status);
       }
     }
     // Sync deal values + lifecycle dates from CRM deals. Every provider's getDeals() is
@@ -356,6 +414,11 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
       else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token, 100); }
       else if (crmProvider === 'odoo') { const odooApi = require('../api/odoo'); deals = await odooApi.getDeals(token, { limit: 500 }); }
 
+      // Étapes de pipeline (migration 092) : carte id → libellé résolue une fois
+      // par sync pour les providers qui ne renvoient qu'un id d'étape.
+      const { getStageLabelMap, extractStage, trackStage } = require('./stage-tracking');
+      const stageLabelMap = await getStageLabelMap(crmProvider, token);
+
       // Prefer the CRM's own close date over "now" — "now" is only a fair proxy for a
       // transition happening in this very sync, never for backfilling an older won/lost deal.
       const safeDateISO = (value) => {
@@ -369,7 +432,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         if (!personId) continue;
 
         const opp = await db.query(
-          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
           [userId, personId]
         );
         if (!opp.rows[0]) continue;
@@ -409,7 +472,54 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           }
         }
 
+        // Étape de pipeline réelle : transition historisée quand l'id change,
+        // simple rafraîchissement de libellé sinon (renommage côté CRM).
+        try {
+          const stageUpdates = await trackStage(
+            userId, o, extractStage(crmProvider, deal, stageLabelMap),
+            { status: deal.status, source: 'delta_sync' }
+          );
+          Object.assign(updates, stageUpdates);
+        } catch { /* stage tracking best-effort */ }
+
         if (Object.keys(updates).length > 0) {
+          // Attribution: if deal moves to 'won' from lost/stagnant, check for reactivation email in last 90 days
+          if (updates.status === 'won' && ['lost', 'stagnant', 'imported', 'new'].includes(o.status)) {
+            const reactivationEmail = await db.query(
+              `SELECT id, pattern_ids FROM nurture_emails
+               WHERE opportunity_id = $1 AND user_id = $2 AND status = 'sent'
+                 AND metadata->>'chain' = 'deal_reactivation'
+                 AND created_at > NOW() - INTERVAL '90 days'
+               ORDER BY created_at DESC LIMIT 1`,
+              [o.id, userId]
+            );
+            if (reactivationEmail.rows[0]) {
+              updates.reactivated_at = new Date().toISOString();
+              updates.reactivated_from_email_id = reactivationEmail.rows[0].id;
+              report.reactivations = (report.reactivations || 0) + 1;
+              logger.info('crm-agent', `Deal reactivated: ${o.id} (email ${reactivationEmail.rows[0].id})`);
+
+              // Renforcement de la boucle d'apprentissage : deal mort → gagné
+              // avec email causal identifié, c'est LE signal le plus fort du
+              // produit. Les patterns utilisés pour rédiger cet email gagnent
+              // une confirmation. Best-effort : ne doit jamais faire échouer
+              // le sync.
+              const causalPatternIds = reactivationEmail.rows[0].pattern_ids || [];
+              if (causalPatternIds.length > 0) {
+                try {
+                  await db.query(
+                    `UPDATE memory_patterns
+                     SET confirmations = COALESCE(confirmations, 0) + 1, last_confirmed_at = now()
+                     WHERE id = ANY($1)`,
+                    [causalPatternIds]
+                  );
+                  logger.info('crm-agent', `Reactivation win: +1 confirmation on ${causalPatternIds.length} pattern(s)`);
+                } catch (err) {
+                  logger.warn('crm-agent', `Pattern reinforcement failed: ${err.message}`);
+                }
+              }
+            }
+          }
           await db.opportunities.update(o.id, updates);
         }
       }
@@ -463,8 +573,50 @@ function findDuplicates(opps) {
 
 // ── Step 3: Nurture ──
 
-async function stepNurture(userId, token, report) {
+// teamId et crmProvider doivent être passés explicitement : ils n'existent que
+// dans le scope de runAgent. Avant ce paramètre, chaque contact matché levait
+// « teamId is not defined », avalé par le catch par-contact — le cron
+// n'a jamais pu générer un seul email de nurture.
+async function stepNurture(userId, token, report, { teamId = null, crmProvider = null } = {}) {
   try {
+    // Expiration : un brouillon pending de plus de 14 jours est périmé.
+    // L'annuler libère le contact (contrainte unique 067 : un seul pending
+    // par contact) — sans quoi la file saturée bloque toute génération.
+    //
+    // Sauf si l'utilisateur n'a aucune boîte mail connectée : le brouillon
+    // n'est alors pas « périmé », il est *inenvoyable*, et l'expirer punit
+    // l'utilisateur pour une étape de configuration manquante. Constaté en
+    // prod : 80 brouillons annulés en août, 80 régénérés derrière, aucun
+    // envoyé — une boucle qui consommait des tokens tous les 14 jours sans
+    // qu'aucun email ne puisse partir. On gèle donc l'horloge tant que la
+    // boîte manque ; la file repart intacte dès la connexion.
+    const mailbox = await db.query(
+      `SELECT 1 FROM email_accounts WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+    const hasMailbox = mailbox.rows.length > 0;
+
+    if (!hasMailbox) {
+      const stuck = await db.query(
+        `SELECT count(*)::int AS n FROM nurture_emails WHERE user_id = $1 AND status = 'pending'`,
+        [userId]
+      );
+      if (stuck.rows[0].n > 0) {
+        report.nurture.blockedNoMailbox = stuck.rows[0].n;
+        logger.warn('crm-agent', `Nurture: ${stuck.rows[0].n} brouillons en attente mais aucune boîte mail connectée (user ${userId}) — expiration gelée`);
+      }
+    } else {
+      const expired = await db.query(
+        `UPDATE nurture_emails SET status = 'cancelled'
+         WHERE user_id = $1 AND status = 'pending' AND created_at < now() - interval '14 days'`,
+        [userId]
+      );
+      if (expired.rowCount > 0) {
+        report.nurture.expired = expired.rowCount;
+        logger.info('crm-agent', `Nurture: ${expired.rowCount} brouillons pending > 14j expirés (cancelled)`);
+      }
+    }
+
     // Get triggers
     const triggersResult = await db.query(
       `SELECT * FROM nurture_triggers WHERE user_id = $1 AND enabled = true`,
@@ -475,80 +627,24 @@ async function stepNurture(userId, token, report) {
     const opps = await db.opportunities.listByUser(userId, 10000, 0);
     const now = Date.now();
 
-    // Get recently emailed contacts to avoid duplication
+    // Get recently emailed contacts to avoid duplication. Inclut tout pending
+    // restant quel que soit son âge : la contrainte unique 067 rejette l'INSERT
+    // pour ces contacts — sans ce filtre, chaque run brûlait ~10 générations
+    // Claude puis échouait en silence (queued 0) dès que les brouillons
+    // sortaient de la fenêtre de 7 jours en restant pending.
     const recentEmails = await db.query(
-      `SELECT DISTINCT to_email FROM nurture_emails WHERE user_id = $1 AND created_at > now() - interval '7 days'`,
+      `SELECT DISTINCT to_email FROM nurture_emails
+       WHERE user_id = $1 AND (created_at > now() - interval '7 days' OR status = 'pending')`,
       [userId]
     );
     const recentSet = new Set(recentEmails.rows.map(r => r.to_email?.toLowerCase()));
 
     for (const trigger of triggersResult.rows) {
-      const conditions = trigger.conditions || {};
-      const days = conditions.days || 30;
-      let matched = [];
-
-      switch (trigger.trigger_type) {
-        case 'deal_won':
-          matched = opps.filter(o => o.status === 'won');
-          break;
-        case 'deal_lost':
-          matched = opps.filter(o => {
-            if (o.status !== 'lost') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && age < days + 7; // window of 7 days after loss
-          });
-          break;
-        case 'deal_stagnant':
-          matched = opps.filter(o => {
-            if (o.status === 'won' || o.status === 'lost') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days;
-          });
-          break;
-        case 'inactive_contact':
-          matched = opps.filter(o => {
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && o.status !== 'lost';
-          });
-          break;
-        case 'onboarding_check':
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && age < days + 3; // window of 3 days
-          });
-          break;
-        case 'renewal_reminder':
-          // Match won deals where renewal_date is within X days from now (or past due)
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            if (o.renewal_date) {
-              // Use renewal_date from CRM field mapping
-              const daysUntilRenewal = (new Date(o.renewal_date).getTime() - now) / DAY_MS;
-              return daysUntilRenewal <= days && daysUntilRenewal >= -7; // X days before + 7 days grace
-            }
-            // Fallback: use won_date + trigger days as estimated renewal
-            const wonDate = o.won_date || o.updated_at || o.created_at;
-            if (!wonDate) return false;
-            const age = (now - new Date(wonDate).getTime()) / DAY_MS;
-            return age >= days;
-          });
-          break;
-        case 'upsell_opportunity':
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days;
-          });
-          break;
-        case 'feedback_request':
-          matched = opps.filter(o => {
-            if (o.status !== 'won') return false;
-            const age = (now - new Date(o.updated_at || o.created_at).getTime()) / DAY_MS;
-            return age >= days && age < days + 7;
-          });
-          break;
-      }
+      // Logique de matching partagée avec la preview (routes/nurture.js) —
+      // toute divergence faisait mentir la preview. null = type évaluable
+      // uniquement en run manuel (newsletter_* via nurture-engine).
+      let matched = matchContacts(trigger, opps, now);
+      if (matched === null) continue;
 
       // Filter already-emailed
       matched = matched.filter(o => o.email && !recentSet.has(o.email.toLowerCase()));
@@ -659,11 +755,14 @@ async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = nul
     const { findRelevantPatterns, ENABLED: pgvEnabled } = require('./vector-store');
     if (pgvEnabled) {
       const context = `${trigger.trigger_type} ${opp.company || ''} ${opp.title || ''} ${(trigger.conditions?.sectors || []).join(' ')}`;
-      allPatterns = await findRelevantPatterns(context, 10);
+      // Tenant obligatoire : sans lui, la recherche pgvector piochait dans la
+      // mémoire de TOUS les clients (audit du 02/09). trigger.user_id est le
+      // propriétaire du trigger — même utilisateur que celui du run.
+      allPatterns = await findRelevantPatterns(context, 10, { teamId, userId: trigger.user_id });
     }
-    // Fallback to recency-based
+    // Fallback to recency-based — même scoping tenant que la recherche pgvector
     if (!allPatterns || allPatterns.length === 0) {
-      allPatterns = await db.memoryPatterns.listForPrompt(10, teamId);
+      allPatterns = await db.memoryPatterns.listForPrompt(10, teamId, trigger.user_id);
     }
     if (allPatterns.length > 0) {
       patternIds = allPatterns.map(p => p.id);
@@ -753,7 +852,7 @@ async function stepAnalysis(userId, report, teamId = null) {
       report.alerts.push({
         type: 'new_contacts',
         severity: 'info',
-        message: `${sync.imported} nouveau(x) contact(s) import\u00E9(s) depuis Pipedrive`,
+        message: `${sync.imported} nouveau(x) contact(s) importé(s) depuis le CRM`,
       });
     }
 
@@ -776,8 +875,17 @@ async function stepAnalysis(userId, report, teamId = null) {
  * Only creates patterns when there's statistically meaningful signal.
  */
 async function generateCrmPatterns(userId, opps, teamId = null) {
-  // Wrap create to auto-inject teamId
-  const createPattern = (data) => db.memoryPatterns.create({ ...data, teamId });
+  // Wrap create to auto-inject the tenant. userId en repli quand l'utilisateur
+  // n'a pas d'équipe : sans lui, le pattern naissait orphelin (ni team_id ni
+  // user_id) et devenait invisible pour son propre créateur avec le DAO scopé.
+  const createPattern = (data) => db.memoryPatterns.create({ ...data, teamId, userId: teamId ? null : userId });
+  // Les gardes anti-doublon doivent chercher dans la mémoire DU tenant.
+  // Historiquement list() sans tenant renvoyait les patterns de TOUS les
+  // clients : dès qu'un client avait son « taux de conversion CRM », plus
+  // aucun autre ne l'obtenait jamais. Avec le DAO scopé (audit 02/09), sans
+  // tenant on ne verrait plus que le pool global partagé — garde cassée dans
+  // l'autre sens (doublons quotidiens). D'où le tenant explicite ici.
+  const listExisting = (category) => db.memoryPatterns.list({ category, limit: 50, teamId, userId: teamId ? null : userId });
   const now = Date.now();
   const won = opps.filter(o => o.status === 'won');
   const lost = opps.filter(o => o.status === 'lost');
@@ -788,7 +896,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Pattern 1: Win rate
   if (won.length + lost.length >= 5) {
     const winRate = Math.round((won.length / (won.length + lost.length)) * 100);
-    const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+    const existing = await listExisting('Cible');
     const hasWinRate = existing.some(p => p.pattern.includes('taux de conversion CRM'));
     if (!hasWinRate) {
       await createPattern({
@@ -809,7 +917,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (velocities.length >= 3) {
       const avgDays = Math.round(velocities.reduce((s, v) => s + v, 0) / velocities.length);
-      const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+      const existing = await listExisting('Timing');
       const hasVelocity = existing.some(p => p.pattern.includes('cycle de vente moyen'));
       if (!hasVelocity) {
         await createPattern({
@@ -831,7 +939,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (stagnation.length >= 3) {
       const avgStagnation = Math.round(stagnation.reduce((s, v) => s + v, 0) / stagnation.length);
-      const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+      const existing = await listExisting('Timing');
       const hasStagnation = existing.some(p => p.pattern.includes('deals perdus stagnent'));
       if (!hasStagnation) {
         await createPattern({
@@ -856,7 +964,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
     const topSize = Object.entries(sizeGroups).sort((a, b) => b[1] - a[1])[0];
     if (topSize && topSize[1] >= 3) {
-      const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+      const existing = await listExisting('Cible');
       const hasSizePattern = existing.some(p => p.pattern.includes('taille d\'entreprise qui convertit'));
       if (!hasSizePattern) {
         await createPattern({
@@ -886,7 +994,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     );
     if (responded.rows.length > 0) {
       const topTitle = responded.rows[0];
-      const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+      const existing = await listExisting('Cible');
       const hasTitle = existing.some(p => p.pattern.includes('fonction qui r\u00E9pond le mieux'));
       if (!hasTitle) {
         await createPattern({
@@ -914,7 +1022,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       const withResponse = touchCounts.rows.filter(r => r.got_response);
       if (withResponse.length >= 3) {
         const avgTouches = Math.round(withResponse.reduce((s, r) => s + parseInt(r.touches, 10), 0) / withResponse.length * 10) / 10;
-        const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+        const existing = await listExisting('Timing');
         const hasTouch = existing.some(p => p.pattern.includes('touches avant r\u00E9ponse'));
         if (!hasTouch) {
           await createPattern({

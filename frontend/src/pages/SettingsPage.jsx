@@ -6,6 +6,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getKeys, saveKeys, testKeys, syncLemlist, syncCRM, syncOutreach, saveLanguage, request } from '../services/api-client';
 import { deleteAccount } from '../services/auth';
 import { useNotifications } from '../context/NotificationContext';
@@ -35,11 +36,11 @@ function getMainTools(lang) {
       guide: en ? ['Go to app.smartlead.ai', 'Settings \u2192 API \u2192 Copy the key'] : ['Allez dans app.smartlead.ai', 'Settings \u2192 API \u2192 Copiez la cl\u00E9'], link: 'https://app.smartlead.ai/settings' },
     { field: 'waalaxyKey', label: 'Waalaxy', desc: en ? 'LinkedIn + email automation' : 'Automatisation LinkedIn + email', placeholder: en ? 'Your Waalaxy API key' : 'Votre cl\u00E9 API Waalaxy', color: '#A29BFE', icon: 'W', category: 'Outreach',
       guide: en ? ['Go to app.waalaxy.com', 'Settings \u2192 Integrations'] : ['Allez dans app.waalaxy.com', 'Settings \u2192 Integrations'], link: 'https://app.waalaxy.com/settings' },
-    { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM',
+    { field: 'hubspotKey', label: 'HubSpot', desc: 'CRM + marketing automation', placeholder: 'pat-...', color: '#FF6B35', icon: 'H', category: 'CRM', oauth: 'hubspot',
       guide: en ? ['Go to app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Create an app or copy the token (pat-)'] : ['Allez dans app.hubspot.com', 'Settings \u2192 Integrations \u2192 Private Apps', 'Cr\u00E9ez une app ou copiez le token (pat-)'], link: 'https://app.hubspot.com/settings/integrations' },
-    { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce access token' : 'Votre access token Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
-      guide: en ? ['Log in to your Salesforce instance', 'Setup \u2192 Apps \u2192 Connected Apps', 'Generate an access token', 'Paste the token and your instance URL below'] : ['Connectez-vous sur votre instance Salesforce', 'Setup \u2192 Apps \u2192 Connected Apps', 'G\u00E9n\u00E9rez un access token', 'Collez le token et votre URL d\'instance ci-dessous'] },
-    { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM',
+    { field: 'salesforceKey', label: 'Salesforce', desc: 'CRM enterprise', placeholder: en ? 'Your Salesforce Consumer Key' : 'Votre Cl\u00E9 consommateur Salesforce', color: '#00A1E0', icon: 'S', category: 'CRM', multiField: 'salesforce',
+      guide: en ? ['Create a Connected App in your Salesforce (Setup > External Client Apps)', 'Enable OAuth with scopes "api" + "refresh_token, offline_access"', 'Copy Consumer Key + Secret below, then authorize'] : ['Cr\u00E9ez une app connect\u00E9e dans votre Salesforce (Param\u00E8tres > Apps clientes externes)', 'Activez OAuth avec les scopes "api" + "refresh_token, offline_access"', 'Copiez Cl\u00E9 + Secret ci-dessous, puis autorisez'] },
+    { field: 'pipedriveKey', label: 'Pipedrive', desc: en ? 'Visual sales-oriented CRM' : 'CRM visuel orient\u00E9 vente', placeholder: en ? 'Your Pipedrive API key' : 'Votre cl\u00E9 API Pipedrive', color: '#017737', icon: 'P', category: 'CRM', oauth: 'pipedrive',
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
       guide: en ? ['URL + database name + login + password'] : ['URL + nom de base + login + mot de passe'] },
@@ -50,34 +51,27 @@ function getMainTools(lang) {
   ];
 }
 
-/* Extended tools in dropdown */
+/* Extended tools in dropdown.
+   Seuls les outils réellement branchés (client dans backend/api/ + usage) sont
+   affichés. Retirés le 2026-08-18 car la clé était stockée mais jamais utilisée
+   (aucun client API) — à réintroduire ici le jour où le backend les branche :
+   Kaspr, Lusha, Snov.io (enrichissement), PhantomBuster, Captain Data
+   (scraping), Calendly, Cal.com (calendrier), MailReach, Warmbox
+   (délivrabilité). */
 function getExtendedTools(lang) {
   const en = lang === 'en';
   return [
     { label: en ? 'Enrichment' : 'Enrichissement', keys: [
       { field: 'dropcontactKey', label: 'DropContact', desc: en ? 'Email and phone enrichment' : 'Enrichissement email et téléphone', placeholder: en ? 'Your DropContact API key' : 'Votre clé API DropContact', color: '#00B894', icon: 'D' },
       { field: 'hunterKey', label: 'Hunter', desc: en ? 'Email search and verification' : 'Recherche et vérification d\'emails', placeholder: en ? 'Your Hunter API key' : 'Votre clé API Hunter', color: '#FF7675', icon: 'H' },
-      { field: 'kasprKey', label: 'Kaspr', desc: en ? 'Real-time LinkedIn data' : 'Données LinkedIn en temps réel', placeholder: en ? 'Your Kaspr API key' : 'Votre clé API Kaspr', color: '#0984E3', icon: 'K' },
-      { field: 'lushaKey', label: 'Lusha', desc: en ? 'Professional contact info' : 'Coordonnées professionnelles', placeholder: en ? 'Your Lusha API key' : 'Votre clé API Lusha', color: '#00CEC9', icon: 'Lu' },
-      { field: 'snovKey', label: 'Snov.io', desc: en ? 'Email finder and drip campaigns' : 'Email finder et drip campaigns', placeholder: en ? 'Your Snov API key' : 'Votre clé API Snov', color: '#E17055', icon: 'S' },
     ]},
     { label: 'Newsletter / Marketing', keys: [
       { field: 'informzKey', label: 'Informz', desc: 'Newsletter campaigns for associations (Higher Logic)', placeholder: 'username:password:brandId', color: '#2D3436', icon: 'Iz',
         helpSteps: ['Get your API credentials from your Informz admin', 'Format: username:password:brandId', 'Your server IP must be whitelisted by Informz'] },
     ]},
-    { label: 'LinkedIn / Scraping', keys: [
+    { label: 'LinkedIn', keys: [
       { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'li_at cookie — enrichment + automated outreach' : 'Cookie li_at — enrichissement + outreach automatisé', placeholder: en ? 'Your li_at cookie (from browser)' : 'Votre cookie li_at (depuis le navigateur)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
         helpSteps: en ? ['Log in to linkedin.com', 'Open DevTools (F12) → Application → Cookies', 'Copy the value of the "li_at" cookie', 'Paste it here'] : ['Connectez-vous à linkedin.com', 'Ouvrez les DevTools (F12) → Application → Cookies', 'Copiez la valeur du cookie "li_at"', 'Collez-la ici'] },
-      { field: 'phantombusterKey', label: 'PhantomBuster', desc: en ? 'Web scraping and automation' : 'Scraping et automatisation web', placeholder: en ? 'Your PhantomBuster API key' : 'Votre clé API PhantomBuster', color: '#636E72', icon: 'PB' },
-      { field: 'captaindataKey', label: 'Captain Data', desc: en ? 'Multi-source data extraction' : 'Extraction de données multi-sources', placeholder: en ? 'Your CaptainData API key' : 'Votre clé API CaptainData', color: '#0984E3', icon: 'CD' },
-    ]},
-    { label: en ? 'Calendar' : 'Calendrier', keys: [
-      { field: 'calendlyKey', label: 'Calendly', desc: en ? 'Automated meeting scheduling' : 'Planification de RDV automatisée', placeholder: en ? 'Your Calendly API key' : 'Votre clé API Calendly', color: '#0069FF', icon: 'Ca' },
-      { field: 'calcomKey', label: 'Cal.com', desc: en ? 'Open-source alternative to Calendly' : 'Alternative open-source à Calendly', placeholder: en ? 'Your Cal.com API key' : 'Votre clé API Cal.com', color: '#292929', icon: 'Cl' },
-    ]},
-    { label: en ? 'Deliverability' : 'Délivrabilité', keys: [
-      { field: 'mailreachKey', label: 'MailReach', desc: en ? 'Warm-up and inbox monitoring' : 'Warm-up et monitoring inbox', placeholder: en ? 'Your MailReach API key' : 'Votre clé API MailReach', color: '#E17055', icon: 'MR' },
-      { field: 'warmboxKey', label: 'Warmbox', desc: en ? 'Automated email warm-up' : 'Préchauffage email automatisé', placeholder: en ? 'Your Warmbox API key' : 'Votre clé API Warmbox', color: '#FDCB6E', icon: 'Wb' },
     ]},
   ];
 }
@@ -116,15 +110,30 @@ function StatusBadge({ status, lang }) {
 /* ─── Component ─── */
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const [keyStatus, setKeyStatus] = useState({});
   const [testStatus, setTestStatus] = useState({});
   const [drafts, setDrafts] = useState({});
   const [editing, setEditing] = useState({});
+  // OAuth produit (hubspot/pipedrive) : 501 tant que l'app n'est pas
+  // enregistrée chez le fournisseur → on masque le bouton et on garde la clé.
+  const [oauthUnavailable, setOauthUnavailable] = useState({});
+
+  const connectCrmOauth = async (provider) => {
+    try {
+      const res = await request(`/crm/${provider}/connect`);
+      if (res.url) { window.location.href = res.url; return; }
+      throw new Error('no url');
+    } catch {
+      setOauthUnavailable(prev => ({ ...prev, [provider]: true }));
+    }
+  };
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
   const [syncStatus, setSyncStatus] = useState(null);
   const [crmSyncStatus, setCrmSyncStatus] = useState(null);
+  const [activeCrm, setActiveCrm] = useState(null);
   const { socket } = useSocket();
   const { showToast: notifyToast } = useNotifications();
   const { lang, setLang, t } = useI18n();
@@ -143,8 +152,12 @@ export default function SettingsPage() {
 
   const loadKeys = useCallback(async () => {
     try {
-      const data = await getKeys();
+      const [data, providersData] = await Promise.all([
+        getKeys(),
+        request('/crm/providers').catch(() => null),
+      ]);
       setKeyStatus(data.keys || {});
+      if (providersData?.activeCrm) setActiveCrm(providersData.activeCrm);
     } catch {
       /* backend not available */
     }
@@ -428,9 +441,21 @@ export default function SettingsPage() {
   /* ─── Detect connected CRM ─── */
 
   const crmFieldLabels = { hubspotKey: 'HubSpot', salesforceKey: 'Salesforce', pipedriveKey: 'Pipedrive', odooKey: 'Odoo', notionToken: 'Notion', airtableKey: 'Airtable' };
+  const crmFieldToProvider = { hubspotKey: 'hubspot', salesforceKey: 'salesforce', pipedriveKey: 'pipedrive', odooKey: 'odoo', notionToken: 'notion', airtableKey: 'airtable' };
+  const crmProviderToLabel = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', odoo: 'Odoo', notion: 'Notion', airtable: 'Airtable' };
   const connectedCrms = Object.keys(crmFieldLabels).filter(f => keyStatus[f]?.configured);
-  const connectedCrmField = connectedCrms[0]; // keep first for backward compat
-  const connectedCrmLabel = connectedCrmField ? crmFieldLabels[connectedCrmField] : null;
+  const connectedCrmProviders = connectedCrms.map(f => crmFieldToProvider[f]);
+  const connectedCrmLabel = activeCrm ? crmProviderToLabel[activeCrm] : (connectedCrms[0] ? crmFieldLabels[connectedCrms[0]] : null);
+
+  const handleSetActiveCrm = async (provider) => {
+    try {
+      await request('/crm/active', { method: 'PUT', body: JSON.stringify({ provider }) });
+      setActiveCrm(provider);
+      showToast(en ? `${crmProviderToLabel[provider]} set as primary CRM` : `${crmProviderToLabel[provider]} défini comme CRM principal`);
+    } catch {
+      showToast(en ? 'Failed to set active CRM' : 'Erreur lors du changement de CRM', 'error');
+    }
+  };
 
   /* ─── Render key row ─── */
 
@@ -616,6 +641,17 @@ export default function SettingsPage() {
                   )}
                   {isEditing && !tool.multiField && (
                     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+                      {tool.oauth && !oauthUnavailable[tool.oauth] && (
+                        <>
+                          <button className="btn btn-primary" style={{ fontSize: 11, padding: '6px 10px', width: '100%', marginBottom: 6 }}
+                            onClick={() => connectCrmOauth(tool.oauth)}>
+                            {t('settings.connectOauth').replace('{provider}', tool.label)}
+                          </button>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 6 }}>
+                            {t('settings.orPasteKey')}
+                          </div>
+                        </>
+                      )}
                       {tool.guide && (
                         <div style={{
                           fontSize: 11, background: 'var(--paper-2)', borderRadius: 6,
@@ -714,10 +750,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-      </div>
 
-      {/* Right column */}
-      <div>
       {/* Lemlist Sync */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -768,9 +801,23 @@ export default function SettingsPage() {
             <div className="card-title">{en ? 'CRM Analysis' : 'Analyse CRM'}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
               {connectedCrmLabel
-                ? (en ? `Connected to ${connectedCrmLabel}` : `Connect\u00e9 \u00e0 ${connectedCrmLabel}`)
+                ? (en ? `Connected to ${connectedCrmLabel}` : `Connecté à ${connectedCrmLabel}`)
                 : (en ? 'Connect a CRM above to get started' : 'Connectez un CRM ci-dessus pour commencer')}
             </div>
+            {connectedCrmProviders.length > 1 && (
+              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                {connectedCrmProviders.map(p => (
+                  <button key={p}
+                    className={`btn btn-sm ${activeCrm === p ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: 10, padding: '2px 8px' }}
+                    onClick={() => handleSetActiveCrm(p)}
+                  >
+                    {crmProviderToLabel[p]}
+                    {activeCrm === p && ' \u2713'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {connectedCrmLabel && (
             <button
@@ -856,13 +903,13 @@ export default function SettingsPage() {
                       : 'Vos données CRM sont synchronisées. Voici ce que vous pouvez faire :'}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-primary btn-sm" onClick={() => window.location.href = '/analytics'}>
+                    <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
                       {en ? 'View Analytics' : 'Voir les Analytics'}
                     </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => window.location.href = '/clients'}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/clients')}>
                       {en ? 'Browse Clients' : 'Voir les Clients'}
                     </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => window.location.href = '/chat'}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
                       {en ? 'Ask the AI' : 'Demander à l\'IA'}
                     </button>
                   </div>
@@ -884,7 +931,10 @@ export default function SettingsPage() {
 
       {/* Email sortant */}
       <EmailAccountSettings />
+      </div>
 
+      {/* Right column */}
+      <div>
       {/* Preferences */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
@@ -1065,10 +1115,248 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Abonnement (Stripe) */}
+      <BillingSection t={t} showToast={showToast} lang={lang} />
+
+      {/* Écriture Baakalai → CRM (opt-in) */}
+      <CrmWritebackSection t={t} showToast={showToast} lang={lang} />
+
+      {/* SLA de réactivité */}
+      <SlaSection t={t} showToast={showToast} lang={lang} />
+
       {/* Danger Zone */}
       <DeleteAccountSection t={t} showToast={showToast} lang={lang} />
       </div>
       </div>
+    </div>
+  );
+}
+
+/* ═══ Billing Section (Stripe) ═══ */
+// Tant que Stripe n'est pas branché côté backend (STRIPE_SECRET_KEY absente),
+// GET /billing renvoie billingEnabled:false : les cartes s'affichent avec les
+// prix mais les boutons sont neutralisés — aucun flux de paiement fantôme.
+
+function BillingSection({ t, showToast, lang }) {
+  const en = lang === 'en';
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    request('/billing').then(setState).catch(() => {});
+  }, []);
+
+  const checkout = async (plan) => {
+    setBusy(true);
+    try {
+      const d = await request('/billing/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan }),
+      });
+      if (d.url) window.location.href = d.url;
+    } catch (err) {
+      showToast(err.message || t('settings.billingSoon'), 'error');
+    }
+    setBusy(false);
+  };
+
+  const portal = async () => {
+    setBusy(true);
+    try {
+      const d = await request('/billing/portal', { method: 'POST' });
+      if (d.url) window.location.href = d.url;
+    } catch (err) {
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
+    }
+    setBusy(false);
+  };
+
+  const enabled = !!state?.billingEnabled;
+  const currentPlan = state?.plan || 'trial';
+  const plans = [
+    { key: 'starter', name: 'Starter', price: state?.prices?.starter ?? 49, feat: t('settings.billingFeatStarter') },
+    { key: 'growth', name: 'Growth', price: state?.prices?.growth ?? 149, feat: t('settings.billingFeatGrowth') },
+    { key: 'scale', name: 'Scale', price: state?.prices?.scale ?? 349, feat: t('settings.billingFeatScale') },
+  ];
+
+  return (
+    <div className="card" style={{ marginTop: 24, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{t('settings.billingTitle')}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            {t('settings.billingCurrent')} : <strong>{currentPlan === 'trial' ? t('settings.billingTrialLabel') : currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</strong>
+            {!enabled && <span style={{ marginLeft: 8, color: 'var(--primary)' }}>· {t('settings.billingSoon')}</span>}
+          </div>
+        </div>
+        {state?.subscribed && (
+          <button className="btn btn-ghost" onClick={portal} disabled={busy} style={{ whiteSpace: 'nowrap' }}>
+            {t('settings.billingManage')}
+          </button>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        {plans.map(p => (
+          <div key={p.key} style={{
+            border: currentPlan === p.key ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+            borderRadius: 10, padding: '14px 16px',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{p.name}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: '6px 0' }}>
+              {p.price}€<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{t('settings.billingPerMonth')}</span>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', minHeight: 32 }}>{p.feat}</div>
+            <button
+              className={currentPlan === p.key ? 'btn btn-ghost' : 'btn btn-primary'}
+              onClick={() => checkout(p.key)}
+              disabled={busy || !enabled || currentPlan === p.key}
+              style={{ width: '100%', marginTop: 10 }}
+            >
+              {currentPlan === p.key ? t('settings.billingCurrentBtn') : t('settings.billingSubscribe')}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ CRM Write-back Section (opt-in) ═══ */
+// Off par défaut : écrire dans le CRM du client est un acte sortant sur sa
+// base de production. Le composant est autonome (GET/PATCH propres) comme
+// DeleteAccountSection, pour ne pas alourdir le chargement de la page.
+
+function CrmWritebackSection({ t, showToast, lang }) {
+  const en = lang === 'en';
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    request('/settings/crm-writeback').then(d => setEnabled(!!d.enabled)).catch(() => {});
+  }, []);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const d = await request('/settings/crm-writeback', {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: !enabled }),
+      });
+      setEnabled(!!d.enabled);
+      showToast(d.enabled ? t('settings.writebackOnToast') : t('settings.writebackOffToast'));
+    } catch (err) {
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="card" style={{ marginTop: 24, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            {t('settings.writebackTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 560 }}>
+            {t('settings.writebackDesc')}
+          </div>
+        </div>
+        <button
+          className={enabled ? 'btn btn-primary' : 'btn btn-ghost'}
+          onClick={toggle}
+          disabled={busy}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {busy ? '…' : enabled ? t('settings.writebackEnabled') : t('settings.writebackDisabled')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ SLA Section ═══ */
+// Seuils de réactivité évalués dans « À traiter aujourd'hui » et le digest du
+// lundi (backend lib/sla.js). Off par défaut : un SLA est une promesse que
+// l'admin déclare. Composant autonome (GET/PATCH propres), comme la section
+// write-back.
+
+function SlaSection({ t, showToast, lang }) {
+  const en = lang === 'en';
+  const [cfg, setCfg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    request('/settings/sla').then(setCfg).catch(() => {});
+  }, []);
+
+  const save = async (patch) => {
+    setBusy(true);
+    try {
+      const d = await request('/settings/sla', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      setCfg(d);
+      if ('enabled' in patch) {
+        showToast(d.enabled ? t('settings.slaOnToast') : t('settings.slaOffToast'));
+      }
+    } catch (err) {
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
+    }
+    setBusy(false);
+  };
+
+  if (!cfg) return null;
+
+  const FIELDS = [
+    { key: 'newLeadDays', labelKey: 'settings.slaNewLead', min: 1, max: 30 },
+    { key: 'followupGraceDays', labelKey: 'settings.slaFollowup', min: 0, max: 30 },
+    { key: 'inactiveDays', labelKey: 'settings.slaInactive', min: 7, max: 365 },
+  ];
+
+  return (
+    <div className="card" style={{ marginTop: 24, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            {t('settings.slaTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 560 }}>
+            {t('settings.slaDesc')}
+          </div>
+        </div>
+        <button
+          className={cfg.enabled ? 'btn btn-primary' : 'btn btn-ghost'}
+          onClick={() => save({ enabled: !cfg.enabled })}
+          disabled={busy}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {busy ? '…' : cfg.enabled ? t('settings.slaEnabled') : t('settings.slaDisabled')}
+        </button>
+      </div>
+      {cfg.enabled && (
+        <div style={{ display: 'flex', gap: 20, marginTop: 16, flexWrap: 'wrap' }}>
+          {FIELDS.map((f) => (
+            <label key={f.key} style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {t(f.labelKey)}
+              <input
+                type="number"
+                min={f.min}
+                max={f.max}
+                value={cfg[f.key]}
+                disabled={busy}
+                onChange={(e) => setCfg((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (Number.isInteger(v) && v >= f.min && v <= f.max) save({ [f.key]: v });
+                  else request('/settings/sla').then(setCfg).catch(() => {});
+                }}
+                style={{ width: 90, padding: '6px 10px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--paper)', color: 'var(--text)' }}
+              />
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1331,42 +1619,40 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
   const en = lang === 'en';
   const [accessToken, setAccessToken] = useState('');
   const [instanceUrl, setInstanceUrl] = useState('');
+  const [consumerKey, setConsumerKey] = useState('');
+  const [consumerSecret, setConsumerSecret] = useState('');
+  const [useTokenFallback, setUseTokenFallback] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [status, setStatus] = useState(null);
-  const [oauthLoading, setOauthLoading] = useState(false);
-  const [customDomain, setCustomDomain] = useState('');
 
-  const handleOAuthConnect = async () => {
-    setOauthLoading(true);
+  // Un-clic via l'app centrale Baakalai : aucun setup côté client. Si le
+  // backend n'a pas l'app centrale (400), repli sur le formulaire manuel.
+  const handleCentralConnect = async () => {
+    setStatus('connecting');
     try {
-      const endpoint = customDomain
-        ? `/crm/salesforce/connect?domain=${encodeURIComponent(customDomain)}`
-        : '/crm/salesforce/connect';
-      const res = await request(endpoint);
-      if (res.url) {
-        window.location.href = res.url;
-      } else {
-        setStatus('error');
-        setOauthLoading(false);
-      }
+      const res = await request('/crm/salesforce/connect');
+      if (res.url) { window.location.assign(res.url); return; }
+      setStatus(null); setShowManual(true);
     } catch {
-      setStatus('error');
-      setOauthLoading(false);
+      setStatus(null); setShowManual(true);
     }
   };
 
-  // If already connected, allow updating just the instance URL
-  const handleUpdateUrl = async () => {
-    if (!instanceUrl.startsWith('http')) return;
+  const handleOAuthConnect = async () => {
+    if (!consumerKey.trim() || !consumerSecret.trim() || !instanceUrl) return;
     setStatus('connecting');
     try {
-      const res = await request('/crm/salesforce/instance-url', {
-        method: 'PATCH',
-        body: JSON.stringify({ instanceUrl: instanceUrl.replace(/\/$/, '') }),
+      await request('/crm/salesforce/manual-connect', {
+        method: 'POST',
+        body: JSON.stringify({
+          consumerKey: consumerKey.trim(),
+          consumerSecret: consumerSecret.trim(),
+          instanceUrl: instanceUrl.trim().replace(/\/$/, ''),
+        }),
       });
-      if (res.status === 'updated' || res.ok) {
-        setStatus('connected');
-        syncCRM().catch(() => {});
-        setTimeout(() => onDone(), 1000);
+      const res = await request('/crm/salesforce/connect');
+      if (res.url) {
+        window.location.assign(res.url);
       } else {
         setStatus('error');
       }
@@ -1395,58 +1681,69 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
     }
   };
 
+  const handleUpdateUrl = async () => {
+    if (!instanceUrl.startsWith('http')) return;
+    setStatus('connecting');
+    try {
+      const res = await request('/crm/salesforce/instance-url', {
+        method: 'PATCH',
+        body: JSON.stringify({ instanceUrl: instanceUrl.replace(/\/$/, '') }),
+      });
+      if (res.status === 'updated' || res.ok) {
+        setStatus('connected');
+        syncCRM().catch(() => {});
+        setTimeout(() => onDone(), 1000);
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+  };
+
   const isValid = isConnected
     ? instanceUrl.startsWith('http')
-    : accessToken.length > 10 && instanceUrl.startsWith('http');
+    : useTokenFallback
+      ? accessToken.length > 10 && instanceUrl.startsWith('http')
+      : consumerKey.trim().length > 5 && consumerSecret.trim().length > 5 && instanceUrl.startsWith('https://');
+
+  if (!isConnected && !useTokenFallback && !showManual) {
+    return (
+      <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
+        <div style={{
+          fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
+          background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+        }}>
+          {en
+            ? 'One-click connection: sign in to Salesforce and authorize baakalai (read/write via API). Nothing to create on your side.'
+            : 'Connexion en un clic : identifiez-vous sur Salesforce et autorisez baakalai (lecture/écriture via API). Rien à créer de votre côté.'}
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
+            onClick={handleCentralConnect} disabled={status === 'connecting'}>
+            {status === 'connecting' ? (en ? 'Redirecting...' : 'Redirection...') : (en ? 'Connect with Salesforce' : 'Connecter via Salesforce')}
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
+            onClick={onCancel}>{'✕'}</button>
+        </div>
+        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, width: '100%', color: 'var(--text-muted)' }}
+          onClick={() => setShowManual(true)}>
+          {en ? 'Or use your own Connected App (Consumer Key + Secret)' : 'Ou utiliser votre propre Connected App (Consumer Key + Secret)'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ marginTop: 4 }} onClick={e => e.stopPropagation()}>
-      {/* OAuth connect button */}
-      {!isConnected && (
-        <>
-          <div style={{ marginBottom: 6 }}>
-            <input
-              type="text"
-              className="form-input"
-              placeholder={en ? 'Custom domain (optional) — e.g. mycompany.my.salesforce.com' : 'Domaine personnalisé (optionnel) — ex: mycompany.my.salesforce.com'}
-              value={customDomain}
-              onChange={e => setCustomDomain(e.target.value)}
-              style={{ width: '100%', padding: '6px 10px', fontSize: 11 }}
-            />
-          </div>
-          <button
-            style={{
-              width: '100%', padding: '8px 12px', fontSize: 12, fontWeight: 600,
-              background: '#00A1E0', color: '#fff', border: 'none', borderRadius: 6,
-              cursor: oauthLoading ? 'wait' : 'pointer', opacity: oauthLoading ? 0.7 : 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}
-            onClick={handleOAuthConnect}
-            disabled={oauthLoading}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z" fill="#fff"/></svg>
-            {oauthLoading
-              ? (en ? 'Redirecting...' : 'Redirection...')
-              : (en ? 'Connect with Salesforce' : 'Connecter Salesforce')}
-          </button>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0',
-            fontSize: 10, color: 'var(--text-muted)',
-          }}>
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            {en ? 'or enter manually' : 'ou saisir manuellement'}
-            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          </div>
-        </>
-      )}
       {isConnected ? (
         <div style={{
           fontSize: 11, color: 'var(--text-muted)', marginBottom: 8,
           background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
         }}>
           {en
-            ? <>Your Salesforce token is saved. Add your instance URL below (e.g., https://mycompany.my.salesforce.com).</>
-            : <>Votre token Salesforce est sauvegard{'\u00E9'}. Ajoutez l'URL de votre instance ci-dessous (ex: https://mycompany.my.salesforce.com).</>}
+            ? <>Salesforce is connected. You can update your instance URL below.</>
+            : <>Salesforce est connect{'\u00E9'}. Vous pouvez modifier l'URL de votre instance ci-dessous.</>}
         </div>
       ) : (
         <div style={{
@@ -1454,8 +1751,34 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
         }}>
           {en
-            ? <>1. Log in to your Salesforce instance<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. Generate an access token<br/>4. Paste both fields below</>
-            : <>1. Connectez-vous sur votre instance Salesforce<br/>2. Setup &gt; Apps &gt; Connected Apps<br/>3. G{'\u00E9'}n{'\u00E9'}rez un access token<br/>4. Collez les deux champs ci-dessous</>}
+            ? <>
+                <strong>Create a Connected App in your Salesforce:</strong><br/>
+                1. Setup &gt; Open Advanced Setup &gt; Platform Tools &gt; External Client Apps &gt; External Client App Manager<br/>
+                2. Click "New External Client App"<br/>
+                3. Fill in the basic information<br/>
+                4. Enable OAuth, add scopes "Manage user data via APIs (api)" and "Perform requests at any time (refresh_token, offline_access)"<br/>
+                5. Callback URL: <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
+                6. Create<br/>
+                7. From the app list, select baakalai<br/>
+                8. Settings<br/>
+                9. OAuth Settings<br/>
+                10. Consumer Key and Secret<br/>
+                11. Copy the <strong>Consumer Key</strong> and <strong>Consumer Secret</strong> below
+              </>
+            : <>
+                <strong>Cr{'\u00E9'}ez une application connect{'\u00E9'}e dans votre Salesforce :</strong><br/>
+                1. Param{'\u00E8'}tres &gt; Ouvrir la configuration avanc{'\u00E9'}e &gt; Outils de la plate-forme &gt; Applications clientes externes &gt; Gestionnaire des applications externes<br/>
+                2. Cliquez "Nouvelle application cliente externe"<br/>
+                3. Remplissez les infos de base<br/>
+                4. Activez OAuth, ajoutez "G{'\u00E9'}rer les donn{'\u00E9'}es utilisateur via des API (api)" et "Effectuer des requ{'\u00EA'}tes {'\u00E0'} tout moment (refresh_token, offline_access)"<br/>
+                5. URL de rappel : <code>https://app.baakal.ai/api/crm/salesforce/callback</code><br/>
+                6. Cr{'\u00E9'}er<br/>
+                7. {'\u00C0'} partir de la liste des applications, s{'\u00E9'}lectionnez baakalai<br/>
+                8. Param{'\u00E8'}tres<br/>
+                9. Param{'\u00E8'}tres OAuth<br/>
+                10. Cl{'\u00E9'} et secret consommateur<br/>
+                11. Copiez la <strong>Cl{'\u00E9'} consommateur</strong> et le <strong>Secret consommateur</strong> ci-dessous
+              </>}
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -1463,7 +1786,19 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           placeholder={en ? "Instance URL (e.g., https://mycompany.my.salesforce.com)" : "URL de l'instance (ex: https://mycompany.my.salesforce.com)"}
           value={instanceUrl} onChange={e => setInstanceUrl(e.target.value)} autoFocus
           style={{ fontSize: 11, padding: '5px 8px' }} />
-        {!isConnected && (
+        {!isConnected && !useTokenFallback && (
+          <>
+            <input className="form-input" type="text"
+              placeholder="Consumer Key"
+              value={consumerKey} onChange={e => setConsumerKey(e.target.value)}
+              style={{ fontSize: 11, padding: '5px 8px' }} />
+            <input className="form-input" type="password"
+              placeholder="Consumer Secret"
+              value={consumerSecret} onChange={e => setConsumerSecret(e.target.value)}
+              style={{ fontSize: 11, padding: '5px 8px' }} />
+          </>
+        )}
+        {!isConnected && useTokenFallback && (
           <input className="form-input" type="password"
             placeholder={en ? "Access token" : "Access token"}
             value={accessToken} onChange={e => setAccessToken(e.target.value)}
@@ -1474,19 +1809,32 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
         <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>{en ? 'Connected!' : 'Connect\u00E9 !'}</div>
       )}
       {status === 'test_failed' && (
-        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed — token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9 — le token a peut-\u00EAtre expir\u00E9'}</div>
+        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed \u2014 token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9 \u2014 le token a peut-\u00EAtre expir\u00E9'}</div>
       )}
       {status === 'error' && (
         <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{en ? 'Connection failed' : '\u00C9chec de connexion'}</div>
       )}
       <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
         <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px', flex: 1 }}
-          onClick={isConnected ? handleUpdateUrl : handleConnect} disabled={saving || status === 'connecting' || !isValid}>
-          {status === 'connecting' ? (en ? 'Saving...' : 'Sauvegarde...') : isConnected ? (en ? 'Save URL' : 'Sauvegarder') : (en ? 'Connect' : 'Connecter')}
+          onClick={isConnected ? handleUpdateUrl : useTokenFallback ? handleConnect : handleOAuthConnect}
+          disabled={saving || status === 'connecting' || !isValid}>
+          {status === 'connecting'
+            ? (useTokenFallback || isConnected ? (en ? 'Saving...' : 'Sauvegarde...') : (en ? 'Redirecting...' : 'Redirection...'))
+            : isConnected ? (en ? 'Save URL' : 'Sauvegarder')
+            : useTokenFallback ? (en ? 'Connect' : 'Connecter')
+            : (en ? 'Connect with Salesforce' : 'Connecter via Salesforce')}
         </button>
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}
           onClick={onCancel}>{'\u2715'}</button>
       </div>
+      {!isConnected && (
+        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, width: '100%', color: 'var(--text-muted)' }}
+          onClick={() => { setUseTokenFallback(v => !v); setStatus(null); }}>
+          {useTokenFallback
+            ? (en ? 'Use OAuth instead (Consumer Key + Secret)' : 'Utiliser OAuth (Consumer Key + Secret)')
+            : (en ? 'Or paste a session token (expires within hours)' : 'Ou coller un token de session (expire en quelques heures)')}
+        </button>
+      )}
       {isConnected && (
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 4, color: 'var(--danger)', width: '100%' }}
           onClick={onRemove} disabled={saving}>{t('settings.delete')}</button>

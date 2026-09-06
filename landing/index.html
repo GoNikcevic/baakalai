@@ -3,7 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>baakalai — l'agent qui exploite ton CRM pour générer du CA</title>
+  <!-- Ancre de catégorie : « RevOps », et non « revenue intelligence » — cette
+       dernière est la catégorie que Gong possède et a définie, la revendiquer
+       nous placerait dans une comparaison frontale avec un produit à 55 k$.
+       « RevOps » désigne une fonction que personne ne possède, et nomme
+       exactement le manque de l'ICP (PME 5-50 sans RevOps).
+       Le métier reste en premier dans le titre — la catégorie sert à être
+       trouvé, la promesse à convertir. Ne jamais écrire que baakalai EST une
+       plateforme RevOps : ni forecast consolidé, ni territoires, ni variable,
+       ni CPQ. Toujours « le travail qu'un RevOps ferait ». -->
+  <title>baakalai — le système IA qui exploite ton CRM | RevOps de la PME</title>
+  <meta name="description" content="Le RevOps sans l'équipe RevOps. baakalai lit ton CRM 24/7, repère les deals à relancer, les upsells et les risques de churn — et agit. Sans changer de CRM.">
+  <meta property="og:site_name" content="baakalai">
+  <meta property="og:title" content="Le RevOps, sans l'équipe RevOps.">
+  <meta property="og:description" content="Ton CRM sait déjà qui relancer. Personne ne le lit. baakalai le lit 24/7 — réactivation, upsell, churn, nettoyage. Opérationnel en 30 minutes.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://baakal.ai/">
+  <meta property="og:locale" content="fr_FR">
+  <!-- og-home.png reste à produire (1200×630, même système visuel que
+       og-diagnostic.png mais CTA beta, pas diagnostic). Tant qu'il manque, le
+       partage social n'affiche pas d'image — comportement identique à
+       aujourd'hui, donc pas de régression. -->
+  <meta property="og:image" content="https://baakal.ai/assets/og-home.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://baakal.ai/assets/og-home.png">
   <link rel="icon" href="assets/favicon.svg">
   <link rel="stylesheet" href="site.css">
   <style>
@@ -200,6 +225,7 @@
       <a href="#beta" data-i18n="nav.pricing">Beta</a>
       <a href="#faq" data-i18n="nav.faq">FAQ</a>
       <a href="#blog" data-i18n="nav.blog">Blog</a>
+      <a href="diagnostic.html" data-i18n="nav.diag" style="color:var(--primary);font-weight:600;">Diagnostic gratuit</a>
     </div>
     <div class="lang-toggle">
       <button data-lang="fr" class="active">FR</button>
@@ -226,12 +252,12 @@
             <span data-i18n="hero.cta">Rejoindre la beta</span>
             <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
           </a>
-          <a href="#crm-intelligence" class="btn btn-ghost" data-i18n="hero.cta_2">Voir ce que fait l'agent</a>
+          <a href="#crm-intelligence" class="btn btn-ghost" data-i18n="hero.cta_2">Voir ce que fait le système</a>
         </div>
         <div style="margin-top:40px; display:flex; gap:24px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--grey-500);">
           <span data-i18n="hero.tag_1">Opérationnel en 30 min</span>
           <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_2">À partir de 49 €/mois</span>
+          <span data-i18n="hero.tag_2">Beta sur candidature</span>
         </div>
       </div>
 
@@ -366,6 +392,24 @@
     </div>
   </section>
 
+  <!-- ──────── DIAGNOSTIC CTA (lead magnet Pipedrive) ──────── -->
+  <section class="section" id="diagnostic-cta" style="padding-top:0;">
+    <div class="container">
+      <div style="
+        background: var(--primary-softer); border: 1px solid var(--primary);
+        border-radius: 18px; padding: clamp(28px, 5vw, 44px); text-align: center;
+      ">
+        <span class="eyebrow" data-i18n="diagcta.eyebrow" style="color:var(--primary-deep);">DIAGNOSTIC GRATUIT</span>
+        <h2 class="h-section" style="margin:14px 0 10px;">
+          <span data-i18n="diagcta.title_a">Sur Pipedrive, HubSpot ou Salesforce ? </span><em class="accent" data-i18n="diagcta.title_em">Mesurez le CA qui attend une relance</em><span data-i18n="diagcta.title_b"> dans votre pipeline.</span>
+        </h2>
+        <p class="body large" data-i18n="diagcta.sub" style="max-width:560px;margin:0 auto 22px;">20 à 40 % des deals d'une PME restent sans suite. Collez votre clé API, obtenez le chiffre des vôtres en 30 secondes — sans compte. Autre CRM ? Le même diagnostic vous attend dans l'app.</p>
+        <a href="diagnostic.html" class="btn btn-accent" style="padding:13px 26px;font-size:15px;" data-i18n="diagcta.cta">Lire mon CRM gratuitement</a>
+        <div style="margin-top:14px;font-size:12px;color:var(--grey-500);" data-i18n="diagcta.trust">Lecture seule · clé jamais stockée · rapport supprimé après 30 jours</div>
+      </div>
+    </div>
+  </section>
+
   <!-- ──────── ACTIVATION FEATURE ──────── -->
   <section class="section paper-2" id="activation">
     <div class="container feature-block reverse">
@@ -459,10 +503,10 @@
       <div style="max-width:760px;">
         <span class="eyebrow" data-i18n="synapse.eyebrow">SYNAPSE — INTELLIGENCE AUTONOME</span>
         <h2 class="h-section" style="margin-top:18px; color:var(--paper);">
-          <span data-i18n="synapse.title_a">Quatre agents qui </span><em class="accent" data-i18n="synapse.title_em">apprennent</em><span data-i18n="synapse.title_b"> de chacune de tes campagnes.</span>
+          <span data-i18n="synapse.title_a">Plus tu l'utilises, </span><em class="accent" data-i18n="synapse.title_em">plus il est précis.</em><span data-i18n="synapse.title_b"></span>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="synapse.sub">
-          Synapse n'est pas un assistant. C'est un système de quatre agents spécialisés qui collaborent en arrière-plan pour transformer chaque interaction en pattern réutilisable.
+          Synapse n'est pas un assistant. C'est un système de 12 agents spécialisés qui collaborent en arrière-plan pour transformer chaque interaction en pattern réutilisable.
         </p>
       </div>
       <div class="agents-grid" id="agents-grid"></div>
@@ -681,7 +725,7 @@
       document.getElementById('beta-grid').innerHTML = `
         <div class="beta-card reveal">
           <div class="beta-card-head">
-            <span class="beta-tag">${lang === 'en' ? 'PLANS' : 'PALIERS'}</span>
+            <span class="beta-tag">${lang === 'en' ? 'WHAT YOU GET' : 'CE QUE TU OBTIENS'}</span>
           </div>
           <ul class="feats">${d.pricing.perks.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
         </div>

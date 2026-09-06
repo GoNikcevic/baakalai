@@ -11,6 +11,7 @@
 
 const db = require('../db');
 const logger = require('./logger');
+const { classifySector, NON_DETERMINE } = require('./sector-classifier');
 
 const DAY_MS = 86400000;
 
@@ -18,13 +19,21 @@ const DAY_MS = 86400000;
 
 const STATUS_POINTS = {
   'new': 0,
+  'open': 10,
+  'qualified': 15,
+  'qualifie': 15,
+  'qualifié': 15,
   'interesse': 15,
   'intéressé': 15,
   'interested': 15,
+  'proposal': 20,
+  'proposition': 20,
   'call planifie': 25,
   'call planifié': 25,
   'meeting': 25,
   'negotiation': 28,
+  'négociation': 28,
+  'negociation': 28,
   'won': 30,
   'rappeler': 12,
   'lost': 3,
@@ -33,16 +42,38 @@ const STATUS_POINTS = {
 
 // ── Fit scoring (max 30) ──
 
-function computeFit(opportunity, campaign, profile) {
+// Textual fallback when no normalized sector context is available (sync callers):
+// any comma-separated ICP target contained in the account sector, or vice versa.
+function textualSectorMatch(targetSectorsRaw, accountSectorRaw) {
+  const account = (accountSectorRaw || '').toLowerCase().trim();
+  if (!account) return false;
+  return String(targetSectorsRaw || '')
+    .toLowerCase()
+    .split(/[,;/]/)
+    .map(s => s.trim())
+    .filter(s => s.length > 2)
+    .some(t => t.includes(account) || account.includes(t));
+}
+
+function computeFit(opportunity, campaign, profile, sectorCtx = null) {
   if (!profile) return { score: 0, factors: [] };
   let score = 0;
   const factors = [];
 
-  const targetSectors = (profile.target_sectors || '').toLowerCase();
-  const campaignSector = (campaign?.sector || '').toLowerCase();
-  if (targetSectors && campaignSector && targetSectors.includes(campaignSector.split(' ')[0])) {
+  // Le secteur comparé à l'ICP est celui du COMPTE (data->>'sector', posé par
+  // l'enrichissement Apollo / Data Quality) — la campagne n'est qu'un fallback,
+  // un client 100 % CRM n'ayant souvent aucune campagne d'outreach.
+  const accountSectorRaw = opportunity.data?.sector || campaign?.sector || '';
+  let sectorDetail = null;
+  if (sectorCtx) {
+    const norm = accountSectorRaw ? sectorCtx.accountSectorMap.get(accountSectorRaw) : null;
+    if (norm && norm !== NON_DETERMINE && sectorCtx.targetSet.has(norm)) sectorDetail = norm;
+  } else if (textualSectorMatch(profile.target_sectors, accountSectorRaw)) {
+    sectorDetail = accountSectorRaw;
+  }
+  if (sectorDetail) {
     score += 12;
-    factors.push({ signal: 'sector_match', weight: 12 });
+    factors.push({ signal: 'sector_match', weight: 12, detail: `Secteur « ${sectorDetail} » ∈ ICP` });
   }
 
   const targetSize = (profile.target_size || '').toLowerCase();
@@ -67,7 +98,24 @@ function computeFit(opportunity, campaign, profile) {
 
 // ── Activity scoring (max 40) ──
 
-function computeActivity(activities) {
+function computeActivity(activities, opportunity = null) {
+  // Sans campagne d'outreach, prospect_activities est vide pour un compte
+  // 100 % CRM — l'activité côté CRM (last_activity_at, posée par
+  // lib/crm-activity-date.js) reste le seul signal de chaleur disponible.
+  if ((!activities || activities.length === 0) && opportunity) {
+    const last = opportunity.last_activity_at || null;
+    if (!last) return { score: 0, factors: [] };
+    const days = (Date.now() - new Date(last).getTime()) / DAY_MS;
+    let pts = 0;
+    if (days < 7) pts = 12;
+    else if (days < 30) pts = 8;
+    else if (days < 90) pts = 3;
+    if (pts === 0) return { score: 0, factors: [] };
+    return {
+      score: pts,
+      factors: [{ signal: 'crm_recency', weight: pts, detail: `Activité CRM il y a ${Math.round(days)}d` }],
+    };
+  }
   if (!activities || activities.length === 0) return { score: 0, factors: [] };
 
   const now = Date.now();
@@ -141,11 +189,46 @@ function computeStatus(opportunity, campaign) {
   return Math.min(score, 30);
 }
 
+// ── ICP sector context (async, batched) ──
+
+/**
+ * Normalise les secteurs cibles du profil ET les secteurs distincts des comptes
+ * dans l'espace canonique partagé 'client_industry' (sector-classifier + cache DB),
+ * pour que « Services financiers » et « Finance » matchent. Un appel classifier
+ * par valeur distincte, jamais par opportunité. Retourne null si le profil n'a
+ * aucun secteur cible exploitable → computeFit retombe sur le match textuel.
+ */
+async function buildSectorContext(profile, opportunities) {
+  const targetsRaw = String(profile?.target_sectors || '')
+    .split(/[,;/]/).map(s => s.trim()).filter(Boolean);
+  if (targetsRaw.length === 0) return null;
+
+  const targetSet = new Set();
+  for (const raw of targetsRaw) {
+    try {
+      const norm = await classifySector(raw, 'client_industry');
+      if (norm !== NON_DETERMINE) targetSet.add(norm);
+    } catch { /* skip — un target non classifiable ne bloque pas les autres */ }
+  }
+  if (targetSet.size === 0) return null;
+
+  const accountSectorMap = new Map();
+  const distinct = [...new Set(opportunities.map(o => o.data?.sector).filter(Boolean))];
+  for (const raw of distinct) {
+    try {
+      accountSectorMap.set(raw, await classifySector(raw, 'client_industry'));
+    } catch {
+      accountSectorMap.set(raw, NON_DETERMINE);
+    }
+  }
+  return { targetSet, accountSectorMap };
+}
+
 // ── Main scoring function ──
 
-function scoreContact(opportunity, { campaign, profile, activities } = {}) {
-  const activityResult = computeActivity(activities || []);
-  const fitResult = computeFit(opportunity, campaign, profile);
+function scoreContact(opportunity, { campaign, profile, activities, sectorCtx } = {}) {
+  const activityResult = computeActivity(activities || [], opportunity);
+  const fitResult = computeFit(opportunity, campaign, profile, sectorCtx || null);
   const statusScore = computeStatus(opportunity, campaign);
 
   const total = Math.min(100, activityResult.score + fitResult.score + statusScore);
@@ -177,6 +260,14 @@ async function scoreAllContacts(userId) {
 
   const campaignMap = {};
   for (const c of allCampaigns) campaignMap[c.id] = c;
+
+  // Résolution sectorielle ICP (profil ↔ comptes) — neutre si elle échoue
+  let sectorCtx = null;
+  try {
+    sectorCtx = await buildSectorContext(profile, opportunities);
+  } catch (err) {
+    logger.warn('contact-scoring', `Sector context failed, falling back to textual match: ${err.message}`);
+  }
 
   // Fetch activities (last 90 days)
   let allActivities = [];
@@ -219,7 +310,7 @@ async function scoreAllContacts(userId) {
     const uniqueActs = acts.filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; });
 
     const campaign = opp.campaign_id ? campaignMap[opp.campaign_id] : null;
-    const result = scoreContact(opp, { campaign, profile, activities: uniqueActs });
+    const result = scoreContact(opp, { campaign, profile, activities: uniqueActs, sectorCtx });
 
     // Find last activity date
     let lastActivity = null;
@@ -260,11 +351,13 @@ async function scoreAllContacts(userId) {
   return { contacts: scoredContacts, avgScore, distribution };
 }
 
-// Backwards-compatible wrapper for code that calls scoreOpportunities(opps, profile, campaignMap)
-function scoreOpportunities(opportunities, profile, campaignMap) {
+// Backwards-compatible wrapper for code that calls scoreOpportunities(opps, profile, campaignMap).
+// sectorCtx (optionnel, via buildSectorContext) active le match sectoriel normalisé ;
+// sans lui, computeFit retombe sur le match textuel.
+function scoreOpportunities(opportunities, profile, campaignMap, sectorCtx = null) {
   return opportunities.map(opp => {
     const campaign = opp.campaign_id ? campaignMap[opp.campaign_id] : null;
-    const result = scoreContact(opp, { campaign, profile, activities: [] });
+    const result = scoreContact(opp, { campaign, profile, activities: [], sectorCtx });
     return {
       ...opp,
       score: result.score,
@@ -273,4 +366,4 @@ function scoreOpportunities(opportunities, profile, campaignMap) {
   });
 }
 
-module.exports = { scoreContact, scoreAllContacts, scoreOpportunities, computeFit, computeActivity };
+module.exports = { scoreContact, scoreAllContacts, scoreOpportunities, computeFit, computeActivity, buildSectorContext };

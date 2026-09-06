@@ -193,6 +193,18 @@ async function processOnboarding() {
         if (sentEmails.includes(step.key)) continue;
         if (daysSinceSignup < step.delay) continue;
 
+        // Un « Bienvenue » dix jours après l'inscription fait plus de mal que
+        // de bien : au-delà d'une semaine de retard sur son créneau, l'étape
+        // est marquée comme traitée sans être envoyée.
+        if (daysSinceSignup > step.delay + 7) {
+          sentEmails.push(step.key);
+          await db.query(
+            `UPDATE users SET data = jsonb_set(COALESCE(data, '{}')::jsonb, '{_onboarding_sent}', $1::jsonb) WHERE id = $2`,
+            [JSON.stringify(sentEmails), user.id]
+          );
+          continue;
+        }
+
         try {
           await sendEmail({
             to: user.email,
@@ -210,6 +222,10 @@ async function processOnboarding() {
         } catch (err) {
           report.errors.push(`${user.email}: ${err.message}`);
         }
+
+        // Un seul email par utilisateur et par run : la séquence est un
+        // goutte-à-goutte quotidien, jamais une rafale de rattrapage.
+        break;
       }
     }
   } catch (err) {
@@ -225,10 +241,15 @@ async function processRetention() {
   const report = { sent: 0, skipped: 0, errors: [] };
 
   try {
+    // chat_messages ne porte pas user_id : l'activité passe par chat_threads.
+    // (La version précédente jetait une erreur SQL à chaque run — la retention
+    // n'a donc jamais envoyé un seul email.)
     const users = await db.query(
       `SELECT u.id, u.name, u.email, u.data,
         EXTRACT(EPOCH FROM (now() - COALESCE(
-          (SELECT MAX(created_at) FROM chat_messages WHERE user_id = u.id),
+          (SELECT MAX(m.created_at) FROM chat_messages m
+             JOIN chat_threads t ON t.id = m.thread_id
+            WHERE t.user_id = u.id),
           u.created_at
         ))) / 86400 AS days_inactive
        FROM users u
@@ -236,46 +257,61 @@ async function processRetention() {
     );
 
     for (const user of users.rows) {
-      const daysInactive = Math.floor(parseFloat(user.days_inactive) || 0);
+      let daysInactive = Math.floor(parseFloat(user.days_inactive) || 0);
       const userData = (typeof user.data === 'string' ? JSON.parse(user.data) : user.data) || {};
       const sentRetention = userData._retention_sent || [];
 
-      for (const step of RETENTION_SEQUENCE) {
-        if (sentRetention.includes(step.key)) continue;
-        if (daysInactive < step.inactiveDays) continue;
+      // Plancher d'inactivité : posé au rallumage de l'orchestrateur
+      // (2026-08-04) sur les comptes existants, pour que la reprise ne
+      // déclenche pas une rafale de relances sur des mois d'inactivité
+      // accumulée pendant que les crons étaient éteints. L'inactivité de ces
+      // comptes se mesure depuis le plancher ; les nouveaux comptes n'en ont
+      // pas et suivent le comportement normal.
+      if (userData._retention_floor) {
+        const floorDays = Math.floor((Date.now() - new Date(userData._retention_floor).getTime()) / DAY_MS);
+        if (Number.isFinite(floorDays)) daysInactive = Math.min(daysInactive, Math.max(0, floorDays));
+      }
 
-        try {
-          // Gather stats for the re-engagement email
-          let stats = {};
-          if (step.key === 'reengagement') {
-            const [patterns, pending, stagnant] = await Promise.all([
-              db.query('SELECT COUNT(*) AS c FROM memory_patterns WHERE date_discovered > now() - interval \'7 days\''),
-              db.query('SELECT COUNT(*) AS c FROM nurture_emails WHERE user_id = $1 AND status = \'pending\'', [user.id]),
-              db.query('SELECT COUNT(*) AS c FROM opportunities WHERE user_id = $1 AND status = \'open\' AND updated_at < now() - interval \'14 days\'', [user.id]),
-            ]);
-            stats = {
-              newPatterns: parseInt(patterns.rows[0]?.c || 0),
-              pendingEmails: parseInt(pending.rows[0]?.c || 0),
-              stagnantDeals: parseInt(stagnant.rows[0]?.c || 0),
-            };
-          }
+      // Palier le plus profond applicable — jamais plusieurs à la fois. Un
+      // utilisateur inactif 35 jours reçoit le « personal check-in », pas les
+      // trois relances de l'échelle dans la même minute.
+      const applicable = RETENTION_SEQUENCE.filter(s => daysInactive >= s.inactiveDays);
+      const step = applicable[applicable.length - 1];
+      if (!step || sentRetention.includes(step.key)) continue;
 
-          await sendEmail({
-            to: user.email,
-            subject: step.subject,
-            html: step.html(user, stats),
-          });
-
-          sentRetention.push(step.key);
-          await db.query(
-            `UPDATE users SET data = jsonb_set(COALESCE(data, '{}')::jsonb, '{_retention_sent}', $1::jsonb) WHERE id = $2`,
-            [JSON.stringify(sentRetention), user.id]
-          );
-          report.sent++;
-          logger.info('lifecycle', `Retention [${step.key}] sent to ${user.email} (inactive ${daysInactive}d)`);
-        } catch (err) {
-          report.errors.push(`${user.email}: ${err.message}`);
+      try {
+        // Gather stats for the re-engagement email
+        let stats = {};
+        if (step.key === 'reengagement') {
+          const [patterns, pending, stagnant] = await Promise.all([
+            db.query('SELECT COUNT(*) AS c FROM memory_patterns WHERE date_discovered > now() - interval \'7 days\''),
+            db.query('SELECT COUNT(*) AS c FROM nurture_emails WHERE user_id = $1 AND status = \'pending\'', [user.id]),
+            db.query('SELECT COUNT(*) AS c FROM opportunities WHERE user_id = $1 AND status = \'open\' AND updated_at < now() - interval \'14 days\'', [user.id]),
+          ]);
+          stats = {
+            newPatterns: parseInt(patterns.rows[0]?.c || 0),
+            pendingEmails: parseInt(pending.rows[0]?.c || 0),
+            stagnantDeals: parseInt(stagnant.rows[0]?.c || 0),
+          };
         }
+
+        await sendEmail({
+          to: user.email,
+          subject: step.subject,
+          html: step.html(user, stats),
+        });
+
+        // Les paliers moins profonds sont marqués aussi : une fois le
+        // check-in 30 jours parti, la relance 7 jours n'a plus de sens.
+        const newSent = [...new Set([...sentRetention, ...applicable.map(s => s.key)])];
+        await db.query(
+          `UPDATE users SET data = jsonb_set(COALESCE(data, '{}')::jsonb, '{_retention_sent}', $1::jsonb) WHERE id = $2`,
+          [JSON.stringify(newSent), user.id]
+        );
+        report.sent++;
+        logger.info('lifecycle', `Retention [${step.key}] sent to ${user.email} (inactive ${daysInactive}d)`);
+      } catch (err) {
+        report.errors.push(`${user.email}: ${err.message}`);
       }
     }
   } catch (err) {

@@ -21,12 +21,14 @@ const TYPE_ICONS = {
   welcome: '👋',
   churn_alert: '⚠️',
   warning: '⚠️',
+  signals: '📡',
 };
 
 /* ─── Type → link mapping (clickable notifications) ─── */
 const TYPE_LINKS = {
   churn_alert: '/clients?filter=churn',
   warning: '/clients?filter=churn',
+  signals: '/activation?section=signals',
 };
 
 /* ─── Time-ago helper ─── */

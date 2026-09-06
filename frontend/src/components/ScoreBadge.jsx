@@ -6,7 +6,13 @@ export default function ScoreBadge({ score, breakdown }) {
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 4 }} title={
-      breakdown ? `Engagement: ${breakdown.engagement}/50 | Fit: ${breakdown.fit}/50` : ''
+      breakdown
+        ? [
+            `Activité: ${breakdown.activity ?? breakdown.engagement ?? 0}/40`,
+            `Fit ICP: ${breakdown.fit ?? 0}/30`,
+            breakdown.status != null ? `Statut: ${breakdown.status}/30` : null,
+          ].filter(Boolean).join(' | ')
+        : ''
     }>
       <span style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

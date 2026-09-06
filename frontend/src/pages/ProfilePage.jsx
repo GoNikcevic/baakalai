@@ -521,6 +521,16 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
               {renderInput(en ? 'Website' : 'Site web', 'website', { type: 'url', placeholder: 'https://...' })}
               {renderSelect(en ? 'Team size' : 'Taille d\'\u00e9quipe', 'team_size', ['1-5', '6-10', '11-25', '26-50', '51-100', '100+'])}
             </div>
+            <div style={{ marginTop: 8 }}>
+              {renderInput(en ? 'ICP target sectors (shared)' : 'Secteurs cibles ICP (partag\u00e9s)', 'target_sectors', {
+                placeholder: en ? 'e.g., Finance, Healthcare, Telecom' : 'ex: Finance, Sant\u00e9, T\u00e9l\u00e9com',
+              })}
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                {en
+                  ? 'Weights the contact score: an account in one of these sectors gets a fit bonus.'
+                  : 'Pond\u00e8re le score des contacts : un compte dans l\'un de ces secteurs re\u00e7oit un bonus de fit.'}
+              </div>
+            </div>
 
             <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {en ? 'Personas & style (shared)' : 'Personas & style (partag\u00e9s)'}

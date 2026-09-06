@@ -10,6 +10,7 @@ import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import api, { request } from '../services/api-client';
+import { useConfirm } from '../components/ConfirmModal';
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import CampaignAssistant from '../components/campaigns/CampaignAssistant';
@@ -20,6 +21,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
   const location = useLocation();
   const t = useT();
   const { lang } = useI18n();
+  const confirm = useConfirm();
   const en = lang === 'en';
   const user = getUser();
   // Non-admins get the campaign assistant only — no tab switcher, no campaign-list/autopilot
@@ -31,7 +33,13 @@ export default function CampaignsList({ onNavigateCampaign }) {
   const [view, setView] = useState(location.state?.openAssistant ? 'assistant' : 'campaigns');
   const [actionLoading, setActionLoading] = useState({});
 
-  const [filter, setFilter] = useState('active');
+  // Arriving scrolled down (long campaign list, or a « Nouvelle campagne » CTA from
+  // another page) left the Campagnes/Autopilot/Assistant tabs off-screen above.
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
+
+  // Default "Tous" (hors archivées) : les campagnes créées par l'assistant naissent
+  // en status 'prep' — un défaut 'active' les rendait invisibles juste après création.
+  const [filter, setFilter] = useState('');
   const [sortByReply, setSortByReply] = useState(false);
   const [sortAsc, setSortAsc] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState({});
@@ -128,7 +136,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
   const handleDelete = useCallback(async (e, campaign) => {
     e.stopPropagation();
-    if (!window.confirm(en ? `Delete campaign "${campaign.name}"?` : `Supprimer la campagne "${campaign.name}" ?`)) return;
+    if (!await confirm(en ? `Delete campaign "${campaign.name}"?` : `Supprimer la campagne "${campaign.name}" ?`, { danger: true })) return;
     const backendId = campaign._backendId || campaign.id;
     setActionLoading(prev => ({ ...prev, [campaign.id]: 'deleting' }));
     try {
@@ -190,7 +198,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
       {view === 'campaigns' && (isEmpty ? (
         <div className="empty-state">
-          <div className="empty-state-icon">\uD83C\uDFAF</div>
+          <div className="empty-state-icon">{'\uD83C\uDFAF'}</div>
           <div className="empty-state-title">{t('campaigns.noCampaigns')}</div>
           <div className="empty-state-desc">
             {t('campaigns.noCampaignsDesc')}

@@ -30,6 +30,10 @@ if (useSqlite) {
   sqliteAdapter = require('./sqlite-adapter');
 }
 
+// `hashCode` a été retiré avec le dernier pg_advisory_lock : il ne servait
+// qu'à dériver une clé de verrou entière. Les baux de cron_locks sont nommés,
+// donc aucune fonction de hachage n'est nécessaire.
+
 // Helper: run a query and return rows
 async function query(text, params) {
   if (useSqlite) {
@@ -576,6 +580,70 @@ const versions = {
 // Memory Patterns
 // =============================================
 
+/**
+ * Anonymise un pattern avant écriture.
+ *
+ * Placé ici, dans le DAO, et non chez les appelants : la migration 013
+ * déclarait déjà l'anonymisation « by convention », et la convention n'a pas
+ * tenu — des noms de clients (LVMH, Qonto, Sanofi…) se sont retrouvés en base.
+ * Un point de passage obligé est la seule forme d'anonymisation qui survive à
+ * l'ajout d'un nouvel agent.
+ *
+ * Règles :
+ * - la rédaction ne peut jamais faire échouer une écriture (un pattern rédigé
+ *   partiellement vaut mieux qu'un agent qui plante) ;
+ * - politique de partage (décision produit 2026-08-04) : `shared` est accordé
+ *   automatiquement dès que la rédaction est complète — lexique réellement
+ *   chargé ET aucun résidu détecté sur le texte du pattern. Le mérite
+ *   (confiance Haute) n'entre pas ici : il est filtré à la lecture par
+ *   `listForPrompt`, ce qui laisse un pattern monter en confiance après coup
+ *   sans réécriture. L'accord n'a lieu que si l'appel porte le texte du
+ *   pattern (`data.pattern` présent) : sur une mise à jour partielle, la garde
+ *   n'a pas vu le vrai texte et ne peut rien promettre. Un `shared: false`
+ *   explicite de l'appelant est respecté ; l'inverse (`shared: true` non sûr)
+ *   est toujours retiré.
+ */
+async function anonymizeBeforeWrite(data, op) {
+  if (!data || typeof data !== 'object') return data;
+  if (data.pattern === undefined && data.data === undefined) return data;
+
+  try {
+    const anonymize = require('../lib/anonymize');
+    const lexicon = await anonymize.loadLexicon({ query });
+    const result = anonymize.anonymizePattern(
+      { pattern: data.pattern, data: data.data },
+      lexicon
+    );
+
+    const out = { ...data };
+    if (data.pattern !== undefined) out.pattern = result.pattern;
+    if (data.data !== undefined) out.data = result.data;
+
+    // Retrait : un partage demandé mais non sûr est toujours refusé.
+    if (out.shared === true && !result.safeToShare) out.shared = false;
+    // Accord : rédaction complète + texte du pattern présent + pas de refus
+    // explicite de l'appelant → le pattern rejoint le pool global.
+    if (out.shared === undefined && data.pattern !== undefined && result.safeToShare) {
+      out.shared = true;
+    }
+
+    if (result.redacted > 0 || result.residual.length > 0) {
+      // console plutôt que lib/logger : le reste de ce module fait pareil et
+      // db/index.js est chargé très tôt.
+      console.warn(
+        `[anonymize] pattern ${op}: ${result.redacted} redaction(s)`
+        + `, residu=${result.residual.slice(0, 5).join(',') || 'aucun'}`
+        + `, partageable=${result.safeToShare}`
+      );
+    }
+    return out;
+  } catch (err) {
+    // Échec de la rédaction : on écrit quand même, mais jamais en partagé.
+    console.error(`[anonymize] rédaction impossible, pattern non partagé: ${err.message}`);
+    return { ...data, shared: false };
+  }
+}
+
 const memoryPatterns = {
   async list(filter = {}) {
     let sql = 'SELECT * FROM memory_patterns';
@@ -590,10 +658,20 @@ const memoryPatterns = {
       conditions.push(`confidence = $${i++}`);
       params.push(filter.confidence);
     }
-    // Team filter: show team patterns + global shared patterns
+    // Team filter: show team patterns + global shared high-confidence patterns
     if (filter.teamId) {
-      conditions.push(`(team_id = $${i++} OR team_id IS NULL OR shared = true)`);
+      conditions.push(`(team_id = $${i++} OR (shared = true AND confidence = 'Haute'))`);
       params.push(filter.teamId);
+    } else if (filter.userId) {
+      // Solo/own patterns (user_id, migration 089) + patterns de ses équipes + pool partagé
+      conditions.push(`(user_id = $${i} OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i}) OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.userId);
+      i++;
+    } else {
+      // Sans tenant : UNIQUEMENT le pool global anonymisé. L'ancien comportement
+      // (aucun filtre → patterns de tous les tenants) fuitait la mémoire privée
+      // de chaque client vers les prompts des autres (audit du 02/09).
+      conditions.push(`shared = true AND confidence = 'Haute'`);
     }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY date_discovered DESC';
@@ -610,8 +688,10 @@ const memoryPatterns = {
   },
 
   async count(filter = {}) {
+    // Mêmes conditions que list() (dismissed + tenant) — l'ancienne version comptait
+    // tout, dismissés et autres tenants inclus, et divergeait du tableau affiché.
     let sql = 'SELECT COUNT(*) as total FROM memory_patterns';
-    const conditions = [];
+    const conditions = ['dismissed_at IS NULL'];
     const params = [];
     let i = 1;
     if (filter.category) {
@@ -622,7 +702,17 @@ const memoryPatterns = {
       conditions.push(`confidence = $${i++}`);
       params.push(filter.confidence);
     }
-    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    if (filter.teamId) {
+      conditions.push(`(team_id = $${i++} OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.teamId);
+    } else if (filter.userId) {
+      conditions.push(`(user_id = $${i} OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i}) OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.userId);
+      i++;
+    } else {
+      conditions.push(`shared = true AND confidence = 'Haute'`);
+    }
+    sql += ' WHERE ' + conditions.join(' AND ');
     const result = await query(sql, params);
     return parseInt(result.rows[0].total, 10);
   },
@@ -633,6 +723,8 @@ const memoryPatterns = {
   },
 
   async create(data) {
+    data = await anonymizeBeforeWrite(data, 'create');
+
     // Derive confidence_score from text confidence if not explicitly provided
     const confidenceText = data.confidence || 'Faible';
     const confidenceScore = data.confidence_score ?? data.confidenceScore
@@ -641,8 +733,8 @@ const memoryPatterns = {
 
     const result = await query(`
       INSERT INTO memory_patterns (pattern, category, data, confidence, confidence_score, date_discovered, sectors, targets,
-        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source, shared, user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
       data.pattern,
@@ -660,11 +752,22 @@ const memoryPatterns = {
       data.improvement_pct || data.improvementPct || null,
       data.confirmations || 1,
       data.teamId || data.team_id || null,
+      data.source || null,
+      // `shared` etait absent de cette liste : le drapeau etait donc
+      // inatteignable a la creation et retombait sur le DEFAULT false. Combine
+      // au fait qu'aucun agent ne le demande, le pool global ne pouvait
+      // structurellement jamais se remplir. La valeur transmise est deja
+      // passee par anonymizeBeforeWrite, qui ne sait que la retirer.
+      data.shared === true,
+      // Tenant solo (migration 089) — un pattern naît scopé à son propriétaire.
+      data.userId || data.user_id || null,
     ]);
     return result.rows[0];
   },
 
   async update(id, data) {
+    data = await anonymizeBeforeWrite(data, 'update');
+
     const sets = [];
     const values = [];
     let i = 1;
@@ -679,8 +782,11 @@ const memoryPatterns = {
       sample_size: 'sample_size', sampleSize: 'sample_size',
       improvement_pct: 'improvement_pct', improvementPct: 'improvement_pct',
       confirmations: 'confirmations',
+      last_confirmed_at: 'last_confirmed_at', lastConfirmedAt: 'last_confirmed_at',
       team_id: 'team_id', teamId: 'team_id',
+      user_id: 'user_id', userId: 'user_id',
       shared: 'shared',
+      source: 'source',
     };
     const seen = new Set();
     for (const [inputKey, col] of Object.entries(mapping)) {
@@ -713,12 +819,18 @@ const memoryPatterns = {
    * Get patterns that should be injected into email generation prompts.
    * Priority: user-applied patterns first, then high-confidence patterns.
    */
-  async listForPrompt(limit = 15, teamId = null) {
-    const teamFilter = teamId
-      ? `AND (team_id = $2 OR team_id IS NULL OR shared = true)`
-      : '';
+  async listForPrompt(limit = 15, teamId = null, userId = null) {
+    let teamFilter;
     const params = [limit];
-    if (teamId) params.push(teamId);
+    if (teamId) {
+      teamFilter = `AND (team_id = $2 OR (shared = true AND confidence = 'Haute'))`;
+      params.push(teamId);
+    } else if (userId) {
+      teamFilter = `AND (user_id = $2 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $2) OR (shared = true AND confidence = 'Haute'))`;
+      params.push(userId);
+    } else {
+      teamFilter = `AND shared = true AND confidence = 'Haute'`;
+    }
     const result = await query(
       `SELECT * FROM memory_patterns
        WHERE dismissed_at IS NULL AND (applied = true OR confidence = 'Haute')
@@ -735,62 +847,122 @@ const memoryPatterns = {
    * or create a new one. Prevents pattern explosion from repeated agent runs.
    */
   async replaceOrCreate(data) {
+    // Scoping tenant (audit 02/09) : toutes les recherches de doublon/dismissed de
+    // cette fonction sont restreintes au tenant du pattern. Avant, un pattern
+    // écarté par UN client bloquait sa re-création chez TOUS, et un update de
+    // dédup pouvait écraser le pattern d'un autre tenant. Sans tenant fourni
+    // (écrivain legacy), on ne matche que les lignes elles-mêmes sans tenant.
+    const tenantTeam = data.teamId || data.team_id || null;
+    const tenantUser = data.userId || data.user_id || null;
+    const tenantClause = (offset) => tenantTeam ? { sql: `AND team_id = $${offset}`, params: [tenantTeam] }
+      : tenantUser ? { sql: `AND user_id = $${offset}`, params: [tenantUser] }
+      : { sql: 'AND team_id IS NULL AND user_id IS NULL', params: [] };
+
     // Check if a similar pattern was dismissed within the last 7 days — respect user's choice
     const prefix = (data.pattern || '').slice(0, 30);
     if (prefix.length >= 10) {
+      const tc = tenantClause(3);
       const dismissed = await query(
-        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at > now() - interval '7 days' LIMIT 1`,
-        [data.category, prefix + '%']
+        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at > now() - interval '7 days' ${tc.sql} LIMIT 1`,
+        [data.category, prefix + '%', ...tc.params]
       );
       if (dismissed.rows[0]) return null; // User dismissed this recently, don't recreate
     }
 
-    // Try to find existing active pattern with same category and content
-    const existing = await query(
-      `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL LIMIT 1`,
-      [data.category, data.pattern]
-    );
-    if (existing.rows[0]) {
-      return this.update(existing.rows[0].id, data);
-    }
-    // Also check by partial match (text prefix)
-    if (prefix.length >= 10) {
-      const partial = await query(
-        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL LIMIT 1`,
-        [data.category, prefix + '%']
+    // Une ré-observation par un agent EST une confirmation : sans ce bump, un
+    // pattern reconfirmé chaque semaine restait à confirmations=1 avec
+    // last_confirmed_at NULL — décoté à 60 j et jamais promouvable (audit 02/09).
+    const confirmAndUpdate = async (id) => {
+      await query(
+        `UPDATE memory_patterns SET confirmations = COALESCE(confirmations, 0) + 1, last_confirmed_at = now() WHERE id = $1`,
+        [id]
       );
-      if (partial.rows[0]) {
-        return this.update(partial.rows[0].id, data);
-      }
-    }
+      return (await this.update(id, data)) || (await this.get(id));
+    };
 
-    // Semantic deduplication via pgvector (if enabled)
+    // Exclusion mutuelle entre agents concurrents écrivant la même catégorie
+    // (Timing Agent + Copy Optimizer, par exemple).
+    //
+    // ⚠️ NE PAS revenir à pg_advisory_lock. DATABASE_URL pointe sur Supavisor
+    // en mode transaction : les advisory locks appartiennent à la session
+    // serveur, que le pooler ne garantit pas stable d'une requête à l'autre.
+    // Le lock se pose sur une connexion, l'unlock part sur une autre et
+    // échoue — le verrou reste alors détenu par une connexion `idle` du
+    // pooler. Comme pg_advisory_lock est BLOQUANT, l'appel suivant attend
+    // indéfiniment : mesuré ici même, une écriture de pattern a bloqué plus de
+    // deux minutes avant d'être tuée. Sur un cron, cela fige la tâche.
+    //
+    // Le bail en table (lib/db-lock.js, migration 066) s'acquiert en une
+    // instruction atomique, expire tout seul, et ne bloque jamais.
+    const lockName = `pattern:${data.category}:${prefix}`;
+    let releaseLock = async () => {};
     try {
-      const { findSimilarPattern, upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
-      if (ENABLED) {
-        const similar = await findSimilarPattern(data.pattern, 0.85);
-        if (similar?.sourceId) {
-          // Check if the similar pattern is active (not dismissed)
-          const active = await query('SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL', [similar.sourceId]);
-          if (active.rows[0]) {
-            const updated = await this.update(active.rows[0].id, data);
-            // Update embedding with new content
-            await upsertPatternEmbedding(active.rows[0].id, data.pattern, { category: data.category, confidence: data.confidence });
-            return updated;
-          }
+      const { acquire } = require('../lib/db-lock');
+      releaseLock = await acquire(lockName, { ttlSeconds: 60 });
+
+      // Try to find existing active pattern with same category and content
+      const tcExact = tenantClause(3);
+      const existing = await query(
+        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL ${tcExact.sql} LIMIT 1`,
+        [data.category, data.pattern, ...tcExact.params]
+      );
+      if (existing.rows[0]) {
+        return await confirmAndUpdate(existing.rows[0].id);
+      }
+      // Also check by partial match (text prefix)
+      if (prefix.length >= 10) {
+        const tcPartial = tenantClause(3);
+        const partial = await query(
+          `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL ${tcPartial.sql} LIMIT 1`,
+          [data.category, prefix + '%', ...tcPartial.params]
+        );
+        if (partial.rows[0]) {
+          return await confirmAndUpdate(partial.rows[0].id);
         }
       }
-    } catch { /* pgvector optional, fall through to create */ }
 
-    // Create new pattern + embed it
-    const created = await this.create(data);
-    try {
-      const { upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
-      if (ENABLED && created) {
-        await upsertPatternEmbedding(created.id, created.pattern, { category: created.category, confidence: created.confidence });
-      }
-    } catch { /* embedding optional */ }
-    return created;
+      // Semantic deduplication via pgvector (if enabled).
+      // findSimilarPattern returns the embedding it computed; we carry it over to
+      // the write below so the same text isn't embedded (and billed) twice.
+      let precomputedEmbedding = null;
+      try {
+        const { findSimilarPattern, upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
+        if (ENABLED) {
+          const similar = await findSimilarPattern(data.pattern, 0.85);
+          precomputedEmbedding = similar?.embedding || null;
+          if (similar?.sourceId) {
+            // Le match vectoriel est global — on ne fusionne que si la ligne
+            // appartient au MÊME tenant, sinon on crée (pas d'écrasement croisé).
+            const tcVec = tenantClause(2);
+            const active = await query(
+              `SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL ${tcVec.sql}`,
+              [similar.sourceId, ...tcVec.params]
+            );
+            if (active.rows[0]) {
+              const updated = await confirmAndUpdate(active.rows[0].id);
+              await upsertPatternEmbedding(active.rows[0].id, data.pattern, null, precomputedEmbedding);
+              return updated;
+            }
+          }
+        }
+      } catch { /* pgvector optional, fall through to create */ }
+
+      // Create new pattern + embed it
+      const created = await this.create(data);
+      try {
+        const { upsertPatternEmbedding, ENABLED } = require('../lib/vector-store');
+        if (ENABLED && created) {
+          await upsertPatternEmbedding(created.id, created.pattern, null, precomputedEmbedding);
+        }
+      } catch { /* embedding optional */ }
+
+      return created;
+    } finally {
+      // Libération unique, quel que soit le chemin de sortie — la version
+      // précédente répétait l'unlock devant chaque `return`, et en avait
+      // forcément oublié un le jour où l'on ajouterait une branche.
+      await releaseLock();
+    }
   },
 
   /**
@@ -814,12 +986,15 @@ const memoryPatterns = {
        RETURNING id`
     );
 
-    // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days
+    // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days.
+    // COALESCE sur date_discovered : sans lui, tout pattern jamais « confirmé par
+    // réponse » (last_confirmed_at NULL, cas de 100 % des créations d'agents)
+    // était à jamais impromouvable — la promotion était un chemin mort (audit 02/09).
     const promoteToMoyenne = await query(
       `UPDATE memory_patterns SET confidence = 'Moyenne', confidence_score = 0.60
        WHERE confidence = 'Faible' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 3
-         AND last_confirmed_at > now() - interval '30 days'
+         AND COALESCE(last_confirmed_at, date_discovered) > now() - interval '30 days'
        RETURNING id`
     );
     // Promote: Moyenne → Haute if confirmations >= 8 and confirmed in last 30 days
@@ -827,7 +1002,7 @@ const memoryPatterns = {
       `UPDATE memory_patterns SET confidence = 'Haute', confidence_score = 0.90
        WHERE confidence = 'Moyenne' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 8
-         AND last_confirmed_at > now() - interval '30 days'
+         AND COALESCE(last_confirmed_at, date_discovered) > now() - interval '30 days'
        RETURNING id`
     );
 
@@ -1350,10 +1525,10 @@ const opportunities = {
     return result.rows;
   },
 
-  async listByCampaign(campaignId) {
+  async listByCampaign(campaignId, limit = 1000) {
     const result = await query(
-      'SELECT * FROM opportunities WHERE campaign_id = $1 ORDER BY created_at DESC',
-      [campaignId]
+      'SELECT * FROM opportunities WHERE campaign_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [campaignId, limit]
     );
     return result.rows;
   },
@@ -1365,8 +1540,8 @@ const opportunities = {
 
   async create(data) {
     const result = await query(`
-      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date, country, city)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
       RETURNING *
     `, [
       data.userId || null,
@@ -1389,6 +1564,15 @@ const opportunities = {
       data.ownerEmail || data.owner_email || null,
       data.crmOwnerId || data.crm_owner_id || null,
       data.data || null,
+      // Ces quatre colonnes étaient absentes de l'INSERT : tous les imports qui
+      // passaient lastActivityAt ou dealValue les perdaient silencieusement, et
+      // seul le chemin update() des synchros suivantes pouvait les rattraper.
+      data.lastActivityAt || data.last_activity_at || null,
+      data.dealValue ?? data.deal_value ?? null,
+      data.wonDate || data.won_date || null,
+      data.lostDate || data.lost_date || null,
+      data.country || null,
+      data.city || null,
     ]);
     return result.rows[0];
   },
@@ -1422,6 +1606,12 @@ const opportunities = {
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
       planned_followup_date: 'planned_followup_date', plannedFollowupDate: 'planned_followup_date',
       planned_followup_reason: 'planned_followup_reason', plannedFollowupReason: 'planned_followup_reason',
+      crm_stage: 'crm_stage', crmStage: 'crm_stage',
+      crm_stage_id: 'crm_stage_id', crmStageId: 'crm_stage_id',
+      crm_stage_changed_at: 'crm_stage_changed_at', crmStageChangedAt: 'crm_stage_changed_at',
+      country: 'country', city: 'city',
+      reactivated_at: 'reactivated_at', reactivatedAt: 'reactivated_at',
+      reactivated_from_email_id: 'reactivated_from_email_id', reactivatedFromEmailId: 'reactivated_from_email_id',
       data: 'data',
     };
     const jsonbCols = new Set(['personalization', 'churn_factors']);
@@ -1457,8 +1647,15 @@ const opportunities = {
     return { changes: result.rowCount };
   },
 
-  async findByEmail(userId, email) {
+  async findByEmail(userId, email, crmProvider = null) {
     if (!email) return null;
+    if (crmProvider) {
+      const result = await query(
+        'SELECT * FROM opportunities WHERE user_id = $1 AND LOWER(email) = LOWER($2) AND crm_provider = $3 LIMIT 1',
+        [userId, email, crmProvider]
+      );
+      return result.rows[0] || null;
+    }
     const result = await query(
       'SELECT * FROM opportunities WHERE user_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1',
       [userId, email]
@@ -1599,9 +1796,13 @@ const userIntegrations = {
   async upsert(userId, provider, data) {
     const existing = await this.get(userId, provider);
     if (existing) {
-      const sets = ['access_token = $1', 'updated_at = now()'];
-      const values = [data.accessToken];
-      let i = 2;
+      const sets = ['updated_at = now()'];
+      const values = [];
+      let i = 1;
+      if (data.accessToken !== undefined) {
+        sets.push(`access_token = $${i++}`);
+        values.push(data.accessToken);
+      }
       if (data.refreshToken !== undefined) {
         sets.push(`refresh_token = $${i++}`);
         values.push(data.refreshToken);
@@ -1651,81 +1852,6 @@ const userIntegrations = {
 };
 
 // =============================================
-// Job Queue (PostgreSQL-backed, replaces in-memory queue)
-// =============================================
-
-const jobQueue = {
-  async add(jobName, data = {}, opts = {}) {
-    const priority = opts.priority || 0;
-    const maxAttempts = opts.maxAttempts || 3;
-    const result = await query(`
-      INSERT INTO job_queue (job_name, data, priority, max_attempts, status)
-      VALUES ($1, $2, $3, $4, 'pending')
-      RETURNING *
-    `, [jobName, JSON.stringify(data), priority, maxAttempts]);
-    return result.rows[0];
-  },
-
-  async claimNext() {
-    // Atomic claim: grab the oldest pending job and mark it processing
-    const result = await query(`
-      UPDATE job_queue SET status = 'processing', started_at = now(), attempts = attempts + 1
-      WHERE id = (
-        SELECT id FROM job_queue
-        WHERE status = 'pending' AND (run_after IS NULL OR run_after <= now())
-        ORDER BY priority DESC, created_at ASC
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED
-      )
-      RETURNING *
-    `);
-    return result.rows[0] || null;
-  },
-
-  async complete(id) {
-    await query(
-      "UPDATE job_queue SET status = 'completed', completed_at = now() WHERE id = $1",
-      [id]
-    );
-  },
-
-  async fail(id, errorMsg) {
-    // Check if we should retry or move to dead letter
-    const job = await query('SELECT * FROM job_queue WHERE id = $1', [id]);
-    const row = job.rows[0];
-    if (row && row.attempts < row.max_attempts) {
-      // Exponential backoff: 2^attempts seconds
-      const backoffSec = Math.pow(2, row.attempts);
-      await query(
-        "UPDATE job_queue SET status = 'pending', last_error = $1, run_after = now() + ($2 || ' seconds')::interval WHERE id = $3",
-        [errorMsg, backoffSec.toString(), id]
-      );
-    } else {
-      await query(
-        "UPDATE job_queue SET status = 'dead', last_error = $1, completed_at = now() WHERE id = $2",
-        [errorMsg, id]
-      );
-    }
-  },
-
-  async getDeadLetterQueue(limit = 50) {
-    const result = await query(
-      "SELECT * FROM job_queue WHERE status = 'dead' ORDER BY completed_at DESC LIMIT $1",
-      [limit]
-    );
-    return result.rows;
-  },
-
-  async cleanup(olderThanDays = 7) {
-    const result = await query(
-      "DELETE FROM job_queue WHERE status = 'completed' AND completed_at < now() - ($1 || ' days')::interval",
-      [olderThanDays.toString()]
-    );
-    return { changes: result.rowCount };
-  },
-};
-
-// =============================================
 // Raw query helper (for special cases in routes)
 // =============================================
 
@@ -1735,6 +1861,21 @@ async function rawQuery(text, params) {
   }
   const result = await pool.query(text, params);
   return result;
+}
+
+/**
+ * Acquire a dedicated client from the pool.
+ *
+ * Required for anything session-scoped — advisory locks in particular.
+ * `rawQuery` goes through `pool.query()`, which may hand out a different
+ * connection on every call: locking on one and unlocking on another leaks the
+ * lock until that connection is recycled. Callers MUST release the client.
+ *
+ * Returns null in SQLite mode (no pool, no advisory locks).
+ */
+async function getClient() {
+  if (useSqlite) return null;
+  return pool.connect();
 }
 
 async function closeDb() {
@@ -1772,13 +1913,6 @@ const recoFeedback = {
       [userId, patternId, patternText, feedback]
     );
     return result.rows[0];
-  },
-  async listByUser(userId) {
-    const result = await query(
-      `SELECT * FROM recommendation_feedback WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
-      [userId]
-    );
-    return result.rows;
   },
 };
 
@@ -2063,6 +2197,7 @@ const teams = {
 
 module.exports = {
   query: rawQuery,
+  getClient,
   closeDb,
   healthCheck,
   campaigns,
@@ -2085,7 +2220,6 @@ module.exports = {
   reports,
   chartData,
   userIntegrations,
-  jobQueue,
   recoFeedback,
   templates,
   notifications,

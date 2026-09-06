@@ -475,6 +475,7 @@ function ModalShell({ children, onClose, title, wide }) {
 }
 
 function VariantDiff({ variant }) {
+  const { lang } = useI18n(); const en = lang === 'en';
   return (
     <div
       style={{

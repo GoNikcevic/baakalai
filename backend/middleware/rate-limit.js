@@ -48,4 +48,15 @@ const statsLimiter = rateLimit({
   validate: { xForwardedForHeader: false },
 });
 
-module.exports = { apiLimiter, aiLimiter, chatLimiter, statsLimiter };
+// Diagnostic CRM public (sans compte) : coûteux (fetch CRM complet) et
+// exposé sans auth — strict, par IP.
+const publicDiagLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited' },
+  validate: { xForwardedForHeader: false },
+});
+
+module.exports = { apiLimiter, aiLimiter, chatLimiter, statsLimiter, publicDiagLimiter };

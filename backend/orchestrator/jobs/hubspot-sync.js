@@ -35,7 +35,11 @@ async function onStatusChange({ opportunityId, newStatus }) {
   const opportunity = await db.opportunities.get(opportunityId);
   if (!opportunity) return null;
 
-  // Resolve the user's HubSpot token
+  // Only sync to HubSpot if the user's active CRM IS HubSpot
+  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [opportunity.user_id]);
+  const activeCrm = userRow.rows[0]?.active_crm_provider;
+  if (activeCrm && activeCrm !== 'hubspot') return null;
+
   const accessToken = await getTokenForUser(opportunity.user_id);
   if (!accessToken) return null;
 
@@ -117,22 +121,20 @@ async function onStatusChange({ opportunityId, newStatus }) {
  * Now iterates per-user: each user's deals get notes via their own token.
  */
 async function pushPatternsToDeals() {
-  const patterns = await db.memoryPatterns.list({ confidence: 'Haute' });
-  if (patterns.length === 0) return { synced: 0, reason: 'No high-confidence patterns' };
-
-  // Find all users who have a HubSpot integration
+  // Find all users who have HubSpot as active CRM with active deals
   const result = await db.query(
     "SELECT DISTINCT o.user_id, COALESCE(o.crm_deal_id, o.hubspot_deal_id) AS crm_deal_id FROM opportunities o " +
     "INNER JOIN user_integrations ui ON ui.user_id = o.user_id AND ui.provider = 'hubspot' " +
+    "INNER JOIN users u ON u.id = o.user_id AND (u.active_crm_provider = 'hubspot' OR u.active_crm_provider IS NULL) " +
     "WHERE o.crm_provider = 'hubspot' AND o.crm_deal_id IS NOT NULL AND o.status NOT IN ('won', 'lost')"
   );
 
   if (result.rows.length === 0) return { synced: 0, reason: 'No active HubSpot deals' };
 
-  const noteBody = hubspot.formatPatternsAsNote(patterns);
   let synced = 0;
+  let totalPatterns = 0;
 
-  // Group by user to avoid fetching the same token multiple times
+  // Group by user to fetch per-user patterns and tokens
   const byUser = {};
   for (const row of result.rows) {
     if (!byUser[row.user_id]) byUser[row.user_id] = [];
@@ -142,6 +144,12 @@ async function pushPatternsToDeals() {
   for (const [userId, dealIds] of Object.entries(byUser)) {
     const accessToken = await getTokenForUser(userId);
     if (!accessToken) continue;
+
+    const patterns = await db.memoryPatterns.list({ confidence: 'Haute', userId });
+    if (patterns.length === 0) continue;
+    totalPatterns += patterns.length;
+
+    const noteBody = hubspot.formatPatternsAsNote(patterns);
 
     for (const dealId of dealIds) {
       try {
@@ -153,8 +161,8 @@ async function pushPatternsToDeals() {
     }
   }
 
-  console.log(`[hubspot-sync] Pushed ${patterns.length} patterns to ${synced} deals`);
-  return { synced, patternsCount: patterns.length };
+  console.log(`[hubspot-sync] Pushed ${totalPatterns} patterns to ${synced} deals`);
+  return { synced, patternsCount: totalPatterns };
 }
 
 module.exports = { onStatusChange, pushPatternsToDeals };

@@ -479,7 +479,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
               required
               autoComplete="email"
               style={styles.input}
-              placeholder="goran@stanko.fr"
+              placeholder={t('auth.emailPlaceholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -497,7 +497,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
                 name="company"
                 autoComplete="organization"
                 style={styles.input}
-                placeholder="Stanko"
+                placeholder={t('auth.companyPlaceholder')}
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
               />

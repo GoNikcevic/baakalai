@@ -4,7 +4,7 @@
    Provides campaigns, projects, KPIs, backend status, and user state.
    =============================================================================== */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import api from '../services/api-client';
 import { getUser, isLoggedIn } from '../services/auth';
 import { AppContext } from './appContextValue';
@@ -72,32 +72,11 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  const value = {
-    // State
-    campaigns,
-    projects,
-    globalKpis,
-    opportunities,
-    recommendations,
-    reports,
-    chartData,
-    backendAvailable,
-    user,
-
-    // Setters
-    setCampaigns,
-    setProjects,
-    setGlobalKpis,
-    setOpportunities,
-    setRecommendations,
-    setReports,
-    setChartData,
-    setBackendAvailable,
-    setUser,
-
-    // Actions
+  const value = useMemo(() => ({
+    campaigns, projects, globalKpis, opportunities, recommendations, reports, chartData, backendAvailable, user,
+    setCampaigns, setProjects, setGlobalKpis, setOpportunities, setRecommendations, setReports, setChartData, setBackendAvailable, setUser,
     initData,
-  };
+  }), [campaigns, projects, globalKpis, opportunities, recommendations, reports, chartData, backendAvailable, user, initData]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

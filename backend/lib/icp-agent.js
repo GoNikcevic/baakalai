@@ -90,12 +90,19 @@ Analyse ces donnees et identifie le profil client ideal (ICP).`;
     throw err;
   }
 
-  const parsed = result.parsed || {
-    topSegments: [],
-    worstSegments: [],
-    recommendations: [],
-    summary: '',
-  };
+  // Un parsing rate produisait un ICP vide indiscernable d'un "pas assez de
+  // donnees" : l'analyse etait ensuite persistee telle quelle en memoire et
+  // affichee a l'utilisateur comme un resultat legitime.
+  if (!result.parsed) {
+    logger.warn('icp-agent', 'Reponse Claude non parsable — analyse ICP abandonnee', {
+      userId, rawLength: (result.raw || '').length,
+    });
+    const err = new Error('ICP analysis unavailable: unparsable model response');
+    err.code = 'ICP_UNPARSABLE';
+    err.status = 502; // panne amont, pas un bug serveur : evite de polluer les alertes 500
+    throw err;
+  }
+  const parsed = result.parsed;
 
   // 5. Store the analysis in memory_patterns as a cached ICP result
   try {

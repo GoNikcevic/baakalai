@@ -21,6 +21,8 @@ const { getValidatedIntegrations } = require('../config');
 const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
 const logger = require('../lib/logger');
+const { track } = require('../lib/track');
+const crmOauth = require('../lib/crm-oauth');
 
 const { rateLimit } = require('../lib/rate-limit');
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 }); // 5 clean ops per minute
@@ -36,13 +38,11 @@ router.param('provider', validateEnum('provider', CRM_PROVIDERS));
  * Returns null if not configured.
  */
 async function getUserHubspotToken(userId) {
-  const integration = await db.userIntegrations.get(userId, 'hubspot');
-  if (!integration) return null;
-  try {
-    return decrypt(integration.access_token);
-  } catch {
-    return null;
-  }
+  // Délègue à crm-token pour profiter du refresh automatique des tokens
+  // OAuth (30 min de durée de vie chez HubSpot). Les clés API privées
+  // passent inchangées.
+  const { getUserCrmToken: resolve } = require('../lib/crm-token');
+  return resolve(userId, 'hubspot');
 }
 
 // =============================================
@@ -71,30 +71,16 @@ router.get('/status', async (req, res, next) => {
 router.post('/sync-opportunity', async (req, res, next) => {
   try {
     const { opportunityId } = req.body;
-    if (!opportunityId) {
-      return res.status(400).json({ error: 'opportunityId is required' });
-    }
-
+    if (!opportunityId) return res.status(400).json({ error: 'opportunityId is required' });
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) return res.status(400).json({ error: 'No active CRM configured. Connect a CRM in Settings.' });
     const opportunity = await db.opportunities.get(opportunityId);
-    if (!opportunity) {
-      return res.status(404).json({ error: 'Opportunity not found' });
-    }
-
-    // Check user owns this opportunity
-    if (opportunity.user_id !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    const token = await getUserHubspotToken(req.user.id);
-    if (!token) {
-      return res.status(400).json({ error: 'HubSpot not configured. Add your token in Settings.' });
-    }
-
-    const result = await syncOpportunityToHubspot(token, opportunity);
+    if (!opportunity) return res.status(404).json({ error: 'Opportunity not found' });
+    if (opportunity.user_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+    const result = await syncOpportunityToProvider(req.user.id, provider, opportunity);
     res.json(result);
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 // =============================================
@@ -103,10 +89,9 @@ router.post('/sync-opportunity', async (req, res, next) => {
 
 router.post('/push-contacts', async (req, res, next) => {
   try {
-    const token = await getUserHubspotToken(req.user.id);
-    if (!token) {
-      return res.status(400).json({ error: 'HubSpot not configured. Add your token in Settings.' });
-    }
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) return res.status(400).json({ error: 'No active CRM configured. Connect a CRM in Settings.' });
 
     const { opportunityIds } = req.body;
     const opportunities = opportunityIds
@@ -115,28 +100,17 @@ router.post('/push-contacts', async (req, res, next) => {
 
     const results = [];
     const errors = [];
-
     for (const opp of opportunities) {
       if (!opp) continue;
       if (opp.user_id !== req.user.id && req.user.role !== 'admin') continue;
-
       try {
-        const result = await syncOpportunityToHubspot(token, opp);
-        results.push(result);
+        results.push(await syncOpportunityToProvider(req.user.id, provider, opp));
       } catch (err) {
         errors.push({ opportunityId: opp.id, name: opp.name, error: err.message });
       }
     }
-
-    res.json({
-      synced: results.length,
-      errors: errors.length,
-      results,
-      errorDetails: errors,
-    });
-  } catch (err) {
-    next(err);
-  }
+    res.json({ synced: results.length, errors: errors.length, results, errorDetails: errors });
+  } catch (err) { next(err); }
 });
 
 // =============================================
@@ -145,34 +119,96 @@ router.post('/push-contacts', async (req, res, next) => {
 
 router.post('/sync-patterns', async (req, res, next) => {
   try {
-    const token = await getUserHubspotToken(req.user.id);
-    if (!token) {
-      return res.status(400).json({ error: 'HubSpot not configured. Add your token in Settings.' });
-    }
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    const provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) return res.status(400).json({ error: 'No active CRM configured.' });
+
+    const token = await getUserCrmToken(req.user.id, provider);
+    if (!token) return res.status(400).json({ error: `${provider} not configured.` });
 
     const { dealId } = req.body;
-
-    // Get high-confidence patterns
-    const allPatterns = await db.memoryPatterns.list({ confidence: 'Haute' });
+    const allPatterns = await db.memoryPatterns.list({ confidence: 'Haute', userId: req.user.id });
     if (allPatterns.length === 0) {
       return res.json({ synced: false, reason: 'No high-confidence patterns found' });
     }
 
-    const noteBody = hubspot.formatPatternsAsNote(allPatterns);
-    const associations = {};
-    if (dealId) associations.dealId = dealId;
-
-    const note = await hubspot.createNote(token, noteBody, associations);
-
-    res.json({ synced: true, noteId: note.id, patternsCount: allPatterns.length });
-  } catch (err) {
-    next(err);
-  }
+    if (provider === 'hubspot') {
+      const noteBody = hubspot.formatPatternsAsNote(allPatterns);
+      const associations = {};
+      if (dealId) associations.dealId = dealId;
+      const note = await hubspot.createNote(token, noteBody, associations);
+      res.json({ synced: true, noteId: note.id, patternsCount: allPatterns.length });
+    } else if (provider === 'salesforce') {
+      const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
+      const instanceUrl = integration?.instance_url;
+      if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
+      const noteBody = allPatterns.map(p => `[${p.type}] ${p.pattern} (${p.confidence})`).join('\n');
+      const note = await salesforce.createNote(instanceUrl, token, { title: 'Baakal.ai — Memory Patterns', body: noteBody, parentId: dealId });
+      res.json({ synced: true, noteId: note.id, patternsCount: allPatterns.length });
+    } else {
+      res.json({ synced: false, reason: `Pattern sync not yet supported for ${provider}` });
+    }
+  } catch (err) { next(err); }
 });
 
 // =============================================
-// Shared sync logic
+// Shared sync logic — sync one opportunity to any CRM
 // =============================================
+
+async function syncOpportunityToProvider(userId, provider, opportunity) {
+  const integration = await db.userIntegrations.get(userId, provider);
+  if (!integration) throw new Error(`${provider} not configured`);
+  let token;
+  try { token = decrypt(integration.access_token); } catch { throw new Error('Invalid stored credentials'); }
+
+  if (provider === 'hubspot') {
+    return syncOpportunityToHubspot(token, opportunity);
+  } else if (provider === 'salesforce') {
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    const instanceUrl = metadata.instance_url || integration.instance_url;
+    if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
+    const contactData = salesforce.mapOpportunityToContact(opportunity);
+    const contacts = opportunity.email ? await salesforce.searchContacts(instanceUrl, token, opportunity.email) : [];
+    let contactId = contacts.length > 0 ? contacts[0].Id : null;
+    if (!contactId) { contactId = (await salesforce.createContact(instanceUrl, token, contactData)).id; }
+    const deal = await salesforce.createDeal(instanceUrl, token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, status: opportunity.status });
+    await db.opportunities.update(opportunity.id, { crm_provider: 'salesforce', crm_contact_id: contactId, crm_deal_id: deal.id });
+    return { opportunityId: opportunity.id, provider: 'salesforce', contactId, dealId: deal.id };
+  } else if (provider === 'pipedrive') {
+    const personData = pipedrive.mapOpportunityToPerson(opportunity);
+    const { person, action } = await pipedrive.upsertPerson(token, personData);
+    const deal = await pipedrive.createDeal(token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, personId: person.id, status: opportunity.status });
+    await db.opportunities.update(opportunity.id, { crm_provider: 'pipedrive', crm_contact_id: person.id, crm_deal_id: deal.id });
+    return { opportunityId: opportunity.id, provider: 'pipedrive', personId: person.id, dealId: deal.id, action };
+  } else if (provider === 'folk') {
+    const personData = folk.mapOpportunityToPerson(opportunity);
+    const person = await folk.createPerson(token, personData);
+    await db.opportunities.update(opportunity.id, { crm_provider: 'folk', crm_contact_id: person.id });
+    return { opportunityId: opportunity.id, provider: 'folk', personId: person.id };
+  } else if (provider === 'notion') {
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    if (!metadata.database_id) throw new Error('Notion database ID not configured');
+    const prospect = { name: opportunity.name || '', email: opportunity.email || '', title: opportunity.title || '', company: opportunity.company || '', company_size: opportunity.company_size || '', linkedin_url: opportunity.linkedin_url || '' };
+    const { pageId } = await notionCrm.pushProspectToNotion(token, metadata.database_id, prospect);
+    await db.opportunities.update(opportunity.id, { crm_provider: 'notion', crm_contact_id: pageId });
+    return { opportunityId: opportunity.id, provider: 'notion', pageId };
+  } else if (provider === 'airtable') {
+    const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
+    if (!metadata.base_id || !metadata.table_name) throw new Error('Airtable base/table not configured');
+    const prospect = airtableCrm.mapOpportunityToProspect(opportunity);
+    const { recordId } = await airtableCrm.pushProspectToAirtable(token, metadata.base_id, metadata.table_name, prospect);
+    await db.opportunities.update(opportunity.id, { crm_provider: 'airtable', crm_contact_id: recordId });
+    return { opportunityId: opportunity.id, provider: 'airtable', recordId };
+  } else if (provider === 'odoo') {
+    let creds;
+    try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are invalid JSON'); }
+    const { id, action } = await odoo.upsertContact(creds, { name: opportunity.name, email: opportunity.email, title: opportunity.title, company: opportunity.company });
+    const deal = await odoo.createDeal(creds, { name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`, contactId: id });
+    await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(deal.id) });
+    return { opportunityId: opportunity.id, provider: 'odoo', contactId: id, dealId: deal.id, action };
+  }
+  throw new Error(`Unsupported CRM provider: ${provider}`);
+}
 
 async function syncOpportunityToHubspot(accessToken, opportunity) {
   const campaign = opportunity.campaign_id
@@ -247,7 +283,12 @@ router.get('/providers', async (req, res, next) => {
     // A row existing in user_integrations isn't enough on its own — only count providers whose
     // stored access_token actually decrypts (excludes stale/placeholder rows, e.g. test data
     // seeded directly in the DB, from silently appearing "connected" everywhere this is checked).
-    const connectedSet = new Set(await getValidatedIntegrations(req.user.id, providers));
+    const [validated, userResult] = await Promise.all([
+      getValidatedIntegrations(req.user.id, providers),
+      db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [req.user.id]),
+    ]);
+    const connectedSet = new Set(validated);
+    const activeCrm = userResult.rows[0]?.active_crm_provider || null;
 
     const statuses = providers.map(provider => ({
       provider,
@@ -255,7 +296,30 @@ router.get('/providers', async (req, res, next) => {
       label: labelMap[provider] || provider,
     }));
 
-    res.json({ providers: statuses });
+    res.json({ providers: statuses, activeCrm });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/crm/active — Set the user's active/primary CRM provider
+router.put('/active', async (req, res, next) => {
+  try {
+    const { provider } = req.body;
+    const validProviders = ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'folk', 'notion', 'airtable'];
+    if (!provider || !validProviders.includes(provider)) {
+      return res.status(400).json({ error: 'Invalid provider' });
+    }
+    // Verify the provider is actually connected
+    const integration = await db.query(
+      `SELECT id FROM user_integrations WHERE user_id = $1 AND provider = $2`,
+      [req.user.id, provider]
+    );
+    if (!integration.rows.length) {
+      return res.status(400).json({ error: 'Provider not connected' });
+    }
+    await db.query(`UPDATE users SET active_crm_provider = $1 WHERE id = $2`, [provider, req.user.id]);
+    res.json({ ok: true, activeCrm: provider });
   } catch (err) {
     next(err);
   }
@@ -679,6 +743,7 @@ router.post('/import/:provider', async (req, res, next) => {
     if (!token) return res.status(400).json({ error: `${provider} not connected` });
 
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
     const errors = [];
 
@@ -694,7 +759,7 @@ router.post('/import/:provider', async (req, res, next) => {
           if (!email) { skipped++; continue; }
 
           // Check if already imported
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
           if (existing) { skipped++; continue; }
 
           await db.opportunities.create({
@@ -706,6 +771,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'pipedrive',
             crmContactId: String(raw.id),
+            lastActivityAt: extractActivityDate(provider, raw),
           });
           imported++;
         } catch (err) {
@@ -720,7 +786,7 @@ router.post('/import/:provider', async (req, res, next) => {
       for (const raw of contacts) {
         try {
           if (!raw.email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, raw.email);
+          const existing = await db.opportunities.findByEmail(req.user.id, raw.email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -731,6 +797,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'odoo',
             crmContactId: String(raw.id),
+            lastActivityAt: extractActivityDate(provider, raw),
           });
           imported++;
         } catch (err) {
@@ -749,7 +816,7 @@ router.post('/import/:provider', async (req, res, next) => {
       for (const raw of contacts) {
         try {
           if (!raw.email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, raw.email);
+          const existing = await db.opportunities.findByEmail(req.user.id, raw.email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -760,13 +827,16 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'salesforce',
             crmContactId: String(raw.id),
+            lastActivityAt: extractActivityDate(provider, raw),
             crmOwnerId: raw.ownerId || null,
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
       }
     } else if (provider === 'hubspot') {
-      const res2 = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=500&properties=email,firstname,lastname,jobtitle,company', {
+      // Les trois dernières propriétés portent la récence commerciale : sans
+      // elles aucun deal ne peut être détecté dormant (lib/crm-activity-date.js).
+      const res2 = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=500&properties=email,firstname,lastname,jobtitle,company,hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res2.ok) {
@@ -778,7 +848,7 @@ router.post('/import/:provider', async (req, res, next) => {
         try {
           const email = c.properties?.email;
           if (!email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -789,6 +859,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'hubspot',
             crmContactId: String(c.id),
+            lastActivityAt: extractActivityDate(provider, c),
           });
           imported++;
         } catch (err) { errors.push({ error: err.message }); }
@@ -804,20 +875,59 @@ router.post('/import/:provider', async (req, res, next) => {
       const contacts = await notionCrm.queryContacts(notionToken, databaseId);
       for (const raw of contacts) {
         try {
-          const name = raw.name || raw.company || 'Unknown';
+          // Dans une base CRM Notion, la propriété title est souvent
+          // l'entreprise ; la personne vit dans « Contact Principal ».
+          const company = raw.company || raw.name || null;
+          const name = raw.contact || raw.name || raw.company || 'Unknown';
           const email = raw.email || null;
           if (!email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
-          if (existing) { skipped++; continue; }
+
+          const lastActivityAt = extractActivityDate(provider, raw);
+          const statusNorm = notionCrm.normalizeNotionStatus(raw.status);
+          const dealValue = typeof raw.dealValue === 'number' ? raw.dealValue : null;
+
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
+          if (existing) {
+            const updates = {};
+            // Monotone : une resynchronisation ne fait jamais rajeunir un deal.
+            if (lastActivityAt && (!existing.last_activity_at
+                || new Date(lastActivityAt) > new Date(existing.last_activity_at))) {
+              updates.lastActivityAt = lastActivityAt;
+            }
+            if (dealValue != null && Number(existing.deal_value || 0) !== dealValue) {
+              updates.dealValue = dealValue;
+            }
+            if (raw.contact && raw.contact !== existing.name) updates.name = raw.contact;
+            if (company && company !== existing.company) updates.company = company;
+            if (statusNorm && statusNorm !== existing.status) {
+              updates.status = statusNorm;
+              if (statusNorm === 'won' && !existing.won_date) {
+                updates.wonDate = lastActivityAt || new Date().toISOString();
+              }
+              if (statusNorm === 'lost' && !existing.lost_date) {
+                updates.lostDate = lastActivityAt || new Date().toISOString();
+              }
+            }
+            if (Object.keys(updates).length > 0) {
+              await db.opportunities.update(existing.id, updates);
+              updated++;
+            } else skipped++;
+            continue;
+          }
+
           await db.opportunities.create({
             userId: req.user.id,
             name,
             email,
             title: raw.title || null,
-            company: raw.company || null,
-            status: 'imported',
+            company,
+            status: statusNorm || 'imported',
             crmProvider: 'notion',
             crmContactId: raw.notionPageId || null,
+            lastActivityAt,
+            dealValue,
+            wonDate: statusNorm === 'won' ? (lastActivityAt || new Date().toISOString()) : null,
+            lostDate: statusNorm === 'lost' ? (lastActivityAt || new Date().toISOString()) : null,
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
@@ -834,7 +944,7 @@ router.post('/import/:provider', async (req, res, next) => {
         try {
           const email = raw.email || null;
           if (!email) { skipped++; continue; }
-          const existing = await db.opportunities.findByEmail(req.user.id, email);
+          const existing = await db.opportunities.findByEmail(req.user.id, email, provider);
           if (existing) { skipped++; continue; }
           await db.opportunities.create({
             userId: req.user.id,
@@ -845,6 +955,7 @@ router.post('/import/:provider', async (req, res, next) => {
             status: 'imported',
             crmProvider: 'airtable',
             crmContactId: raw.airtableRecordId || null,
+            lastActivityAt: extractActivityDate(provider, raw),
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
@@ -853,8 +964,10 @@ router.post('/import/:provider', async (req, res, next) => {
       return res.status(400).json({ error: `Import not yet supported for ${provider}` });
     }
 
-    res.json({ imported, skipped, errors: errors.length > 0 ? errors : undefined });
+    track(req.user.id, 'import_done', { provider, imported, updated, skipped });
+    res.json({ imported, updated, skipped, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
+    track(req.user.id, 'import_failed', { provider: req.params.provider, error: String(err.message).slice(0, 200) });
     next(err);
   }
 });
@@ -1594,7 +1707,7 @@ async function importContactsForUser(userId, provider) {
   for (const c of contacts) {
     if (!c.email) continue;
     try {
-      const existing = await db.opportunities.findByEmail(userId, c.email);
+      const existing = await db.opportunities.findByEmail(userId, c.email, provider);
       if (existing) continue;
       await db.opportunities.create({
         userId,
@@ -1621,13 +1734,15 @@ router.post('/first-diagnostic', async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // Auto-detect connected CRM
-    const { getUserKey } = require('../config');
-    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
-    let connectedProvider = null;
-    for (const p of providers) {
-      const key = await getUserKey(userId, p);
-      if (key) { connectedProvider = p; break; }
+    // Use active CRM, fallback to auto-detect
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+    let connectedProvider = userRow.rows[0]?.active_crm_provider || null;
+    if (!connectedProvider) {
+      const { getUserKey } = require('../config');
+      for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable']) {
+        const key = await getUserKey(userId, p);
+        if (key) { connectedProvider = p; break; }
+      }
     }
 
     // Load contacts — auto-import if DB is empty but CRM is connected
@@ -1774,6 +1889,7 @@ router.post('/auto-clean', cleanLimit, async (req, res, next) => {
 // Helper: get CRM token for any provider (with auto-refresh for Salesforce OAuth)
 // Delegated to shared utility to avoid circular deps
 const { getUserCrmToken } = require('../lib/crm-token');
+const { extractActivityDate } = require('../lib/crm-activity-date');
 
 // =============================================
 // Autopilot settings
@@ -1859,30 +1975,47 @@ setInterval(() => {
   for (const [key, val] of _sfOauthStates) {
     if (val.expiresAt < now) _sfOauthStates.delete(key);
   }
-}, 300000);
+}, 300000).unref();
 
-// GET /api/crm/salesforce/connect — Start Salesforce OAuth flow
-// Supports ?domain=mycompany.my.salesforce.com for orgs with custom domains
-router.get('/salesforce/connect', (req, res, next) => {
+// GET /api/crm/salesforce/connect — Start Salesforce OAuth flow using client's own Connected App
+router.get('/salesforce/connect', async (req, res, next) => {
   try {
-    const clientId = process.env.SALESFORCE_CLIENT_ID;
-    if (!clientId) return res.status(500).json({ error: 'Salesforce OAuth not configured' });
     if (_sfOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
+    // Connected App du client (DB) sinon app centrale Baakalai (env) —
+    // le un-clic marche alors sans aucune intégration préexistante.
+    const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
+    const metadata = typeof integration?.metadata === 'string' ? JSON.parse(integration.metadata) : (integration?.metadata || {});
+    const creds = crmOauth.salesforceCredentials(metadata);
+    if (!creds) {
+      return res.status(400).json({ error: 'No Salesforce Connected App configured. Save your Consumer Key and Secret first.' });
+    }
+    const clientId = creds.clientId;
+
     const state = crypto.randomBytes(16).toString('hex');
-    // PKCE: generate code_verifier and code_challenge
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-    // Support custom Salesforce domain (e.g. mycompany.my.salesforce.com)
+
+    // Derive login host from stored instance URL
     let loginHost = 'login.salesforce.com';
-    if (req.query.domain) {
-      const domain = req.query.domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-      if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com)$/.test(domain)) {
-        loginHost = domain;
-      }
+    if (integration?.instance_url) {
+      try {
+        const host = new URL(integration.instance_url).hostname;
+        if (/\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com)$/.test(host)) {
+          loginHost = host;
+        }
+      } catch {}
     }
 
-    _sfOauthStates.set(state, { userId: req.user.id, expiresAt: Date.now() + 600000, codeVerifier, loginHost });
+    _sfOauthStates.set(state, {
+      userId: req.user.id,
+      expiresAt: Date.now() + 600000,
+      codeVerifier,
+      loginHost,
+      // Retour wizard vs settings : le wizard restaure son brouillon via
+      // ?crm_connected=, comme pour hubspot/pipedrive.
+      from: req.query.from === 'wizard' ? 'wizard' : 'settings',
+    });
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -1902,15 +2035,61 @@ router.get('/salesforce/connect', (req, res, next) => {
 router.get('/salesforce/callback', async (req, res) => {
   logger.info('salesforce-oauth', `Callback hit: ${req.originalUrl}, APP_URL=${APP_URL}`);
 
+  // États du diagnostic public (lead magnet, lib/oauth-states) : le refus
+  // comme le succès repartent vers la landing, jamais vers /settings.
+  const sharedStates = require('../lib/oauth-states');
+  const LANDING_URL = process.env.LANDING_URL || 'https://baakal.ai';
+  const diagData = req.query.state ? sharedStates.get(req.query.state) : null;
+  const isDiagnostic = diagData && diagData.diagnostic && diagData.provider === 'salesforce';
+
   // Handle user denial or Salesforce error
   if (req.query.error) {
     logger.warn('salesforce-oauth', `OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
+    if (isDiagnostic) {
+      sharedStates.delete(req.query.state);
+      return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=` + encodeURIComponent(req.query.error));
+    }
     return res.redirect(APP_URL + '/settings?crm_error=' + encodeURIComponent(req.query.error));
   }
 
   const { code, state } = req.query;
   if (!code) {
     return res.redirect(APP_URL + '/settings?crm_error=missing_code');
+  }
+
+  if (isDiagnostic) {
+    sharedStates.delete(state);
+    if (diagData.expiresAt < Date.now()) {
+      return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=expired`);
+    }
+    try {
+      const creds = crmOauth.salesforceCredentials(null);
+      if (!creds) return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=unavailable`);
+      const tokenRes = await fetch('https://login.salesforce.com/services/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          client_id: creds.clientId,
+          client_secret: creds.clientSecret,
+          redirect_uri: APP_URL + '/api/crm/salesforce/callback',
+          code_verifier: diagData.codeVerifier,
+        }),
+      });
+      if (!tokenRes.ok) {
+        logger.warn('salesforce-oauth', `Diagnostic token exchange failed: ${(await tokenRes.text()).slice(0, 200)}`);
+        return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=token`);
+      }
+      const tokens = await tokenRes.json();
+      // Une seule lecture avec le token, jamais stocké — seul le rapport reste.
+      const { runOauthDiagnostic } = require('./public-diagnostic');
+      const { id, ownerKey } = await runOauthDiagnostic('salesforce', tokens, diagData.lang);
+      return res.redirect(`${LANDING_URL}/diagnostic?r=${id}&k=${ownerKey}`);
+    } catch (err) {
+      logger.error('salesforce-oauth', `Diagnostic salesforce failed: ${err.message}`);
+      return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=failed`);
+    }
   }
 
   const oauthData = _sfOauthStates.get(state);
@@ -1923,14 +2102,24 @@ router.get('/salesforce/callback', async (req, res) => {
   const tokenHost = oauthData.loginHost || 'login.salesforce.com';
 
   try {
+    // Connected App du client (DB) sinon app centrale Baakalai (env)
+    const integration = await db.userIntegrations.get(oauthData.userId, 'salesforce');
+    const prevMetadata = typeof integration?.metadata === 'string' ? JSON.parse(integration.metadata) : (integration?.metadata || {});
+    const creds = crmOauth.salesforceCredentials(prevMetadata);
+    if (!creds) {
+      logger.error('salesforce-oauth', `No Connected App credentials found for user ${oauthData.userId}`);
+      return res.redirect(APP_URL + '/settings?crm_error=salesforce_no_credentials');
+    }
+    const { clientId, clientSecret } = creds;
+
     const tokenRes = await fetch(`https://${tokenHost}/services/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        client_id: process.env.SALESFORCE_CLIENT_ID,
-        client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: APP_URL + '/api/crm/salesforce/callback',
         code_verifier: oauthData.codeVerifier,
       }),
@@ -1943,22 +2132,37 @@ router.get('/salesforce/callback', async (req, res) => {
     }
 
     const tokens = await tokenRes.json();
-    // tokens: { access_token, refresh_token, instance_url, id, token_type, issued_at, signature }
 
     const encryptedAccess = encrypt(tokens.access_token);
     const encryptedRefresh = tokens.refresh_token ? encrypt(tokens.refresh_token) : null;
-    // Salesforce access tokens expire in ~2 hours but no expires_in field is returned
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
+    // Preserve Connected App credentials in metadata (absent en central :
+    // le refresh retombera sur les env vars via salesforceCredentials)
     await db.userIntegrations.upsert(oauthData.userId, 'salesforce', {
       accessToken: encryptedAccess,
       refreshToken: encryptedRefresh,
-      metadata: { instance_url: tokens.instance_url, oauth: true, loginHost: tokenHost },
+      metadata: {
+        consumerKey: prevMetadata.consumerKey,
+        encryptedConsumerSecret: prevMetadata.encryptedConsumerSecret,
+        central: creds.central || undefined,
+        instance_url: tokens.instance_url,
+        oauth: true,
+        loginHost: tokenHost,
+      },
       expiresAt,
       instanceUrl: tokens.instance_url,
     });
 
     logger.info('salesforce-oauth', `Salesforce connected for user ${oauthData.userId}: ${tokens.instance_url}`);
+
+    // Auto-set as active CRM if none is set
+    await db.query(
+      `UPDATE users SET active_crm_provider = 'salesforce' WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+      [oauthData.userId]
+    );
+
+    track(oauthData.userId, 'crm_connected', { provider: 'salesforce', oauth: true });
 
     // Auto-trigger CRM sync in background after OAuth connection
     const { syncCRM } = require('../lib/crm-sync');
@@ -1966,7 +2170,8 @@ router.get('/salesforce/callback', async (req, res) => {
       logger.error('salesforce-oauth', `Background CRM sync failed for user ${oauthData.userId}: ${err.message}`);
     });
 
-    res.redirect(APP_URL + '/settings?crm_connected=salesforce');
+    const landing = oauthData.from === 'wizard' ? '/' : '/settings';
+    res.redirect(APP_URL + landing + '?crm_connected=salesforce');
   } catch (err) {
     logger.error('salesforce-oauth', `Salesforce OAuth failed: ${err.message}`);
     res.redirect(APP_URL + '/settings?crm_error=salesforce_failed');
@@ -1985,14 +2190,21 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
     const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
     const refreshHost = metadata.loginHost || 'login.salesforce.com';
 
+    // Connected App du client (metadata) sinon app centrale Baakalai (env)
+    const creds = crmOauth.salesforceCredentials(metadata);
+    if (!creds) {
+      return res.status(400).json({ error: 'No Connected App credentials found. Please reconnect Salesforce.' });
+    }
+    const { clientId, clientSecret } = creds;
+
     const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: process.env.SALESFORCE_CLIENT_ID,
-        client_secret: process.env.SALESFORCE_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
       }),
     });
 
@@ -2006,8 +2218,11 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
     const encryptedAccess = encrypt(tokens.access_token);
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
+    // Si Salesforce fait tourner le refresh token (rotation), persister le
+    // nouveau — l'ancien devient invalide.
     await db.userIntegrations.upsert(req.user.id, 'salesforce', {
       accessToken: encryptedAccess,
+      ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
       expiresAt,
     });
 
@@ -2023,38 +2238,81 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Validate Salesforce instance URL to prevent SSRF
-function isValidSalesforceUrl(url) {
+// Validate + normalize Salesforce instance URL (SSRF guard). Returns the
+// https origin, or null si invalide. On ne garde jamais le chemin : un
+// utilisateur colle souvent l'URL de la page où il se trouve
+// (.../lightning/page/home) et les appels API concatènent /services/data
+// dessus. lightning.force.com est l'hôte de l'UI, pas de l'API — on le
+// convertit vers my.salesforce.com (même sous-domaine).
+function normalizeSalesforceUrl(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' &&
-      /^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com|force\.com|visual\.force\.com)$/.test(parsed.hostname);
-  } catch { return false; }
+    if (parsed.protocol !== 'https:') return null;
+    let host = parsed.hostname;
+    if (!/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*\.(my\.salesforce\.com|salesforce\.com|lightning\.force\.com|force\.com|visual\.force\.com)$/.test(host)) {
+      return null;
+    }
+    host = host.replace(/\.lightning\.force\.com$/, '.my.salesforce.com');
+    return `https://${host}`;
+  } catch { return null; }
 }
 
-// POST /api/crm/salesforce/manual-connect — Store manually provided Salesforce credentials
+// POST /api/crm/salesforce/manual-connect — Two payload shapes:
+// { consumerKey, consumerSecret, instanceUrl } — save the user's External Client App
+//   credentials, then the client calls GET /salesforce/connect to run the OAuth flow.
+// { accessToken, instanceUrl } — store a session/bearer token pasted directly
+//   (fallback: expires in 2-24h, never auto-refreshed).
 router.post('/salesforce/manual-connect', async (req, res, next) => {
   try {
-    const { accessToken, instanceUrl } = req.body;
-    if (!accessToken || !instanceUrl) {
-      return res.status(400).json({ error: 'accessToken and instanceUrl are required' });
+    const { accessToken, consumerKey, consumerSecret, instanceUrl } = req.body;
+    const hasCredentials = consumerKey && consumerSecret;
+    if (!instanceUrl || (!accessToken && !hasCredentials)) {
+      return res.status(400).json({ error: 'instanceUrl plus either accessToken or consumerKey+consumerSecret are required' });
     }
-    if (!isValidSalesforceUrl(instanceUrl)) {
+    const normalizedUrl = normalizeSalesforceUrl(instanceUrl);
+    if (!normalizedUrl) {
       return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL (e.g. https://mycompany.my.salesforce.com)' });
+    }
+
+    if (hasCredentials) {
+      // access_token is NOT NULL in schema: placeholder on first insert,
+      // replaced by the OAuth callback; existing token kept on update.
+      const existing = await db.userIntegrations.get(req.user.id, 'salesforce');
+      await db.userIntegrations.upsert(req.user.id, 'salesforce', {
+        ...(existing ? {} : { accessToken: '' }),
+        // Wipe any previous OAuth state: a stale refresh_token would be
+        // replayed against the new Connected App credentials and fail.
+        refreshToken: null,
+        expiresAt: null,
+        metadata: {
+          consumerKey: String(consumerKey).trim(),
+          encryptedConsumerSecret: encrypt(String(consumerSecret).trim()),
+          instance_url: normalizedUrl,
+          oauth: false,
+        },
+        instanceUrl: normalizedUrl,
+      });
+      logger.info('salesforce-manual', `Connected App credentials saved for user ${req.user.id}: ${normalizedUrl}`);
+      return res.json({ ok: true, status: 'credentials_saved' });
     }
 
     const encryptedAccess = encrypt(accessToken);
     await db.userIntegrations.upsert(req.user.id, 'salesforce', {
       accessToken: encryptedAccess,
-      metadata: { instance_url: instanceUrl, oauth: false },
-      instanceUrl,
+      metadata: { instance_url: normalizedUrl, oauth: false },
+      instanceUrl: normalizedUrl,
     });
+
+    // Auto-set as active CRM if none is set
+    await db.query(
+      `UPDATE users SET active_crm_provider = 'salesforce' WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+      [req.user.id]
+    );
 
     // Test the connection
     try {
-      const sf = require('../api/salesforce');
-      await sf.listContacts(instanceUrl, accessToken);
-      logger.info('salesforce-manual', `Salesforce connected for user ${req.user.id}: ${instanceUrl}`);
+      await salesforce.listContacts(normalizedUrl, accessToken);
+      logger.info('salesforce-manual', `Salesforce connected for user ${req.user.id}: ${normalizedUrl}`);
       res.json({ ok: true, status: 'connected' });
     } catch (testErr) {
       logger.warn('salesforce-manual', `Connection test failed: ${testErr.message}`);
@@ -2068,7 +2326,8 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
   try {
     const { instanceUrl } = req.body;
     if (!instanceUrl) return res.status(400).json({ error: 'instanceUrl is required' });
-    if (!isValidSalesforceUrl(instanceUrl)) {
+    const normalizedUrl = normalizeSalesforceUrl(instanceUrl);
+    if (!normalizedUrl) {
       return res.status(400).json({ error: 'instanceUrl must be a valid Salesforce HTTPS URL' });
     }
 
@@ -2083,15 +2342,288 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
 
     await db.query(
       `UPDATE user_integrations SET instance_url = $1, updated_at = NOW() WHERE user_id = $2 AND provider = 'salesforce'`,
-      [instanceUrl.replace(/\/$/, ''), req.user.id]
+      [normalizedUrl, req.user.id]
     );
 
-    logger.info('salesforce', `Instance URL updated for user ${req.user.id}: ${instanceUrl}`);
+    logger.info('salesforce', `Instance URL updated for user ${req.user.id}: ${normalizedUrl}`);
     res.json({ ok: true, status: 'updated' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/reactivation-stats — Reactivation KPIs
+router.get('/reactivation-stats', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [reactivated, emailsSent, pipeline] = await Promise.all([
+      // Deals successfully reactivated (attributed)
+      db.query(`
+        SELECT COUNT(*) as count, COALESCE(SUM(deal_value), 0) as revenue,
+               json_agg(json_build_object(
+                 'id', o.id, 'name', o.name, 'company', o.company,
+                 'dealValue', o.deal_value, 'reactivatedAt', o.reactivated_at,
+                 'wonDate', o.won_date
+               ) ORDER BY o.reactivated_at DESC) as deals
+        FROM opportunities o
+        WHERE o.user_id = $1 AND o.reactivated_at IS NOT NULL
+      `, [userId]),
+      // Reactivation emails sent (last 90 days)
+      db.query(`
+        SELECT COUNT(*) as total,
+               COUNT(*) FILTER (WHERE replied_at IS NOT NULL) as replied,
+               COUNT(*) FILTER (WHERE status = 'pending') as pending
+        FROM nurture_emails
+        WHERE user_id = $1 AND metadata->>'chain' = 'deal_reactivation'
+          AND created_at > NOW() - INTERVAL '90 days'
+      `, [userId]),
+      // Pipeline ouvert + deals stagnants. Stagnance mesurée sur
+      // last_activity_at (signal métier) et non updated_at, réécrit en masse
+      // par chaque import — même piège que stepNurture, corrigé le 04/08.
+      db.query(`
+        SELECT
+          COUNT(*) as open_count,
+          COALESCE(SUM(deal_value), 0) as open_value,
+          COUNT(*) FILTER (
+            WHERE COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ) as count,
+          COALESCE(SUM(deal_value) FILTER (
+            WHERE COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ), 0) as potential_revenue
+        FROM opportunities
+        WHERE user_id = $1 AND status NOT IN ('won', 'lost')
+      `, [userId]),
+    ]);
+
+    const stats = reactivated.rows[0];
+    const emails = emailsSent.rows[0];
+    const pipe = pipeline.rows[0];
+
+    res.json({
+      reactivated: {
+        count: parseInt(stats.count),
+        revenue: parseFloat(stats.revenue) || 0,
+        deals: stats.count > 0 ? stats.deals : [],
+      },
+      emails: {
+        sent: parseInt(emails.total),
+        replied: parseInt(emails.replied),
+        pending: parseInt(emails.pending),
+        replyRate: emails.total > 0 ? Math.round((emails.replied / emails.total) * 100) : 0,
+      },
+      pipeline: {
+        stagnantDeals: parseInt(pipe.count),
+        potentialRevenue: parseFloat(pipe.potential_revenue) || 0,
+        openDeals: parseInt(pipe.open_count),
+        totalValue: parseFloat(pipe.open_value) || 0,
+      },
+      conversionRate: emails.total > 0 ? Math.round((stats.count / emails.total) * 100) : 0,
+    });
+  } catch (err) { next(err); }
+});
+
+// =============================================
+// OAuth produit — HubSpot & Pipedrive
+// =============================================
+// Contrairement à Salesforce (Connected App par client), l'app OAuth est la
+// nôtre : credentials en env (HUBSPOT_CLIENT_ID/SECRET, PIPEDRIVE_CLIENT_ID/
+// SECRET). Tant qu'elles ne sont pas posées, /connect répond 501 et le
+// frontend retombe sur le champ clé API.
+
+const _crmOauthStates = require('../lib/oauth-states');
+const LANDING_URL = process.env.LANDING_URL || 'https://baakal.ai';
+
+// GET /api/crm/:provider/connect — démarre le flow OAuth (hubspot|pipedrive)
+router.get('/:provider(hubspot|pipedrive)/connect', async (req, res, next) => {
+  try {
+    const { provider } = req.params;
+    if (!crmOauth.isConfigured(provider)) {
+      return res.status(501).json({ error: `${provider} OAuth is not configured yet — paste an API key instead` });
+    }
+    if (_crmOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
+
+    const state = crypto.randomBytes(16).toString('hex');
+    // `from` pilote la redirection retour : le wizard vit sur /, pas /settings.
+    const from = req.query.from === 'wizard' ? 'wizard' : 'settings';
+    _crmOauthStates.set(state, { userId: req.user.id, provider, from, expiresAt: Date.now() + 600000 });
+
+    const url = crmOauth.authorizeUrl(provider, {
+      redirectUri: `${APP_URL}/api/crm/${provider}/callback`,
+      state,
+    });
+    res.json({ url });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/:provider/callback — retour OAuth (public, pas de JWT :
+// bypass explicite dans middleware/auth.js, comme salesforce/callback)
+router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
+  const { provider } = req.params;
+  const { code, state } = req.query;
+
+  const oauthData = _crmOauthStates.get(state);
+  const from = oauthData?.from || 'settings';
+  // Les states du diagnostic public (sans compte) reviennent sur la landing.
+  const fail = (reason) => res.redirect(oauthData?.diagnostic
+    ? `${LANDING_URL}/diagnostic?oauth_error=${encodeURIComponent(reason)}`
+    : `${APP_URL}${from === 'wizard' ? '/' : '/settings'}?crm_error=${encodeURIComponent(reason)}`);
+
+  if (req.query.error) {
+    logger.warn('crm-oauth', `${provider} OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
+    return fail(req.query.error);
+  }
+  if (!code) return fail('missing_code');
+  if (!oauthData || oauthData.provider !== provider || oauthData.expiresAt < Date.now()) {
+    return fail('invalid_state');
+  }
+  _crmOauthStates.delete(state);
+
+  try {
+    const tokens = await crmOauth.exchangeCode(provider, {
+      code,
+      redirectUri: `${APP_URL}/api/crm/${provider}/callback`,
+    });
+
+    // Diagnostic public : le token sert à UNE lecture puis est jeté — rien
+    // n'est stocké hors le rapport agrégé. Require paresseux (cycle sinon).
+    if (oauthData.diagnostic) {
+      const { runOauthDiagnostic } = require('./public-diagnostic');
+      const { id, ownerKey } = await runOauthDiagnostic(provider, tokens, oauthData.lang);
+      logger.info('crm-oauth', `${provider} diagnostic public via OAuth: rapport ${id}`);
+      return res.redirect(`${LANDING_URL}/diagnostic?r=${id}&k=${ownerKey}`);
+    }
+
+    // Marge de 60 s sur l'expiration pour que le refresh parte avant le 401.
+    const expiresAt = new Date(Date.now() + Math.max(60, (tokens.expires_in || 1800) - 60) * 1000).toISOString();
+
+    await db.userIntegrations.upsert(oauthData.userId, provider, {
+      accessToken: encrypt(tokens.access_token),
+      refreshToken: tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
+      expiresAt,
+      // apiDomain : Pipedrive OAuth impose d'appeler le domaine de la société
+      // ({api_domain}/api/v1), pas api.pipedrive.com.
+      metadata: { oauth: true, ...(tokens.api_domain ? { apiDomain: tokens.api_domain } : {}) },
+    });
+
+    await db.query(
+      `UPDATE users SET active_crm_provider = $2 WHERE id = $1 AND (active_crm_provider IS NULL OR active_crm_provider = '')`,
+      [oauthData.userId, provider]
+    );
+
+    track(oauthData.userId, 'crm_connected', { provider, oauth: true });
+
+    const { syncCRM } = require('../lib/crm-sync');
+    syncCRM(oauthData.userId).catch((err) => {
+      logger.error('crm-oauth', `Background CRM sync failed for user ${oauthData.userId}: ${err.message}`);
+    });
+
+    logger.info('crm-oauth', `${provider} connected via OAuth for user ${oauthData.userId}`);
+    res.redirect(`${APP_URL}${from === 'wizard' ? '/' : '/settings'}?crm_connected=${provider}`);
+  } catch (err) {
+    logger.error('crm-oauth', `${provider} OAuth failed: ${err.message}`);
+    return fail(`${provider}_failed`);
+  }
+});
+
+// GET /api/crm/reading-summary — Compte-rendu de lecture du CRM.
+// Affiché juste après le premier import (wizard) et comme premier message
+// du chat : « voilà ce que j'ai lu, voilà ce qui dort, voilà ce qui manque ».
+// Pur SQL sur opportunities — aucune dépendance à l'analyse IA, donc
+// disponible dans la seconde qui suit l'import.
+// Seuil de dormance : 30 jours — le standard défendable du marché (14 j
+// classait « dormant » presque tout CRM à cycle long et diluait le chiffre).
+router.get('/reading-summary', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [totals, topDormant] = await Promise.all([
+      // Stagnance sur COALESCE(last_activity_at, created_at) — jamais
+      // updated_at, réécrit en masse par chaque import (cf. reactivation-stats).
+      db.query(`
+        SELECT
+          COUNT(*) as total_deals,
+          COALESCE(SUM(deal_value), 0) as total_value,
+          COUNT(*) FILTER (WHERE status NOT IN ('won', 'lost')) as open_deals,
+          COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0) as open_value,
+          COUNT(*) FILTER (
+            WHERE status NOT IN ('won', 'lost')
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ) as dormant_count,
+          COALESCE(SUM(deal_value) FILTER (
+            WHERE status NOT IN ('won', 'lost')
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+              AND deal_value IS NOT NULL AND deal_value > 0
+          ), 0) as dormant_value,
+          COUNT(*) FILTER (
+            WHERE status NOT IN ('won', 'lost')
+              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+              AND (deal_value IS NULL OR deal_value = 0)
+          ) as dormant_no_value,
+          COUNT(*) FILTER (WHERE deal_value IS NULL OR deal_value = 0) as missing_value,
+          COUNT(*) FILTER (WHERE last_activity_at IS NULL) as missing_activity,
+          COUNT(*) FILTER (WHERE company IS NULL OR company = '') as missing_company
+        FROM opportunities
+        WHERE user_id = $1
+      `, [userId]),
+      // Top 3 par valeur × ancienneté : un deal moyen oublié depuis 200 jours
+      // mérite de passer devant un gros deal calme depuis 31 jours.
+      db.query(`
+        SELECT id, name, company, deal_value,
+               GREATEST(0, EXTRACT(DAY FROM NOW() - COALESCE(last_activity_at, created_at)))::int as days_inactive
+        FROM opportunities
+        WHERE user_id = $1 AND status NOT IN ('won', 'lost')
+          AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+          AND deal_value IS NOT NULL AND deal_value > 0
+        ORDER BY deal_value * GREATEST(1, EXTRACT(DAY FROM NOW() - COALESCE(last_activity_at, created_at))) DESC
+        LIMIT 3
+      `, [userId]),
+    ]);
+
+    const row = totals.rows[0];
+    const openValue = parseFloat(row.open_value) || 0;
+    const dormantValue = parseFloat(row.dormant_value) || 0;
+
+    const { track } = require('../lib/track');
+    track(userId, 'reading_summary_viewed', {
+      dormant: parseInt(row.dormant_count),
+      dormantNoValue: parseInt(row.dormant_no_value),
+      openDeals: parseInt(row.open_deals),
+    });
+
+    res.json({
+      totalDeals: parseInt(row.total_deals),
+      totalValue: parseFloat(row.total_value) || 0,
+      openDeals: parseInt(row.open_deals),
+      openValue,
+      dormant: {
+        count: parseInt(row.dormant_count),
+        value: dormantValue,
+        // Les deals dormants SANS montant : invisibles avant — or c'est le cas
+        // type du CRM de PME mal renseigné, le manque devient l'accroche.
+        noValueCount: parseInt(row.dormant_no_value),
+        sharePct: openValue > 0 ? Math.round((dormantValue / openValue) * 100) : null,
+        top: topDormant.rows.map(d => ({
+          id: d.id,
+          name: d.name,
+          company: d.company,
+          dealValue: parseFloat(d.deal_value) || 0,
+          daysInactive: d.days_inactive,
+        })),
+      },
+      dataGaps: {
+        missingValue: parseInt(row.missing_value),
+        missingActivity: parseInt(row.missing_activity),
+        missingCompany: parseInt(row.missing_company),
+      },
+    });
   } catch (err) { next(err); }
 });
 
 module.exports = router;
 module.exports.syncOpportunityToHubspot = syncOpportunityToHubspot;
+module.exports.syncOpportunityToProvider = syncOpportunityToProvider;
+module.exports.importContactsForUser = importContactsForUser;
 module.exports.getUserHubspotToken = getUserHubspotToken;
 module.exports.getUserCrmToken = getUserCrmToken;

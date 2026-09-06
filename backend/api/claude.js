@@ -3,6 +3,45 @@ const { config } = require('../config');
 const prompts = require('./prompts');
 const { withRetry } = require('../lib/retry');
 const logger = require('../lib/logger');
+const models = require('../config/models');
+
+/**
+ * Timeout par requête, en millisecondes (le SDK JS attend des ms).
+ * Généreux par défaut : certains prompts de consolidation sortent 3000 tokens.
+ */
+const CLAUDE_TIMEOUT_MS = parseInt(process.env.CLAUDE_TIMEOUT_MS, 10) || 120000;
+
+/**
+ * Enregistre un appel LLM dans `llm_usage`.
+ *
+ * Best-effort par construction : toute erreur d'écriture est avalée. La
+ * comptabilité ne doit jamais faire échouer un appel métier, et la table peut
+ * ne pas exister (migration 067 non jouée).
+ *
+ * Les tokens étaient déjà journalisés, mais uniquement sur stdout Railway —
+ * sans rétention ni agrégation possible.
+ */
+function recordUsage({ action, model, usage, durationMs, ok = true, errorType = null, userId = null }) {
+  setImmediate(async () => {
+    try {
+      const db = require('../db');
+      await db.query(
+        `INSERT INTO llm_usage
+           (action, model, user_id, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens, duration_ms, ok, error_type)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          action || null, model, userId,
+          usage?.input_tokens || 0,
+          usage?.output_tokens || 0,
+          usage?.cache_read_input_tokens || 0,
+          usage?.cache_creation_input_tokens || 0,
+          durationMs ?? null, ok, errorType,
+        ]
+      );
+    } catch { /* comptabilité best-effort */ }
+  });
+}
 
 let client;
 let clientKeyHash;
@@ -15,7 +54,17 @@ function getClient() {
     throw err;
   }
   if (!client || clientKeyHash !== currentKey) {
-    client = new Anthropic({ apiKey: currentKey });
+    client = new Anthropic({
+      apiKey: currentKey,
+      // Aucun timeout n'était appliqué : un appel bloqué immobilisait l'agent
+      // indéfiniment (le seul garde-fou existant, AGENT_TIMEOUT_MS, ne couvre
+      // que le chemin hebdomadaire de strategic-orchestrator).
+      timeout: CLAUDE_TIMEOUT_MS,
+      // Le SDK retente 2 fois par défaut, et lib/retry.js retente 3 fois par
+      // dessus : jusqu'à 9 appels facturés pour une seule demande. On laisse
+      // withRetry seul aux commandes.
+      maxRetries: 0,
+    });
     clientKeyHash = currentKey;
   }
   return client;
@@ -62,8 +111,12 @@ function wrapApiError(err) {
  * Priority:
  * 1. If config.claude.model is explicitly set to an Opus model (via env or
  *    Settings), it acts as a global override — every action uses Opus.
- * 2. Otherwise, use the per-action model from config.claude.models.
- * 3. Fallback to config.claude.model (Sonnet by default).
+ * 2. Otherwise config/models.js decides, in this order:
+ *      CLAUDE_MODEL_<ACTION>  →  CLAUDE_TIER_<TIER>  →  tier declared by the action.
+ *
+ * Actions with no entry in config/models.js fall back to the `balanced` tier.
+ * Run `node -e "console.log(require('./config/models').describeRouting())"` to
+ * print the resolved table for the current environment.
  */
 function resolveModel(action) {
   const globalModel = config.claude.model;
@@ -74,12 +127,8 @@ function resolveModel(action) {
     return globalModel;
   }
 
-  // Per-action routing from config.claude.models
-  const actionModel = config.claude.models?.[action];
-  if (actionModel) return actionModel;
-
-  // Fallback to the global default
-  return globalModel;
+  // Per-action routing (config/models.js): env override → tier → default tier.
+  return models.modelFor(action);
 }
 
 /**
@@ -112,20 +161,30 @@ function toSystemBlocks(systemPrompt) {
  */
 async function callClaude(systemPrompt, userContent, maxTokens = 4000, action) {
   const model = resolveModel(action);
+  // Per-action thinking config. No-op on 4.x models (they don't think unless
+  // asked), but load-bearing on gen-5 where thinking is on by default and would
+  // otherwise eat into max_tokens. See config/models.js.
+  const thinking = models.thinkingFor(action);
+  const startedAt = Date.now();
   let response;
   try {
     response = await withRetry(() => getClient().messages.create({
       model,
       max_tokens: maxTokens,
+      ...(thinking ? { thinking } : {}),
       system: toSystemBlocks(systemPrompt),
       messages: [{ role: 'user', content: userContent }],
     }), { maxRetries: 3, baseDelay: 2000 });
   } catch (err) {
     logger.error('claude', 'API call failed', { action, model, error: err.message });
+    recordUsage({ action, model, usage: null, durationMs: Date.now() - startedAt, ok: false, errorType: err?.name || 'error' });
     throw wrapApiError(err);
   }
 
-  const text = response.content[0].text;
+  // Ne PAS indexer content[0] en dur : sur les modeles gen-5 la reflexion est
+  // active par defaut et un bloc `thinking` precede le texte, ce qui ferait
+  // renvoyer undefined ici.
+  const text = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('') || '';
 
   // Try to extract JSON from response
   let parsed;
@@ -142,6 +201,7 @@ async function callClaude(systemPrompt, userContent, maxTokens = 4000, action) {
     input_tokens: response.usage?.input_tokens,
     output_tokens: response.usage?.output_tokens,
   });
+  recordUsage({ action, model, usage: response.usage, durationMs: Date.now() - startedAt });
 
   return { raw: text, parsed, usage: response.usage, model };
 }
@@ -581,7 +641,9 @@ PÉRIMÈTRE STRICT : Tu réponds UNIQUEMENT aux questions liées à :
 - Le fonctionnement de Baakalai (connecter un CRM, triggers d'activation, A/B testing, mémoire IA, équipe, sécurité, tarification)
 - Des conseils généraux de vente B2B, stratégie de prospection ou CRM (angle, timing, priorisation de comptes) — SANS créer, éditer ni déployer de campagne toi-même
 
-Si l'utilisateur veut réellement CRÉER ou LANCER une campagne de prospection (séquences, ciblage, envoi), ne le fais PAS ici : redirige-le vers l'assistant dédié dans l'onglet "Campagnes". Exemple : "Je peux te conseiller sur l'angle et la cible, mais pour construire et lancer la campagne, direction l'onglet Campagnes — l'assistant là-bas s'en charge avec toi."
+Si l'utilisateur veut réellement CRÉER ou LANCER une campagne (relance de deals, réactivation ou upsell de clients, séquences, ciblage, envoi), ne le fais PAS ici : émets l'action open_campaign_assistant — l'interface affichera un bouton qui l'emmène vers l'assistant dédié de l'onglet "Campagnes". Mets dans "prompt" un résumé en une phrase de ce qu'il veut faire, réutilisable tel quel comme premier message là-bas.
+{ "action": "open_campaign_assistant", "prompt": "Créer une campagne de relance pour mes deals dormants depuis plus de 30 jours" }
+Accompagne l'action d'une phrase courte du type : "Pour construire et lancer cette campagne, bascule sur l'assistant Campagnes — je t'ai préparé le brief." Tu peux toujours conseiller sur l'angle, la cible ou le timing AVANT de proposer la bascule.
 
 Si l'utilisateur te pose une question HORS de ce périmètre (météo, actualités, code, recettes, opinions politiques, sujets personnels, general knowledge, etc.), redirige poliment avec cette phrase exacte :
 "Je suis l'assistant Baakalai, je ne peux t'aider que sur ton CRM, tes clients et le fonctionnement de la plateforme. Dis-moi en quoi je peux t'assister !"
@@ -590,13 +652,13 @@ Ne réponds PAS à la question hors-sujet, même partiellement. Reste amical mai
 CONNAISSANCE PRODUIT (utilise ces informations pour répondre aux questions sur le fonctionnement de Baakalai — reste cohérent avec elles) :
 - Connecter un CRM : Paramètres → Intégrations (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable). Connecter un email : Paramètres → Comptes Email (Gmail/Outlook, OAuth en un clic).
 - Extension Chrome : ajoute des contacts depuis LinkedIn, affiche leur statut CRM, permet d'envoyer un email sans quitter LinkedIn.
-- Trigger : envoie automatiquement un email personnalisé quand une condition CRM est remplie (lead stagnant, contact inactif, lead gagné...). Mode "auto" = envoi immédiat ; mode "approbation" = mis en file d'attente pour validation avant envoi.
+- Trigger : envoie automatiquement un email personnalisé quand une condition CRM est remplie (deal stagnant, contact inactif, deal gagné...). Mode "auto" = envoi immédiat ; mode "approbation" = mis en file d'attente pour validation avant envoi.
 - A/B testing : 2 variantes générées par email, après 7 jours un gagnant est déclaré statistiquement, le système alloue plus de trafic à la variante gagnante.
 - Score de churn : 0 à 100, prédit le risque de perte d'un client. Basé sur l'inactivité, le sentiment des derniers emails, la durée du deal et les retards de paiement.
 - Mémoire IA : chaque email envoyé et chaque réponse reçue alimentent la mémoire ; l'IA identifie les patterns qui marchent (timing, ton, angle) et les applique automatiquement. Un pattern "Approuvé" (validé manuellement) est toujours prioritaire. Un pattern non confirmé depuis 60 jours perd un niveau de confiance (Haute → Moyenne → Faible) ; les patterns approuvés ne se dégradent jamais.
 - Équipe : inviter un membre depuis Profil → Équipe → Inviter. Rôles : admin, prospection, activation, viewer. Max 5 membres. Contacts/campagnes/patterns/triggers sont partagés au sein de l'équipe, mais chaque membre envoie depuis sa propre boîte email.
 - Sécurité : chiffrement AES-256 pour les clés API, authentification JWT, headers Helmet, mots de passe hashés en bcrypt 12.
-- Tarification : 75€/mois par utilisateur, IA illimitée, toutes les intégrations, support prioritaire, accès à tous les agents stratégiques. Sans engagement, accès jusqu'à la fin de la période facturée en cas d'annulation.
+- Tarification : Starter 49€/mois, Growth 149€/mois, Scale 349€/mois. IA incluse, toutes les intégrations, accès aux agents stratégiques selon le plan. Sans engagement, accès jusqu'à la fin de la période facturée en cas d'annulation.
 
 RÈGLE lookup_client :
 Quand l'utilisateur demande des infos sur un client précis par son nom, tu n'as PAS accès direct aux données CRM. Émets l'action lookup_client avec le terme de recherche, SANS jamais inventer un statut, un score de churn ou une date. Une seule action lookup_client par réponse.

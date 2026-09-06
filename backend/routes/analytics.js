@@ -53,6 +53,50 @@ function canonicalStage(status) {
   return mapping[s] || 'new';
 }
 
+// ── Filtres transverses produit / compte (barre de filtres Analytics) ──
+// Les routes de cette page agrègent déjà en mémoire sur listByUser : on filtre
+// donc en JS après chargement — zéro changement de comportement sans filtre.
+// `productLine` = UUID de product_lines, `account` = nom de société exact
+// (insensible à la casse et aux espaces).
+
+async function resolveAnalyticsFilters(userId, query) {
+  const productLine = String(query?.productLine || '').trim();
+  const account = String(query?.account || '').trim().toLowerCase();
+  let productOppIds = null;
+  if (productLine) {
+    const r = await db.query(
+      `SELECT opl.opportunity_id FROM opportunity_product_lines opl
+       JOIN opportunities o ON o.id = opl.opportunity_id
+       WHERE opl.product_line_id = $1 AND o.user_id = $2`,
+      [productLine, userId]
+    );
+    productOppIds = new Set(r.rows.map(x => x.opportunity_id));
+  }
+  return { productLine, account, productOppIds, active: !!(productLine || account) };
+}
+
+function applyAnalyticsFilters(opps, filters) {
+  if (!filters?.active) return opps;
+  let list = opps;
+  if (filters.productOppIds) list = list.filter(o => filters.productOppIds.has(o.id));
+  if (filters.account) list = list.filter(o => (o.company || '').trim().toLowerCase() === filters.account);
+  return list;
+}
+
+async function listFilteredOpportunities(userId, query) {
+  const opps = await db.opportunities.listByUser(userId, 10000, 0);
+  return applyAnalyticsFilters(opps, await resolveAnalyticsFilters(userId, query));
+}
+
+// Pour les routes en SQL pur (/stages, /ask) : liste d'IDs autorisés, ou null
+// si aucun filtre — à passer en $n::uuid[] avec `($n::uuid[] IS NULL OR id = ANY($n))`.
+async function filteredOppIds(userId, query) {
+  const filters = await resolveAnalyticsFilters(userId, query);
+  if (!filters.active) return null;
+  const opps = await db.opportunities.listByUser(userId, 10000, 0);
+  return applyAnalyticsFilters(opps, filters).map(o => o.id);
+}
+
 // =============================================
 // GET /api/analytics/pipeline
 // =============================================
@@ -60,7 +104,7 @@ function canonicalStage(status) {
 router.get('/pipeline', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const total = opportunities.length;
 
     // Count per stage
@@ -162,9 +206,49 @@ router.get('/pipeline', async (req, res, next) => {
 router.get('/attribution', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const [allCampaigns, allOpportunities] = await Promise.all([
+    const [allCampaigns, allOpportunities, touchAgg, touchedDeals] = await Promise.all([
       db.campaigns.list({ userId }),
-      db.opportunities.listByUser(userId, 10000, 0),
+      listFilteredOpportunities(userId, req.query),
+      // Attribution deals touchés/non touchés : un deal est « touché » dès
+      // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé.
+      // Périmètre plus large que /crm/reactivation-stats (chains seules).
+      db.query(`
+        WITH touch AS (
+          SELECT o.id, o.deal_value, o.status, o.reactivated_at,
+                 COUNT(ne.id) AS emails_sent,
+                 BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+          FROM opportunities o
+          LEFT JOIN nurture_emails ne
+            ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
+          WHERE o.user_id = $1
+          GROUP BY o.id
+        )
+        SELECT
+          COUNT(*) FILTER (WHERE emails_sent > 0) AS touched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0), 0) AS touched_value,
+          COUNT(*) FILTER (WHERE emails_sent = 0) AS untouched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent = 0), 0) AS untouched_value,
+          COUNT(*) FILTER (WHERE emails_sent > 0 AND status = 'won') AS touched_won,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0 AND status = 'won'), 0) AS touched_won_value,
+          COUNT(*) FILTER (WHERE emails_sent = 0 AND status = 'won') AS untouched_won,
+          COUNT(*) FILTER (WHERE emails_sent > 0 AND replied) AS touched_replied,
+          COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL) AS reactivated_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE reactivated_at IS NOT NULL), 0) AS reactivated_value
+        FROM touch
+      `, [userId]),
+      db.query(`
+        SELECT o.name, o.company, o.deal_value, o.status, o.reactivated_at,
+               COUNT(ne.id) AS emails_sent,
+               MAX(ne.sent_at) AS last_touch_at,
+               BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+        FROM opportunities o
+        JOIN nurture_emails ne
+          ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
+        WHERE o.user_id = $1
+        GROUP BY o.id, o.name, o.company, o.deal_value, o.status, o.reactivated_at
+        ORDER BY MAX(ne.sent_at) DESC
+        LIMIT 50
+      `, [userId]),
     ]);
 
     // Group opportunities by campaign_id
@@ -213,7 +297,37 @@ router.get('/attribution', async (req, res, next) => {
       ? Math.round((totals.meetings / totals.prospects) * 1000) / 10
       : 0;
 
-    res.json({ campaigns, totals });
+    const ta = touchAgg.rows[0];
+    const num = (v) => parseFloat(v) || 0;
+    const dealTouch = {
+      touched: {
+        count: parseInt(ta.touched_count),
+        value: num(ta.touched_value),
+        won: parseInt(ta.touched_won),
+        wonValue: num(ta.touched_won_value),
+        replied: parseInt(ta.touched_replied),
+        replyRate: ta.touched_count > 0
+          ? Math.round((ta.touched_replied / ta.touched_count) * 100) : 0,
+      },
+      untouched: {
+        count: parseInt(ta.untouched_count),
+        value: num(ta.untouched_value),
+        won: parseInt(ta.untouched_won),
+      },
+      reactivated: { count: parseInt(ta.reactivated_count), value: num(ta.reactivated_value) },
+      deals: touchedDeals.rows.map(d => ({
+        name: d.name,
+        company: d.company,
+        dealValue: num(d.deal_value),
+        status: d.status,
+        emailsSent: parseInt(d.emails_sent),
+        lastTouchAt: d.last_touch_at,
+        replied: d.replied,
+        reactivatedAt: d.reactivated_at,
+      })),
+    };
+
+    res.json({ campaigns, totals, dealTouch });
   } catch (err) {
     next(err);
   }
@@ -227,10 +341,27 @@ router.get('/scoring', async (req, res, next) => {
   try {
     const result = await scoreAllContacts(req.user.id);
 
+    // scoreAllContacts score TOUT le tenant (les scores persistés doivent rester
+    // globaux) — le filtre produit/compte ne s'applique qu'à la restitution.
+    let contacts = result.contacts;
+    const filters = await resolveAnalyticsFilters(req.user.id, req.query);
+    if (filters.active) {
+      contacts = applyAnalyticsFilters(contacts, filters);
+    }
+
+    const distribution = { high: 0, medium: 0, low: 0 };
+    let totalScore = 0;
+    for (const c of contacts) {
+      totalScore += c.score;
+      if (c.score >= 70) distribution.high++;
+      else if (c.score >= 40) distribution.medium++;
+      else distribution.low++;
+    }
+
     res.json({
-      leads: result.contacts.slice(0, 200),
-      distribution: result.distribution,
-      avgScore: result.avgScore,
+      leads: contacts.slice(0, 200),
+      distribution,
+      avgScore: contacts.length > 0 ? Math.round((totalScore / contacts.length) * 10) / 10 : 0,
     });
   } catch (err) {
     next(err);
@@ -381,7 +512,7 @@ router.get('/health', async (req, res, next) => {
   try {
     const userId = req.user.id;
     const [opportunities, allCampaigns, profile] = await Promise.all([
-      db.opportunities.listByUser(userId, 10000, 0),
+      listFilteredOpportunities(userId, req.query),
       db.campaigns.list({ userId }),
       db.profiles.get(userId),
     ]);
@@ -534,7 +665,7 @@ router.get('/health', async (req, res, next) => {
 router.get('/forecast', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const allOpportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const allOpportunities = await listFilteredOpportunities(userId, req.query);
     const now = Date.now();
     const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -637,11 +768,23 @@ router.get('/forecast', async (req, res, next) => {
     const atRiskRevenue = wonDeals.filter(o => (o.churn_score || 0) >= 50).reduce((sum, o) => sum + Number(o.deal_value || 0), 0);
     const totalWonRevenue = wonDeals.reduce((sum, o) => sum + Number(o.deal_value || 0), 0);
 
+    // Forecast intelligent : probabilité PAR DEAL calibrée sur l'historique
+    // réel du tenant (cycle appris, activité, lead score, calibration) —
+    // best-effort, l'ancien forecast par stage reste le repli d'affichage.
+    let memoryForecast = null;
+    try {
+      const { computeForecast } = require('../lib/forecast-engine');
+      memoryForecast = await computeForecast(userId);
+    } catch (err) {
+      require('../lib/logger').warn('analytics', `memoryForecast failed: ${err.message}`);
+    }
+
     res.json({
       revenueHistory,
       pipeline: { byStage: pipelineByStage, totalValue: totalPipeline, weightedForecast: totalWeighted },
       salesCycle: { avgDays: avgSalesCycle, closedDeals: closedDeals.length },
       projectedDeals,
+      memoryForecast,
       retention: {
         totalWonRevenue: Math.round(totalWonRevenue),
         atRiskRevenue: Math.round(atRiskRevenue),
@@ -659,7 +802,7 @@ router.get('/forecast', async (req, res, next) => {
 router.get('/renewals', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const now = new Date();
     const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -737,7 +880,7 @@ router.get('/renewals', async (req, res, next) => {
 router.get('/segments', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const now = Date.now();
     const DAY_MS = 1000 * 60 * 60 * 24;
     const DAYS_30 = 30 * DAY_MS;
@@ -901,7 +1044,7 @@ function sendCsv(res, filename, headers, rows) {
 router.get('/pipeline/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const total = opportunities.length;
     const counts = {}; const stageTimes = {}; const stageCounts2 = {};
     for (const def of STAGE_DEFS) counts[def.stage] = 0;
@@ -927,7 +1070,7 @@ router.get('/pipeline/csv', async (req, res, next) => {
 router.get('/attribution/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const [allCampaigns, allOpps] = await Promise.all([db.campaigns.list({ userId }), db.opportunities.listByUser(userId, 10000, 0)]);
+    const [allCampaigns, allOpps] = await Promise.all([db.campaigns.list({ userId }), listFilteredOpportunities(userId, req.query)]);
     const oppByCampaign = {};
     for (const opp of allOpps) { const cid = opp.campaign_id || '__none__'; if (!oppByCampaign[cid]) oppByCampaign[cid] = []; oppByCampaign[cid].push(opp); }
     const headers = ['Campaign', 'Channel', 'Prospects', 'Interested', 'Meetings', 'Conversion %'];
@@ -993,7 +1136,7 @@ router.get('/channels/csv', async (req, res, next) => {
 router.get('/health/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const now = Date.now(); const DAY_MS = 86400000;
     const activeOpps = opportunities.filter(o => { const s = canonicalStage(o.status); return s !== 'won' && s !== 'lost'; });
     const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updated_at).getTime() : 0; return (now - u) > 7 * DAY_MS; });
@@ -1013,7 +1156,7 @@ router.get('/health/csv', async (req, res, next) => {
 router.get('/forecast/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const counts = {}; for (const opp of opportunities) counts[canonicalStage(opp.status)] = (counts[canonicalStage(opp.status)] || 0) + 1;
     const wonCount = counts['won'] || 0;
     const funnelStages = ['new', 'interested', 'meeting', 'negotiation', 'won'];
@@ -1033,7 +1176,7 @@ router.get('/forecast/csv', async (req, res, next) => {
 router.get('/renewals/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const now = new Date();
     const DAY_MS = 86400000;
     const rows = opportunities
@@ -1055,4 +1198,302 @@ router.get('/renewals/csv', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// =============================================
+// GET /api/analytics/stages — étapes de pipeline CRM réelles (migration 092)
+// =============================================
+// Contrairement à /pipeline (statuts canoniques dérivés de `status`), ici ce
+// sont les étapes telles que l'utilisateur les a nommées dans SON CRM,
+// rapatriées par le delta sync. L'historique des transitions ne démarre qu'à
+// l'installation du tracking — le front doit l'afficher honnêtement.
+
+router.get('/stages', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    // null = pas de filtre actif (le prédicat $2::uuid[] IS NULL court-circuite)
+    const oppIds = await filteredOppIds(userId, req.query);
+
+    const dist = await db.query(
+      `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
+       FROM opportunities
+       WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won', 'lost')
+         AND ($2::uuid[] IS NULL OR id = ANY($2))
+       GROUP BY crm_stage`,
+      [userId, oppIds]
+    );
+
+    if (dist.rows.length === 0) {
+      const any = await db.query(
+        `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_stage IS NOT NULL LIMIT 1`,
+        [userId]
+      );
+      if (!any.rows[0]) return res.json({ available: false });
+    }
+
+    // Ordre naturel du pipeline quand le CRM le fournit (Pipedrive/HubSpot) ;
+    // sinon tri par volume décroissant.
+    let order = null;
+    try {
+      const { resolveCrmForUser } = require('../lib/crm-token');
+      const { getStageLabelMap } = require('../lib/stage-tracking');
+      const { provider, creds } = await resolveCrmForUser(userId);
+      const map = provider ? await getStageLabelMap(provider, creds) : null;
+      if (map && map.size > 0) order = [...map.values()];
+    } catch { /* best-effort */ }
+
+    const stages = dist.rows.sort((a, b) => {
+      if (order) {
+        const ia = order.indexOf(a.stage);
+        const ib = order.indexOf(b.stage);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      }
+      return b.count - a.count;
+    });
+
+    // Où meurent les deals : l'étape d'origine de la DERNIÈRE transition d'un
+    // deal perdu (from_stage) — pas son étape courante, qui est souvent une
+    // étape terminale type « Closed lost » sans valeur diagnostique.
+    const lost = await db.query(
+      `SELECT COALESCE(h.from_stage, o.crm_stage) AS stage, COUNT(*)::int AS count
+       FROM opportunities o
+       LEFT JOIN LATERAL (
+         SELECT from_stage FROM opportunity_stage_history h
+         WHERE h.opportunity_id = o.id AND h.from_stage IS NOT NULL
+         ORDER BY h.changed_at DESC LIMIT 1
+       ) h ON true
+       WHERE o.user_id = $1 AND o.status = 'lost' AND COALESCE(h.from_stage, o.crm_stage) IS NOT NULL
+         AND ($2::uuid[] IS NULL OR o.id = ANY($2))
+       GROUP BY 1 ORDER BY count DESC LIMIT 12`,
+      [userId, oppIds]
+    );
+
+    const transitions = await db.query(
+      `SELECT from_stage AS "from", to_stage AS "to", COUNT(*)::int AS count
+       FROM opportunity_stage_history
+       WHERE user_id = $1 AND from_stage IS NOT NULL
+         AND ($2::uuid[] IS NULL OR opportunity_id = ANY($2))
+       GROUP BY from_stage, to_stage ORDER BY count DESC LIMIT 15`,
+      [userId, oppIds]
+    );
+
+    const since = await db.query(
+      `SELECT MIN(changed_at) AS since FROM opportunity_stage_history WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({
+      available: true,
+      stages,
+      lostByStage: lost.rows,
+      transitions: transitions.rows,
+      historySince: since.rows[0]?.since || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/geography — répartition géographique du portefeuille
+// =============================================
+// Pays = colonne CRM (migration 093) normalisée en ISO-2, sinon TLD de l'email.
+// Les TLD génériques (.com, .io) ne donnent rien : la part « non déterminé »
+// est retournée telle quelle — le front doit l'afficher honnêtement.
+
+router.get('/geography', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { resolveCountry } = require('../lib/geo');
+    const opportunities = await listFilteredOpportunities(userId, req.query);
+
+    const byCountry = new Map();
+    let undetermined = 0;
+    let fromCrm = 0;
+
+    for (const opp of opportunities) {
+      const resolved = resolveCountry(opp);
+      if (!resolved) { undetermined++; continue; }
+      if (resolved.source === 'crm') fromCrm++;
+
+      let row = byCountry.get(resolved.code);
+      if (!row) {
+        row = { code: resolved.code, contacts: 0, clients: 0, openDeals: 0, openValue: 0, wonValue: 0 };
+        byCountry.set(resolved.code, row);
+      }
+      row.contacts++;
+      const stage = canonicalStage(opp.status);
+      const value = parseFloat(opp.deal_value) || 0;
+      if (stage === 'won') {
+        row.clients++;
+        row.wonValue += value;
+      } else if (stage !== 'lost' && value > 0) {
+        row.openDeals++;
+        row.openValue += value;
+      }
+    }
+
+    const countries = [...byCountry.values()]
+      .map(r => ({ ...r, openValue: Math.round(r.openValue), wonValue: Math.round(r.wonValue) }))
+      .sort((a, b) => b.contacts - a.contacts);
+
+    const total = opportunities.length;
+    res.json({
+      countries,
+      total,
+      undetermined,
+      // Part des pays issus du CRM (vs déduits du TLD email) — indicateur de fiabilité
+      crmCoverage: total > 0 ? Math.round((fromCrm / total) * 100) : 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/accounts — options du filtre « compte »
+// =============================================
+
+router.get('/accounts', async (req, res, next) => {
+  try {
+    const r = await db.query(
+      `SELECT trim(company) AS company, COUNT(*)::int AS contacts
+       FROM opportunities
+       WHERE user_id = $1 AND company IS NOT NULL AND trim(company) != ''
+       GROUP BY trim(company) ORDER BY contacts DESC, company ASC LIMIT 300`,
+      [req.user.id]
+    );
+    res.json({ accounts: r.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// POST /api/analytics/ask — question libre sur les données du tenant
+// =============================================
+// Un seul appel Claude, ancré sur un paquet d'agrégats SQL calculés à la
+// volée : la réponse ne peut citer que ce que la base contient vraiment.
+
+async function buildAnalyticsContext(userId, filterQuery = null) {
+  const ctx = {};
+
+  // Restriction produit/compte éventuelle. Quand un filtre est actif, les blocs
+  // globaux (emails d'activation, forecast, patterns) sont omis : ils ne sont
+  // pas filtrables et mélangeraient des périmètres — Claude citerait des
+  // chiffres « globaux » comme s'ils étaient filtrés.
+  let oppIds = null;
+  if (filterQuery) {
+    const filters = await resolveAnalyticsFilters(userId, filterQuery);
+    if (filters.active) {
+      const opps = await db.opportunities.listByUser(userId, 10000, 0);
+      oppIds = applyAnalyticsFilters(opps, filters).map(o => o.id);
+      ctx.filters_applied = {};
+      if (filters.productLine) {
+        try {
+          const pl = await db.query('SELECT name FROM product_lines WHERE id = $1', [filters.productLine]);
+          ctx.filters_applied.product_line = pl.rows[0]?.name || filters.productLine;
+        } catch { ctx.filters_applied.product_line = filters.productLine; }
+      }
+      if (filters.account) ctx.filters_applied.account = filters.account;
+    }
+  }
+
+  const totals = await db.query(
+    `SELECT
+       COUNT(*)::int AS contacts,
+       COUNT(*) FILTER (WHERE status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals,
+       COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won','lost')), 0)::float AS open_value,
+       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '365 days')::int AS won_365d,
+       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '365 days')::int AS lost_365d,
+       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '90 days')::int AS won_90d,
+       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '90 days')::int AS lost_90d,
+       COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL)::int AS deals_reactivated,
+       ROUND(AVG(EXTRACT(EPOCH FROM (won_date - created_at)) / 86400)
+         FILTER (WHERE status = 'won' AND won_date > created_at))::int AS avg_cycle_days,
+       COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS clients_at_churn_risk,
+       COUNT(*) FILTER (WHERE last_activity_at < now() - interval '30 days'
+         AND status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals_quiet_30d
+     FROM opportunities WHERE user_id = $1 AND ($2::uuid[] IS NULL OR id = ANY($2))`,
+    [userId, oppIds]
+  );
+  ctx.totals = totals.rows[0];
+  const w = ctx.totals.won_365d, l = ctx.totals.lost_365d;
+  ctx.totals.win_rate_365d = (w + l) > 0 ? Math.round((w / (w + l)) * 100) : null;
+
+  const stages = await db.query(
+    `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
+     FROM opportunities
+     WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won','lost')
+       AND ($2::uuid[] IS NULL OR id = ANY($2))
+     GROUP BY crm_stage ORDER BY count DESC LIMIT 15`,
+    [userId, oppIds]
+  );
+  if (stages.rows.length > 0) ctx.open_deals_by_crm_stage = stages.rows;
+
+  if (oppIds !== null) return ctx;
+
+  const emails = await db.query(
+    `SELECT COUNT(*) FILTER (WHERE status = 'sent' AND created_at > now() - interval '30 days')::int AS sent_30d,
+            COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_approval
+     FROM nurture_emails WHERE user_id = $1`,
+    [userId]
+  );
+  ctx.activation_emails = emails.rows[0];
+
+  try {
+    const { computeForecast } = require('../lib/forecast-engine');
+    const f = await computeForecast(userId);
+    ctx.forecast = { scenarios: f.scenarios, counts: f.counts, context: f.context };
+  } catch { /* forecast optionnel */ }
+
+  try {
+    let teamId = null;
+    const team = await db.teams.getByUser(userId);
+    if (team) teamId = team.id;
+    const patterns = await db.memoryPatterns.listForPrompt(5, teamId, userId);
+    if (patterns.length > 0) {
+      ctx.learned_patterns = patterns.map(p => p.pattern).filter(Boolean);
+    }
+  } catch { /* mémoire optionnelle */ }
+
+  return ctx;
+}
+
+router.post('/ask', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const question = String(req.body?.question || '').trim().slice(0, 500);
+    const lang = req.body?.lang === 'en' ? 'en' : 'fr';
+    if (!question) return res.status(400).json({ error: 'Question required' });
+
+    // Filtres produit/compte de la barre Analytics — même périmètre que les onglets
+    const context = await buildAnalyticsContext(userId, req.body?.filters || null);
+    const claude = require('../api/claude');
+
+    const systemPrompt = `Tu es l'analyste données de baakalai. On te fournit un paquet d'agrégats calculés depuis le CRM de l'utilisateur (JSON) et une question libre.
+
+Règles strictes :
+- Réponds UNIQUEMENT à partir des chiffres fournis. N'invente jamais un chiffre, une tendance ou une cause qui n'est pas dans les données.
+- Si les données ne permettent pas de répondre, dis-le clairement et indique ce qui permettrait d'y répondre (ex. « l'historique des étapes est trop récent »).
+- Réponse courte et concrète : 2 à 6 phrases, les chiffres cités tels quels, une recommandation actionnable quand elle découle des données.
+- Montants en euros (symbole €), pas de jargon.
+- win_rate_365d null = pas assez de deals clos pour un taux fiable.
+- Si "filters_applied" est présent, TOUS les chiffres sont restreints à ce périmètre (ligne produit et/ou compte) : dis-le explicitement dans ta réponse.
+- Réponds en ${lang === 'en' ? 'anglais' : 'français'}. Pas de markdown lourd : du texte simple, éventuellement des tirets.`;
+
+    const result = await claude.callClaude(
+      systemPrompt,
+      `Question : ${question}\n\nDonnées du tenant :\n${JSON.stringify(context)}`,
+      1200,
+      'analytics_ask'
+    );
+
+    res.json({ answer: (result.raw || '').trim() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
+// Réutilisé par le playbook à la demande (routes/ai.js) — mêmes agrégats,
+// même garantie : rien qui ne vienne pas de la base.
+module.exports.buildAnalyticsContext = buildAnalyticsContext;

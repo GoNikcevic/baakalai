@@ -13,13 +13,28 @@ async function pdFetch(apiToken, endpoint, options = {}) {
   if (!apiToken) {
     throw new Error('Pipedrive API token is required');
   }
+  // Deux modes d'auth (lib/crm-token.js) :
+  // - string : clé API classique → api.pipedrive.com + ?api_token=
+  // - objet { oauth, accessToken, apiDomain } : OAuth → Bearer sur le domaine
+  //   de la société ({api_domain}/api/v1) — api.pipedrive.com refuse les
+  //   tokens OAuth.
+  const isOauth = typeof apiToken === 'object';
   return withRetry(async () => {
-    const sep = endpoint.includes('?') ? '&' : '?';
-    const url = `${BASE_URL}${endpoint}${sep}api_token=${apiToken}`;
+    let url;
+    const authHeaders = {};
+    if (isOauth) {
+      const base = `${(apiToken.apiDomain || 'https://api.pipedrive.com').replace(/\/$/, '')}/api/v1`;
+      url = `${base}${endpoint}`;
+      authHeaders.Authorization = `Bearer ${apiToken.accessToken}`;
+    } else {
+      const sep = endpoint.includes('?') ? '&' : '?';
+      url = `${BASE_URL}${endpoint}${sep}api_token=${apiToken}`;
+    }
     const res = await fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options.headers,
       },
     });
@@ -197,6 +212,32 @@ async function updateDeal(apiToken, dealId, data) {
   });
 }
 
+// Diagnostic public : liste paginée avec les champs d'activité — getDeals()
+// ne remonte ni last_activity_date ni org_name et ne pagine pas.
+async function listDealsForDiagnostic(apiToken, { maxDeals = 2000 } = {}) {
+  const deals = [];
+  let start = 0;
+  while (deals.length < maxDeals) {
+    const page = await pdFetch(apiToken, `/deals?limit=500&start=${start}`);
+    if (!page || page.length === 0) break;
+    for (const d of page) {
+      if (d.status === 'deleted') continue;
+      deals.push({
+        name: d.title,
+        company: d.org_name || d.org_id?.name || null,
+        value: parseFloat(d.value) || 0,
+        currency: d.currency || 'EUR',
+        status: d.status, // open | won | lost
+        addTime: d.add_time,
+        lastActivity: d.last_activity_date || null,
+      });
+    }
+    if (page.length < 500) break;
+    start += 500;
+  }
+  return deals;
+}
+
 async function getDeals(apiToken, limit = 100) {
   const deals = await pdFetch(apiToken, `/deals?limit=${limit}&sort=add_time DESC`);
   return (deals || []).map(d => ({
@@ -268,6 +309,7 @@ module.exports = {
   createDeal,
   updateDeal,
   getDeals,
+  listDealsForDiagnostic,
   createNote,
   getUsers,
   mapOpportunityToPerson,

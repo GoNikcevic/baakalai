@@ -1,23 +1,32 @@
 /* ===============================================================================
    BAKAL — Onboarding Checklist Component
-   Shows a progress card on the dashboard for new users. Mirrors the simplified
-   OnboardingWizard's two mandatory steps — connect a CRM, connect an email — and
-   nothing else. Purely informational, never blocking; self-hides once both are done.
+   Shows a progress card on the dashboard for new users (beta testers).
+   6-step guided tour to first campaign launch in <30 min.
+   Complements the OnboardingWizard (wizard = initial setup, checklist = ongoing guide).
    =============================================================================== */
 
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
 
+// Ordre CRM-first : l'import des deals suit immédiatement la connexion CRM —
+// c'est lui qui produit le « wow » (deals dormants). L'email n'est nécessaire
+// que pour agir ensuite.
 const STEP_CONFIG = [
+  { key: 'accountCreated', route: null },
   { key: 'crmConnected', route: '/settings' },
+  { key: 'contactsImported', route: '/clients' },
   { key: 'emailConnected', route: '/settings' },
+  { key: 'firstCampaign', route: '/campaigns', state: { openAssistant: true } },
+  { key: 'firstLaunch', route: '/campaigns' },
 ];
 
 export default function OnboardingChecklist() {
   const t = useT();
   const navigate = useNavigate();
+  const { campaigns, opportunities } = useApp();
 
   const [keys, setKeys] = useState(null);
   const [emailAccounts, setEmailAccounts] = useState(null);
@@ -30,13 +39,27 @@ export default function OnboardingChecklist() {
     let cancelled = false;
     async function load() {
       try {
+        // Cache in sessionStorage to avoid duplicate API calls (component mounts on Dashboard + Chat)
+        const cacheKey = 'bakal_checklist_data';
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const { keys: k, accounts: a, ts } = JSON.parse(cached);
+          if (Date.now() - ts < 60000) { // 1 min cache
+            if (!cancelled) { setKeys(k); setEmailAccounts(a); }
+            if (!cancelled) setLoading(false);
+            return;
+          }
+        }
         const [keysRes, emailRes] = await Promise.all([
           request('/settings/keys'),
           request('/nurture/email-accounts').catch(() => ({ accounts: [] })),
         ]);
         if (!cancelled) {
-          setKeys(keysRes.keys || keysRes);
-          setEmailAccounts(emailRes.accounts || []);
+          const k = keysRes.keys || keysRes;
+          const a = emailRes.accounts || [];
+          setKeys(k);
+          setEmailAccounts(a);
+          sessionStorage.setItem(cacheKey, JSON.stringify({ keys: k, accounts: a, ts: Date.now() }));
         }
       } catch { /* checklist won't show */ }
       finally { if (!cancelled) setLoading(false); }
@@ -45,27 +68,43 @@ export default function OnboardingChecklist() {
     return () => { cancelled = true; };
   }, []);
 
+  const campaignsList = useMemo(() => Object.values(campaigns || {}), [campaigns]);
+  const contactsList = useMemo(() => Object.values(opportunities || {}), [opportunities]);
+
   const steps = useMemo(() => {
     if (loading) return null;
 
-    // CRM connected — any of Pipedrive/HubSpot/Salesforce/Odoo/Notion/Airtable configured
+    // 1. Account created — always true if they see this
+    const accountCreated = true;
+
+    // 2. CRM connected — any of Pipedrive/HubSpot/Salesforce/Odoo configured
     const crmConnected = !!(keys && (
       (keys.pipedriveKey && keys.pipedriveKey.configured) ||
       (keys.hubspotKey && keys.hubspotKey.configured) ||
       (keys.salesforceKey && keys.salesforceKey.configured) ||
       (keys.odooKey && keys.odooKey.configured) ||
       (keys.notionToken && keys.notionToken.configured) ||
-      (keys.airtableKey && keys.airtableKey.configured)
+      (keys.airtableKey && keys.airtableKey.configured) ||
+      (keys.folkKey && keys.folkKey.configured)
     ));
 
-    // Email connected — any email account (SMTP/OAuth)
+    // 3. Email connected — any email account (SMTP/OAuth)
     const emailConnected = !!(emailAccounts && emailAccounts.length > 0);
+
+    // 4. Contacts imported — at least one contact/opportunity exists
+    const contactsImported = contactsList.length > 0;
+
+    // 5. First campaign created
+    const firstCampaign = campaignsList.length > 0;
+
+    // 6. First campaign launched
+    const firstLaunch = campaignsList.some(c => c.status === 'active');
 
     return STEP_CONFIG.map((cfg, i) => ({
       ...cfg,
-      done: [crmConnected, emailConnected][i],
+      done: [accountCreated, crmConnected, contactsImported, emailConnected, firstCampaign, firstLaunch][i],
     }));
-  }, [loading, keys, emailAccounts]);
+  }, [loading, keys, emailAccounts, contactsList, campaignsList]);
 
   if (loading || !steps || dismissed) return null;
   const doneCount = steps.filter(s => s.done).length;
@@ -181,13 +220,17 @@ export default function OnboardingChecklist() {
         })}
       </div>
 
-      {/* CTA — both remaining steps route to Settings, so this is always reachable while visible */}
+      {/* CTA */}
       <button
         className="btn btn-primary"
         style={{ fontSize: 13, padding: '8px 18px', width: 'fit-content' }}
-        onClick={() => navigate('/settings')}
+        onClick={() => {
+          const nextStep = steps.find(s => !s.done && s.route);
+          if (nextStep) navigate(nextStep.route, nextStep.state ? { state: nextStep.state } : undefined);
+          else navigate('/campaigns', { state: { openAssistant: true } });
+        }}
       >
-        {t('onboarding.continueSettings')}
+        {t('onboarding.continueChat')}
       </button>
     </div>
   );

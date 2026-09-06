@@ -150,12 +150,17 @@ async function generateReply(userId, opts) {
   const userName = user.rows[0]?.name || 'Moi';
   const userCompany = user.rows[0]?.company || '';
 
-  // Load relevant memory patterns
-  const patterns = await db.query(
-    `SELECT pattern FROM memory_patterns WHERE user_id = $1 AND confidence IN ('Haute', 'Moyenne') ORDER BY confirmations DESC LIMIT 5`,
-    [userId]
-  );
-  const patternCtx = patterns.rows.map(p => `- ${p.pattern}`).join('\n');
+  // Load relevant memory patterns, scoped to the tenant (user + ses équipes +
+  // pool global partagé). L'ancienne requête `WHERE user_id = $1` levait
+  // systématiquement avant la migration 089 (colonne inexistante) : ce contexte
+  // n'était jamais injecté dans le prompt.
+  let patternCtx = '';
+  try {
+    const patterns = await db.memoryPatterns.listForPrompt(5, null, userId);
+    patternCtx = patterns.map(p => `- ${p.pattern}`).join('\n');
+  } catch (err) {
+    logger.warn('autopilot', `Memory patterns unavailable: ${err.message}`);
+  }
 
   const historyText = (conversationHistory || [])
     .slice(-6) // last 6 messages for context

@@ -35,15 +35,15 @@ async function runMemoryAgent() {
 
   // ── Step 1: Check if consolidation is needed ──
   try {
-    // Count diagnostics since last consolidation
-    const lastConsolidation = await db.query(
-      `SELECT MAX(date_discovered) as last_date FROM memory_patterns`
-    );
-    const lastDate = lastConsolidation.rows[0]?.last_date || '2020-01-01';
-
+    // Critère NON auto-référentiel (audit 02/09). L'ancien déclencheur comptait
+    // les diagnostics postérieurs à MAX(memory_patterns.date_discovered) — or
+    // les agents du matin écrivent des patterns le jour même, donc lastDate
+    // valait toujours « aujourd'hui » et le count retombait systématiquement à
+    // 0 : la consolidation ne tournait jamais. Le job étant hebdomadaire, le
+    // critère devient « au moins 3 nouveaux diagnostics sur les 7 derniers
+    // jours », indépendant des écritures de patterns.
     const newDiagnostics = await db.query(
-      `SELECT COUNT(*) as count FROM diagnostics WHERE date_analyse > $1`,
-      [lastDate]
+      `SELECT COUNT(*) as count FROM diagnostics WHERE date_analyse > now() - interval '7 days'`
     );
     const newCount = parseInt(newDiagnostics.rows[0]?.count || 0, 10);
 
@@ -90,6 +90,60 @@ async function runMemoryAgent() {
     }
   } catch (err) {
     report.errors.push({ step: 'decay', error: err.message });
+  }
+
+  // ── Step 2c: Feedback loops (phase 2 audit mémoire 02/09) ──
+  // Les résultats réels nourrissent la mémoire : verdicts churn → poids
+  // sectoriels, réactivations attribuées → patterns tactiques par tenant,
+  // signaux registres → corrélation churn. Chaque boucle est best-effort.
+  report.feedback = { sectorWeights: 0, reactivationPatterns: 0, registryPattern: false };
+  try {
+    const { recalibrateSectorWeights, learnFromReactivations, learnFromRegistrySignals } = require('./memory-feedback');
+
+    const weights = await recalibrateSectorWeights();
+    report.feedback.sectorWeights = weights.adjusted.length;
+
+    // Réactivations : par utilisateur ayant au moins un deal réactivé sur 90 j.
+    const reactivators = await db.query(
+      `SELECT DISTINCT user_id FROM opportunities
+       WHERE reactivated_at > now() - interval '90 days' AND reactivated_from_email_id IS NOT NULL`
+    );
+    for (const { user_id } of reactivators.rows) {
+      try {
+        const team = await db.teams.getByUser(user_id).catch(() => null);
+        const tenant = team?.id ? { teamId: team.id } : { userId: user_id };
+        const created = await learnFromReactivations(user_id, tenant);
+        if (created) report.feedback.reactivationPatterns++;
+      } catch (err) {
+        logger.warn('memory-agent', `Reactivation feedback failed for ${user_id}: ${err.message}`);
+      }
+    }
+
+    report.feedback.registryPattern = !!(await learnFromRegistrySignals());
+
+    // Calibration des forecasts : photos hebdo de 30+ jours comparées aux
+    // résultats réels — l'écart devient un facteur appliqué aux suivants.
+    report.feedback.forecastCalibrations = 0;
+    const { calibrate } = require('./forecast-engine');
+    const forecastUsers = await db.query(
+      `SELECT DISTINCT user_id FROM forecast_snapshots
+       WHERE evaluated_at IS NULL AND taken_at < now() - interval '30 days'`
+    );
+    for (const { user_id } of forecastUsers.rows) {
+      try {
+        const team = await db.teams.getByUser(user_id).catch(() => null);
+        const tenant = team?.id ? { teamId: team.id } : { userId: user_id };
+        const result = await calibrate(user_id, tenant);
+        if (result) report.feedback.forecastCalibrations++;
+      } catch (err) {
+        logger.warn('memory-agent', `Forecast calibration failed for ${user_id}: ${err.message}`);
+      }
+    }
+
+    logger.info('memory-agent',
+      `Feedback: ${report.feedback.sectorWeights} poids ajustés, ${report.feedback.reactivationPatterns} patterns réactivation, registre: ${report.feedback.registryPattern}, ${report.feedback.forecastCalibrations} calibrations forecast`);
+  } catch (err) {
+    report.errors.push({ step: 'feedback', error: err.message });
   }
 
   // ── Step 3: Template generation ──

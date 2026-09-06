@@ -3,22 +3,17 @@
    Signal-based prospecting: configure monitoring + view/action detected signals
    =============================================================================== */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 import { showToast } from '../services/notifications';
 
-const SIGNAL_TYPE_OPTIONS = [
-  { value: 'funding', icon: '💰', label: { fr: 'Levées de fonds', en: 'Funding rounds' } },
-  { value: 'hiring', icon: '👥', label: { fr: 'Recrutement actif', en: 'Active hiring' } },
-  { value: 'news', icon: '📰', label: { fr: 'Actualités entreprise', en: 'Company news' } },
-  { value: 'job_change', icon: '🔄', label: { fr: 'Changements de poste', en: 'Job changes' } },
-  { value: 'leadership_change', icon: '👔', label: { fr: 'Nouveau leadership', en: 'Leadership changes' } },
-  { value: 'competitor', icon: '⚔️', label: { fr: 'Activité concurrents', en: 'Competitor activity' } },
-  { value: 'product_launch', icon: '🚀', label: { fr: 'Lancements produit', en: 'Product launches' } },
-  { value: 'expansion', icon: '🌍', label: { fr: 'Expansion géographique', en: 'Geographic expansion' } },
-  { value: 'tech_adoption', icon: '⚡', label: { fr: 'Adoption tech', en: 'Tech adoption' } },
-];
+const SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
+
+const SIGNAL_ICONS = {
+  funding: '💰', hiring: '👥', news: '📰', job_change: '🔄', leadership_change: '👔',
+  competitor: '⚔️', product_launch: '🚀', expansion: '🌍', tech_adoption: '⚡',
+};
 
 const SIGNAL_COLORS = {
   funding: '#16A34A', hiring: '#2563EB', news: '#D97706',
@@ -26,12 +21,22 @@ const SIGNAL_COLORS = {
   product_launch: '#EA580C', expansion: '#0D9488', tech_adoption: '#6D28D9',
 };
 
+const HOWTO_KEY = 'bakal_signals_howto';
+
 export default function SignalsPage() {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
 
   const [activeTab, setActiveTab] = useState('feed');
+  // « Comment ça marche » : fermable définitivement (même patron que la file de réactivation)
+  const [showHowTo, setShowHowTo] = useState(() => {
+    try { return !localStorage.getItem(HOWTO_KEY); } catch { return true; }
+  });
+  const dismissHowTo = () => {
+    setShowHowTo(false);
+    try { localStorage.setItem(HOWTO_KEY, '1'); } catch { /* ignore */ }
+  };
   const [signals, setSignals] = useState([]);
   const [counts, setCounts] = useState({});
   const [configs, setConfigs] = useState([]);
@@ -76,9 +81,9 @@ export default function SignalsPage() {
     setScanning(true);
     try {
       const result = await request('/signals/scan', { method: 'POST' });
-      showToast({ type: 'success', title: en ? 'Scan complete' : 'Scan terminé', message: `${result.detected || 0} ${en ? 'signals detected' : 'signaux détectés'}` });
+      showToast({ type: 'success', title: t('signals.scanDone'), message: t('signals.scanDetected', { count: result.detected || 0 }) });
       await loadData();
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Scan failed' : 'Échec du scan' }); }
+    } catch { showToast({ type: 'error', title: t('signals.error'), message: t('signals.scanFailed') }); }
     setScanning(false);
   };
 
@@ -87,10 +92,22 @@ export default function SignalsPage() {
     try {
       await request(`/signals/${signalId}/action`, { method: 'POST', body: JSON.stringify({ action }) });
       setSignals(prev => prev.map(s => s.id === signalId ? { ...s, status: action === 'dismiss' ? 'dismissed' : 'actioned', action_taken: action } : s));
-      const label = action === 'add_to_crm' ? (en ? 'Added to CRM' : 'Ajouté au CRM') :
-        action === 'send_email' ? (en ? 'Email sent' : 'Email envoyé') : (en ? 'Dismissed' : 'Ignoré');
+      const label = action === 'add_to_crm' ? t('signals.addedToCrm') :
+        action === 'send_email' ? t('signals.emailSent') : t('signals.dismissed');
       showToast({ type: 'success', title: label });
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Action failed' : 'Action échouée' }); }
+    } catch { showToast({ type: 'error', title: t('signals.error'), message: t('signals.actionFailed') }); }
+    setActioningId(null);
+  };
+
+  // Endpoint dédié (pas /action) : l'état signals/actioningId vit ici,
+  // SignalFeed ne reçoit que des callbacks.
+  const handleLinkedInOutreach = async (signalId) => {
+    setActioningId(signalId);
+    try {
+      await request(`/signals/${signalId}/linkedin-outreach`, { method: 'POST' });
+      setSignals(prev => prev.map(sig => sig.id === signalId ? { ...sig, status: 'actioned', action_taken: 'linkedin_connect' } : sig));
+      showToast({ type: 'success', title: t('signals.linkedinSent') });
+    } catch (err) { showToast({ type: 'error', title: t('signals.error'), message: err.message }); }
     setActioningId(null);
   };
 
@@ -111,15 +128,15 @@ export default function SignalsPage() {
       setShowCreate(false);
       setForm({ name: '', signalTypes: ['funding', 'hiring', 'news'], targetSectors: '', targetTitles: '', targetKeywords: '', targetCompetitors: '' });
       await loadData();
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to create config' : 'Échec de création' }); }
+    } catch { showToast({ type: 'error', title: t('signals.error'), message: t('signals.createConfigFailed') }); }
   };
 
   const handleDeleteConfig = async (id) => {
-    if (!window.confirm(en ? 'Delete this signal config?' : 'Supprimer cette configuration ?')) return;
+    if (!window.confirm(t('signals.confirmDeleteConfig'))) return;
     try {
       await request(`/signals/configs/${id}`, { method: 'DELETE' });
       await loadData();
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur' }); }
+    } catch { showToast({ type: 'error', title: t('signals.error') }); }
   };
 
   const handleViewCompany = async (companyName) => {
@@ -137,8 +154,8 @@ export default function SignalsPage() {
     try {
       const data = await request(`/signals/${signalId}/create-sequence`, { method: 'POST' });
       setSequenceResult(data);
-      showToast({ type: 'success', title: en ? 'Sequence created!' : 'Séquence créée !' });
-    } catch { showToast({ type: 'error', title: en ? 'Failed' : 'Échec' }); }
+      showToast({ type: 'success', title: t('signals.sequenceCreated') });
+    } catch { showToast({ type: 'error', title: t('signals.sequenceFailed') }); }
     setCreatingSequence(null);
   };
 
@@ -146,12 +163,12 @@ export default function SignalsPage() {
     try {
       await request(`/signals/configs/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !enabled }) });
       await loadData();
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur' }); }
+    } catch { showToast({ type: 'error', title: t('signals.error') }); }
   };
 
   const tabs = [
-    { key: 'feed', label: en ? 'Signal Feed' : 'Flux de signaux', count: (counts.new || 0) + (counts.reviewed || 0) },
-    { key: 'config', label: en ? 'Monitoring' : 'Surveillance', count: configs.length },
+    { key: 'feed', label: t('signals.tabFeed'), count: counts.new || 0 },
+    { key: 'config', label: t('signals.tabConfig'), count: configs.length },
     companyView ? { key: 'company', label: `📊 ${companyView}`, count: null } : null,
   ].filter(Boolean);
 
@@ -159,21 +176,19 @@ export default function SignalsPage() {
     <div className="dashboard-page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{en ? 'Signals' : 'Signaux'}</h1>
-          <div className="page-subtitle">
-            {en ? 'Detect buying signals and find the right prospects at the right time' : 'Détectez les signaux d\'achat et trouvez les bons prospects au bon moment'}
-          </div>
+          <h1 className="page-title">{t('signals.title')}</h1>
+          <div className="page-subtitle">{t('signals.subtitle')}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {activeTab === 'config' && (
             <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}
               onClick={() => setShowCreate(true)}>
-              {en ? '+ New config' : '+ Nouvelle config'}
+              {t('signals.newConfigBtn')}
             </button>
           )}
           <button className="btn btn-primary" style={{ fontSize: 13, padding: '8px 18px' }}
             onClick={handleScan} disabled={scanning}>
-            {scanning ? (en ? 'Scanning...' : 'Scan...') : (en ? '🔍 Scan for signals' : '🔍 Lancer le scan')}
+            {scanning ? t('signals.scanning') : t('signals.scan')}
           </button>
         </div>
       </div>
@@ -182,11 +197,11 @@ export default function SignalsPage() {
       {stats?.kpis && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           {[
-            { label: en ? 'This week' : 'Cette semaine', value: stats.kpis.this_week || 0, color: 'var(--accent)' },
-            { label: en ? 'Pending' : 'En attente', value: stats.kpis.pending || 0, color: 'var(--warning)' },
-            { label: en ? 'Actioned' : 'Traités', value: stats.kpis.actioned || 0, color: 'var(--success)' },
-            { label: en ? 'Avg relevance' : 'Pertinence moy.', value: stats.kpis.avg_relevance || 0, color: 'var(--text-primary)' },
-            { label: en ? 'Companies (30d)' : 'Entreprises (30j)', value: stats.kpis.unique_companies_30d || 0, color: 'var(--blue)' },
+            { label: t('signals.kpiWeek'), value: stats.kpis.this_week || 0, color: 'var(--accent)' },
+            { label: t('signals.kpiPending'), value: stats.kpis.pending || 0, color: 'var(--warning)' },
+            { label: t('signals.kpiActioned'), value: stats.kpis.actioned || 0, color: 'var(--success)' },
+            { label: t('signals.kpiAvgRelevance'), value: stats.kpis.avg_relevance || 0, color: 'var(--text-primary)' },
+            { label: t('signals.kpiCompanies'), value: stats.kpis.unique_companies_30d || 0, color: 'var(--blue)' },
           ].map(k => (
             <div key={k.label} style={{
               flex: '1 1 120px', background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -213,11 +228,37 @@ export default function SignalsPage() {
         ))}
       </div>
 
+      {activeTab === 'feed' && showHowTo && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-body" style={{ padding: '14px 18px', position: 'relative' }}>
+            <button
+              className="btn btn-ghost"
+              style={{ position: 'absolute', top: 8, right: 8, fontSize: 12, padding: '2px 8px' }}
+              onClick={dismissHowTo}
+              aria-label={t('common.close')}
+            >
+              ×
+            </button>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('signals.howTitle')}</div>
+            {[t('signals.howStep1'), t('signals.howStep2'), t('signals.howStep3')].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{
+                  flexShrink: 0, width: 18, height: 18, borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                  background: 'var(--accent-glow)', color: 'var(--accent)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>{i + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
       ) : activeTab === 'feed' ? (
         <SignalFeed signals={signals} counts={counts} filter={filter} setFilter={setFilter}
-          onAction={handleAction} actioningId={actioningId} en={en}
+          onAction={handleAction} onLinkedInOutreach={handleLinkedInOutreach} actioningId={actioningId} en={en}
           onViewCompany={handleViewCompany} onCreateSequence={handleCreateSequence}
           creatingSequence={creatingSequence} sequenceResult={sequenceResult} />
       ) : activeTab === 'company' ? (
@@ -234,11 +275,12 @@ export default function SignalsPage() {
 
 /* ═══ Signal Feed ═══ */
 
-function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId, en, onViewCompany, onCreateSequence, creatingSequence, sequenceResult }) {
+function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOutreach, actioningId, en, onViewCompany, onCreateSequence, creatingSequence, sequenceResult }) {
+  const t = useT();
   const filters = [
-    { key: 'new', label: en ? 'New' : 'Nouveaux', count: counts.new || 0 },
-    { key: 'actioned', label: en ? 'Actioned' : 'Traités', count: counts.actioned || 0 },
-    { key: 'dismissed', label: en ? 'Dismissed' : 'Ignorés', count: counts.dismissed || 0 },
+    { key: 'new', label: t('signals.filterNew'), count: counts.new || 0 },
+    { key: 'actioned', label: t('signals.filterActioned'), count: counts.actioned || 0 },
+    { key: 'dismissed', label: t('signals.filterDismissed'), count: counts.dismissed || 0 },
   ];
 
   return (
@@ -265,14 +307,11 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
           border: '1px solid var(--border)', borderRadius: 12,
         }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>📡</div>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-            {en ? 'No signals yet. Configure monitoring and run a scan.' : 'Aucun signal. Configurez la surveillance et lancez un scan.'}
-          </div>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t('signals.emptyFeed')}</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {signals.map(s => {
-            const typeOpt = SIGNAL_TYPE_OPTIONS.find(o => o.value === s.signal_type);
             const color = SIGNAL_COLORS[s.signal_type] || 'var(--text-muted)';
             return (
               <div key={s.id} style={{
@@ -287,7 +326,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
                         fontSize: 10, padding: '2px 8px', borderRadius: 4,
                         background: `${color}15`, color, fontWeight: 600, textTransform: 'uppercase',
                       }}>
-                        {typeOpt?.icon} {s.signal_type.replace('_', ' ')}
+                        {SIGNAL_ICONS[s.signal_type]} {t(`signals.type.${s.signal_type}`)}
                       </span>
                       <span style={{
                         fontSize: 10, padding: '2px 8px', borderRadius: 4,
@@ -315,41 +354,33 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
                   <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                     <button className="btn btn-primary" style={{ fontSize: 11, padding: '5px 12px' }}
                       onClick={() => onAction(s.id, 'add_to_crm')} disabled={actioningId === s.id}>
-                      {en ? 'Add to CRM' : 'Ajouter au CRM'}
+                      {t('signals.addToCrm')}
                     </button>
                     {s.contact_email && (
                       <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', border: '1px solid var(--border)' }}
                         onClick={() => onAction(s.id, 'send_email')} disabled={actioningId === s.id}>
-                        {en ? 'Send email' : 'Envoyer un email'}
+                        {t('signals.sendEmail')}
                       </button>
                     )}
                     {s.contact_linkedin && (
                       <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', border: '1px solid #0A66C2', color: '#0A66C2' }}
-                        onClick={async () => {
-                          setActioningId(s.id);
-                          try {
-                            await request(`/signals/${s.id}/linkedin-outreach`, { method: 'POST' });
-                            setSignals(prev => prev.map(sig => sig.id === s.id ? { ...sig, status: 'actioned', action_taken: 'linkedin_connect' } : sig));
-                            showToast({ type: 'success', title: en ? 'Connection sent' : 'Connexion envoyée' });
-                          } catch (err) { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message }); }
-                          setActioningId(null);
-                        }} disabled={actioningId === s.id}>
-                        {en ? 'Connect on LinkedIn' : 'Connecter sur LinkedIn'}
+                        onClick={() => onLinkedInOutreach(s.id)} disabled={actioningId === s.id}>
+                        {t('signals.connectLinkedin')}
                       </button>
                     )}
                     {s.source_url && (
                       <a href={s.source_url} target="_blank" rel="noopener noreferrer"
                         className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', textDecoration: 'none', border: '1px solid var(--border)' }}>
-                        {en ? 'Source' : 'Source'} ↗
+                        {t('signals.source')} ↗
                       </a>
                     )}
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', border: '1px solid var(--accent)', color: 'var(--accent)' }}
                       onClick={() => onCreateSequence?.(s.id)} disabled={creatingSequence === s.id}>
-                      {creatingSequence === s.id ? '...' : (en ? '⚡ Create sequence' : '⚡ Créer séquence')}
+                      {creatingSequence === s.id ? '...' : t('signals.createSequence')}
                     </button>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', color: 'var(--text-muted)' }}
                       onClick={() => onAction(s.id, 'dismiss')} disabled={actioningId === s.id}>
-                      {en ? 'Dismiss' : 'Ignorer'}
+                      {t('signals.dismiss')}
                     </button>
                   </div>
                 )}
@@ -358,6 +389,11 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--accent)' }}>
                       ⚡ {sequenceResult.sequence.name}
                     </div>
+                    {sequenceResult.queuedEmailId && (
+                      <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
+                        ✓ {t('activation.sequenceE1Queued')}
+                      </div>
+                    )}
                     {sequenceResult.sequence.steps.map((step, i) => (
                       <div key={i} style={{ fontSize: 11, marginBottom: 6, paddingLeft: 8, borderLeft: '2px solid var(--border)' }}>
                         <div style={{ fontWeight: 600 }}>{step.step} ({step.timing}) — {step.subject}</div>
@@ -368,8 +404,8 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
                 )}
                 {s.status === 'actioned' && (
                   <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 8 }}>
-                    ✅ {s.action_taken === 'add_to_crm' ? (en ? 'Added to CRM' : 'Ajouté au CRM') :
-                        s.action_taken === 'send_email' ? (en ? 'Email sent' : 'Email envoyé') : s.action_taken}
+                    ✅ {s.action_taken === 'add_to_crm' ? t('signals.addedToCrm') :
+                        s.action_taken === 'send_email' ? t('signals.emailSent') : s.action_taken}
                   </div>
                 )}
               </div>
@@ -381,12 +417,11 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, actioningId,
   );
 }
 
-/* ═══ Config Section ═══ */
-
 /* ═══ Company Timeline ═══ */
 
 function CompanyTimeline({ data, companyName, en, onClose }) {
-  if (!data) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading...</div>;
+  const t = useT();
+  if (!data) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{t('common.loading')}</div>;
 
   return (
     <div>
@@ -394,11 +429,11 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
         <div>
           <div style={{ fontSize: 18, fontWeight: 700 }}>📊 {companyName}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {data.signals.length} {en ? 'signals' : 'signaux'} · {data.contacts.length} {en ? 'contacts in CRM' : 'contacts dans le CRM'}
+            {t('signals.signalsCount', { count: data.signals.length })} · {t('signals.contactsInCrm', { count: data.contacts.length })}
           </div>
         </div>
         <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}>
-          {en ? '← Back to feed' : '← Retour au flux'}
+          {t('signals.backToFeed')}
         </button>
       </div>
 
@@ -406,7 +441,7 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
       {data.contacts.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
-            {en ? 'CRM Contacts' : 'Contacts CRM'}
+            {t('signals.crmContacts')}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {data.contacts.map(c => (
@@ -426,11 +461,11 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
 
       {/* Signal timeline */}
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
-        {en ? 'Signal Timeline' : 'Historique des signaux'}
+        {t('signals.timeline')}
       </div>
       {data.signals.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
-          {en ? 'No signals for this company' : 'Aucun signal pour cette entreprise'}
+          {t('signals.noCompanySignals')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -444,7 +479,7 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: `${color}15`, color, fontWeight: 600, textTransform: 'uppercase', marginRight: 8 }}>
-                      {s.signal_type.replace('_', ' ')}
+                      {t(`signals.type.${s.signal_type}`)}
                     </span>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{s.title}</span>
                   </div>
@@ -469,6 +504,7 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
 /* ═══ Config Section ═══ */
 
 function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onDeleteConfig, onToggleConfig, setShowCreate, en }) {
+  const t = useT();
   return (
     <div>
       {/* Create form */}
@@ -476,63 +512,63 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
           <div className="card-body" style={{ padding: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
-              {en ? 'New signal monitoring config' : 'Nouvelle configuration de surveillance'}
+              {t('signals.newConfigTitle')}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <input type="text" placeholder={en ? 'Config name (e.g., Crypto funding watch)' : 'Nom (ex: Veille funding crypto)'}
+              <input type="text" placeholder={t('signals.configNamePh')}
                 value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                 className="form-input" style={{ fontSize: 13, padding: '8px 12px' }} />
 
               {/* Signal types */}
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-                  {en ? 'Signal types to monitor' : 'Types de signaux à surveiller'}
+                  {t('signals.typesLabel')}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {SIGNAL_TYPE_OPTIONS.map(opt => (
-                    <button key={opt.value} onClick={() => {
+                  {SIGNAL_TYPES.map(value => (
+                    <button key={value} onClick={() => {
                       setForm(p => ({
                         ...p,
-                        signalTypes: p.signalTypes.includes(opt.value)
-                          ? p.signalTypes.filter(v => v !== opt.value)
-                          : [...p.signalTypes, opt.value],
+                        signalTypes: p.signalTypes.includes(value)
+                          ? p.signalTypes.filter(v => v !== value)
+                          : [...p.signalTypes, value],
                       }));
                     }} style={{
                       padding: '5px 12px', fontSize: 11, borderRadius: 8,
-                      border: `1px solid ${form.signalTypes.includes(opt.value) ? 'var(--accent)' : 'var(--border)'}`,
-                      background: form.signalTypes.includes(opt.value) ? 'rgba(110,87,250,0.08)' : 'transparent',
-                      color: form.signalTypes.includes(opt.value) ? 'var(--accent)' : 'var(--text-muted)',
+                      border: `1px solid ${form.signalTypes.includes(value) ? 'var(--accent)' : 'var(--border)'}`,
+                      background: form.signalTypes.includes(value) ? 'rgba(110,87,250,0.08)' : 'transparent',
+                      color: form.signalTypes.includes(value) ? 'var(--accent)' : 'var(--text-muted)',
                       cursor: 'pointer',
                     }}>
-                      {opt.icon} {opt.label[en ? 'en' : 'fr']}
+                      {SIGNAL_ICONS[value]} {t(`signals.type.${value}`)}
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Targeting */}
-              <input type="text" placeholder={en ? 'Target sectors (comma-separated: crypto, DeFi, fintech)' : 'Secteurs cibles (séparés par virgule : crypto, DeFi, fintech)'}
+              <input type="text" placeholder={t('signals.sectorsPh')}
                 value={form.targetSectors} onChange={e => setForm(p => ({ ...p, targetSectors: e.target.value }))}
                 className="form-input" style={{ fontSize: 13, padding: '8px 12px' }} />
 
-              <input type="text" placeholder={en ? 'Target titles (CEO, CMO, VP Sales)' : 'Titres cibles (CEO, CMO, VP Sales)'}
+              <input type="text" placeholder={t('signals.titlesPh')}
                 value={form.targetTitles} onChange={e => setForm(p => ({ ...p, targetTitles: e.target.value }))}
                 className="form-input" style={{ fontSize: 13, padding: '8px 12px' }} />
 
-              <input type="text" placeholder={en ? 'Keywords to monitor (DeFi, exchange, wallet, NFT)' : 'Mots-clés à surveiller (DeFi, exchange, wallet, NFT)'}
+              <input type="text" placeholder={t('signals.keywordsPh')}
                 value={form.targetKeywords} onChange={e => setForm(p => ({ ...p, targetKeywords: e.target.value }))}
                 className="form-input" style={{ fontSize: 13, padding: '8px 12px' }} />
 
-              <input type="text" placeholder={en ? 'Competitors to track (Gojiberry, SalesCaptain)' : 'Concurrents à suivre (Gojiberry, SalesCaptain)'}
+              <input type="text" placeholder={t('signals.competitorsPh')}
                 value={form.targetCompetitors} onChange={e => setForm(p => ({ ...p, targetCompetitors: e.target.value }))}
                 className="form-input" style={{ fontSize: 13, padding: '8px 12px' }} />
 
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowCreate(false)}>
-                  {en ? 'Cancel' : 'Annuler'}
+                  {t('signals.cancel')}
                 </button>
                 <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onCreateConfig} disabled={!form.name.trim()}>
-                  {en ? 'Create' : 'Créer'}
+                  {t('signals.create')}
                 </button>
               </div>
             </div>
@@ -548,10 +584,10 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
         }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>⚙️</div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>
-            {en ? 'No signal configs yet. Create one to start monitoring buying signals.' : 'Aucune configuration. Créez-en une pour commencer à surveiller les signaux d\'achat.'}
+            {t('signals.emptyConfig')}
           </div>
           <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={() => setShowCreate(true)}>
-            {en ? '+ Create config' : '+ Créer une configuration'}
+            {t('signals.createConfig')}
           </button>
         </div>
       ) : (
@@ -566,23 +602,20 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-                      {(c.signal_types || []).map(st => {
-                        const opt = SIGNAL_TYPE_OPTIONS.find(o => o.value === st);
-                        return (
-                          <span key={st} style={{
-                            fontSize: 10, padding: '2px 8px', borderRadius: 4,
-                            background: `${SIGNAL_COLORS[st] || '#666'}15`,
-                            color: SIGNAL_COLORS[st] || 'var(--text-muted)',
-                          }}>
-                            {opt?.icon} {st.replace('_', ' ')}
-                          </span>
-                        );
-                      })}
+                      {(c.signal_types || []).map(st => (
+                        <span key={st} style={{
+                          fontSize: 10, padding: '2px 8px', borderRadius: 4,
+                          background: `${SIGNAL_COLORS[st] || '#666'}15`,
+                          color: SIGNAL_COLORS[st] || 'var(--text-muted)',
+                        }}>
+                          {SIGNAL_ICONS[st]} {t(`signals.type.${st}`)}
+                        </span>
+                      ))}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                      {(c.target_sectors || []).length > 0 && <span>{en ? 'Sectors' : 'Secteurs'}: {c.target_sectors.join(', ')} · </span>}
-                      {(c.target_keywords || []).length > 0 && <span>{en ? 'Keywords' : 'Mots-clés'}: {c.target_keywords.join(', ')} · </span>}
-                      {c.last_run && <span>{en ? 'Last scan' : 'Dernier scan'}: {new Date(c.last_run).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                      {(c.target_sectors || []).length > 0 && <span>{t('signals.sectors')}: {c.target_sectors.join(', ')} · </span>}
+                      {(c.target_keywords || []).length > 0 && <span>{t('signals.keywords')}: {c.target_keywords.join(', ')} · </span>}
+                      {c.last_run && <span>{t('signals.lastScan')}: {new Date(c.last_run).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -590,11 +623,11 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                       fontSize: 10, padding: '4px 10px',
                       color: c.enabled ? 'var(--warning)' : 'var(--success)',
                     }} onClick={() => onToggleConfig(c.id, c.enabled)}>
-                      {c.enabled ? (en ? 'Pause' : 'Pause') : (en ? 'Enable' : 'Activer')}
+                      {c.enabled ? t('signals.pause') : t('signals.enable')}
                     </button>
                     <button className="btn btn-ghost" style={{ fontSize: 10, padding: '4px 10px', color: 'var(--danger)' }}
                       onClick={() => onDeleteConfig(c.id)}>
-                      {en ? 'Delete' : 'Supprimer'}
+                      {t('signals.delete')}
                     </button>
                   </div>
                 </div>

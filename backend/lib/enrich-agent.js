@@ -19,10 +19,13 @@ const net = require('net');
 const dns = require('dns').promises;
 const { webSearch } = require('../api/brave-search');
 const { config } = require('../config');
+const claude = require('../api/claude');
 const db = require('../db');
 const logger = require('./logger');
+const { safeParseClaudeJSON } = require('./utils/safe-json-parse');
 
-const PARSE_MODEL = 'claude-haiku-4-5-20251001';
+// Le modele n'est plus code en dur : les actions `enrich_company_from_web` et
+// `enrich_contact_from_web` sont routees vers le tier `fast` (config/models.js).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // In-memory pattern cache (persists across calls within same process)
@@ -218,28 +221,22 @@ async function findCompanyFromWeb(name, title) {
     const results = await webSearch(query, 5);
     if (results.length === 0) return null;
 
-    // Use Haiku to extract company from snippets
-    const apiKey = config.claude.apiKey;
-    if (!apiKey) return null;
+    if (!config.claude.apiKey) return null;
 
-    const Anthropic = require('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey });
     const snippets = results.slice(0, 5)
       .map((r, i) => `[${i + 1}] ${r.title}\n    ${r.description}`)
       .join('\n\n');
 
-    const response = await client.messages.create({
-      model: PARSE_MODEL,
-      max_tokens: 200,
-      system: `Extract the company/employer of "${name}" from these search snippets. Return ONLY JSON: {"company": "..." or null, "title": "..." or null, "domain": "..." or null}. domain = company website domain if visible.`,
-      messages: [{ role: 'user', content: snippets }],
-    });
-
-    const text = response.content?.[0]?.text || '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    return JSON.parse(match[0]);
-  } catch { return null; }
+    const result = await claude.callClaude(
+      `Extract the company/employer of "${name}" from these search snippets. Return ONLY JSON: {"company": "..." or null, "title": "..." or null, "domain": "..." or null}. domain = company website domain if visible.`,
+      snippets, 200, 'enrich_company_from_web'
+    );
+    return safeParseClaudeJSON(result);
+  } catch (err) {
+    // Distinguer "rien trouve" d'une panne d'API : les deux renvoyaient null.
+    logger.warn('enrich-agent', `findCompanyFromWeb echoue pour "${name}": ${err.message}`);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -376,12 +373,8 @@ async function enrichViaWebSearch(contact, company) {
   }
   if (allResults.length === 0) return null;
 
-  // Parse with Haiku
-  const apiKey = config.claude.apiKey;
-  if (!apiKey) return null;
+  if (!config.claude.apiKey) return null;
 
-  const Anthropic = require('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
   const snippets = allResults.slice(0, 10)
     .map((r, i) => `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.description}`)
     .join('\n\n');
@@ -391,24 +384,18 @@ async function enrichViaWebSearch(contact, company) {
   if (!company && !contact.company) missing.push('company');
 
   try {
-    const response = await client.messages.create({
-      model: PARSE_MODEL,
-      max_tokens: 500,
-      system: [
-        `Extract missing contact data from web search snippets.`,
-        `Contact: "${name}"${searchCompany ? ` at "${searchCompany}"` : ''}${contact.title ? `, ${contact.title}` : ''}.`,
-        `Missing: ${missing.join(', ')}.`,
-        'Only return data clearly matching this person. Return ONLY JSON:',
-        '{"email": "...|null", "company": "...|null", "title": "...|null", "linkedinUrl": "...|null"}',
-      ].join('\n'),
-      messages: [{ role: 'user', content: snippets }],
-    });
+    const systemPrompt = [
+      `Extract missing contact data from web search snippets.`,
+      `Contact: "${name}"${searchCompany ? ` at "${searchCompany}"` : ''}${contact.title ? `, ${contact.title}` : ''}.`,
+      `Missing: ${missing.join(', ')}.`,
+      'Only return data clearly matching this person. Return ONLY JSON:',
+      '{"email": "...|null", "company": "...|null", "title": "...|null", "linkedinUrl": "...|null"}',
+    ].join('\n');
 
-    const text = response.content?.[0]?.text || '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
+    const result = await claude.callClaude(systemPrompt, snippets, 500, 'enrich_contact_from_web');
+    const parsed = safeParseClaudeJSON(result);
+    if (!parsed) return null;
 
-    const parsed = JSON.parse(match[0]);
     if (parsed.email && !EMAIL_RE.test(parsed.email)) parsed.email = null;
 
     return {
@@ -417,7 +404,10 @@ async function enrichViaWebSearch(contact, company) {
       title: parsed.title || null,
       linkedinUrl: parsed.linkedinUrl || null,
     };
-  } catch { return null; }
+  } catch (err) {
+    logger.warn('enrich-agent', `enrichFromWeb echoue pour "${name}": ${err.message}`);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

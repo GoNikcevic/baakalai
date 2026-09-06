@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from './context/useApp'
 import { isLoggedIn, validateToken } from './services/auth'
 import { SocketProvider } from './context/SocketContext'
@@ -30,7 +30,6 @@ const ChatPage = lazyRetry(() => import('./pages/ChatPage'))
 const DashboardPage = lazyRetry(() => import('./pages/DashboardPage'))
 const CampaignsList = lazyRetry(() => import('./pages/CampaignsList'))
 const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'))
-const PerformancePage = lazyRetry(() => import('./pages/PerformancePage'))
 const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
 const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
 const DealsToReactivatePage = lazyRetry(() => import('./pages/DealsToReactivatePage'))
@@ -46,7 +45,17 @@ const JoinTeamPage = lazyRetry(() => import('./pages/JoinTeamPage'))
 const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
 
 // Public routes accessible without authentication
-const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy']
+const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy', '/diagnostic']
+
+// Le diagnostic public vit sur la landing (baakal.ai/diagnostic) — l'app ne
+// garde que l'API ; on redirige les anciens liens (dont les partages /r/:id).
+function DiagnosticRedirect() {
+  const { id } = useParams()
+  useEffect(() => {
+    window.location.replace(id ? `https://baakal.ai/diagnostic?r=${id}` : 'https://baakal.ai/diagnostic')
+  }, [id])
+  return null
+}
 
 export default function App() {
   const { initData } = useApp()
@@ -139,6 +148,8 @@ export default function App() {
         <Routes>
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/legal" element={<LegalPage />} />
+          <Route path="/diagnostic" element={<DiagnosticRedirect />} />
+          <Route path="/diagnostic/r/:id" element={<DiagnosticRedirect />} />
           <Route path="/terms" element={<Navigate to="/legal" replace />} />
           <Route path="/privacy" element={<Navigate to="/legal#privacy" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -171,7 +182,7 @@ export default function App() {
   }
 
   const fallback = (
-    <div style={{ marginLeft: 240, padding: '28px 32px' }}>
+    <div style={{ padding: '28px 32px' }}>
       <DashboardSkeleton />
     </div>
   )
@@ -195,21 +206,23 @@ export default function App() {
             <Route path="/activation" element={<ActivationPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsWrapper />} />
-            <Route path="/performance" element={<PerformancePage />} />
             <Route path="/recos" element={<RecosPage />} />
             <Route path="/help" element={<Navigate to="/chat" replace />} />
             <Route path="/join/:code" element={<JoinTeamPage />} />
             {/* Redirects for old routes */}
             <Route path="/nurture" element={<Navigate to="/activation" replace />} />
-            <Route path="/signals" element={<Navigate to="/activation" replace />} />
+            <Route path="/signals" element={<Navigate to="/activation?section=signals" replace />} />
             <Route path="/crm-analytics" element={<Navigate to="/analytics" replace />} />
+            <Route path="/performance" element={<Navigate to="/analytics" replace />} />
             <Route path="/membership" element={<Navigate to="/analytics" replace />} />
             <Route path="/profil" element={<Navigate to="/settings" replace />} />
             <Route path="/memory" element={<Navigate to="/settings" replace />} />
             <Route path="/integrations" element={<Navigate to="/settings" replace />} />
             <Route path="/copyeditor" element={<Navigate to="/campaigns" replace />} />
-            <Route path="/" element={<Navigate to="/chat" replace />} />
-            <Route path="*" element={<Navigate to="/chat" replace />} />
+            {/* Accueil = dashboard (deals à relancer), pas le chat : le chat
+                est l'outil de prospection, le produit est le CRM exploité. */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>
       </Suspense>

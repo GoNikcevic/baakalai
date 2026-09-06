@@ -183,14 +183,22 @@ async function getDefaultAccount(userId) {
 /**
  * Send a personal email via user's own email account.
  *
+ * `code` accompagne chaque échec : les appelants (route /approve, TodayCard)
+ * en ont besoin pour distinguer « rien à configurer » d'une vraie panne SMTP
+ * et proposer l'action corrective. Le message texte reste destiné aux logs.
+ *
  * @param {string} userId
  * @param {{ to, toName, subject, body, replyTo }} options
- * @returns {{ success, messageId, error }}
+ * @returns {{ success, messageId, error, code }}
  */
 async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo }) {
   let account = await getDefaultAccount(userId);
   if (!account) {
-    return { success: false, error: 'No email account configured. Connect Gmail or SMTP in Settings.' };
+    return {
+      success: false,
+      code: 'no_email_account',
+      error: 'No email account configured. Connect Gmail or SMTP in Settings.',
+    };
   }
 
   // Refresh OAuth token if needed
@@ -198,7 +206,7 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
     try {
       account = await refreshTokenIfNeeded(account);
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, code: 'token_refresh_failed', error: err.message };
     }
   }
 
@@ -228,20 +236,38 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
         [account.id]
       );
       _transportCache.delete(account.id);
+      // Le compte vient de passer 'expired' : getDefaultAccount ne le renverra
+      // plus, l'utilisateur doit reconnecter — c'est la même action corrective
+      // que l'absence de compte, d'où le même code.
+      return { success: false, code: 'no_email_account', error: err.message };
     }
 
-    return { success: false, error: err.message };
+    // Rejet DÉFINITIF du destinataire (5xx « user unknown ») ≠ erreur transitoire :
+    // l'adresse n'existe plus — la personne a probablement quitté la société.
+    // Code distinct pour que l'appelant tamponne le contact (data quality + churn).
+    const permanentCodes = [550, 551, 553];
+    const bounceText = /user unknown|no such user|does not exist|recipient .*(rejected|not found)|mailbox (unavailable|not found|does not exist)|address rejected|invalid recipient/i;
+    if (permanentCodes.includes(err.responseCode)
+      || (err.responseCode >= 500 && bounceText.test(err.message || ''))) {
+      return { success: false, code: 'recipient_bounced', error: err.message };
+    }
+
+    return { success: false, code: 'smtp_error', error: err.message };
   }
 }
 
 /**
  * Send a nurture email + log it + create Pipedrive activity.
+ *
+ * existingEmailId : id d'une ligne nurture_emails déjà en file (status
+ * 'pending'). Dans ce cas on met à jour cette ligne au lieu d'en insérer une
+ * nouvelle — sinon l'approbation créait un doublon et l'original restait
+ * bloqué en 'pending' pour toujours.
  */
 async function sendNurtureEmail(userId, {
   triggerId, opportunityId, to, toName, subject, body, crmProvider = 'pipedrive', teamCampaignId, patternIds, existingEmailId,
 }) {
-  // 1. Reuse an existing pending row (e.g. user-approved from the queue) instead of
-  // creating a duplicate, or create a fresh one for direct/automated sends.
+  // 1. Create the email record as pending (or reuse the queued one)
   let nurture;
   if (existingEmailId) {
     const existing = await db.query(
@@ -269,6 +295,15 @@ async function sendNurtureEmail(userId, {
       [nurture.id]
     );
 
+    // L'envoi passe : si l'adresse était marquée bouncée, elle re-marche.
+    if (opportunityId) {
+      await db.query(
+        `UPDATE opportunities SET email_bounced_at = NULL, email_bounce_reason = NULL
+         WHERE id = $1 AND email_bounced_at IS NOT NULL`,
+        [opportunityId]
+      ).catch(() => {});
+    }
+
     // 4. Log in Pipedrive as activity/note
     if (crmProvider === 'pipedrive') {
       try {
@@ -288,11 +323,50 @@ async function sendNurtureEmail(userId, {
         logger.warn('email-outbound', `Pipedrive note failed: ${err.message}`);
       }
     }
+  } else if (result.code === 'no_email_account') {
+    // Aucune boîte mail connectée : rien ne cloche avec CET email, c'est le
+    // compte qui n'est pas configuré. Le passer en 'failed' le sortirait de la
+    // file — or la contrainte unique 067 (un seul pending par contact) libère
+    // alors le contact, et le cron du lendemain regénère un brouillon tout
+    // aussi inenvoyable, à nouveau facturé en tokens. On laisse donc la ligne
+    // en 'pending' : on enregistre juste la raison, la file est préservée et
+    // les emails partiront tels quels dès la boîte connectée.
+    await db.query(
+      `UPDATE nurture_emails SET error = $1 WHERE id = $2`,
+      [result.error, nurture.id]
+    );
   } else {
     await db.query(
       `UPDATE nurture_emails SET status = 'failed', error = $1 WHERE id = $2`,
       [result.error, nurture.id]
     );
+
+    // Bounce définitif : tamponner le contact — lu par le scan data quality
+    // (issue email_bounced) et par le scoring churn (contact probablement parti).
+    if (result.code === 'recipient_bounced') {
+      if (opportunityId) {
+        await db.query(
+          `UPDATE opportunities SET email_bounced_at = now(), email_bounce_reason = $1 WHERE id = $2`,
+          [(result.error || '').slice(0, 500), opportunityId]
+        ).catch(() => {});
+      }
+
+      // Pénalité mémoire : un bounce n'est PAS un échec du copy (le contenu
+      // n'a jamais été lu), mais laisser l'envoi compter comme neutre-positif
+      // fausserait la boucle — les patterns de cet email seraient crédités
+      // d'un « envoi » vers une adresse morte. On décrémente donc d'un cran,
+      // plancher à 0. Best-effort : la pénalité ne doit jamais faire échouer
+      // le traitement du bounce lui-même.
+      const bouncedPatternIds = nurture.pattern_ids || [];
+      if (bouncedPatternIds.length > 0) {
+        await db.query(
+          `UPDATE memory_patterns
+           SET confirmations = GREATEST(COALESCE(confirmations, 1) - 1, 0)
+           WHERE id = ANY($1)`,
+          [bouncedPatternIds]
+        ).catch((err) => logger.warn('email-outbound', `Pattern bounce penalty failed: ${err.message}`));
+      }
+    }
   }
 
   return { ...result, emailId: nurture.id };

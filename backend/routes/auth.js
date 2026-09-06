@@ -48,7 +48,7 @@ setInterval(() => {
   for (const [key, val] of _oauthStates) {
     if (val < now) _oauthStates.delete(key);
   }
-}, 60000);
+}, 60000).unref();
 
 // HTTPS helpers — bypass Railway proxy cert issues
 function httpsPost(url, body) {
@@ -169,6 +169,8 @@ router.post('/register', async (req, res, next) => {
     sendVerificationEmail(email, verificationToken).catch(() => {});
 
     const { accessToken, refreshToken } = await issueTokens(user);
+
+    require('../lib/track').track(user.id, 'signup', { hasCompany: !!company });
 
     setRefreshCookie(res, refreshToken);
     res.status(201).json({
@@ -527,6 +529,7 @@ router.delete('/account', requireAuth, async (req, res, next) => {
 router.post('/onboarding-complete', requireAuth, async (req, res, next) => {
   try {
     await db.query('UPDATE users SET onboarding_complete = true WHERE id = $1', [req.user.id]);
+    require('../lib/track').track(req.user.id, 'onboarding_complete');
     res.json({ success: true });
   } catch (err) {
     next(err);

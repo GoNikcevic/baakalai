@@ -48,6 +48,14 @@ async function runRetentionCleanup() {
     results.prospect_activities = activities.rowCount || 0;
   } catch { results.prospect_activities = 'skipped'; }
 
+  try {
+    // Rapports du diagnostic CRM public : éphémères par design (30 jours)
+    const diag = await db.query(
+      `DELETE FROM public_diagnostics WHERE expires_at < now()`
+    );
+    results.public_diagnostics = diag.rowCount || 0;
+  } catch { results.public_diagnostics = 'skipped'; }
+
   const totalDeleted = Object.values(results)
     .filter(v => typeof v === 'number')
     .reduce((sum, n) => sum + n, 0);

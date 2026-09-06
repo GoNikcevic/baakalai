@@ -13,6 +13,7 @@ import { useT } from '../i18n';
 
 const CRM_BANNER_KEY = 'bakal_reactivation_crm_banner_dismissed';
 const CRM_BANNER_TTL = 24 * 60 * 60 * 1000; // reappears after 24h
+const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 
 export default function ReactivationQueuePage({ kind, i18nNamespace, detailRouteBase }) {
   const t = useT();
@@ -25,17 +26,35 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   const [sort, setSort] = useState('overdue');
   const [postponeFor, setPostponeFor] = useState(null);
   const [postponeDate, setPostponeDate] = useState('');
+  // null = pas encore su ; l'état vide ne s'affiche qu'une fois la réponse connue
+  const [hasCrm, setHasCrm] = useState(null);
   const [showCrmBanner, setShowCrmBanner] = useState(() => {
     try {
       const ts = parseInt(localStorage.getItem(CRM_BANNER_KEY) || '0', 10);
       return !(ts > 0 && (Date.now() - ts) < CRM_BANNER_TTL);
     } catch { return true; }
   });
+  // « Comment ça marche » : fermable définitivement, par file (deal vs upsell)
+  const howToKey = `bakal_reactivation_howto_${kind}`;
+  const [showHowTo, setShowHowTo] = useState(() => {
+    try { return !localStorage.getItem(howToKey); } catch { return true; }
+  });
 
   const dismissCrmBanner = () => {
     setShowCrmBanner(false);
     try { localStorage.setItem(CRM_BANNER_KEY, String(Date.now())); } catch { /* ignore */ }
   };
+
+  const dismissHowTo = () => {
+    setShowHowTo(false);
+    try { localStorage.setItem(howToKey, '1'); } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    request('/crm/providers')
+      .then(d => setHasCrm((d.providers || []).some(p => CRM_PROVIDERS.includes(p.provider) && p.connected)))
+      .catch(() => setHasCrm(true)); // en cas de doute, ne pas afficher le CTA « connecter »
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -149,6 +168,32 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
         </button>
       </div>
 
+      {tab === 'pending' && showHowTo && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-body" style={{ padding: '14px 18px', position: 'relative' }}>
+            <button
+              className="btn btn-ghost"
+              style={{ position: 'absolute', top: 8, right: 8, fontSize: 12, padding: '2px 8px' }}
+              onClick={dismissHowTo}
+              aria-label={t('common.close')}
+            >
+              ×
+            </button>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('reactivation.howTitle')}</div>
+            {[t(`${i18nNamespace}.howStep1`), t('reactivation.howStep2'), t('reactivation.howStep3')].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{
+                  flexShrink: 0, width: 18, height: 18, borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                  background: 'var(--accent-glow)', color: 'var(--accent)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>{i + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {tab === 'pending' && showCrmBanner && (
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
@@ -170,9 +215,20 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
         loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>...</div>
         ) : candidates.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-            {t('reactivation.noCandidates')}
-          </div>
+          hasCrm === false ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13, maxWidth: 420, margin: '0 auto 16px' }}>
+                {t('reactivation.noCandidatesNoCrm')}
+              </div>
+              <button className="btn btn-primary" onClick={() => navigate('/settings')}>
+                {t('reactivation.connectCrmCta')}
+              </button>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
+              {hasCrm === null ? t('reactivation.noCandidates') : t('reactivation.noCandidatesAllClear')}
+            </div>
+          )
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {candidates.map(c => (

@@ -40,7 +40,7 @@ function getVocabulary(mode, en) {
     };
   }
   return {
-    deal: en ? 'Lead' : 'Lead',
+    deal: en ? 'Deal' : 'Deal',
     won: en ? 'Won' : 'Gagné',
     lost: en ? 'Lost' : 'Perdu',
     pipeline: 'Pipeline',
@@ -118,6 +118,7 @@ function getTabs(t, vocab) { return [
   { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline'), essential: true },
   { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring'), essential: true },
   { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments'), essential: true },
+  { key: 'geography', label: t('analytics.geoTab'), desc: t('analytics.tabDescGeo'), essential: true },
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
@@ -152,22 +153,52 @@ export default function CRMAnalyticsPage() {
   const TABS = getTabs(t, vocab);
   const fetchedRef = useRef(new Set());
 
+  // Filtres transverses produit / compte — propagés en query string à toutes les
+  // routes analytics (le backend filtre les opportunités avant agrégation)
+  const [filters, setFilters] = useState({ productLine: '', account: '' });
+  const [productLines, setProductLines] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const filterQs = useMemo(() => {
+    const p = new URLSearchParams();
+    if (filters.productLine) p.set('productLine', filters.productLine);
+    if (filters.account) p.set('account', filters.account);
+    const s = p.toString();
+    return s ? '?' + s : '';
+  }, [filters]);
+
   const fetchData = useCallback(async (tab, force) => {
     if (!backendAvailable) {
       setData({});
       return;
     }
-    if (!force && fetchedRef.current.has(tab)) return;
-    fetchedRef.current.add(tab);
+    // La clé de cache inclut le périmètre : changer de filtre force le refetch
+    const cacheKey = tab + filterQs;
+    if (!force && fetchedRef.current.has(cacheKey)) return;
+    fetchedRef.current.add(cacheKey);
     setLoading(true);
     try {
-      const result = await api.request('/analytics/' + tab);
+      const result = await api.request('/analytics/' + tab + filterQs);
       setData(prev => ({ ...prev, [tab]: result }));
     } catch {
       setData(prev => ({ ...prev, [tab]: null }));
     }
     setLoading(false);
+  }, [backendAvailable, filterQs]);
+
+  // Options des filtres (une fois)
+  useEffect(() => {
+    if (!backendAvailable) return;
+    api.request('/crm/product-lines').then(d => setProductLines(d.productLines || [])).catch(() => {});
+    api.request('/analytics/accounts').then(d => setAccounts(d.accounts || [])).catch(() => {});
   }, [backendAvailable]);
+
+  // Changer de périmètre invalide les données affichées (dont les KPIs pipeline)
+  const prevQsRef = useRef(filterQs);
+  useEffect(() => {
+    if (prevQsRef.current === filterQs) return;
+    prevQsRef.current = filterQs;
+    setData({});
+  }, [filterQs]);
 
   useEffect(() => {
     fetchData(activeTab);
@@ -258,6 +289,57 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
+      {/* Filtres transverses produit / compte */}
+      {backendAvailable && hasData && (productLines.length > 0 || accounts.length > 0) && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.filterLabel')}</span>
+          {productLines.length > 0 && (
+            <select
+              value={filters.productLine}
+              onChange={e => setFilters(f => ({ ...f, productLine: e.target.value }))}
+              style={{
+                fontSize: 13, padding: '6px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">{t('analytics.filterAllProducts')}</option>
+              {productLines.map(pl => (
+                <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name}</option>
+              ))}
+            </select>
+          )}
+          {accounts.length > 0 && (
+            <select
+              value={filters.account}
+              onChange={e => setFilters(f => ({ ...f, account: e.target.value }))}
+              style={{
+                fontSize: 13, padding: '6px 10px', borderRadius: 8, maxWidth: 240,
+                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">{t('analytics.filterAllAccounts')}</option>
+              {accounts.map(a => (
+                <option key={a.company} value={a.company}>{a.company} ({a.contacts})</option>
+              ))}
+            </select>
+          )}
+          {(filters.productLine || filters.account) && (
+            <button
+              onClick={() => setFilters({ productLine: '', account: '' })}
+              style={{
+                fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+                border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)',
+              }}
+            >
+              ✕ {t('analytics.filterClear')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Question libre sur les données — réponses ancrées sur les agrégats SQL */}
+      {backendAvailable && hasData && <AnalyticsAsk filters={filters} />}
+
       {/* Tab bar — essential tabs + expandable advanced tabs */}
       <div className="crm-tabs">
         {TABS.filter(tab => tab.essential || showAllTabs || activeTab === tab.key).map(tab => (
@@ -325,8 +407,17 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* CSV Export button */}
-      {!loading && tabData && (
+      {/* Les tendances et canaux viennent des campagnes, pas des contacts — le
+          filtre produit/compte ne s'y applique pas : on le dit plutôt que de
+          laisser croire que les chiffres sont filtrés. */}
+      {!loading && tabData && (filters.productLine || filters.account) && (activeTab === 'trends' || activeTab === 'channels') && (
+        <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 12 }}>
+          {t('analytics.filterNotApplied')}
+        </div>
+      )}
+
+      {/* CSV Export button (pas de route CSV pour la géographie) */}
+      {!loading && tabData && activeTab !== 'geography' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             className="btn btn-ghost"
@@ -338,7 +429,12 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {!loading && activeTab === 'pipeline' && tabData && <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
+      {!loading && activeTab === 'pipeline' && tabData && (
+        <>
+          <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />
+          <StagesBlock filterQs={filterQs} />
+        </>
+      )}
       {!loading && activeTab === 'attribution' && tabData && <AttributionSection data={tabData} />}
       {!loading && activeTab === 'scoring' && tabData && <ScoringSection data={tabData} statusLabels={STATUS_LABELS} />}
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
@@ -346,6 +442,7 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
       {!loading && activeTab === 'segments' && tabData && <SegmentsSection data={tabData} />}
       {!loading && activeTab === 'renewals' && tabData && <RenewalsSection data={tabData} />}
+      {!loading && activeTab === 'geography' && tabData && <GeographySection data={tabData} />}
     </div>
   );
 }
@@ -412,6 +509,90 @@ function PipelineSection({ data, statusLabels, vocab }) {
 
 /* ═══ Attribution Section ═══ */
 
+function DealTouchBlock({ dt }) {
+  const t = useT();
+  const navigate = useNavigate();
+  if (!dt) return null;
+
+  const empty = dt.touched.count === 0;
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-title">
+        {t('analytics.dealTouchTitle')}
+        <HelpTip text={t('analytics.dealTouchHelp')} />
+      </div>
+      <div className="card-body">
+        {empty ? (
+          <div style={{ padding: '12px 0' }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('analytics.dealTouchEmptyTitle')}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+              {t('analytics.dealTouchEmptyBody', { count: dt.untouched.count })}
+            </div>
+            <button className="btn btn-accent" onClick={() => navigate('/activation')}>
+              {t('analytics.dealTouchEmptyCta')}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="crm-kpi-row">
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value">{dt.touched.count}</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchTouched')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>${(dt.touched.value || 0).toLocaleString()}</div>
+              </div>
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value" style={{ color: 'var(--blue)' }}>{dt.touched.replyRate}%</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchReplyRate')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('analytics.dealTouchReplied', { count: dt.touched.replied })}
+                </div>
+              </div>
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{dt.reactivated.count}</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchReactivated')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>${(dt.reactivated.value || 0).toLocaleString()}</div>
+              </div>
+              <div className="crm-kpi-card">
+                <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>{dt.touched.won}</div>
+                <div className="crm-kpi-label">{t('analytics.dealTouchWon')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {t('analytics.dealTouchWonVs', { count: dt.untouched.won })}
+                </div>
+              </div>
+            </div>
+            <div className="crm-table" style={{ marginTop: 12 }}>
+              <div className="crm-table-header">
+                <span style={{ flex: 2 }}>{t('analytics.dealTouchDeal')}</span>
+                <span>{t('analytics.dealTouchEmails')}</span>
+                <span>{t('analytics.dealTouchLastTouch')}</span>
+                <span>{t('analytics.dealTouchOutcome')}</span>
+              </div>
+              {dt.deals.map((d, i) => (
+                <div className="crm-table-row" key={i}>
+                  <span style={{ flex: 2, fontWeight: 600 }}>
+                    {d.name}{d.company ? ` · ${d.company}` : ''}
+                    {d.dealValue > 0 && (
+                      <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — ${d.dealValue.toLocaleString()}</span>
+                    )}
+                  </span>
+                  <span>{d.emailsSent}</span>
+                  <span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span>
+                  <span style={{ fontWeight: 600, color: d.reactivatedAt ? 'var(--success)' : d.replied ? 'var(--blue)' : 'var(--text-muted)' }}>
+                    {d.reactivatedAt ? t('analytics.dealTouchOutcomeReactivated')
+                      : d.replied ? t('analytics.dealTouchOutcomeReplied')
+                      : t('analytics.dealTouchOutcomePending')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AttributionSection({ data }) {
   const t = useT();
   const sorted = useMemo(() =>
@@ -421,6 +602,9 @@ function AttributionSection({ data }) {
 
   return (
     <div className="crm-section">
+      {/* Deals touchés par l'agent — la preuve ROI côté CRM */}
+      <DealTouchBlock dt={data.dealTouch} />
+
       {/* Totals */}
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">
@@ -703,11 +887,135 @@ function ChannelsSection({ data }) {
   );
 }
 
+/* ═══ Intelligent Forecast (memory-calibrated) ═══ */
+
+const MF_GROUPS = [
+  { key: 'commit', color: 'var(--success)' },
+  { key: 'probable', color: 'var(--warning)' },
+  { key: 'possible', color: 'var(--text-muted)' },
+];
+
+function MemoryForecastBlock({ mf }) {
+  const { t, lang } = useI18n();
+  const en = lang === 'en';
+  const fmtEur = useMemo(
+    () => new Intl.NumberFormat(en ? 'en-US' : 'fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }),
+    [en]
+  );
+
+  const deals = Array.isArray(mf?.deals) ? mf.deals : [];
+  const grouped = useMemo(() => {
+    const g = { commit: [], probable: [], possible: [] };
+    deals.forEach(d => { (g[d.category] || g.possible).push(d); });
+    return g;
+  }, [deals]);
+
+  if (!mf || deals.length === 0) return null;
+
+  const scenarios = mf.scenarios || {};
+  const counts = mf.counts || {};
+  const ctx = mf.context || {};
+  const calibration = typeof ctx.calibration === 'number' ? ctx.calibration : 1;
+  const calibrationPct = Math.round(Math.abs(1 - calibration) * 100);
+
+  const groupLabels = {
+    commit: t('analytics.mfGroupCommit'),
+    probable: t('analytics.mfGroupProbable'),
+    possible: t('analytics.mfGroupPossible'),
+  };
+
+  const tiles = [
+    { key: 'commit', label: t('analytics.mfScenarioCommit'), sub: t('analytics.mfScenarioCommitSub', { count: counts.commit || 0 }), value: scenarios.commit || 0, featured: false },
+    { key: 'weighted', label: t('analytics.mfScenarioWeighted'), sub: t('analytics.mfScenarioWeightedSub'), value: scenarios.weighted || 0, featured: true },
+    { key: 'optimistic', label: t('analytics.mfScenarioOptimistic'), sub: t('analytics.mfScenarioOptimisticSub'), value: scenarios.optimistic || 0, featured: false },
+  ];
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-primary)' }}>{t('analytics.mfTitle')}</div>
+
+      {/* Scenario tiles */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+        {tiles.map(tile => (
+          <div key={tile.key} className="card" style={{
+            padding: 16,
+            border: tile.featured ? '1.5px solid var(--accent)' : undefined,
+            background: tile.featured ? 'var(--accent-glow)' : undefined,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: tile.featured ? 'var(--accent)' : 'var(--text-muted)' }}>
+              {tile.label}
+            </div>
+            <div style={{ fontSize: tile.featured ? 26 : 21, fontWeight: 700, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: tile.featured ? 'var(--accent)' : 'var(--text-primary)' }}>
+              {fmtEur.format(tile.value)}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{tile.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Honest context line */}
+      <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        {ctx.reliable ? (
+          <span>
+            {t('analytics.mfContextReliable', { days: ctx.avgCycleDays != null ? ctx.avgCycleDays : '—', winRate: Math.round((ctx.winRate || 0) * 100) })}
+            {calibrationPct > 0 && (
+              <> {calibration < 1 ? t('analytics.mfCalibrationOver', { pct: calibrationPct }) : t('analytics.mfCalibrationUnder', { pct: calibrationPct })}</>
+            )}
+          </span>
+        ) : (
+          <span style={{ display: 'inline-block', padding: '6px 10px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+            {t('analytics.mfContextUnreliable', { count: ctx.wonSample || 0 })}
+            {calibrationPct > 0 && (
+              <> {calibration < 1 ? t('analytics.mfCalibrationOver', { pct: calibrationPct }) : t('analytics.mfCalibrationUnder', { pct: calibrationPct })}</>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* Commit / Probable / Possible breakdown */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 12 }}>
+        {MF_GROUPS.map(g => {
+          const list = grouped[g.key] || [];
+          if (list.length === 0) return null;
+          const shown = list.slice(0, 8);
+          const extra = list.length - shown.length;
+          return (
+            <div key={g.key} className="card" style={{ padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: g.color, display: 'inline-block', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{groupLabels[g.key]}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({list.length})</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {shown.map(d => (
+                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontWeight: 600 }}>{d.name}</span>
+                      {d.company ? <span style={{ color: 'var(--text-muted)' }}>{' — '}{d.company}</span> : null}
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0 }}>{fmtEur.format(d.value || 0)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 10, color: 'var(--text-on-color)', background: g.color, flexShrink: 0 }}>
+                      {t('analytics.mfProbBadge', { pct: Math.round((d.probability || 0) * 100) })}
+                    </span>
+                  </div>
+                ))}
+                {extra > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('analytics.mfMoreDeals', { count: extra })}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Forecast Section ═══ */
 
 function ForecastSection({ data: initialData, statusLabels, vocab }) {
   const STATUS_LABELS = statusLabels;
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   const en = lang === 'en';
   const [forecastData, setForecastData] = useState(initialData);
   const defaultFrom = useMemo(() => {
@@ -746,6 +1054,9 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
         <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
           className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
       </div>
+
+      {/* Intelligent forecast (memory-calibrated) — renders nothing when memoryForecast is null/empty */}
+      <MemoryForecastBlock mf={data.memoryForecast} />
 
       {/* KPI row */}
       <div className="crm-kpi-row">
@@ -1118,6 +1429,282 @@ function RenewalsSection({ data }) {
             : `${data.later.count} renouvellement(s) suppl\u00e9mentaire(s) au-del\u00e0 de 90 jours`}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ═══ Real CRM Stages (migration 092) ═══ */
+
+function StageBars({ rows, color, showValue }) {
+  const max = Math.max(1, ...rows.map(r => r.count));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {rows.map((r, i) => (
+        <div key={i}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
+            <span style={{ fontWeight: 600 }}>{r.stage}</span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              {r.count}
+              {showValue && r.value > 0 ? ' · ' + Math.round(r.value).toLocaleString() + ' €' : ''}
+            </span>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 4, width: Math.round((r.count / max) * 100) + '%', background: color }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StagesBlock({ filterQs = '' }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const [stagesData, setStagesData] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.request('/analytics/stages' + filterQs)
+      .then(d => { if (alive) setStagesData(d); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [filterQs]);
+
+  if (!stagesData?.available) return null;
+  const hasOpen = (stagesData.stages || []).length > 0;
+  const hasLost = (stagesData.lostByStage || []).length > 0;
+  if (!hasOpen && !hasLost) return null;
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div className="crm-grid-2">
+        {hasOpen && (
+          <div className="card">
+            <div className="card-title">
+              {t('analytics.crmStagesTitle')}
+              <HelpTip text={t('analytics.crmStagesHelp')} />
+            </div>
+            <div className="card-body">
+              <StageBars rows={stagesData.stages} color="var(--purple)" showValue />
+            </div>
+          </div>
+        )}
+        {hasLost && (
+          <div className="card">
+            <div className="card-title">
+              {t('analytics.crmStagesLostTitle')}
+              <HelpTip text={t('analytics.crmStagesLostHelp')} />
+            </div>
+            <div className="card-body">
+              <StageBars rows={stagesData.lostByStage} color="var(--danger)" />
+            </div>
+          </div>
+        )}
+      </div>
+      {stagesData.historySince && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'right' }}>
+          {t('analytics.crmStagesSince', { date: new Date(stagesData.historySince).toLocaleDateString(en ? 'en-US' : 'fr-FR') })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ Geography Section ═══ */
+
+// Drapeau emoji depuis un code ISO-2 (indicateurs régionaux Unicode)
+function countryFlag(code) {
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  return String.fromCodePoint(...[...code].map(c => 127397 + c.charCodeAt(0)));
+}
+
+function GeographySection({ data }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const countries = data.countries || [];
+
+  // Noms de pays localisés sans table à maintenir
+  const regionNames = useMemo(() => {
+    try { return new Intl.DisplayNames([en ? 'en' : 'fr'], { type: 'region' }); } catch { return null; }
+  }, [en]);
+  const countryLabel = (code) => {
+    try { return regionNames?.of(code) || code; } catch { return code; }
+  };
+
+  if (countries.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+          {t('analytics.geoEmptyTitle')}
+        </div>
+        <div style={{ fontSize: 13, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>
+          {t('analytics.geoEmptyDesc')}
+        </div>
+      </div>
+    );
+  }
+
+  const barRows = countries.slice(0, 12).map(c => ({
+    stage: `${countryFlag(c.code)} ${countryLabel(c.code)}`,
+    count: c.contacts,
+    value: c.openValue,
+  }));
+
+  return (
+    <div>
+      <div className="crm-grid-2">
+        <div className="card">
+          <div className="card-title">
+            {t('analytics.geoContactsTitle')}
+            <HelpTip text={t('analytics.geoHelp')} />
+          </div>
+          <div className="card-body">
+            <StageBars rows={barRows} color="var(--blue)" showValue />
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-title">{t('analytics.geoTableTitle')}</div>
+          <div className="card-body" style={{ overflowX: 'auto' }}>
+            <table className="crm-table" style={{ width: '100%', fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 12 }}>
+                  <th style={{ padding: '6px 8px' }}>{t('analytics.geoCountry')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoContacts')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoClients')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoOpenValue')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoWonValue')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {countries.map(c => (
+                  <tr key={c.code} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '7px 8px', fontWeight: 600 }}>
+                      {countryFlag(c.code)} {countryLabel(c.code)}
+                    </td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>{c.contacts}</td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>{c.clients}</td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                      {c.openValue > 0 ? c.openValue.toLocaleString() + ' €' : '—'}
+                    </td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                      {c.wonValue > 0 ? c.wonValue.toLocaleString() + ' €' : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.5 }}>
+        {data.undetermined > 0 && (
+          <span>{t('analytics.geoUndetermined', { count: data.undetermined, total: data.total })} · </span>
+        )}
+        {t('analytics.geoCoverageNote', { pct: data.crmCoverage })}
+      </div>
+    </div>
+  );
+}
+
+/* ═══ Analytics Ask — question libre sur les données ═══ */
+
+function AnalyticsAsk({ filters }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const [question, setQuestion] = useState('');
+  const [history, setHistory] = useState([]);
+  const [asking, setAsking] = useState(false);
+  const endRef = useRef(null);
+  const hasFilters = !!(filters?.productLine || filters?.account);
+
+  useEffect(() => {
+    if (history.length > 0) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [history]);
+
+  const ask = async (raw) => {
+    const q = (raw || '').trim();
+    if (!q || asking) return;
+    setAsking(true);
+    setQuestion('');
+    try {
+      const r = await api.request('/analytics/ask', {
+        method: 'POST',
+        // Même périmètre que les onglets : les filtres actifs restreignent les agrégats
+        body: JSON.stringify({ question: q, lang, filters: hasFilters ? filters : undefined }),
+      });
+      setHistory(h => [...h, { q, a: r.answer || t('analytics.askError') }]);
+    } catch {
+      setHistory(h => [...h, { q, a: t('analytics.askError') }]);
+    }
+    setAsking(false);
+  };
+
+  const suggestions = [t('analytics.askSuggest1'), t('analytics.askSuggest2'), t('analytics.askSuggest3')];
+
+  return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-title">
+        {t('analytics.askTitle')}
+        <HelpTip text={t('analytics.askHelp')} />
+      </div>
+      <div className="card-body">
+        {history.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14, maxHeight: 320, overflowY: 'auto' }}>
+            {history.map((item, i) => (
+              <div key={i}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{item.q}</div>
+                <div style={{
+                  fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                  background: 'var(--bg-secondary, #f5f5f4)', borderRadius: 8, padding: '10px 12px',
+                }}>{item.a}</div>
+              </div>
+            ))}
+            <div ref={endRef} />
+          </div>
+        )}
+        {history.length === 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            {suggestions.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => ask(s)}
+                disabled={asking}
+                style={{
+                  fontSize: 12, padding: '6px 12px', borderRadius: 16, cursor: 'pointer',
+                  border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+                }}
+              >{s}</button>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') ask(question); }}
+            placeholder={t('analytics.askPlaceholder')}
+            disabled={asking}
+            style={{
+              flex: 1, padding: '9px 12px', borderRadius: 8, fontSize: 13,
+              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+            }}
+          />
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 13, padding: '8px 18px' }}
+            onClick={() => ask(question)}
+            disabled={asking || !question.trim()}
+          >
+            {asking ? '…' : t('analytics.askButton')}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+          {t('analytics.askDisclaimer')}
+        </div>
+      </div>
     </div>
   );
 }

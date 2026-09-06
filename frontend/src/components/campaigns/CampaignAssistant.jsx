@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/useApp';
 import { useSocket } from '../../context/SocketContext';
-import api, { request } from '../../services/api-client';
+import api, { request, trackEvent } from '../../services/api-client';
 import { sanitizeHtml } from '../../services/sanitize';
 import Confetti from '../Confetti';
 import OnboardingChecklist from '../OnboardingChecklist';
@@ -17,27 +17,35 @@ import { formatMarkdown, TypingIndicator, ThreadList, InlineSuggestions, ChatMes
 
 /* ─── Helpers ─── */
 
+// Réactivation d'abord (hero job du produit) — la création de campagne reste
+// accessible via les boutons d'action du WelcomeScreen, inutile de la dupliquer ici.
 function getDefaultSuggestions(lang) {
   return lang === 'en'
-    ? ['🎯 Create a prospecting campaign', '📡 Scan for buying signals', '🔍 Analyze my CRM health', '📊 Show my campaign performance']
-    : ['🎯 Cr\u00e9er une campagne de prospection', '📡 Scanner les signaux d\'achat', '🔍 Analyser la sant\u00e9 de mon CRM', '📊 Voir les performances de mes campagnes'];
+    ? ['⚡ Reactivate my dormant deals', '📡 Scan for buying signals', '🔍 Analyze my CRM health', '📊 Show my campaign performance']
+    : ['⚡ Relancer mes deals dormants', '📡 Scanner les signaux d\'achat', '🔍 Analyser la santé de mon CRM', '📊 Voir les performances de mes campagnes'];
 }
 
+// Suggestions du tout premier ecran (campaignCount === 0).
+// Elles etaient exclusivement orientees prospection — profil, premiere campagne,
+// ICP — alors que c'est precisement l'utilisateur dont le time-to-wow compte le
+// plus. Les actions CRM n'apparaissaient qu'une fois une campagne creee
+// (getReturningSuggestions) : le chemin qui porte la proposition de valeur ne se
+// debloquait donc qu'apres le chemin secondaire.
 function getOnboardingSuggestions(lang) {
   return lang === 'en'
-    ? ['📄 Help me set up my profile', '🎯 Create my first campaign', '❓ How does baakalai work?', '🧠 Help me define my ICP']
-    : ['📄 Aide-moi \u00e0 configurer mon profil', '🎯 Cr\u00e9er ma premi\u00e8re campagne', '❓ Comment fonctionne baakalai ?', '🧠 Aide-moi \u00e0 d\u00e9finir mon ICP'];
+    ? ['⚡ Show me my dormant deals', '🔍 Analyze my CRM health', '🎯 Create my first campaign', '❓ How does baakalai work?']
+    : ['⚡ Montre-moi mes deals dormants', '🔍 Analyser la santé de mon CRM', '🎯 Créer ma première campagne', '❓ Comment fonctionne baakalai ?'];
 }
 
 function getReturningSuggestions(lang) {
   return lang === 'en'
-    ? ['🎯 Create a new campaign', '⚡ Activate stagnant leads', '🔍 Scan my CRM health', '📊 Analyze my performance']
-    : ['🎯 Nouvelle campagne', '⚡ Relancer les leads stagnants', '🔍 Scanner la santé de mon CRM', '📊 Analyser mes performances'];
+    ? ['⚡ Activate stagnant deals', '🎯 Create a new campaign', '🔍 Scan my CRM health', '📊 Analyze my performance']
+    : ['⚡ Relancer les deals stagnants', '🎯 Nouvelle campagne', '🔍 Scanner la santé de mon CRM', '📊 Analyser mes performances'];
 }
 
 function getActionPrompts(lang) {
   if (lang === 'en') return {
-    create: 'I want to create a new prospecting campaign. Guide me step by step.',
+    create: 'I want to create a new campaign. Based on my CRM, suggest the best type first (dormant deal reactivation, client re-engagement, upsell, or prospecting), then guide me step by step.',
     refine: 'I want to refine one of my underperforming campaigns. Which ones can I improve?',
     analyze: 'Can you analyze the performance of my active campaigns and give me a diagnostic?',
     setup_profile: 'I just signed up. Help me set up my company profile to personalize my campaigns.',
@@ -45,7 +53,7 @@ function getActionPrompts(lang) {
     create_from_insights: 'You\'ve analyzed my previous campaigns and identified patterns that work. Create a new refined campaign based on these insights and cross-campaign memory. Suggest the best angle, tone and sequence based on what worked.',
   };
   return {
-    create: 'Je veux cr\u00E9er une nouvelle campagne de prospection. Guide-moi \u00E9tape par \u00E9tape.',
+    create: 'Je veux créer une nouvelle campagne. Propose-moi d\'abord le type le plus pertinent selon mon CRM (réactivation de deals dormants, relance clients, upsell ou prospection), puis guide-moi étape par étape.',
     refine: 'Je veux affiner une de mes campagnes existantes qui sous-performe. Quelles campagnes puis-je am\u00E9liorer ?',
     analyze: 'Peux-tu analyser les performances de mes campagnes actives et me donner un diagnostic ?',
     setup_profile: 'Je viens de m\'inscrire. Aide-moi \u00E0 configurer mon profil entreprise pour personnaliser mes campagnes.',
@@ -54,23 +62,28 @@ function getActionPrompts(lang) {
   };
 }
 
+// Templates alignés sur les jobs du produit : réactivation (hero) > relance clients
+// > upsell, prospection en porte d'entrée. Recrutement et partenariat retirés —
+// hors produit (baakalai exploite le CRM, il ne fait ni RH ni co-marketing).
+// La prospection s'appuie sur le profil/ICP de l'utilisateur, pas sur une cible inventée.
 function getCampaignTemplates(t) {
   return [
-    { label: t('chat.templateSaas'), desc: t('chat.templateSaasDesc'), prompt: 'Create a B2B SaaS prospecting campaign. Target: CTO and VP Engineering at startups/scale-ups 50-500 employees. Channel: multi (email + LinkedIn). Tone: professional but casual. Angle: ROI and time saved. Generate the full sequence.' },
-    { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
+    { label: t('chat.templateDormant'), desc: t('chat.templateDormantDesc'), prompt: 'Look at my CRM and create a reactivation campaign for my dormant deals, prioritized by deal value. Warm, personal tone that references the previous conversation — never a cold pitch. 3 touchpoints spaced 5-7 days apart.' },
     { label: t('chat.templateReactivation'), desc: t('chat.templateReactivationDesc'), prompt: 'Create an email reactivation sequence for existing clients who haven\'t been contacted in 3+ months. Warm tone, not salesy. Goal: re-establish contact and propose a check-in. 3 touchpoints spaced 7 days apart.' },
-    { label: t('chat.templateRecruiting'), desc: t('chat.templateRecruitingDesc'), prompt: 'Create a multi-channel sequence (LinkedIn + email) to recruit tech profiles. Start with a personalized LinkedIn invite (max 300 chars), then a LinkedIn message, then an email. Tone: informal, appreciative. No corporate HR tone.' },
-    { label: t('chat.templatePartnership'), desc: t('chat.templatePartnershipDesc'), prompt: 'Create an email sequence to propose a partnership or collaboration with complementary companies. Tone: peer-to-peer, not salesy. Goal: an exploratory call. 3 emails spaced 5 days apart. Highlight mutual benefit.' },
+    { label: t('chat.templateUpsell'), desc: t('chat.templateUpsellDesc'), prompt: 'Create an upsell campaign for my existing clients. Use my CRM data to identify which clients could benefit from an additional product or an upgrade. Peer-to-peer tone, lead with the value for them, no hard sell. 2-3 touchpoints.' },
+    { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
+    { label: t('chat.templateProspection'), desc: t('chat.templateProspectionDesc'), prompt: 'Create a prospecting campaign based on my company profile and ICP. If my profile is incomplete, ask me who I want to target — don\'t invent a target. Channel: email. Professional, direct tone. Generate the full sequence.' },
   ];
 }
 
 /* ─── Sub-components ─── */
 
 function AiStatusBadge({ online }) {
+  const { lang } = useI18n();
   return (
     <div className={`ai-status${online ? '' : ' offline'}`}>
       <span className="ai-pulse"></span>
-      {online ? 'Online' : 'Offline'}
+      {online ? (lang === 'en' ? 'Online' : 'En ligne') : (lang === 'en' ? 'Offline' : 'Hors ligne')}
     </div>
   );
 }
@@ -1072,11 +1085,15 @@ function SignalSearchCard({ metadata }) {
     setScanning(true);
     try {
       // Create a temporary config and scan
-      const config = await request('/signals/configs', {
+      // signal_types must come from the fixed set understood by the signal-agent
+      // (SIGNAL_QUERIES) — free-text keywords go in targetKeywords only.
+      const VALID_SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
+      const requestedTypes = (metadata.signalTypes || []).filter(k => VALID_SIGNAL_TYPES.includes(k));
+      await request('/signals/configs', {
         method: 'POST',
         body: JSON.stringify({
           name: `Chat scan ${new Date().toLocaleDateString()}`,
-          signalTypes: metadata.keywords || ['funding', 'hiring', 'news'],
+          signalTypes: requestedTypes.length > 0 ? requestedTypes : ['funding', 'hiring', 'news'],
           targetSectors: metadata.sectors || [],
           targetTitles: metadata.titles || [],
           targetKeywords: metadata.keywords || metadata.sectors || [],
@@ -1115,7 +1132,7 @@ function SignalSearchCard({ metadata }) {
           <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>
             ✅ {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
           </div>
-          <a href="/activation" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
+          <a href="/activation?section=signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
             {en ? 'View signals →' : 'Voir les signaux →'}
           </a>
         </div>
@@ -1455,6 +1472,87 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
   );
 }
 
+/* Premier dialogue : ce que baakalai a lu dans le CRM, avec les deals
+   dormants cliquables — un clic lance la conversation sur un vrai deal.
+   Rendu uniquement quand l'utilisateur a un profil mais aucune campagne. */
+function CrmReadingSummary({ onSuggestionClick }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    request('/crm/reading-summary')
+      .then(setSummary)
+      .catch((err) => { console.warn('reading-summary failed:', err.message); });
+  }, []);
+
+  if (!summary || !summary.totalDeals) return null;
+
+  const money = (n) => {
+    if (!n) return '0 €';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M €`;
+    if (n >= 1000) return `${Math.round(n / 1000)}k €`;
+    return `${Math.round(n)} €`;
+  };
+
+  const revivePrompt = (d) => (lang === 'en'
+    ? `Draft a follow-up for the deal "${d.name}"${d.company ? ` (${d.company})` : ''} — no activity for ${d.daysInactive} days.`
+    : `Prépare une relance pour le deal « ${d.name} »${d.company ? ` (${d.company})` : ''} — sans activité depuis ${d.daysInactive} jours.`);
+
+  return (
+    <div style={{
+      background: 'var(--paper)', border: '1px solid var(--border)',
+      borderRadius: 12, padding: '14px 18px', marginBottom: 20,
+      textAlign: 'left', maxWidth: 520, width: '100%',
+    }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        {t('chat.readSummary')
+          .replace('{count}', summary.totalDeals)
+          .replace('{value}', money(summary.openValue))}
+        {summary.dormant.count > 0 && (
+          <> {t('chat.readDormant').replace('{count}', summary.dormant.count)}</>
+        )}
+        {summary.dormant.noValueCount > 0 && (
+          <> {t('chat.readDormantNoValue').replace('{count}', summary.dormant.noValueCount)}</>
+        )}
+      </div>
+      {summary.dormant.top.length > 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
+          {t('chat.readStartWith')}
+        </div>
+      )}
+      {summary.dormant.top.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+          {summary.dormant.top.map(d => (
+            <button
+              key={d.id}
+              onClick={() => {
+                trackEvent('reading_summary_revive_click', { daysInactive: d.daysInactive });
+                onSuggestionClick(revivePrompt(d));
+              }}
+              style={{
+                background: 'var(--paper-2)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: '8px 12px', textAlign: 'left',
+                cursor: 'pointer', fontSize: 13, color: 'var(--ink)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <strong>{d.name}</strong>{d.company ? ` · ${d.company}` : ''}
+              </span>
+              <span style={{ flexShrink: 0, color: 'var(--text-secondary)', fontSize: 12 }}>
+                {money(d.dealValue)} · {t('chat.readDays').replace('{days}', d.daysInactive)} →
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) {
   const { userName, campaignCount, hasProfile, activeCampaigns, topCampaign, insights } = userState || {};
   const t = useT();
@@ -1478,7 +1576,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
       { key: 'create', label: t('chat.createFirst') },
     ];
   } else if (hasProfile && campaignCount === 0) {
-    title = userName ? t('chat.readyToProspect', { name: userName }) : (lang === 'en' ? 'Ready to prospect?' : 'Pr\u00EAt \u00E0 prospecter ?');
+    title = userName ? t('chat.readyToProspect', { name: userName }) : (lang === 'en' ? 'Which deals shall we revive today?' : 'On relance quels deals aujourd\u2019hui ?');
     subtitle = t('chat.chooseTemplate');
     actions = [];
     suggestions = [];
@@ -1553,6 +1651,11 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
               {t('chat.createFromInsights')} →
             </button>
           </div>
+        )}
+
+        {/* Premier dialogue : compte-rendu de lecture du CRM, deals cliquables */}
+        {(hasProfile && campaignCount === 0) && (
+          <CrmReadingSummary onSuggestionClick={onSuggestionClick} />
         )}
 
         {/* Campaign templates — shown when user has profile but no/few campaigns */}
@@ -1896,7 +1999,7 @@ export default function CampaignAssistant() {
             cta: '',
             volume: { sent: 0, planned: 0 },
             iteration: 0,
-            startDate: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+            startDate: new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' }),
             lemlistRef: null,
             nextAction: null,
             kpis: { contacts: 0, openRate: null, replyRate: null, interested: null, meetings: null },
@@ -1964,7 +2067,7 @@ export default function CampaignAssistant() {
       ]);
       scrollToBottom();
     }
-  }, [currentThreadId, backendAvailable, setCampaigns, scrollToBottom]);
+  }, [currentThreadId, backendAvailable, setCampaigns, scrollToBottom, lang]);
 
   /* ─── Send message ─── */
   const sendMessage = useCallback(async (overrideText) => {

@@ -1,8 +1,10 @@
 /* ===============================================================================
    BAKAL — Data Quality Page
-   Organized into 3 strates (one per data-quality need) + a change history tab:
-   General (CRM hygiene not specific to leads or clients — duplicates, missing/invalid
-   fields, inactivity), Lead quality, Client quality, Historique. Every strate adapts
+   Organized into strates (one per data-quality need) + a change history tab + a GDPR
+   compliance tab: General (CRM hygiene not specific to deals or clients — duplicates,
+   missing/invalid fields, inactivity), Deal quality, Client quality, Historique,
+   Conformité (GDPR purge of long-inactive contacts). A score-trend header on top shows
+   the current quality score, its 30-day delta and a sparkline. Every strate adapts
    to what each connected CRM actually supports — see lib/crm-cleaning-agent.js.
    =============================================================================== */
 
@@ -10,16 +12,19 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useT } from '../i18n';
 import DataQualityBanners from '../components/dataQuality/DataQualityBanners';
+import ScoreTrendHeader from '../components/dataQuality/ScoreTrendHeader';
 import DuplicatesStrate from '../components/dataQuality/DuplicatesStrate';
 import DealQualityStrate from '../components/dataQuality/DealQualityStrate';
 import ClientQualityStrate from '../components/dataQuality/ClientQualityStrate';
 import HistoryTab from '../components/dataQuality/HistoryTab';
+import GdprStrate from '../components/dataQuality/GdprStrate';
 
 const TABS = [
   { key: 'general', labelKey: 'dataQuality.tabs.general', Component: DuplicatesStrate },
   { key: 'dealQuality', labelKey: 'dataQuality.tabs.dealQuality', Component: DealQualityStrate },
   { key: 'clientQuality', labelKey: 'dataQuality.tabs.clientQuality', Component: ClientQualityStrate },
   { key: 'history', labelKey: 'dataQuality.tabs.history', Component: HistoryTab },
+  { key: 'gdpr', labelKey: 'dataQuality.tabs.gdpr', Component: GdprStrate },
 ];
 
 export default function DataQualityPage() {
@@ -37,6 +42,8 @@ export default function DataQualityPage() {
           <div className="page-subtitle">{t('dataQuality.subtitle')}</div>
         </div>
       </div>
+
+      <ScoreTrendHeader />
 
       <DataQualityBanners />
 

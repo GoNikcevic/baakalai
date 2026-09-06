@@ -18,6 +18,7 @@
  * - Individual agents on-demand (from chat or API)
  */
 
+const db = require('../../db');
 const logger = require('../logger');
 
 const AGENTS = {
@@ -65,6 +66,7 @@ async function runAll(userId) {
     } else {
       logger.info('strategic-orchestrator', `${config.name}: done`);
     }
+    if (!isTotalFailure(result)) await persistResult(userId, key, result);
   }
 
   results.duration = Date.now() - startTime;
@@ -80,7 +82,37 @@ async function runOne(userId, agentKey) {
   if (!config) throw new Error(`Unknown agent: ${agentKey}. Available: ${Object.keys(AGENTS).join(', ')}`);
 
   const agent = require(config.module);
-  return agent.run(userId);
+  const result = await agent.run(userId);
+  if (!isTotalFailure(result)) await persistResult(userId, agentKey, result);
+  return result;
+}
+
+/**
+ * Un résultat partiel (quelques suggestions + quelques erreurs) ou vide
+ * (journée sans deal stagnant) reste un résultat : on le persiste pour que
+ * le dashboard n'ait pas à relancer l'agent. Seul l'échec total (que des
+ * erreurs, aucun contenu) est écarté — le fallback pourra retenter.
+ */
+function isTotalFailure(result) {
+  if (!result || typeof result !== 'object') return true;
+  if (!result.errors?.length) return false;
+  return !Object.entries(result).some(([k, v]) => k !== 'errors' && Array.isArray(v) && v.length > 0);
+}
+
+/**
+ * Historise le résultat (table strategic_results, migration 073) : le
+ * dashboard lit le dernier run au lieu de relancer l'agent, et l'historique
+ * permet de mesurer la justesse des suggestions a posteriori.
+ */
+async function persistResult(userId, agentKey, result) {
+  try {
+    await db.query(
+      `INSERT INTO strategic_results (user_id, agent, result) VALUES ($1, $2, $3)`,
+      [userId, agentKey, JSON.stringify(result)]
+    );
+  } catch (err) {
+    logger.warn('strategic-orchestrator', `persist ${agentKey} failed: ${err.message}`);
+  }
 }
 
 /**

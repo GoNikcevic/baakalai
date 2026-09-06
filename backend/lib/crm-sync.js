@@ -8,6 +8,7 @@ const { getUserCrmToken } = require('./crm-token');
 const claude = require('../api/claude');
 const db = require('../db');
 const { notifyUser } = require('../socket');
+const { extractActivityDate } = require('./crm-activity-date');
 
 /**
  * Sync deals from the user's CRM and analyze them with Claude.
@@ -20,12 +21,20 @@ async function syncCRM(userId) {
   try {
     notifyUser(userId, 'crm:sync', { status: 'starting', progress: 0 });
 
-    // Detect CRM provider
+    // Detect CRM provider — prefer user's active_crm_provider
     let provider = null;
     let apiKey = null;
-    for (const p of ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'notion', 'airtable']) {
-      const key = await getUserCrmToken(userId, p);
-      if (key) { provider = p; apiKey = key; break; }
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+    const activeCrm = userRow.rows[0]?.active_crm_provider;
+    if (activeCrm) {
+      const key = await getUserCrmToken(userId, activeCrm);
+      if (key) { provider = activeCrm; apiKey = key; }
+    }
+    if (!provider) {
+      for (const p of ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'notion', 'airtable']) {
+        const key = await getUserCrmToken(userId, p);
+        if (key) { provider = p; apiKey = key; break; }
+      }
     }
     if (!provider) throw new Error('No CRM configured');
 
@@ -112,6 +121,9 @@ async function syncCRM(userId) {
                 status: 'imported',
                 crmProvider: 'salesforce',
                 crmContactId: c.Id,
+                // LastModifiedDate était déjà demandée dans le SOQL ci-dessus
+                // mais jamais exploitée.
+                lastActivityAt: extractActivityDate('salesforce', c),
               });
               contactsImported++;
             } catch { /* skip individual failures */ }
@@ -123,13 +135,21 @@ async function syncCRM(userId) {
       }
     } else if (provider === 'notion' || provider === 'airtable' || provider === 'odoo') {
       // For Notion/Airtable/Odoo: use already-imported opportunities as deals
-      const opps = await db.opportunities.listByUser(userId, 200);
-      deals = opps.map(o => ({
+      const iso = v => (v ? new Date(v).toISOString().slice(0, 10) : '');
+      const opps = await db.opportunities.listByUser(userId, 500);
+      // N'analyser que les lignes de CE CRM : les imports CSV historiques
+      // (crm_provider NULL, montants vides, stage 'imported') noyaient
+      // l'analyse et faisaient conclure « pipeline uniformément à 0€ ».
+      deals = opps.filter(o => o.crm_provider === provider).map(o => ({
         name: o.name || '',
         amount: o.deal_value || 0,
         stage: o.status || '',
         status: o.status || '',
-        closedAt: o.updated_at || '',
+        // updated_at est réécrit en masse par chaque import : le prendre pour
+        // date de clôture faisait conclure « tous les deals fermés le même
+        // jour ». Seules won_date/lost_date sont de vraies clôtures.
+        closedAt: iso(o.won_date || o.lost_date),
+        lastActivityAt: iso(o.last_activity_at),
         company: o.company || '',
       }));
     }
@@ -158,7 +178,7 @@ async function syncCRM(userId) {
     });
 
     const analysisInput = deals.map(d =>
-      `Deal "${d.name}": montant ${d.amount}\u20AC, stage ${d.stage}, ${d.status || ''} ${d.closedAt ? `fermé le ${d.closedAt}` : ''}`
+      `Deal "${d.name}"${d.company ? ` (${d.company})` : ''}: montant ${d.amount}\u20AC, stage ${d.stage}, ${d.status || ''}${d.closedAt ? ` fermé le ${d.closedAt}` : ''}${d.lastActivityAt ? ` dernière activité le ${d.lastActivityAt}` : ''}`
     ).join('\n');
 
     const systemPrompt = `Tu es un expert en prospection B2B. Analyse l'historique CRM ci-dessous et identifie les patterns de conversion.
@@ -194,6 +214,9 @@ Sois spécifique et actionnable.`;
           await db.memoryPatterns.create({
             pattern: p.pattern,
             category: p.category || 'Cible',
+            // source au niveau colonne (migration 068) : c'est elle qui permet
+            // la purge ciblée des patterns dérivés quand le dataset change.
+            source: 'crm_sync',
             data: JSON.stringify({
               source: 'crm_sync',
               provider,

@@ -43,8 +43,10 @@ export function I18nProvider({ children }) {
     const stored = localStorage.getItem('baakalai_lang');
     if (stored && translations[stored]) return stored;
     const browser = navigator.language?.slice(0, 2);
-    if (browser === 'en') return 'en';
-    return 'fr';
+    const detected = (browser === 'en') ? 'en' : 'fr';
+    // Persist detected language so other modules (api-client) can read it
+    localStorage.setItem('baakalai_lang', detected);
+    return detected;
   });
 
   const setLang = useCallback((newLang) => {

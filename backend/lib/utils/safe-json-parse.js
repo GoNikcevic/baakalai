@@ -1,12 +1,12 @@
 /**
  * Safe JSON extraction from Claude API responses.
- * Handles both result.parsed and regex fallback with proper error handling.
+ * Handles both result.parsed and result.raw regex fallback with proper error handling.
  */
 
 function safeParseClaudeJSON(result, markerKey) {
   if (result.parsed) return result.parsed;
 
-  const content = result.content || '';
+  const content = result.raw || '';
   try {
     const pattern = markerKey
       ? new RegExp(`\\{[\\s\\S]*"${markerKey}"[\\s\\S]*\\}`)
@@ -22,7 +22,7 @@ function safeParseClaudeJSON(result, markerKey) {
 function safeParseClaudeArray(result) {
   if (Array.isArray(result.parsed)) return result.parsed;
 
-  const content = result.content || '';
+  const content = result.raw || '';
   try {
     const m = content.match(/\[[\s\S]*\]/);
     if (m) return JSON.parse(m[0]);

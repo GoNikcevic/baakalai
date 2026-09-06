@@ -106,7 +106,7 @@ Return JSON: { "note": "..." }`;
         const result = await claude.callClaude('Return only valid JSON.', notePrompt, 300, 'linkedin_note');
         let note = result.parsed?.note;
         if (!note) {
-          const m = (result.content || '').match(/"note"\s*:\s*"([^"]+)"/);
+          const m = (result.raw || '').match(/"note"\s*:\s*"([^"]+)"/);
           if (m) note = m[1];
         }
         if (!note) {
@@ -143,7 +143,7 @@ Return JSON: { "note": "..." }`;
     // ── Step 3: Follow up with message for accepted connections (J+2) ──
     const pendingFollowups = await db.query(
       `SELECT lo.id, lo.signal_id, lo.linkedin_url, lo.message AS connection_note,
-              s.signal_title, s.signal_desc, s.contact_name, s.contact_title, s.company_name
+              s.title AS signal_title, s.description AS signal_desc, s.contact_name, s.contact_title, s.company_name
        FROM linkedin_outreach lo
        JOIN signals s ON s.id = lo.signal_id
        WHERE lo.user_id = $1 AND lo.type = 'connection' AND lo.status = 'sent'
@@ -174,7 +174,7 @@ Return JSON: { "message": "..." }`;
         const result = await claude.callClaude('Return only valid JSON.', msgPrompt, 400, 'linkedin_followup');
         let message = result.parsed?.message;
         if (!message) {
-          const m = (result.content || '').match(/"message"\s*:\s*"([^"]+)"/);
+          const m = (result.raw || '').match(/"message"\s*:\s*"([^"]+)"/);
           if (m) message = m[1];
         }
         if (!message) continue;

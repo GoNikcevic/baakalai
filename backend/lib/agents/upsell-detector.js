@@ -167,7 +167,7 @@ async function draftOne(userId, opportunityId) {
   const [timing, copyCtx, patternCtx] = await Promise.all([
     getTimingContext(userId),
     getCopyContext(userId),
-    getPatternContext(teamId),
+    getPatternContext(teamId, userId),
   ]);
 
   const prompt = `Generate a personal upsell/cross-sell email for an existing client.

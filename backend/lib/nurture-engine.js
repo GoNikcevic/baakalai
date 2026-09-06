@@ -19,6 +19,7 @@ const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const linkedin = require('../api/linkedin');
 const { sendNurtureEmail } = require('./email-outbound');
+const { getPatternContext, getTeamId } = require('./email-context');
 const logger = require('./logger');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -35,8 +36,9 @@ async function evaluateTriggers(userId) {
 
   if (triggers.rows.length === 0) return [];
 
-  // Get CRM token
-  const crmProvider = triggers.rows[0].crm_provider || 'pipedrive';
+  // Get CRM token — always use user's active_crm_provider
+  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+  const crmProvider = userRow.rows[0]?.active_crm_provider || 'pipedrive';
   const crmToken = await getUserCrmToken(userId, crmProvider);
   if (!crmToken) return [];
 
@@ -111,7 +113,11 @@ async function evaluateTriggers(userId) {
         break;
       }
 
-      case 'renewal': {
+      // 'renewal_reminder' est le nom écrit par l'UI et le cron (crm-agent) ;
+      // 'renewal' est l'ancien nom — les deux doivent matcher ici, sinon le
+      // run manuel ignore silencieusement les triggers créés depuis l'UI.
+      case 'renewal':
+      case 'renewal_reminder': {
         const daysBefore = conditions.days || 30;
         const now = Date.now();
         // Load opportunities with renewal_date set
@@ -241,9 +247,21 @@ function normalizeContact(raw, deal = null) {
 }
 
 /**
- * Generate a personalized email for a contact using Claude.
+ * Format the memory-pattern block injected into generation prompts.
+ * Même format que crm-agent (generateNurtureEmail) pour que les deux moteurs
+ * apprennent de la même mémoire de la même façon.
  */
-async function generateEmail(trigger, contact) {
+function buildPatternsBlock(patternCtx) {
+  if (!patternCtx?.text) return '';
+  return `\n\nPATTERNS QUI FONCTIONNENT (mémoire cross-campagne) :\n${patternCtx.text}\nApplique en priorité les patterns APPROUVÉS.`;
+}
+
+/**
+ * Generate a personalized email for a contact using Claude.
+ * `patternCtx` ({ text, ids } de getPatternContext) est optionnel — sans lui,
+ * la génération reste possible mais n'exploite pas la mémoire.
+ */
+async function generateEmail(trigger, contact, patternCtx = null) {
   const template = trigger.email_template || {};
   const prompt = `Tu es un commercial B2B. Génère un email professionnel et personnel (PAS un email marketing).
 
@@ -259,7 +277,7 @@ Instructions :
 - L'email doit sembler écrit par un humain, pas généré
 - Pas de template marketing, pas de header/footer fancy
 - Maximum 6 lignes
-- Tutoiement : ${template.formality === 'tu' ? 'oui' : 'non, vouvoyer'}
+- Tutoiement : ${template.formality === 'tu' ? 'oui' : 'non, vouvoyer'}${buildPatternsBlock(patternCtx)}
 
 Retourne un JSON : { "subject": "...", "body": "..." }`;
 
@@ -287,7 +305,7 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
 /**
  * Generate a personalized LinkedIn message or connection note via Claude.
  */
-async function generateLinkedInContent(trigger, contact, actionType) {
+async function generateLinkedInContent(trigger, contact, actionType, patternCtx = null) {
   const template = trigger.email_template || {};
   const isConnect = actionType === 'linkedin_connect';
   const maxChars = isConnect ? 280 : 600;
@@ -305,7 +323,7 @@ Instructions :
 - Ton naturel, pas commercial
 - Référencer le contexte business de manière subtile
 - Finir par une ouverture (curiosité ou valeur)
-- Max 280 caractères
+- Max 280 caractères${buildPatternsBlock(patternCtx)}
 
 Retourne un JSON : { "note": "..." }`
     : `Tu es un commercial B2B. Génère un message LinkedIn personnalisé (3-4 phrases max).
@@ -320,7 +338,7 @@ Instructions :
 - Ton : ${template.tone || 'professionnel mais chaleureux'}
 - Message court et naturel, pas de pitch
 - Proposer une valeur concrète ou poser une question pertinente
-- ${template.formality === 'tu' ? 'Tutoyer' : 'Vouvoyer'}
+- ${template.formality === 'tu' ? 'Tutoyer' : 'Vouvoyer'}${buildPatternsBlock(patternCtx)}
 
 Retourne un JSON : { "message": "..." }`;
 
@@ -348,7 +366,7 @@ Retourne un JSON : { "message": "..." }`;
  * Execute a LinkedIn action (connect, message, visit) for a nurture contact.
  * Logs to prospect_activities for memory/learning.
  */
-async function executeLinkedInAction(userId, trigger, contact, actionType) {
+async function executeLinkedInAction(userId, trigger, contact, actionType, patternCtx = null) {
   const cookie = await getUserKey(userId, 'linkedin');
   if (!cookie) throw new Error('LinkedIn not connected');
 
@@ -367,26 +385,30 @@ async function executeLinkedInAction(userId, trigger, contact, actionType) {
     await linkedin.getProfile(cookie, publicId);
     content = { action: 'visit' };
   } else if (actionType === 'linkedin_connect' && publicId) {
-    const { note } = await generateLinkedInContent(trigger, contact, 'linkedin_connect');
+    const { note } = await generateLinkedInContent(trigger, contact, 'linkedin_connect', patternCtx);
     await linkedin.sendConnectionRequest(cookie, { profileUrn: publicId, message: note }, userId);
     content = { action: 'connect', note };
   } else if (actionType === 'linkedin_message' && publicId) {
-    const { message } = await generateLinkedInContent(trigger, contact, 'linkedin_message');
+    const { message } = await generateLinkedInContent(trigger, contact, 'linkedin_message', patternCtx);
     await linkedin.sendMessage(cookie, { recipientUrn: publicId, message }, userId);
     content = { action: 'message', message };
   } else {
     throw new Error(`Cannot execute ${actionType}: missing LinkedIn profile ID`);
   }
 
-  // Log in nurture_emails for tracking/UI consistency
+  // Log in nurture_emails for tracking/UI consistency.
+  // pattern_ids (migration 048) : seuls connect/message génèrent du copy à
+  // partir de la mémoire — une simple visite n'utilise aucun pattern.
+  const usedPatternIds = actionType === 'linkedin_visit' ? [] : (patternCtx?.ids || []);
   await db.query(`
-    INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, action_type)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', $8)
+    INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, action_type, pattern_ids)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'sent', $8, $9)
   `, [
     userId, trigger.id, opp?.id || null, contact.email, contact.name,
     actionType.replace('linkedin_', 'LinkedIn '),
     JSON.stringify(content),
     actionType,
+    usedPatternIds,
   ]);
 
   // Log in prospect_activities for memory & learning
@@ -410,6 +432,16 @@ async function runNurtureEngine(userId) {
   const matches = await evaluateTriggers(userId);
   const results = { triggered: 0, sent: 0, queued: 0, errors: [] };
 
+  // Mémoire cross-campagne : résolue UNE fois par run (les patterns ne varient
+  // pas d'un contact à l'autre). Le teamId est résolu comme dans crm-agent
+  // (db.teams.getByUser, via le helper email-context). Best-effort : sans
+  // mémoire, la génération continue — elle n'apprend juste rien.
+  let patternCtx = { text: '', ids: [] };
+  try {
+    const teamId = await getTeamId(userId);
+    patternCtx = await getPatternContext(teamId, userId);
+  } catch { /* mémoire optionnelle */ }
+
   for (const { trigger, contacts } of matches) {
     // Determine action type: email (default), linkedin_connect, linkedin_message, linkedin_visit
     const actionType = trigger.action_type || 'email';
@@ -421,11 +453,11 @@ async function runNurtureEngine(userId) {
 
         if (isLinkedIn) {
           // Execute LinkedIn action
-          const result = await executeLinkedInAction(userId, trigger, contact, actionType);
+          const result = await executeLinkedInAction(userId, trigger, contact, actionType, patternCtx);
           if (result.success) results.sent++;
         } else {
           // Generate personalized email
-          const { subject, body } = await generateEmail(trigger, contact);
+          const { subject, body } = await generateEmail(trigger, contact, patternCtx);
 
           // Find opportunity in Baakalai DB
           const opp = await db.opportunities.findByEmail(userId, contact.email);
@@ -440,6 +472,7 @@ async function runNurtureEngine(userId) {
               subject,
               body,
               crmProvider: trigger.crm_provider || 'pipedrive',
+              patternIds: patternCtx.ids,
             });
 
             if (sendResult.success) {
@@ -448,11 +481,13 @@ async function runNurtureEngine(userId) {
               results.errors.push({ contact: contact.name, error: sendResult.error });
             }
           } else {
-            // Queue for approval
+            // Queue for approval — pattern_ids = patterns réellement injectés
+            // dans le prompt (avant : [] en dur, la boucle d'apprentissage ne
+            // pouvait jamais attribuer un succès à un pattern).
             await db.query(`
               INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids)
               VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
-            `, [userId, trigger.id, opp?.id || null, contact.email, contact.name, subject, body, []]);
+            `, [userId, trigger.id, opp?.id || null, contact.email, contact.name, subject, body, patternCtx.ids]);
             results.queued++;
           }
         }

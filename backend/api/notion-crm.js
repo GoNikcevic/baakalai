@@ -18,7 +18,32 @@ const PROPERTY_ALIASES = {
   company: ['Company', 'Entreprise', 'Société', 'Organisation', 'Organization', 'Org'],
   companySize: ['Company Size', 'Taille', 'Size', 'Effectif', 'Employees'],
   linkedin: ['LinkedIn', 'linkedin', 'LinkedIn URL', 'Profil LinkedIn', 'LinkedIn Profile'],
+  // Dans beaucoup de bases CRM Notion, la propriété title est l'ENTREPRISE et
+  // la personne vit dans une propriété texte séparée — d'où ce champ dédié.
+  contact: ['Contact Principal', 'Contact', 'Nom du contact', 'Personne', 'Person'],
+  status: ['Statut', 'Status', 'Étape', 'Etape', 'Stage', 'État', 'Etat', 'Pipeline'],
+  dealValue: [
+    'Deal Value (€)', 'Deal Value ($)', 'Deal Value', 'Montant (€)', 'Montant',
+    'Valeur', 'Amount', 'Value', 'MRR Potentiel (€)', 'MRR', 'Budget',
+  ],
 };
+
+/**
+ * Ramène un statut libre de CRM Notion aux trois états canoniques du produit
+ * (won / lost / open) — la condition pour que won_date, le win/loss analysis
+ * et la LTV fonctionnent. « Churned » devient lost : couplé à won_date, c'est
+ * ce qui permet le calcul de tenure/LTV dans les analytics.
+ * Renvoie null si le libellé est vide (statut inconnu ≠ statut absent).
+ */
+const STATUS_WON = new Set(['gagné', 'gagne', 'won', 'signé', 'signe', 'client']);
+const STATUS_LOST = new Set(['perdu', 'lost', 'churned', 'churn', 'abandonné', 'abandonne']);
+function normalizeNotionStatus(label) {
+  if (!label) return null;
+  const s = String(label).toLowerCase().trim();
+  if (STATUS_WON.has(s)) return 'won';
+  if (STATUS_LOST.has(s)) return 'lost';
+  return 'open';
+}
 
 /**
  * Discover which property names exist in a Notion database
@@ -262,9 +287,18 @@ async function queryContacts(notionToken, databaseId) {
           val = prop.number;
         } else if (meta.type === 'select') {
           val = prop.select?.name || null;
+        } else if (meta.type === 'status') {
+          // Notion a deux types pour un statut : select (bases anciennes) et
+          // status (bases récentes). Les deux portent la valeur dans .name.
+          val = prop.status?.name || null;
         }
         contact[field] = val;
       }
+
+      // Timestamps de page : c'est la seule date d'activité que Notion expose.
+      // lib/crm-activity-date.js les attend sous ces noms exacts.
+      contact.last_edited_time = page.last_edited_time || null;
+      contact.created_time = page.created_time || null;
 
       // Also try to extract email from direct 'Email' property if schema didn't catch it
       if (!contact.email) {
@@ -282,6 +316,47 @@ async function queryContacts(notionToken, databaseId) {
   return contacts;
 }
 
+/**
+ * Écrit une note baakalai sur la page d'un contact.
+ *
+ * Bloc callout ajouté en fin de page — et non commentaire Notion : les
+ * commentaires demandent la capability « comment » que les intégrations des
+ * utilisateurs n'ont pas forcément accordée, alors que l'append de contenu
+ * utilise la même capability « insert content » que pushProspectToNotion,
+ * déjà requise pour que le connecteur fonctionne. Aucun nouveau scope à
+ * demander aux utilisateurs existants.
+ *
+ * Le texte est découpé en lignes → un paragraphe par ligne dans le callout,
+ * la première ligne servant de titre. Limite rich_text : 2000 chars par
+ * segment, largement au-dessus de nos contenus.
+ *
+ * @param {string} notionToken
+ * @param {{ pageId: string, content: string }} data  pageId = crm_contact_id
+ */
+async function createNote(notionToken, { pageId, content }) {
+  const notion = new Client({ auth: notionToken });
+  const lines = String(content || '').split('\n').filter(Boolean);
+  if (!lines.length) return { ok: true, skipped: true };
+
+  const [title, ...body] = lines;
+  await notion.blocks.children.append({
+    block_id: pageId,
+    children: [{
+      type: 'callout',
+      callout: {
+        icon: { type: 'emoji', emoji: '🤖' },
+        color: 'purple_background',
+        rich_text: [{ type: 'text', text: { content: title }, annotations: { bold: true } }],
+        children: body.map(line => ({
+          type: 'paragraph',
+          paragraph: { rich_text: [{ type: 'text', text: { content: line.slice(0, 2000) } }] },
+        })),
+      },
+    }],
+  });
+  return { ok: true, pageId };
+}
+
 module.exports = {
   pushProspectToNotion,
   pushProspectsToNotion,
@@ -289,4 +364,6 @@ module.exports = {
   discoverSchema,
   buildProperties,
   queryContacts,
+  normalizeNotionStatus,
+  createNote,
 };

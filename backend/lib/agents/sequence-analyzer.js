@@ -15,6 +15,15 @@ const logger = require('../logger');
 async function run(userId) {
   const report = { insights: 0, recommendations: [], errors: [] };
 
+  // Tenant des patterns (audit 02/09) : l'équipe si l'utilisateur en a une,
+  // sinon l'utilisateur — jamais les deux (règle DAO, migration 089).
+  // Résolu une seule fois par run, réutilisé pour chaque écriture.
+  let tenant = { userId };
+  try {
+    const team = await db.teams.getByUser(userId);
+    if (team) tenant = { teamId: team.id };
+  } catch { /* résolution d'équipe indisponible : le pattern reste scopé user */ }
+
   try {
     // ── 1. Drop-off analysis per step ──
     // For each campaign, compare activity counts at each step
@@ -78,6 +87,7 @@ async function run(userId) {
       report.recommendations.push(insight);
 
       await db.memoryPatterns.replaceOrCreate({
+        ...tenant,
         pattern: insight,
         category: 'Séquence',
         data: JSON.stringify({ type: 'dropoff', ...worstDropoff }),
@@ -106,6 +116,7 @@ async function run(userId) {
       report.recommendations.push(insight);
 
       await db.memoryPatterns.replaceOrCreate({
+        ...tenant,
         pattern: insight,
         category: 'Séquence',
         data: JSON.stringify({ type: 'best_reply_step', step: bestStep.sequence_step, pct, totalReplies }),
@@ -155,6 +166,7 @@ async function run(userId) {
         report.recommendations.push(insight);
 
         await db.memoryPatterns.replaceOrCreate({
+          ...tenant,
           pattern: insight,
           category: 'Séquence',
           data: JSON.stringify({ type: 'optimal_length', buckets: { short: avgShort, medium: avgMedium, long: avgLong } }),
@@ -192,6 +204,7 @@ async function run(userId) {
           report.recommendations.push(insight);
 
           await db.memoryPatterns.replaceOrCreate({
+            ...tenant,
             pattern: insight,
             category: 'Séquence',
             data: JSON.stringify({ type: 'channel_mix', avgEmail, avgMulti, diff }),

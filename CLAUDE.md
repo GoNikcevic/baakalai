@@ -1,301 +1,93 @@
-# CLAUDE.md — Baakalai Project Briefing
+# CLAUDE.md — Baakalai
 
-> **Purpose:** This document provides full context for any AI assistant (Claude Code, Claude Chat, Cowork, etc.) to work on Baakalai. Read this first before any task.
-
----
+> Context file for AI assistants working on this codebase. Keep concise — use Grep/Glob for file discovery.
 
 ## 1. What is Baakalai
 
-baakalai is the agent that exploits your CRM to generate revenue. It connects to your existing CRM (Pipedrive, HubSpot, Salesforce, Odoo) and reads your data 24/7 — spotting stagnant deals to reactivate, clients ready to upsell, accounts about to churn. It acts: sends the right follow-up, at the right time, from the user's own email. The outbound is a door, not the product. The real value is making the data the client already paid for generate CA without acquisition cost. 12 AI agents build a collective memory that compounds — the more you use baakalai, the sharper it gets.
+baakalai is the AI system that exploits your CRM to generate revenue. It connects to existing CRMs (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable, Folk) and reads data 24/7 — spotting stagnant deals to reactivate, clients ready to upsell, accounts about to churn. It sends the right follow-up, at the right time, from the user's own email. 12 AI agents build a collective memory that compounds.
 
-- **CRM Intelligence** : Connect your existing CRM, get churn prediction (0-100), deal coaching, data cleaning, upsell/cross-sell detection, win/loss analysis — without switching tools
-- **Activation** : 8 pre-built triggers (deal won, stagnant, lost, inactive, onboarding, renewal, upsell, feedback), personalized follow-ups from CRM history, sent via user's own SMTP
-- **Prospection** : Create campaigns via AI chat, generate sequences (email + LinkedIn), deploy to Lemlist/Apollo/Smartlead, A/B test, refine automatically
-- **Intelligence** : 12 autonomous AI agents (4 operational + 7 strategic + 1 template generator) that learn from every campaign and every CRM interaction
+**Naming rule:** baakalai is *a system* (singular, the product identity), made of *12 agents* (plural, the architecture). Never call the product "the agent" — the singular contradicts the multi-agent architecture we sell, and "system" is only credible because the 12 agents are real. Category anchor is **RevOps** (a function nobody owns), never "revenue intelligence" (the category Gong defined and owns). Never claim baakalai *is* a RevOps platform — no consolidated forecasting, territories, comp or CPQ. Always "the job a RevOps would do".
 
-Pricing: $75/user/month. Team plan: up to 5 members with roles (admin, prospection, activation, viewer).
+**3 pillars:** CRM Intelligence > Activation > Prospection (prospection = door, not the product).
+
+**Pricing:** Starter 49€/mo, Growth 149€/mo, Scale 349€/mo. Team plan up to 5 members.
 
 ## 2. Tech Stack
 
-- **Frontend** : React 19 + Vite 7 + React Router 7
-- **Backend** : Node.js + Express + PostgreSQL (Supabase)
-- **AI** : Claude API (Anthropic) with hybrid Sonnet/Opus routing + prompt caching
-- **Deployment** : Railway (auto-deploy main → app.baakal.ai), Cloudflare Pages (auto-deploy landing/* → baakal.ai)
-- **Email** : Resend (system emails), nodemailer/SMTP+OAuth (user emails for activation)
-- **Security** : Helmet, DOMPurify, bcrypt 12, AES-256-GCM, JWT code exchange
-- **Fonts** : Geist + Geist Mono (brand v6)
-- **Theme** : Light-first, purple/lavender accents (#6E57FA primary)
+- **Frontend**: React 19 + Vite 7 + React Router 7 (inline styles, no CSS-in-JS)
+- **Backend**: Node.js + Express + PostgreSQL (Supabase, pgvector enabled)
+- **AI**: Claude API with hybrid Sonnet/Opus routing + prompt caching
+- **Deployment**: Railway auto-deploy main → app.baakal.ai
+- **Landing**: Cloudflare Pages auto-deploy → baakal.ai
+- **Email**: Resend (system), nodemailer/SMTP+OAuth (user activation emails)
+- **Security**: Helmet, DOMPurify, bcrypt 12, AES-256-GCM, JWT
+- **Theme**: Light-first, Geist font, primary #6E57FA, paper #FAFAF9
 
-## 3. Integrations
+## 3. Code Conventions & Rules
 
-| Tool | Type | Status | What it does |
-|------|------|--------|-------------|
-| Lemlist | Outreach | Production | Campaign deployment, stats sync (v2 API), activities, conditional sequences |
-| Apollo | Outreach + Enrichment | Production | Prospect search (200/request), contact enrichment, campaign stats |
-| Smartlead | Outreach | Production | Campaign deployment, sequences, leads, analytics, replies |
-| Pipedrive | CRM | Production | Full bidirectional sync + real-time webhooks, upsert contacts, deals, pipelines, stages, activities, notes, owner mapping |
-| HubSpot | CRM | Production | Contact/deal sync, push scores, owner mapping, field mapping |
-| Salesforce | CRM | Production | Contact/deal sync via REST, owner mapping, field mapping |
-| Odoo | CRM + ERP | Production | JSON-RPC client. Contacts, deals, stages, invoices, activities, notes, owner mapping |
-| Notion | CRM + Docs | Production | Contact sync, database discovery |
-| Airtable | CRM | Production | Contact sync with batch of 10 |
-| Brave Search | Web search | Production | Web prospect agent (5 queries/company) |
-| Resend | Email (system) | Production | Verification, password reset, weekly reports |
-| Gmail OAuth | Email (activation) | Production | 1-click connect, auto token refresh, emails sent from user's Gmail |
-| Microsoft OAuth | Email (activation) | Ready | Needs Azure app registration, code is ready |
-| SMTP (user) | Email (activation) | Production | Personal emails via Gmail/Outlook/OVH for nurture campaigns |
+- Backend: CommonJS (`require`/`module.exports`), Express routes, raw SQL queries
+- Frontend: ES Modules, React functional components, inline styles
+- DB migrations: numbered SQL files in `backend/db/migrations/`
+- API keys: encrypted in `user_integrations` via `config/crypto.js`
+- Git: `main` branch, Railway auto-deploys on push
 
-## 4. Key Features
+### Mandatory Rules
 
-### Prospection
-- Chat-driven campaign creation with Claude AI
-- 5 pre-built campaign templates (SaaS B2B, Prise de RDV, Relance clients, Recrutement, Partenariat)
-- Multi-channel sequences (email + LinkedIn) with conditional branching
-- Lemlist deployment with A/B testing and batch mode
-- Prospect search via Lemlist database (200/request) or Apollo
-- Web search agent for deep company research
-- Replies tab with auto-sync from Lemlist + Apollo
+1. **i18n**: NEVER hardcode French text in JSX. Always use `t('key')` from `useI18n()`. Add keys to BOTH `fr.json` AND `en.json` in the same commit.
+2. **Active CRM**: Always use `users.active_crm_provider` to determine which CRM to sync/display. Never hardcode provider priority order.
+3. **Pattern writes**: `replaceOrCreate()` uses a table-based lease (`lib/db-lock.js`, `cron_locks` table) for mutual exclusion. NEVER use `pg_advisory_lock` — DATABASE_URL goes through Supavisor in transaction mode, where advisory locks leak and block forever. All pattern writes are anonymized in the DAO (`lib/anonymize.js`); `shared` is granted automatically when redaction is complete.
+4. **Email dedup**: Before inserting nurture emails, always check for existing pending/recent emails for the same contact (2-hour + 7-day windows).
+5. **Environments**: Never share credentials between prod and staging. Never point staging `APP_URL` to production.
 
-### Activation (CRM)
-- Import contacts from any connected CRM (Pipedrive, Odoo, HubSpot)
-- Client detail panel with timeline (emails + CRM activities + invoices for Odoo)
-- 8 pre-built trigger types: deal_won, deal_stagnant, inactive_contact, deal_lost, onboarding_check, renewal_reminder, upsell_opportunity, feedback_request
-- Preview mode before sending (see who gets emailed + sample email)
-- Response analysis agent (sentiment + intent detection via Claude)
-- Trigger effectiveness scoring over time
-- Data cleaning agent: duplicates, missing fields, invalid emails, inactive contacts, format issues (score /100)
+## 4. Architecture
 
-### Intelligence (12 AI Agents)
+### Agent System (4 operational + 7 strategic + 2 specialized)
 
-**Operational (scheduled):**
-1. **Prospection Agent** (daily 8AM): stats collection + batch A/B + deliverability checks
-2. **CRM Agent** (daily 9AM): delta sync + data quality + nurture + response analysis + churn scoring + owner sync
-3. **Memory Agent** (Sunday 10AM): consolidation + pruning + template generation + strategic agents
-4. **Reporting Agent** (Monday 9AM): anomaly detection + weekly report (only to active users)
+| Agent | Schedule | What it does |
+|-------|----------|-------------|
+| Prospection | 8AM + 8PM | Stats, batch A/B, deliverability |
+| CRM | 9AM | Delta sync, data quality, nurture, response analysis, churn scoring |
+| Strategic (fast) | 9:30AM | Deal Coach, Upsell Detector, Copy Optimizer (per user) |
+| Agent Chains | 9:45AM | Deal Reactivation + Auto-Upsell autonomous chains |
+| Memory | Sunday 10AM | Consolidation, pruning, templates, heavy strategic agents |
+| Reporting | Monday 9AM | Anomaly detection, weekly report |
 
-**Strategic (Sunday + on-demand via POST /api/strategic/run/:agent):**
-5. **Competitor Watch**: competitive landscape, positioning angles, evaluation triggers
-6. **Timing Agent**: best day/hour, optimal follow-up delay from response data
-7. **Deal Coach**: AI-suggested next action for each stagnant deal
-8. **Upsell Detector**: cross-sell/upsell scoring for won clients
-9. **Win/Loss Analyst**: discriminating patterns between won and lost deals
-10. **Copy Optimizer**: email length, subject lines, tone analysis from response data
-11. **ICP Refiner**: ideal customer profile refinement from actual conversion data
+**Key patterns:**
+- `db.memoryPatterns.replaceOrCreate()` — atomic upsert with advisory lock + pgvector semantic dedup
+- Delta sync — only sync what changed since last run
+- Owner resolver — unified CRM owner → team member mapping (`lib/crm-owner-resolver.js`)
+- CRM field mapper — map CRM custom fields to product lines/status (`lib/crm-field-mapper.js`)
 
-**Template Agent** (Sunday): generates sector-specific templates from memory patterns + campaign stats. 15 sectors covered.
+### Database (key tables)
 
-All strategic agents use `db.memoryPatterns.replaceOrCreate()` to prevent pattern explosion.
+`users` (+ `active_crm_provider`), `teams`, `team_members`, `opportunities` (contacts with CRM link + churn_score + owner), `memory_patterns` (cross-campaign learnings), `nurture_triggers`, `nurture_emails`, `user_integrations` (encrypted keys), `product_lines`, `agent_chain_executions`
 
-### Team Mode
-- Teams table with invite codes (max 5 members). Auto-created for solo users on first product line
-- Roles: admin (full access), prospection, activation, viewer (read-only)
-- Role-based UI: non-admins see simplified sidebar (Chat, Dashboard, Clients, Nurture, Profile only)
-- Non-admins only see contacts they own (filtered server-side)
-- Shared CRM keys at team level
-- Team campaigns: admin creates, each rep sends from their own inbox
-- Join page: /join/:code
+## 5. Environments
 
-### Multi-product / Product Lines
-- Product lines (verticals) in Profile page with tabbed UI
-- Each project: name, icon, description, target sectors, value prop, pain points
-- Contacts can be assigned to product lines (many-to-many)
-- CRM field mapping: map Pipedrive/HubSpot/Salesforce custom fields → product lines
-- Team campaigns can target specific product lines
+| Env | URL | DB (Supabase) | Branch |
+|-----|-----|---------------|--------|
+| **Production** | app.baakal.ai | `wbxmdchrsceaibhjtwxl` | main |
+| **Staging** | baakal-staging.up.railway.app | `eomzkghixlgtnadsgfuc` | staging |
 
-### Churn Prediction
-- Score 0-100 per contact, 5 weighted signals: inactivity, deal stagnation, email engagement, profile completeness, status
-- Integrated into CRM Agent daily run
-- ClientsPage: summary cards (Critical/High/Medium/Low), risk filter tab, factor breakdown
+- Railway auto-deploys: `main` → production, `staging` → staging (same service, two environments)
+- Workflow (depuis 2026-09-02): push sur `staging` d'abord → validation Goran → push sur `main`
+- Staging has `ORCHESTRATOR_ENABLED=false` (no agent crons)
+- Never share `DATABASE_URL`, `JWT_SECRET`, or `ENCRYPTION_SECRET` between envs
 
-### Account Ownership
-- CRM owner → Baakalai team member mapping (matched by email)
-- Unified resolver for Pipedrive, HubSpot, Salesforce, Odoo
-- Owner synced during CRM Agent delta sync
-- Pipedrive webhooks for real-time owner/contact/deal updates
+## 6. Current Gaps
 
-## 5. Database Schema (key tables)
+- [x] Stripe billing + paywall — socle livré (routes /api/billing, webhook, migration 078, section Réglages, paywall d'essai expiré). Inerte tant que STRIPE_SECRET_KEY + price IDs ne sont pas posés sur Railway ; comptes existants exemptés (trial_ends_at NULL).
+- [ ] Microsoft OAuth publisher verification (beta testers can't consent Outlook)
+- [ ] Salesforce campaigns (contacts + deals done, missing campaigns)
+- [ ] A/B testing on activation emails (only prospection currently)
+- [ ] Membership analytics (tenure, LTV by segment, renewal rates)
+- [ ] Bug: `t is not defined` occasionally on navigation (need to reproduce)
 
-```
-users, teams, team_members
-campaigns, touchpoints, diagnostics, versions
-opportunities (contacts/clients with CRM link + owner_id + churn_score + churn_factors)
-prospect_activities (Lemlist/Apollo reply/open/click data)
-memory_patterns (cross-campaign learnings, replaceOrCreate for dedup)
-nurture_triggers (activation rules)
-nurture_emails (sent/pending/cancelled activation emails + team_campaign_id)
-email_accounts (SMTP/OAuth credentials per team)
-crm_cleaning_reports (data quality scan results)
-crm_field_mappings (CRM field → Baakalai concept mapping)
-user_integrations (encrypted API keys per user/team)
-product_lines (verticals per team)
-opportunity_product_lines (many-to-many contact ↔ product line)
-team_campaigns (admin-launched campaigns for sales team)
-chat_threads, chat_messages
-notifications, templates, reports
-```
+## 7. Business Context
 
-## 6. Key Backend Files
-
-```
-backend/
-  api/
-    lemlist.js      — Lemlist API (v2 stats, activities, conditional sequences, search)
-    apollo.js       — Apollo API (campaigns, contacts, activities, enrichment)
-    smartlead.js    — Smartlead API (campaigns, sequences, leads, analytics, replies)
-    pipedrive.js    — Pipedrive API (persons, deals, pipelines, stages, activities, notes, upsert, users)
-    odoo.js         — Odoo JSON-RPC (contacts, deals, invoices, stages, activities)
-    claude.js       — Claude API with CHAT_SYSTEM_RULES (all chat actions defined here)
-    hubspot.js      — HubSpot API
-    salesforce.js   — Salesforce API
-  lib/
-    crm-agent.js           — Unified CRM agent (sync + quality + nurture + response analysis + churn + owner)
-    prospection-agent.js   — Wraps collect-stats + batch-orchestrator + deliverability
-    memory-agent.js        — Wraps consolidate + pruning + templates + strategic agents
-    reporting-agent.js     — Wraps weekly-report + anomaly detection
-    response-analysis-agent.js — Analyzes CRM replies, scores triggers, creates memory patterns
-    churn-scoring.js       — Churn prediction scoring engine (0-100, 5 signals)
-    email-outbound.js      — SMTP/OAuth email sending + auto token refresh + Pipedrive note logging
-    nurture-engine.js      — Trigger evaluation + Claude email generation
-    crm-owner-resolver.js  — Unified owner mapping for all CRM providers
-    crm-field-mapper.js    — CRM field mapping (Pipedrive/HubSpot/Salesforce → product lines/status)
-    crm-cleaning-agent.js  — Data quality scan with provider adapters
-    crm-bidirectional-sync.js — Pipedrive <> Baakalai sync
-    template-agent.js      — Sector template generation from memory patterns + stats
-    outreach-deploy.js     — Deploy campaigns to Apollo/Smartlead/Instantly (text→HTML conversion)
-    agents/
-      strategic-orchestrator.js — Coordinates all 7 strategic agents
-      competitor-watch.js   — Competitive landscape analysis
-      timing-agent.js       — Optimal send windows from response data
-      deal-coach.js         — AI-powered next best action for stagnant deals
-      upsell-detector.js    — Cross-sell/upsell opportunity scoring
-      win-loss-analyst.js   — Won vs lost deal pattern analysis
-      copy-optimizer.js     — Email copy effectiveness analysis
-      icp-refiner.js        — ICP refinement from conversion data
-  routes/
-    chat.js       — Chat with Claude + CRM actions from chat
-    campaigns.js  — Campaign CRUD + launch to Lemlist
-    crm.js        — CRM sync, import, clean, client detail, pipelines, product lines, field mapping
-    nurture.js    — Triggers CRUD, email accounts (SMTP+OAuth), preview, send
-    team-campaigns.js — Admin-launched team email campaigns
-    strategic.js  — Strategic agent API (run-all, run/:agent, list)
-    webhooks.js   — Pipedrive real-time webhooks (public, secret-validated)
-    stats.js      — Lemlist/Apollo stats sync, activities
-    teams.js      — Team create, join, members, roles
-    dashboard.js  — KPIs, activation metrics, refresh stats
-    templates.js  — Template CRUD + on-demand generation
-  orchestrator/
-    index.js      — 4-agent scheduler (Prospection 8AM, CRM 9AM, Memory Sun, Reporting Mon)
-```
-
-## 7. Key Frontend Files
-
-```
-frontend/src/
-  pages/
-    ChatPage.jsx            — Chat with Claude, campaign templates, CRM action cards
-    DashboardPage.jsx       — KPIs, deliverability, ICP insights, weekly report link
-    CampaignsList.jsx       — Campaign list with filters, archive, delete
-    ClientsPage.jsx         — Client import, pipeline stages, detail panel, churn scores, owner filter, product line tags
-    NurturePage.jsx         — Activation: dashboard, campaigns, triggers, pending/sent, preview, team campaigns
-    ProfilePage.jsx         — Company profile with tabbed product lines (name, value prop, pain points, docs)
-    CRMAnalyticsPage.jsx    — Pipeline, attribution, scoring, health (live data cleaning)
-    SettingsPage.jsx        — API keys with guides, email accounts, team management, Odoo form
-    MemoryExplorerPage.jsx  — AI memory patterns with apply/delete/export
-  components/
-    Layout.jsx              — Sidebar nav with mark logo
-    OnboardingWizard.jsx    — 3-step wizard (company+target, API keys with guides, confirmation)
-    EmailAccountSettings.jsx — SMTP config + OAuth Gmail/Microsoft 1-click connect
-    TeamSettings.jsx        — Team creation, invite link, member roles
-    ProductLinesSettings.jsx — Product lines CRUD (also in SettingsPage)
-    FieldMappingSettings.jsx — CRM field → Baakalai concept mapping UI
-    DeliverabilityCard.jsx  — Health score + refresh stats
-    ICPInsightsCard.jsx     — ICP analysis card
-```
-
-## 8. Chat Actions (claude.js CHAT_SYSTEM_RULES)
-
-Claude can propose these structured actions in the chat (JSON blocks):
-
-| Action | What it does |
-|--------|-------------|
-| create_campaign | Create campaign with full sequence |
-| search_prospects | Search via Lemlist/Apollo (limit 200) |
-| web_search_prospects | Deep web search for specific companies |
-| add_prospects_manual | Parse pasted contact list |
-| send_email | Send personal email to a contact |
-| scan_crm | Trigger CRM health scan |
-| run_nurture | Execute activation triggers |
-| import_crm | Import contacts from CRM |
-| list_clients | Show filtered client list |
-
-## 9. Brand Identity (v6)
-
-- Name: **baakalai** (lowercase, no dot, no ".ai")
-- Domain: baakal.ai (landing, Cloudflare Pages) / app.baakal.ai (platform, Railway)
-- Font: Geist (sans) + Geist Mono
-- Colors: paper #FAFAF9, ink #0A0A0A, primary #6E57FA, lavender #C4B5FD
-- Mark: rounded square with purple + lavender bars
-- Verb: "refine" (not "optimize")
-- Tone: direct, product-first, specific over vague
-
-## 10. Current State & Known Gaps
-
-### Working in production
-- Full prospection flow (chat > campaign > sequences > Lemlist deploy > stats > A/B)
-- CRM Pipedrive full integration (import, sync, cleaning, activation, response analysis)
-- Odoo integration (contacts, deals, invoices, stages)
-- Team mode (create, invite, roles)
-- Activation page with triggers, preview, campaigns view
-- Brand v6 (light theme, Geist font, purple accents)
-- 4 autonomous agents replacing 7 crons
-- Chat actions for CRM operations
-
-### Completed (April-May 2026)
-- [x] Memory patterns injected into nurture email generation
-- [x] i18n FR/EN on all main pages
-- [x] 9 pattern sources (was 4)
-- [x] Pipedrive webhooks (real-time sync)
-- [x] OAuth Gmail (1-click connect)
-- [x] Churn prediction scoring (0-100)
-- [x] Account ownership + multi-CRM owner resolver
-- [x] Product lines / multi-product support
-- [x] Team campaigns (admin → reps)
-- [x] Role-based UI for sales reps
-- [x] CRM field mapping (Pipedrive/HubSpot/Salesforce)
-- [x] Smartlead integration
-- [x] 7 strategic AI agents
-- [x] Template generation agent (15 sectors)
-- [x] Security audit (20/20 fixed) + DOMPurify + Helmet
-- [x] Domain split (baakal.ai landing / app.baakal.ai platform)
-- [x] Text→HTML conversion for all outreach tools
-
-### Remaining gaps
-- [ ] Microsoft OAuth (Azure app registration needed)
-- [ ] Stripe payment integration
-- [x] Landing page repositioning (CRM copilot, 12 agents, 3-pillar: CRM Intelligence > Activation > Prospection)
-- [ ] Membership analytics: tenure, LTV by segment, renewal rates
-- [ ] Salesforce full integration (contacts + deals done, missing campaigns)
-- [ ] Renewal trigger needs custom field mapping
-- [ ] A/B testing on activation emails (only on prospection currently)
-- [ ] Bug: `t is not defined` occasionally when navigating (need to reproduce)
-
-## 11. Business Context
-
-- **Vision**: Full customer lifecycle hub — outreach + CRM + analytics (Amplitude/GA) + billing (Stripe/Odoo) all connected, AI analyzes everything and triggers the right action
-- **ICP**: SMB services B2B (10-400 employees) + membership organizations. Sectors: crypto, telecom, cybersecurity, agencies, biotech, health, freelance
-- **Pricing**: Starter 49€/mo, Growth 149€/mo, Scale 349€/mo (team plan up to 5 members)
-- **Competitors**: Attio (AI-native CRM, $29-69/seat, no outbound), SalesCaptain (~EUR30k/4 months agency), GTM Studio (~EUR140k/7 months agency), Lemlist/Apollo (outreach only, no CRM intelligence)
-- **Key differentiator**: Agent that exploits existing CRM data (no migration) to generate revenue — deal reactivation, upsell detection, churn prevention, data cleaning. Revenue intelligence for SMBs, a segment structurally inaccessible to Gong/Clari (40-150k€/year). Collective memory compounds over time. Prospection is a door, not the product.
-- **Target onboarding time**: <30 minutes to first campaign (currently ~25-35 min)
-- **Owner**: Goran Nikcevic (goran@oenobiote.com)
-
-## 12. Code Conventions
-
-- Backend: CommonJS (require/module.exports), Express routes, PostgreSQL via raw queries
-- Frontend: ES Modules (import/export), React functional components, inline styles (no CSS-in-JS lib)
-- i18n: fr.json + en.json with useT() hook
-- **RULE: NEVER hardcode French text in JSX.** Always use t('key') from useT(). When adding ANY user-facing string, add the key to BOTH fr.json AND en.json in the same commit. No exceptions.
-- DB migrations: numbered SQL files in backend/db/migrations/
-- Env vars: ORCHESTRATOR_ENABLED, PGVECTOR_ENABLED for feature flags
-- API keys: encrypted in user_integrations table via config/crypto.js
-- Git: main branch, Railway auto-deploys on push
+- **ICP** (élargi 2026-09-02): PME B2B 5-200 pers, ≥12 mois historique CRM, base clients existante, pas d'équipe RevOps constituée, ≤5 personnes sur le CRM (plafond produit actuel). L'effectif est un proxy — qualifier sur ces 4 critères.
+- **Wedge**: Revenue intelligence for SMBs — structurally inaccessible to Gong/Clari
+- **Hero job**: Deal reactivation ("1 deal recovered = tool paid for itself")
+- **4 jobs**: Reactivation > Upsell > Churn > Data cleaning
+- **Competitors**: Attio ($29-69/seat, no outbound), Lemlist/Apollo (outreach only, no CRM intelligence)
+- **Owner**: Goran Nikcevic

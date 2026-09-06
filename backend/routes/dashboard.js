@@ -121,10 +121,35 @@ router.post('/refresh-stats', refreshLimiter, async (req, res, next) => {
 // GET /api/dashboard/memory — Cross-campaign patterns (paginated)
 router.get('/memory', async (req, res, next) => {
   try {
-    const { category, confidence } = req.query;
+    const { category, confidence, lang } = req.query;
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
-    const patterns = await db.memoryPatterns.list({ category, confidence, limit, offset });
+    const patterns = await db.memoryPatterns.list({ category, confidence, limit, offset, userId: req.user.id });
+
+    // Translate patterns to the user's language (patterns are a mix of FR and EN from different agents)
+    const targetLang = lang || 'fr';
+    if (patterns.length > 0) {
+      try {
+        const claude = require('../api/claude');
+        const textsToTranslate = patterns.slice(0, 10).map(p => p.pattern).join('\n---\n');
+        const targetLabel = targetLang === 'fr' ? 'French' : 'English';
+        const result = await claude.callClaude(
+          `You are a translator. Translate each text to ${targetLabel}. If a text is already in ${targetLabel}, return it unchanged. Return a JSON array of translated strings, one per input.`,
+          `Translate these CRM/sales insights to ${targetLabel} (keep same order, return JSON array of strings):\n\n${textsToTranslate}`,
+          500, 'translate_patterns'
+        );
+        let translations = result.parsed;
+        if (!translations && result.raw) {
+          const m = result.raw.match(/\[[\s\S]*\]/);
+          if (m) try { translations = JSON.parse(m[0]); } catch { /* ignore */ }
+        }
+        if (Array.isArray(translations)) {
+          for (let i = 0; i < Math.min(translations.length, patterns.length); i++) {
+            if (translations[i]) patterns[i].pattern = translations[i];
+          }
+        }
+      } catch { /* translation is best-effort, return as-is if it fails */ }
+    }
 
     res.json({ patterns });
   } catch (err) {
@@ -263,20 +288,34 @@ router.get('/activation', async (req, res, next) => {
     const now = Date.now();
     const DAY = 86400000;
 
+    // Récence métier. Surtout PAS `updated_at` : il est réécrit à chaque
+    // synchronisation CRM, si bien que tous les deals paraissaient touchés à
+    // l'instant. Mesuré avant correction : 0 deal stagnant sur 373, donc la
+    // QuickWinCard du dashboard ne s'affichait jamais. Voir lib/crm-activity-date.js.
+    const ageInDays = (o) => (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY;
+
+    /** Les 5 deals les plus utiles à montrer : joignables d'abord, puis les plus dormants. */
+    const rankForAction = (list) => [...list]
+      .sort((a, b) => {
+        const aReachable = !!(a.email || '').trim();
+        const bReachable = !!(b.email || '').trim();
+        if (aReachable !== bReachable) return aReachable ? -1 : 1;
+        return ageInDays(b) - ageInDays(a);
+      })
+      .slice(0, 5)
+      .map(o => ({
+        id: o.id, name: o.name, company: o.company, email: o.email,
+        daysSinceUpdate: Math.round(ageInDays(o)),
+      }));
+
     // Segment clients
     const won = opps.filter(o => o.status === 'won');
-    const active = opps.filter(o => {
-      const age = now - new Date(o.updated_at || o.created_at).getTime();
-      return age < 90 * DAY && o.status !== 'lost';
-    });
+    const active = opps.filter(o => ageInDays(o) < 90 && o.status !== 'lost');
     const stagnant = opps.filter(o => {
-      const age = now - new Date(o.updated_at || o.created_at).getTime();
-      return age >= 30 * DAY && age < 90 * DAY && o.status !== 'won' && o.status !== 'lost';
+      const age = ageInDays(o);
+      return age >= 30 && age < 90 && o.status !== 'won' && o.status !== 'lost';
     });
-    const churnRisk = opps.filter(o => {
-      const age = now - new Date(o.updated_at || o.created_at).getTime();
-      return age >= 90 * DAY && o.status !== 'lost';
-    });
+    const churnRisk = opps.filter(o => ageInDays(o) >= 90 && o.status !== 'lost');
 
     // Recent nurture emails
     const recentEmails = await db.query(
@@ -300,8 +339,12 @@ router.get('/activation', async (req, res, next) => {
         stagnant: stagnant.length,
         churnRisk: churnRisk.length,
       },
-      topStagnant: stagnant.slice(0, 5).map(o => ({ id: o.id, name: o.name, company: o.company, email: o.email, daysSinceUpdate: Math.round((now - new Date(o.updated_at || o.created_at).getTime()) / DAY) })),
-      topChurnRisk: churnRisk.slice(0, 5).map(o => ({ id: o.id, name: o.name, company: o.company, email: o.email, daysSinceUpdate: Math.round((now - new Date(o.updated_at || o.created_at).getTime()) / DAY) })),
+      // `slice(0, 5)` sur un tableau non trié montrait cinq deals au hasard.
+      // Pour une carte dont tout l'intérêt est de frapper juste, on classe :
+      // d'abord les contacts joignables — un deal sans email n'est pas
+      // actionnable, donc inutile de l'exposer en tête — puis les plus dormants.
+      topStagnant: rankForAction(stagnant),
+      topChurnRisk: rankForAction(churnRisk),
       emailsLast30d: emailStats,
       triggers: { total: parseInt(triggers.rows[0]?.total || 0, 10), active: parseInt(triggers.rows[0]?.active || 0, 10) },
     });

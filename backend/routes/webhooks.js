@@ -124,7 +124,7 @@ async function handleDealEvent(userId, action, current, previous) {
 
   // Find the opportunity by CRM contact ID
   const result = await db.query(
-    `SELECT id, status FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+    `SELECT id, status, crm_stage, crm_stage_id FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
     [userId, String(personId)]
   );
   const opp = result.rows[0];
@@ -133,6 +133,38 @@ async function handleDealEvent(userId, action, current, previous) {
   if (action === 'added' || action === 'updated') {
     const dealStatus = current.status; // open, won, lost
     const newStatus = dealStatus === 'won' ? 'won' : dealStatus === 'lost' ? 'lost' : null;
+
+    // Étape de pipeline temps réel (migration 092) — le libellé n'est résolu
+    // (1 appel /stages) que si l'id stocké diffère vraiment.
+    if (current.stage_id != null && String(current.stage_id) !== String(opp.crm_stage_id || '')) {
+      try {
+        const { getUserCrmToken } = require('../lib/crm-token');
+        const { getStageLabelMap, extractStage, trackStage } = require('../lib/stage-tracking');
+        const apiToken = await getUserCrmToken(userId, 'pipedrive');
+        const labelMap = apiToken ? await getStageLabelMap('pipedrive', apiToken) : new Map();
+        const stageUpdates = await trackStage(
+          userId, opp, extractStage('pipedrive', { stage: current.stage_id }, labelMap),
+          { status: dealStatus || 'open', source: 'webhook' }
+        );
+        if (Object.keys(stageUpdates).length > 0) {
+          await db.opportunities.update(opp.id, stageUpdates);
+          logger.info('webhook-pipedrive', `Deal ${current.id}: stage → ${stageUpdates.crm_stage}`);
+        }
+      } catch (err) {
+        logger.warn('webhook-pipedrive', `Stage tracking failed: ${err.message}`);
+      }
+    }
+
+    // Un deal qui bouge = bonne raison de re-vérifier l'actu de la société :
+    // boost dans la file du signal-scheduler (scan au prochain tick <= 30 min,
+    // pas d'appel Brave immédiat — le budget quotidien reste maître).
+    try {
+      const oppCompany = await db.query('SELECT company FROM opportunities WHERE id = $1', [opp.id]);
+      if (oppCompany.rows[0]?.company) {
+        const { boostCompany } = require('../lib/signal-scheduler');
+        await boostCompany(userId, oppCompany.rows[0].company);
+      }
+    } catch { /* boost best-effort */ }
 
     if (newStatus && newStatus !== opp.status) {
       await db.opportunities.update(opp.id, { status: newStatus });

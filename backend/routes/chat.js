@@ -5,6 +5,7 @@ const { emitToThread, notifyUser } = require('../socket');
 const { sanitizeText } = require('../lib/sanitize');
 const { rateLimit } = require('../lib/rate-limit');
 const { getValidatedIntegrations } = require('../config');
+const { getPatternContext, getTeamId } = require('../lib/email-context');
 const emailLimit = rateLimit({ windowMs: 60000, max: 10 }); // 10 emails per minute
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 });
 
@@ -138,7 +139,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       db.profiles.get(req.user.id),
       db.documents.getParsedTextByUser(req.user.id, 5),
       db.campaigns.list({ userId: req.user.id, limit: MAX_CAMPAIGNS_IN_CONTEXT }),
-      db.memoryPatterns.list({ limit: MAX_PATTERNS_IN_CONTEXT }),
+      db.memoryPatterns.list({ limit: MAX_PATTERNS_IN_CONTEXT, userId: req.user.id }),
       listUserSources(req.user.id),
       db.userIntegrations.listByUser(req.user.id),
     ]);
@@ -268,7 +269,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const connectedCrms = userIntegrations.filter(i => crmProviders.includes(i.provider) && i.access_token);
     if (connectedCrms.length > 0) {
       const crmLines = connectedCrms.map(c => `- ${c.provider.charAt(0).toUpperCase() + c.provider.slice(1)}${c.instance_url ? ' (' + c.instance_url + ')' : ''}`);
-      contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}\n\nL'utilisateur a un CRM connecté. Tu peux proposer d'analyser son CRM, scanner la santé des données, importer des contacts, ou lancer des triggers d'activation.`);
+      contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}\n\nL'utilisateur a un CRM connecté. Tu peux proposer d'analyser son CRM, scanner la santé des données, importer des contacts, ou lancer des triggers d'activation.\n\nACTIONS RÉACTIVATION DISPONIBLES:\n- "list-reactivation-targets": Lister les deals stagnants/perdus à réactiver (triés par valeur)\n- "reactivation-stats": Voir les KPIs de réactivation (deals récupérés, revenu, taux de conversion)\n- "send-reactivation": Générer et mettre en file un email de réactivation pour un contact spécifique\nQuand l'utilisateur parle de deals stagnants, relance, réactivation, ou demande "qui je devrais relancer", propose ces actions via des quick_replies.`);
     } else {
       contextParts.push("CRM: Aucun CRM connecté. Si l'utilisateur demande une analyse CRM, redirige-le vers Paramètres pour connecter Pipedrive, HubSpot, Salesforce, Notion ou un autre CRM.");
     }
@@ -516,15 +517,17 @@ router.post('/threads/:id/scan-crm', async (req, res, next) => {
 // POST /api/chat/threads/:id/clean-crm — Auto-fix CRM issues
 router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
   try {
-    const { getUserKey } = require('../config');
     const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
 
-    // Detect connected CRM
-    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
-    let provider = null;
-    for (const p of providers) {
-      const key = await getUserKey(req.user.id, p);
-      if (key) { provider = p; break; }
+    // Use active CRM
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    let provider = userRow.rows[0]?.active_crm_provider;
+    if (!provider) {
+      const { getUserKey } = require('../config');
+      for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable']) {
+        const key = await getUserKey(req.user.id, p);
+        if (key) { provider = p; break; }
+      }
     }
     if (!provider) return res.json({ error: 'No CRM connected', applied: 0 });
 
@@ -581,39 +584,18 @@ router.post('/threads/:id/run-nurture', async (req, res, next) => {
 // POST /api/chat/threads/:id/import-crm — Import contacts from CRM
 router.post('/threads/:id/import-crm', async (req, res, next) => {
   try {
-    const { getUserKey } = require('../config');
-    const pipedrive = require('../api/pipedrive');
-    const { provider } = req.body;
+    const { importContactsForUser } = require('./crm');
+    let { provider } = req.body;
 
-    if (provider !== 'pipedrive') return res.status(400).json({ error: `Import not supported for ${provider}` });
-
-    const token = await getUserKey(req.user.id, provider);
-    if (!token) return res.status(400).json({ error: `${provider} not connected` });
-
-    const persons = await pipedrive.listAllPersons(token);
-    let imported = 0, skipped = 0;
-
-    for (const raw of (persons || [])) {
-      const email = Array.isArray(raw.email)
-        ? (raw.email.find(e => e.primary)?.value || raw.email[0]?.value || null)
-        : (raw.email || null);
-      if (!email) { skipped++; continue; }
-      const existing = await db.opportunities.findByEmail(req.user.id, email);
-      if (existing) { skipped++; continue; }
-      await db.opportunities.create({
-        userId: req.user.id,
-        name: raw.name || 'Unknown',
-        email,
-        title: raw.job_title || null,
-        company: raw.org_name || raw.org_id?.name || null,
-        status: 'imported',
-        crmProvider: 'pipedrive',
-        crmContactId: String(raw.id),
-      });
-      imported++;
+    // Use active CRM if no provider specified
+    if (!provider) {
+      const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+      provider = userRow.rows[0]?.active_crm_provider;
     }
+    if (!provider) return res.status(400).json({ error: 'No CRM connected' });
 
-    res.json({ imported, skipped });
+    const result = await importContactsForUser(req.user.id, provider);
+    res.json(result);
   } catch (err) {
     next(err);
   }
@@ -640,6 +622,7 @@ router.post('/threads/:id/list-clients', async (req, res, next) => {
       clients: filtered.map(o => ({
         id: o.id, name: o.name, email: o.email, company: o.company,
         title: o.title, status: o.status, score: o.score,
+        crmProvider: o.crm_provider || null,
         lastUpdate: o.updated_at || o.created_at,
       })),
       total: filtered.length,
@@ -655,13 +638,15 @@ router.post('/threads/:id/create-trigger', async (req, res, next) => {
     const { name, triggerType, actionType, days, mode } = req.body;
     if (!name || !triggerType) return res.status(400).json({ error: 'name and triggerType required' });
 
-    // Detect CRM provider
-    const { getUserKey } = require('../config');
-    const providers = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
-    let crmProvider = null;
-    for (const p of providers) {
-      const key = await getUserKey(req.user.id, p);
-      if (key) { crmProvider = p; break; }
+    // Use active CRM provider
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    let crmProvider = userRow.rows[0]?.active_crm_provider || null;
+    if (!crmProvider) {
+      const { getUserKey } = require('../config');
+      for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable']) {
+        const key = await getUserKey(req.user.id, p);
+        if (key) { crmProvider = p; break; }
+      }
     }
 
     const result = await db.query(`
@@ -696,6 +681,154 @@ router.post('/threads/:id/toggle-autopilot', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// POST /api/chat/threads/:id/list-reactivation-targets — List stagnant/lost deals for reactivation
+router.post('/threads/:id/list-reactivation-targets', async (req, res, next) => {
+  try {
+    const { minDays = 14, maxResults = 20 } = req.body;
+    const result = await db.query(`
+      SELECT id, name, email, company, title, status, deal_value, churn_score,
+             updated_at, lost_date,
+             EXTRACT(DAY FROM NOW() - COALESCE(updated_at, created_at))::int AS days_stagnant
+      FROM opportunities
+      WHERE user_id = $1
+        AND (
+          (status NOT IN ('won', 'lost') AND updated_at < NOW() - INTERVAL '1 day' * $2)
+          OR (status = 'lost' AND lost_date > NOW() - INTERVAL '90 days')
+        )
+        AND email IS NOT NULL
+      ORDER BY deal_value DESC NULLS LAST, churn_score DESC NULLS LAST
+      LIMIT $3
+    `, [req.user.id, minDays, maxResults]);
+
+    res.json({
+      targets: result.rows.map(r => ({
+        id: r.id, name: r.name, email: r.email, company: r.company,
+        title: r.title, status: r.status, dealValue: r.deal_value,
+        churnScore: r.churn_score, daysStagnant: r.days_stagnant,
+        lostDate: r.lost_date,
+      })),
+      total: result.rows.length,
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /api/chat/threads/:id/reactivation-stats — Get reactivation KPIs for chat
+router.post('/threads/:id/reactivation-stats', async (req, res, next) => {
+  try {
+    const { reactivationStats } = require('./crm');
+    // Reuse the GET endpoint logic
+    const [reactivated, emailsSent, pipeline] = await Promise.all([
+      db.query(`
+        SELECT COUNT(*) as count, COALESCE(SUM(deal_value), 0) as revenue
+        FROM opportunities WHERE user_id = $1 AND reactivated_at IS NOT NULL
+      `, [req.user.id]),
+      db.query(`
+        SELECT COUNT(*) as total,
+               COUNT(*) FILTER (WHERE replied_at IS NOT NULL) as replied
+        FROM nurture_emails
+        WHERE user_id = $1 AND metadata->>'chain' = 'deal_reactivation'
+          AND created_at > NOW() - INTERVAL '90 days'
+      `, [req.user.id]),
+      db.query(`
+        SELECT COUNT(*) as count, COALESCE(SUM(deal_value), 0) as potential
+        FROM opportunities
+        WHERE user_id = $1 AND status NOT IN ('won', 'lost')
+          AND updated_at < NOW() - INTERVAL '14 days'
+      `, [req.user.id]),
+    ]);
+    const r = reactivated.rows[0];
+    const e = emailsSent.rows[0];
+    const p = pipeline.rows[0];
+    res.json({
+      dealsReactivated: parseInt(r.count),
+      revenueRecovered: parseFloat(r.revenue) || 0,
+      emailsSent: parseInt(e.total),
+      emailsReplied: parseInt(e.replied),
+      stagnantDeals: parseInt(p.count),
+      potentialRevenue: parseFloat(p.potential) || 0,
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /api/chat/threads/:id/send-reactivation — Generate & queue reactivation email for a specific contact
+router.post('/threads/:id/send-reactivation', async (req, res, next) => {
+  try {
+    const { contactId } = req.body;
+    if (!contactId) return res.status(400).json({ error: 'contactId required' });
+
+    const oppResult = await db.query(
+      'SELECT * FROM opportunities WHERE id = $1 AND user_id = $2', [contactId, req.user.id]
+    );
+    const opp = oppResult.rows[0];
+    if (!opp) return res.status(404).json({ error: 'Contact not found' });
+    if (!opp.email) return res.status(400).json({ error: 'Contact has no email' });
+
+    // Check dedup: no email sent to this contact in last 7 days
+    const recent = await db.query(
+      `SELECT id FROM nurture_emails WHERE user_id = $1 AND opportunity_id = $2
+       AND created_at > NOW() - INTERVAL '7 days' LIMIT 1`,
+      [req.user.id, opp.id]
+    );
+    if (recent.rows.length > 0) {
+      return res.status(409).json({ error: 'A reactivation email was already sent to this contact in the last 7 days' });
+    }
+
+    // Mémoire cross-campagne : mêmes patterns que le moteur de nurture, pour
+    // que les réactivations lancées depuis le chat apprennent (et nourrissent
+    // la boucle via pattern_ids) au lieu de générer « à froid ». Best-effort.
+    let patternCtx = { text: '', ids: [] };
+    try {
+      patternCtx = await getPatternContext(await getTeamId(req.user.id), req.user.id);
+    } catch { /* mémoire optionnelle */ }
+
+    // Generate email with Claude
+    const daysStagnant = Math.floor((Date.now() - new Date(opp.updated_at || opp.created_at).getTime()) / 86400000);
+    const prompt = `Generate a personal reactivation email for a stagnant deal.
+
+CONTEXT:
+- Contact: ${opp.name} (${opp.title || 'N/A'}) at ${opp.company || 'N/A'}
+- Deal stagnant for ${daysStagnant} days
+- Churn score: ${opp.churn_score || 'N/A'}/100
+- Status: ${opp.status}
+${opp.deal_value ? `- Deal value: ${opp.deal_value}` : ''}
+${patternCtx.text ? `\nPATTERNS THAT WORK (cross-campaign memory):\n${patternCtx.text}\nApply the APPROVED patterns first.` : ''}
+
+RULES:
+- Max 6 lines, must sound human and personal (NOT marketing)
+- Tone: professional but warm
+- The goal is to re-engage, not to sell aggressively
+- Write in the user's language
+
+Return JSON: { "subject": "...", "body": "..." }`;
+
+    const result = await claude.callClaude('Return only valid JSON.', prompt, 500, 'chat_reactivation');
+    let email = result.parsed;
+    if (!email) {
+      const m = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
+      if (m) { try { email = JSON.parse(m[0]); } catch { email = null; } }
+    }
+    if (!email?.subject || !email?.body) {
+      return res.status(500).json({ error: 'Failed to generate reactivation email' });
+    }
+
+    // Queue as pending for approval
+    const inserted = await db.query(
+      `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, metadata, pattern_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8) RETURNING id`,
+      [req.user.id, opp.id, opp.email, opp.name, email.subject, email.body,
+       JSON.stringify({ chain: 'deal_reactivation', source: 'chat' }), patternCtx.ids]
+    );
+
+    res.json({
+      queued: true,
+      emailId: inserted.rows[0].id,
+      to: opp.email,
+      subject: email.subject,
+      preview: email.body,
+    });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

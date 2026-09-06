@@ -457,4 +457,117 @@ router.post('/history/:groupId/undo', async (req, res, next) => {
   }
 });
 
+// GET /api/data-quality/score-history — historique du score pour la sparkline.
+// Sentinelles `__*__` exclues (score 0 par construction, ce ne sont que des caches).
+router.get('/score-history', async (req, res, next) => {
+  try {
+    const r = await db.query(
+      `SELECT provider, score, created_at FROM crm_cleaning_reports
+       WHERE user_id = $1 AND provider NOT LIKE '\\_\\_%'
+         AND created_at > now() - interval '90 days'
+       ORDER BY created_at ASC`,
+      [req.user.id]
+    );
+
+    const byProvider = new Map();
+    for (const row of r.rows) {
+      if (!byProvider.has(row.provider)) byProvider.set(row.provider, []);
+      byProvider.get(row.provider).push({ date: row.created_at, score: row.score });
+    }
+    const providers = [...byProvider.entries()].map(([provider, points]) => ({ provider, points }));
+
+    // current / delta30d : moyenne des derniers scores par provider vs il y a ~30 j
+    const avgAt = (cutoff) => {
+      const latest = new Map();
+      for (const row of r.rows) {
+        if (new Date(row.created_at) <= cutoff) latest.set(row.provider, row.score);
+      }
+      if (latest.size === 0) return null;
+      const scores = [...latest.values()];
+      return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    };
+    const current = avgAt(new Date());
+    const baseline = avgAt(new Date(Date.now() - 30 * 24 * 3600 * 1000));
+
+    res.json({
+      current,
+      delta30d: current != null && baseline != null ? current - baseline : null,
+      providers,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/data-quality/gdpr — contacts candidats à la purge RGPD : aucune
+// activité réelle depuis 24 mois et pas client actif (won = relation en cours).
+const GDPR_THRESHOLD_MONTHS = 24;
+router.get('/gdpr', async (req, res, next) => {
+  try {
+    const r = await db.query(
+      `SELECT id, name, email, company, status,
+              COALESCE(last_activity_at, created_at) AS last_activity_at
+       FROM opportunities
+       WHERE user_id = $1 AND status <> 'won'
+         AND COALESCE(last_activity_at, created_at) < now() - interval '${GDPR_THRESHOLD_MONTHS} months'
+       ORDER BY COALESCE(last_activity_at, created_at) ASC`,
+      [req.user.id]
+    );
+    const now = Date.now();
+    res.json({
+      thresholdMonths: GDPR_THRESHOLD_MONTHS,
+      candidates: r.rows.map(row => ({
+        ...row,
+        lastActivityAt: row.last_activity_at,
+        monthsInactive: Math.floor((now - new Date(row.last_activity_at).getTime()) / (30.44 * 24 * 3600 * 1000)),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/data-quality/gdpr/purge — suppression locale (la copie baakalai ;
+// le CRM du client reste sous SA responsabilité), en un seul groupe d'historique
+// donc annulable d'un clic dans l'onglet Historique.
+router.post('/gdpr/purge', async (req, res, next) => {
+  try {
+    const { opportunityIds } = req.body;
+    if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
+      return res.status(400).json({ error: 'opportunityIds (non vide) requis' });
+    }
+    if (opportunityIds.length > 500) {
+      return res.status(400).json({ error: 'Maximum 500 contacts par purge' });
+    }
+
+    const groupId = randomUUID();
+    let deleted = 0;
+    for (const id of opportunityIds) {
+      const rowResult = await db.query(
+        `SELECT * FROM opportunities WHERE id = $1 AND user_id = $2`, [id, req.user.id]);
+      const row = rowResult.rows[0];
+      if (!row) continue;
+
+      const pl = await db.query(
+        `SELECT product_line_id FROM opportunity_product_lines WHERE opportunity_id = $1`, [id]);
+      await audit.recordChange(req.user.id, groupId, {
+        strate: 'gdpr',
+        changeType: 'gdpr_purge',
+        provider: row.crm_provider,
+        crmContactId: row.crm_contact_id,
+        opportunityId: id,
+        remoteAction: 'none',
+        beforeData: { local: row, productLineIds: pl.rows.map(p => p.product_line_id) },
+        afterData: {},
+      });
+      await db.query(`DELETE FROM opportunities WHERE id = $1 AND user_id = $2`, [id, req.user.id]);
+      deleted++;
+    }
+
+    res.json({ deleted, groupId });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

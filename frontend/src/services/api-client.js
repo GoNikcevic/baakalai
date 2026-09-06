@@ -40,9 +40,21 @@ export async function request(path, opts = {}) {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(body.error || `HTTP ${res.status}`), { status: res.status });
+    // `code` remonte le motif machine quand la route en fournit un (ex.
+    // 'no_email_account') : l'appelant peut alors proposer l'action
+    // corrective au lieu d'afficher le message brut du serveur.
+    throw Object.assign(new Error(body.error || `HTTP ${res.status}`), { status: res.status, code: body.code });
   }
   return res.json();
+}
+
+/* ─── Instrumentation produit ─── */
+
+// Fire-and-forget : un événement perdu vaut mieux qu'une UX perturbée par
+// l'analytics. Le backend valide le nom ([a-z0-9_]) et borne les metadata.
+export function trackEvent(event, metadata = null) {
+  request('/events', { method: 'POST', body: JSON.stringify({ event, metadata }) })
+    .catch(() => {});
 }
 
 /* ─── Channel helpers ─── */
@@ -106,9 +118,7 @@ export function transformCampaign(c, sequence, diagnostics, history) {
     sequence: (sequence || []).map(transformTouchpoint),
     diagnostics: (diagnostics || []).map(transformDiagnostic),
     history: (history || []).map(transformVersion),
-    abConfig: c.ab_config
-      ? (typeof c.ab_config === 'string' ? JSON.parse(c.ab_config) : c.ab_config)
-      : null,
+    abConfig: (() => { try { return c.ab_config ? (typeof c.ab_config === 'string' ? JSON.parse(c.ab_config) : c.ab_config) : null; } catch { return null; } })(),
     prepChecklist: c.status === 'prep' ? buildDefaultChecklist(c) : undefined,
     info: {
       period: c.start_date || '',
@@ -302,13 +312,18 @@ export function transformChartData(d) {
 
 /* ─── Transform: memory patterns → recommendations ─── */
 
-export function patternsToRecommendations(patterns) {
+export function patternsToRecommendations(patterns, lang = null) {
+  const userLang = lang || localStorage.getItem('baakalai_lang') || 'fr';
   const levelMap = {
     Haute: 'success',
     Moyenne: 'warning',
     Faible: 'blue',
   };
-  const labelMap = {
+  const labelMap = userLang === 'en' ? {
+    Haute: '\u2705 Apply \u2014 High impact',
+    Moyenne: '\uD83D\uDCA1 Test \u2014 Opportunity',
+    Faible: '\uD83D\uDCCA Insight',
+  } : {
     Haute: '\u2705 Appliquer \u2014 Impact fort',
     Moyenne: '\uD83D\uDCA1 Tester \u2014 Opportunit\u00e9',
     Faible: '\uD83D\uDCCA Insight',
@@ -415,8 +430,9 @@ export async function fetchChartData() {
 
 /** Fetch AI recommendations (derived from memory patterns) */
 export async function fetchRecommendations() {
-  const data = await request('/dashboard/memory');
-  return patternsToRecommendations(data.patterns || []);
+  const lang = localStorage.getItem('baakalai_lang') || 'fr';
+  const data = await request(`/dashboard/memory?lang=${lang}`);
+  return patternsToRecommendations(data.patterns || [], lang);
 }
 
 /** Create a new campaign */

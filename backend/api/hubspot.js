@@ -97,6 +97,18 @@ async function getDeal(accessToken, dealId) {
   return hubspotFetch(accessToken, `/crm/v3/objects/deals/${dealId}`);
 }
 
+async function getDealStageLabels(accessToken) {
+  // dealstage renvoie l'id interne d'étape (ex. "appointmentscheduled"), pas le libellé
+  // que l'utilisateur voit — /crm/v3/pipelines/deals donne la correspondance, tous
+  // pipelines confondus (les ids d'étape sont uniques au portail).
+  const data = await hubspotFetch(accessToken, '/crm/v3/pipelines/deals');
+  const map = new Map();
+  for (const p of (data.results || [])) {
+    for (const s of (p.stages || [])) map.set(String(s.id), s.label);
+  }
+  return map;
+}
+
 async function getDeals(accessToken, limit = 100) {
   // hs_is_closed / hs_is_closed_won are default calculated properties on every HubSpot portal —
   // the native won/lost signal, independent of the pipeline's (fully customizable) dealstage IDs.
@@ -238,7 +250,11 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
   const all = [];
   let after;
   while (all.length < limit) {
-    let url = '/crm/v3/objects/contacts?limit=100&properties=email,firstname,lastname,jobtitle,company,hubspot_owner_id';
+    // Les trois dernières propriétés portent la récence commerciale. Sans elles,
+    // aucun deal ne peut être détecté comme dormant : voir lib/crm-activity-date.js.
+    let url = '/crm/v3/objects/contacts?limit=100&properties=email,firstname,lastname,jobtitle,company,hubspot_owner_id'
+      + ',country,city'
+      + ',hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate';
     if (after) url += `&after=${after}`;
     const data = await hubspotFetch(accessToken, url);
     const results = data.results || [];
@@ -250,6 +266,11 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
         job_title: c.properties?.jobtitle,
         org_name: c.properties?.company,
         owner_id: c.properties?.hubspot_owner_id,
+        country: c.properties?.country || null,
+        city: c.properties?.city || null,
+        // Ce connecteur aplatit `properties` : sans cette ligne, les dates
+        // demandées ci-dessus seraient récupérées puis jetées.
+        lastActivityAt: extractActivityDate('hubspot', c),
       });
     }
     if (!data.paging?.next?.after || results.length === 0) break;
@@ -262,6 +283,63 @@ async function archiveContact(accessToken, contactId) {
   return hubspotFetch(accessToken, `/crm/v3/objects/contacts/${contactId}`, {
     method: 'DELETE',
   });
+}
+
+// Diagnostic public : liste paginée des deals au format attendu par
+// computeReport (routes/public-diagnostic.js), aligné sur la version
+// Pipedrive. notes_last_updated est la « Last Activity Date » des deals.
+// Scopes requis du token private app : crm.objects.deals.read
+// (+ crm.objects.companies.read pour les noms de sociétés, optionnel).
+async function listDealsForDiagnostic(accessToken, { maxDeals = 2000 } = {}) {
+  const raw = [];
+  let after;
+  while (raw.length < maxDeals) {
+    let url = '/crm/v3/objects/deals?limit=100&associations=companies'
+      + '&properties=dealname,amount,createdate,notes_last_updated,hs_is_closed,hs_is_closed_won';
+    if (after) url += `&after=${after}`;
+    const data = await hubspotFetch(accessToken, url);
+    const results = data.results || [];
+    for (const d of results) {
+      const p = d.properties || {};
+      raw.push({
+        name: p.dealname || null,
+        companyId: d.associations?.companies?.results?.[0]?.id || null,
+        value: parseFloat(p.amount) || 0,
+        currency: 'EUR',
+        status: p.hs_is_closed_won === 'true' ? 'won' : p.hs_is_closed === 'true' ? 'lost' : 'open',
+        addTime: p.createdate,
+        lastActivity: p.notes_last_updated || null,
+      });
+    }
+    if (!data.paging?.next?.after || results.length === 0) break;
+    after = data.paging.next.after;
+  }
+
+  // Noms de sociétés en batch (100 max/appel). Best-effort : un token sans le
+  // scope companies donne un diagnostic valide, seuls les noms manquent.
+  const companyNames = {};
+  const ids = [...new Set(raw.map(d => d.companyId).filter(Boolean))];
+  try {
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = await hubspotFetch(accessToken, '/crm/v3/objects/companies/batch/read', {
+        method: 'POST',
+        body: JSON.stringify({
+          inputs: ids.slice(i, i + 100).map(id => ({ id })),
+          properties: ['name'],
+        }),
+      });
+      for (const c of batch.results || []) companyNames[c.id] = c.properties?.name || null;
+    }
+  } catch (err) {
+    if (err.status !== 403) throw err;
+  }
+
+  // Fallback « — » : société associée mais nom illisible (scope manquant) —
+  // compte dans pctCompany sans afficher un nom bidon dans le top 3.
+  return raw.map(({ companyId, ...d }) => ({
+    ...d,
+    company: companyId ? (companyNames[companyId] || '—') : null,
+  }));
 }
 
 module.exports = {
@@ -277,6 +355,8 @@ module.exports = {
   updateDeal,
   getDeal,
   getDeals,
+  getDealStageLabels,
+  listDealsForDiagnostic,
   // Associations
   associateContactToDeal,
   // Notes
