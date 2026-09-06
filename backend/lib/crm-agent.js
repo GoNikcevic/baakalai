@@ -320,8 +320,35 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
       // de la fraîcheur du deal. Voir lib/crm-activity-date.js.
       const lastActivityAt = extractActivityDate(crmProvider, raw);
 
+      // Géo rapatriée du CRM (migration 093). Odoo renvoie country_id = [id, libellé] ;
+      // Pipedrive n'a pas d'adresse standard sur les personnes → reste null (fallback
+      // TLD email côté analytics).
+      const country = raw.country || (Array.isArray(raw.country_id) ? raw.country_id[1] : null) || null;
+      const city = raw.city || null;
+
+      // Field mappings CRM (lignes produit, statut, renouvellement) — factorisé pour
+      // s'appliquer aussi aux NOUVEAUX contacts : avant, seule la branche update les
+      // appliquait, donc un import frais n'avait jamais de ligne produit.
+      const applyFieldMappings = async (oppId, currentStatus) => {
+        try {
+          const mapped = await applyMappings(userId, crmProvider, raw);
+          for (const plId of mapped.productLineIds) {
+            await db.query(
+              `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+              [oppId, plId]
+            );
+          }
+          const fieldUpdates = {};
+          if (mapped.customFields.status && mapped.customFields.status !== currentStatus) fieldUpdates.status = mapped.customFields.status;
+          if (mapped.customFields.renewal_date) fieldUpdates.renewal_date = mapped.customFields.renewal_date;
+          if (Object.keys(fieldUpdates).length > 0) {
+            await db.opportunities.update(oppId, fieldUpdates);
+          }
+        } catch { /* mapping is optional */ }
+      };
+
       if (!existing) {
-        await db.opportunities.create({
+        const created = await db.opportunities.create({
           userId,
           name: raw.name || 'Unknown',
           email,
@@ -334,8 +361,11 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           ownerEmail,
           ownerId,
           lastActivityAt,
+          country,
+          city,
         });
         report.sync.imported++;
+        await applyFieldMappings(created.id, created.status);
       } else {
         // Update if CRM data is different
         const updates = {};
@@ -359,30 +389,15 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           if (ownerEmail) updates.owner_email = ownerEmail;
           if (ownerId) updates.owner_id = ownerId;
         }
+        if (country && country !== existing.country) updates.country = country;
+        if (city && city !== existing.city) updates.city = city;
 
         if (Object.keys(updates).length > 0) {
           await db.opportunities.update(existing.id, updates);
           report.sync.updated++;
         }
 
-        // Apply field mappings (product lines, etc.)
-        try {
-          const mapped = await applyMappings(userId, crmProvider, raw);
-          if (mapped.productLineIds.length > 0) {
-            for (const plId of mapped.productLineIds) {
-              await db.query(
-                `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-                [existing.id, plId]
-              );
-            }
-          }
-          const fieldUpdates = {};
-          if (mapped.customFields.status && mapped.customFields.status !== existing.status) fieldUpdates.status = mapped.customFields.status;
-          if (mapped.customFields.renewal_date) fieldUpdates.renewal_date = mapped.customFields.renewal_date;
-          if (Object.keys(fieldUpdates).length > 0) {
-            await db.opportunities.update(existing.id, fieldUpdates);
-          }
-        } catch { /* mapping is optional */ }
+        await applyFieldMappings(existing.id, existing.status);
       }
     }
     // Sync deal values + lifecycle dates from CRM deals. Every provider's getDeals() is

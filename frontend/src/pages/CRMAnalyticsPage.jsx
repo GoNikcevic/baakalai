@@ -118,6 +118,7 @@ function getTabs(t, vocab) { return [
   { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline'), essential: true },
   { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring'), essential: true },
   { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments'), essential: true },
+  { key: 'geography', label: t('analytics.geoTab'), desc: t('analytics.tabDescGeo'), essential: true },
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
@@ -152,22 +153,52 @@ export default function CRMAnalyticsPage() {
   const TABS = getTabs(t, vocab);
   const fetchedRef = useRef(new Set());
 
+  // Filtres transverses produit / compte — propagés en query string à toutes les
+  // routes analytics (le backend filtre les opportunités avant agrégation)
+  const [filters, setFilters] = useState({ productLine: '', account: '' });
+  const [productLines, setProductLines] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const filterQs = useMemo(() => {
+    const p = new URLSearchParams();
+    if (filters.productLine) p.set('productLine', filters.productLine);
+    if (filters.account) p.set('account', filters.account);
+    const s = p.toString();
+    return s ? '?' + s : '';
+  }, [filters]);
+
   const fetchData = useCallback(async (tab, force) => {
     if (!backendAvailable) {
       setData({});
       return;
     }
-    if (!force && fetchedRef.current.has(tab)) return;
-    fetchedRef.current.add(tab);
+    // La clé de cache inclut le périmètre : changer de filtre force le refetch
+    const cacheKey = tab + filterQs;
+    if (!force && fetchedRef.current.has(cacheKey)) return;
+    fetchedRef.current.add(cacheKey);
     setLoading(true);
     try {
-      const result = await api.request('/analytics/' + tab);
+      const result = await api.request('/analytics/' + tab + filterQs);
       setData(prev => ({ ...prev, [tab]: result }));
     } catch {
       setData(prev => ({ ...prev, [tab]: null }));
     }
     setLoading(false);
+  }, [backendAvailable, filterQs]);
+
+  // Options des filtres (une fois)
+  useEffect(() => {
+    if (!backendAvailable) return;
+    api.request('/crm/product-lines').then(d => setProductLines(d.productLines || [])).catch(() => {});
+    api.request('/analytics/accounts').then(d => setAccounts(d.accounts || [])).catch(() => {});
   }, [backendAvailable]);
+
+  // Changer de périmètre invalide les données affichées (dont les KPIs pipeline)
+  const prevQsRef = useRef(filterQs);
+  useEffect(() => {
+    if (prevQsRef.current === filterQs) return;
+    prevQsRef.current = filterQs;
+    setData({});
+  }, [filterQs]);
 
   useEffect(() => {
     fetchData(activeTab);
@@ -258,8 +289,56 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
+      {/* Filtres transverses produit / compte */}
+      {backendAvailable && hasData && (productLines.length > 0 || accounts.length > 0) && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.filterLabel')}</span>
+          {productLines.length > 0 && (
+            <select
+              value={filters.productLine}
+              onChange={e => setFilters(f => ({ ...f, productLine: e.target.value }))}
+              style={{
+                fontSize: 13, padding: '6px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">{t('analytics.filterAllProducts')}</option>
+              {productLines.map(pl => (
+                <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name}</option>
+              ))}
+            </select>
+          )}
+          {accounts.length > 0 && (
+            <select
+              value={filters.account}
+              onChange={e => setFilters(f => ({ ...f, account: e.target.value }))}
+              style={{
+                fontSize: 13, padding: '6px 10px', borderRadius: 8, maxWidth: 240,
+                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">{t('analytics.filterAllAccounts')}</option>
+              {accounts.map(a => (
+                <option key={a.company} value={a.company}>{a.company} ({a.contacts})</option>
+              ))}
+            </select>
+          )}
+          {(filters.productLine || filters.account) && (
+            <button
+              onClick={() => setFilters({ productLine: '', account: '' })}
+              style={{
+                fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+                border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)',
+              }}
+            >
+              ✕ {t('analytics.filterClear')}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Question libre sur les données — réponses ancrées sur les agrégats SQL */}
-      {backendAvailable && hasData && <AnalyticsAsk />}
+      {backendAvailable && hasData && <AnalyticsAsk filters={filters} />}
 
       {/* Tab bar — essential tabs + expandable advanced tabs */}
       <div className="crm-tabs">
@@ -328,8 +407,17 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* CSV Export button */}
-      {!loading && tabData && (
+      {/* Les tendances et canaux viennent des campagnes, pas des contacts — le
+          filtre produit/compte ne s'y applique pas : on le dit plutôt que de
+          laisser croire que les chiffres sont filtrés. */}
+      {!loading && tabData && (filters.productLine || filters.account) && (activeTab === 'trends' || activeTab === 'channels') && (
+        <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 12 }}>
+          {t('analytics.filterNotApplied')}
+        </div>
+      )}
+
+      {/* CSV Export button (pas de route CSV pour la géographie) */}
+      {!loading && tabData && activeTab !== 'geography' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             className="btn btn-ghost"
@@ -344,7 +432,7 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'pipeline' && tabData && (
         <>
           <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />
-          <StagesBlock />
+          <StagesBlock filterQs={filterQs} />
         </>
       )}
       {!loading && activeTab === 'attribution' && tabData && <AttributionSection data={tabData} />}
@@ -354,6 +442,7 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
       {!loading && activeTab === 'segments' && tabData && <SegmentsSection data={tabData} />}
       {!loading && activeTab === 'renewals' && tabData && <RenewalsSection data={tabData} />}
+      {!loading && activeTab === 'geography' && tabData && <GeographySection data={tabData} />}
     </div>
   );
 }
@@ -1368,7 +1457,7 @@ function StageBars({ rows, color, showValue }) {
   );
 }
 
-function StagesBlock() {
+function StagesBlock({ filterQs = '' }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
@@ -1376,11 +1465,11 @@ function StagesBlock() {
 
   useEffect(() => {
     let alive = true;
-    api.request('/analytics/stages')
+    api.request('/analytics/stages' + filterQs)
       .then(d => { if (alive) setStagesData(d); })
       .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [filterQs]);
 
   if (!stagesData?.available) return null;
   const hasOpen = (stagesData.stages || []).length > 0;
@@ -1422,15 +1511,113 @@ function StagesBlock() {
   );
 }
 
+/* ═══ Geography Section ═══ */
+
+// Drapeau emoji depuis un code ISO-2 (indicateurs régionaux Unicode)
+function countryFlag(code) {
+  if (!/^[A-Z]{2}$/.test(code)) return '';
+  return String.fromCodePoint(...[...code].map(c => 127397 + c.charCodeAt(0)));
+}
+
+function GeographySection({ data }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const en = lang === 'en';
+  const countries = data.countries || [];
+
+  // Noms de pays localisés sans table à maintenir
+  const regionNames = useMemo(() => {
+    try { return new Intl.DisplayNames([en ? 'en' : 'fr'], { type: 'region' }); } catch { return null; }
+  }, [en]);
+  const countryLabel = (code) => {
+    try { return regionNames?.of(code) || code; } catch { return code; }
+  };
+
+  if (countries.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+          {t('analytics.geoEmptyTitle')}
+        </div>
+        <div style={{ fontSize: 13, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>
+          {t('analytics.geoEmptyDesc')}
+        </div>
+      </div>
+    );
+  }
+
+  const barRows = countries.slice(0, 12).map(c => ({
+    stage: `${countryFlag(c.code)} ${countryLabel(c.code)}`,
+    count: c.contacts,
+    value: c.openValue,
+  }));
+
+  return (
+    <div>
+      <div className="crm-grid-2">
+        <div className="card">
+          <div className="card-title">
+            {t('analytics.geoContactsTitle')}
+            <HelpTip text={t('analytics.geoHelp')} />
+          </div>
+          <div className="card-body">
+            <StageBars rows={barRows} color="var(--blue)" showValue />
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-title">{t('analytics.geoTableTitle')}</div>
+          <div className="card-body" style={{ overflowX: 'auto' }}>
+            <table className="crm-table" style={{ width: '100%', fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 12 }}>
+                  <th style={{ padding: '6px 8px' }}>{t('analytics.geoCountry')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoContacts')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoClients')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoOpenValue')}</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('analytics.geoWonValue')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {countries.map(c => (
+                  <tr key={c.code} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '7px 8px', fontWeight: 600 }}>
+                      {countryFlag(c.code)} {countryLabel(c.code)}
+                    </td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>{c.contacts}</td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>{c.clients}</td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                      {c.openValue > 0 ? c.openValue.toLocaleString() + ' €' : '—'}
+                    </td>
+                    <td style={{ padding: '7px 8px', textAlign: 'right' }}>
+                      {c.wonValue > 0 ? c.wonValue.toLocaleString() + ' €' : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.5 }}>
+        {data.undetermined > 0 && (
+          <span>{t('analytics.geoUndetermined', { count: data.undetermined, total: data.total })} · </span>
+        )}
+        {t('analytics.geoCoverageNote', { pct: data.crmCoverage })}
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Analytics Ask — question libre sur les données ═══ */
 
-function AnalyticsAsk() {
+function AnalyticsAsk({ filters }) {
   const t = useT();
   const { lang } = useI18n();
   const [question, setQuestion] = useState('');
   const [history, setHistory] = useState([]);
   const [asking, setAsking] = useState(false);
   const endRef = useRef(null);
+  const hasFilters = !!(filters?.productLine || filters?.account);
 
   useEffect(() => {
     if (history.length > 0) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1444,7 +1631,8 @@ function AnalyticsAsk() {
     try {
       const r = await api.request('/analytics/ask', {
         method: 'POST',
-        body: JSON.stringify({ question: q, lang }),
+        // Même périmètre que les onglets : les filtres actifs restreignent les agrégats
+        body: JSON.stringify({ question: q, lang, filters: hasFilters ? filters : undefined }),
       });
       setHistory(h => [...h, { q, a: r.answer || t('analytics.askError') }]);
     } catch {

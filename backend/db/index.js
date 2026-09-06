@@ -1540,8 +1540,8 @@ const opportunities = {
 
   async create(data) {
     const result = await query(`
-      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date, country, city)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
       RETURNING *
     `, [
       data.userId || null,
@@ -1571,6 +1571,8 @@ const opportunities = {
       data.dealValue ?? data.deal_value ?? null,
       data.wonDate || data.won_date || null,
       data.lostDate || data.lost_date || null,
+      data.country || null,
+      data.city || null,
     ]);
     return result.rows[0];
   },
@@ -1607,6 +1609,7 @@ const opportunities = {
       crm_stage: 'crm_stage', crmStage: 'crm_stage',
       crm_stage_id: 'crm_stage_id', crmStageId: 'crm_stage_id',
       crm_stage_changed_at: 'crm_stage_changed_at', crmStageChangedAt: 'crm_stage_changed_at',
+      country: 'country', city: 'city',
       reactivated_at: 'reactivated_at', reactivatedAt: 'reactivated_at',
       reactivated_from_email_id: 'reactivated_from_email_id', reactivatedFromEmailId: 'reactivated_from_email_id',
       data: 'data',

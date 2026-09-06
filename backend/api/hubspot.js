@@ -253,6 +253,7 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
     // Les trois dernières propriétés portent la récence commerciale. Sans elles,
     // aucun deal ne peut être détecté comme dormant : voir lib/crm-activity-date.js.
     let url = '/crm/v3/objects/contacts?limit=100&properties=email,firstname,lastname,jobtitle,company,hubspot_owner_id'
+      + ',country,city'
       + ',hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate';
     if (after) url += `&after=${after}`;
     const data = await hubspotFetch(accessToken, url);
@@ -265,6 +266,8 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
         job_title: c.properties?.jobtitle,
         org_name: c.properties?.company,
         owner_id: c.properties?.hubspot_owner_id,
+        country: c.properties?.country || null,
+        city: c.properties?.city || null,
         // Ce connecteur aplatit `properties` : sans cette ligne, les dates
         // demandées ci-dessus seraient récupérées puis jetées.
         lastActivityAt: extractActivityDate('hubspot', c),

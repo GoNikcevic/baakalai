@@ -81,7 +81,7 @@ async function listContacts(creds, { limit = 500, offset = 0 } = {}) {
   if (!ids || ids.length === 0) return [];
 
   return call(creds, 'res.partner', 'read', [ids], {
-    fields: ['id', 'name', 'email', 'phone', 'function', 'company_name', 'parent_id', 'write_date', 'create_date'],
+    fields: ['id', 'name', 'email', 'phone', 'function', 'company_name', 'parent_id', 'write_date', 'create_date', 'country_id', 'city'],
   });
 }
 

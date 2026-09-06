@@ -265,7 +265,7 @@ async function getActivities(instanceUrl, accessToken, contactId) {
 async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
   const all = [];
   let result = await sfFetch(instanceUrl, accessToken,
-    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Phone, Title, Account.Name, OwnerId, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
+    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Phone, Title, Account.Name, OwnerId, MailingCountry, MailingCity, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
   );
   const mapRecords = (records) => {
     for (const c of (records || [])) {
@@ -277,6 +277,8 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
         title: c.Title,
         company: c.Account?.Name || '',
         ownerId: c.OwnerId,
+        country: c.MailingCountry || null,
+        city: c.MailingCity || null,
         updatedAt: c.LastModifiedDate,
         // C'est ce chemin-ci qu'emprunte la synchro (stepSync), pas getDeals.
         lastActivityAt: extractActivityDate('salesforce', c),
