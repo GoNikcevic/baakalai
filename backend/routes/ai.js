@@ -848,7 +848,7 @@ router.post('/deploy-to-outreach', async (req, res, next) => {
 router.post('/score-leads', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { scoreOpportunities } = require('../lib/contact-scoring');
+    const { scoreOpportunities, buildSectorContext } = require('../lib/contact-scoring');
 
     const [opps, profile] = await Promise.all([
       db.opportunities.listByUser(userId, 100, 0),
@@ -866,7 +866,9 @@ router.post('/score-leads', async (req, res, next) => {
       try { campaignMap[cid] = await db.campaigns.get(cid); } catch {}
     }
 
-    const scored = scoreOpportunities(opps, profile, campaignMap);
+    // Match sectoriel ICP normalisé (cache DB — coûteux uniquement au 1er passage)
+    const sectorCtx = await buildSectorContext(profile, opps).catch(() => null);
+    const scored = scoreOpportunities(opps, profile, campaignMap, sectorCtx);
 
     // Persist scores
     for (const opp of scored) {
