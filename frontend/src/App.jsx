@@ -30,7 +30,6 @@ const ChatPage = lazyRetry(() => import('./pages/ChatPage'))
 const DashboardPage = lazyRetry(() => import('./pages/DashboardPage'))
 const CampaignsList = lazyRetry(() => import('./pages/CampaignsList'))
 const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'))
-const PerformancePage = lazyRetry(() => import('./pages/PerformancePage'))
 const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
 const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
 const DealsToReactivatePage = lazyRetry(() => import('./pages/DealsToReactivatePage'))
@@ -207,7 +206,6 @@ export default function App() {
             <Route path="/activation" element={<ActivationPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsWrapper />} />
-            <Route path="/performance" element={<PerformancePage />} />
             <Route path="/recos" element={<RecosPage />} />
             <Route path="/help" element={<Navigate to="/chat" replace />} />
             <Route path="/join/:code" element={<JoinTeamPage />} />
@@ -215,6 +213,7 @@ export default function App() {
             <Route path="/nurture" element={<Navigate to="/activation" replace />} />
             <Route path="/signals" element={<Navigate to="/activation?section=signals" replace />} />
             <Route path="/crm-analytics" element={<Navigate to="/analytics" replace />} />
+            <Route path="/performance" element={<Navigate to="/analytics" replace />} />
             <Route path="/membership" element={<Navigate to="/analytics" replace />} />
             <Route path="/profil" element={<Navigate to="/settings" replace />} />
             <Route path="/memory" element={<Navigate to="/settings" replace />} />

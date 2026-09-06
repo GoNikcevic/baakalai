@@ -148,15 +148,6 @@ export default function DashboardPage() {
       {/* ICP Insights — only show if user has >= 3 campaigns */}
       {campaignsList.length >= 3 && <ICPInsightsCard />}
 
-      {/* Weekly report link */}
-      {!isEmpty && (
-        <div style={{ marginBottom: 16, textAlign: 'right' }}>
-          <Link to="/performance" style={{ fontSize: 13, color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>
-            {en ? 'Weekly report & trends' : 'Rapport hebdo & tendances'} {'\u2192'}
-          </Link>
-        </div>
-      )}
-
       {/* Overview content */}
       <OverviewSection
         isEmpty={isEmpty}

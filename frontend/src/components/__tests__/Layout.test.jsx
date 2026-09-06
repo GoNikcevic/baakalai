@@ -4,6 +4,10 @@ import { describe, it, expect, vi } from 'vitest';
 import Layout from '../Layout';
 import { AppProvider } from '../../context/AppContext';
 import { NotificationProvider } from '../../context/NotificationContext';
+import { I18nProvider } from '../../i18n';
+
+// Assertions below are on the French labels — force fr before I18nProvider reads it
+localStorage.setItem('baakalai_lang', 'fr');
 
 // Mock auth service so AppProvider doesn't hit localStorage issues
 vi.mock('../../services/auth', () => ({
@@ -21,6 +25,7 @@ vi.mock('../../services/api-client', () => ({
   default: {
     checkHealth: vi.fn().mockResolvedValue(null),
   },
+  request: vi.fn().mockResolvedValue({}),
 }));
 
 // Mock useSocketEvents to avoid needing full socket infrastructure
@@ -38,13 +43,15 @@ vi.mock('../../services/socket', () => ({
 
 function renderLayout(initialRoute = '/dashboard') {
   return render(
-    <AppProvider>
-      <NotificationProvider>
-        <MemoryRouter initialEntries={[initialRoute]}>
-          <Layout />
-        </MemoryRouter>
-      </NotificationProvider>
-    </AppProvider>
+    <I18nProvider>
+      <AppProvider>
+        <NotificationProvider>
+          <MemoryRouter initialEntries={[initialRoute]}>
+            <Layout />
+          </MemoryRouter>
+        </NotificationProvider>
+      </AppProvider>
+    </I18nProvider>
   );
 }
 
@@ -56,15 +63,14 @@ describe('Layout', () => {
     // "Dashboard" appears in both sidebar and mobile nav, so use getAllByText
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Campagnes').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Performance').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Profil')).toBeInTheDocument();
+    expect(screen.getAllByText('Analytics').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Paramètres').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders the brand logo', () => {
     renderLayout();
 
-    expect(screen.getByText('b')).toBeInTheDocument();
-    expect(screen.getByText('.ai')).toBeInTheDocument();
+    expect(screen.getByText('baakalai')).toBeInTheDocument();
   });
 
   it('renders the new campaign button', () => {
@@ -92,9 +98,8 @@ describe('Layout', () => {
     expect(screen.getByText('Chat')).toBeInTheDocument();
     // "Campagnes" appears in both sidebar and mobile nav
     expect(screen.getAllByText('Campagnes').length).toBeGreaterThanOrEqual(2);
-    // "Performance" appears in both sidebar and mobile nav
-    expect(screen.getAllByText('Performance').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Config')).toBeInTheDocument();
+    // "Activation" appears in both sidebar and mobile nav
+    expect(screen.getAllByText('Activation').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders the main content outlet area', () => {

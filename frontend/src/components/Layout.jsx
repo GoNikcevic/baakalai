@@ -45,7 +45,6 @@ const NAV_ITEMS = [
     ],
   },
   { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture', countKey: 'nurturePending' },
-  { i18nKey: 'nav.performance',         to: '/performance',         icon: 'dashboard', adminOnly: true },
   { i18nKey: 'nav.settings',            to: '/settings',            icon: 'settings', adminOnly: true },
 ];
 

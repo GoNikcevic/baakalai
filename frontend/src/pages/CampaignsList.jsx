@@ -37,7 +37,9 @@ export default function CampaignsList({ onNavigateCampaign }) {
   // another page) left the Campagnes/Autopilot/Assistant tabs off-screen above.
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
 
-  const [filter, setFilter] = useState('active');
+  // Default "Tous" (hors archivées) : les campagnes créées par l'assistant naissent
+  // en status 'prep' — un défaut 'active' les rendait invisibles juste après création.
+  const [filter, setFilter] = useState('');
   const [sortByReply, setSortByReply] = useState(false);
   const [sortAsc, setSortAsc] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState({});
