@@ -53,6 +53,26 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/signals/preferences — Cadence de la veille automatique
+router.get('/preferences', async (req, res, next) => {
+  try {
+    const r = await db.query(`SELECT signal_scan_frequency FROM users WHERE id = $1`, [req.user.id]);
+    res.json({ frequency: r.rows[0]?.signal_scan_frequency || 'weekly' });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/signals/preferences — Choix de cadence (off = scan manuel uniquement)
+router.put('/preferences', async (req, res, next) => {
+  try {
+    const { frequency } = req.body;
+    if (!['off', 'weekly', 'daily'].includes(frequency)) {
+      return res.status(400).json({ error: 'frequency must be off, weekly or daily' });
+    }
+    await db.query(`UPDATE users SET signal_scan_frequency = $1 WHERE id = $2`, [frequency, req.user.id]);
+    res.json({ frequency });
+  } catch (err) { next(err); }
+});
+
 // GET /api/signals/configs — List configs
 router.get('/configs', async (req, res, next) => {
   try {

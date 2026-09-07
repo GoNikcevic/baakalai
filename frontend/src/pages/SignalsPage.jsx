@@ -50,6 +50,7 @@ export default function SignalsPage() {
   const [companyData, setCompanyData] = useState(null);
   const [sequenceResult, setSequenceResult] = useState(null);
   const [creatingSequence, setCreatingSequence] = useState(null);
+  const [scanFrequency, setScanFrequency] = useState('weekly');
 
   const [form, setForm] = useState({
     name: '',
@@ -71,11 +72,24 @@ export default function SignalsPage() {
       setConfigs(cfgData.configs || []);
       // Load stats
       request('/signals/stats').then(d => setStats(d)).catch(() => {});
+      request('/signals/preferences').then(d => setScanFrequency(d.frequency || 'weekly')).catch(() => {});
     } catch { /* ignore */ }
     setLoading(false);
   }, [filter]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const handleFrequencyChange = async (freq) => {
+    const prev = scanFrequency;
+    setScanFrequency(freq);
+    try {
+      await request('/signals/preferences', { method: 'PUT', body: JSON.stringify({ frequency: freq }) });
+      showToast({ type: 'success', title: t('signals.freqSavedTitle'), message: t(`signals.freq_${freq}`) });
+    } catch (err) {
+      setScanFrequency(prev);
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+    }
+  };
 
   const handleScan = async () => {
     setScanning(true);
@@ -267,7 +281,8 @@ export default function SignalsPage() {
       ) : (
         <ConfigSection configs={configs} showCreate={showCreate} form={form} setForm={setForm}
           onCreateConfig={handleCreateConfig} onDeleteConfig={handleDeleteConfig}
-          onToggleConfig={handleToggleConfig} setShowCreate={setShowCreate} en={en} />
+          onToggleConfig={handleToggleConfig} setShowCreate={setShowCreate} en={en}
+          scanFrequency={scanFrequency} onChangeFrequency={handleFrequencyChange} />
       )}
     </div>
   );
@@ -503,10 +518,34 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
 
 /* ═══ Config Section ═══ */
 
-function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onDeleteConfig, onToggleConfig, setShowCreate, en }) {
+function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onDeleteConfig, onToggleConfig, setShowCreate, en, scanFrequency, onChangeFrequency }) {
   const t = useT();
   return (
     <div>
+      {/* Cadence de la veille automatique */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: '16px 20px' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{t('signals.freqTitle')}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>{t('signals.freqDesc')}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {['weekly', 'daily', 'off'].map(freq => (
+              <button key={freq} onClick={() => onChangeFrequency(freq)} style={{
+                padding: '7px 16px', fontSize: 12, borderRadius: 8,
+                border: `1px solid ${scanFrequency === freq ? 'var(--accent)' : 'var(--border)'}`,
+                background: scanFrequency === freq ? 'rgba(110,87,250,0.08)' : 'transparent',
+                color: scanFrequency === freq ? 'var(--accent)' : 'var(--text-muted)',
+                fontWeight: scanFrequency === freq ? 600 : 400, cursor: 'pointer',
+              }}>
+                {t(`signals.freq_${freq}`)}
+              </button>
+            ))}
+          </div>
+          {scanFrequency === 'off' && (
+            <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 8 }}>{t('signals.freqOffHint')}</div>
+          )}
+        </div>
+      </div>
+
       {/* Create form */}
       {showCreate && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
