@@ -829,12 +829,17 @@
     "viewAll": "View all",
     "performance4w": "Performance 4 weeks",
     "allRecos": "View all recommendations",
-    "welcomeTitle": "Welcome to baakalai",
-    "welcomeSubtitle": "Welcome — Connect your CRM: baakalai spots the deals worth reviving",
+    "welcomeSubtitle": "Welcome — baakalai continuously analyzes your CRM to revive your deals, retain your clients, and keep your data clean.",
     "launchAndRefine": "Launch and refine",
     "launchAndRefineDesc": "baakalai analyzes performance and automatically refines your messages.",
     "createCampaign": "Create a campaign",
-    "chartsPlaceholder": "Charts will appear with campaign data."
+    "chartsPlaceholder": "Charts will appear with campaign data.",
+    "tabs": {
+      "deals": "Deals",
+      "clients": "Clients",
+      "crm": "CRM",
+      "activation": "Activation"
+    }
   },
   "wizard": {
     "step1Title": "Your company",
@@ -933,39 +938,6 @@
     "upsellOpportunityDesc": "Propose an upgrade to active clients after X days",
     "feedbackRequest": "Feedback request",
     "feedbackRequestDesc": "Ask for a testimonial after X days"
-  },
-  "today": {
-    "title": "To handle today",
-    "subtitle": "{count} action(s) prioritized by your CRM",
-    "refresh": "Refresh",
-    "empty": "Nothing to handle — all caught up.",
-    "approveAll": "Approve all ({count})",
-    "approving": "Sending...",
-    "approvedOk": "{sent} sent",
-    "approvedFailed": "{failed} failed",
-    "remaining": "{count} remaining — click again to continue",
-    "sendBlocked": "Cannot send",
-    "connectMailbox": "Connect a mailbox",
-    "approve": "Approve",
-    "dismiss": "Dismiss",
-    "waitingDays": "waiting for {days}d",
-    "typeNurture": "Email ready",
-    "typeDealStagnant": "Stagnant deal",
-    "typeUpsell": "Upsell",
-    "typeChurn": "Churn risk",
-    "typeSignal": "Signal",
-    "typeSla": "SLA breach",
-    "alsoFlaggedBy": "also flagged by: {sources}",
-    "openSignals": "View signal",
-    "prepareEmail": "Prepare email",
-    "chatChurnPrefill": "Prepare an email to retain {name} ({company}) — high churn risk detected by the CRM.",
-    "chatUpsellPrefill": "Prepare an upsell email for {name} ({company}). Context: {reason}",
-    "chatDealPrefill": "Send a follow-up email to {name} ({company}). Context: {reason}. Suggestion: {suggestion}",
-    "chatSignalPrefill": "Prepare a follow-up for {name} ({company}) — signal detected: {reason}",
-    "slaReasonNewLead": "New lead never contacted for {days} days",
-    "slaReasonFollowup": "Planned follow-up overdue by {days} days",
-    "slaReasonInactive": "Open deal with no activity for {days} days",
-    "chatSlaPrefill": "Prepare a follow-up for {name} ({company}) — SLA breach: {reason}"
   },
   "signals": {
     "title": "Signals",
@@ -1227,7 +1199,10 @@
     "historyPostponedAutoOn": "Automatically postponed to {date}",
     "historyWonOn": "Won on {date}",
     "historyLostOn": "Lost on {date}",
-    "sendFailedBadge": "⚠ Last send failed"
+    "sendFailedBadge": "⚠ Last send failed",
+    "currentContract": "Current contract",
+    "productsOwned": "Current products",
+    "productsCrossSell": "Additional products possible"
   },
   "churn": {
     "title": "Clients at churn risk",

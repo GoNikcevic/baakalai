@@ -1300,6 +1300,37 @@ router.get('/churn/summary', async (req, res, next) => {
 });
 
 // =============================================
+// GET /api/crm/upsell/summary — Band strip équivalent à /churn/summary pour
+// le Dashboard : total de clients éligibles à l'upsell (score >= 25, tous —
+// pas seulement ceux "dus" aujourd'hui comme /reactivation/queue), score
+// moyen, et emails d'upsell envoyés sur 14 jours.
+// =============================================
+router.get('/upsell/summary', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { run } = require('../lib/agents/upsell-detector');
+    const [{ opportunities }, emailsSent] = await Promise.all([
+      run(userId),
+      db.query(
+        `SELECT COUNT(*) as total FROM nurture_emails
+         WHERE user_id = $1 AND metadata->>'chain' = 'auto_upsell'
+           AND created_at > NOW() - INTERVAL '14 days'`,
+        [userId]
+      ),
+    ]);
+    const totalCandidates = opportunities.length;
+    const avgScore = totalCandidates > 0
+      ? Math.round(opportunities.reduce((sum, o) => sum + o.score, 0) / totalCandidates)
+      : 0;
+    res.json({
+      totalCandidates,
+      emailsSent14d: parseInt(emailsSent.rows[0].total) || 0,
+      avgScore,
+    });
+  } catch (err) { next(err); }
+});
+
+// =============================================
 // GET /api/crm/team-owners — List team members with their contact counts
 // =============================================
 router.get('/team-owners', async (req, res, next) => {
@@ -1438,13 +1469,23 @@ router.post('/product-lines/:id/unassign', async (req, res, next) => {
     if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
       return res.status(400).json({ error: 'opportunityIds array required' });
     }
-    for (const oppId of opportunityIds) {
+    // Validate opportunity ownership — même garde que /assign, sinon un
+    // utilisateur authentifié pourrait détacher des opportunités d'un autre
+    // user en devinant leurs IDs.
+    const validOpps = await db.query(
+      `SELECT id FROM opportunities WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+      [req.user.id, opportunityIds]
+    );
+    const validIds = new Set(validOpps.rows.map(r => r.id));
+    const filtered = opportunityIds.filter(id => validIds.has(id));
+
+    for (const oppId of filtered) {
       await db.query(
         `DELETE FROM opportunity_product_lines WHERE opportunity_id = $1 AND product_line_id = $2`,
         [oppId, req.params.id]
       );
     }
-    res.json({ removed: opportunityIds.length });
+    res.json({ removed: filtered.length });
   } catch (err) { next(err); }
 });
 
@@ -2417,6 +2458,9 @@ router.get('/reactivation-stats', async (req, res, next) => {
         potentialRevenue: parseFloat(pipe.potential_revenue) || 0,
         openDeals: parseInt(pipe.open_count),
         totalValue: parseFloat(pipe.open_value) || 0,
+        // Exposé pour que le frontend affiche toujours le seuil réel utilisé
+        // (cf. label "Deals dormants (14j+)" et le texte de ReactivationCard).
+        stagnantThresholdDays: 14,
       },
       conversionRate: emails.total > 0 ? Math.round((stats.count / emails.total) * 100) : 0,
     });

@@ -122,7 +122,7 @@ export function transformCampaign(c, sequence, diagnostics, history) {
     prepChecklist: c.status === 'prep' ? buildDefaultChecklist(c) : undefined,
     info: {
       period: c.start_date || '',
-      createdDate: c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
+      createdDate: c.created_at ? new Date(c.created_at).toLocaleDateString((localStorage.getItem('baakalai_lang') || 'fr') === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
       copyDesc: [c.tone, c.formality, c.angle, 'FR'].filter(Boolean).join(' · '),
       channelsDesc: ch.label,
       launchEstimate: c.status === 'prep' ? 'Non planifié' : '',
@@ -297,6 +297,8 @@ export function transformOpportunity(o) {
     timing: o.timing || '',
     score: o.score ?? null,
     scoreBreakdown: o.score_breakdown || o.scoreBreakdown || null,
+    churnScore: o.churn_score ?? o.churnScore ?? null,
+    dealValue: o.deal_value ?? o.dealValue ?? null,
   };
 }
 

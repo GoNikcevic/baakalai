@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
-import { useT } from '../i18n';
+import { useT, useI18n } from '../i18n';
 
 const CRM_BANNER_KEY = 'bakal_reactivation_crm_banner_dismissed';
 const CRM_BANNER_TTL = 24 * 60 * 60 * 1000; // reappears after 24h
@@ -17,6 +17,8 @@ const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', '
 
 export default function ReactivationQueuePage({ kind, i18nNamespace, detailRouteBase }) {
   const t = useT();
+  const { lang } = useI18n();
+  const dateLocale = lang === 'en' ? 'en-US' : 'fr-FR';
   const navigate = useNavigate();
   const [tab, setTab] = useState('pending');
   const [candidates, setCandidates] = useState([]);
@@ -83,7 +85,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   }, [tab, historyLoaded, kind]);
 
   const historyLabel = (e) => {
-    const date = new Date(e.date).toLocaleDateString('fr-FR');
+    const date = new Date(e.date).toLocaleDateString(dateLocale);
     if (e.eventType === 'sent') return t('reactivation.historySentOn', { date });
     if (e.eventType === 'postponed') {
       return t(e.isManual ? 'reactivation.historyPostponedManualOn' : 'reactivation.historyPostponedAutoOn', { date });
@@ -238,7 +240,9 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name || c.company || c.email}</div>
                       {c.company && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.company}</div>}
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{c.reason}</div>
+                      {!c.factors && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{c.reason}</div>
+                      )}
                       {c.hasFailedSend && (
                         <div style={{ fontSize: 11, color: 'var(--danger, #d64545)', marginTop: 4, fontWeight: 600 }}>
                           {t('reactivation.sendFailedBadge')}
@@ -246,9 +250,14 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                       )}
                     </div>
                     <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {c.factors && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                          {t('reactivation.currentContract')}
+                        </div>
+                      )}
                       {c.dealValue != null && (
                         <div style={{ fontSize: 14, fontWeight: 700 }}>
-                          {Math.round(c.dealValue).toLocaleString('fr-FR')} €
+                          {Math.round(c.dealValue).toLocaleString(dateLocale)} €
                         </div>
                       )}
                       {c.score != null && (
@@ -256,6 +265,53 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                       )}
                     </div>
                   </div>
+
+                  {/* Score breakdown — même présentation que la section "À risque"
+                      (liste de facteurs + poids coloré), seulement pour les
+                      candidats upsell (deal_reactivation garde la ligne "reason"
+                      simple ci-dessus, sans factors). */}
+                  {c.factors && c.factors.length > 0 && (
+                    <div style={{
+                      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                      borderRadius: 8, padding: '8px 12px', marginTop: 10,
+                    }}>
+                      {c.factors.map((f, i) => (
+                        <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{f.detail}</span>
+                          <span style={{ fontWeight: 600, color: f.weight >= 25 ? 'var(--success)' : 'var(--accent)' }}>
+                            {f.weight >= 0 ? '+' : ''}{f.weight}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Produits déjà souscrits vs additionnels possibles — seulement
+                      si des lignes de produit existent pour cette équipe. */}
+                  {(c.ownedProducts?.length > 0 || c.crossSellProducts?.length > 0) && (
+                    <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
+                      {c.ownedProducts?.length > 0 && (
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>
+                            {t('reactivation.productsOwned')}
+                          </div>
+                          {c.ownedProducts.map((p, i) => (
+                            <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '1px 0' }}>{'✓ ' + p}</div>
+                          ))}
+                        </div>
+                      )}
+                      {c.crossSellProducts?.length > 0 && (
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <div style={{ fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>
+                            {t('reactivation.productsCrossSell')}
+                          </div>
+                          {c.crossSellProducts.map((p, i) => (
+                            <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '1px 0' }}>{'+ ' + p}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
                     <button

@@ -120,6 +120,9 @@ async function listClientsToUpsell(userId, sort = 'score') {
         dealValue: opp.deal_value,
         score: c.score,
         reason: c.reasons.join(', '),
+        factors: c.factors,
+        ownedProducts: c.ownedProducts,
+        crossSellProducts: c.crossSellProducts,
         ...overdue,
         hasFailedSend: failedIds.has(c.contactId),
       };

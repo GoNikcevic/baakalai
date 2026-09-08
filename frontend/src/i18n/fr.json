@@ -829,12 +829,17 @@
     "viewAll": "Voir tout",
     "performance4w": "Performance 4 semaines",
     "allRecos": "Voir toutes les recommandations",
-    "welcomeTitle": "Bienvenue sur baakalai",
-    "welcomeSubtitle": "Bienvenue — Connectez votre CRM : baakalai repère les deals à relancer",
+    "welcomeSubtitle": "Bienvenue — baakalai analyse votre CRM en continu pour relancer vos deals, fidéliser vos clients et garder vos données propres.",
     "launchAndRefine": "Lancez et affinez",
     "launchAndRefineDesc": "baakalai analyse les performances et affine automatiquement vos messages.",
     "createCampaign": "Créer une campagne",
-    "chartsPlaceholder": "Les graphiques apparaîtront avec les données de campagne."
+    "chartsPlaceholder": "Les graphiques apparaîtront avec les données de campagne.",
+    "tabs": {
+      "deals": "Deals",
+      "clients": "Clients",
+      "crm": "CRM",
+      "activation": "Activation"
+    }
   },
   "wizard": {
     "step1Title": "Votre entreprise",
@@ -933,39 +938,6 @@
     "upsellOpportunityDesc": "Proposer un upgrade aux clients actifs depuis X jours",
     "feedbackRequest": "Demande de feedback",
     "feedbackRequestDesc": "Demander un retour d'expérience après X jours"
-  },
-  "today": {
-    "title": "À traiter aujourd'hui",
-    "subtitle": "{count} action(s) priorisée(s) par votre CRM",
-    "refresh": "Actualiser",
-    "empty": "Rien à traiter — tout est à jour.",
-    "approveAll": "Tout approuver ({count})",
-    "approving": "Envoi...",
-    "approvedOk": "{sent} envoyé(s)",
-    "approvedFailed": "{failed} échec(s)",
-    "remaining": "{count} restant(s) — cliquez à nouveau pour continuer",
-    "sendBlocked": "Envoi impossible",
-    "connectMailbox": "Connecter une boîte mail",
-    "approve": "Approuver",
-    "dismiss": "Ignorer",
-    "waitingDays": "en attente depuis {days} j",
-    "typeNurture": "Email prêt",
-    "typeDealStagnant": "Deal stagnant",
-    "typeUpsell": "Upsell",
-    "typeChurn": "Risque churn",
-    "typeSignal": "Signal",
-    "typeSla": "SLA dépassé",
-    "alsoFlaggedBy": "aussi signalé par : {sources}",
-    "openSignals": "Voir le signal",
-    "prepareEmail": "Préparer l'email",
-    "chatChurnPrefill": "Prépare un email pour retenir {name} ({company}) — risque de churn élevé détecté par le CRM.",
-    "chatUpsellPrefill": "Prépare un email d'upsell pour {name} ({company}). Contexte : {reason}",
-    "chatDealPrefill": "Envoie un email de relance à {name} ({company}). Contexte : {reason}. Suggestion : {suggestion}",
-    "chatSignalPrefill": "Prépare une relance pour {name} ({company}) — signal détecté : {reason}",
-    "slaReasonNewLead": "Lead entrant jamais contacté depuis {days} jours",
-    "slaReasonFollowup": "Relance prévue dépassée de {days} jours",
-    "slaReasonInactive": "Deal ouvert sans activité depuis {days} jours",
-    "chatSlaPrefill": "Prépare une relance pour {name} ({company}) — SLA dépassé : {reason}"
   },
   "signals": {
     "title": "Signaux",
@@ -1227,7 +1199,10 @@
     "historyPostponedAutoOn": "Reporté automatiquement au {date}",
     "historyWonOn": "Gagné le {date}",
     "historyLostOn": "Perdu le {date}",
-    "sendFailedBadge": "⚠ Dernier envoi échoué"
+    "sendFailedBadge": "⚠ Dernier envoi échoué",
+    "currentContract": "Contrat actuel",
+    "productsOwned": "Produits actuels",
+    "productsCrossSell": "Produits additionnels possibles"
   },
   "churn": {
     "title": "Clients à risque de churn",

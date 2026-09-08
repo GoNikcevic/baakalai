@@ -134,8 +134,8 @@ export default function ReactivationCard({ stats: statsProp }) {
           background: stats.reactivated.count > 0 ? 'rgba(255,255,255,0.15)' : 'var(--bg-elevated)',
         }}>
           {en
-            ? <>{fmt(stats.pipeline.stagnantDeals)} stagnant deals worth <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> in your pipeline</>
-            : <>{fmt(stats.pipeline.stagnantDeals)} deals stagnants pour <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> dans votre pipeline</>}
+            ? <>{fmt(stats.pipeline.stagnantDeals)} stagnant deals worth <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> in your pipeline ({stats.pipeline.stagnantThresholdDays || 14}d+ inactive)</>
+            : <>{fmt(stats.pipeline.stagnantDeals)} deals stagnants pour <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> dans votre pipeline ({stats.pipeline.stagnantThresholdDays || 14}j+ d'inactivité)</>}
         </div>
       )}
 

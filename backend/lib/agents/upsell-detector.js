@@ -71,32 +71,54 @@ async function run(userId) {
       const assignedPLs = new Set(assignsByOpp.get(client.id) || []);
       const positiveCount = positiveByOpp.get(client.id) || 0;
 
-      // Score upsell potential
+      // Score upsell potential. `factors` mirrors churn-scoring.js's
+      // {signal, weight, detail} shape so the frontend can render the same
+      // score-breakdown UI as the churn-risk section — `reasons` (flat
+      // strings) stays untouched alongside it for existing consumers.
       let score = 0;
       const reasons = [];
+      const factors = [];
+      let crossSellProducts = [];
 
       // Mature client (30+ days since won)
-      if (daysSinceWon >= 30) { score += 20; reasons.push(`Client depuis ${Math.round(daysSinceWon)}j`); }
-      if (daysSinceWon >= 90) { score += 10; reasons.push('Client mature (90j+)'); }
+      if (daysSinceWon >= 30) {
+        const detail = `Client depuis ${Math.round(daysSinceWon)}j`;
+        score += 20; reasons.push(detail); factors.push({ signal: 'maturity_30d', weight: 20, detail });
+      }
+      if (daysSinceWon >= 90) {
+        const detail = 'Client mature (90j+)';
+        score += 10; reasons.push(detail); factors.push({ signal: 'maturity_90d', weight: 10, detail });
+      }
 
       // Positive engagement
-      if (positiveCount >= 2) { score += 25; reasons.push(`${positiveCount} interactions positives`); }
-      else if (positiveCount === 1) { score += 10; reasons.push('1 interaction positive'); }
+      if (positiveCount >= 2) {
+        const detail = `${positiveCount} interactions positives`;
+        score += 25; reasons.push(detail); factors.push({ signal: 'engagement', weight: 25, detail });
+      } else if (positiveCount === 1) {
+        const detail = '1 interaction positive';
+        score += 10; reasons.push(detail); factors.push({ signal: 'engagement', weight: 10, detail });
+      }
 
       // Cross-sell: not assigned to all product lines
       if (productLines.length > 1 && assignedPLs.size < productLines.length) {
         const unassigned = productLines.filter(pl => !assignedPLs.has(pl.id));
-        score += 15 * unassigned.length;
-        reasons.push(`Cross-sell possible : ${unassigned.map(pl => pl.name).join(', ')}`);
+        crossSellProducts = unassigned.map(pl => pl.name);
+        const weight = 15 * unassigned.length;
+        const detail = `Cross-sell possible : ${crossSellProducts.join(', ')}`;
+        score += weight; reasons.push(detail); factors.push({ signal: 'cross_sell', weight, detail });
       }
 
       // Low churn risk = good candidate
       if (client.churn_score != null && client.churn_score < 30) {
-        score += 15;
-        reasons.push('Risque churn faible');
+        const detail = 'Risque churn faible';
+        score += 15; reasons.push(detail); factors.push({ signal: 'low_churn', weight: 15, detail });
       }
 
       if (score >= 25) {
+        const ownedProducts = [...assignedPLs]
+          .map(id => productLines.find(pl => pl.id === id)?.name)
+          .filter(Boolean);
+
         report.opportunities.push({
           contactId: client.id,
           name: client.name,
@@ -104,6 +126,9 @@ async function run(userId) {
           email: client.email,
           score,
           reasons,
+          factors,
+          ownedProducts,
+          crossSellProducts,
           assignedProductLines: assignedPLs.length,
           totalProductLines: productLines.length,
         });
