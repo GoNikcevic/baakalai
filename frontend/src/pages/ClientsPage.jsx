@@ -426,7 +426,18 @@ export default function ClientsPage() {
             }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{stage.name}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: STAGE_COLORS[i % STAGE_COLORS.length] }}>
-                {clients.filter(c => c.crm_stage === stage.id || c.status === stage.name?.toLowerCase()).length}
+                {/* `crm_stage` porte le LIBELLÉ de l'étape et `stage.id` son
+                    identifiant natif : les comparer ne matchait jamais, d'où un
+                    compteur figé à 0. La comparaison se fait sur crm_stage_id,
+                    que lib/stage-tracking.js renseigne (migration 092).
+                    L'ancienne heuristique par nom ne sert plus que de repli pour
+                    les contacts sans étape connue — la garder inconditionnelle
+                    ferait compter deux fois un même contact. */}
+                {clients.filter(c => (
+                  c.crm_stage_id != null
+                    ? String(c.crm_stage_id) === String(stage.id)
+                    : c.status === stage.name?.toLowerCase()
+                )).length}
               </div>
             </div>
           ))}
