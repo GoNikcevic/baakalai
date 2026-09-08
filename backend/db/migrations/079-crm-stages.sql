@@ -55,6 +55,17 @@ ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS stage_changed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_opportunities_stage
   ON opportunities (user_id, crm_stage_id);
 
+-- RLS : toutes les tables porteuses d'un user_id l'ont activé (voir
+-- supabase-rls-and-extras.sql). Le backend passe par DATABASE_URL, donc un rôle
+-- qui contourne RLS — la politique est là pour que la table reste close si elle
+-- est un jour lue depuis un client Supabase. Même règle que `opportunities`,
+-- dont crm_stages est le complément direct.
+ALTER TABLE crm_stages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users manage own crm stages" ON crm_stages;
+CREATE POLICY "Users manage own crm stages" ON crm_stages
+  FOR ALL USING (auth.uid() = user_id);
+
 COMMENT ON TABLE crm_stages IS
   'Référentiel des étapes de pipeline importées du CRM du client. '
   'Écrit par lib/crm-stage-resolver.js (syncStages), lu par GET /api/crm/stages.';
