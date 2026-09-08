@@ -972,6 +972,108 @@ router.post('/import/:provider', async (req, res, next) => {
   }
 });
 
+// =============================================
+// GET /api/crm/stages — Étapes du pipeline, tous CRM confondus
+// =============================================
+//
+// Remplace le branchement par CRM côté page Clients, qui n'avait jamais été
+// écrit pour HubSpot ni Salesforce : leurs étapes étaient bien collectées et
+// stockées sur les deals, mais aucune route ne permettait de les relire, donc
+// la barre de pipeline restait vide pour ces deux CRM.
+//
+// ATTENTION — le champ `id` renvoyé doit être exactement ce que
+// lib/stage-tracking.js écrit dans opportunities.crm_stage_id, sinon le
+// rapprochement échoue et les compteurs affichent 0 :
+//   pipedrive / odoo : identifiant numérique de l'étape
+//   hubspot          : id interne de dealstage ("appointmentscheduled")
+//   salesforce       : le LIBELLÉ (StageName), pas l'Id du OpportunityStage
+router.get('/stages', async (req, res, next) => {
+  try {
+    const WITH_PIPELINE = ['pipedrive', 'hubspot', 'salesforce', 'odoo'];
+
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    let provider = userRow.rows[0]?.active_crm_provider || null;
+
+    // Repli sur le premier CRM connecté quand aucun CRM actif n'est choisi :
+    // c'est ce que faisait la page Clients, et s'en passer ferait disparaître
+    // la barre pour les comptes qui n'ont jamais renseigné leur CRM principal.
+    if (!provider) {
+      const connected = await db.query(
+        'SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)',
+        [req.user.id, WITH_PIPELINE]
+      );
+      const found = new Set(connected.rows.map(r => r.provider));
+      provider = WITH_PIPELINE.find(p => found.has(p)) || null;
+    }
+
+    // Notion, Airtable et Folk n'ont pas de pipeline : leur « étape » est une
+    // propriété texte libre, sans ordre ni structure. Réponse vide, pas erreur.
+    if (!provider || !WITH_PIPELINE.includes(provider)) {
+      return res.json({ provider, stages: [] });
+    }
+
+    const token = await getUserCrmToken(req.user.id, provider);
+    if (!token) return res.json({ provider, stages: [] });
+
+    let stages = [];
+
+    if (provider === 'pipedrive') {
+      // Sans pipelineId, Pipedrive renvoie les étapes de TOUS les pipelines —
+      // l'ancien code ne prenait que le premier et masquait donc les autres.
+      const [pipelines, raw] = await Promise.all([
+        pipedrive.getPipelines(token).catch(() => []),
+        pipedrive.getStages(token),
+      ]);
+      const pipelineNames = new Map((pipelines || []).map(p => [String(p.id), p.name]));
+      stages = (raw || []).map(st => ({
+        id: String(st.id),
+        name: st.name,
+        order: st.order ?? 0,
+        pipelineId: st.pipelineId != null ? String(st.pipelineId) : null,
+        pipelineName: pipelineNames.get(String(st.pipelineId)) || null,
+      }));
+    } else if (provider === 'hubspot') {
+      const pipelines = await hubspot.getDealPipelines(token);
+      for (const pl of pipelines) {
+        for (const st of pl.stages) {
+          stages.push({
+            id: st.id, name: st.name, order: st.order,
+            pipelineId: pl.id, pipelineName: pl.name,
+          });
+        }
+      }
+    } else if (provider === 'salesforce') {
+      const integration = await db.query(
+        `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
+        [req.user.id]
+      );
+      const instanceUrl = integration.rows[0]?.instance_url;
+      if (!instanceUrl) return res.json({ provider, stages: [] });
+      const raw = await salesforce.getStages(instanceUrl, token);
+      stages = (raw || []).map(st => ({
+        // `name` fait office d'id : l'Opportunity ne porte que StageName.
+        id: st.name, name: st.name, order: st.order ?? 0,
+        pipelineId: null, pipelineName: null,
+      }));
+    } else if (provider === 'odoo') {
+      let creds = token;
+      if (typeof creds === 'string') {
+        try { creds = JSON.parse(creds); } catch { return res.json({ provider, stages: [] }); }
+      }
+      const raw = await odoo.getStages(creds);
+      stages = (raw || []).map(st => ({
+        id: String(st.id), name: st.name, order: st.order ?? 0,
+        pipelineId: null, pipelineName: null,
+      }));
+    }
+
+    stages.sort((a, b) => (a.pipelineName || '').localeCompare(b.pipelineName || '') || a.order - b.order);
+    res.json({ provider, stages });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/crm/pipedrive/pipelines — List Pipedrive pipelines
 router.get('/pipedrive/pipelines', async (req, res, next) => {
   try {
