@@ -8,11 +8,7 @@
    =============================================================================== */
 
 import { useMemo, useCallback, useState, useEffect } from 'react';
-<<<<<<< HEAD
 import { useOutletContext, useNavigate } from 'react-router-dom';
-=======
-import { Link, useNavigate } from 'react-router-dom';
->>>>>>> a89ec6dd43e8c9c13e88b09df8f759a5933ef49a
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import { useSocket } from '../context/SocketContext';
@@ -47,12 +43,8 @@ export default function DashboardPage() {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
-<<<<<<< HEAD
   const { campaigns, globalKpis, recommendations, chartData } = useApp();
   const { setShowCreatorModal } = useOutletContext() || {};
-=======
-  const { campaigns, globalKpis, opportunities, recommendations, chartData, setOpportunities } = useApp();
->>>>>>> a89ec6dd43e8c9c13e88b09df8f759a5933ef49a
   const navigate = useNavigate();
   const openCreator = useCallback(() => navigate('/campaigns', { state: { openAssistant: true } }), [navigate]);
   const { socket } = useSocket();
