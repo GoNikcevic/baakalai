@@ -196,7 +196,8 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/campaigns" element={<CampaignsList />} />
             <Route path="/campaigns/:id" element={<CampaignDetailRoute />} />
-            <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/deals" element={<ClientsPage scope="deals" />} />
+            <Route path="/clients" element={<ClientsPage scope="clients" />} />
             <Route path="/deals-to-reactivate" element={<DealsToReactivatePage />} />
             <Route path="/deals-to-reactivate/:opportunityId" element={<DealReactivationDetailRoute />} />
             <Route path="/clients-to-upsell" element={<ClientsToUpsellPage />} />

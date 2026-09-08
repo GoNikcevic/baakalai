@@ -50,10 +50,17 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
   });
 
-  it('shows empty state / welcome banner when no campaigns', () => {
+  // L'ancienne bannière d'accueil et ses quatre étapes d'onboarding
+  // (WelcomeBanner) ne sont plus rendues : l'audit UX du 2026-08-05 a retiré
+  // les jauges de progression concurrentes, et le composant est resté dans le
+  // fichier sans appelant. L'état vide se compose désormais des KPI à blanc et
+  // des cartes « Campagnes actives » / « Performance 4 semaines ».
+  it('shows empty state cards when no campaigns', () => {
     renderDashboard();
 
-    expect(screen.getByText('Bienvenue sur Bakal')).toBeInTheDocument();
+    expect(screen.getByText(/Campagnes actives/)).toBeInTheDocument();
+    expect(screen.getByText(/Aucune campagne pour le moment/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Cr.er une campagne/ })).toBeInTheDocument();
   });
 
   it('shows empty KPI cards with placeholder values', () => {
@@ -67,15 +74,14 @@ describe('DashboardPage', () => {
   it('shows subtitle for empty state', () => {
     renderDashboard();
 
-    expect(screen.getByText(/Bienvenue.*Configurez votre premi.re campagne/)).toBeInTheDocument();
+    // Le sous-titre d'accueil parle désormais de connecter le CRM, plus de
+    // configurer une campagne — le positionnement a changé.
+    expect(screen.getByText(/Connectez votre CRM/)).toBeInTheDocument();
   });
 
-  it('shows onboarding steps in empty overview', () => {
+  it('shows the 4-week performance placeholder in empty overview', () => {
     renderDashboard();
 
-    expect(screen.getByText(/Cr.ez votre campagne/)).toBeInTheDocument();
-    expect(screen.getByText(/Baakalai g.n.re vos s.quences/)).toBeInTheDocument();
-    expect(screen.getByText('Importez vos prospects')).toBeInTheDocument();
-    expect(screen.getByText('Lancez et optimisez')).toBeInTheDocument();
+    expect(screen.getByText(/Performance 4 semaines/)).toBeInTheDocument();
   });
 });

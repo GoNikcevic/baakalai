@@ -73,20 +73,23 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('renders core API key cards (Lemlist, CRM)', async () => {
+  it('renders core API key cards', async () => {
     renderSettings();
 
+    // Les cartes de tête sont les outils d'outreach ; les CRM ont été
+    // déplacés dans la section étendue, et « CRM » n'est plus un libellé
+    // autonome dans le DOM.
     await waitFor(() => {
       expect(screen.getByText('Lemlist')).toBeInTheDocument();
-      expect(screen.getByText('CRM')).toBeInTheDocument();
+      expect(screen.getByText('Apollo')).toBeInTheDocument();
     });
   });
 
-  it('renders the integrations library title', async () => {
+  it('renders the integrations section title', async () => {
     renderSettings();
 
     await waitFor(() => {
-      expect(screen.getByText(/Biblioth.que d'int.grations/)).toBeInTheDocument();
+      expect(screen.getByText('Intégrations')).toBeInTheDocument();
     });
   });
 
@@ -97,31 +100,32 @@ describe('SettingsPage', () => {
       expect(screen.getByText(/Limite quotidienne Lemlist/)).toBeInTheDocument();
       expect(screen.getByText(/Fen.tre d'envoi/)).toBeInTheDocument();
       expect(screen.getByText(/Jours d'envoi/)).toBeInTheDocument();
-      expect(screen.getByText(/Mod.le Claude/)).toBeInTheDocument();
+      expect(screen.getByText(/Mod.le IA/)).toBeInTheDocument();
     });
   });
 
+  // Le sélecteur de thème est devenu un simple bouton, qui affiche la cible du
+  // basculement (« Sombre » quand on est en clair). Les phrases « Mode sombre
+  // activé » et la classe .theme-toggle ont disparu : ces tests vérifient
+  // désormais l'effet réel — l'attribut data-theme sur <html> — plutôt que la
+  // formulation, qui rebougera au prochain ajustement de copie.
   it('renders the theme toggle section', async () => {
     renderSettings();
 
     await waitFor(() => {
       expect(screen.getByText(/Th.me/)).toBeInTheDocument();
-      expect(screen.getByText(/Mode sombre activ/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Sombre|Clair/ })).toBeInTheDocument();
     });
   });
 
   it('toggles theme from dark to light', async () => {
+    document.documentElement.setAttribute('data-theme', 'dark');
     renderSettings();
 
-    await waitFor(() => {
-      expect(screen.getByText(/Mode sombre activ/)).toBeInTheDocument();
-    });
-
-    // Click the theme toggle
-    const toggle = document.querySelector('.theme-toggle');
+    // En thème sombre, le bouton propose de passer en clair.
+    const toggle = await screen.findByRole('button', { name: /Clair/ });
     fireEvent.click(toggle);
 
-    expect(screen.getByText(/Mode clair activ/)).toBeInTheDocument();
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
@@ -129,14 +133,9 @@ describe('SettingsPage', () => {
     document.documentElement.setAttribute('data-theme', 'light');
     renderSettings();
 
-    await waitFor(() => {
-      expect(screen.getByText(/Mode clair activ/)).toBeInTheDocument();
-    });
-
-    const toggle = document.querySelector('.theme-toggle');
+    const toggle = await screen.findByRole('button', { name: /Sombre/ });
     fireEvent.click(toggle);
 
-    expect(screen.getByText(/Mode sombre activ/)).toBeInTheDocument();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
@@ -144,20 +143,18 @@ describe('SettingsPage', () => {
     renderSettings();
 
     await waitFor(() => {
-      expect(screen.getByText(/Biblioth.que d'int.grations/)).toBeInTheDocument();
+      expect(screen.getByText(/Voir plus d'intégrations/)).toBeInTheDocument();
     });
   });
 
   it('shows extended integrations when library header is clicked', async () => {
     renderSettings();
 
-    await waitFor(() => {
-      expect(screen.getByText(/Biblioth.que d'int.grations/)).toBeInTheDocument();
-    });
+    const toggle = await screen.findByText(/Voir plus d'intégrations/);
 
-    // Extended integrations are hidden by default (collapsed)
-    // Click the library header to expand
-    fireEvent.click(screen.getByText(/Biblioth.que d'int.grations/));
+    // La section étendue est repliée par défaut (max-height 0) : on la déplie
+    // en cliquant le bouton dédié, et non plus le titre de la section.
+    fireEvent.click(toggle);
 
     // Extended integrations should now be visible (in the DOM, even if visually hidden via CSS)
     expect(screen.getByText('DropContact')).toBeInTheDocument();

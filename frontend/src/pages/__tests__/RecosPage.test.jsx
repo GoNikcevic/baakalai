@@ -12,13 +12,43 @@ vi.mock('../../services/auth', () => ({
   getRefreshToken: () => null,
 }));
 
-// Mock api-client
+// Les recommandations ne sont plus des données de démo codées en dur : la page
+// les construit à partir des diagnostics de chaque campagne et des patterns de
+// mémoire, récupérés côté backend. On injecte donc les trois entrées dont la
+// page dépend — campagnes, diagnostics, mémoire — et on couvre au passage la
+// transformation diagnostic → recommandation, qui est la vraie logique ici.
+const CAMPAIGNS = {
+  'drh-lyon': { id: 'drh-lyon', _backendId: 'drh-lyon', name: 'DRH PME Lyon' },
+  'daf-idf': { id: 'daf-idf', _backendId: 'daf-idf', name: 'DAF Ile-de-France' },
+  'dirigeants': { id: 'dirigeants', _backendId: 'dirigeants', name: 'Dirigeants Formation' },
+};
+
+// priority backend → priorité affichée : high → critique, medium → importante,
+// low → suggestion. Le jeu couvre les trois, ce dont les tests de filtre ont besoin.
+const DIAGNOSTICS = {
+  'drh-lyon': [{ priority: 'high', step: 'E1', title: 'Remplacer le CTA agressif par une question ouverte', text: 'Le CTA direct sous-performe.', impact: '+3pts' }],
+  'daf-idf': [{ priority: 'medium', step: 'E3', title: "Remplacer l'angle anxiogène par un angle positif", text: 'Angle trop dur.', impact: '+2pts' }],
+  'dirigeants': [{ priority: 'low', step: 'L2', title: 'Raccourcir le break-up', text: 'Trop long.', impact: '+1pt' }],
+};
+
+const PATTERNS = [
+  { pattern: 'Questions ouvertes > CTA directs', data: 'Les questions ouvertes convertissent mieux.', confidence: 'Haute' },
+  { pattern: 'Angle positif surperforme', data: "L'angle positif bat l'angle anxiogène.", confidence: 'Moyenne' },
+];
+
+vi.mock('../../context/useApp', () => ({
+  useApp: () => ({ campaigns: CAMPAIGNS, backendAvailable: true }),
+}));
+
 vi.mock('../../services/api-client', () => ({
-  // Les composants passent par request() pour les appels non typés ;
-  // sans cette entrée, vitest rejette tout accès à l'export absent.
   request: vi.fn().mockResolvedValue({}),
   default: {
     checkHealth: vi.fn().mockResolvedValue(null),
+    // Lazy : vi.mock est hissé en tête de fichier, donc la factory s'exécute
+    // avant l'initialisation des constantes. mockResolvedValue(PATTERNS)
+    // lirait la variable trop tôt — l'appeler dans le corps la diffère.
+    getMemory: vi.fn(() => Promise.resolve({ patterns: PATTERNS })),
+    getDiagnostics: vi.fn((id) => Promise.resolve({ diagnostics: DIAGNOSTICS[id] || [] })),
   },
 }));
 
@@ -42,7 +72,7 @@ describe('RecosPage', () => {
   it('renders the page subtitle', () => {
     renderRecos();
 
-    expect(screen.getByText(/Baakalai analyse vos campagnes et propose des optimisations/)).toBeInTheDocument();
+    expect(screen.getByText(/Baakalai analyse vos campagnes et propose des affinages/)).toBeInTheDocument();
   });
 
   it('renders recommendation stats cards', () => {
@@ -68,23 +98,32 @@ describe('RecosPage', () => {
     expect(screen.getByRole('button', { name: /Suggestions/ })).toBeInTheDocument();
   });
 
-  it('renders recommendation cards', () => {
+  it('renders recommendation cards', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     expect(screen.getByText('Remplacer le CTA agressif par une question ouverte')).toBeInTheDocument();
     expect(screen.getByText(/Remplacer l'angle/)).toBeInTheDocument();
   });
 
-  it('renders campaign filter buttons', () => {
+  it('renders campaign filter buttons', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     expect(screen.getByRole('button', { name: 'DRH PME Lyon' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /DAF/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dirigeants Formation' })).toBeInTheDocument();
   });
 
-  it('filters by priority when clicking "Critiques"', () => {
+  it('filters by priority when clicking "Critiques"', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     fireEvent.click(screen.getByRole('button', { name: /Critiques/ }));
 
@@ -94,8 +133,11 @@ describe('RecosPage', () => {
     expect(screen.queryByText(/Raccourcir le break-up/)).not.toBeInTheDocument();
   });
 
-  it('filters by campaign when clicking a campaign button', () => {
+  it('filters by campaign when clicking a campaign button', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     fireEvent.click(screen.getByRole('button', { name: 'DRH PME Lyon' }));
 
@@ -105,16 +147,22 @@ describe('RecosPage', () => {
     expect(screen.queryByText(/Remplacer l'angle/)).not.toBeInTheDocument();
   });
 
-  it('renders cross-campaign insights', () => {
+  it('renders cross-campaign insights', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     expect(screen.getByText(/Patterns cross-campagne/)).toBeInTheDocument();
     expect(screen.getByText('Questions ouvertes > CTA directs')).toBeInTheDocument();
     expect(screen.getByText(/Angle positif/)).toBeInTheDocument();
   });
 
-  it('renders action buttons on non-applied cards', () => {
+  it('renders action buttons on non-applied cards', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     const applyButtons = screen.getAllByRole('button', { name: 'Appliquer' });
     expect(applyButtons.length).toBeGreaterThan(0);
@@ -123,8 +171,11 @@ describe('RecosPage', () => {
     expect(ignoreButtons.length).toBeGreaterThan(0);
   });
 
-  it('applies a recommendation when clicking "Appliquer"', () => {
+  it('applies a recommendation when clicking "Appliquer"', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     const applyButtons = screen.getAllByRole('button', { name: 'Appliquer' });
     const initialCount = applyButtons.length;
@@ -135,8 +186,11 @@ describe('RecosPage', () => {
     expect(remainingApplyButtons.length).toBeLessThan(initialCount);
   });
 
-  it('dismisses a recommendation when clicking "Ignorer"', () => {
+  it('dismisses a recommendation when clicking "Ignorer"', async () => {
     renderRecos();
+    // Les recommandations sont construites à partir des diagnostics
+    // récupérés côté backend : elles arrivent après le rendu initial.
+    await screen.findByText('Remplacer le CTA agressif par une question ouverte');
 
     const ignoreButtons = screen.getAllByRole('button', { name: 'Ignorer' });
     const initialCount = ignoreButtons.length;

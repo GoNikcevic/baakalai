@@ -67,6 +67,14 @@ describe('Layout', () => {
     expect(screen.getAllByText('Paramètres').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('expose une vue globale sous Deals comme sous Clients', () => {
+    renderLayout();
+
+    // Deals et Clients sont deux populations de la meme table `opportunities` :
+    // chacune a sa vue globale, cadree par la route (/deals vs /clients).
+    expect(screen.getAllByText('Vue globale').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('renders the brand logo', () => {
     renderLayout();
 
