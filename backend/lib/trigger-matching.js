@@ -13,6 +13,8 @@
  *   antérieures à ces colonnes
  */
 
+const { onlyCrmContacts } = require('./crm-scope');
+
 const DAY_MS = 86400000;
 
 // Types évalués uniquement par le run manuel : nurture-engine interroge le
@@ -24,8 +26,15 @@ const MANUAL_ONLY_TYPES = ['newsletter_inactive', 'newsletter_engaged'];
  * `opps` = lignes de la table opportunities (SELECT *).
  * Retourne null si le type n'est pas évaluable depuis la base locale
  * (types MANUAL_ONLY_TYPES) — à distinguer de [] (évalué, aucun match).
+ *
+ * Les prospects froids d'une campagne de prospection sont écartés en entrée
+ * (cf. crm-scope.js) : les triggers d'Activation ne parlent qu'aux contacts
+ * venus du CRM. Le filtre est ici et non dans les requêtes appelantes parce
+ * que cette fonction est le point de passage unique du cron (crm-agent) et
+ * de la preview (routes/nurture.js) — les deux héritent donc de la règle.
  */
-function matchContacts(trigger, opps, now = Date.now()) {
+function matchContacts(trigger, allOpps, now = Date.now()) {
+  const opps = onlyCrmContacts(allOpps);
   const conditions = trigger.conditions || {};
   const days = conditions.days || 30;
 
