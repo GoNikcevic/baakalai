@@ -23,6 +23,10 @@ vi.mock('../../services/api-client', () => ({
   scoreLeads: vi.fn(),
   exportScoresToCRM: vi.fn(),
   downloadScoresCSV: vi.fn(),
+  // ClientsTab (bandeau "Risque de churn") et ActivationTab (feedback 👍/👎
+  // des recommandations) appellent ces exports nommés directement.
+  getChurnSummary: vi.fn().mockResolvedValue({}),
+  sendRecoFeedback: vi.fn(),
 }));
 
 // Mock react-router-dom's useOutletContext
@@ -74,9 +78,9 @@ describe('DashboardPage', () => {
   it('shows subtitle for empty state', () => {
     renderDashboard();
 
-    // Le sous-titre d'accueil parle désormais de connecter le CRM, plus de
-    // configurer une campagne — le positionnement a changé.
-    expect(screen.getByText(/Connectez votre CRM/)).toBeInTheDocument();
+    // Le sous-titre d'accueil décrit le produit dans son ensemble (deals,
+    // clients, données) plutôt qu'une seule offre — voir dashboard.welcomeSubtitle.
+    expect(screen.getByText(/analyse votre CRM en continu/)).toBeInTheDocument();
   });
 
   it('shows the 4-week performance placeholder in empty overview', () => {
