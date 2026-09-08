@@ -101,12 +101,35 @@ async function getDealStageLabels(accessToken) {
   // dealstage renvoie l'id interne d'étape (ex. "appointmentscheduled"), pas le libellé
   // que l'utilisateur voit — /crm/v3/pipelines/deals donne la correspondance, tous
   // pipelines confondus (les ids d'étape sont uniques au portail).
-  const data = await hubspotFetch(accessToken, '/crm/v3/pipelines/deals');
+  const pipelines = await getDealPipelines(accessToken);
   const map = new Map();
-  for (const p of (data.results || [])) {
-    for (const s of (p.stages || [])) map.set(String(s.id), s.label);
+  for (const p of pipelines) {
+    for (const s of p.stages) map.set(s.id, s.name);
   }
   return map;
+}
+
+/**
+ * Pipelines de deals et leurs étapes, avec l'ordre d'affichage.
+ *
+ * getDealStageLabels() n'en garde que la correspondance id → libellé, ce qui
+ * suffit à la synchro mais pas à dessiner un pipeline : il y faut l'ordre des
+ * étapes et leur regroupement. Les deux lisent le même endpoint.
+ */
+async function getDealPipelines(accessToken) {
+  const data = await hubspotFetch(accessToken, '/crm/v3/pipelines/deals');
+  return (data.results || []).map(p => ({
+    id: String(p.id),
+    name: p.label || String(p.id),
+    order: p.displayOrder ?? 0,
+    stages: (p.stages || []).map(s => ({
+      // Cet id est celui que la propriété `dealstage` porte sur chaque deal :
+      // c'est lui qui sert de clé de rapprochement avec crm_stage_id.
+      id: String(s.id),
+      name: s.label || String(s.id),
+      order: s.displayOrder ?? 0,
+    })),
+  }));
 }
 
 async function getDeals(accessToken, limit = 100) {
@@ -356,6 +379,7 @@ module.exports = {
   getDeal,
   getDeals,
   getDealStageLabels,
+  getDealPipelines,
   listDealsForDiagnostic,
   // Associations
   associateContactToDeal,

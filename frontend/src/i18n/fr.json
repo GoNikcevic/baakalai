@@ -1,6 +1,6 @@
 {
   "nav": {
-    "campaigns": "Campagnes",
+    "campaigns": "Prospection",
     "chat": "Chat",
     "assistant": "Assistant",
     "dashboard": "Dashboard",
@@ -17,7 +17,6 @@
     "crmAnalytics": "CRM Analytics",
     "membership": "Analytics Clients",
     "help": "Aide",
-    "newCampaign": "+ Nouvelle campagne",
     "openSidebar": "Ouvrir la sidebar",
     "collapseSidebar": "Réduire la sidebar",
     "logoutTitle": "Se déconnecter",
@@ -171,7 +170,7 @@
     "enrichDoneDesc": "{skipped} ignoré(s) · {errors} erreur(s)",
     "enrichFailed": "Échec de la personnalisation",
     "enrichFailedDesc": "Erreur inconnue — vérifiez votre clé API Brave Search.",
-    "tabAssistant": "Assistant"
+    "tabAssistant": "Créer une campagne"
   },
   "prospectGen": {
     "title": "Générer des prospects",
@@ -504,7 +503,7 @@
     "title": "Activation",
     "subtitle": "Automatisez vos emails de suivi client",
     "overview": "Vue d'ensemble",
-    "campaigns": "Campagnes",
+    "campaigns": "Séquences",
     "triggers": "Triggers",
     "pending": "En attente",
     "sent": "Envoyés",

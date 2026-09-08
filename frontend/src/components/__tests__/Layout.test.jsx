@@ -62,7 +62,7 @@ describe('Layout', () => {
     expect(screen.getByText('Assistant')).toBeInTheDocument();
     // "Dashboard" appears in both sidebar and mobile nav, so use getAllByText
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Campagnes').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Prospection').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Analytics').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Paramètres').length).toBeGreaterThanOrEqual(1);
   });
@@ -73,10 +73,12 @@ describe('Layout', () => {
     expect(screen.getByText('baakalai')).toBeInTheDocument();
   });
 
-  it('renders the new campaign button', () => {
+  it('n affiche plus de bouton de creation de campagne dans la sidebar', () => {
     renderLayout();
 
-    expect(screen.getByText('+ Nouvelle campagne')).toBeInTheDocument();
+    // Le formulaire fige qu'il ouvrait ignorait le CRM. La creation passe
+    // desormais par l'Assistant ou par l'onglet dedie de Prospection.
+    expect(screen.queryByText('+ Nouvelle campagne')).not.toBeInTheDocument();
   });
 
   it('renders user info when user is logged in', () => {
@@ -96,8 +98,8 @@ describe('Layout', () => {
     renderLayout();
 
     expect(screen.getByText('Chat')).toBeInTheDocument();
-    // "Campagnes" appears in both sidebar and mobile nav
-    expect(screen.getAllByText('Campagnes').length).toBeGreaterThanOrEqual(2);
+    // "Prospection" appears in both sidebar and mobile nav
+    expect(screen.getAllByText('Prospection').length).toBeGreaterThanOrEqual(2);
     // "Activation" appears in both sidebar and mobile nav
     expect(screen.getAllByText('Activation').length).toBeGreaterThanOrEqual(2);
   });

@@ -14,7 +14,19 @@ import fr from './fr.json';
 import en from './en.json';
 
 const translations = { fr, en };
-const I18nContext = createContext({ lang: 'fr', setLang: () => {}, t: (k) => k });
+
+// Contexte par défaut, utilisé quand un composant est monté hors du Provider.
+// `t` y renvoyait la clé brute : un composant rendu hors Provider affichait
+// « common.tagline » à l'écran au lieu du texte. Il traduit maintenant en
+// français, la langue par défaut du produit — même repli que le Provider
+// lui-même, qui retombe déjà sur `fr` quand une clé manque dans la langue
+// active. La clé nue ne reste que si elle n'existe dans aucun des deux
+// fichiers, ce qui est une vraie erreur de développement.
+const I18nContext = createContext({
+  lang: 'fr',
+  setLang: () => {},
+  t: (key, params) => interpolate(resolve(fr, key) ?? key, params),
+});
 
 /**
  * Get a nested value from an object by dot-separated key.

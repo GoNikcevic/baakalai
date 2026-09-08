@@ -84,17 +84,12 @@ export default function ClientsPage() {
       if (churnData) setChurnSummary(churnData);
       setOwners(ownersData.owners || []);
 
-      // Load pipeline stages (depends on active CRM)
-      if (activeCrm === 'pipedrive') {
-        const pipelinesData = await request('/crm/pipedrive/pipelines').catch(() => ({ pipelines: [] }));
-        if (pipelinesData.pipelines?.length > 0) {
-          const stagesData = await request(`/crm/pipedrive/stages/${pipelinesData.pipelines[0].id}`).catch(() => ({ stages: [] }));
-          setStages(stagesData.stages || []);
-        }
-      } else if (activeCrm === 'odoo') {
-        const stagesData = await request('/crm/odoo/stages').catch(() => ({ stages: [] }));
-        setStages(stagesData.stages || []);
-      }
+      // Étapes du pipeline : une seule route pour tous les CRM. Le branchement
+      // par provider qui existait ici n'avait jamais été écrit pour HubSpot ni
+      // Salesforce — leurs étapes étaient collectées mais jamais affichées —
+      // et il ne prenait que le premier pipeline de Pipedrive.
+      const stagesData = await request('/crm/stages').catch(() => ({ stages: [] }));
+      setStages(stagesData.stages || []);
     } catch { /* ignore */ }
     setLoading(false);
   }, []);
@@ -155,6 +150,18 @@ export default function ClientsPage() {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
     return 0;
   }), [clients, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue]);
+
+  // Regroupement par pipeline. Salesforce et Odoo n'en exposent pas
+  // (pipelineName null) : tout tombe alors dans un groupe unique, sans titre.
+  const stagesByPipeline = useMemo(() => {
+    const groups = new Map();
+    for (const stage of stages) {
+      const key = stage.pipelineName || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(stage);
+    }
+    return [...groups.entries()];
+  }, [stages]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
@@ -416,17 +423,43 @@ export default function ClientsPage() {
       ) : null}
 
       {/* Pipeline stages */}
-      {stages.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', padding: '4px 0' }}>
-          {stages.map((stage, i) => (
-            <div key={stage.id} style={{
-              flex: '1 0 120px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderTop: `3px solid ${STAGE_COLORS[i % STAGE_COLORS.length]}`, borderRadius: 10,
-              padding: '12px 14px', textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{stage.name}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: STAGE_COLORS[i % STAGE_COLORS.length] }}>
-                {clients.filter(c => c.crm_stage === stage.id || c.status === stage.name?.toLowerCase()).length}
+      {stagesByPipeline.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          {stagesByPipeline.map(([pipelineName, pipelineStages]) => (
+            <div key={pipelineName} style={{ marginBottom: 10 }}>
+              {/* HubSpot et Pipedrive exposent plusieurs pipelines. Les fondre
+                  dans une seule barre juxtaposerait deux étapes homonymes
+                  (« Closed Won » de chaque pipeline) sans moyen de les
+                  distinguer. Le titre n'apparaît que s'il y a de quoi confondre. */}
+              {stagesByPipeline.length > 1 && (
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {pipelineName}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 0' }}>
+                {pipelineStages.map((stage, i) => (
+                  <div key={stage.id} style={{
+                    flex: '1 0 120px', background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderTop: `3px solid ${STAGE_COLORS[i % STAGE_COLORS.length]}`, borderRadius: 10,
+                    padding: '12px 14px', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{stage.name}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: STAGE_COLORS[i % STAGE_COLORS.length] }}>
+                      {/* `crm_stage` porte le LIBELLÉ de l'étape et `stage.id` son
+                          identifiant natif : les comparer ne matchait jamais, d'où un
+                          compteur figé à 0. La comparaison se fait sur crm_stage_id,
+                          que lib/stage-tracking.js renseigne (migration 092).
+                          L'ancienne heuristique par nom ne sert plus que de repli pour
+                          les contacts sans étape connue — la garder inconditionnelle
+                          ferait compter deux fois un même contact. */}
+                      {clients.filter(c => (
+                        c.crm_stage_id != null
+                          ? String(c.crm_stage_id) === String(stage.id)
+                          : c.status === stage.name?.toLowerCase()
+                      )).length}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}

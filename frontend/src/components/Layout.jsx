@@ -11,7 +11,6 @@ import { useT } from '../i18n';
 import { logout, getUser } from '../services/auth';
 import { disconnect as disconnectSocket } from '../services/socket';
 import { useSocketEvents } from '../hooks/useSocketEvents';
-import CampaignCreatorModal from './CampaignCreatorModal';
 import NotificationBell from './NotificationBell';
 import HelpWidget from './HelpWidget';
 
@@ -26,7 +25,6 @@ const NAV_ITEMS = [
     i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'refinement',
     children: [
       { i18nKey: 'nav.toReactivate',    to: '/deals-to-reactivate', icon: 'refinement', countKey: 'reactivation' },
-      { i18nKey: 'nav.campaigns',       to: '/campaigns',           icon: 'campaigns' },
     ],
   },
   {
@@ -44,6 +42,12 @@ const NAV_ITEMS = [
       { i18nKey: 'nav.analytics',       to: '/analytics',           icon: 'reports', adminOnly: true },
     ],
   },
+  // Prospection est volontairement hors des sections CRM. Rangée sous Deals,
+  // elle affirmait que campagnes et deals CRM sont la même chose — or ce sont
+  // deux populations disjointes (cf. backend/lib/crm-scope.js) et deux moteurs
+  // distincts. Placée après les trois sections CRM, qui restent contiguës :
+  // le CRM est le produit, la prospection est la porte d'entrée.
+  { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
   { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture', countKey: 'nurturePending' },
   { i18nKey: 'nav.settings',            to: '/settings',            icon: 'settings', adminOnly: true },
 ];
@@ -170,7 +174,6 @@ export default function Layout() {
   const { user, setUser } = useApp();
   const t = useT();
   const navigate = useNavigate();
-  const [showCreatorModal, setShowCreatorModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Collapsible nav sections — all open by default, state persisted per section.
@@ -278,16 +281,6 @@ export default function Layout() {
           </svg>
           <span className="brand-text">baakalai</span>
         </NavLink>
-
-        {/* New campaign button (admin only) */}
-        {(!getUser()?.teamRole || getUser()?.teamRole === 'admin') && (
-          <button
-            className="btn btn-primary sidebar-cta"
-            onClick={() => setShowCreatorModal(true)}
-          >
-            {t('nav.newCampaign')}
-          </button>
-        )}
 
         {/* Navigation */}
         <nav className="sidebar-nav">
@@ -438,7 +431,7 @@ export default function Layout() {
         >
           <NotificationBell />
         </div>
-        <Outlet context={{ showCreatorModal, setShowCreatorModal }} />
+        <Outlet />
       </main>
 
       {/* ═══ Mobile bottom nav ═══ */}
@@ -460,11 +453,6 @@ export default function Layout() {
           </NavLink>
         ))}
       </nav>
-
-      {/* Campaign creator modal */}
-      {showCreatorModal && (
-        <CampaignCreatorModal onClose={() => setShowCreatorModal(false)} />
-      )}
 
       <HelpWidget />
     </div>

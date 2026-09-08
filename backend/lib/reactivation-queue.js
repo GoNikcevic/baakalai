@@ -55,6 +55,9 @@ async function listDealsToReactivate(userId, sort = 'overdue') {
   const result = await db.query(
     `SELECT * FROM opportunities
      WHERE user_id = $1 AND status NOT IN ('won', 'lost')
+       -- Contacts CRM uniquement : un prospect froid de campagne n'a jamais
+       -- eu d'échange à « réactiver » (cf. lib/crm-scope.js).
+       AND campaign_id IS NULL
        AND (
          (planned_followup_date IS NULL AND COALESCE(last_activity_at, created_at) < now() - interval '${STAGNANT_DAYS} days')
          OR (planned_followup_date IS NOT NULL AND planned_followup_date <= now())
@@ -190,6 +193,7 @@ async function getHistory(userId, kind) {
     `SELECT id, name, company, planned_followup_date, planned_followup_reason
      FROM opportunities
      WHERE user_id = $1 AND status ${kind === 'auto_upsell' ? "= 'won'" : "NOT IN ('won', 'lost')"}
+       AND campaign_id IS NULL
        AND planned_followup_date IS NOT NULL AND planned_followup_date > now()
        AND (planned_followup_reason IS NULL OR planned_followup_reason != 'post_send_cooldown')
      ORDER BY planned_followup_date DESC LIMIT 50`,

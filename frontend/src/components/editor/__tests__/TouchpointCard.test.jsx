@@ -4,6 +4,9 @@ import TouchpointCard from '../TouchpointCard';
 
 // Mock api-client
 vi.mock('../../../services/api-client', () => ({
+  // Les composants passent par request() pour les appels non typés ;
+  // sans cette entrée, vitest rejette tout accès à l'export absent.
+  request: vi.fn().mockResolvedValue({}),
   default: {
     regenerateSequence: vi.fn(),
   },
