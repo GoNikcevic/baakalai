@@ -122,7 +122,10 @@ async function evaluateTriggers(userId) {
         const now = Date.now();
         // Load opportunities with renewal_date set
         const oppsWithRenewal = await db.query(
-          `SELECT o.* FROM opportunities o WHERE o.user_id = (SELECT user_id FROM nurture_triggers WHERE id = $1) AND o.renewal_date IS NOT NULL AND o.status != 'lost'`,
+          `SELECT o.* FROM opportunities o
+            WHERE o.user_id = (SELECT user_id FROM nurture_triggers WHERE id = $1)
+              AND o.campaign_id IS NULL
+              AND o.renewal_date IS NOT NULL AND o.status != 'lost'`,
           [trigger.id]
         );
         for (const o of (oppsWithRenewal.rows || [])) {
