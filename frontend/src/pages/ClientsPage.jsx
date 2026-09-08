@@ -27,7 +27,24 @@ function getStatusLabels(lang) {
   return { new: 'Nouveau', imported: 'Import\u00e9', interested: 'Int\u00e9ress\u00e9', meeting: 'RDV', negotiation: 'N\u00e9go', won: 'Gagn\u00e9', lost: 'Perdu' };
 }
 
-export default function ClientsPage() {
+/**
+ * Vue globale des contacts CRM, cadrée sur une population.
+ *
+ * `scope` partitionne la table `opportunities`, qui mélange deals en cours et
+ * clients gagnés :
+ *   'deals'   → tout sauf gagné (importé, nouveau, intéressé, RDV, perdu)
+ *   'clients' → gagné uniquement
+ *   absent    → tout (aucune route ne l'utilise, gardé pour un usage direct)
+ *
+ * La partition est exhaustive : aucun contact ne devient inatteignable. Même
+ * composant pour les deux entrées de nav, sur le modèle de ReactivationQueuePage
+ * — une seule page, deux cadrages, plutôt que deux pages à maintenir.
+ *
+ * Un lien profond porteur de `highlight` court-circuite la portée : il désigne
+ * des contacts précis, et les masquer parce qu'ils sont dans l'autre population
+ * transformerait le lien en page vide.
+ */
+export default function ClientsPage({ scope }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -135,6 +152,8 @@ export default function ClientsPage() {
       }
       return true;
     }
+    if (scope === 'deals' && c.status === 'won') return false;
+    if (scope === 'clients' && c.status !== 'won') return false;
     if (filter === 'churn_risk' && (c.status !== 'won' || c.churn_score == null || c.churn_score < 50)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
@@ -149,7 +168,7 @@ export default function ClientsPage() {
   }).sort((a, b) => {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
     return 0;
-  }), [clients, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue]);
+  }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue]);
 
   // Regroupement par pipeline. Salesforce et Odoo n'en exposent pas
   // (pipelineName null) : tout tombe alors dans un groupe unique, sans titre.
@@ -163,11 +182,17 @@ export default function ClientsPage() {
     return [...groups.entries()];
   }, [stages]);
 
+  const scopedClients = useMemo(() => {
+    if (scope === 'deals') return clients.filter(c => c.status !== 'won');
+    if (scope === 'clients') return clients.filter(c => c.status === 'won');
+    return clients;
+  }, [clients, scope]);
+
   const statusCounts = useMemo(() => {
     const counts = {};
-    for (const c of clients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
+    for (const c of scopedClients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
     return counts;
-  }, [clients]);
+  }, [scopedClients]);
 
   const crmProviderCounts = useMemo(() => {
     const counts = {};
@@ -243,13 +268,17 @@ export default function ClientsPage() {
   }, [selected, connectedCrm, loadData, t]);
 
   const statusTabs = [
-    { key: 'all', label: t('clients.all'), count: clients.length },
+    { key: 'all', label: t('clients.all'), count: scopedClients.length },
     { key: 'imported', label: STATUS_LABELS.imported, count: statusCounts.imported || 0 },
     { key: 'new', label: STATUS_LABELS.new, count: statusCounts.new || 0 },
     { key: 'interested', label: STATUS_LABELS.interested, count: statusCounts.interested || 0 },
     { key: 'meeting', label: STATUS_LABELS.meeting, count: statusCounts.meeting || 0 },
-    { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
-    { key: 'churn_risk', label: t('clients.churnRisk'), count: clients.filter(c => c.status === 'won' && c.churn_score >= 50).length },
+    // « Gagné » et « À risque » ne concernent que les clients : hors de portée
+    // côté deals, et redondant avec la portée elle-même côté clients.
+    ...(scope === 'deals' ? [] : [
+      { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
+      { key: 'churn_risk', label: t('clients.churnRisk'), count: scopedClients.filter(c => c.status === 'won' && c.churn_score >= 50).length },
+    ]),
   ].filter(tab => tab.key === 'all' || tab.count > 0);
 
   return (

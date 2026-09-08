@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   {
     i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'refinement',
     children: [
+      { i18nKey: 'nav.globalView',      to: '/deals',               icon: 'clients' },
       { i18nKey: 'nav.toReactivate',    to: '/deals-to-reactivate', icon: 'refinement', countKey: 'reactivation' },
     ],
   },

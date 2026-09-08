@@ -17,7 +17,8 @@ import { request } from '../services/api-client';
 const STEP_CONFIG = [
   { key: 'accountCreated', route: null },
   { key: 'crmConnected', route: '/settings' },
-  { key: 'contactsImported', route: '/clients' },
+  // Les contacts fraîchement importés sont des deals en cours, pas des clients gagnés.
+  { key: 'contactsImported', route: '/deals' },
   { key: 'emailConnected', route: '/settings' },
   { key: 'firstCampaign', route: '/campaigns', state: { openAssistant: true } },
   { key: 'firstLaunch', route: '/campaigns' },
