@@ -1536,6 +1536,15 @@ const opportunities = {
       lost_date: 'lost_date', lostDate: 'lost_date',
       renewal_date: 'renewal_date', renewalDate: 'renewal_date',
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
+      // Étape de pipeline rapatriée du CRM (migration 079). Sans ces entrées,
+      // update() les écarterait en silence, comme cela s'est produit pour
+      // last_activity_at et deal_value.
+      crm_stage_id: 'crm_stage_id', crmStageId: 'crm_stage_id',
+      crm_stage_name: 'crm_stage_name', crmStageName: 'crm_stage_name',
+      crm_pipeline_id: 'crm_pipeline_id', crmPipelineId: 'crm_pipeline_id',
+      crm_pipeline_name: 'crm_pipeline_name', crmPipelineName: 'crm_pipeline_name',
+      crm_stage_order: 'crm_stage_order', crmStageOrder: 'crm_stage_order',
+      stage_changed_at: 'stage_changed_at', stageChangedAt: 'stage_changed_at',
       reactivated_at: 'reactivated_at', reactivatedAt: 'reactivated_at',
       reactivated_from_email_id: 'reactivated_from_email_id', reactivatedFromEmailId: 'reactivated_from_email_id',
       data: 'data',
@@ -2104,6 +2113,49 @@ const teams = {
   },
 };
 
+// =============================================
+// CRM Stages (référentiel d'étapes rapatrié du CRM — migration 079)
+// =============================================
+
+const crmStages = {
+  /**
+   * Étapes d'un utilisateur, dans l'ordre du pipeline.
+   * `provider` optionnel : sans lui, on renvoie les étapes de tous les CRM
+   * connectés (un client peut avoir migré de CRM sans purger l'ancien).
+   */
+  async listByUser(userId, provider = null) {
+    const params = [userId];
+    let sql = 'SELECT * FROM crm_stages WHERE user_id = $1';
+    if (provider) {
+      sql += ' AND crm_provider = $2';
+      params.push(provider);
+    }
+    sql += ' ORDER BY pipeline_name NULLS FIRST, display_order ASC, stage_name ASC';
+    const result = await query(sql, params);
+    return result.rows;
+  },
+
+  /**
+   * Nombre de deals par étape, pour la barre de pipeline.
+   * Compté en SQL plutôt que côté client : la page ne charge que 500 contacts,
+   * ce qui tronquerait les compteurs dès qu'un client dépasse ce volume.
+   */
+  async countsByStage(userId, provider = null) {
+    const params = [userId];
+    let sql = `SELECT crm_stage_id, count(*)::int AS n FROM opportunities
+               WHERE user_id = $1 AND crm_stage_id IS NOT NULL`;
+    if (provider) {
+      sql += ' AND crm_provider = $2';
+      params.push(provider);
+    }
+    sql += ' GROUP BY crm_stage_id';
+    const result = await query(sql, params);
+    const counts = {};
+    for (const row of result.rows) counts[row.crm_stage_id] = row.n;
+    return counts;
+  },
+};
+
 module.exports = {
   query: rawQuery,
   getClient,
@@ -2134,5 +2186,6 @@ module.exports = {
   notifications,
   prospectActivities,
   crmCleaningReports,
+  crmStages,
   teams,
 };

@@ -243,7 +243,12 @@ async function getDeals(apiToken, limit = 100) {
   return (deals || []).map(d => ({
     id: d.id,
     name: d.title,
+    // `stage` reste l'identifiant brut pour les appelants historiques ;
+    // stageId/pipelineId sont les clés de jointure avec le référentiel
+    // d'étapes (lib/crm-stage-resolver.js), qui seul connaît les libellés.
     stage: d.stage_id,
+    stageId: d.stage_id != null ? String(d.stage_id) : null,
+    pipelineId: d.pipeline_id != null ? String(d.pipeline_id) : null,
     status: d.status,
     value: d.value,
     personId: d.person_id?.value || d.person_id,

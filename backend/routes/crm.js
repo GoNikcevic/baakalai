@@ -26,6 +26,8 @@ const crmOauth = require('../lib/crm-oauth');
 const { rateLimit } = require('../lib/rate-limit');
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 }); // 5 clean ops per minute
 const scanLimit = rateLimit({ windowMs: 60000, max: 3 }); // 3 scans per minute
+// Le rapatriement des étapes tape l'API du CRM : on le borne comme un scan.
+const stagesSyncLimit = rateLimit({ windowMs: 60000, max: 3 });
 
 const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 const router = Router();
@@ -959,6 +961,90 @@ router.post('/import/:provider', async (req, res, next) => {
     res.json({ imported, updated, skipped, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
     track(req.user.id, 'import_failed', { provider: req.params.provider, error: String(err.message).slice(0, 200) });
+    next(err);
+  }
+});
+
+// =============================================
+// Étapes de pipeline — référentiel unifié (migration 079)
+// =============================================
+
+/**
+ * Résout le CRM actif de l'utilisateur et ses identifiants.
+ * Salesforce est le seul à exiger un objet (accessToken + instanceUrl).
+ */
+async function activeCrmCredentials(userId) {
+  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+  let provider = userRow.rows[0]?.active_crm_provider || null;
+
+  if (!provider) {
+    // Aucun CRM actif choisi : on retombe sur le premier connecté, dans le même
+    // ordre que crm-agent pour que l'affichage corresponde à ce qui est synchronisé.
+    for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo']) {
+      const token = await getUserCrmToken(userId, p);
+      if (token) return { provider: p, credentials: await withInstanceUrl(userId, p, token) };
+    }
+    return { provider: null, credentials: null };
+  }
+
+  const token = await getUserCrmToken(userId, provider);
+  if (!token) return { provider, credentials: null };
+  return { provider, credentials: await withInstanceUrl(userId, provider, token) };
+}
+
+async function withInstanceUrl(userId, provider, token) {
+  if (provider !== 'salesforce') return token;
+  const integration = await db.query(
+    "SELECT access_token, instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'",
+    [userId]
+  );
+  const row = integration.rows[0];
+  if (!row?.instance_url) return null;
+  return {
+    accessToken: typeof token === 'string' ? token : decrypt(row.access_token),
+    instanceUrl: row.instance_url,
+  };
+}
+
+// GET /api/crm/stages — Étapes du CRM actif + nombre de deals par étape
+router.get('/stages', async (req, res, next) => {
+  try {
+    const { provider } = await activeCrmCredentials(req.user.id);
+    const [stages, counts] = await Promise.all([
+      db.crmStages.listByUser(req.user.id, provider),
+      db.crmStages.countsByStage(req.user.id, provider),
+    ]);
+    res.json({
+      provider,
+      stages: stages.map(s => ({
+        id: s.stage_id,
+        name: s.stage_name,
+        pipelineId: s.pipeline_id,
+        pipelineName: s.pipeline_name,
+        order: s.display_order,
+        isWon: s.is_won,
+        isClosed: s.is_closed,
+        count: counts[s.stage_id] || 0,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/crm/stages/sync — Rapatrier les étapes maintenant
+// (la synchro quotidienne le fait déjà ; cette route sert au premier
+// branchement d'un CRM, pour ne pas attendre le cron de 9h).
+router.post('/stages/sync', stagesSyncLimit, async (req, res, next) => {
+  try {
+    const { provider, credentials } = await activeCrmCredentials(req.user.id);
+    if (!provider) return res.status(400).json({ error: 'No CRM connected' });
+    if (!credentials) return res.status(400).json({ error: `${provider} credentials incomplete` });
+
+    const { syncStages } = require('../lib/crm-stage-resolver');
+    const map = await syncStages(req.user.id, provider, credentials);
+    res.json({ ok: true, provider, imported: map.size });
+  } catch (err) {
     next(err);
   }
 });

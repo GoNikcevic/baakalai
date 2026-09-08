@@ -552,7 +552,12 @@
     "churnFactors": "Churn risk factors",
     "churnScoringError": "Churn scoring failed",
     "error": "Error",
-    "autopilotHelp": "When enabled, baakalai automatically sends follow-up emails to this contact based on your active triggers."
+    "autopilotHelp": "When enabled, baakalai automatically sends follow-up emails to this contact based on your active triggers.",
+    "pipelineFrom": "Stages imported from {crm}",
+    "noStages": "No stages imported yet",
+    "syncStages": "Import stages",
+    "syncingStages": "Importing…",
+    "stagesSynced": "{count} stage(s) imported"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring and CRM health",

@@ -97,6 +97,75 @@ async function getDeal(accessToken, dealId) {
   return hubspotFetch(accessToken, `/crm/v3/objects/deals/${dealId}`);
 }
 
+/**
+ * Liste les deals avec leur étape de pipeline et le contact associé.
+ *
+ * `hs_is_closed` / `hs_is_closed_won` sont calculées par HubSpot à partir de
+ * l'étape : on les prend telles quelles plutôt que de déduire le statut du
+ * libellé d'étape, qui est libre côté client.
+ *
+ * `personId` est le premier contact associé — c'est la clé de rapprochement
+ * avec opportunities.crm_contact_id, qui stocke des contacts, pas des deals.
+ */
+async function getDeals(accessToken, limit = 500) {
+  const deals = [];
+  let after;
+  const props = [
+    'dealname', 'amount', 'dealstage', 'pipeline', 'createdate',
+    'hs_lastmodifieddate', 'notes_last_updated', 'hs_is_closed', 'hs_is_closed_won',
+  ].join(',');
+
+  while (deals.length < limit) {
+    const pageSize = Math.min(100, limit - deals.length);
+    let url = `/crm/v3/objects/deals?limit=${pageSize}&properties=${props}&associations=contacts`;
+    if (after) url += `&after=${after}`;
+    const data = await hubspotFetch(accessToken, url);
+    const results = data.results || [];
+
+    for (const d of results) {
+      const p = d.properties || {};
+      deals.push({
+        id: d.id,
+        name: p.dealname || null,
+        stageId: p.dealstage || null,
+        pipelineId: p.pipeline || null,
+        status: p.hs_is_closed_won === 'true' ? 'won' : p.hs_is_closed === 'true' ? 'lost' : 'open',
+        value: parseFloat(p.amount) || 0,
+        personId: d.associations?.contacts?.results?.[0]?.id || null,
+        createdAt: p.createdate || null,
+        updatedAt: p.hs_lastmodifieddate || p.createdate || null,
+      });
+    }
+
+    if (!data.paging?.next?.after || results.length === 0) break;
+    after = data.paging.next.after;
+  }
+  return deals;
+}
+
+/**
+ * Référentiel des pipelines de deals et de leurs étapes.
+ *
+ * HubSpot ne marque pas « gagné » par un booléen dédié : une étape fermée porte
+ * `metadata.isClosed`, et l'étape gagnante est celle dont la probabilité vaut 1.
+ * C'est la convention officielle du pipeline par défaut (closedwon = 1.0).
+ */
+async function getPipelines(accessToken) {
+  const data = await hubspotFetch(accessToken, '/crm/v3/pipelines/deals');
+  return (data.results || []).map(pl => ({
+    id: String(pl.id),
+    name: pl.label || null,
+    order: pl.displayOrder ?? 0,
+    stages: (pl.stages || []).map(s => ({
+      id: String(s.id),
+      name: s.label || String(s.id),
+      order: s.displayOrder ?? 0,
+      isClosed: String(s.metadata?.isClosed) === 'true',
+      isWon: parseFloat(s.metadata?.probability) === 1,
+    })),
+  }));
+}
+
 // =============================================
 // Associations (link contact ↔ deal)
 // =============================================
@@ -313,6 +382,8 @@ module.exports = {
   createDeal,
   updateDeal,
   getDeal,
+  getDeals,
+  getPipelines,
   listDealsForDiagnostic,
   // Associations
   associateContactToDeal,

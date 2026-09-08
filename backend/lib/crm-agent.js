@@ -25,6 +25,7 @@ const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const { notifyUser } = require('../socket');
 const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
+const { syncStages, stageUpdates, statusFromStage, extractStageId, odooCreds } = require('./crm-stage-resolver');
 const { extractActivityDate } = require('./crm-activity-date');
 const { applyMappings } = require('./crm-field-mapper');
 const { matchContacts } = require('./trigger-matching');
@@ -49,7 +50,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
   const startTime = Date.now();
   const report = {
     trigger,
-    sync: { imported: 0, updated: 0 },
+    sync: { imported: 0, updated: 0, stagesApplied: 0 },
     cleaning: { issues: 0, score: null },
     nurture: { evaluated: 0, sent: 0, queued: 0 },
     responses: { analyzed: 0, positive: 0, negative: 0 },
@@ -426,27 +427,42 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         } catch { /* mapping is optional */ }
       }
     }
-    // Sync deal values + lifecycle dates from CRM deals
+    // Sync deal values + lifecycle dates + pipeline stage from CRM deals
     try {
+      // Référentiel d'étapes du client, rapatrié avant la boucle : une seule
+      // lecture pour tous les deals (lib/crm-stage-resolver.js).
+      const stageMap = await syncStages(userId, crmProvider, token);
+
       let deals = [];
       if (crmProvider === 'pipedrive') deals = await pipedrive.getDeals(token, 500);
-      else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
+      else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken, 500); }
+      else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token, 500); }
+      else if (crmProvider === 'odoo') { const od = require('../api/odoo'); deals = await od.getDeals(odooCreds(token), { limit: 500 }); }
 
       for (const deal of deals) {
-        const personId = deal.personId ? String(deal.personId) : null;
+        // Odoo rattache le deal à un partenaire (`contactId`), les autres à une
+        // personne (`personId`) : c'est la même chose côté opportunities.
+        const personId = (deal.personId ?? deal.contactId) != null
+          ? String(deal.personId ?? deal.contactId)
+          : null;
         if (!personId) continue;
 
         const opp = await db.query(
-          `SELECT id, status, won_date, lost_date, deal_value FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+          `SELECT id, status, won_date, lost_date, deal_value, crm_stage_id FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
           [userId, personId]
         );
         if (!opp.rows[0]) continue;
         const o = opp.rows[0];
 
-        const updates = {};
+        const updates = { ...stageUpdates(crmProvider, deal, stageMap, o) };
+        if (updates.crm_stage_id) report.sync.stagesApplied++;
         if (deal.value && deal.value !== parseFloat(o.deal_value)) updates.deal_value = deal.value;
-        if (deal.status === 'won' && o.status !== 'won') { updates.status = 'won'; updates.won_date = new Date().toISOString(); }
-        if (deal.status === 'lost' && o.status !== 'lost') { updates.status = 'lost'; updates.lost_date = new Date().toISOString(); }
+
+        // Odoo n'expose pas de statut : le gain n'existe que comme drapeau sur
+        // l'étape. Le référentiel qu'on vient de rapatrier permet enfin de le lire.
+        const dealStatus = deal.status || statusFromStage(stageMap, extractStageId(crmProvider, deal));
+        if (dealStatus === 'won' && o.status !== 'won') { updates.status = 'won'; updates.won_date = new Date().toISOString(); }
+        if (dealStatus === 'lost' && o.status !== 'lost') { updates.status = 'lost'; updates.lost_date = new Date().toISOString(); }
 
         if (Object.keys(updates).length > 0) {
           // Attribution: if deal moves to 'won' from lost/stagnant, check for reactivation email in last 90 days
@@ -469,7 +485,13 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           await db.opportunities.update(o.id, updates);
         }
       }
-    } catch { /* deal sync is optional */ }
+    } catch (err) {
+      // Anciennement avalée en silence. Cette boucle porte désormais aussi
+      // l'étape de pipeline : si la migration 079 n'est pas passée, le SELECT
+      // échoue et TOUTE la synchro des deals (montant, gagné, perdu) s'arrête
+      // sans laisser la moindre trace. On loggue donc la cause.
+      logger.warn('crm-agent', `Sync deals (${crmProvider}) : ${err.message}`);
+    }
   } catch (err) {
     report.errors.push(`Sync: ${err.message}`);
   }

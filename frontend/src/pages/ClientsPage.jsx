@@ -35,6 +35,7 @@ export default function ClientsPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [stages, setStages] = useState([]);
+  const [syncingStages, setSyncingStages] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [connectedCrm, setConnectedCrm] = useState(null);
   const [churnSummary, setChurnSummary] = useState(null);
@@ -76,17 +77,12 @@ export default function ClientsPage() {
       if (churnData) setChurnSummary(churnData);
       setOwners(ownersData.owners || []);
 
-      // Load pipeline stages (depends on active CRM)
-      if (activeCrm === 'pipedrive') {
-        const pipelinesData = await request('/crm/pipedrive/pipelines').catch(() => ({ pipelines: [] }));
-        if (pipelinesData.pipelines?.length > 0) {
-          const stagesData = await request(`/crm/pipedrive/stages/${pipelinesData.pipelines[0].id}`).catch(() => ({ stages: [] }));
-          setStages(stagesData.stages || []);
-        }
-      } else if (activeCrm === 'odoo') {
-        const stagesData = await request('/crm/odoo/stages').catch(() => ({ stages: [] }));
-        setStages(stagesData.stages || []);
-      }
+      // Étapes du pipeline : un seul endpoint pour tous les CRM, et les
+      // compteurs viennent du serveur. L'ancien chemin n'interrogeait que
+      // Pipedrive et Odoo, ne prenait que le premier pipeline, et comptait
+      // côté client sur les 500 contacts chargés.
+      const stagesData = await request('/crm/stages').catch(() => ({ stages: [] }));
+      setStages(stagesData.stages || []);
     } catch { /* ignore */ }
     setLoading(false);
   }, []);
@@ -116,6 +112,25 @@ export default function ClientsPage() {
     setImporting(false);
   }, [loadData, connectedCrm, clients.length]);
 
+  // Rapatriement à la demande : la synchro quotidienne le fait déjà, mais un
+  // CRM tout juste branché n'a aucune étape avant le cron de 9h.
+  const handleSyncStages = useCallback(async () => {
+    setSyncingStages(true);
+    try {
+      const result = await request('/crm/stages/sync', { method: 'POST' });
+      const stagesData = await request('/crm/stages').catch(() => ({ stages: [] }));
+      setStages(stagesData.stages || []);
+      showToast({
+        type: 'success',
+        title: t('common.success'),
+        message: t('clients.stagesSynced').replace('{count}', result.imported ?? 0),
+      });
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setSyncingStages(false);
+  }, [t]);
+
   const filtered = useMemo(() => clients.filter(c => {
     // If highlight param is set, only show those contacts
     if (highlightIds) return highlightIds.has(c.id);
@@ -134,6 +149,18 @@ export default function ClientsPage() {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
     return 0;
   }), [clients, filter, ownerFilter, crmFilter, search, highlightIds]);
+
+  // Regroupement par pipeline : Pipedrive et HubSpot en exposent plusieurs,
+  // Salesforce et Odoo un seul (pipelineName null → une seule barre).
+  const stagesByPipeline = useMemo(() => {
+    const groups = new Map();
+    for (const stage of stages) {
+      const key = stage.pipelineName || '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(stage);
+    }
+    return [...groups.entries()];
+  }, [stages]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
@@ -374,18 +401,67 @@ export default function ClientsPage() {
         </div>
       ) : null}
 
-      {/* Pipeline stages */}
+      {/* Aucune étape encore rapatriée : sans ce bloc, un CRM fraîchement
+          branché n'offre aucun moyen de déclencher l'import avant le cron. */}
+      {connectedCrm && stages.length === 0 && !loading && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20,
+          fontSize: 12, color: 'var(--text-muted)',
+        }}>
+          <span>{t('clients.noStages')}</span>
+          <button
+            onClick={handleSyncStages} disabled={syncingStages}
+            style={{
+              padding: '3px 10px', border: '1px solid var(--border)', borderRadius: 6,
+              background: 'transparent', color: 'var(--text-muted)', fontSize: 11,
+              cursor: syncingStages ? 'default' : 'pointer',
+            }}
+          >
+            {syncingStages ? t('clients.syncingStages') : t('clients.syncStages')}
+          </button>
+        </div>
+      )}
+
+      {/* Étapes du pipeline, telles qu'elles existent dans le CRM du client */}
       {stages.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', padding: '4px 0' }}>
-          {stages.map((stage, i) => (
-            <div key={stage.id} style={{
-              flex: '1 0 120px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderTop: `3px solid ${STAGE_COLORS[i % STAGE_COLORS.length]}`, borderRadius: 10,
-              padding: '12px 14px', textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{stage.name}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: STAGE_COLORS[i % STAGE_COLORS.length] }}>
-                {clients.filter(c => c.crm_stage === stage.id || c.status === stage.name?.toLowerCase()).length}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('clients.pipelineFrom').replace('{crm}', crmLabel)}
+            </div>
+            <button
+              onClick={handleSyncStages} disabled={syncingStages}
+              style={{
+                padding: '3px 10px', border: '1px solid var(--border)', borderRadius: 6,
+                background: 'transparent', color: 'var(--text-muted)', fontSize: 11,
+                cursor: syncingStages ? 'default' : 'pointer',
+              }}
+            >
+              {syncingStages ? t('clients.syncingStages') : t('clients.syncStages')}
+            </button>
+          </div>
+          {stagesByPipeline.map(([pipelineName, pipelineStages]) => (
+            <div key={pipelineName} style={{ marginBottom: 12 }}>
+              {/* Un client peut avoir plusieurs pipelines : sans ce titre, les
+                  étapes de deux pipelines se mélangeraient dans une même barre. */}
+              {stagesByPipeline.length > 1 && (
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {pipelineName}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 0' }}>
+                {pipelineStages.map((stage, i) => (
+                  <div key={stage.id} style={{
+                    flex: '1 0 120px', background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderTop: `3px solid ${STAGE_COLORS[i % STAGE_COLORS.length]}`, borderRadius: 10,
+                    padding: '12px 14px', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{stage.name}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: STAGE_COLORS[i % STAGE_COLORS.length] }}>
+                      {stage.count || 0}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}

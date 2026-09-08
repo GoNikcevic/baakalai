@@ -57,6 +57,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 - Delta sync — only sync what changed since last run
 - Owner resolver — unified CRM owner → team member mapping (`lib/crm-owner-resolver.js`)
 - CRM field mapper — map CRM custom fields to product lines/status (`lib/crm-field-mapper.js`)
+- Stage resolver — import the client's real pipeline stages from any CRM into `crm_stages` + `opportunities.crm_stage_*` (`lib/crm-stage-resolver.js`)
 
 ### Database (key tables)
 

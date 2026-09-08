@@ -81,18 +81,65 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
 async function getDeals(instanceUrl, accessToken, limit = 100) {
   // LastActivityDate / LastModifiedDate : sans elles, la récence d'un deal est
   // inconnue et rien ne peut être signalé comme dormant. Voir lib/crm-activity-date.js.
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  // IsClosed/IsWon : c'est Salesforce qui décide si une étape est fermée et
+  // gagnante. Sans ces deux champs, `status` ci-dessous vaudrait toujours 'open'.
+  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsClosed, IsWon FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  return (result.records || []).map(r => ({
+  const records = result.records || [];
+
+  // Salesforce ne porte aucun contact sur l'Opportunity : le lien passe par
+  // OpportunityContactRole. Sans lui, `personId` est absent et toute la boucle
+  // de synchro des deals (crm-agent) saute chaque opportunité en silence.
+  const contactByOpp = await fetchPrimaryContacts(
+    instanceUrl, accessToken, records.map(r => r.Id)
+  );
+
+  return records.map(r => ({
     id: r.Id,
     name: r.Name,
     stage: r.StageName,
+    // L'Opportunity ne stocke que le libellé de l'étape, pas l'Id du
+    // OpportunityStage : c'est donc MasterLabel qui sert de clé de jointure
+    // avec le référentiel (voir getStages).
+    stageId: r.StageName || null,
+    status: r.IsClosed ? (r.IsWon ? 'won' : 'lost') : 'open',
     amount: r.Amount,
+    value: r.Amount,
+    personId: contactByOpp.get(r.Id) || null,
     closeDate: r.CloseDate,
     createdAt: r.CreatedDate,
     // Sans ces deux champs le deal remonte sans recence, donc jamais dormant.
     lastActivityAt: extractActivityDate('salesforce', r),
   }));
+}
+
+/**
+ * Contact principal de chaque opportunité, via OpportunityContactRole.
+ * À défaut de rôle marqué IsPrimary, on prend le premier rôle trouvé : mieux
+ * vaut rattacher le deal à un contact de l'affaire que de le perdre.
+ */
+async function fetchPrimaryContacts(instanceUrl, accessToken, opportunityIds) {
+  const byOpp = new Map();
+  // Les Id Salesforce sont alphanumériques : ce filtre garantit qu'aucune
+  // valeur inattendue ne puisse atteindre la clause IN ci-dessous.
+  const ids = opportunityIds.filter(id => typeof id === 'string' && /^[a-zA-Z0-9]{15,18}$/.test(id));
+  if (ids.length === 0) return byOpp;
+
+  // Les Id sont générés par Salesforce (alphanumériques) : aucune donnée libre
+  // n'entre dans la clause IN, donc pas d'injection SOQL possible ici.
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200).map(id => `'${id}'`).join(',');
+    const soql = `SELECT OpportunityId, ContactId, IsPrimary FROM OpportunityContactRole WHERE OpportunityId IN (${chunk}) ORDER BY IsPrimary DESC`;
+    try {
+      const res = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(soql)}`);
+      for (const r of res.records || []) {
+        // ORDER BY IsPrimary DESC : le premier vu pour une opportunité est le
+        // principal s'il en existe un, d'où le `if (!has)`.
+        if (!byOpp.has(r.OpportunityId) && r.ContactId) byOpp.set(r.OpportunityId, r.ContactId);
+      }
+    } catch { /* les rôles de contact sont optionnels : le deal reste exploitable */ }
+  }
+  return byOpp;
 }
 
 // Diagnostic public (lead magnet) : lecture unique et anonyme des
@@ -769,6 +816,7 @@ module.exports = {
   getDeals,
   listDealsForDiagnostic,
   getStages,
+  fetchPrimaryContacts,
   getUsers,
   getActivities,
   getContactFields,

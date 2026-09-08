@@ -552,7 +552,12 @@
     "churnFactors": "Facteurs de risque churn",
     "churnScoringError": "Le scoring churn a échoué",
     "error": "Erreur",
-    "autopilotHelp": "Quand activé, baakalai envoie automatiquement des emails de suivi à ce contact selon vos triggers actifs."
+    "autopilotHelp": "Quand activé, baakalai envoie automatiquement des emails de suivi à ce contact selon vos triggers actifs.",
+    "pipelineFrom": "Étapes rapatriées de {crm}",
+    "noStages": "Aucune étape rapatriée pour le moment",
+    "syncStages": "Rapatrier les étapes",
+    "syncingStages": "Rapatriement…",
+    "stagesSynced": "{count} étape(s) rapatriée(s)"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring et santé de votre CRM",

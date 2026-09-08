@@ -186,13 +186,18 @@ async function getStages(creds) {
   if (!ids || ids.length === 0) return [];
 
   const stages = await call(creds, 'crm.stage', 'read', [ids], {
-    fields: ['id', 'name', 'sequence', 'is_won'],
+    // team_id : dans Odoo, un pipeline n'est pas un objet — c'est l'équipe
+    // commerciale à laquelle l'étape est rattachée. Une étape sans équipe est
+    // partagée par tous les pipelines.
+    fields: ['id', 'name', 'sequence', 'is_won', 'team_id'],
   });
   return stages.map(s => ({
     id: s.id,
     name: s.name,
     order: s.sequence,
     isWon: s.is_won,
+    teamId: s.team_id?.[0] || null,
+    teamName: s.team_id?.[1] || null,
   }));
 }
 
