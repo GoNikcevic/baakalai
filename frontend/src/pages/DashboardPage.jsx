@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useMemo, useCallback, useState, useEffect } from 'react';
-import { useOutletContext, Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import { useSocket } from '../context/SocketContext';
@@ -46,7 +46,6 @@ export default function DashboardPage() {
   const { lang } = useI18n();
   const en = lang === 'en';
   const { campaigns, globalKpis, opportunities, recommendations, chartData, setOpportunities } = useApp();
-  const { setShowCreatorModal } = useOutletContext() || {};
   const navigate = useNavigate();
   const openCreator = useCallback(() => navigate('/campaigns', { state: { openAssistant: true } }), [navigate]);
   const { socket } = useSocket();

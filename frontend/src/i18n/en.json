@@ -1,6 +1,6 @@
 {
   "nav": {
-    "campaigns": "Campaigns",
+    "campaigns": "Prospecting",
     "chat": "Chat",
     "assistant": "Assistant",
     "dashboard": "Dashboard",
@@ -17,7 +17,6 @@
     "crmAnalytics": "CRM Analytics",
     "membership": "Membership Analytics",
     "help": "Help",
-    "newCampaign": "+ New campaign",
     "openSidebar": "Open sidebar",
     "collapseSidebar": "Collapse sidebar",
     "logoutTitle": "Log out",
@@ -171,7 +170,7 @@
     "enrichDoneDesc": "{skipped} skipped · {errors} error(s)",
     "enrichFailed": "Personalization failed",
     "enrichFailedDesc": "Unknown error — check your Brave Search API key.",
-    "tabAssistant": "Assistant"
+    "tabAssistant": "Build a campaign"
   },
   "prospectGen": {
     "title": "Generate prospects",
@@ -504,7 +503,7 @@
     "title": "Activation",
     "subtitle": "Automate your client follow-up emails",
     "overview": "Overview",
-    "campaigns": "Campaigns",
+    "campaigns": "Sequences",
     "triggers": "Triggers",
     "pending": "Pending",
     "sent": "Sent",

@@ -6,7 +6,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import api, { request } from '../services/api-client';
