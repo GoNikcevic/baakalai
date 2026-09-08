@@ -226,6 +226,9 @@ async function runDealReactivation(userId) {
               EXTRACT(DAY FROM now() - COALESCE(o.last_activity_at, o.created_at))::int AS days_since_activity
          FROM opportunities o
         WHERE o.user_id = $1
+          -- Contacts CRM uniquement : un prospect froid de campagne n'a jamais
+          -- eu d'échange à « réactiver » (cf. lib/crm-scope.js).
+          AND o.campaign_id IS NULL
           AND o.status NOT IN ('won', 'lost')
           AND o.email IS NOT NULL AND o.email <> ''
           AND COALESCE(o.last_activity_at, o.created_at) < now() - ($2 || ' days')::interval
