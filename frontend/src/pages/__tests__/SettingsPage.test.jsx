@@ -15,6 +15,9 @@ vi.mock('../../services/auth', () => ({
 
 // Mock api-client
 vi.mock('../../services/api-client', () => ({
+  // Les composants passent par request() pour les appels non typés ;
+  // sans cette entrée, vitest rejette tout accès à l'export absent.
+  request: vi.fn().mockResolvedValue({}),
   default: {
     checkHealth: vi.fn().mockResolvedValue(null),
   },
