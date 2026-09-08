@@ -1,6 +1,6 @@
 {
   "nav": {
-    "campaigns": "Campaigns",
+    "campaigns": "Prospecting",
     "chat": "Chat",
     "assistant": "Assistant",
     "dashboard": "Dashboard",
@@ -19,6 +19,7 @@
     "membership": "Membership Analytics",
     "help": "Help",
     "newCampaign": "+ New campaign",
+    "prospection": "Prospecting",
     "openSidebar": "Open sidebar",
     "collapseSidebar": "Collapse sidebar",
     "logoutTitle": "Log out"
@@ -256,7 +257,11 @@
     "templateUpsell": "Upsell existing clients",
     "templateUpsellDesc": "Offer current clients a complementary product",
     "templateProspection": "New target prospecting",
-    "templateProspectionDesc": "Email sequence built on your profile and ICP"
+    "templateProspectionDesc": "Email sequence built on your profile and ICP",
+    "templatesActivation": "Activate my CRM",
+    "templatesActivationHint": "contacts and deals already in your CRM",
+    "templatesProspection": "Reach new prospects",
+    "templatesProspectionHint": "targets not yet in your CRM"
   },
   "common": {
     "tagline": "The AI system that exploits your CRM",
@@ -506,7 +511,9 @@
     "emailsFailed": "Failed",
     "activeTriggersTitle": "Active triggers",
     "outOf": "out of {total}",
-    "connectCrm": "Connect Pipedrive and import your contacts to see activation metrics."
+    "connectCrm": "Connect Pipedrive and import your contacts to see activation metrics.",
+    "autopilotTitle": "Reply Autopilot",
+    "autopilotDesc": "AI answers incoming replies — cold prospects and CRM contacts alike — until a meeting is booked. Max 5 turns, 2-4h delay between replies. One setting, applies everywhere."
   },
   "clients": {
     "title": "Clients",

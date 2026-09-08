@@ -1120,6 +1120,7 @@ function TeamCampaignsSection({ lang }) {
 
 function AutopilotSection({ lang }) {
   const en = lang === 'en';
+  const t = useT();
   const [settings, setSettings] = useState(null);
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1162,18 +1163,21 @@ function AutopilotSection({ lang }) {
 
   return (
     <div>
-      {/* Settings card */}
+      {/* Réglage unique de l'autopilot. Il était affiché en double (ici et dans
+          l'onglet Campagnes) sur le même interrupteur global, sous deux noms
+          contradictoires : l'activer d'un côté le montrait actif de l'autre
+          sans explication. Un seul emplacement, et un nom qui dit ce qu'il
+          couvre vraiment — toute conversation entrante, prospect froid comme
+          contact CRM. */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {'\uD83E\uDD16'} {en ? 'Conversation Autopilot' : 'Autopilot de conversation'}
+                {'\uD83E\uDD16'} {t('activation.autopilotTitle')}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                {en
-                  ? 'AI manages replies to your prospects until a meeting is booked. Max 5 turns, 2-4h delay between responses.'
-                  : 'L\'IA gère les réponses à vos prospects jusqu\'à ce qu\'un RDV soit fixé. Max 5 tours, 2-4h entre chaque réponse.'}
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 560 }}>
+                {t('activation.autopilotDesc')}
               </div>
             </div>
             <button

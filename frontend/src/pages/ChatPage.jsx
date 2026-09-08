@@ -75,7 +75,7 @@ function getReturningSuggestions(lang) {
 
 function getActionPrompts(lang) {
   if (lang === 'en') return {
-    create: 'I want to create a new campaign. Based on my CRM, suggest the best type first (dormant deal reactivation, client re-engagement, upsell, or prospecting), then guide me step by step.',
+    create: 'I want to reach new prospects who are not yet in my CRM. Guide me step by step to build a cold prospecting campaign from my profile and ICP. If what I actually need is to work my existing CRM contacts (dormant deals, client re-engagement, upsell), tell me so and set up an Activation trigger instead.',
     refine: 'I want to refine one of my underperforming campaigns. Which ones can I improve?',
     analyze: 'Can you analyze the performance of my active campaigns and give me a diagnostic?',
     setup_profile: 'I just signed up. Help me set up my company profile to personalize my campaigns.',
@@ -83,7 +83,7 @@ function getActionPrompts(lang) {
     create_from_insights: 'You\'ve analyzed my previous campaigns and identified patterns that work. Create a new refined campaign based on these insights and cross-campaign memory. Suggest the best angle, tone and sequence based on what worked.',
   };
   return {
-    create: 'Je veux créer une nouvelle campagne. Propose-moi d\'abord le type le plus pertinent selon mon CRM (réactivation de deals dormants, relance clients, upsell ou prospection), puis guide-moi étape par étape.',
+    create: 'Je veux toucher de nouveaux prospects qui ne sont pas encore dans mon CRM. Guide-moi étape par étape pour construire une campagne de prospection froide à partir de mon profil et de mon ICP. Si ce dont j\'ai réellement besoin est de travailler mes contacts déjà présents dans le CRM (deals dormants, relance clients, upsell), dis-le-moi et mets plutôt en place un trigger d\'Activation.',
     refine: 'Je veux affiner une de mes campagnes existantes qui sous-performe. Quelles campagnes puis-je am\u00E9liorer ?',
     analyze: 'Peux-tu analyser les performances de mes campagnes actives et me donner un diagnostic ?',
     setup_profile: 'Je viens de m\'inscrire. Aide-moi \u00E0 configurer mon profil entreprise pour personnaliser mes campagnes.',
@@ -92,17 +92,25 @@ function getActionPrompts(lang) {
   };
 }
 
-// Templates alignés sur les jobs du produit : réactivation (hero) > relance clients
-// > upsell, prospection en porte d'entrée. Recrutement et partenariat retirés —
-// hors produit (baakalai exploite le CRM, il ne fait ni RH ni co-marketing).
-// La prospection s'appuie sur le profil/ICP de l'utilisateur, pas sur une cible inventée.
-function getCampaignTemplates(t) {
+// Deux familles distinctes, jamais mélangées — c'est la frontière du produit :
+//
+// - ACTIVATION : les contacts déjà dans le CRM (deals stagnants, clients
+//   inactifs, upsell). Ces jobs passent par un trigger d'Activation, pas par
+//   une campagne : une campagne ne lit pas le CRM, et le contact atterrirait
+//   dans Prospection alors qu'il n'y a rien à prospecter.
+// - PROSPECTION : des prospects froids absents du CRM. Seule famille qui
+//   crée une campagne.
+//
+// Recrutement et partenariat retirés — hors produit (baakalai exploite le CRM,
+// il ne fait ni RH ni co-marketing). La prospection s'appuie sur le profil/ICP
+// de l'utilisateur, pas sur une cible inventée.
+function getAssistantTemplates(t) {
   return [
-    { label: t('chat.templateDormant'), desc: t('chat.templateDormantDesc'), prompt: 'Look at my CRM and create a reactivation campaign for my dormant deals, prioritized by deal value. Warm, personal tone that references the previous conversation — never a cold pitch. 3 touchpoints spaced 5-7 days apart.' },
-    { label: t('chat.templateReactivation'), desc: t('chat.templateReactivationDesc'), prompt: 'Create an email reactivation sequence for existing clients who haven\'t been contacted in 3+ months. Warm tone, not salesy. Goal: re-establish contact and propose a check-in. 3 touchpoints spaced 7 days apart.' },
-    { label: t('chat.templateUpsell'), desc: t('chat.templateUpsellDesc'), prompt: 'Create an upsell campaign for my existing clients. Use my CRM data to identify which clients could benefit from an additional product or an upgrade. Peer-to-peer tone, lead with the value for them, no hard sell. 2-3 touchpoints.' },
-    { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
-    { label: t('chat.templateProspection'), desc: t('chat.templateProspectionDesc'), prompt: 'Create a prospecting campaign based on my company profile and ICP. If my profile is incomplete, ask me who I want to target — don\'t invent a target. Channel: email. Professional, direct tone. Generate the full sequence.' },
+    { family: 'activation', label: t('chat.templateDormant'), desc: t('chat.templateDormantDesc'), prompt: 'Set up CRM activation for my dormant deals: create an Activation trigger on stagnant deals, prioritized by deal value. Warm, personal tone that references the previous conversation — never a cold pitch. This targets contacts already in my CRM, so it must go through an Activation trigger, never a prospecting campaign.' },
+    { family: 'activation', label: t('chat.templateReactivation'), desc: t('chat.templateReactivationDesc'), prompt: 'Set up CRM activation for my existing clients who haven\'t been contacted in 3+ months: create an Activation trigger on inactive contacts. Warm tone, not salesy. Goal: re-establish contact and propose a check-in. These are contacts already in my CRM — use an Activation trigger, never a prospecting campaign.' },
+    { family: 'activation', label: t('chat.templateUpsell'), desc: t('chat.templateUpsellDesc'), prompt: 'Set up CRM activation for upsell: create an Activation trigger on upsell opportunities among my existing clients, using my CRM data and product lines. Peer-to-peer tone, lead with the value for them, no hard sell. These are clients already in my CRM — use an Activation trigger, never a prospecting campaign.' },
+    { family: 'prospection', label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short cold prospecting campaign (3 touchpoints) to book a 15-minute meeting with new prospects who are not yet in my CRM. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
+    { family: 'prospection', label: t('chat.templateProspection'), desc: t('chat.templateProspectionDesc'), prompt: 'Create a cold prospecting campaign based on my company profile and ICP, targeting prospects not yet in my CRM. If my profile is incomplete, ask me who I want to target — don\'t invent a target. Channel: email. Professional, direct tone. Generate the full sequence.' },
   ];
 }
 
@@ -1852,29 +1860,49 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
           <CrmReadingSummary onSuggestionClick={onSuggestionClick} />
         )}
 
-        {/* Campaign templates — shown when user has profile but no/few campaigns */}
+        {/* Templates — groupés par famille : Activation (contacts déjà dans le
+            CRM) et Prospection (prospects froids). Le regroupement est ce qui
+            rend la frontière lisible : sans lui, « relancer mes deals dormants »
+            et « prospecter une nouvelle cible » se ressemblent alors qu'ils ne
+            passent pas du tout par le même moteur. */}
         {(hasProfile && campaignCount === 0) && (
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: 10, marginBottom: 20, maxWidth: 640, width: '100%',
-          }}>
-            {getCampaignTemplates(t).map(tpl => (
-              <button
-                key={tpl.label}
-                onClick={() => onSuggestionClick(tpl.prompt)}
-                style={{
-                  background: 'var(--paper)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--r-lg)', padding: '14px 16px',
-                  textAlign: 'left', cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-softer)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--paper)'; }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>{tpl.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--grey-500)', lineHeight: 1.4 }}>{tpl.desc}</div>
-              </button>
-            ))}
+          <div style={{ marginBottom: 20, maxWidth: 640, width: '100%' }}>
+            {[
+              { family: 'activation', title: t('chat.templatesActivation'), hint: t('chat.templatesActivationHint') },
+              { family: 'prospection', title: t('chat.templatesProspection'), hint: t('chat.templatesProspectionHint') },
+            ].map(group => {
+              const items = getAssistantTemplates(t).filter(tpl => tpl.family === group.family);
+              if (items.length === 0) return null;
+              return (
+                <div key={group.family} style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{group.title}</span>
+                    <span style={{ fontSize: 11, color: 'var(--grey-500)' }}>{group.hint}</span>
+                  </div>
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10,
+                  }}>
+                    {items.map(tpl => (
+                      <button
+                        key={tpl.label}
+                        onClick={() => onSuggestionClick(tpl.prompt)}
+                        style={{
+                          background: 'var(--paper)', border: '1px solid var(--border)',
+                          borderRadius: 'var(--r-lg)', padding: '14px 16px',
+                          textAlign: 'left', cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-softer)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--paper)'; }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>{tpl.label}</div>
+                        <div style={{ fontSize: 11, color: 'var(--grey-500)', lineHeight: 1.4 }}>{tpl.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

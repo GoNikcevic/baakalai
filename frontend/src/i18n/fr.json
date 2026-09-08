@@ -1,6 +1,6 @@
 {
   "nav": {
-    "campaigns": "Campagnes",
+    "campaigns": "Prospection",
     "chat": "Chat",
     "assistant": "Assistant",
     "dashboard": "Dashboard",
@@ -19,6 +19,7 @@
     "membership": "Analytics Clients",
     "help": "Aide",
     "newCampaign": "+ Nouvelle campagne",
+    "prospection": "Prospection",
     "openSidebar": "Ouvrir la sidebar",
     "collapseSidebar": "Réduire la sidebar",
     "logoutTitle": "Se déconnecter"
@@ -256,7 +257,11 @@
     "templateUpsell": "Upsell clients existants",
     "templateUpsellDesc": "Proposer une offre complémentaire aux clients actuels",
     "templateProspection": "Prospection nouvelle cible",
-    "templateProspectionDesc": "Séquence email construite sur votre profil et votre ICP"
+    "templateProspectionDesc": "Séquence email construite sur votre profil et votre ICP",
+    "templatesActivation": "Activer mon CRM",
+    "templatesActivationHint": "contacts et deals déjà dans votre CRM",
+    "templatesProspection": "Aller chercher de nouveaux prospects",
+    "templatesProspectionHint": "cibles absentes de votre CRM"
   },
   "common": {
     "tagline": "Le système IA qui exploite ton CRM",
@@ -506,7 +511,9 @@
     "emailsFailed": "Échoués",
     "activeTriggersTitle": "Triggers actifs",
     "outOf": "sur {total}",
-    "connectCrm": "Connectez Pipedrive et importez vos contacts pour voir les métriques d'activation."
+    "connectCrm": "Connectez Pipedrive et importez vos contacts pour voir les métriques d'activation.",
+    "autopilotTitle": "Autopilot de réponse",
+    "autopilotDesc": "L'IA répond aux réponses entrantes — prospects froids comme contacts CRM — jusqu'à ce qu'un RDV soit fixé. Max 5 tours, 2 à 4h de délai entre chaque réponse. Réglage unique, valable partout."
   },
   "clients": {
     "title": "Clients",

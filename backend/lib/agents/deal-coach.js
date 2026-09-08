@@ -11,6 +11,7 @@
 const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
+const { onlyCrmContacts } = require('../crm-scope');
 const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 
 const DAY_MS = 86400000;
@@ -19,7 +20,9 @@ async function run(userId) {
   const report = { coached: 0, suggestions: [], errors: [] };
 
   try {
-    const opps = await db.opportunities.listByUser(userId, 500, 0);
+    // Contacts CRM uniquement : les prospects froids d'une campagne de
+    // prospection ne sont pas des deals à coacher (cf. lib/crm-scope.js).
+    const opps = onlyCrmContacts(await db.opportunities.listByUser(userId, 500, 0));
     const now = Date.now();
 
     // Find stagnant deals (open, no activity in 14+ days)
