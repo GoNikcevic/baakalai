@@ -549,7 +549,8 @@
   "clients": {
     "title": "Clients",
     "contactsInCrm": "{count} contact(s) in your CRM",
-    "importFrom": "Import from {crm}",
+    "dealsInCrm": "{count} ongoing deal(s) in your CRM",
+    "refresh": "Refresh",
     "importing": "Importing...",
     "connectCrm": "Connect a CRM",
     "imported": "{count} imported, {skipped} already present",
@@ -569,7 +570,6 @@
     "emailPending": "Pending",
     "noActivity": "No activity for this contact",
     "importResult": "{imported} imported, {skipped} already present",
-    "merged": "Contacts merged successfully",
     "churnRisk": "Churn risk",
     "churnPrediction": "Churn Prediction",
     "churnPredictionDesc": "Score your contacts to detect churn risk",
@@ -589,8 +589,7 @@
     "owner": "Owner",
     "churnFactors": "Churn risk factors",
     "churnScoringError": "Churn scoring failed",
-    "error": "Error",
-    "autopilotHelp": "When enabled, baakalai automatically sends follow-up emails to this contact based on your active triggers."
+    "error": "Error"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring and CRM health",
