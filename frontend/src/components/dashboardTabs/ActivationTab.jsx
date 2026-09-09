@@ -354,56 +354,26 @@ function EmptyKpis() {
 }
 
 function EmptyOverviewGrid({ onCreateCampaign }) {
-  const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
   return (
-    <div className="section-grid">
-      <div className="card card-empty">
-        <div className="card-header">
-          <div className="card-title">{'\u{1F3AF}'} {en ? 'Active campaigns' : 'Campagnes actives'}</div>
-        </div>
-        <div className="card-body">
-          <div className="empty-icon">{'\u{1F4ED}'}</div>
-          <div className="empty-text">
-            {en ? 'No campaigns yet. Create your first campaign to see your performance here.'
-              : 'Aucune campagne pour le moment. Créez votre première campagne pour voir vos performances ici.'}
-          </div>
-          <button
-            className="btn btn-primary"
-            style={{ marginTop: '16px', fontSize: '13px' }}
-            onClick={onCreateCampaign}
-          >
-            {en ? 'Create a campaign' : 'Créer une campagne'}
-          </button>
-        </div>
+    <div className="card card-empty">
+      <div className="card-header">
+        <div className="card-title">{'\u{1F3AF}'} {en ? 'Active campaigns' : 'Campagnes actives'}</div>
       </div>
-
-      <div className="card card-empty">
-        <div className="card-header">
-          <div className="card-title">{'\u{1F4C8}'} {en ? '4-week performance' : 'Performance 4 semaines'}</div>
+      <div className="card-body">
+        <div className="empty-icon">{'\u{1F4ED}'}</div>
+        <div className="empty-text">
+          {en ? 'No campaigns yet. Create your first campaign to see your performance here.'
+            : 'Aucune campagne pour le moment. Créez votre première campagne pour voir vos performances ici.'}
         </div>
-        <div className="card-body">
-          <div className="empty-icon">{'\u{1F4CA}'}</div>
-          <div className="empty-text">
-            {en ? 'Performance charts will appear once your first campaign is active.'
-              : 'Les graphiques de performance apparaîtront dès que votre première campagne sera active.'}
-          </div>
-        </div>
-      </div>
-
-      <div className="card card-empty">
-        <div className="card-header">
-          <div className="card-title">{'\u{1F4A1}'} {en ? 'Baakalai Recommendations' : 'Recommandations Baakalai'}</div>
-        </div>
-        <div className="card-body">
-          <div className="empty-icon">{'\u{1F916}'}</div>
-          <div className="empty-text">
-            {t('dashboard.emptyRecoText') || (en
-              ? 'baakalai will analyze your campaigns and suggest refinements once it has enough data (>50 prospects, >7 days).'
-              : 'baakalai analysera vos campagnes et proposera des ajustements dès qu\'il aura assez de données (>50 prospects, >7 jours).')}
-          </div>
-        </div>
+        <button
+          className="btn btn-primary"
+          style={{ marginTop: '16px', fontSize: '13px' }}
+          onClick={onCreateCampaign}
+        >
+          {en ? 'Create a campaign' : 'Créer une campagne'}
+        </button>
       </div>
     </div>
   );

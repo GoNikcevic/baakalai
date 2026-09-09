@@ -478,12 +478,7 @@
     "accountCreated": "Account created",
     "crmConnected": "Connect your CRM (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable or Folk)",
     "emailConnected": "Connect an email (Gmail or Outlook)",
-    "contactsImported": "Import your deals from the CRM",
-    "firstCampaign": "Create your first campaign",
-    "firstLaunch": "Launch a campaign",
-    "continueChat": "Continue setup in chat →",
-    "allDone": "All set! You can start prospecting.",
-    "continueSettings": "Go to Settings →"
+    "contactsImported": "Import your deals from the CRM"
   },
   "replies": {
     "title": "Prospect Activities",

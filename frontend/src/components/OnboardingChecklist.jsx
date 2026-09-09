@@ -1,7 +1,9 @@
 /* ===============================================================================
    BAKAL — Onboarding Checklist Component
    Shows a progress card on the dashboard for new users (beta testers).
-   6-step guided tour to first campaign launch in <30 min.
+   4-step guided tour covering CRM connection + import + email — the two
+   mandatory prerequisites, nothing about campaigns (that's a downstream step,
+   not a first-run blocker).
    Complements the OnboardingWizard (wizard = initial setup, checklist = ongoing guide).
    =============================================================================== */
 
@@ -20,14 +22,12 @@ const STEP_CONFIG = [
   // Les contacts fraîchement importés sont des deals en cours, pas des clients gagnés.
   { key: 'contactsImported', route: '/deals' },
   { key: 'emailConnected', route: '/settings' },
-  { key: 'firstCampaign', route: '/campaigns', state: { openAssistant: true } },
-  { key: 'firstLaunch', route: '/campaigns' },
 ];
 
 export default function OnboardingChecklist() {
   const t = useT();
   const navigate = useNavigate();
-  const { campaigns, opportunities } = useApp();
+  const { opportunities } = useApp();
 
   const [keys, setKeys] = useState(null);
   const [emailAccounts, setEmailAccounts] = useState(null);
@@ -69,7 +69,6 @@ export default function OnboardingChecklist() {
     return () => { cancelled = true; };
   }, []);
 
-  const campaignsList = useMemo(() => Object.values(campaigns || {}), [campaigns]);
   const contactsList = useMemo(() => Object.values(opportunities || {}), [opportunities]);
 
   const steps = useMemo(() => {
@@ -95,17 +94,11 @@ export default function OnboardingChecklist() {
     // 4. Contacts imported — at least one contact/opportunity exists
     const contactsImported = contactsList.length > 0;
 
-    // 5. First campaign created
-    const firstCampaign = campaignsList.length > 0;
-
-    // 6. First campaign launched
-    const firstLaunch = campaignsList.some(c => c.status === 'active');
-
     return STEP_CONFIG.map((cfg, i) => ({
       ...cfg,
-      done: [accountCreated, crmConnected, contactsImported, emailConnected, firstCampaign, firstLaunch][i],
+      done: [accountCreated, crmConnected, contactsImported, emailConnected][i],
     }));
-  }, [loading, keys, emailAccounts, contactsList, campaignsList]);
+  }, [loading, keys, emailAccounts, contactsList]);
 
   if (loading || !steps || dismissed) return null;
   const doneCount = steps.filter(s => s.done).length;
@@ -220,19 +213,6 @@ export default function OnboardingChecklist() {
           );
         })}
       </div>
-
-      {/* CTA */}
-      <button
-        className="btn btn-primary"
-        style={{ fontSize: 13, padding: '8px 18px', width: 'fit-content' }}
-        onClick={() => {
-          const nextStep = steps.find(s => !s.done && s.route);
-          if (nextStep) navigate(nextStep.route, nextStep.state ? { state: nextStep.state } : undefined);
-          else navigate('/campaigns', { state: { openAssistant: true } });
-        }}
-      >
-        {t('onboarding.continueChat')}
-      </button>
     </div>
   );
 }
