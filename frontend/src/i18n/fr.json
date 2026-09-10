@@ -844,6 +844,12 @@
       "clients": "Clients",
       "crm": "CRM",
       "activation": "Activation"
+    },
+    "tabDescs": {
+      "deals": "Pipeline en cours et deals à relancer",
+      "clients": "Clients à risque et opportunités d'upsell",
+      "crm": "Qualité et fraîcheur des données",
+      "activation": "Emails envoyés et campagnes en cours"
     }
   },
   "wizard": {
