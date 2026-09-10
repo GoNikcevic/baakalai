@@ -11,6 +11,7 @@ import { useT, useI18n } from '../i18n';
 import { useConfirm } from '../components/ConfirmModal';
 import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
 import Icon from '../components/Icon';
+import AutopilotSettings from '../components/AutopilotSettings';
 
 function getTriggerTypes(lang) {
   const en = lang === 'en';

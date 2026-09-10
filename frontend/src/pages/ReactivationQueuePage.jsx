@@ -23,6 +23,9 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   const showStagnation = kind === 'deal_reactivation';
   const [stagnation, setStagnation] = useState(null);
   const [savingStagnation, setSavingStagnation] = useState(false);
+  // Le seuil apparaît dans quatre phrases de la page. Sans lui, elles
+  // annonçaient « 14 jours » en dur pendant que le champ affichait autre chose.
+  const stagnantDays = stagnation?.stagnantDays ?? 14;
   const dateLocale = lang === 'en' ? 'en-US' : 'fr-FR';
   const navigate = useNavigate();
   const [tab, setTab] = useState('pending');
@@ -58,9 +61,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   };
 
   useEffect(() => {
-    if (showStagnation) {
-      request('/reactivation/settings').then(setStagnation).catch(() => {});
-    }
+    request('/reactivation/settings').then(setStagnation).catch(() => {});
     request('/crm/providers')
       .then(d => setHasCrm((d.providers || []).some(p => CRM_PROVIDERS.includes(p.provider) && p.connected)))
       .catch(() => setHasCrm(true)); // en cas de doute, ne pas afficher le CTA « connecter »
@@ -127,7 +128,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
       <div className="page-header">
         <div>
           <h1 className="page-title">{t(`${i18nNamespace}.title`)}</h1>
-          <div className="page-subtitle">{t(`${i18nNamespace}.subtitle`)}</div>
+          <div className="page-subtitle">{t(`${i18nNamespace}.subtitle`, { days: stagnantDays })}</div>
         </div>
         {showStagnation && stagnation && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
@@ -229,7 +230,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
               ×
             </button>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('reactivation.howTitle')}</div>
-            {[t(`${i18nNamespace}.howStep1`), t('reactivation.howStep2'), t('reactivation.howStep3')].map((step, i) => (
+            {[t(`${i18nNamespace}.howStep1`, { days: stagnantDays }), t('reactivation.howStep2'), t('reactivation.howStep3')].map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
                 <span style={{
                   flexShrink: 0, width: 18, height: 18, borderRadius: '50%', fontSize: 11, fontWeight: 700,
@@ -249,7 +250,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
           background: 'var(--accent-glow)', border: '1px solid var(--border-light)',
           borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12,
         }}>
-          <span style={{ color: 'var(--text-secondary)' }}>{t('reactivation.crmHygieneBanner')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{t('reactivation.crmHygieneBanner', { days: stagnantDays })}</span>
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
@@ -275,7 +276,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
-              {hasCrm === null ? t('reactivation.noCandidates') : t('reactivation.noCandidatesAllClear')}
+              {hasCrm === null ? t('reactivation.noCandidates') : t('reactivation.noCandidatesAllClear', { days: stagnantDays })}
             </div>
           )
         ) : (

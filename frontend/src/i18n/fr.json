@@ -1052,8 +1052,8 @@
   },
   "dealsToReactivate": {
     "title": "Deals à relancer",
-    "subtitle": "Deals sans aucune activité CRM depuis 14 jours, ou dont la date de relance est dépassée.",
-    "howStep1": "baakalai détecte les deals restés sans échange (note, email, appel) depuis 14 jours — ou dont la date de relance prévue est arrivée."
+    "subtitle": "Deals sans aucune activité CRM depuis {days} jours, ou dont la date de relance est dépassée.",
+    "howStep1": "baakalai détecte les deals restés sans échange (note, email, appel) depuis {days} jours — ou dont la date de relance prévue est arrivée."
   },
   "upsell": {
     "title": "Clients à upseller",
@@ -1209,13 +1209,13 @@
     "sent": "Envoyé",
     "generating": "Rédaction de l'email en cours...",
     "generatingHint": "Merci de patienter quelques secondes, ne quittez pas cette page.",
-    "crmHygieneBanner": "📝 Vos notes CRM pilotent cette liste : chaque échange noté (appel, email, rendez-vous) remet le compteur d'activité à zéro — le contact sort de la file et ne sera pas relancé à tort. Sans note depuis 14 jours, il y revient.",
+    "crmHygieneBanner": "📝 Vos notes CRM pilotent cette liste : chaque échange noté (appel, email, rendez-vous) remet le compteur d'activité à zéro — le contact sort de la file et ne sera pas relancé à tort. Sans note depuis {days} jours, il y revient.",
     "howTitle": "Comment ça marche",
     "howStep2": "« Voir le mail » rédige un brouillon personnalisé à partir de votre CRM — rien ne part sans votre validation.",
     "howStep3": "« Reporter » fixe la prochaine date de relance : le contact disparaît de la file et reviendra ce jour-là.",
     "noCandidatesNoCrm": "Connectez votre CRM pour que baakalai lise vos deals et détecte ceux à relancer.",
     "connectCrmCta": "Connecter mon CRM",
-    "noCandidatesAllClear": "Tout est à jour ✓ Les contacts sans activité depuis 14 jours, ou arrivés à leur date de relance, apparaîtront ici.",
+    "noCandidatesAllClear": "Tout est à jour ✓ Les contacts sans activité depuis {days} jours, ou arrivés à leur date de relance, apparaîtront ici.",
     "tabPending": "En attente",
     "tabHistory": "Historique",
     "historyEmpty": "Aucun historique pour l'instant.",
