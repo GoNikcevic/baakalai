@@ -12,6 +12,7 @@
 const db = require('../db');
 const { sendEmail } = require('./email');
 const logger = require('./logger');
+const { getStagnantDays } = require('./stagnation');
 
 const APP_URL = process.env.APP_URL || 'https://app.baakal.ai';
 const DAY_MS = 86400000;
@@ -283,10 +284,21 @@ async function processRetention() {
         // Gather stats for the re-engagement email
         let stats = {};
         if (step.key === 'reengagement') {
+          // « Tu as N deals stagnants qui t'attendent » doit annoncer le même N
+          // que l'app : même seuil (lib/stagnation.js, réglable) et même date de
+          // référence (COALESCE(last_activity_at, created_at) — jamais
+          // updated_at, réécrit en masse par chaque import). Un 14 en dur sur
+          // updated_at faisait de cet email une sixième version du chiffre.
+          const stagnantDays = await getStagnantDays(user.id);
           const [patterns, pending, stagnant] = await Promise.all([
             db.query('SELECT COUNT(*) AS c FROM memory_patterns WHERE date_discovered > now() - interval \'7 days\''),
             db.query('SELECT COUNT(*) AS c FROM nurture_emails WHERE user_id = $1 AND status = \'pending\'', [user.id]),
-            db.query('SELECT COUNT(*) AS c FROM opportunities WHERE user_id = $1 AND status = \'open\' AND updated_at < now() - interval \'14 days\'', [user.id]),
+            db.query(
+              `SELECT COUNT(*) AS c FROM opportunities
+                WHERE user_id = $1 AND status = 'open'
+                  AND COALESCE(last_activity_at, created_at) < now() - ($2::int * INTERVAL '1 day')`,
+              [user.id, stagnantDays]
+            ),
           ]);
           stats = {
             newPatterns: parseInt(patterns.rows[0]?.c || 0),

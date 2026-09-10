@@ -87,21 +87,6 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 - [ ] Membership analytics (tenure, LTV by segment, renewal rates)
 - [ ] Bug: `t is not defined` occasionally on navigation (need to reproduce)
 
-### Décisions en attente — à rappeler à Goran en début de session
-
-Ces points sont livrés et fonctionnels, mais un arbitrage produit reste ouvert.
-Les signaler dès le premier message d'une session, sans attendre qu'il en parle.
-
-- **Seuil de dormance par défaut : 14 j ou 30 j ?** (ouvert le 2026-09-10)
-  `lib/stagnation.js` est l'autorité unique du « depuis quand ce deal est-il dormant »,
-  réglable par utilisateur, avec **14 jours** comme valeur de départ. Le compte-rendu de
-  lecture (`/api/crm/reading-summary`), le wizard d'onboarding et l'assistant général
-  comptaient encore sur un **30** en dur ; ils lisent maintenant le réglage, ce qui fait
-  **remonter plus de deals dormants** pour tout compte qui n'y a jamais touché.
-  Goran doit trancher : garder 14 comme départ, ou repasser `DEFAULT_STAGNANT_DAYS` à 30.
-  Le réglage lui-même se change dans la file de réactivation (« un deal est dormant après
-  X jours »). Retirer cette entrée une fois la décision prise.
-
 ## 7. Business Context
 
 - **ICP** (élargi 2026-09-02): PME B2B 5-200 pers, ≥12 mois historique CRM, base clients existante, pas d'équipe RevOps constituée, ≤5 personnes sur le CRM (plafond produit actuel). L'effectif est un proxy — qualifier sur ces 4 critères.

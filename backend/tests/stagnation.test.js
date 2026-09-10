@@ -17,8 +17,10 @@ const DAY = 86400000;
 const NOW = Date.parse('2026-09-10T12:00:00Z');
 const daysAgo = (n) => new Date(NOW - n * DAY).toISOString();
 
-test('le seuil par defaut est celui de la file de reactivation', () => {
-  assert.strictEqual(DEFAULT_STAGNANT_DAYS, 14);
+test('le seuil par defaut est 30 jours', () => {
+  // Arbitrage produit, pas une constante technique : a 14 jours presque tout
+  // CRM a cycle long ressort dormant. Ne pas rebaisser sans decision de Goran.
+  assert.strictEqual(DEFAULT_STAGNANT_DAYS, 30);
 });
 
 test('clampDays ramene les valeurs hors bornes dans l intervalle', () => {

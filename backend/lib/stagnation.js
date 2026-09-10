@@ -20,8 +20,15 @@
 
 const db = require('../db');
 
-/** Valeur de départ, reprise de la file de réactivation et du Deal Coach. */
-const DEFAULT_STAGNANT_DAYS = 14;
+/** Valeur de départ : 30 jours, arbitrage de Goran (2026-09-10).
+ *
+ *  Le module était parti sur 14, la valeur que la file de réactivation et le
+ *  Deal Coach portaient en dur. Mais l'unification a mis ce chiffre devant tout
+ *  le monde — compte-rendu de lecture, wizard d'onboarding, assistant général —
+ *  et à 14 jours presque tout CRM à cycle long ressort « dormant », ce qui vide
+ *  le mot de son sens. 30 est le seuil retenu par défaut ; chaque utilisateur
+ *  peut le régler depuis la file de réactivation selon son cycle de vente. */
+const DEFAULT_STAGNANT_DAYS = 30;
 
 /** Bornes de bon sens : en dessous d'un jour la notion n'a pas de sens, au delà
  *  d'un an ce n'est plus un deal dormant mais un deal mort. */
