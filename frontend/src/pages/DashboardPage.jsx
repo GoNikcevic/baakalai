@@ -13,6 +13,7 @@ import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import { useSocket } from '../context/SocketContext';
 import OnboardingChecklist from '../components/OnboardingChecklist';
+import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
 import { request } from '../services/api-client';
 import DealsTab from '../components/dashboardTabs/DealsTab';
 import ClientsTab from '../components/dashboardTabs/ClientsTab';
@@ -52,6 +53,9 @@ export default function DashboardPage() {
   // Stats CRM (pipeline, dormants, récupéré) — fetch unique, partagé entre la
   // grille RevenueKpis et la ReactivationCard (toutes deux dans DealsTab).
   const [crmStats, setCrmStats] = useState(null);
+  // Diagnostic CRM à la demande — le même rapport que celui affiché après le
+  // premier import, rejouable depuis le haut du dashboard.
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +105,22 @@ export default function DashboardPage() {
             <span style={{ marginLeft: 8 }}>{subtitle}</span>
           </div>
         </div>
+        <div className="header-actions">
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowDiagnostic(true)}
+            title={t('diagnostic.subtitle')}
+          >
+            <span style={{ marginRight: 6 }}>{'\u{1FA7A}'}</span>
+            {t('diagnostic.title')}
+          </button>
+        </div>
       </div>
+
+      {/* Rapport de diagnostic CRM (plein écran) */}
+      {showDiagnostic && (
+        <CRMDiagnosticReport onClose={() => setShowDiagnostic(false)} />
+      )}
 
       {/* Sync in progress indicator */}
       {syncStatus && (
