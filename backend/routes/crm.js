@@ -2054,13 +2054,11 @@ router.patch('/autopilot/settings', async (req, res, next) => {
     // et répondre tout seul à un client en cours n'engagent pas le même risque.
     // `enabled` est l'ancien réglage unique, encore accepté pour ne pas casser
     // un appel existant — il ne pilote que la prospection.
-    const { prospection, crm, enabled, maxTurns, channels } = req.body;
+    const { prospection, crm, enabled } = req.body;
     const updates = {};
     if (prospection !== undefined) updates.autopilot_prospection_enabled = !!prospection;
     else if (enabled !== undefined) updates.autopilot_prospection_enabled = !!enabled;
     if (crm !== undefined) updates.autopilot_crm_enabled = !!crm;
-    if (maxTurns !== undefined) updates.autopilot_max_turns = Math.min(Math.max(maxTurns, 1), 10);
-    if (channels !== undefined) updates.autopilot_channels = channels;
 
     await db.query(
       `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,

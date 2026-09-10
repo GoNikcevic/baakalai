@@ -29,6 +29,12 @@ const { sendNurtureEmail } = require('./email-outbound');
 const logger = require('./logger');
 const { populationOf } = require('./crm-scope');
 
+// Garde-fou des conversations qui ne concluent pas. Les deux issues nettes ont
+// leur propre sortie, sur l'intention détectée et non sur un compteur : une
+// demande de RDV déclenche une proposition de créneaux puis l'arrêt, un refus
+// coupe l'autopilot sur le contact. MAX_TURNS ne sert qu'au troisième cas —
+// l'interlocuteur enchaîne les questions sans jamais dire oui ni non. Sans
+// cette borne, l'IA discuterait indéfiniment ; au-delà, elle rend la main.
 const MAX_TURNS = 5;
 const MIN_DELAY_MS = 2 * 60 * 60 * 1000;  // 2 hours
 const MAX_DELAY_MS = 4 * 60 * 60 * 1000;  // 4 hours
@@ -398,8 +404,6 @@ async function getAutopilotSettings(userId) {
   return {
     prospection: settings.autopilot_prospection_enabled ?? legacy,
     crm: settings.autopilot_crm_enabled ?? false,
-    maxTurns: settings.autopilot_max_turns ?? MAX_TURNS,
-    channels: settings.autopilot_channels ?? ['email', 'linkedin'],
   };
 }
 
