@@ -735,6 +735,8 @@
     "mfContextUnreliable": "Not enough history to calibrate finely ({count} deals won over 12 months) — probabilities will sharpen with usage."
   },
   "diagnostic": {
+    "cta": "Analyze my CRM",
+    "ctaHint": "Run the analysis: opportunities, churn risks and data quality",
     "title": "CRM Diagnostic",
     "subtitle": "Here’s what baakalai found in your CRM",
     "loading": "Analyzing...",
@@ -1057,6 +1059,7 @@
       }
     },
     "duplicates": {
+      "activityCounts": "{emails} emails · {activities} activities · {lines} product lines",
       "rescan": "Rescan",
       "scanning": "Scanning...",
       "scanError": "Scan failed",

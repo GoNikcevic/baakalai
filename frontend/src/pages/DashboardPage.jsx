@@ -14,6 +14,7 @@ import { useT, useI18n } from '../i18n';
 import { useSocket } from '../context/SocketContext';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
+import Icon from '../components/Icon';
 import { request } from '../services/api-client';
 import DealsTab from '../components/dashboardTabs/DealsTab';
 import ClientsTab from '../components/dashboardTabs/ClientsTab';
@@ -21,10 +22,10 @@ import CrmTab from '../components/dashboardTabs/CrmTab';
 import ActivationTab from '../components/dashboardTabs/ActivationTab';
 
 const SECTIONS = [
-  { key: 'deals', labelKey: 'dashboard.tabs.deals', icon: '\u{1F4BC}', color: 'var(--accent)' },
-  { key: 'clients', labelKey: 'dashboard.tabs.clients', icon: '\u{1F465}', color: 'var(--danger)' },
-  { key: 'crm', labelKey: 'dashboard.tabs.crm', icon: '\u{1F5C2}️', color: 'var(--blue)' },
-  { key: 'activation', labelKey: 'dashboard.tabs.activation', icon: '\u{1F4E7}', color: 'var(--warning)' },
+  { key: 'deals', labelKey: 'dashboard.tabs.deals', icon: 'briefcase', color: 'var(--accent)' },
+  { key: 'clients', labelKey: 'dashboard.tabs.clients', icon: 'users', color: 'var(--danger)' },
+  { key: 'crm', labelKey: 'dashboard.tabs.crm', icon: 'database', color: 'var(--blue)' },
+  { key: 'activation', labelKey: 'dashboard.tabs.activation', icon: 'mail', color: 'var(--warning)' },
 ];
 
 function SectionHeader({ icon, title, color }) {
@@ -34,7 +35,7 @@ function SectionHeader({ icon, title, color }) {
       marginTop: 32, marginBottom: 16,
       paddingBottom: 8, borderBottom: `2px solid ${color}`,
     }}>
-      <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
+      <Icon name={icon} size={18} color={color} />
       <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{title}</h2>
     </div>
   );
@@ -109,10 +110,10 @@ export default function DashboardPage() {
           <button
             className="btn btn-primary"
             onClick={() => setShowDiagnostic(true)}
-            title={t('diagnostic.subtitle')}
+            title={t('diagnostic.ctaHint')}
           >
-            <span style={{ marginRight: 6 }}>{'\u{1FA7A}'}</span>
-            {t('diagnostic.title')}
+            <Icon name="activity" size={15} style={{ marginRight: 7 }} />
+            {t('diagnostic.cta')}
           </button>
         </div>
       </div>

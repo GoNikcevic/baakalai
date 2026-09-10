@@ -7,12 +7,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 import { showToast } from '../services/notifications';
+import Icon from '../components/Icon';
 
 const SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
 
 const SIGNAL_ICONS = {
-  funding: '💰', hiring: '👥', news: '📰', job_change: '🔄', leadership_change: '👔',
-  competitor: '⚔️', product_launch: '🚀', expansion: '🌍', tech_adoption: '⚡',
+  funding: 'revenue', hiring: 'users', news: 'news', job_change: 'refresh', leadership_change: 'briefcase',
+  competitor: 'shield', product_launch: 'rocket', expansion: 'globe', tech_adoption: 'zap',
 };
 
 const SIGNAL_COLORS = {
@@ -183,7 +184,7 @@ export default function SignalsPage() {
   const tabs = [
     { key: 'feed', label: t('signals.tabFeed'), count: counts.new || 0 },
     { key: 'config', label: t('signals.tabConfig'), count: configs.length },
-    companyView ? { key: 'company', label: `📊 ${companyView}`, count: null } : null,
+    companyView ? { key: 'company', label: companyView, icon: 'chart', count: null } : null,
   ].filter(Boolean);
 
   return (
@@ -321,7 +322,9 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
           textAlign: 'center', padding: 50, background: 'var(--bg-card)',
           border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>📡</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="radio" size={32} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t('signals.emptyFeed')}</div>
         </div>
       ) : (
@@ -341,7 +344,8 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                         fontSize: 10, padding: '2px 8px', borderRadius: 4,
                         background: `${color}15`, color, fontWeight: 600, textTransform: 'uppercase',
                       }}>
-                        {SIGNAL_ICONS[s.signal_type]} {t(`signals.type.${s.signal_type}`)}
+                        <Icon name={SIGNAL_ICONS[s.signal_type]} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                        {t(`signals.type.${s.signal_type}`)}
                       </span>
                       <span style={{
                         fontSize: 10, padding: '2px 8px', borderRadius: 4,
@@ -356,9 +360,9 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     {s.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{s.description}</div>}
                     <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
                       {s.company_name && <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
-                        onClick={(e) => { e.stopPropagation(); onViewCompany?.(s.company_name); }}>🏢 {s.company_name}</span>}
-                      {s.contact_name && <span>👤 {s.contact_name}{s.contact_title ? ` · ${s.contact_title}` : ''}</span>}
-                      {s.contact_email && <span>✉️ {s.contact_email}</span>}
+                        onClick={(e) => { e.stopPropagation(); onViewCompany?.(s.company_name); }}><Icon name="building" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.company_name}</span>}
+                      {s.contact_name && <span><Icon name="user" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.contact_name}{s.contact_title ? ` · ${s.contact_title}` : ''}</span>}
+                      {s.contact_email && <span><Icon name="mail" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.contact_email}</span>}
                       <span>{new Date(s.detected_at).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' })}</span>
                     </div>
                   </div>
@@ -402,7 +406,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                 {sequenceResult?.signal?.id === s.id && sequenceResult?.sequence && (
                   <div style={{ marginTop: 10, padding: 12, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--accent)' }}>
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--accent)' }}>
-                      ⚡ {sequenceResult.sequence.name}
+                      <Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{sequenceResult.sequence.name}
                     </div>
                     {sequenceResult.queuedEmailId && (
                       <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
@@ -419,7 +423,8 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                 )}
                 {s.status === 'actioned' && (
                   <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 8 }}>
-                    ✅ {s.action_taken === 'add_to_crm' ? t('signals.addedToCrm') :
+                    <Icon name="checkCircle" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                    {s.action_taken === 'add_to_crm' ? t('signals.addedToCrm') :
                         s.action_taken === 'send_email' ? t('signals.emailSent') : s.action_taken}
                   </div>
                 )}
@@ -442,7 +447,10 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>📊 {companyName}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="building" size={18} color="var(--accent)" />
+            <span>{companyName}</span>
+          </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {t('signals.signalsCount', { count: data.signals.length })} · {t('signals.contactsInCrm', { count: data.contacts.length })}
           </div>
@@ -503,9 +511,9 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
                   </span>
                 </div>
                 {s.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{s.description}</div>}
-                {s.contact_name && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>👤 {s.contact_name} {s.contact_title ? `· ${s.contact_title}` : ''}</div>}
+                {s.contact_name && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}><Icon name="user" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.contact_name} {s.contact_title ? `· ${s.contact_title}` : ''}</div>}
                 {s.status === 'actioned' && (
-                  <div style={{ fontSize: 10, color: 'var(--success)', marginTop: 4 }}>✅ {s.action_taken}</div>
+                  <div style={{ fontSize: 10, color: 'var(--success)', marginTop: 4 }}><Icon name="checkCircle" size={10} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.action_taken}</div>
                 )}
               </div>
             );
@@ -579,7 +587,8 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                       color: form.signalTypes.includes(value) ? 'var(--accent)' : 'var(--text-muted)',
                       cursor: 'pointer',
                     }}>
-                      {SIGNAL_ICONS[value]} {t(`signals.type.${value}`)}
+                      <Icon name={SIGNAL_ICONS[value]} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                      {t(`signals.type.${value}`)}
                     </button>
                   ))}
                 </div>
@@ -621,7 +630,9 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
           textAlign: 'center', padding: 50, background: 'var(--bg-card)',
           border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>⚙️</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="settings" size={32} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>
             {t('signals.emptyConfig')}
           </div>
@@ -647,7 +658,8 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                           background: `${SIGNAL_COLORS[st] || '#666'}15`,
                           color: SIGNAL_COLORS[st] || 'var(--text-muted)',
                         }}>
-                          {SIGNAL_ICONS[st]} {t(`signals.type.${st}`)}
+                          <Icon name={SIGNAL_ICONS[st]} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                          {t(`signals.type.${st}`)}
                         </span>
                       ))}
                     </div>

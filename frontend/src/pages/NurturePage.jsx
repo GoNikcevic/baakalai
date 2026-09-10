@@ -10,20 +10,21 @@ import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 import { useConfirm } from '../components/ConfirmModal';
 import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
+import Icon from '../components/Icon';
 
 function getTriggerTypes(lang) {
   const en = lang === 'en';
   return [
-    { value: 'deal_won', label: en ? 'Lead won' : 'Lead gagn\u00E9', desc: en ? 'Welcome/onboarding email when a lead is won' : 'Email de bienvenue quand un lead est gagn\u00E9', icon: '\uD83C\uDF89', defaultDays: 1, defaultName: en ? 'Welcome new client' : 'Bienvenue nouveau client' },
-    { value: 'deal_stagnant', label: en ? 'Stagnant lead' : 'Lead stagnant', desc: en ? 'Follow up when a lead is inactive for X days' : 'Relancer quand un lead est inactif depuis X jours', icon: '\u23F0', defaultDays: 30, defaultName: en ? 'Stagnant lead follow-up' : 'Relance leads stagnants' },
-    { value: 'inactive_contact', label: en ? 'Inactive contact' : 'Contact inactif', desc: en ? 'Re-engage a contact with no activity for X days' : 'R\u00E9engager un contact sans activit\u00E9 depuis X jours', icon: '\uD83D\uDCA4', defaultDays: 60, defaultName: en ? 'Re-engage inactive contacts' : 'R\u00E9activation contacts inactifs' },
-    { value: 'deal_lost', label: en ? 'Lead lost' : 'Lead perdu', desc: en ? 'Win-back email after a lost lead' : 'Email de suivi apr\u00E8s un lead perdu', icon: '\uD83D\uDC94', defaultDays: 14, defaultName: en ? 'Win-back lost leads' : 'Win-back leads perdus' },
-    { value: 'onboarding_check', label: en ? 'Onboarding check' : 'Check onboarding', desc: en ? 'Check adoption X days after signing' : 'V\u00E9rifier la prise en main X jours apr\u00E8s signature', icon: '\uD83D\uDE80', defaultDays: 7, defaultName: en ? 'Onboarding follow-up D+7' : 'Suivi onboarding J+7' },
-    { value: 'renewal_reminder', label: en ? 'Renewal' : 'Renouvellement', desc: en ? 'Reminder X days before renewal date' : 'Rappel X jours avant la date de renouvellement', icon: '\uD83D\uDD14', defaultDays: 30, defaultName: en ? 'Renewal reminder' : 'Rappel renouvellement' },
-    { value: 'upsell_opportunity', label: en ? 'Upsell opportunity' : 'Opportunit\u00E9 upsell', desc: en ? 'Suggest upgrade to active clients after X days' : 'Proposer un upgrade aux clients actifs depuis X jours', icon: '\u2B06\uFE0F', defaultDays: 90, defaultName: en ? 'Upsell proposal' : 'Proposition upsell' },
-    { value: 'feedback_request', label: en ? 'Feedback request' : 'Demande de feedback', desc: en ? 'Ask for feedback after X days' : 'Demander un retour d\'exp\u00E9rience apr\u00E8s X jours', icon: '\u2B50', defaultDays: 30, defaultName: en ? 'Testimonial request' : 'Demande de t\u00E9moignage' },
-    { value: 'newsletter_inactive', label: en ? 'Newsletter inactive' : 'Newsletter inactif', desc: en ? 'Re-engage contacts who never open newsletters (Salesforce/Fonteva)' : 'R\u00E9engager les contacts qui n\'ouvrent pas les newsletters (Salesforce/Fonteva)', icon: '\uD83D\uDCE7', defaultDays: 30, defaultName: en ? 'Newsletter re-engagement' : 'R\u00E9activation newsletter' },
-    { value: 'newsletter_engaged', label: en ? 'Newsletter engaged' : 'Newsletter engag\u00E9', desc: en ? 'Notify sales when contacts actively engage with newsletters (Salesforce/Fonteva)' : 'Alerter le commercial quand un contact engage avec les newsletters (Salesforce/Fonteva)', icon: '\uD83D\uDD25', defaultDays: 30, defaultName: en ? 'Hot newsletter lead' : 'Lead chaud newsletter' },
+    { value: 'deal_won', label: en ? 'Lead won' : 'Lead gagn\u00E9', desc: en ? 'Welcome/onboarding email when a lead is won' : 'Email de bienvenue quand un lead est gagn\u00E9', icon: 'award', defaultDays: 1, defaultName: en ? 'Welcome new client' : 'Bienvenue nouveau client' },
+    { value: 'deal_stagnant', label: en ? 'Stagnant lead' : 'Lead stagnant', desc: en ? 'Follow up when a lead is inactive for X days' : 'Relancer quand un lead est inactif depuis X jours', icon: 'moon', defaultDays: 30, defaultName: en ? 'Stagnant lead follow-up' : 'Relance leads stagnants' },
+    { value: 'inactive_contact', label: en ? 'Inactive contact' : 'Contact inactif', desc: en ? 'Re-engage a contact with no activity for X days' : 'R\u00E9engager un contact sans activit\u00E9 depuis X jours', icon: 'moon', defaultDays: 60, defaultName: en ? 'Re-engage inactive contacts' : 'R\u00E9activation contacts inactifs' },
+    { value: 'deal_lost', label: en ? 'Lead lost' : 'Lead perdu', desc: en ? 'Win-back email after a lost lead' : 'Email de suivi apr\u00E8s un lead perdu', icon: 'heartOff', defaultDays: 14, defaultName: en ? 'Win-back lost leads' : 'Win-back leads perdus' },
+    { value: 'onboarding_check', label: en ? 'Onboarding check' : 'Check onboarding', desc: en ? 'Check adoption X days after signing' : 'V\u00E9rifier la prise en main X jours apr\u00E8s signature', icon: 'rocket', defaultDays: 7, defaultName: en ? 'Onboarding follow-up D+7' : 'Suivi onboarding J+7' },
+    { value: 'renewal_reminder', label: en ? 'Renewal' : 'Renouvellement', desc: en ? 'Reminder X days before renewal date' : 'Rappel X jours avant la date de renouvellement', icon: 'bell', defaultDays: 30, defaultName: en ? 'Renewal reminder' : 'Rappel renouvellement' },
+    { value: 'upsell_opportunity', label: en ? 'Upsell opportunity' : 'Opportunit\u00E9 upsell', desc: en ? 'Suggest upgrade to active clients after X days' : 'Proposer un upgrade aux clients actifs depuis X jours', icon: 'trendingUp', defaultDays: 90, defaultName: en ? 'Upsell proposal' : 'Proposition upsell' },
+    { value: 'feedback_request', label: en ? 'Feedback request' : 'Demande de feedback', desc: en ? 'Ask for feedback after X days' : 'Demander un retour d\'exp\u00E9rience apr\u00E8s X jours', icon: 'message', defaultDays: 30, defaultName: en ? 'Testimonial request' : 'Demande de t\u00E9moignage' },
+    { value: 'newsletter_inactive', label: en ? 'Newsletter inactive' : 'Newsletter inactif', desc: en ? 'Re-engage contacts who never open newsletters (Salesforce/Fonteva)' : 'R\u00E9engager les contacts qui n\'ouvrent pas les newsletters (Salesforce/Fonteva)', icon: 'mail', defaultDays: 30, defaultName: en ? 'Newsletter re-engagement' : 'R\u00E9activation newsletter' },
+    { value: 'newsletter_engaged', label: en ? 'Newsletter engaged' : 'Newsletter engag\u00E9', desc: en ? 'Notify sales when contacts actively engage with newsletters (Salesforce/Fonteva)' : 'Alerter le commercial quand un contact engage avec les newsletters (Salesforce/Fonteva)', icon: 'flame', defaultDays: 30, defaultName: en ? 'Hot newsletter lead' : 'Lead chaud newsletter' },
   ];
 }
 
@@ -107,7 +108,12 @@ export default function NurturePage() {
               setPreviewing(false);
             }}
           >
-            {previewing ? `\u23F3 ${t('activation.previewing')}` : `\uD83D\uDD0D ${t('activation.preview')}`}
+            {previewing ? t('activation.previewing') : (
+              <>
+                <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                {t('activation.preview')}
+              </>
+            )}
           </button>
           <button
             className="btn btn-primary"
@@ -343,7 +349,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                   style={{ flex: 1, fontSize: 13, padding: '8px 12px' }}
                 >
                   {TRIGGER_TYPES.map(t => (
-                    <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
+                    <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
                 <input
@@ -360,10 +366,10 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                   className="form-input"
                   style={{ width: 160, fontSize: 13, padding: '8px 12px' }}
                 >
-                  <option value="email">{'\u2709\uFE0F'} Email</option>
-                  <option value="linkedin_connect">{'\uD83D\uDD17'} LinkedIn Connect</option>
-                  <option value="linkedin_message">{'\uD83D\uDCAC'} LinkedIn Message</option>
-                  <option value="linkedin_visit">{'\uD83D\uDC41\uFE0F'} LinkedIn Visit</option>
+                  <option value="email">Email</option>
+                  <option value="linkedin_connect">LinkedIn Connect</option>
+                  <option value="linkedin_message">LinkedIn Message</option>
+                  <option value="linkedin_visit">LinkedIn Visit</option>
                 </select>
                 {!form.actionType.startsWith('linkedin_') && (
                   <select
@@ -414,7 +420,12 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                 <div className="card-body" style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>
-                      {typeConfig.icon || '\u26A1'} {trigger.name}
+                      <Icon
+                        name={typeConfig.icon || 'zap'}
+                        size={14}
+                        style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 7 }}
+                      />
+                      {trigger.name}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                       {typeConfig.desc} {conditions.days ? `(${conditions.days}j)` : ''}
@@ -503,8 +514,8 @@ function EmailsSection({ emails, type, onRefresh }) {
         textAlign: 'center', padding: 50,
         background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
       }}>
-        <div style={{ fontSize: 28, marginBottom: 12 }}>
-          {type === 'pending' ? '\uD83D\uDCEC' : '\u2705'}
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+          <Icon name={type === 'pending' ? 'inbox' : 'checkCircle'} size={28} strokeWidth={1.5} />
         </div>
         <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
           {type === 'pending' ? t('activation.noPending') : t('activation.noSent')}
@@ -597,10 +608,10 @@ function EmailsSection({ emails, type, onRefresh }) {
 function getSegmentConfig(lang) {
   const en = lang === 'en';
   return [
-    { key: 'active', label: en ? 'Active' : 'Actifs', color: 'var(--success)', icon: '\u2705' },
-    { key: 'won', label: en ? 'Won' : 'Gagn\u00E9s', color: 'var(--purple)', icon: '\uD83C\uDFC6' },
-    { key: 'stagnant', label: en ? 'Stagnant' : 'Stagnants', color: 'var(--warning)', icon: '\u23F0' },
-    { key: 'churnRisk', label: en ? 'Churn risk' : 'Risque churn', color: 'var(--danger)', icon: '\u26A0\uFE0F' },
+    { key: 'active', label: en ? 'Active' : 'Actifs', color: 'var(--success)', icon: 'checkCircle' },
+    { key: 'won', label: en ? 'Won' : 'Gagn\u00E9s', color: 'var(--purple)', icon: 'award' },
+    { key: 'stagnant', label: en ? 'Stagnant' : 'Stagnants', color: 'var(--warning)', icon: 'moon' },
+    { key: 'churnRisk', label: en ? 'Churn risk' : 'Risque churn', color: 'var(--danger)', icon: 'alert' },
   ];
 }
 
@@ -628,7 +639,10 @@ function ActivationDashboard({ metrics }) {
             background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
             padding: '16px 20px', borderTop: `3px solid ${seg.color}`,
           }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{seg.icon} {seg.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Icon name={seg.icon} size={12} color={seg.color} />
+              <span>{seg.label}</span>
+            </div>
             <div style={{ fontSize: 28, fontWeight: 700, color: seg.color }}>{segments[seg.key] || 0}</div>
           </div>
         ))}
@@ -978,7 +992,10 @@ function TeamCampaignsSection({ lang }) {
                       color: form.targetProductLines.includes(pl.id) ? 'var(--accent)' : 'var(--text-muted)',
                       cursor: 'pointer',
                     }}>
-                      {pl.icon || '\uD83D\uDCE6'} {pl.name}
+                      {pl.icon
+                        ? <span style={{ marginRight: 5 }}>{pl.icon}</span>
+                        : <Icon name="package" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />}
+                      {pl.name}
                     </button>
                   ))}
                 </div>
@@ -1027,7 +1044,9 @@ function TeamCampaignsSection({ lang }) {
           textAlign: 'center', padding: 50, background: 'var(--bg-card)',
           border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>{'\uD83D\uDCE8'}</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="send" size={28} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
             {en ? 'No team campaigns yet' : 'Aucune campagne \u00E9quipe'}
           </div>
@@ -1174,7 +1193,8 @@ function AutopilotSection({ lang }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {'\uD83E\uDD16'} {en ? 'Conversation Autopilot' : 'Autopilot de conversation'}
+                <Icon name="bot" size={16} color="var(--accent)" />
+                {en ? 'Conversation Autopilot' : 'Autopilot de conversation'}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                 {en
@@ -1230,7 +1250,12 @@ function AutopilotSection({ lang }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>
-                          {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.to_name || q.to_email}
+                          <Icon
+                            name={q.channel === 'linkedin' ? 'message' : 'mail'}
+                            size={13}
+                            style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }}
+                          />
+                          {q.to_name || q.to_email}
                           {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
                         </div>
                         {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
@@ -1266,7 +1291,12 @@ function AutopilotSection({ lang }) {
                 <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--success)' }}>
                   <div className="card-body" style={{ padding: '12px 16px' }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>
-                      {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.to_name || q.to_email}
+                      <Icon
+                        name={q.channel === 'linkedin' ? 'message' : 'mail'}
+                        size={13}
+                        style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }}
+                      />
+                      {q.to_name || q.to_email}
                       {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
                     </div>
                     {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
@@ -1287,7 +1317,9 @@ function AutopilotSection({ lang }) {
       {/* Empty state */}
       {settings?.enabled && pending.length === 0 && sent.length === 0 && (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83E\uDD16'}</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="bot" size={28} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             {en ? 'Autopilot is active. Replies will appear here when prospects respond.' : 'L\'autopilot est actif. Les réponses apparaîtront ici quand vos prospects répondront.'}
           </div>
@@ -1374,7 +1406,9 @@ function ABResultsSection({ lang }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: 700 }}>
                         {en ? 'Variant' : 'Variante'} {variant}
-                        {isWinner ? ' 🏆' : ''}
+                        {isWinner && (
+                          <Icon name="award" size={13} color="var(--success)" style={{ display: 'inline-block', verticalAlign: '-2px', marginLeft: 5 }} />
+                        )}
                       </span>
                       <span style={{
                         fontSize: 20, fontWeight: 800,
@@ -1449,7 +1483,9 @@ function NewsletterAnalyticsSection({ lang }) {
   if (error) {
     return (
       <div className="card" style={{ padding: 30, textAlign: 'center' }}>
-        <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83D\uDCE7'}</div>
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+          <Icon name="mail" size={28} strokeWidth={1.5} />
+        </div>
         <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 8 }}>
           {en ? 'Salesforce not connected or EmailMessage not accessible' : 'Salesforce non connect\u00E9 ou EmailMessage non accessible'}
         </div>

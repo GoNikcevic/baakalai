@@ -735,6 +735,8 @@
     "mfContextUnreliable": "Historique insuffisant pour calibrer finement ({count} deals gagnés sur 12 mois) — les probabilités s'affineront avec l'usage."
   },
   "diagnostic": {
+    "cta": "Analyser mon CRM",
+    "ctaHint": "Lancer l'analyse : opportunités, risques de churn et qualité des données",
     "title": "Diagnostic CRM",
     "subtitle": "Voici ce que baakalai a trouvé dans votre CRM",
     "loading": "Analyse en cours...",
@@ -1057,6 +1059,7 @@
       }
     },
     "duplicates": {
+      "activityCounts": "{emails} emails · {activities} activités · {lines} lignes produit",
       "rescan": "Relancer le scan",
       "scanning": "Analyse en cours...",
       "scanError": "Erreur lors du scan",
