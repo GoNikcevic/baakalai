@@ -1,14 +1,21 @@
 /* ===============================================================================
-   BAKAL — Chat Page (React)
-   Conversational campaign builder powered by Claude.
-   Ported from /app/chat.js — full React hooks implementation.
+   BAKAL — Assistant Prospection (onglet Prospection → Assistant)
+   Constructeur conversationnel de campagnes de PROSPECTION FROIDE : cible/ICP,
+   sourcing de prospects, séquences, copy, A/B, analyse de performance.
+
+   Périmètre volontairement fermé : tout ce qui concerne des contacts déjà présents
+   dans le CRM (relance de deals dormants, upsell, churn, triggers, nettoyage, envoi
+   d'un email à un contact) appartient à l'assistant général (pages/ChatPage.jsx) —
+   create_campaign ne sait pas lire le CRM. Claude émet alors open_general_assistant
+   et l'UI propose la bascule, brief pré-rempli.
+   Rendu des messages partagé via components/chat/ChatPrimitives.jsx.
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/useApp';
 import { useSocket } from '../../context/SocketContext';
-import api, { request, trackEvent } from '../../services/api-client';
+import api from '../../services/api-client';
 import { sanitizeHtml } from '../../services/sanitize';
 import Confetti from '../Confetti';
 import OnboardingChecklist from '../OnboardingChecklist';
@@ -42,34 +49,34 @@ function getReturningSuggestions(t) {
 
 function getActionPrompts(lang) {
   if (lang === 'en') return {
-    create: 'I want to create a new campaign. Based on my CRM, suggest the best type first (dormant deal reactivation, client re-engagement, upsell, or prospecting), then guide me step by step.',
+    create: 'I want to create a new cold prospecting campaign. Suggest the best angle based on my company profile and ICP, then guide me step by step.',
     refine: 'I want to refine one of my underperforming campaigns. Which ones can I improve?',
     analyze: 'Can you analyze the performance of my active campaigns and give me a diagnostic?',
     setup_profile: 'I just signed up. Help me set up my company profile to personalize my campaigns.',
-    explore: 'Explain baakalai\'s features and how to get the most out of the platform.',
+    explore: 'Explain how prospecting works on baakalai and how to get the most out of it.',
     create_from_insights: 'You\'ve analyzed my previous campaigns and identified patterns that work. Create a new refined campaign based on these insights and cross-campaign memory. Suggest the best angle, tone and sequence based on what worked.',
   };
   return {
-    create: 'Je veux créer une nouvelle campagne. Propose-moi d\'abord le type le plus pertinent selon mon CRM (réactivation de deals dormants, relance clients, upsell ou prospection), puis guide-moi étape par étape.',
+    create: 'Je veux créer une nouvelle campagne de prospection froide. Propose-moi le meilleur angle selon mon profil entreprise et mon ICP, puis guide-moi étape par étape.',
     refine: 'Je veux affiner une de mes campagnes existantes qui sous-performe. Quelles campagnes puis-je am\u00E9liorer ?',
     analyze: 'Peux-tu analyser les performances de mes campagnes actives et me donner un diagnostic ?',
     setup_profile: 'Je viens de m\'inscrire. Aide-moi \u00E0 configurer mon profil entreprise pour personnaliser mes campagnes.',
-    explore: 'Explique-moi les fonctionnalit\u00E9s de baakalai et comment tirer le meilleur parti de la plateforme.',
+    explore: 'Explique-moi comment fonctionne la prospection sur baakalai et comment en tirer le meilleur parti.',
     create_from_insights: 'Tu as analys\u00E9 mes campagnes pr\u00E9c\u00E9dentes et identifi\u00E9 des patterns qui fonctionnent. Cr\u00E9e-moi une nouvelle campagne affin\u00E9e en t\'appuyant sur ces insights et la m\u00E9moire cross-campagne.',
   };
 }
 
-// Templates alignés sur les jobs du produit : réactivation (hero) > relance clients
-// > upsell, prospection en porte d'entrée. Recrutement et partenariat retirés —
-// hors produit (baakalai exploite le CRM, il ne fait ni RH ni co-marketing).
+// Templates de campagne — prospection froide uniquement. Les templates
+// « deals dormants », « relance clients » et « upsell » ont été déplacés vers
+// l'assistant général (pages/ChatPage.jsx) : ils visent des contacts déjà dans le
+// CRM, que create_campaign ne sait pas traiter (cf. CHAT_SYSTEM_RULES).
 // La prospection s'appuie sur le profil/ICP de l'utilisateur, pas sur une cible inventée.
 function getCampaignTemplates(t) {
   return [
-    { label: t('chat.templateDormant'), desc: t('chat.templateDormantDesc'), prompt: 'Look at my CRM and create a reactivation campaign for my dormant deals, prioritized by deal value. Warm, personal tone that references the previous conversation — never a cold pitch. 3 touchpoints spaced 5-7 days apart.' },
-    { label: t('chat.templateReactivation'), desc: t('chat.templateReactivationDesc'), prompt: 'Create an email reactivation sequence for existing clients who haven\'t been contacted in 3+ months. Warm tone, not salesy. Goal: re-establish contact and propose a check-in. 3 touchpoints spaced 7 days apart.' },
-    { label: t('chat.templateUpsell'), desc: t('chat.templateUpsellDesc'), prompt: 'Create an upsell campaign for my existing clients. Use my CRM data to identify which clients could benefit from an additional product or an upgrade. Peer-to-peer tone, lead with the value for them, no hard sell. 2-3 touchpoints.' },
-    { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
     { label: t('chat.templateProspection'), desc: t('chat.templateProspectionDesc'), prompt: 'Create a prospecting campaign based on my company profile and ICP. If my profile is incomplete, ask me who I want to target — don\'t invent a target. Channel: email. Professional, direct tone. Generate the full sequence.' },
+    { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
+    { label: t('chat.templateMulti'), desc: t('chat.templateMultiDesc'), prompt: 'Create a multichannel prospecting campaign (email + LinkedIn) on my ICP. Alternate the channels: LinkedIn connection request, then email, then LinkedIn message. 4 touchpoints over 3 weeks.' },
+    { label: t('chat.templateBreakup'), desc: t('chat.templateBreakupDesc'), prompt: 'Write a short breakup sequence for the cold prospects who never answered my current campaigns: one last email, honest and no pressure, that gives them an easy way out — and often gets a reply.' },
   ];
 }
 
@@ -185,39 +192,32 @@ function ActionCard({ metadata, onCreateCampaign, onModify, onActionExecute, onP
     return <WebSearchProspectsCard metadata={metadata} onActionExecute={onActionExecute} />;
   }
 
-  // CRM / Activation actions
-  if (action === 'send_email') {
-    return <SendEmailCard metadata={metadata} />;
-  }
-  if (action === 'scan_crm') {
-    return <CrmActionCard metadata={metadata} actionType="scan_crm" label={en ? 'Scan CRM' : 'Scanner le CRM'} icon={'\uD83D\uDD0D'} />;
-  }
-  if (action === 'run_nurture') {
-    return <CrmActionCard metadata={metadata} actionType="run_nurture" label={en ? 'Run activation' : 'Lancer l\'activation'} icon={'\u26A1'} />;
-  }
-  if (action === 'import_crm') {
-    return <CrmActionCard metadata={metadata} actionType="import_crm" label={en ? 'Import from CRM' : 'Importer depuis le CRM'} icon={'\u2B07\uFE0F'} />;
-  }
-  if (action === 'clean_crm') {
-    return <CrmActionCard metadata={metadata} actionType="clean_crm" label={en ? 'Clean CRM data' : 'Nettoyer le CRM'} icon={'\uD83E\uDDF9'} />;
-  }
-  if (action === 'list_clients') {
-    return <ListClientsCard metadata={metadata} />;
-  }
-  if (action === 'create_trigger') {
-    return <CreateTriggerCard metadata={metadata} />;
-  }
-  if (action === 'toggle_autopilot') {
-    return <ToggleAutopilotCard metadata={metadata} />;
-  }
-  if (action === 'search_signals') {
-    return <SignalSearchCard metadata={metadata} />;
-  }
-  if (action === 'send_newsletter') {
-    return <NewsletterCard metadata={metadata} />;
+  // Bascule vers l'assistant général : tout ce qui touche aux contacts déjà dans
+  // le CRM (relance, upsell, churn, trigger, nettoyage) s'y traite, pas ici.
+  if (action === 'open_general_assistant') {
+    return <OpenGeneralAssistantCard metadata={metadata} />;
   }
 
   return null;
+}
+
+/* Carte de bascule Prospection → Assistant général. Symétrique de
+   open_campaign_assistant côté ChatPage : le brief rédigé par Claude est
+   pré-rempli dans l'input de l'assistant d'arrivée. */
+function OpenGeneralAssistantCard({ metadata }) {
+  const t = useT();
+  const navigate = useNavigate();
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        className="btn btn-primary"
+        style={{ fontSize: 12, padding: '8px 16px' }}
+        onClick={() => navigate('/chat', { state: { prefillMessage: metadata.prompt || undefined } })}
+      >
+        {t('chat.openGeneralAssistant')}
+      </button>
+    </div>
+  );
 }
 
 function WebSearchProspectsCard({ metadata, onActionExecute }) {
@@ -726,501 +726,6 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify, onPreview })
   );
 }
 
-/* ═══ CRM / Activation Action Cards ═══ */
-
-function SendEmailCard({ metadata }) {
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const [status, setStatus] = useState('ready'); // ready, sending, sent, error
-  const [error, setError] = useState(null);
-
-  const handleSend = async () => {
-    setStatus('sending');
-    try {
-      await request('/nurture/send', {
-        method: 'POST',
-        body: JSON.stringify({
-          to: metadata.to,
-          toName: metadata.toName,
-          subject: metadata.subject,
-          body: metadata.body,
-        }),
-      });
-      setStatus('sent');
-    } catch (err) {
-      setError(err.message);
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
-      padding: 16, marginTop: 8,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-        {'\u2709\uFE0F'} Email {'\u2192'} {metadata.toName || metadata.to}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-        <strong>{en ? 'Subject:' : 'Objet :'}</strong> {metadata.subject}
-      </div>
-      <div style={{
-        fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap',
-        background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 12px',
-        maxHeight: 120, overflow: 'hidden', marginBottom: 10, lineHeight: 1.5,
-      }}>
-        {metadata.body}
-      </div>
-      {status === 'ready' && (
-        <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleSend}>
-          {en ? 'Send' : 'Envoyer'}
-        </button>
-      )}
-      {status === 'sending' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'Sending...' : 'Envoi...'}</span>}
-      {status === 'sent' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {en ? 'Email sent!' : 'Email envoy\u00E9 !'}</span>}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {error}</span>}
-    </div>
-  );
-}
-
-function IssueRow({ issue, en }) {
-  const [expanded, setExpanded] = useState(false);
-  const severity = issue.severity === 'critical' || issue.severity === 'high' ? '\uD83D\uDD34'
-    : issue.severity === 'warning' || issue.severity === 'medium' ? '\uD83D\uDFE1' : '\uD83D\uDFE2';
-  const contacts = issue.contacts || [];
-  const hasContacts = contacts.length > 0;
-  const typeLabel = {
-    invalid_email_format: en ? 'Invalid email format' : 'Format email invalide',
-    invalid_email_domain: en ? 'Invalid email domain (no mail server)' : 'Domaine email invalide (pas de serveur mail)',
-    invalid_email: en ? 'Invalid emails' : 'Emails invalides',
-    duplicate_email: en ? 'Duplicate emails' : 'Emails en doublon',
-    missing_email: en ? 'Missing emails' : 'Emails manquants',
-    missing_name: en ? 'Missing names' : 'Noms manquants',
-    format_name_caps: en ? 'Name formatting' : 'Format des noms',
-  }[issue.type] || issue.message || issue.type;
-
-  return (
-    <div style={{ marginBottom: 4 }}>
-      <div
-        style={{ display: 'flex', gap: 6, lineHeight: 1.5, cursor: hasContacts ? 'pointer' : 'default' }}
-        onClick={() => hasContacts && setExpanded(!expanded)}
-      >
-        <span>{severity}</span>
-        <span style={{ flex: 1 }}>{typeLabel} {issue.count > 1 ? `(${issue.count})` : ''}</span>
-        {hasContacts && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{expanded ? '\u25B2' : '\u25BC'}</span>}
-      </div>
-      {expanded && contacts.length > 0 && (
-        <div style={{ marginLeft: 22, marginTop: 4, marginBottom: 6, fontSize: 11, color: 'var(--text-muted)' }}>
-          {contacts.slice(0, 10).map((c, j) => (
-            <div key={j} style={{ padding: '2px 0' }}>
-              {c.name ? `${c.name} — ` : ''}<span style={{ color: 'var(--danger)' }}>{c.email}</span>
-            </div>
-          ))}
-          {contacts.length > 10 && (
-            <div style={{ fontStyle: 'italic', marginTop: 2 }}>+{contacts.length - 10} {en ? 'more' : 'de plus'}...</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CrmActionCard({ metadata, actionType, label, icon }) {
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const [status, setStatus] = useState('ready');
-  const [result, setResult] = useState(null);
-
-  const handleRun = async () => {
-    setStatus('running');
-    try {
-      let endpoint;
-      let body = {};
-      if (actionType === 'scan_crm') {
-        endpoint = '/crm/scan/' + (metadata.provider || 'auto');
-        body = {};
-      } else if (actionType === 'run_nurture') {
-        endpoint = '/nurture/run';
-        body = {};
-      } else if (actionType === 'import_crm') {
-        endpoint = '/crm/import/' + (metadata.provider || 'auto');
-        body = {};
-      } else if (actionType === 'clean_crm') {
-        endpoint = '/crm/auto-clean';
-      }
-      const res = await request(endpoint, { method: 'POST', body: JSON.stringify(body) });
-      setResult(res);
-      setStatus('done');
-    } catch (err) {
-      setResult({ error: err.message });
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
-      padding: 16, marginTop: 8,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-        {icon} {label}
-      </div>
-      {status === 'ready' && (
-        <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleRun}>
-          {en ? 'Execute' : 'Ex\u00E9cuter'}
-        </button>
-      )}
-      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'In progress...' : 'En cours...'}</span>}
-      {status === 'done' && (
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--success)', marginBottom: 8 }}>
-            {'\u2705'} {en ? 'Done' : 'Termin\u00E9'}
-            {result?.score != null && !result?.health && ` — ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
-            {result?.imported != null && ` — ${result.imported} ${en ? 'contact(s) imported' : 'contact(s) import\u00E9(s)'}`}
-            {result?.sent != null && ` — ${result.sent} ${en ? 'email(s) sent' : 'email(s) envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
-            {result?.triggered != null && ` — ${result.triggered} trigger(s), ${result.sent || 0} ${en ? 'sent' : 'envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
-            {result?.health?.score != null && ` — ${en ? 'Health' : 'Sant\u00E9'}: ${result.health.score}/100`}
-            {result?.contacts?.total != null && ` — ${result.contacts.total} contacts`}
-            {result?.autoFixed != null && ` — ${result.autoFixed} ${en ? 'fixed' : 'corrig\u00E9(s)'}, ${result.remainingManual || 0} ${en ? 'remaining' : 'restant(s)'}`}
-            {result?.message && ` — ${result.message}`}
-          </div>
-          {/* Detailed results inline — from health scan or CRM scan */}
-          {(result?.health?.issues?.length > 0 || result?.issues?.length > 0) && (
-            <div style={{ fontSize: 12, marginTop: 6, padding: '10px 12px', background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 8 }}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                {en ? 'Issues found' : 'Problèmes détectés'} ({(result?.health?.issues || result?.issues || []).length})
-              </div>
-              {(result?.health?.issues || result?.issues || []).slice(0, 8).map((issue, i) => (
-                <IssueRow key={i} issue={issue} en={en} />
-              ))}
-              {(result?.health?.issues || result?.issues || []).length > 8 && (
-                <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-                  +{(result?.health?.issues || result?.issues || []).length - 8} {en ? 'more' : 'de plus'}...
-                </div>
-              )}
-            </div>
-          )}
-          {/* Link to full analytics */}
-          {(result?.score != null || result?.health?.score != null) && (
-            <a href="/analytics" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', display: 'inline-block', marginTop: 8 }}>
-              {en ? 'View full analytics →' : 'Voir les analytics complètes →'}
-            </a>
-          )}
-        </div>
-      )}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
-    </div>
-  );
-}
-
-function CreateTriggerCard({ metadata }) {
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const [status, setStatus] = useState('ready');
-  const [result, setResult] = useState(null);
-  const threadId = metadata?._threadId || 'default';
-
-  const handleCreate = async () => {
-    setStatus('running');
-    try {
-      const res = await request(`/chat/threads/${threadId}/create-trigger`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: metadata.name,
-          triggerType: metadata.triggerType,
-          actionType: metadata.actionType || 'email',
-          days: metadata.days || 30,
-          mode: metadata.mode || 'approval',
-        }),
-      });
-      setResult(res);
-      setStatus('done');
-    } catch (err) {
-      setResult({ error: err.message });
-      setStatus('error');
-    }
-  };
-
-  const actionLabel = (metadata.actionType || 'email').startsWith('linkedin_')
-    ? 'LinkedIn ' + (metadata.actionType || '').replace('linkedin_', '')
-    : 'Email';
-
-  return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
-      padding: 16, marginTop: 8,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-        {'\u26A1'} {en ? 'Create trigger' : 'Créer un trigger'}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-        <strong>{metadata.name}</strong> — {metadata.triggerType?.replace(/_/g, ' ')} · {metadata.days || 30} {en ? 'days' : 'jours'} · {actionLabel} · {metadata.mode === 'auto' ? (en ? 'Automatic' : 'Automatique') : (en ? 'Approval' : 'Approbation')}
-      </div>
-      {status === 'ready' && (
-        <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleCreate}>
-          {en ? 'Create trigger' : 'Créer le trigger'}
-        </button>
-      )}
-      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'Creating...' : 'Création...'}</span>}
-      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {en ? 'Trigger created' : 'Trigger créé'}</span>}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
-    </div>
-  );
-}
-
-function ToggleAutopilotCard({ metadata }) {
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const [status, setStatus] = useState('ready');
-  const threadId = metadata?._threadId || 'default';
-  const enabling = metadata.enabled !== false;
-  // La portée vient de l'Assistant, qui doit la demander quand elle manque.
-  // Sans elle la route refuse : mieux vaut une carte inerte qu'une bascule
-  // silencieuse sur la mauvaise population.
-  const scope = metadata.scope === 'crm' || metadata.scope === 'prospection' ? metadata.scope : null;
-  const scopeLabel = scope === 'crm'
-    ? (en ? 'CRM contacts and clients' : 'contacts et clients du CRM')
-    : (en ? 'cold prospects' : 'prospects froids');
-
-  const handleToggle = async () => {
-    setStatus('running');
-    try {
-      await request(`/chat/threads/${threadId}/toggle-autopilot`, {
-        method: 'POST',
-        body: JSON.stringify({ enabled: enabling, scope }),
-      });
-      setStatus('done');
-    } catch {
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
-      padding: 16, marginTop: 8,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-        {'\uD83E\uDD16'} {enabling ? (en ? 'Enable Autopilot' : 'Activer l\'Autopilot') : (en ? 'Disable Autopilot' : 'Désactiver l\'Autopilot')}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-        {enabling
-          ? (en ? `AI will automatically answer replies from ${scopeLabel} (max 5 turns, 2-4h delay).` : `L'IA répondra automatiquement aux réponses de vos ${scopeLabel} (max 5 tours, délai 2-4h).`)
-          : (en ? `Autopilot will be disabled for ${scopeLabel}. You will need to respond manually.` : `L'autopilot sera désactivé pour vos ${scopeLabel}. Vous devrez répondre manuellement.`)}
-      </div>
-      {!scope && (
-        <div style={{ fontSize: 12, color: 'var(--danger)' }}>
-          {en ? 'Which population? Ask the assistant to specify: cold prospects, or CRM contacts.'
-              : 'Sur quelle population ? Demande à l\'assistant de préciser : prospects froids, ou contacts CRM.'}
-        </div>
-      )}
-      {scope && status === 'ready' && (
-        <button className={`btn ${enabling ? 'btn-success' : 'btn-outline'}`} style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleToggle}>
-          {enabling ? (en ? 'Enable' : 'Activer') : (en ? 'Disable' : 'Désactiver')}
-        </button>
-      )}
-      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'}...</span>}
-      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {enabling ? (en ? 'Autopilot enabled' : 'Autopilot activé') : (en ? 'Autopilot disabled' : 'Autopilot désactivé')}</span>}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {en ? 'Failed' : 'Échec'}</span>}
-    </div>
-  );
-}
-
-function ListClientsCard({ metadata }) {
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const [clients, setClients] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    request('/dashboard/opportunities')
-      .then(data => {
-        let opps = data.opportunities || [];
-        if (metadata.filter === 'won') opps = opps.filter(o => o.status === 'won');
-        else if (metadata.filter === 'stagnant' || metadata.filter === 'inactive') {
-          const days = metadata.days || 30;
-          const threshold = Date.now() - days * 86400000;
-          opps = opps.filter(o => new Date(o.updated_at || o.created_at).getTime() < threshold);
-        }
-        setClients(opps);
-      })
-      .catch(() => setClients([]))
-      .finally(() => setLoading(false));
-  }, [metadata.filter, metadata.days]);
-
-  if (loading) return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>{'\u23F3'} {en ? 'Loading...' : 'Chargement...'}</div>;
-  if (!clients || clients.length === 0) {
-    return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>{en ? 'No clients found with this filter.' : 'Aucun client trouv\u00E9 avec ce filtre.'}</div>;
-  }
-
-  return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
-      padding: 16, marginTop: 8,
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-        {'\uD83D\uDC65'} {clients.length} {en ? 'client(s) found' : 'client(s) trouv\u00E9(s)'}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
-        {clients.slice(0, 10).map(c => (
-          <div key={c.id} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '6px 10px', borderRadius: 6, background: 'var(--bg-elevated)', fontSize: 12,
-          }}>
-            <div>
-              <span style={{ fontWeight: 600 }}>{c.name}</span>
-              {c.company && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>@ {c.company}</span>}
-            </div>
-            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{c.email}</span>
-          </div>
-        ))}
-        {clients.length > 10 && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-            +{clients.length - 10} {en ? 'more' : 'autres'}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SignalSearchCard({ metadata }) {
-  const [scanning, setScanning] = useState(false);
-  const [results, setResults] = useState(null);
-  const { lang } = useI18n();
-  const en = lang === 'en';
-
-  const handleScan = async () => {
-    setScanning(true);
-    try {
-      // Create a temporary config and scan
-      // signal_types must come from the fixed set understood by the signal-agent
-      // (SIGNAL_QUERIES) — free-text keywords go in targetKeywords only.
-      const VALID_SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
-      const requestedTypes = (metadata.signalTypes || []).filter(k => VALID_SIGNAL_TYPES.includes(k));
-      await request('/signals/configs', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: `Chat scan ${new Date().toLocaleDateString()}`,
-          signalTypes: requestedTypes.length > 0 ? requestedTypes : ['funding', 'hiring', 'news'],
-          targetSectors: metadata.sectors || [],
-          targetTitles: metadata.titles || [],
-          targetKeywords: metadata.keywords || metadata.sectors || [],
-        }),
-      });
-      // Run the scan
-      const report = await request('/signals/scan', { method: 'POST' });
-      setResults(report);
-    } catch { setResults({ error: true }); }
-    setScanning(false);
-  };
-
-  return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--accent)', borderRadius: 12,
-      padding: 16, marginTop: 8,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 18 }}>📡</span>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>{en ? 'Signal Search' : 'Recherche de signaux'}</div>
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-        {metadata.sectors?.length > 0 && <span>{en ? 'Sectors' : 'Secteurs'}: {metadata.sectors.join(', ')} · </span>}
-        {metadata.titles?.length > 0 && <span>{en ? 'Titles' : 'Titres'}: {metadata.titles.join(', ')} · </span>}
-        {metadata.keywords?.length > 0 && <span>{en ? 'Keywords' : 'Mots-clés'}: {metadata.keywords.join(', ')}</span>}
-      </div>
-      {!results ? (
-        <button className="btn btn-primary" style={{ fontSize: 12, width: '100%', justifyContent: 'center' }}
-          onClick={handleScan} disabled={scanning}>
-          {scanning ? (en ? 'Scanning...' : 'Scan en cours...') : (en ? '🔍 Scan for signals' : '🔍 Lancer le scan')}
-        </button>
-      ) : results.error ? (
-        <div style={{ fontSize: 12, color: 'var(--danger)' }}>{en ? 'Scan failed' : 'Échec du scan'}</div>
-      ) : (
-        <div style={{ fontSize: 12 }}>
-          <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>
-            ✅ {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
-          </div>
-          <a href="/activation?section=signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
-            {en ? 'View signals →' : 'Voir les signaux →'}
-          </a>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NewsletterCard({ metadata }) {
-  const [templates, setTemplates] = useState(null);
-  const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState(null);
-  const { lang } = useI18n();
-  const en = lang === 'en';
-
-  useEffect(() => {
-    request('/informz/templates').then(d => setTemplates(d.rows || [])).catch(() => setTemplates([]));
-  }, []);
-
-  const handleSend = async () => {
-    setSending(true);
-    try {
-      const data = await request('/informz/send-from-template', {
-        method: 'POST',
-        body: JSON.stringify({
-          templateId: selectedTemplate,
-          prompt: metadata.topic || '',
-        }),
-      });
-      setResult(data);
-    } catch (err) { setResult({ error: err.message }); }
-    setSending(false);
-  };
-
-  return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--accent)', borderRadius: 12,
-      padding: 16, marginTop: 8,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 18 }}>📨</span>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>Newsletter</div>
-      </div>
-      {metadata.topic && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-          {en ? 'Topic' : 'Sujet'}: {metadata.topic}
-        </div>
-      )}
-      {templates === null ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'Loading templates...' : 'Chargement des templates...'}</div>
-      ) : templates.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--warning)' }}>
-          {en ? 'No Informz templates found. Connect Informz in Settings or create templates in Informz first.' : 'Aucun template Informz trouvé. Connectez Informz dans les Settings ou créez des templates dans Informz.'}
-        </div>
-      ) : !result ? (
-        <>
-          <select className="form-input" style={{ fontSize: 12, marginBottom: 8 }}
-            value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
-            <option value="">{en ? '— Select a template —' : '— Choisir un template —'}</option>
-            {templates.map((t, i) => (
-              <option key={t.Id || i} value={t.Id || t.id || i}>{t.Name || t.name || `Template ${i + 1}`}</option>
-            ))}
-          </select>
-          <button className="btn btn-primary" style={{ fontSize: 12, width: '100%', justifyContent: 'center' }}
-            onClick={handleSend} disabled={sending || !selectedTemplate}>
-            {sending ? '...' : (en ? '📨 Generate & send newsletter' : '📨 Générer et envoyer')}
-          </button>
-        </>
-      ) : result.error ? (
-        <div style={{ fontSize: 12, color: 'var(--danger)' }}>{result.error}</div>
-      ) : (
-        <div style={{ fontSize: 12, color: 'var(--success)' }}>✅ {en ? 'Newsletter sent!' : 'Newsletter envoyée !'}</div>
-      )}
-    </div>
-  );
-}
-
 function ProspectSearchCard({ metadata, onActionExecute }) {
   const { campaigns } = useApp();
   const t = useT();
@@ -1482,86 +987,6 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
   );
 }
 
-/* Premier dialogue : ce que baakalai a lu dans le CRM, avec les deals
-   dormants cliquables — un clic lance la conversation sur un vrai deal.
-   Rendu uniquement quand l'utilisateur a un profil mais aucune campagne. */
-function CrmReadingSummary({ onSuggestionClick }) {
-  const t = useT();
-  const { lang } = useI18n();
-  const [summary, setSummary] = useState(null);
-
-  useEffect(() => {
-    request('/crm/reading-summary')
-      .then(setSummary)
-      .catch((err) => { console.warn('reading-summary failed:', err.message); });
-  }, []);
-
-  if (!summary || !summary.totalDeals) return null;
-
-  const money = (n) => {
-    if (!n) return '0 €';
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M €`;
-    if (n >= 1000) return `${Math.round(n / 1000)}k €`;
-    return `${Math.round(n)} €`;
-  };
-
-  const revivePrompt = (d) => (lang === 'en'
-    ? `Draft a follow-up for the deal "${d.name}"${d.company ? ` (${d.company})` : ''} — no activity for ${d.daysInactive} days.`
-    : `Prépare une relance pour le deal « ${d.name} »${d.company ? ` (${d.company})` : ''} — sans activité depuis ${d.daysInactive} jours.`);
-
-  return (
-    <div style={{
-      background: 'var(--paper)', border: '1px solid var(--border)',
-      borderRadius: 12, padding: '14px 18px', marginBottom: 20,
-      textAlign: 'left', maxWidth: 520, width: '100%',
-    }}>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-        {t('chat.readSummary')
-          .replace('{count}', summary.totalDeals)
-          .replace('{value}', money(summary.openValue))}
-        {summary.dormant.count > 0 && (
-          <> {t('chat.readDormant').replace('{count}', summary.dormant.count)}</>
-        )}
-        {summary.dormant.noValueCount > 0 && (
-          <> {t('chat.readDormantNoValue').replace('{count}', summary.dormant.noValueCount)}</>
-        )}
-      </div>
-      {summary.dormant.top.length > 0 && (
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
-          {t('chat.readStartWith')}
-        </div>
-      )}
-      {summary.dormant.top.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-          {summary.dormant.top.map(d => (
-            <button
-              key={d.id}
-              onClick={() => {
-                trackEvent('reading_summary_revive_click', { daysInactive: d.daysInactive });
-                onSuggestionClick(revivePrompt(d));
-              }}
-              style={{
-                background: 'var(--paper-2)', border: '1px solid var(--border)',
-                borderRadius: 8, padding: '8px 12px', textAlign: 'left',
-                cursor: 'pointer', fontSize: 13, color: 'var(--ink)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
-            >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <strong>{d.name}</strong>{d.company ? ` · ${d.company}` : ''}
-              </span>
-              <span style={{ flexShrink: 0, color: 'var(--text-secondary)', fontSize: 12 }}>
-                {money(d.dealValue)} · {t('chat.readDays').replace('{days}', d.daysInactive)} →
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) {
   const { userName, campaignCount, hasProfile, activeCampaigns, topCampaign, insights } = userState || {};
@@ -1661,11 +1086,6 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
               {t('chat.createFromInsights')} →
             </button>
           </div>
-        )}
-
-        {/* Premier dialogue : compte-rendu de lecture du CRM, deals cliquables */}
-        {(hasProfile && campaignCount === 0) && (
-          <CrmReadingSummary onSuggestionClick={onSuggestionClick} />
         )}
 
         {/* Campaign templates — shown when user has profile but no/few campaigns */}
@@ -1954,28 +1374,14 @@ export default function CampaignAssistant() {
     if (metadata.action === 'regenerate_touchpoints') {
       return en ? ['View new versions', 'Deploy changes', 'Change approach'] : ['Voir les nouvelles versions', 'D\u00E9ployer les modifications', 'Modifier l\'approche'];
     }
-    if (metadata.action === 'scan_crm' || metadata.action === 'clean_crm') {
-      return en ? ['Fix all issues', 'Import contacts', 'Create a trigger', 'Enable autopilot'] : ['Corriger tous les probl\u00E8mes', 'Importer les contacts', 'Cr\u00E9er un trigger', 'Activer l\'autopilot'];
+    // Les actions CRM (scan_crm, run_nurture, create_trigger, toggle_autopilot,
+    // send_email, list_clients) ne sont plus émises ici — cet assistant ne les
+    // déclare plus. Leurs suggestions de suite vivent avec elles, côté assistant
+    // général (pages/ChatPage.jsx).
+    if (metadata.action === 'search_prospects' || metadata.action === 'web_search_prospects') {
+      return en ? ['Add them to a campaign', 'Broaden the search', 'Refine the titles'] : ['Les ajouter \u00E0 une campagne', 'Élargir la recherche', 'Affiner les postes'];
     }
-    if (metadata.action === 'import_crm') {
-      return en ? ['Scan CRM health', 'Create activation trigger', 'Show imported contacts'] : ['Scanner la sant\u00E9 CRM', 'Cr\u00E9er un trigger d\'activation', 'Voir les contacts import\u00E9s'];
-    }
-    if (metadata.action === 'create_trigger') {
-      return en ? ['Create another trigger', 'Run activation now', 'Enable autopilot'] : ['Cr\u00E9er un autre trigger', 'Lancer l\'activation maintenant', 'Activer l\'autopilot'];
-    }
-    if (metadata.action === 'toggle_autopilot') {
-      return en ? ['Show autopilot queue', 'Create a trigger', 'Scan CRM'] : ['Voir la file autopilot', 'Cr\u00E9er un trigger', 'Scanner le CRM'];
-    }
-    if (metadata.action === 'run_nurture') {
-      return en ? ['View sent emails', 'Check pending approvals', 'Scan CRM health'] : ['Voir les emails envoy\u00E9s', 'V\u00E9rifier les approbations', 'Scanner la sant\u00E9 CRM'];
-    }
-    if (metadata.action === 'send_email') {
-      return en ? ['Send another email', 'Create a follow-up trigger', 'View client profile'] : ['Envoyer un autre email', 'Cr\u00E9er un trigger de suivi', 'Voir le profil client'];
-    }
-    if (metadata.action === 'list_clients') {
-      return en ? ['Export this list', 'Create trigger for these clients', 'Run churn scoring'] : ['Exporter cette liste', 'Cr\u00E9er un trigger pour ces clients', 'Lancer le scoring churn'];
-    }
-    return en ? ['Create a campaign', 'Scan my CRM', 'Enable autopilot'] : ['Cr\u00E9er une campagne', 'Scanner mon CRM', 'Activer l\'autopilot'];
+    return en ? ['Create a campaign', 'View my stats', 'Refine my sequences'] : ['Cr\u00E9er une campagne', 'Voir mes stats', 'Affiner mes s\u00E9quences'];
   }, []);
 
   /* ─── Create campaign from chat ─── */

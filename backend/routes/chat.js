@@ -12,20 +12,52 @@ const cleanLimit = rateLimit({ windowMs: 60000, max: 5 });
 const ASSISTANT_TYPES = ['general', 'campaign'];
 
 /**
- * Lean context for the general assistant (first sidebar tab) — language + whether a CRM is
- * genuinely connected, nothing else. Deliberately skips documents/campaigns/patterns/
- * diagnostics/versions, all irrelevant to a non-campaign-creating assistant. Uses
- * getValidatedIntegrations (decrypts to confirm a real, usable connection) rather than the
- * plain access_token-exists check the campaign assistant's context still uses below — see this
- * session's earlier fix for why a stale/placeholder token must not count as "connected."
+ * Context for the general assistant (first sidebar tab).
+ *
+ * It used to be deliberately lean — language + whether a CRM was connected — back when this
+ * assistant only answered questions. It now owns the whole activation surface (relaunch
+ * dormant deals, triggers, autopilot, CRM scan/clean/import, sending an email), so it needs
+ * to know the state of the CRM it is being asked to act on: an assistant that has to call
+ * list_clients before it can say "you have dormant deals" wastes a round-trip on something
+ * one aggregate query answers.
+ *
+ * Still deliberately excluded: campaigns, documents, prospect sources, memory patterns,
+ * diagnostics and versions — all of them serve cold-prospecting campaign building, which
+ * belongs to the other assistant.
+ *
+ * Uses getValidatedIntegrations (decrypts to confirm a real, usable connection) rather than
+ * the plain access_token-exists check the prospecting assistant's context still uses below —
+ * a stale/placeholder token must not count as "connected."
  */
 async function buildGeneralContext(userId) {
   const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
-  const [userRow, connectedCrms] = await Promise.all([
-    db.query('SELECT language FROM users WHERE id = $1', [userId]),
+  const [userRow, connectedCrms, crmStats, triggers] = await Promise.all([
+    db.query('SELECT language, settings FROM users WHERE id = $1', [userId]),
     getValidatedIntegrations(userId, CRM_PROVIDERS),
+    // Même définition de la dormance que /api/crm/reading-summary : 30 jours sur
+    // COALESCE(last_activity_at, created_at) — jamais updated_at, réécrit en masse
+    // à chaque import. Les deux surfaces doivent annoncer le même chiffre.
+    db.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status NOT IN ('won', 'lost'))::int AS open_deals,
+        COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0)::float AS open_value,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('won', 'lost')
+            AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+        )::int AS dormant,
+        COUNT(*) FILTER (WHERE status = 'won')::int AS clients,
+        COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS churn_risk,
+        COUNT(*) FILTER (WHERE email IS NULL OR email = '')::int AS missing_email
+      FROM opportunities WHERE user_id = $1
+    `, [userId]),
+    db.query(
+      'SELECT name, trigger_type, mode, enabled FROM nurture_triggers WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10',
+      [userId]
+    ),
   ]);
   const userLang = userRow.rows?.[0]?.language || 'fr';
+  const settings = userRow.rows?.[0]?.settings || {};
 
   const contextParts = [];
   contextParts.push(userLang === 'en'
@@ -35,8 +67,31 @@ async function buildGeneralContext(userId) {
   if (connectedCrms.length > 0) {
     const crmLines = connectedCrms.map(p => `- ${p.charAt(0).toUpperCase() + p.slice(1)}`);
     contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}`);
+
+    const c = crmStats.rows[0] || {};
+    contextParts.push([
+      'ÉTAT DU CRM (chiffres réels, réutilise-les tels quels — ne les invente pas et ne les arrondis pas au hasard) :',
+      `- ${c.total || 0} contacts synchronisés`,
+      `- ${c.open_deals || 0} deals ouverts, ${Math.round(c.open_value || 0)} € au total`,
+      `- ${c.dormant || 0} deals dormants (aucune activité depuis plus de 30 jours)`,
+      `- ${c.clients || 0} clients gagnés, dont ${c.churn_risk || 0} à risque de churn (score ≥ 60)`,
+      `- ${c.missing_email || 0} contacts sans email`,
+    ].join('\n'));
+
+    if (triggers.rows.length > 0) {
+      const lines = triggers.rows.map(t =>
+        `- "${t.name}" (${t.trigger_type}, ${t.mode === 'auto' ? 'automatique' : 'approbation'}) ${t.enabled ? '✅ actif' : '⏸️ en pause'}`
+      );
+      contextParts.push(`TRIGGERS D'ACTIVATION EXISTANTS:\n${lines.join('\n')}\n\nNe propose pas de créer un trigger qui fait déjà doublon avec l'un d'eux.`);
+    } else {
+      contextParts.push("TRIGGERS D'ACTIVATION EXISTANTS: aucun. L'utilisateur relance encore tout à la main — create_trigger est souvent la bonne suggestion.");
+    }
+
+    contextParts.push(
+      `AUTOPILOT DE RÉPONSE: prospection ${settings.autopilot_prospection_enabled ? 'activé' : 'désactivé'}, CRM ${settings.autopilot_crm_enabled ? 'activé' : 'désactivé'}.`
+    );
   } else {
-    contextParts.push("CRM: Aucun CRM connecté. Si l'utilisateur demande des infos sur un client, dis-lui de connecter un CRM dans Paramètres d'abord.");
+    contextParts.push("CRM: Aucun CRM connecté. Toutes les actions CRM (relance, trigger, scan, import, envoi d'email) sont impossibles tant qu'il n'a pas connecté un CRM. Redirige-le vers Paramètres → Intégrations plutôt que de proposer une action qui échouera.");
   }
 
   return contextParts.join('\n\n');
@@ -269,7 +324,10 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const connectedCrms = userIntegrations.filter(i => crmProviders.includes(i.provider) && i.access_token);
     if (connectedCrms.length > 0) {
       const crmLines = connectedCrms.map(c => `- ${c.provider.charAt(0).toUpperCase() + c.provider.slice(1)}${c.instance_url ? ' (' + c.instance_url + ')' : ''}`);
-      contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}\n\nL'utilisateur a un CRM connecté. Tu peux proposer d'analyser son CRM, scanner la santé des données, importer des contacts, ou lancer des triggers d'activation.\n\nACTIONS RÉACTIVATION DISPONIBLES:\n- "list-reactivation-targets": Lister les deals stagnants/perdus à réactiver (triés par valeur)\n- "reactivation-stats": Voir les KPIs de réactivation (deals récupérés, revenu, taux de conversion)\n- "send-reactivation": Générer et mettre en file un email de réactivation pour un contact spécifique\nQuand l'utilisateur parle de deals stagnants, relance, réactivation, ou demande "qui je devrais relancer", propose ces actions via des quick_replies.`);
+      // Le CRM connecté est une info utile ici (ses contacts existants disent quels
+      // segments marchent), mais AGIR dessus n'est pas le rôle de cet assistant :
+      // scan, import, relance et triggers appartiennent à l'assistant général.
+      contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}\n\nCes contacts sont DÉJÀ dans le CRM : ils ne sont pas ta cible. Si l'utilisateur veut les relancer, les nettoyer, les importer ou automatiser un suivi, émets open_general_assistant. Tu peux en revanche t'appuyer sur ce que le CRM raconte (secteurs et postes qui convertissent) pour affiner le ciblage d'une campagne de prospection FROIDE.`);
     } else {
       contextParts.push("CRM: Aucun CRM connecté. Si l'utilisateur demande une analyse CRM, redirige-le vers Paramètres pour connecter Pipedrive, HubSpot, Salesforce, Notion ou un autre CRM.");
     }

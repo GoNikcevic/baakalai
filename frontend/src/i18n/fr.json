@@ -241,7 +241,7 @@
     "welcome": "Bienvenue",
     "hello": "Bonjour {name} !",
     "readyToProspect": "On relance quels deals aujourd'hui, {name} ?",
-    "openCampaignAssistant": "Ouvrir l'assistant Campagnes →",
+    "openCampaignAssistant": "Ouvrir l'assistant Prospection →",
     "readSummary": "J'ai lu vos {count} deals — {value} de pipeline.",
     "readDormant": "{count} dorment depuis plus de 30 jours.",
     "readDormantNoValue": "{count} autres dorment sans montant renseigné.",
@@ -279,7 +279,18 @@
     "templateUpsell": "Upsell clients existants",
     "templateUpsellDesc": "Proposer une offre complémentaire aux clients actuels",
     "templateProspection": "Prospection nouvelle cible",
-    "templateProspectionDesc": "Séquence email construite sur votre profil et votre ICP"
+    "templateProspectionDesc": "Séquence email construite sur votre profil et votre ICP",
+    "openGeneralAssistant": "Ouvrir l'assistant général →",
+    "templateMulti": "Séquence multicanale",
+    "templateMultiDesc": "Email + LinkedIn alternés sur la même cible",
+    "templateBreakup": "Dernière relance",
+    "templateBreakupDesc": "Email de clôture pour les prospects restés silencieux",
+    "templateDormantPrompt": "Montre-moi mes deals dormants, priorisés par valeur, et propose-moi une relance personnalisée pour les trois plus importants.",
+    "templateReactivationPrompt": "Quels clients n'ont pas été contactés depuis plus de 3 mois ? Propose-moi une relance chaleureuse pour reprendre contact, et un trigger pour automatiser ça à l'avenir.",
+    "templateUpsellPrompt": "Quels clients existants pourraient bénéficier d'une offre complémentaire ou d'un upgrade ? Analyse mon CRM et propose-moi un angle d'upsell pour chacun.",
+    "templateChurn": "Clients à risque",
+    "templateChurnDesc": "Repérer les comptes qui décrochent avant qu’ils partent",
+    "templateChurnPrompt": "Quels clients présentent le plus fort risque de churn en ce moment ? Explique-moi pourquoi pour chacun, et propose une action concrète."
   },
   "common": {
     "tagline": "Le système IA qui exploite ton CRM",
@@ -1238,7 +1249,11 @@
   "assistant": {
     "conversations": "Conversations",
     "welcomeTitle": "Comment puis-je vous aider ?",
-    "welcomeSubtitle": "Posez une question sur un client, sur le fonctionnement de Baakalai, ou demandez un conseil de vente ou de prospection."
+    "welcomeSubtitle": "Posez une question sur un client, lancez une relance ou un nettoyage du CRM, ou demandez conseil. Pour créer une campagne de prospection froide, je vous bascule vers l'onglet Prospection.",
+    "example1": "👤 Quel est le statut de mon client Marc ?",
+    "example2": "🧹 Analyse la santé de mon CRM et corrige ce qui peut l’être",
+    "example3": "⚡ Crée un trigger qui relance les deals stagnants depuis 30 jours",
+    "example4": "❓ Comment fonctionne le score de churn ?"
   },
   "autopilot": {
     "title": "Autopilot de réponse",
