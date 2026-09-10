@@ -27,6 +27,7 @@ const db = require('../db');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const logger = require('./logger');
+const { populationOf } = require('./crm-scope');
 
 const MAX_TURNS = 5;
 const MIN_DELAY_MS = 2 * 60 * 60 * 1000;  // 2 hours
@@ -53,16 +54,23 @@ async function processReply(userId, opts) {
     return { action: 'skipped', reason: 'Missing opportunityId or email' };
   }
 
-  // Check if autopilot is enabled for this user
-  const settings = await getAutopilotSettings(userId);
-  if (!settings.enabled) {
-    return { action: 'skipped', reason: 'Autopilot disabled' };
+  // Le contact est chargé avant les réglages : c'est lui qui dit de quelle
+  // population relève la conversation, donc quel interrupteur consulter.
+  const opp = await db.query(
+    'SELECT autopilot_enabled, status, campaign_id FROM opportunities WHERE id = $1 AND user_id = $2',
+    [opportunityId, userId]
+  );
+  if (!opp.rows[0]) {
+    return { action: 'skipped', reason: 'Unknown opportunity' };
+  }
+  if (opp.rows[0].autopilot_enabled === false) {
+    return { action: 'skipped', reason: 'Autopilot disabled for this contact' };
   }
 
-  // Check if this opportunity has autopilot disabled
-  const opp = await db.query('SELECT autopilot_enabled, status FROM opportunities WHERE id = $1 AND user_id = $2', [opportunityId, userId]);
-  if (!opp.rows[0] || opp.rows[0].autopilot_enabled === false) {
-    return { action: 'skipped', reason: 'Autopilot disabled for this contact' };
+  const population = populationOf(opp.rows[0]);
+  const settings = await getAutopilotSettings(userId);
+  if (!settings[population]) {
+    return { action: 'skipped', reason: `Autopilot disabled for ${population}` };
   }
 
   // Stop conditions
@@ -237,18 +245,38 @@ async function scheduleReply(userId, opportunityId, toEmail, toName, reply, chan
  */
 async function sendScheduledReplies() {
   const pending = await db.query(`
-    SELECT aq.*, u.name as user_name
+    SELECT aq.*, u.name as user_name, o.campaign_id
     FROM autopilot_queue aq
     JOIN users u ON u.id = aq.user_id
+    LEFT JOIN opportunities o ON o.id = aq.opportunity_id
     WHERE aq.status = 'pending' AND aq.scheduled_at <= now()
     ORDER BY aq.scheduled_at
     LIMIT 20
     FOR UPDATE OF aq SKIP LOCKED
   `);
 
+  // Une réponse reste 2 à 4h en file avant de partir. Sans cette vérification,
+  // couper l'autopilot ne stoppait pas ce qui était déjà planifié : un
+  // utilisateur qui l'éteint parce qu'il ne veut plus que l'IA parle à ses
+  // clients voyait quand même partir les réponses des heures suivantes.
+  // Le réglage est relu au moment d'envoyer, pas au moment de planifier.
+  const settingsByUser = new Map();
+  const scopeAllows = async (item) => {
+    if (!settingsByUser.has(item.user_id)) {
+      settingsByUser.set(item.user_id, await getAutopilotSettings(item.user_id));
+    }
+    return !!settingsByUser.get(item.user_id)[populationOf(item)];
+  };
+
   let sent = 0;
   for (const item of pending.rows) {
     try {
+      if (!await scopeAllows(item)) {
+        await db.query(`UPDATE autopilot_queue SET status = 'cancelled' WHERE id = $1`, [item.id]);
+        logger.info('autopilot', `reply ${item.id} annulée — portée ${populationOf(item)} désactivée entre-temps`);
+        continue;
+      }
+
       const content = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
 
       if (item.channel === 'linkedin') {
@@ -359,8 +387,17 @@ async function getAutopilotSettings(userId) {
     [userId]
   );
   const settings = result.rows[0]?.settings || {};
+
+  // Bascule depuis l'ancien interrupteur unique `autopilot_enabled`, qui
+  // commandait les deux populations à la fois. Un « oui » historique portait
+  // sur la prospection — c'est le seul cas que l'UI décrivait — et ne doit
+  // surtout pas se transformer en autorisation de répondre tout seul dans une
+  // conversation client en cours. En cas de doute, la portée CRM reste fermée.
+  const legacy = settings.autopilot_enabled ?? false;
+
   return {
-    enabled: settings.autopilot_enabled ?? false,
+    prospection: settings.autopilot_prospection_enabled ?? legacy,
+    crm: settings.autopilot_crm_enabled ?? false,
     maxTurns: settings.autopilot_max_turns ?? MAX_TURNS,
     channels: settings.autopilot_channels ?? ['email', 'linkedin'],
   };

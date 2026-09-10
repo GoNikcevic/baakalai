@@ -1217,5 +1217,30 @@
     "conversations": "Conversations",
     "welcomeTitle": "How can I help?",
     "welcomeSubtitle": "Ask about a client, how Baakalai works, or get sales/prospecting advice."
+  },
+  "autopilot": {
+    "title": "Reply Autopilot",
+    "titleProspection": "Autopilot — cold prospects",
+    "titleCrm": "Autopilot — CRM contacts and clients",
+    "descProspection": "AI answers replies from your cold prospects and runs the conversation until a meeting is booked. This setting never touches your CRM contacts.",
+    "descCrm": "AI answers replies from your CRM contacts and clients. A live client conversation has real value: only turn this on if you are comfortable letting AI answer in it.",
+    "howItWorks": "How it works",
+    "stepProspection1": "A cold prospect replies to your sequence (email or LinkedIn)",
+    "stepCrm1": "A CRM contact or client replies to an activation email",
+    "step2": "AI analyses the intent (interested, question, meeting request…)",
+    "step3": "AI drafts a reply from the conversation history and learned patterns",
+    "step4": "The reply goes out after 2-4 hours, the way a human would",
+    "step5": "The conversation continues until a meeting is accepted, or 5 turns max",
+    "enable": "Enable",
+    "active": "Active",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "pendingCount": "{count} pending reply(ies)",
+    "sentCount": "{count} auto-reply(ies) sent",
+    "cancel": "Cancel",
+    "sendsAt": "Sends at:",
+    "sentAt": "Sent:",
+    "emptyProspection": "Active. When a cold prospect replies, AI will run the conversation here.",
+    "emptyCrm": "Active. When a CRM contact replies, AI will run the conversation here."
   }
 }

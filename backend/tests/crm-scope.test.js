@@ -92,3 +92,29 @@ test('les types evalues en direct depuis le CRM renvoient toujours null', () => 
   const out = matchContacts({ trigger_type: 'newsletter_inactive', conditions: {} }, stagnantOpps, NOW);
   assert.strictEqual(out, null);
 });
+
+// ── Portée de l'autopilot de réponse ───────────────────────────────────────
+//
+// Répondre tout seul à un inconnu et répondre tout seul dans une conversation
+// avec un client qui paie n'engagent pas le même risque : chaque population a
+// son interrupteur, et la portée se lit sur le contact.
+
+const { populationOf } = require('../lib/crm-scope');
+
+test('un contact CRM releve de la portee crm', () => {
+  assert.strictEqual(populationOf({ campaign_id: null }), 'crm');
+});
+
+test('un prospect de campagne releve de la portee prospection', () => {
+  assert.strictEqual(populationOf({ campaign_id: 'c-1' }), 'prospection');
+});
+
+test('la portee designe la cle de reglage effectivement consultee', () => {
+  // Reproduit la selection faite par processReply : settings[population].
+  const settings = { prospection: true, crm: false };
+
+  assert.strictEqual(settings[populationOf({ campaign_id: 'c-1' })], true,
+    'autopilot prospection actif → un prospect froid obtient une reponse auto');
+  assert.strictEqual(settings[populationOf({ campaign_id: null })], false,
+    'autopilot CRM inactif → un client ne doit PAS obtenir de reponse auto');
+});

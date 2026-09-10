@@ -977,13 +977,20 @@ function ToggleAutopilotCard({ metadata }) {
   const [status, setStatus] = useState('ready');
   const threadId = metadata?._threadId || 'default';
   const enabling = metadata.enabled !== false;
+  // La portée vient de l'Assistant, qui doit la demander quand elle manque.
+  // Sans elle la route refuse : mieux vaut une carte inerte qu'une bascule
+  // silencieuse sur la mauvaise population.
+  const scope = metadata.scope === 'crm' || metadata.scope === 'prospection' ? metadata.scope : null;
+  const scopeLabel = scope === 'crm'
+    ? (en ? 'CRM contacts and clients' : 'contacts et clients du CRM')
+    : (en ? 'cold prospects' : 'prospects froids');
 
   const handleToggle = async () => {
     setStatus('running');
     try {
       await request(`/chat/threads/${threadId}/toggle-autopilot`, {
         method: 'POST',
-        body: JSON.stringify({ enabled: enabling }),
+        body: JSON.stringify({ enabled: enabling, scope }),
       });
       setStatus('done');
     } catch {
@@ -1001,10 +1008,16 @@ function ToggleAutopilotCard({ metadata }) {
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
         {enabling
-          ? (en ? 'AI will automatically respond to prospect replies (max 5 turns, 2-4h delay).' : 'L\'IA répondra automatiquement aux prospects (max 5 tours, délai 2-4h).')
-          : (en ? 'Autopilot will be disabled. You will need to respond manually.' : 'L\'autopilot sera désactivé. Vous devrez répondre manuellement.')}
+          ? (en ? `AI will automatically answer replies from ${scopeLabel} (max 5 turns, 2-4h delay).` : `L'IA répondra automatiquement aux réponses de vos ${scopeLabel} (max 5 tours, délai 2-4h).`)
+          : (en ? `Autopilot will be disabled for ${scopeLabel}. You will need to respond manually.` : `L'autopilot sera désactivé pour vos ${scopeLabel}. Vous devrez répondre manuellement.`)}
       </div>
-      {status === 'ready' && (
+      {!scope && (
+        <div style={{ fontSize: 12, color: 'var(--danger)' }}>
+          {en ? 'Which population? Ask the assistant to specify: cold prospects, or CRM contacts.'
+              : 'Sur quelle population ? Demande à l\'assistant de préciser : prospects froids, ou contacts CRM.'}
+        </div>
+      )}
+      {scope && status === 'ready' && (
         <button className={`btn ${enabling ? 'btn-success' : 'btn-outline'}`} style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleToggle}>
           {enabling ? (en ? 'Enable' : 'Activer') : (en ? 'Disable' : 'Désactiver')}
         </button>
