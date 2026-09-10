@@ -504,62 +504,9 @@ function CampaignTableRow({ campaign: c }) {
   );
 }
 
-
 /* ═══════════════════════════════════════════════════
    Empty States
    ═══════════════════════════════════════════════════ */
-
-function WelcomeBanner({ onCreateCampaign }) {
-  const t = useT();
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  return (
-    <div className="welcome-banner">
-      <div className="welcome-title">{t('dashboard.welcomeTitle')}</div>
-      <div className="welcome-subtitle">
-        {en ? 'Your intelligent prospecting platform is ready. Follow these steps to launch your first campaign and start generating qualified meetings.'
-          : 'Votre plateforme de prospection intelligente est pr\u00eate. Suivez ces \u00e9tapes pour lancer votre premi\u00e8re campagne et commencer \u00e0 g\u00e9n\u00e9rer des RDV qualifi\u00e9s.'}
-      </div>
-      <div className="onboarding-steps">
-        <div className="onboarding-step step-active">
-          <div className="onboarding-step-number">1</div>
-          <div className="onboarding-step-title">{en ? 'Create your campaign' : 'Cr\u00e9ez votre campagne'}</div>
-          <div className="onboarding-step-desc">
-            {en ? 'Define your target, channel (Email, LinkedIn or both), and approach angle.'
-              : 'D\u00e9finissez votre cible, votre canal (Email, LinkedIn ou les deux) et votre angle d\'approche.'}
-          </div>
-          <button className="btn btn-primary" onClick={onCreateCampaign}>{en ? 'Create my campaign' : 'Cr\u00e9er ma campagne'}</button>
-        </div>
-        <div className="onboarding-step">
-          <div className="onboarding-step-number">2</div>
-          <div className="onboarding-step-title">
-            {en ? 'baakalai generates your sequences' : 'Baakalai g\u00e9n\u00e8re vos s\u00e9quences'}
-          </div>
-          <div className="onboarding-step-desc">
-            {en ? 'AI writes personalized messages adapted to your target and sector.'
-              : 'L\'IA r\u00e9dige des messages personnalis\u00e9s et adapt\u00e9s \u00e0 votre cible et votre secteur.'}
-          </div>
-        </div>
-        <div className="onboarding-step">
-          <div className="onboarding-step-number">3</div>
-          <div className="onboarding-step-title">
-            {en ? 'Import your prospects' : 'Importez vos prospects'}
-          </div>
-          <div className="onboarding-step-desc">
-            {en ? 'Add your contact list or let us build it for you.' : 'Ajoutez votre liste de contacts ou laissez-nous la constituer pour vous.'}
-          </div>
-        </div>
-        <div className="onboarding-step">
-          <div className="onboarding-step-number">4</div>
-          <div className="onboarding-step-title">{t('dashboard.launchAndRefine')}</div>
-          <div className="onboarding-step-desc">
-            {t('dashboard.launchAndRefineDesc')}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* \u2500\u2500 KPIs revenue \u2014 la langue du produit \u2500\u2500
    Pipeline ouvert, deals dormants, revenu r\u00e9cup\u00e9r\u00e9, relances : le
