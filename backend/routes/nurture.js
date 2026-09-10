@@ -26,6 +26,7 @@ const { encrypt } = require('../config/crypto');
 const { sendPersonalEmail, sendNurtureEmail, testEmailAccount } = require('../lib/email-outbound');
 const { runNurtureEngine } = require('../lib/nurture-engine');
 const { matchContacts } = require('../lib/trigger-matching');
+const { getStagnantDays } = require('../lib/stagnation');
 const logger = require('../lib/logger');
 
 const router = Router();
@@ -430,13 +431,17 @@ router.post('/preview', async (req, res, next) => {
     );
     const recentSet = new Set(recent.rows.map(r => r.to_email?.toLowerCase()));
 
+    // Même repli que le cron, sinon la preview affiche autre chose que ce qui
+    // partira réellement (cf. lib/stagnation.js).
+    const stagnantDays = await getStagnantDays(req.user.id);
+
     const previews = [];
 
     for (const trigger of triggers.rows) {
       // Même logique de matching que le cron (lib/trigger-matching.js) —
       // la preview affichait des contacts calculés sur updated_at alors que
       // le cron déclenchait sur last_activity_at.
-      let matched = matchContacts(trigger, opps, now);
+      let matched = matchContacts(trigger, opps, now, { stagnantDays });
 
       // Types évalués uniquement en run manuel (newsletter_*) : signaler
       // plutôt que d'ignorer silencieusement.

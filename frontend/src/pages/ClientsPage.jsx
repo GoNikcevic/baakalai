@@ -12,6 +12,7 @@ import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
 import ProductLineTags from '../components/ProductLineTags';
+import Icon from '../components/Icon';
 
 const STAGE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
@@ -592,7 +593,9 @@ export default function ClientsPage({ scope }) {
               textAlign: 'center', padding: 50, background: 'var(--bg-card)',
               border: '1px solid var(--border)', borderRadius: 12,
             }}>
-              <div style={{ fontSize: 28, marginBottom: 12 }}>{'\uD83D\uDC65'}</div>
+              <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                <Icon name="users" size={28} strokeWidth={1.5} />
+              </div>
               <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
                 {clients.length === 0 ? t('clients.noClients') : t('clients.noResults')}
               </div>
@@ -1162,11 +1165,11 @@ function formatRelativeDate(dateStr, lang) {
 }
 
 const TIMELINE_CONFIG = {
-  email_sent: { icon: '\u2709\uFE0F', color: 'var(--success)', label: (e, lang) => e.subject || (lang === 'en' ? 'Email' : 'Email') },
-  campaign_activity: { icon: '\uD83D\uDCCA', color: 'var(--accent)', label: (e, lang) => `${e.event || ''} — ${e.campaign_name || ''}` },
-  crm_activity: { icon: '\uD83D\uDCCB', color: 'var(--blue)', label: (e) => e.subject || e.activity_type || 'Activity' },
+  email_sent: { icon: 'mail', color: 'var(--success)', label: (e, lang) => e.subject || (lang === 'en' ? 'Email' : 'Email') },
+  campaign_activity: { icon: 'chart', color: 'var(--accent)', label: (e, lang) => `${e.event || ''} — ${e.campaign_name || ''}` },
+  crm_activity: { icon: 'clipboard', color: 'var(--blue)', label: (e) => e.subject || e.activity_type || 'Activity' },
   follow_up_planned: {
-    icon: '\uD83D\uDCC5', color: 'var(--warning)',
+    icon: 'calendar', color: 'var(--warning)',
     label: (e, lang) => {
       const d = new Date(e.date).toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
       return lang === 'en'
@@ -1178,11 +1181,11 @@ const TIMELINE_CONFIG = {
 
 function getTimelineIcon(item) {
   if (item.type === 'crm_activity') {
-    if (item.activity_type === 'call') return '\uD83D\uDCDE';
-    if (item.activity_type === 'meeting') return '\uD83D\uDCC5';
-    return '\uD83D\uDCCB';
+    if (item.activity_type === 'call') return 'phone';
+    if (item.activity_type === 'meeting') return 'calendar';
+    return 'clipboard';
   }
-  return TIMELINE_CONFIG[item.type]?.icon || '\u25CF';
+  return TIMELINE_CONFIG[item.type]?.icon || 'activity';
 }
 
 function getTimelineColor(item) {
@@ -1253,7 +1256,7 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span>{icon}</span>
+                    <Icon name={icon} size={12} color={color} />
                     <span style={{
                       fontSize: 10, padding: '1px 6px', borderRadius: 4,
                       background: `${color}15`, color, fontWeight: 600,

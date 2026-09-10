@@ -241,13 +241,25 @@
     "welcome": "Welcome",
     "hello": "Hello {name}!",
     "readyToProspect": "Which deals shall we revive today, {name}?",
-    "openCampaignAssistant": "Open the Campaigns assistant →",
+    "openCampaignAssistant": "Open the Prospecting assistant →",
     "readSummary": "I read your {count} deals — {value} in open pipeline.",
-    "readDormant": "{count} have been dormant for 30+ days.",
+    "readDormant": "{count} have been dormant for {days}+ days.",
     "readDormantNoValue": "{count} more are dormant with no amount set.",
     "readStartWith": "I suggest starting with:",
     "readDays": "{days}d",
     "chooseTemplate": "Choose a template or describe your campaign.",
+    "sugOnboarding1": "🎯 Create my first prospecting campaign",
+    "sugOnboarding2": "👤 Define my ideal target (ICP)",
+    "sugOnboarding3": "✍️ Write an email sequence",
+    "sugOnboarding4": "❓ How does prospecting work on baakalai?",
+    "sugDefault1": "🚀 Launch a campaign that's in preparation",
+    "sugDefault2": "🎯 Create a new campaign",
+    "sugDefault3": "✍️ Improve the copy of my sequences",
+    "sugDefault4": "👤 Refine my target (ICP)",
+    "sugReturning1": "📊 Analyze my campaign performance",
+    "sugReturning2": "✍️ Regenerate my weakest touchpoints",
+    "sugReturning3": "🧪 Run an A/B test on a sequence",
+    "sugReturning4": "🎯 Create a new campaign",
     "defaultSubtitle": "I can help you create campaigns, refine your sequences and analyze your performance.",
     "refineCampaigns": "Refine my campaigns",
     "analyzePerf": "Analyze performance",
@@ -267,7 +279,18 @@
     "templateUpsell": "Upsell existing clients",
     "templateUpsellDesc": "Offer current clients a complementary product",
     "templateProspection": "New target prospecting",
-    "templateProspectionDesc": "Email sequence built on your profile and ICP"
+    "templateProspectionDesc": "Email sequence built on your profile and ICP",
+    "openGeneralAssistant": "Open the general assistant →",
+    "templateMulti": "Multichannel sequence",
+    "templateMultiDesc": "Email and LinkedIn alternating on the same target",
+    "templateBreakup": "Final follow-up",
+    "templateBreakupDesc": "A closing email for prospects who stayed silent",
+    "templateDormantPrompt": "Show me my dormant deals, sorted by value, and draft a personal follow-up for the three biggest ones.",
+    "templateReactivationPrompt": "Which clients haven't been contacted in over 3 months? Draft a warm re-engagement message, and a trigger to automate this going forward.",
+    "templateUpsellPrompt": "Which existing clients could benefit from an add-on or an upgrade? Analyze my CRM and suggest an upsell angle for each.",
+    "templateChurn": "Clients at risk",
+    "templateChurnDesc": "Spot the accounts slipping away before they leave",
+    "templateChurnPrompt": "Which clients are at highest risk of churning right now? Explain why for each one, and suggest a concrete action."
   },
   "common": {
     "tagline": "The AI system that exploits your CRM",
@@ -754,6 +777,8 @@
     "mfContextUnreliable": "Not enough history to calibrate finely ({count} deals won over 12 months) — probabilities will sharpen with usage."
   },
   "diagnostic": {
+    "cta": "Analyze my CRM",
+    "ctaHint": "Run the analysis: opportunities, churn risks and data quality",
     "title": "CRM Diagnostic",
     "subtitle": "Here’s what baakalai found in your CRM",
     "loading": "Analyzing...",
@@ -851,6 +876,12 @@
       "clients": "Clients",
       "crm": "CRM",
       "activation": "Activation"
+    },
+    "tabDescs": {
+      "deals": "Open pipeline and deals to reactivate",
+      "clients": "At-risk clients and upsell opportunities",
+      "crm": "Data quality and freshness",
+      "activation": "Emails sent and running campaigns"
     }
   },
   "wizard": {
@@ -907,7 +938,7 @@
     "importError": "The CRM import didn't complete. You can retry it from Clients — this doesn't block anything.",
     "seeDormantDeals": "See my dormant deals →",
     "readTitle": "I read {count} deals from your CRM — {value} in open pipeline.",
-    "readDormant": "{count} have been dormant for 30+ days — {value} to revive.",
+    "readDormant": "{count} have been dormant for {days}+ days — {value} to revive.",
     "readDormantShare": "That is {pct}% of your open pipeline value.",
     "readDormantNoValue": "+ {count} dormant deals with no amount set — impossible to know what they are worth: fill them in first.",
     "readTopIntro": "The biggest:",
@@ -1040,8 +1071,8 @@
   },
   "dealsToReactivate": {
     "title": "Deals to reactivate",
-    "subtitle": "Deals with no CRM activity for 14 days, or past their planned follow-up date.",
-    "howStep1": "baakalai detects deals with no logged exchange (note, email, call) for 14 days — or whose planned follow-up date has arrived."
+    "subtitle": "Deals with no CRM activity for {days} days, or past their planned follow-up date.",
+    "howStep1": "baakalai detects deals with no logged exchange (note, email, call) for {days} days — or whose planned follow-up date has arrived."
   },
   "upsell": {
     "title": "Clients to upsell",
@@ -1076,6 +1107,7 @@
       }
     },
     "duplicates": {
+      "activityCounts": "{emails} emails · {activities} activities · {lines} product lines",
       "rescan": "Rescan",
       "scanning": "Scanning...",
       "scanError": "Scan failed",
@@ -1196,13 +1228,13 @@
     "sent": "Sent",
     "generating": "Writing the email...",
     "generatingHint": "This takes a few seconds — please don't leave this page.",
-    "crmHygieneBanner": "📝 Your CRM notes drive this list: every logged exchange (call, email, meeting) resets the activity clock — the contact leaves the queue and won't be chased by mistake. With no note for 14 days, they come back.",
+    "crmHygieneBanner": "📝 Your CRM notes drive this list: every logged exchange (call, email, meeting) resets the activity clock — the contact leaves the queue and won't be chased by mistake. With no note for {days} days, they come back.",
     "howTitle": "How it works",
     "howStep2": "\"View email\" drafts a personalized email from your CRM data — nothing is sent without your approval.",
     "howStep3": "\"Postpone\" sets the next follow-up date: the contact leaves the queue and comes back that day.",
     "noCandidatesNoCrm": "Connect your CRM so baakalai can read your deals and detect which ones to reactivate.",
     "connectCrmCta": "Connect my CRM",
-    "noCandidatesAllClear": "All caught up ✓ Contacts with no activity for 14 days, or reaching their follow-up date, will show up here.",
+    "noCandidatesAllClear": "All caught up ✓ Contacts with no activity for {days} days, or reaching their follow-up date, will show up here.",
     "tabPending": "Pending",
     "tabHistory": "History",
     "historyEmpty": "No history yet.",
@@ -1214,7 +1246,11 @@
     "sendFailedBadge": "⚠ Last send failed",
     "currentContract": "Current contract",
     "productsOwned": "Current products",
-    "productsCrossSell": "Additional products possible"
+    "productsCrossSell": "Additional products possible",
+    "stagnantAfter": "Deal dormant after",
+    "stagnantDaysUnit": "days without activity",
+    "stagnantSaved": "Threshold saved",
+    "stagnantSavedDesc": "A deal is now considered dormant after {days} days without activity."
   },
   "churn": {
     "title": "Clients at churn risk",
@@ -1235,6 +1271,35 @@
   "assistant": {
     "conversations": "Conversations",
     "welcomeTitle": "How can I help?",
-    "welcomeSubtitle": "Ask about a client, how Baakalai works, or get sales/prospecting advice."
+    "welcomeSubtitle": "Ask about a client, run a follow-up or a CRM cleanup, or get advice. To build a cold prospecting campaign, I hand you over to the Prospecting tab.",
+    "example1": "👤 What's the status of my client Marc?",
+    "example2": "🧹 Analyze my CRM health and fix what can be fixed",
+    "example3": "⚡ Create a trigger that automatically follows up on stagnant deals",
+    "example4": "❓ How does churn scoring work?"
+  },
+  "autopilot": {
+    "title": "Reply Autopilot",
+    "titleProspection": "Autopilot — cold prospects",
+    "titleCrm": "Autopilot — CRM contacts and clients",
+    "descProspection": "AI answers replies from your cold prospects and runs the conversation until a meeting is booked. This setting never touches your CRM contacts.",
+    "descCrm": "AI answers replies from your CRM contacts and clients. A live client conversation has real value: only turn this on if you are comfortable letting AI answer in it.",
+    "howItWorks": "How it works",
+    "stepProspection1": "A cold prospect replies to your sequence (email or LinkedIn)",
+    "stepCrm1": "A CRM contact or client replies to an activation email",
+    "step2": "AI analyses the intent (interested, question, meeting request…)",
+    "step3": "AI drafts a reply from the conversation history and learned patterns",
+    "step4": "The reply goes out after 2-4 hours, the way a human would",
+    "step5": "The conversation continues until a meeting is accepted, or 5 turns max",
+    "enable": "Enable",
+    "active": "Active",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "pendingCount": "{count} pending reply(ies)",
+    "sentCount": "{count} auto-reply(ies) sent",
+    "cancel": "Cancel",
+    "sendsAt": "Sends at:",
+    "sentAt": "Sent:",
+    "emptyProspection": "Active. When a cold prospect replies, AI will run the conversation here.",
+    "emptyCrm": "Active. When a CRM contact replies, AI will run the conversation here."
   }
 }

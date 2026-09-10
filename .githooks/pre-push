@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
 # Versioned pre-push hook. Enabled via: git config core.hooksPath .githooks
 # (run scripts/install-hooks.sh once per clone). Bypass with: git push --no-verify
-exec node "$(git rev-parse --show-toplevel)/scripts/pre-push-smoke.js"
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+
+# 1. Conflits : désynchro avec la branche distante + fusion vers main.
+node "$ROOT/scripts/check-conflicts.js"
+
+# 2. Smoke test : require() des modules backend modifiés.
+exec node "$ROOT/scripts/pre-push-smoke.js"
