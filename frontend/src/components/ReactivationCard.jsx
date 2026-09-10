@@ -65,7 +65,7 @@ export default function ReactivationCard({ stats: statsProp }) {
         <div style={{ fontSize: 12, opacity: 0.9, marginTop: 6, marginBottom: 12 }}>
           {en
             ? 'These deals have been inactive for 14+ days. Set up reactivation to recover revenue automatically.'
-            : 'Ces deals sont inactifs depuis 14+ jours. Activez la r\u00E9activation pour r\u00E9cup\u00E9rer du revenu automatiquement.'}
+            : 'Ces deals sont inactifs depuis 14+ jours. Activez la réactivation pour r\u00E9cup\u00E9rer du revenu automatiquement.'}
         </div>
         <button
           onClick={() => navigate('/activation?tab=triggers&create=deal_stagnant')}
@@ -75,7 +75,7 @@ export default function ReactivationCard({ stats: statsProp }) {
             fontWeight: 600, cursor: 'pointer',
           }}
         >
-          {en ? 'Activate deal reactivation' : 'Activer la r\u00E9activation'}
+          {en ? 'Activate deal reactivation' : 'Activer la réactivation'}
         </button>
       </div>
     );
@@ -134,8 +134,8 @@ export default function ReactivationCard({ stats: statsProp }) {
           background: stats.reactivated.count > 0 ? 'rgba(255,255,255,0.15)' : 'var(--bg-elevated)',
         }}>
           {en
-            ? <>{fmt(stats.pipeline.stagnantDeals)} stagnant deals worth <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> in your pipeline</>
-            : <>{fmt(stats.pipeline.stagnantDeals)} deals stagnants pour <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> dans votre pipeline</>}
+            ? <>{fmt(stats.pipeline.stagnantDeals)} stagnant deals worth <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> in your pipeline ({stats.pipeline.stagnantThresholdDays || 14}d+ inactive)</>
+            : <>{fmt(stats.pipeline.stagnantDeals)} deals stagnants pour <strong>{fmtCurrency(stats.pipeline.potentialRevenue)}</strong> dans votre pipeline ({stats.pipeline.stagnantThresholdDays || 14}j+ d'inactivité)</>}
         </div>
       )}
 
@@ -148,7 +148,7 @@ export default function ReactivationCard({ stats: statsProp }) {
         }}>
           {en
             ? <>{stats.emails.pending} reactivation email{stats.emails.pending > 1 ? 's' : ''} awaiting approval</>
-            : <>{stats.emails.pending} email{stats.emails.pending > 1 ? 's' : ''} de r\u00E9activation en attente d'approbation</>}
+            : <>{stats.emails.pending} email{stats.emails.pending > 1 ? 's' : ''} de réactivation en attente d'approbation</>}
         </div>
       )}
 

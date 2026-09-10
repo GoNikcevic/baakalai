@@ -499,6 +499,42 @@ router.get('/score-history', async (req, res, next) => {
   }
 });
 
+// GET /api/data-quality/dashboard-summary — bandeau compact pour la section
+// CRM du Dashboard : doublons + problèmes par strate (Général/Deals/Clients).
+// Lit uniquement le cache 24h de crm_cleaning_reports (comme /nav/counts) —
+// pas de scan CRM live, contrairement à /duplicates, /deal-quality, etc.
+router.get('/dashboard-summary', async (req, res, next) => {
+  try {
+    const r = await db.query(
+      `SELECT DISTINCT ON (provider) provider, issues
+       FROM crm_cleaning_reports
+       WHERE user_id = $1 AND created_at > now() - interval '24 hours'
+       ORDER BY provider, created_at DESC`,
+      [req.user.id]
+    );
+
+    const countContacts = (issues, filterFn) =>
+      (issues || [])
+        .filter(filterFn)
+        .reduce((sum, i) => sum + (i.count || i.contacts?.length || 0), 0);
+    const isDuplicate = (i) => i.type === 'duplicate_email' || i.type === 'duplicate_name';
+
+    let duplicates = 0, general = 0, dealQuality = 0, clientQuality = 0;
+    for (const row of r.rows) {
+      if (row.provider === '__deal_quality__') dealQuality += countContacts(row.issues, () => true);
+      else if (row.provider === '__client_quality__') clientQuality += countContacts(row.issues, () => true);
+      else {
+        duplicates += countContacts(row.issues, isDuplicate);
+        general += countContacts(row.issues, (i) => !isDuplicate(i));
+      }
+    }
+
+    res.json({ duplicates, general, dealQuality, clientQuality });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/data-quality/gdpr — contacts candidats à la purge RGPD : aucune
 // activité réelle depuis 24 mois et pas client actif (won = relation en cours).
 const GDPR_THRESHOLD_MONTHS = 24;

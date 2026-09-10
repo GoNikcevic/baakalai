@@ -38,4 +38,16 @@ function onlyCrmContacts(opps) {
   return (opps || []).filter(isCrmContact);
 }
 
-module.exports = { CRM_CONTACT_SQL, isCrmContact, onlyCrmContacts };
+/**
+ * À quelle population appartient ce contact — 'crm' ou 'prospection'.
+ *
+ * Sert partout où un réglage se décline par population plutôt que de
+ * s'appliquer aveuglément aux deux (l'autopilot de réponse, par exemple) :
+ * répondre tout seul à un inconnu et répondre tout seul dans une conversation
+ * avec un client qui paie n'engagent pas le même risque.
+ */
+function populationOf(opp) {
+  return isCrmContact(opp) ? 'crm' : 'prospection';
+}
+
+module.exports = { CRM_CONTACT_SQL, isCrmContact, onlyCrmContacts, populationOf };

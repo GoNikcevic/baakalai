@@ -23,6 +23,10 @@ vi.mock('../../services/api-client', () => ({
   scoreLeads: vi.fn(),
   exportScoresToCRM: vi.fn(),
   downloadScoresCSV: vi.fn(),
+  // ClientsTab (bandeau "Risque de churn") et ActivationTab (feedback 👍/👎
+  // des recommandations) appellent ces exports nommés directement.
+  getChurnSummary: vi.fn().mockResolvedValue({}),
+  sendRecoFeedback: vi.fn(),
 }));
 
 // Mock react-router-dom's useOutletContext
@@ -53,9 +57,9 @@ describe('DashboardPage', () => {
   // L'ancienne bannière d'accueil et ses quatre étapes d'onboarding
   // (WelcomeBanner) ne sont plus rendues : l'audit UX du 2026-08-05 a retiré
   // les jauges de progression concurrentes, et le composant est resté dans le
-  // fichier sans appelant. L'état vide se compose désormais des KPI à blanc et
-  // des cartes « Campagnes actives » / « Performance 4 semaines ».
-  it('shows empty state cards when no campaigns', () => {
+  // fichier sans appelant. L'état vide ne montre plus qu'une seule carte
+  // « Campagnes actives » pleine largeur (Performance/Recommandations retirées).
+  it('shows empty state card when no campaigns', () => {
     renderDashboard();
 
     expect(screen.getByText(/Campagnes actives/)).toBeInTheDocument();
@@ -74,14 +78,8 @@ describe('DashboardPage', () => {
   it('shows subtitle for empty state', () => {
     renderDashboard();
 
-    // Le sous-titre d'accueil parle désormais de connecter le CRM, plus de
-    // configurer une campagne — le positionnement a changé.
-    expect(screen.getByText(/Connectez votre CRM/)).toBeInTheDocument();
-  });
-
-  it('shows the 4-week performance placeholder in empty overview', () => {
-    renderDashboard();
-
-    expect(screen.getByText(/Performance 4 semaines/)).toBeInTheDocument();
+    // Le sous-titre d'accueil décrit le produit dans son ensemble (deals,
+    // clients, données) plutôt qu'une seule offre — voir dashboard.welcomeSubtitle.
+    expect(screen.getByText(/analyse votre CRM en continu/)).toBeInTheDocument();
   });
 });

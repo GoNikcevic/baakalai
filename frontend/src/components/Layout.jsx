@@ -21,34 +21,37 @@ import HelpWidget from './HelpWidget';
 const NAV_ITEMS = [
   { i18nKey: 'nav.assistant',           to: '/chat',                icon: 'chat' },
   { i18nKey: 'nav.dashboard',           to: '/dashboard',           icon: 'dashboard',  end: true },
+  // Ordre voulu : Prospection > Deals > Clients > Activation > CRM.
+  // Prospection ouvre la liste parce qu'elle est la porte d'entrée — mais elle
+  // reste hors des sections CRM : campagnes froides et deals CRM sont deux
+  // populations disjointes (cf. backend/lib/crm-scope.js), deux moteurs
+  // distincts. Deals et Clients suivent, ce sont les deux populations du CRM ;
+  // Activation est l'action qu'on leur applique, donc juste après ; CRM ferme
+  // la liste comme couche d'analyse (qualité de données, analytics).
+  { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
   {
-    i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'refinement',
+    i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'pipeline',
     children: [
+      { i18nKey: 'nav.globalView',      to: '/deals',               icon: 'list' },
       { i18nKey: 'nav.toReactivate',    to: '/deals-to-reactivate', icon: 'refinement', countKey: 'reactivation' },
     ],
   },
   {
     i18nKey: 'nav.sectionClients', section: 'clients', icon: 'clients',
     children: [
-      { i18nKey: 'nav.globalView',      to: '/clients',             icon: 'clients' },
+      { i18nKey: 'nav.globalView',      to: '/clients',             icon: 'table' },
       { i18nKey: 'nav.toUpsell',        to: '/clients-to-upsell',   icon: 'upsell', countKey: 'upsell' },
       { i18nKey: 'nav.atRisk',          to: '/churn-risk',          icon: 'churn', countKey: 'churn' },
     ],
   },
+  { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture', countKey: 'nurturePending' },
   {
-    i18nKey: 'nav.sectionCrm', section: 'crm', icon: 'crm',
+    i18nKey: 'nav.sectionCrm', section: 'crm', icon: 'database',
     children: [
-      { i18nKey: 'nav.dataQuality',     to: '/data-quality',        icon: 'crm', countKey: 'dataQuality' },
+      { i18nKey: 'nav.dataQuality',     to: '/data-quality',        icon: 'dataQuality', countKey: 'dataQuality' },
       { i18nKey: 'nav.analytics',       to: '/analytics',           icon: 'reports', adminOnly: true },
     ],
   },
-  // Prospection est volontairement hors des sections CRM. Rangée sous Deals,
-  // elle affirmait que campagnes et deals CRM sont la même chose — or ce sont
-  // deux populations disjointes (cf. backend/lib/crm-scope.js) et deux moteurs
-  // distincts. Placée après les trois sections CRM, qui restent contiguës :
-  // le CRM est le produit, la prospection est la porte d'entrée.
-  { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
-  { i18nKey: 'nav.activation',          to: '/activation',          icon: 'nurture', countKey: 'nurturePending' },
   { i18nKey: 'nav.settings',            to: '/settings',            icon: 'settings', adminOnly: true },
 ];
 
@@ -91,7 +94,7 @@ function NavIcon({ name }) {
     ),
     campaigns: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
       </svg>
     ),
     copy: (
@@ -151,13 +154,42 @@ function NavIcon({ name }) {
     ),
     nurture: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
       </svg>
     ),
     crm: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" />
         <line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" />
+      </svg>
+    ),
+    pipeline: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+      </svg>
+    ),
+    list: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+        <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+      </svg>
+    ),
+    table: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <line x1="3" y1="9" x2="21" y2="9" /><line x1="10" y1="21" x2="10" y2="9" />
+      </svg>
+    ),
+    database: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3" />
+        <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
+      </svg>
+    ),
+    dataQuality: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
       </svg>
     ),
     settings: (

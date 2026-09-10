@@ -17,30 +17,27 @@ import { formatMarkdown, TypingIndicator, ThreadList, InlineSuggestions, ChatMes
 
 /* ─── Helpers ─── */
 
-// Réactivation d'abord (hero job du produit) — la création de campagne reste
-// accessible via les boutons d'action du WelcomeScreen, inutile de la dupliquer ici.
-function getDefaultSuggestions(lang) {
-  return lang === 'en'
-    ? ['⚡ Reactivate my dormant deals', '📡 Scan for buying signals', '🔍 Analyze my CRM health', '📊 Show my campaign performance']
-    : ['⚡ Relancer mes deals dormants', '📡 Scanner les signaux d\'achat', '🔍 Analyser la santé de mon CRM', '📊 Voir les performances de mes campagnes'];
+// Suggestions du WelcomeScreen de l'assistant Campagnes (onglet Prospection).
+// Périmètre STRICT prospection : cible/ICP, séquences, copy, A/B, performance des
+// campagnes. Les entrées CRM (deals dormants, santé du CRM, relance clients, upsell)
+// ont été retirées : c'est de l'ACTIVATION, un autre univers que la prospection froide
+// (cf. CHAT_SYSTEM_RULES côté backend, qui interdit explicitement create_campaign pour
+// ces contacts). Elles restent servies par l'assistant général (onglet Assistant).
+
+// État intermédiaire : des campagnes existent mais aucune n'est active.
+function getDefaultSuggestions(t) {
+  return [t('chat.sugDefault1'), t('chat.sugDefault2'), t('chat.sugDefault3'), t('chat.sugDefault4')];
 }
 
-// Suggestions du tout premier ecran (campaignCount === 0).
-// Elles etaient exclusivement orientees prospection — profil, premiere campagne,
-// ICP — alors que c'est precisement l'utilisateur dont le time-to-wow compte le
-// plus. Les actions CRM n'apparaissaient qu'une fois une campagne creee
-// (getReturningSuggestions) : le chemin qui porte la proposition de valeur ne se
-// debloquait donc qu'apres le chemin secondaire.
-function getOnboardingSuggestions(lang) {
-  return lang === 'en'
-    ? ['⚡ Show me my dormant deals', '🔍 Analyze my CRM health', '🎯 Create my first campaign', '❓ How does baakalai work?']
-    : ['⚡ Montre-moi mes deals dormants', '🔍 Analyser la santé de mon CRM', '🎯 Créer ma première campagne', '❓ Comment fonctionne baakalai ?'];
+// Tout premier écran (campaignCount === 0) : on ouvre sur la cible et la première
+// séquence, pas sur le CRM — l'utilisateur est ici pour prospecter.
+function getOnboardingSuggestions(t) {
+  return [t('chat.sugOnboarding1'), t('chat.sugOnboarding2'), t('chat.sugOnboarding3'), t('chat.sugOnboarding4')];
 }
 
-function getReturningSuggestions(lang) {
-  return lang === 'en'
-    ? ['⚡ Activate stagnant deals', '🎯 Create a new campaign', '🔍 Scan my CRM health', '📊 Analyze my performance']
-    : ['⚡ Relancer les deals stagnants', '🎯 Nouvelle campagne', '🔍 Scanner la santé de mon CRM', '📊 Analyser mes performances'];
+// Utilisateur avec au moins une campagne active : optimisation avant création.
+function getReturningSuggestions(t) {
+  return [t('chat.sugReturning1'), t('chat.sugReturning2'), t('chat.sugReturning3'), t('chat.sugReturning4')];
 }
 
 function getActionPrompts(lang) {
@@ -977,13 +974,20 @@ function ToggleAutopilotCard({ metadata }) {
   const [status, setStatus] = useState('ready');
   const threadId = metadata?._threadId || 'default';
   const enabling = metadata.enabled !== false;
+  // La portée vient de l'Assistant, qui doit la demander quand elle manque.
+  // Sans elle la route refuse : mieux vaut une carte inerte qu'une bascule
+  // silencieuse sur la mauvaise population.
+  const scope = metadata.scope === 'crm' || metadata.scope === 'prospection' ? metadata.scope : null;
+  const scopeLabel = scope === 'crm'
+    ? (en ? 'CRM contacts and clients' : 'contacts et clients du CRM')
+    : (en ? 'cold prospects' : 'prospects froids');
 
   const handleToggle = async () => {
     setStatus('running');
     try {
       await request(`/chat/threads/${threadId}/toggle-autopilot`, {
         method: 'POST',
-        body: JSON.stringify({ enabled: enabling }),
+        body: JSON.stringify({ enabled: enabling, scope }),
       });
       setStatus('done');
     } catch {
@@ -1001,10 +1005,16 @@ function ToggleAutopilotCard({ metadata }) {
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
         {enabling
-          ? (en ? 'AI will automatically respond to prospect replies (max 5 turns, 2-4h delay).' : 'L\'IA répondra automatiquement aux prospects (max 5 tours, délai 2-4h).')
-          : (en ? 'Autopilot will be disabled. You will need to respond manually.' : 'L\'autopilot sera désactivé. Vous devrez répondre manuellement.')}
+          ? (en ? `AI will automatically answer replies from ${scopeLabel} (max 5 turns, 2-4h delay).` : `L'IA répondra automatiquement aux réponses de vos ${scopeLabel} (max 5 tours, délai 2-4h).`)
+          : (en ? `Autopilot will be disabled for ${scopeLabel}. You will need to respond manually.` : `L'autopilot sera désactivé pour vos ${scopeLabel}. Vous devrez répondre manuellement.`)}
       </div>
-      {status === 'ready' && (
+      {!scope && (
+        <div style={{ fontSize: 12, color: 'var(--danger)' }}>
+          {en ? 'Which population? Ask the assistant to specify: cold prospects, or CRM contacts.'
+              : 'Sur quelle population ? Demande à l\'assistant de préciser : prospects froids, ou contacts CRM.'}
+        </div>
+      )}
+      {scope && status === 'ready' && (
         <button className={`btn ${enabling ? 'btn-success' : 'btn-outline'}`} style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleToggle}>
           {enabling ? (en ? 'Enable' : 'Activer') : (en ? 'Disable' : 'Désactiver')}
         </button>
@@ -1713,6 +1723,7 @@ export default function CampaignAssistant() {
   const { backendAvailable, setCampaigns, campaigns, user, recommendations } = useApp();
   const { socket } = useSocket();
   const { lang } = useI18n();
+  const t = useT();
 
   // Local state
   const [threads, setThreads] = useState([]);
@@ -2448,9 +2459,9 @@ export default function CampaignAssistant() {
         {showWelcome && messages.length === 0 ? (
           <WelcomeScreen
             suggestions={
-              userState.campaignCount === 0 ? getOnboardingSuggestions(lang)
-              : userState.activeCampaigns > 0 ? getReturningSuggestions(lang)
-              : getDefaultSuggestions(lang)
+              userState.campaignCount === 0 ? getOnboardingSuggestions(t)
+              : userState.activeCampaigns > 0 ? getReturningSuggestions(t)
+              : getDefaultSuggestions(t)
             }
             onSuggestionClick={(s) => sendMessage(s)}
             onAction={startAction}

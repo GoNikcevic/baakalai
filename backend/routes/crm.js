@@ -1402,6 +1402,37 @@ router.get('/churn/summary', async (req, res, next) => {
 });
 
 // =============================================
+// GET /api/crm/upsell/summary — Band strip équivalent à /churn/summary pour
+// le Dashboard : total de clients éligibles à l'upsell (score >= 25, tous —
+// pas seulement ceux "dus" aujourd'hui comme /reactivation/queue), score
+// moyen, et emails d'upsell envoyés sur 14 jours.
+// =============================================
+router.get('/upsell/summary', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { run } = require('../lib/agents/upsell-detector');
+    const [{ opportunities }, emailsSent] = await Promise.all([
+      run(userId),
+      db.query(
+        `SELECT COUNT(*) as total FROM nurture_emails
+         WHERE user_id = $1 AND metadata->>'chain' = 'auto_upsell'
+           AND created_at > NOW() - INTERVAL '14 days'`,
+        [userId]
+      ),
+    ]);
+    const totalCandidates = opportunities.length;
+    const avgScore = totalCandidates > 0
+      ? Math.round(opportunities.reduce((sum, o) => sum + o.score, 0) / totalCandidates)
+      : 0;
+    res.json({
+      totalCandidates,
+      emailsSent14d: parseInt(emailsSent.rows[0].total) || 0,
+      avgScore,
+    });
+  } catch (err) { next(err); }
+});
+
+// =============================================
 // GET /api/crm/team-owners — List team members with their contact counts
 // =============================================
 router.get('/team-owners', async (req, res, next) => {
@@ -1540,13 +1571,23 @@ router.post('/product-lines/:id/unassign', async (req, res, next) => {
     if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
       return res.status(400).json({ error: 'opportunityIds array required' });
     }
-    for (const oppId of opportunityIds) {
+    // Validate opportunity ownership — même garde que /assign, sinon un
+    // utilisateur authentifié pourrait détacher des opportunités d'un autre
+    // user en devinant leurs IDs.
+    const validOpps = await db.query(
+      `SELECT id FROM opportunities WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+      [req.user.id, opportunityIds]
+    );
+    const validIds = new Set(validOpps.rows.map(r => r.id));
+    const filtered = opportunityIds.filter(id => validIds.has(id));
+
+    for (const oppId of filtered) {
       await db.query(
         `DELETE FROM opportunity_product_lines WHERE opportunity_id = $1 AND product_line_id = $2`,
         [oppId, req.params.id]
       );
     }
-    res.json({ removed: opportunityIds.length });
+    res.json({ removed: filtered.length });
   } catch (err) { next(err); }
 });
 
@@ -2009,11 +2050,15 @@ router.get('/autopilot/settings', async (req, res, next) => {
 // PATCH /api/crm/autopilot/settings — Enable/disable autopilot
 router.patch('/autopilot/settings', async (req, res, next) => {
   try {
-    const { enabled, maxTurns, channels } = req.body;
+    // Un interrupteur par population : répondre tout seul à un prospect froid
+    // et répondre tout seul à un client en cours n'engagent pas le même risque.
+    // `enabled` est l'ancien réglage unique, encore accepté pour ne pas casser
+    // un appel existant — il ne pilote que la prospection.
+    const { prospection, crm, enabled } = req.body;
     const updates = {};
-    if (enabled !== undefined) updates.autopilot_enabled = enabled;
-    if (maxTurns !== undefined) updates.autopilot_max_turns = Math.min(Math.max(maxTurns, 1), 10);
-    if (channels !== undefined) updates.autopilot_channels = channels;
+    if (prospection !== undefined) updates.autopilot_prospection_enabled = !!prospection;
+    else if (enabled !== undefined) updates.autopilot_prospection_enabled = !!enabled;
+    if (crm !== undefined) updates.autopilot_crm_enabled = !!crm;
 
     await db.query(
       `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
@@ -2038,11 +2083,18 @@ router.patch('/autopilot/contact/:id', async (req, res, next) => {
 // GET /api/crm/autopilot/queue — List pending/sent autopilot messages
 router.get('/autopilot/queue', async (req, res, next) => {
   try {
+    // `scope` cadre la file sur une population (cf. lib/crm-scope.js) : chaque
+    // écran d'autopilot ne montre que les conversations qu'il commande.
+    // Absent = tout, pour un appel qui ne cadre pas.
+    const { scope } = req.query;
+    const scopeSql = scope === 'crm' ? 'AND o.campaign_id IS NULL'
+      : scope === 'prospection' ? 'AND o.campaign_id IS NOT NULL'
+        : '';
     const result = await db.query(
       `SELECT aq.*, o.name as contact_name, o.company
        FROM autopilot_queue aq
        LEFT JOIN opportunities o ON o.id = aq.opportunity_id
-       WHERE aq.user_id = $1
+       WHERE aq.user_id = $1 ${scopeSql}
        ORDER BY aq.created_at DESC LIMIT 50`,
       [req.user.id]
     );
@@ -2519,6 +2571,9 @@ router.get('/reactivation-stats', async (req, res, next) => {
         potentialRevenue: parseFloat(pipe.potential_revenue) || 0,
         openDeals: parseInt(pipe.open_count),
         totalValue: parseFloat(pipe.open_value) || 0,
+        // Exposé pour que le frontend affiche toujours le seuil réel utilisé
+        // (cf. label "Deals dormants (14j+)" et le texte de ReactivationCard).
+        stagnantThresholdDays: 14,
       },
       conversionRate: emails.total > 0 ? Math.round((stats.count / emails.total) * 100) : 0,
     });

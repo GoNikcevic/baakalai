@@ -248,6 +248,18 @@
     "readStartWith": "Je vous propose de commencer par :",
     "readDays": "{days} j",
     "chooseTemplate": "Choisissez un modèle ou décrivez votre campagne.",
+    "sugOnboarding1": "🎯 Créer ma première campagne de prospection",
+    "sugOnboarding2": "👤 Définir ma cible idéale (ICP)",
+    "sugOnboarding3": "✍️ Écrire une séquence d'emails",
+    "sugOnboarding4": "❓ Comment marche la prospection sur baakalai ?",
+    "sugDefault1": "🚀 Lancer une campagne en préparation",
+    "sugDefault2": "🎯 Créer une nouvelle campagne",
+    "sugDefault3": "✍️ Améliorer le copy de mes séquences",
+    "sugDefault4": "👤 Affiner ma cible (ICP)",
+    "sugReturning1": "📊 Analyser les performances de mes campagnes",
+    "sugReturning2": "✍️ Régénérer mes touchpoints les plus faibles",
+    "sugReturning3": "🧪 Lancer un A/B test sur une séquence",
+    "sugReturning4": "🎯 Créer une nouvelle campagne",
     "defaultSubtitle": "Je peux vous aider à créer des campagnes, affiner vos séquences et analyser vos performances.",
     "refineCampaigns": "Affiner mes campagnes",
     "analyzePerf": "Analyser les performances",
@@ -478,12 +490,7 @@
     "accountCreated": "Compte créé",
     "crmConnected": "Connecter votre CRM (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable ou Folk)",
     "emailConnected": "Connecter un email (Gmail ou Outlook)",
-    "contactsImported": "Importer vos deals depuis le CRM",
-    "firstCampaign": "Créer une première campagne",
-    "firstLaunch": "Lancer une campagne",
-    "continueChat": "Continuer la configuration dans le chat →",
-    "allDone": "Tout est prêt ! Vous pouvez commencer à prospecter.",
-    "continueSettings": "Aller dans Paramètres →"
+    "contactsImported": "Importer vos deals depuis le CRM"
   },
   "replies": {
     "title": "Activités Prospects",
@@ -554,7 +561,8 @@
   "clients": {
     "title": "Clients",
     "contactsInCrm": "{count} contact(s) dans votre CRM",
-    "importFrom": "Importer depuis {crm}",
+    "dealsInCrm": "{count} deal(s) en cours dans votre CRM",
+    "refresh": "Actualiser",
     "importing": "Import...",
     "connectCrm": "Connecter un CRM",
     "imported": "{count} importé(s), {skipped} déjà présent(s)",
@@ -574,7 +582,6 @@
     "emailPending": "En attente",
     "noActivity": "Aucune activité pour ce contact",
     "importResult": "{imported} importé(s), {skipped} déjà présent(s)",
-    "merged": "Contacts fusionnés avec succès",
     "churnRisk": "Risque churn",
     "churnPrediction": "Prédiction de churn",
     "churnPredictionDesc": "Scorez vos contacts pour détecter les risques de churn",
@@ -594,8 +601,7 @@
     "owner": "Commercial",
     "churnFactors": "Facteurs de risque churn",
     "churnScoringError": "Le scoring churn a échoué",
-    "error": "Erreur",
-    "autopilotHelp": "Quand activé, baakalai envoie automatiquement des emails de suivi à ce contact selon vos triggers actifs."
+    "error": "Erreur"
   },
   "analytics": {
     "subtitle": "Pipeline, attribution, scoring et santé de votre CRM",
@@ -828,12 +834,23 @@
     "viewAll": "Voir tout",
     "performance4w": "Performance 4 semaines",
     "allRecos": "Voir toutes les recommandations",
-    "welcomeTitle": "Bienvenue sur baakalai",
-    "welcomeSubtitle": "Bienvenue — Connectez votre CRM : baakalai repère les deals à relancer",
+    "welcomeSubtitle": "Bienvenue — baakalai analyse votre CRM en continu pour relancer vos deals, fidéliser vos clients et garder vos données propres.",
     "launchAndRefine": "Lancez et affinez",
     "launchAndRefineDesc": "baakalai analyse les performances et affine automatiquement vos messages.",
     "createCampaign": "Créer une campagne",
-    "chartsPlaceholder": "Les graphiques apparaîtront avec les données de campagne."
+    "chartsPlaceholder": "Les graphiques apparaîtront avec les données de campagne.",
+    "tabs": {
+      "deals": "Deals",
+      "clients": "Clients",
+      "crm": "CRM",
+      "activation": "Activation"
+    },
+    "tabDescs": {
+      "deals": "Pipeline en cours et deals à relancer",
+      "clients": "Clients à risque et opportunités d'upsell",
+      "crm": "Qualité et fraîcheur des données",
+      "activation": "Emails envoyés et campagnes en cours"
+    }
   },
   "wizard": {
     "step1Title": "Votre entreprise",
@@ -932,39 +949,6 @@
     "upsellOpportunityDesc": "Proposer un upgrade aux clients actifs depuis X jours",
     "feedbackRequest": "Demande de feedback",
     "feedbackRequestDesc": "Demander un retour d'expérience après X jours"
-  },
-  "today": {
-    "title": "À traiter aujourd'hui",
-    "subtitle": "{count} action(s) priorisée(s) par votre CRM",
-    "refresh": "Actualiser",
-    "empty": "Rien à traiter — tout est à jour.",
-    "approveAll": "Tout approuver ({count})",
-    "approving": "Envoi...",
-    "approvedOk": "{sent} envoyé(s)",
-    "approvedFailed": "{failed} échec(s)",
-    "remaining": "{count} restant(s) — cliquez à nouveau pour continuer",
-    "sendBlocked": "Envoi impossible",
-    "connectMailbox": "Connecter une boîte mail",
-    "approve": "Approuver",
-    "dismiss": "Ignorer",
-    "waitingDays": "en attente depuis {days} j",
-    "typeNurture": "Email prêt",
-    "typeDealStagnant": "Deal stagnant",
-    "typeUpsell": "Upsell",
-    "typeChurn": "Risque churn",
-    "typeSignal": "Signal",
-    "typeSla": "SLA dépassé",
-    "alsoFlaggedBy": "aussi signalé par : {sources}",
-    "openSignals": "Voir le signal",
-    "prepareEmail": "Préparer l'email",
-    "chatChurnPrefill": "Prépare un email pour retenir {name} ({company}) — risque de churn élevé détecté par le CRM.",
-    "chatUpsellPrefill": "Prépare un email d'upsell pour {name} ({company}). Contexte : {reason}",
-    "chatDealPrefill": "Envoie un email de relance à {name} ({company}). Contexte : {reason}. Suggestion : {suggestion}",
-    "chatSignalPrefill": "Prépare une relance pour {name} ({company}) — signal détecté : {reason}",
-    "slaReasonNewLead": "Lead entrant jamais contacté depuis {days} jours",
-    "slaReasonFollowup": "Relance prévue dépassée de {days} jours",
-    "slaReasonInactive": "Deal ouvert sans activité depuis {days} jours",
-    "chatSlaPrefill": "Prépare une relance pour {name} ({company}) — SLA dépassé : {reason}"
   },
   "signals": {
     "title": "Signaux",
@@ -1226,7 +1210,14 @@
     "historyPostponedAutoOn": "Reporté automatiquement au {date}",
     "historyWonOn": "Gagné le {date}",
     "historyLostOn": "Perdu le {date}",
-    "sendFailedBadge": "⚠ Dernier envoi échoué"
+    "sendFailedBadge": "⚠ Dernier envoi échoué",
+    "currentContract": "Contrat actuel",
+    "productsOwned": "Produits actuels",
+    "productsCrossSell": "Produits additionnels possibles",
+    "stagnantAfter": "Deal dormant après",
+    "stagnantDaysUnit": "jours sans activité",
+    "stagnantSaved": "Seuil enregistré",
+    "stagnantSavedDesc": "Un deal est désormais considéré comme dormant après {days} jours sans activité."
   },
   "churn": {
     "title": "Clients à risque de churn",
@@ -1248,5 +1239,30 @@
     "conversations": "Conversations",
     "welcomeTitle": "Comment puis-je vous aider ?",
     "welcomeSubtitle": "Posez une question sur un client, sur le fonctionnement de Baakalai, ou demandez un conseil de vente ou de prospection."
+  },
+  "autopilot": {
+    "title": "Autopilot de réponse",
+    "titleProspection": "Autopilot — prospects froids",
+    "titleCrm": "Autopilot — contacts et clients du CRM",
+    "descProspection": "L'IA répond aux réponses de vos prospects froids et mène la conversation jusqu'au RDV. Ce réglage ne touche pas vos contacts CRM.",
+    "descCrm": "L'IA répond aux réponses de vos contacts et clients du CRM. Une conversation en cours avec un client a de la valeur : n'activez ceci que si vous êtes à l'aise pour que l'IA y réponde seule.",
+    "howItWorks": "Comment ça marche",
+    "stepProspection1": "Un prospect froid répond à votre séquence (email ou LinkedIn)",
+    "stepCrm1": "Un contact ou un client du CRM répond à un email d'activation",
+    "step2": "L'IA analyse l'intention (intéressé, question, demande de RDV…)",
+    "step3": "L'IA rédige une réponse à partir de l'historique et des patterns appris",
+    "step4": "La réponse part après 2 à 4h, comme le ferait un humain",
+    "step5": "La conversation continue jusqu'au RDV accepté, ou 5 tours maximum",
+    "enable": "Activer",
+    "active": "Actif",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "pendingCount": "{count} réponse(s) en attente",
+    "sentCount": "{count} réponse(s) envoyée(s)",
+    "cancel": "Annuler",
+    "sendsAt": "Envoi à :",
+    "sentAt": "Envoyé :",
+    "emptyProspection": "Actif. Quand un prospect froid répondra, l'IA gérera la conversation ici.",
+    "emptyCrm": "Actif. Quand un contact du CRM répondra, l'IA gérera la conversation ici."
   }
 }

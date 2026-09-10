@@ -74,7 +74,7 @@ export default function DealQualityStrate() {
                   const ids = (issue.contacts || []).map(c => c.id).filter(Boolean).slice(0, 20);
                   const params = new URLSearchParams({ context: 'deal_quality', issue: issue.type });
                   if (ids.length > 0) params.set('highlight', ids.join(','));
-                  navigate(`/clients?${params.toString()}`);
+                  navigate(`/deals?${params.toString()}`);
                 }}
               >
                 {t('dataQuality.common.view')}
