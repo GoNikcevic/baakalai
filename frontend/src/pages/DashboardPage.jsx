@@ -98,7 +98,7 @@ export default function DashboardPage() {
           <h1 className="page-title">Dashboard</h1>
           <div className="page-subtitle">
             {!isEmpty && <span className="pulse-dot"></span>}
-            <span style={{ marginLeft: 8 }}>{subtitle}</span>
+            <span style={{ marginLeft: isEmpty ? 0 : 8 }}>{subtitle}</span>
           </div>
         </div>
       </div>
