@@ -832,6 +832,12 @@
       "clients": "Clients",
       "crm": "CRM",
       "activation": "Activation"
+    },
+    "tabDescs": {
+      "deals": "Open pipeline and deals to reactivate",
+      "clients": "At-risk clients and upsell opportunities",
+      "crm": "Data quality and freshness",
+      "activation": "Emails sent and running campaigns"
     }
   },
   "wizard": {
