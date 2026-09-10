@@ -241,9 +241,9 @@
     "welcome": "Welcome",
     "hello": "Hello {name}!",
     "readyToProspect": "Which deals shall we revive today, {name}?",
-    "openCampaignAssistant": "Open the Campaigns assistant →",
+    "openCampaignAssistant": "Open the Prospecting assistant →",
     "readSummary": "I read your {count} deals — {value} in open pipeline.",
-    "readDormant": "{count} have been dormant for 30+ days.",
+    "readDormant": "{count} have been dormant for {days}+ days.",
     "readDormantNoValue": "{count} more are dormant with no amount set.",
     "readStartWith": "I suggest starting with:",
     "readDays": "{days}d",
@@ -279,7 +279,18 @@
     "templateUpsell": "Upsell existing clients",
     "templateUpsellDesc": "Offer current clients a complementary product",
     "templateProspection": "New target prospecting",
-    "templateProspectionDesc": "Email sequence built on your profile and ICP"
+    "templateProspectionDesc": "Email sequence built on your profile and ICP",
+    "openGeneralAssistant": "Open the general assistant →",
+    "templateMulti": "Multichannel sequence",
+    "templateMultiDesc": "Email and LinkedIn alternating on the same target",
+    "templateBreakup": "Final follow-up",
+    "templateBreakupDesc": "A closing email for prospects who stayed silent",
+    "templateDormantPrompt": "Show me my dormant deals, sorted by value, and draft a personal follow-up for the three biggest ones.",
+    "templateReactivationPrompt": "Which clients haven't been contacted in over 3 months? Draft a warm re-engagement message, and a trigger to automate this going forward.",
+    "templateUpsellPrompt": "Which existing clients could benefit from an add-on or an upgrade? Analyze my CRM and suggest an upsell angle for each.",
+    "templateChurn": "Clients at risk",
+    "templateChurnDesc": "Spot the accounts slipping away before they leave",
+    "templateChurnPrompt": "Which clients are at highest risk of churning right now? Explain why for each one, and suggest a concrete action."
   },
   "common": {
     "tagline": "The AI system that exploits your CRM",
@@ -908,7 +919,7 @@
     "importError": "The CRM import didn't complete. You can retry it from Clients — this doesn't block anything.",
     "seeDormantDeals": "See my dormant deals →",
     "readTitle": "I read {count} deals from your CRM — {value} in open pipeline.",
-    "readDormant": "{count} have been dormant for 30+ days — {value} to revive.",
+    "readDormant": "{count} have been dormant for {days}+ days — {value} to revive.",
     "readDormantShare": "That is {pct}% of your open pipeline value.",
     "readDormantNoValue": "+ {count} dormant deals with no amount set — impossible to know what they are worth: fill them in first.",
     "readTopIntro": "The biggest:",
@@ -1241,7 +1252,11 @@
   "assistant": {
     "conversations": "Conversations",
     "welcomeTitle": "How can I help?",
-    "welcomeSubtitle": "Ask about a client, how Baakalai works, or get sales/prospecting advice."
+    "welcomeSubtitle": "Ask about a client, run a follow-up or a CRM cleanup, or get advice. To build a cold prospecting campaign, I hand you over to the Prospecting tab.",
+    "example1": "👤 What's the status of my client Marc?",
+    "example2": "🧹 Analyze my CRM health and fix what can be fixed",
+    "example3": "⚡ Create a trigger that automatically follows up on stagnant deals",
+    "example4": "❓ How does churn scoring work?"
   },
   "autopilot": {
     "title": "Reply Autopilot",

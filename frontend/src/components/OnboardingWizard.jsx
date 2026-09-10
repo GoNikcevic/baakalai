@@ -54,6 +54,7 @@ function renderReadingSummary(s, t) {
           <div style={{ marginTop: 6 }}>
             {t('wizard.readDormant')
               .replace('{count}', s.dormant.count)
+              .replace('{days}', s.stagnantDays ?? 30)
               .replace('{value}', moneyEUR(s.dormant.value))}
             {s.dormant.sharePct != null && s.dormant.sharePct > 0 && (
               <> {t('wizard.readDormantShare').replace('{pct}', s.dormant.sharePct)}</>
