@@ -1207,7 +1207,11 @@
     "sendFailedBadge": "⚠ Last send failed",
     "currentContract": "Current contract",
     "productsOwned": "Current products",
-    "productsCrossSell": "Additional products possible"
+    "productsCrossSell": "Additional products possible",
+    "stagnantAfter": "Deal dormant after",
+    "stagnantDaysUnit": "days without activity",
+    "stagnantSaved": "Threshold saved",
+    "stagnantSavedDesc": "A deal is now considered dormant after {days} days without activity."
   },
   "churn": {
     "title": "Clients at churn risk",
