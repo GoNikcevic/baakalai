@@ -11,6 +11,18 @@ import { useT, useI18n } from '../i18n';
 import { useConfirm } from '../components/ConfirmModal';
 import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
 
+// Texte dont le sens complet est dans l'infobulle : on le signale au survol,
+// sinon personne ne devine qu'il y a une explication a lire.
+const HELP_HINT = { cursor: 'help', borderBottom: '1px dotted var(--border)' };
+
+const FIELD_LABEL = {
+  display: 'block',
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'var(--text-muted)',
+  marginBottom: 4,
+};
+
 function getTriggerTypes(lang) {
   const en = lang === 'en';
   return [
@@ -269,6 +281,18 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
   });
   const [saving, setSaving] = useState(false);
 
+  // Les explications affichees sous le formulaire : le delai en jours n'a pas
+  // le meme sens selon le type de trigger (avant le renouvellement, apres la
+  // signature, depuis la derniere activite...), donc chaque type a son texte.
+  const isLinkedinAction = form.actionType.startsWith('linkedin_');
+  // Meme repli que handleCreate (`|| 30`) : l'explication doit annoncer le
+  // delai qui sera reellement enregistre, champ vide ou a zero compris.
+  const effectiveDays = parseInt(form.days, 10) || 30;
+  const daysExplanation = t(`activation.daysHint.${form.triggerType}`, { days: effectiveDays });
+  const modeExplanation = isLinkedinAction
+    ? t('activation.modeHintLinkedin')
+    : (form.mode === 'auto' ? t('activation.modeHintAuto') : t('activation.modeHintApproval'));
+
   const handleCreate = async () => {
     if (!form.name) return;
     setSaving(true);
@@ -327,55 +351,85 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                 className="form-input"
                 style={{ fontSize: 13, padding: '8px 12px' }}
               />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select
-                  value={form.triggerType}
-                  onChange={e => {
-                    const tt = TRIGGER_TYPES.find(t => t.value === e.target.value);
-                    setForm(p => ({
-                      ...p,
-                      triggerType: e.target.value,
-                      name: p.name || tt?.defaultName || '',
-                      days: tt?.defaultDays || p.days,
-                    }));
-                  }}
-                  className="form-input"
-                  style={{ flex: 1, fontSize: 13, padding: '8px 12px' }}
-                >
-                  {TRIGGER_TYPES.map(t => (
-                    <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  placeholder={lang === 'en' ? 'Days' : 'Jours'}
-                  value={form.days}
-                  onChange={e => setForm(p => ({ ...p, days: e.target.value }))}
-                  className="form-input"
-                  style={{ width: 80, fontSize: 13, padding: '8px 12px' }}
-                />
-                <select
-                  value={form.actionType}
-                  onChange={e => setForm(p => ({ ...p, actionType: e.target.value }))}
-                  className="form-input"
-                  style={{ width: 160, fontSize: 13, padding: '8px 12px' }}
-                >
-                  <option value="email">{'\u2709\uFE0F'} Email</option>
-                  <option value="linkedin_connect">{'\uD83D\uDD17'} LinkedIn Connect</option>
-                  <option value="linkedin_message">{'\uD83D\uDCAC'} LinkedIn Message</option>
-                  <option value="linkedin_visit">{'\uD83D\uDC41\uFE0F'} LinkedIn Visit</option>
-                </select>
-                {!form.actionType.startsWith('linkedin_') && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 190 }}>
+                  <label style={FIELD_LABEL} htmlFor="trigger-type">{t('activation.fieldTypeLabel')}</label>
                   <select
-                    value={form.mode}
-                    onChange={e => setForm(p => ({ ...p, mode: e.target.value }))}
+                    id="trigger-type"
+                    value={form.triggerType}
+                    onChange={e => {
+                      const tt = TRIGGER_TYPES.find(t => t.value === e.target.value);
+                      setForm(p => ({
+                        ...p,
+                        triggerType: e.target.value,
+                        name: p.name || tt?.defaultName || '',
+                        days: tt?.defaultDays || p.days,
+                      }));
+                    }}
                     className="form-input"
-                    style={{ width: 140, fontSize: 13, padding: '8px 12px' }}
+                    style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
                   >
-                    <option value="approval">{lang === 'en' ? 'Approval' : 'Approbation'}</option>
-                    <option value="auto">{lang === 'en' ? 'Automatic' : 'Automatique'}</option>
+                    {TRIGGER_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
+                    ))}
                   </select>
+                </div>
+                <div style={{ width: 110 }}>
+                  <label style={FIELD_LABEL} htmlFor="trigger-days">{t('activation.fieldDaysLabel')}</label>
+                  <input
+                    id="trigger-days"
+                    type="number"
+                    min="1"
+                    placeholder={lang === 'en' ? 'Days' : 'Jours'}
+                    value={form.days}
+                    onChange={e => setForm(p => ({ ...p, days: e.target.value }))}
+                    className="form-input"
+                    style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
+                  />
+                </div>
+                <div style={{ width: 170 }}>
+                  <label style={FIELD_LABEL} htmlFor="trigger-action">{t('activation.fieldActionLabel')}</label>
+                  <select
+                    id="trigger-action"
+                    value={form.actionType}
+                    onChange={e => setForm(p => ({ ...p, actionType: e.target.value }))}
+                    className="form-input"
+                    style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
+                  >
+                    <option value="email">{'\u2709\uFE0F'} Email</option>
+                    <option value="linkedin_connect">{'\uD83D\uDD17'} LinkedIn Connect</option>
+                    <option value="linkedin_message">{'\uD83D\uDCAC'} LinkedIn Message</option>
+                    <option value="linkedin_visit">{'\uD83D\uDC41\uFE0F'} LinkedIn Visit</option>
+                  </select>
+                </div>
+                {!isLinkedinAction && (
+                  <div style={{ width: 150 }}>
+                    <label style={FIELD_LABEL} htmlFor="trigger-mode">{t('activation.fieldModeLabel')}</label>
+                    <select
+                      id="trigger-mode"
+                      value={form.mode}
+                      onChange={e => setForm(p => ({ ...p, mode: e.target.value }))}
+                      className="form-input"
+                      style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
+                    >
+                      <option value="approval">{lang === 'en' ? 'Approval' : 'Approbation'}</option>
+                      <option value="auto">{lang === 'en' ? 'Automatic' : 'Automatique'}</option>
+                    </select>
+                  </div>
                 )}
+              </div>
+
+              {/* Explication en clair de la config choisie : le nombre de jours
+                  et le mode d'envoi sont les deux reglages que personne ne
+                  devine depuis les seuls libelles des champs. */}
+              <div style={{
+                fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)',
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', padding: '10px 12px',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <div><strong style={{ color: 'var(--text-primary)' }}>{t('activation.fieldDaysLabel')} :</strong>{' '}{daysExplanation}</div>
+                <div><strong style={{ color: 'var(--text-primary)' }}>{isLinkedinAction ? t('activation.fieldActionLabel') : t('activation.fieldModeLabel')} :</strong>{' '}{modeExplanation}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowCreate(false)}>
@@ -417,8 +471,16 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                       {typeConfig.icon || '\u26A1'} {trigger.name}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {typeConfig.desc} {conditions.days ? `(${conditions.days}j)` : ''}
-                      {' \u00B7 '} {lang === 'en' ? 'Mode' : 'Mode'}: {trigger.mode === 'auto' ? (lang === 'en' ? 'automatic' : 'automatique') : (lang === 'en' ? 'approval' : 'approbation')}
+                      <span title={conditions.days ? t(`activation.daysHint.${trigger.trigger_type}`, { days: conditions.days }) : undefined} style={conditions.days ? HELP_HINT : undefined}>
+                        {typeConfig.desc}{conditions.days ? ` (${conditions.days} ${en ? 'days' : 'jours'})` : ''}
+                      </span>
+                      {' \u00B7 '}
+                      <span
+                        title={trigger.mode === 'auto' ? t('activation.modeHintAuto') : t('activation.modeHintApproval')}
+                        style={HELP_HINT}
+                      >
+                        {t('activation.fieldModeLabel')}: {trigger.mode === 'auto' ? (lang === 'en' ? 'automatic' : 'automatique') : (lang === 'en' ? 'approval' : 'approbation')}
+                      </span>
                       {trigger.last_run && ` \u00B7 ${lang === 'en' ? 'Last run:' : 'Dernier run :'} ${new Date(trigger.last_run).toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR')}`}
                     </div>
                   </div>
