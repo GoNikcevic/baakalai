@@ -40,3 +40,17 @@ RAPPEL (règle 6 de CLAUDE.md) : lancer `node scripts/check-conflicts.js` avant
 tout `git push`. Si des conflits sont listés ci-dessus, les signaler à Goran
 plutôt que de pousser sans rien dire.
 EOF
+
+# --- 3. Décisions produit en attente ----------------------------------------
+#
+# Goran a demandé qu'on lui rappelle les arbitrages ouverts à chaque session
+# plutôt que de compter sur sa mémoire. La liste vit dans CLAUDE.md (source
+# unique) ; on la relit ici pour qu'elle passe aussi par le terminal, pas
+# seulement par le contexte du modèle. Section vidée = rien d'affiché.
+
+PENDING="$(awk '/^### Décisions en attente/{f=1; next} f && /^## /{exit} f' "$ROOT/CLAUDE.md" 2>/dev/null || true)"
+if printf '%s' "$PENDING" | grep -q '^- '; then
+  echo ""
+  echo "── Décisions en attente (CLAUDE.md § 6) ──"
+  printf '%s\n' "$PENDING"
+fi
