@@ -28,6 +28,7 @@ const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const logger = require('./logger');
 const { populationOf } = require('./crm-scope');
+const { outcomeOf, instructionFor } = require('./reply-intents');
 
 // Garde-fou des conversations qui ne concluent pas. Les deux issues nettes ont
 // leur propre sortie, sur l'intention détectée et non sur un compteur : une
@@ -41,9 +42,8 @@ const MAX_DELAY_MS = 4 * 60 * 60 * 1000;  // 4 hours
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOT_NOW_FOLLOWUP_DAYS = 21; // matches the "in a few weeks" wording used in the auto-reply
 
-// Intents that stop the autopilot
-const STOP_INTENTS = ['not_interested', 'unsubscribe'];
-const SUCCESS_INTENTS = ['meeting_request'];
+// Les issues de chaque intention sont déclarées une seule fois, dans
+// lib/reply-intents.js — la même source que l'énumération du prompt d'analyse.
 
 /**
  * Process a new reply and decide whether to auto-respond.
@@ -80,7 +80,7 @@ async function processReply(userId, opts) {
   }
 
   // Stop conditions
-  if (STOP_INTENTS.includes(intent)) {
+  if (outcomeOf(intent) === 'stop') {
     // A negative reply is a reasonable signal to mark a not-yet-won deal as lost, but it's an
     // inferred signal (sentiment on one email), not authoritative — it must never downgrade an
     // already-won client's status. Only the CRM's own native status is authoritative for that
@@ -93,12 +93,12 @@ async function processReply(userId, opts) {
   }
 
   // Success — meeting request detected
-  if (SUCCESS_INTENTS.includes(intent)) {
+  if (outcomeOf(intent) === 'success') {
     // Generate meeting proposal reply
     const reply = await generateReply(userId, {
       contactName, company, email, replyContent, intent, channel,
       conversationHistory: await getConversationHistory(userId, email),
-      instruction: 'The prospect wants a meeting. Propose 2-3 specific time slots this week or next week. Be enthusiastic but professional.',
+      instruction: instructionFor(intent),
     });
 
     await scheduleReply(userId, opportunityId, email, contactName, reply, channel);
@@ -114,26 +114,17 @@ async function processReply(userId, opts) {
     return { action: 'handoff', reason: `Max turns reached (${MAX_TURNS})` };
   }
 
-  // Generate contextual reply based on intent
-  let instruction;
-  switch (intent) {
-    case 'interested':
-      instruction = 'The prospect is interested. Ask a qualifying question about their needs/timeline, and subtly steer toward a meeting. Do NOT propose a meeting yet if this is turn 1-2.';
-      break;
-    case 'question':
-      instruction = 'The prospect has a question. Answer it concisely and professionally based on context. Then ask a follow-up question to keep the conversation going.';
-      break;
-    case 'not_now':
-      instruction = 'The prospect says not now. Acknowledge respectfully, offer to follow up in a few weeks, and ask when would be a better time.';
-      // The reply promises "a few weeks" — actually schedule that, instead of just
-      // sending a polite auto-reply with no structural effect on the reactivation queue.
-      await db.opportunities.update(opportunityId, {
-        planned_followup_date: new Date(Date.now() + NOT_NOW_FOLLOWUP_DAYS * DAY_MS).toISOString(),
-        planned_followup_reason: 'not_now',
-      });
-      break;
-    default:
-      instruction = 'Continue the conversation naturally. Be helpful and professional. Try to understand their needs and move toward a meeting.';
+  // L'instruction vient de la déclaration de l'intention ; une valeur inconnue
+  // retombe sur le repli, qui poursuit l'échange sans rien conclure.
+  let instruction = instructionFor(intent);
+
+  if (intent === 'not_now') {
+    // La réponse promet « dans quelques semaines » — on le planifie vraiment,
+    // au lieu d'envoyer une politesse sans effet sur la file de réactivation.
+    await db.opportunities.update(opportunityId, {
+      planned_followup_date: new Date(Date.now() + NOT_NOW_FOLLOWUP_DAYS * DAY_MS).toISOString(),
+      planned_followup_reason: 'not_now',
+    });
   }
 
   // If we're at turn 3+, push toward meeting
