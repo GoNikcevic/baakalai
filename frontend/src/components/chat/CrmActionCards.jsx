@@ -550,7 +550,9 @@ function CrmReadingSummary({ onSuggestionClick }) {
           .replace('{count}', summary.totalDeals)
           .replace('{value}', money(summary.openValue))}
         {summary.dormant.count > 0 && (
-          <> {t('chat.readDormant').replace('{count}', summary.dormant.count)}</>
+          <> {t('chat.readDormant')
+            .replace('{count}', summary.dormant.count)
+            .replace('{days}', summary.stagnantDays ?? 30)}</>
         )}
         {summary.dormant.noValueCount > 0 && (
           <> {t('chat.readDormantNoValue').replace('{count}', summary.dormant.noValueCount)}</>

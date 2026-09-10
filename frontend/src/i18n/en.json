@@ -243,7 +243,7 @@
     "readyToProspect": "Which deals shall we revive today, {name}?",
     "openCampaignAssistant": "Open the Prospecting assistant →",
     "readSummary": "I read your {count} deals — {value} in open pipeline.",
-    "readDormant": "{count} have been dormant for 30+ days.",
+    "readDormant": "{count} have been dormant for {days}+ days.",
     "readDormantNoValue": "{count} more are dormant with no amount set.",
     "readStartWith": "I suggest starting with:",
     "readDays": "{days}d",
@@ -917,7 +917,7 @@
     "importError": "The CRM import didn't complete. You can retry it from Clients — this doesn't block anything.",
     "seeDormantDeals": "See my dormant deals →",
     "readTitle": "I read {count} deals from your CRM — {value} in open pipeline.",
-    "readDormant": "{count} have been dormant for 30+ days — {value} to revive.",
+    "readDormant": "{count} have been dormant for {days}+ days — {value} to revive.",
     "readDormantShare": "That is {pct}% of your open pipeline value.",
     "readDormantNoValue": "+ {count} dormant deals with no amount set — impossible to know what they are worth: fill them in first.",
     "readTopIntro": "The biggest:",
@@ -1252,7 +1252,7 @@
     "welcomeSubtitle": "Ask about a client, run a follow-up or a CRM cleanup, or get advice. To build a cold prospecting campaign, I hand you over to the Prospecting tab.",
     "example1": "👤 What's the status of my client Marc?",
     "example2": "🧹 Analyze my CRM health and fix what can be fixed",
-    "example3": "⚡ Create a trigger that follows up on deals stagnant for 30 days",
+    "example3": "⚡ Create a trigger that automatically follows up on stagnant deals",
     "example4": "❓ How does churn scoring work?"
   },
   "autopilot": {

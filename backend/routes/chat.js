@@ -31,12 +31,16 @@ const ASSISTANT_TYPES = ['general', 'campaign'];
  */
 async function buildGeneralContext(userId) {
   const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
+  const { getStagnantDays } = require('../lib/stagnation');
+  // Le seuil de dormance est celui de l'utilisateur, pas un nombre décidé ici
+  // (cf. lib/stagnation.js) : l'assistant doit annoncer le même chiffre que la file
+  // de réactivation et le compte-rendu de lecture affiché juste au-dessus de lui.
+  const stagnantDays = await getStagnantDays(userId);
   const [userRow, connectedCrms, crmStats, triggers] = await Promise.all([
     db.query('SELECT language, settings FROM users WHERE id = $1', [userId]),
     getValidatedIntegrations(userId, CRM_PROVIDERS),
-    // Même définition de la dormance que /api/crm/reading-summary : 30 jours sur
-    // COALESCE(last_activity_at, created_at) — jamais updated_at, réécrit en masse
-    // à chaque import. Les deux surfaces doivent annoncer le même chiffre.
+    // Stagnance sur COALESCE(last_activity_at, created_at) — jamais updated_at,
+    // réécrit en masse par chaque import (cf. /api/crm/reading-summary).
     db.query(`
       SELECT
         COUNT(*)::int AS total,
@@ -44,13 +48,13 @@ async function buildGeneralContext(userId) {
         COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0)::float AS open_value,
         COUNT(*) FILTER (
           WHERE status NOT IN ('won', 'lost')
-            AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+            AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')
         )::int AS dormant,
         COUNT(*) FILTER (WHERE status = 'won')::int AS clients,
         COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS churn_risk,
         COUNT(*) FILTER (WHERE email IS NULL OR email = '')::int AS missing_email
       FROM opportunities WHERE user_id = $1
-    `, [userId]),
+    `, [userId, stagnantDays]),
     db.query(
       'SELECT name, trigger_type, mode, enabled FROM nurture_triggers WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10',
       [userId]
@@ -73,7 +77,7 @@ async function buildGeneralContext(userId) {
       'ÉTAT DU CRM (chiffres réels, réutilise-les tels quels — ne les invente pas et ne les arrondis pas au hasard) :',
       `- ${c.total || 0} contacts synchronisés`,
       `- ${c.open_deals || 0} deals ouverts, ${Math.round(c.open_value || 0)} € au total`,
-      `- ${c.dormant || 0} deals dormants (aucune activité depuis plus de 30 jours)`,
+      `- ${c.dormant || 0} deals dormants (aucune activité depuis plus de ${stagnantDays} jours — seuil réglé par l'utilisateur)`,
       `- ${c.clients || 0} clients gagnés, dont ${c.churn_risk || 0} à risque de churn (score ≥ 60)`,
       `- ${c.missing_email || 0} contacts sans email`,
     ].join('\n'));
