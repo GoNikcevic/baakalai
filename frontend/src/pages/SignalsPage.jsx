@@ -203,6 +203,7 @@ export default function SignalsPage() {
           )}
           <button className="btn btn-primary" style={{ fontSize: 13, padding: '8px 18px' }}
             onClick={handleScan} disabled={scanning}>
+            {!scanning && <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
             {scanning ? t('signals.scanning') : t('signals.scan')}
           </button>
         </div>
@@ -395,6 +396,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     )}
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', border: '1px solid var(--accent)', color: 'var(--accent)' }}
                       onClick={() => onCreateSequence?.(s.id)} disabled={creatingSequence === s.id}>
+                      {creatingSequence !== s.id && <Icon name="zap" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
                       {creatingSequence === s.id ? '...' : t('signals.createSequence')}
                     </button>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', color: 'var(--text-muted)' }}

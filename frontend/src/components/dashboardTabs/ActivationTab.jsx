@@ -241,7 +241,9 @@ function CampaignTableRow({ campaign: c }) {
       Active
     </span>
   ) : (
-    <span className="status-badge status-prep">{'⏳'} {en ? 'Preparing' : 'En préparation'}</span>
+    <span className="status-badge status-prep">
+      <Icon name="clock" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Preparing' : 'En préparation'}
+    </span>
   );
 
   let openContent, replyContent, meetingsContent;

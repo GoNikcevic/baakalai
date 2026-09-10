@@ -115,7 +115,7 @@ function OtherIssueCard({ provider, issue, onFixed }) {
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState(null);
   const [expanded, setExpanded] = useState(false);
-  const config = getOtherIssueConfig(en)[issue.type] || { icon: '?', label: issue.type, color: 'var(--text-muted)' };
+  const config = getOtherIssueConfig(en)[issue.type] || { icon: 'alert', label: issue.type, color: 'var(--text-muted)' };
   const count = issue.count || issue.contacts?.length || 0;
   const fixField = FIXABLE_FIELD_BY_ISSUE_TYPE[issue.type];
 

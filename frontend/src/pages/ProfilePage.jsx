@@ -9,6 +9,7 @@ import { useApp } from '../context/useApp';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useI18n } from '../i18n';
+import Icon from '../components/Icon';
 
 /* ─── Default empty profile ─── */
 
@@ -447,7 +448,10 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: -1 }}>
         {lines.map(pl => (
           <button key={pl.id} onClick={() => setActiveTab(pl.id)} style={tabStyle(activeTab === pl.id, false)}>
-            {pl.icon || '📦'} {pl.name}
+            {pl.icon
+              ? <span style={{ marginRight: 6 }}>{pl.icon}</span>
+              : <Icon name="package" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+            {pl.name}
           </button>
         ))}
         <button onClick={() => setActiveTab('new')} style={tabStyle(activeTab === 'new', true)}>
@@ -593,7 +597,12 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                   <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {uploadedDocs.map((doc, i) => (
                       <div key={doc.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', background: 'var(--bg-elevated)', borderRadius: 5, fontSize: 12 }}>
-                        <span style={{ fontSize: 13 }}>{doc.mime_type?.includes('pdf') ? '📄' : doc.mime_type?.includes('sheet') || doc.mime_type?.includes('excel') ? '📊' : '📎'}</span>
+                        <Icon
+                          name={doc.mime_type?.includes('pdf') ? 'file'
+                            : doc.mime_type?.includes('sheet') || doc.mime_type?.includes('excel') ? 'chart'
+                            : 'paperclip'}
+                          size={13}
+                        />
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.original_name}</span>
                         <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
                         <button onClick={async () => { try { await request('/documents/' + doc.id, { method: 'DELETE' }); setUploadedDocs(prev => prev.filter(d => d.id !== doc.id)); } catch {} }}

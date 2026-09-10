@@ -17,6 +17,7 @@ import TeamSettings from '../components/TeamSettings';
 import ProductLinesSettings from '../components/ProductLinesSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
 import LoadingTips from '../components/LoadingTips';
+import Icon from '../components/Icon';
 
 /* ─── Unified tool list organized by category ─── */
 
@@ -890,7 +891,9 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div style={{ fontSize: 12, color: crmSyncStatus.status === 'done' ? 'var(--success)' : crmSyncStatus.status === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
-                {crmSyncStatus.status === 'done' ? '\u2705 ' : crmSyncStatus.status === 'error' ? '\u274c ' : ''}{crmSyncStatus.message || ''}
+                {crmSyncStatus.status === 'done' && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+                {crmSyncStatus.status === 'error' && <Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+                {crmSyncStatus.message || ''}
               </div>
               {crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error' && (
                 <LoadingTips
@@ -1556,7 +1559,7 @@ function MetadataConfig({ provider, en }) {
         )}
         {(saved || (currentMeta?.database_id && !selected)) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>{'\u2705'} {en ? 'Database configured' : 'Base configurée'}</span>
+            <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Database configured' : 'Base configurée'}</span>
             <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-muted)' }}
               onClick={() => { setSaved(false); setSelected(''); }}>
               {en ? 'Change' : 'Changer'}

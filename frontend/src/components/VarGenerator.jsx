@@ -7,6 +7,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { sanitizeHtml } from '../services/sanitize';
 import { useI18n } from '../i18n';
+import Icon from './Icon';
 
 /* ─── Scenario data ─── */
 
@@ -30,7 +31,7 @@ const VARGEN_SCENARIOS = {
         label: 'Nom de la bière phare',
         type: 'base',
         desc: 'Le produit signature ou best-seller de la brasserie. Trouvable sur leur site, Untappd, ou réseaux sociaux.',
-        source: { icon: '🔍', label: 'Scraping site web / Untappd' },
+        source: { icon: 'search', label: 'Scraping site web / Untappd' },
         examples: [
           { prospect: "Brasserie de la Goutte d'Or", value: 'Chateau Rouge (Amber Ale)' },
           { prospect: 'Brasserie du Mont Blanc', value: 'La Blanche (Witbier)' },
@@ -42,7 +43,7 @@ const VARGEN_SCENARIOS = {
         label: 'Risque microbiologique probable',
         type: 'enrichment',
         desc: 'Problème microbiologique le plus courant selon le type de bière produite. Généré par IA à partir du style de bière.',
-        source: { icon: '🤖', label: 'IA \u2014 base sur le type de fermentation' },
+        source: { icon: 'bot', label: 'IA \u2014 base sur le type de fermentation' },
         dependsOn: ['beerName'],
         derivationHint: 'Le type de bière (IPA, Stout, Sour, Lager\u2026) détermine la levure et les risques de contamination.',
         formula: {
@@ -60,7 +61,7 @@ const VARGEN_SCENARIOS = {
         label: 'Icebreaker brasseur',
         type: 'derived',
         desc: "Accroche personnalisée qui combine la bière phare et le risque microbio pour montrer une expertise crédible du métier.",
-        source: { icon: '🧠', label: 'IA \u2014 combinaison de beerName + microbioProblem' },
+        source: { icon: 'sparkles', label: 'IA \u2014 combinaison de beerName + microbioProblem' },
         dependsOn: ['beerName', 'microbioProblem'],
         formula: {
           inputs: ['beerName', 'microbioProblem'],
@@ -93,7 +94,7 @@ const VARGEN_SCENARIOS = {
         label: 'Logiciel comptable utilisé',
         type: 'base',
         desc: "L'outil principal de gestion comptable. Identifiable via les offres d'emploi, profils LinkedIn de l'equipe, ou le site web.",
-        source: { icon: '🔍', label: "Scraping offres d'emploi / LinkedIn" },
+        source: { icon: 'search', label: "Scraping offres d'emploi / LinkedIn" },
         examples: [
           { prospect: 'Cabinet Fidrec', value: 'Sage 100 Comptabilite' },
           { prospect: 'Nexia Conseil', value: 'Cegid Loop' },
@@ -105,7 +106,7 @@ const VARGEN_SCENARIOS = {
         label: 'Heures perdues estimées / semaine',
         type: 'enrichment',
         desc: "Estimation du temps consacré aux tâches automatisables, calculé selon l'outil utilisé et la taille du cabinet.",
-        source: { icon: '🤖', label: 'IA \u2014 base sur accountingSoftware + companySize' },
+        source: { icon: 'bot', label: 'IA \u2014 base sur accountingSoftware + companySize' },
         dependsOn: ['accountingSoftware', 'companySize'],
         derivationHint: "Chaque logiciel a des fonctionnalités d'automatisation connues. On estime le gap entre usage courant et potentiel.",
         formula: {
@@ -123,7 +124,7 @@ const VARGEN_SCENARIOS = {
         label: 'Icebreaker DAF chiffre',
         type: 'derived',
         desc: "Accroche qui combine l'outil comptable et les heures perdues en une question qui parle le langage du DAF.",
-        source: { icon: '🧠', label: 'IA \u2014 combinaison accountingSoftware + estimatedTimeLost' },
+        source: { icon: 'sparkles', label: 'IA \u2014 combinaison accountingSoftware + estimatedTimeLost' },
         dependsOn: ['accountingSoftware', 'estimatedTimeLost'],
         formula: {
           inputs: ['accountingSoftware', 'estimatedTimeLost'],
@@ -156,7 +157,7 @@ const VARGEN_SCENARIOS = {
         label: 'Statut Qualiopi',
         type: 'base',
         desc: "Si l'organisme est certifie Qualiopi (obligatoire pour fonds publics). Verifiable sur la base publique DataDock / Qualiopi.",
-        source: { icon: '🔍', label: 'Base publique Qualiopi / site web' },
+        source: { icon: 'search', label: 'Base publique Qualiopi / site web' },
         examples: [
           { prospect: 'FormaPro Consulting', value: 'Certifie Qualiopi \u2014 Actions de formation' },
           { prospect: 'CreActifs', value: 'Certifie Qualiopi \u2014 Formation + VAE' },
@@ -168,7 +169,7 @@ const VARGEN_SCENARIOS = {
         label: 'Taille du catalogue',
         type: 'base',
         desc: "Nombre approximatif de formations proposées. Identifiable sur leur site ou les plateformes CPF.",
-        source: { icon: '🔍', label: 'Scraping site web / MonCompteFormation' },
+        source: { icon: 'search', label: 'Scraping site web / MonCompteFormation' },
         examples: [
           { prospect: 'FormaPro Consulting', value: '12 formations (management, RH)' },
           { prospect: 'CreActifs', value: '8 formations (entrepreneuriat)' },
@@ -180,7 +181,7 @@ const VARGEN_SCENARIOS = {
         label: 'Icebreaker formation',
         type: 'derived',
         desc: "Accroche qui combine statut Qualiopi et taille catalogue pour parler de la problématique de remplissage.",
-        source: { icon: '🧠', label: 'IA \u2014 combinaison qualiopiStatus + catalogSize' },
+        source: { icon: 'sparkles', label: 'IA \u2014 combinaison qualiopiStatus + catalogSize' },
         dependsOn: ['qualiopiStatus', 'catalogSize'],
         formula: {
           inputs: ['qualiopiStatus', 'catalogSize'],
@@ -244,21 +245,22 @@ function VarCard({ variable, onAccept, onDismiss, onEdit, onRefreshPreview }) {
         <div className="vargen-var-name">
           <span className="vargen-var-tag">{`{{${variable.key}}}`}</span>
           <span className={`vargen-var-type ${variable.type}`}>
-            {isDerived ? '\u26A1 Dérivée' : isEnrichment ? '🧠 Enrichie' : '📥 Base'}
+            <Icon name={isDerived ? 'zap' : isEnrichment ? 'sparkles' : 'download'} size={11} style={{ display: 'inline-block', verticalAlign: '-1px', marginRight: 4 }} />
+            {isDerived ? 'Dérivée' : isEnrichment ? 'Enrichie' : 'Base'}
           </span>
         </div>
         <div className="vargen-var-actions">
           {status === 'accepted' ? (
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              \u2705 Ajoutée à la bibliothèque
+              <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Ajoutée à la bibliothèque
             </span>
           ) : (
             <>
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 10px' }} onClick={handleAccept}>
-                \u2705 Accepter
+                <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Accepter
               </button>
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 10px' }} onClick={handleEdit}>
-                {en ? 'Edit' : '\u270F\uFE0F Modifier'}
+                <Icon name="pen" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Edit' : 'Modifier'}
               </button>
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 10px' }} onClick={handleDismiss}>
                 \u2715
@@ -275,7 +277,7 @@ function VarCard({ variable, onAccept, onDismiss, onEdit, onRefreshPreview }) {
 
       {/* Source */}
       <div className="vargen-var-source">
-        <span className="vargen-var-source-icon">{variable.source.icon}</span>
+        <span className="vargen-var-source-icon"><Icon name={variable.source.icon} size={13} /></span>
         <span>Source : {variable.source.label}</span>
         {variable.dependsOn && (
           <span style={{ marginLeft: 8, color: 'var(--accent-light)' }}>
@@ -288,7 +290,7 @@ function VarCard({ variable, onAccept, onDismiss, onEdit, onRefreshPreview }) {
       {(isDerived || isEnrichment) && variable.formula && (
         <div className="vargen-formula">
           <div className="vargen-formula-label">
-            \u2699\uFE0F Formule de derivation
+            <Icon name="settings" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Formule de derivation
           </div>
           <div className="vargen-formula-inputs">
             {variable.formula.inputs.map((inp, i) => (
@@ -314,7 +316,9 @@ function VarCard({ variable, onAccept, onDismiss, onEdit, onRefreshPreview }) {
       {/* Enrichment derivation hint (if no formula) */}
       {isEnrichment && !variable.formula && variable.derivationHint && (
         <div className="vargen-formula">
-          <div className="vargen-formula-label">\u2699\uFE0F Logique d'enrichissement</div>
+          <div className="vargen-formula-label">
+            <Icon name="settings" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Logique d'enrichissement
+          </div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
             {variable.derivationHint}
           </div>
@@ -326,20 +330,23 @@ function VarCard({ variable, onAccept, onDismiss, onEdit, onRefreshPreview }) {
         <div className="vargen-preview">
           <div className="vargen-preview-header">
             <span className="vargen-preview-title">
-              {'\uD83D\uDC41\uFE0F'} Prévisualisation IA &mdash; {variable.examples.length} exemples
+              <Icon name="eye" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              Prévisualisation IA &mdash; {variable.examples.length} exemples
             </span>
             <button
               className="btn btn-ghost"
               style={{ fontSize: 10, padding: '4px 8px' }}
               onClick={handleRefresh}
             >
-              {'🔄'} Rafraîchir
+              <Icon name="refresh" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              Rafraîchir
             </button>
           </div>
           <div className="vargen-preview-body">
             {refreshing ? (
               <div style={{ textAlign: 'center', padding: 20, fontSize: 12, color: 'var(--text-muted)' }}>
-                {'🔄'} {en ? 'Regenerating examples...' : 'Régénération des exemples...'}
+                <Icon name="refresh" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {en ? 'Regenerating examples...' : 'Régénération des exemples...'}
               </div>
             ) : (
               variable.examples.map((ex, i) => (
@@ -462,7 +469,8 @@ export default function VarGenerator({
       }}>
         <div className="vargen-header-left">
           <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: '-0.3px' }}>
-            {'🧬'} Générateur de variables
+            <Icon name="variable" size={15} color="var(--accent)" style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            Générateur de variables
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
             Suggestions IA basées sur l'industrie et la campagne
@@ -470,7 +478,8 @@ export default function VarGenerator({
         </div>
         {allAccepted ? (
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            \u2705 {scenario.chain.length} variables ajoutées à votre bibliothèque
+            <Icon name="checkCircle" size={14} />
+            {scenario.chain.length} variables ajoutées à votre bibliothèque
           </div>
         ) : (
           <button
@@ -479,7 +488,8 @@ export default function VarGenerator({
             onClick={regenerateSuggestions}
             disabled={regenerating}
           >
-            {regenerating ? (en ? 'Analyzing...' : '🧠 Analyse en cours...') : (en ? 'Regenerate' : '🔄 Régénérer')}
+            <Icon name={regenerating ? 'sparkles' : 'refresh'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {regenerating ? (en ? 'Analyzing...' : 'Analyse en cours...') : (en ? 'Regenerate' : 'Régénérer')}
           </button>
         )}
       </div>
@@ -540,7 +550,9 @@ export default function VarGenerator({
       <div className="vargen-body" id="vargen-body" style={{ padding: 20 }}>
         {regenerating ? (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: 36, marginBottom: 16 }}>{'🧠'}</div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
+              <Icon name="sparkles" size={36} strokeWidth={1.5} />
+            </div>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Analyse en cours...</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 400, margin: '0 auto' }}>
               Baakalai analyse l'industrie, les données de campagne et la mémoire cross-campagne pour suggérer les meilleures variables.
@@ -554,7 +566,8 @@ export default function VarGenerator({
               borderRadius: 10, padding: 16, marginBottom: 20,
             }}>
               <div className="vargen-explanation-title" style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                {'💡'} {scenario.explanation.title}
+                <Icon name="bulb" size={13} color="var(--accent)" style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {scenario.explanation.title}
               </div>
               <div
                 className="vargen-explanation-text"
@@ -592,7 +605,8 @@ export default function VarGenerator({
               marginTop: 20, padding: '16px 0', borderTop: '1px solid var(--border)',
             }}>
               <div className="vargen-actions-info" style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
-                {'💡'} Les variables acceptées seront ajoutées à votre bibliothèque et synchronisées avec Lemlist.
+                <Icon name="bulb" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                Les variables acceptées seront ajoutées à votre bibliothèque et synchronisées avec Lemlist.
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
@@ -600,7 +614,8 @@ export default function VarGenerator({
                   style={{ fontSize: 12, padding: '8px 14px' }}
                   onClick={suggestNewChain}
                 >
-                  {'🧠'} Suggérer une autre chaîne
+                  <Icon name="sparkles" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                  Suggérer une autre chaîne
                 </button>
                 <button
                   className="btn btn-primary"
@@ -608,7 +623,7 @@ export default function VarGenerator({
                   onClick={handleAcceptAll}
                   disabled={allAccepted}
                 >
-                  \u2705 Accepter {visibleChain.length} variables
+                  <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Accepter {visibleChain.length} variables
                 </button>
               </div>
             </div>

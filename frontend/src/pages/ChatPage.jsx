@@ -24,6 +24,7 @@ import {
   SendEmailCard, CrmActionCard, CreateTriggerCard, ToggleAutopilotCard,
   ListClientsCard, SignalSearchCard, NewsletterCard, CrmReadingSummary,
 } from '../components/chat/CrmActionCards';
+import Icon from '../components/Icon';
 
 const STATUS_LABELS = {
   new: { fr: 'Nouveau', en: 'New' },
@@ -127,16 +128,16 @@ function GeneralActionCard({ metadata }) {
   // Actions CRM / activation — chaque carte s'exécute elle-même au clic.
   if (metadata?.action === 'send_email') return <SendEmailCard metadata={metadata} />;
   if (metadata?.action === 'scan_crm') {
-    return <CrmActionCard metadata={metadata} actionType="scan_crm" label={en ? 'Scan CRM' : 'Scanner le CRM'} icon={'\uD83D\uDD0D'} />;
+    return <CrmActionCard metadata={metadata} actionType="scan_crm" label={en ? 'Scan CRM' : 'Scanner le CRM'} icon="search" />;
   }
   if (metadata?.action === 'run_nurture') {
-    return <CrmActionCard metadata={metadata} actionType="run_nurture" label={en ? 'Run activation' : 'Lancer l\'activation'} icon={'\u26A1'} />;
+    return <CrmActionCard metadata={metadata} actionType="run_nurture" label={en ? 'Run activation' : 'Lancer l\'activation'} icon="zap" />;
   }
   if (metadata?.action === 'import_crm') {
-    return <CrmActionCard metadata={metadata} actionType="import_crm" label={en ? 'Import from CRM' : 'Importer depuis le CRM'} icon={'\u2B07\uFE0F'} />;
+    return <CrmActionCard metadata={metadata} actionType="import_crm" label={en ? 'Import from CRM' : 'Importer depuis le CRM'} icon="download" />;
   }
   if (metadata?.action === 'clean_crm') {
-    return <CrmActionCard metadata={metadata} actionType="clean_crm" label={en ? 'Clean CRM data' : 'Nettoyer le CRM'} icon={'\uD83E\uDDF9'} />;
+    return <CrmActionCard metadata={metadata} actionType="clean_crm" label={en ? 'Clean CRM data' : 'Nettoyer le CRM'} icon="sparkles" />;
   }
   if (metadata?.action === 'list_clients') return <ListClientsCard metadata={metadata} />;
   if (metadata?.action === 'create_trigger') return <CreateTriggerCard metadata={metadata} />;

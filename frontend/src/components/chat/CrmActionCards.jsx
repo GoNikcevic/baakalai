@@ -15,6 +15,7 @@
 import { useState, useEffect } from 'react';
 import { request, trackEvent } from '../../services/api-client';
 import { useT, useI18n } from '../../i18n';
+import Icon from '../Icon';
 
 
 /* ═══ CRM / Activation Action Cards ═══ */
@@ -50,7 +51,7 @@ function SendEmailCard({ metadata }) {
       padding: 16, marginTop: 8,
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-        {'\u2709\uFE0F'} Email {'\u2192'} {metadata.toName || metadata.to}
+        <Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Email {'\u2192'} {metadata.toName || metadata.to}
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
         <strong>{en ? 'Subject:' : 'Objet :'}</strong> {metadata.subject}
@@ -67,17 +68,17 @@ function SendEmailCard({ metadata }) {
           {en ? 'Send' : 'Envoyer'}
         </button>
       )}
-      {status === 'sending' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'Sending...' : 'Envoi...'}</span>}
-      {status === 'sent' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {en ? 'Email sent!' : 'Email envoy\u00E9 !'}</span>}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {error}</span>}
+      {status === 'sending' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}><Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Sending...' : 'Envoi...'}</span>}
+      {status === 'sent' && <span style={{ fontSize: 12, color: 'var(--success)' }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Email sent!' : 'Email envoy\u00E9 !'}</span>}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}><Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{error}</span>}
     </div>
   );
 }
 
 function IssueRow({ issue, en }) {
   const [expanded, setExpanded] = useState(false);
-  const severity = issue.severity === 'critical' || issue.severity === 'high' ? '\uD83D\uDD34'
-    : issue.severity === 'warning' || issue.severity === 'medium' ? '\uD83D\uDFE1' : '\uD83D\uDFE2';
+  const severityColor = issue.severity === 'critical' || issue.severity === 'high' ? 'var(--danger)'
+    : issue.severity === 'warning' || issue.severity === 'medium' ? 'var(--warning)' : 'var(--success)';
   const contacts = issue.contacts || [];
   const hasContacts = contacts.length > 0;
   const typeLabel = {
@@ -96,7 +97,7 @@ function IssueRow({ issue, en }) {
         style={{ display: 'flex', gap: 6, lineHeight: 1.5, cursor: hasContacts ? 'pointer' : 'default' }}
         onClick={() => hasContacts && setExpanded(!expanded)}
       >
-        <span>{severity}</span>
+        <Icon name="dot" size={9} color={severityColor} />
         <span style={{ flex: 1 }}>{typeLabel} {issue.count > 1 ? `(${issue.count})` : ''}</span>
         {hasContacts && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{expanded ? '\u25B2' : '\u25BC'}</span>}
       </div>
@@ -154,18 +155,18 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
       padding: 16, marginTop: 8,
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-        {icon} {label}
+        <Icon name={icon} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{label}
       </div>
       {status === 'ready' && (
         <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleRun}>
           {en ? 'Execute' : 'Ex\u00E9cuter'}
         </button>
       )}
-      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'In progress...' : 'En cours...'}</span>}
+      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}><Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'In progress...' : 'En cours...'}</span>}
       {status === 'done' && (
         <div>
           <div style={{ fontSize: 12, color: 'var(--success)', marginBottom: 8 }}>
-            {'\u2705'} {en ? 'Done' : 'Termin\u00E9'}
+            <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Done' : 'Termin\u00E9'}
             {result?.score != null && !result?.health && ` — ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
             {result?.imported != null && ` — ${result.imported} ${en ? 'contact(s) imported' : 'contact(s) import\u00E9(s)'}`}
             {result?.sent != null && ` — ${result.sent} ${en ? 'email(s) sent' : 'email(s) envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
@@ -199,7 +200,7 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
           )}
         </div>
       )}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}><Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{result?.error}</span>}
     </div>
   );
 }
@@ -242,7 +243,7 @@ function CreateTriggerCard({ metadata }) {
       padding: 16, marginTop: 8,
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-        {'\u26A1'} {en ? 'Create trigger' : 'Créer un trigger'}
+        <Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Create trigger' : 'Créer un trigger'}
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
         <strong>{metadata.name}</strong> — {metadata.triggerType?.replace(/_/g, ' ')} · {metadata.days || 30} {en ? 'days' : 'jours'} · {actionLabel} · {metadata.mode === 'auto' ? (en ? 'Automatic' : 'Automatique') : (en ? 'Approval' : 'Approbation')}
@@ -252,9 +253,9 @@ function CreateTriggerCard({ metadata }) {
           {en ? 'Create trigger' : 'Créer le trigger'}
         </button>
       )}
-      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'} {en ? 'Creating...' : 'Création...'}</span>}
-      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {en ? 'Trigger created' : 'Trigger créé'}</span>}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {result?.error}</span>}
+      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}><Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Creating...' : 'Création...'}</span>}
+      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Trigger created' : 'Trigger créé'}</span>}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}><Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{result?.error}</span>}
     </div>
   );
 }
@@ -292,7 +293,8 @@ function ToggleAutopilotCard({ metadata }) {
       padding: 16, marginTop: 8,
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-        {'\uD83E\uDD16'} {enabling ? (en ? 'Enable Autopilot' : 'Activer l\'Autopilot') : (en ? 'Disable Autopilot' : 'Désactiver l\'Autopilot')}
+        <Icon name="bot" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+        {enabling ? (en ? 'Enable Autopilot' : 'Activer l\'Autopilot') : (en ? 'Disable Autopilot' : 'Désactiver l\'Autopilot')}
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
         {enabling
@@ -310,9 +312,9 @@ function ToggleAutopilotCard({ metadata }) {
           {enabling ? (en ? 'Enable' : 'Activer') : (en ? 'Disable' : 'Désactiver')}
         </button>
       )}
-      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{'\u23F3'}...</span>}
-      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}>{'\u2705'} {enabling ? (en ? 'Autopilot enabled' : 'Autopilot activé') : (en ? 'Autopilot disabled' : 'Autopilot désactivé')}</span>}
-      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{'\u274C'} {en ? 'Failed' : 'Échec'}</span>}
+      {status === 'running' && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}><Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />...</span>}
+      {status === 'done' && <span style={{ fontSize: 12, color: 'var(--success)' }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{enabling ? (en ? 'Autopilot enabled' : 'Autopilot activé') : (en ? 'Autopilot disabled' : 'Autopilot désactivé')}</span>}
+      {status === 'error' && <span style={{ fontSize: 12, color: 'var(--danger)' }}><Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Failed' : 'Échec'}</span>}
     </div>
   );
 }
@@ -340,7 +342,7 @@ function ListClientsCard({ metadata }) {
       .finally(() => setLoading(false));
   }, [metadata.filter, metadata.days]);
 
-  if (loading) return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>{'\u23F3'} {en ? 'Loading...' : 'Chargement...'}</div>;
+  if (loading) return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}><Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Loading...' : 'Chargement...'}</div>;
   if (!clients || clients.length === 0) {
     return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 8 }}>{en ? 'No clients found with this filter.' : 'Aucun client trouv\u00E9 avec ce filtre.'}</div>;
   }
@@ -351,7 +353,8 @@ function ListClientsCard({ metadata }) {
       padding: 16, marginTop: 8,
     }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-        {'\uD83D\uDC65'} {clients.length} {en ? 'client(s) found' : 'client(s) trouv\u00E9(s)'}
+        <Icon name="users" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+        {clients.length} {en ? 'client(s) found' : 'client(s) trouv\u00E9(s)'}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
         {clients.slice(0, 10).map(c => (
@@ -413,7 +416,7 @@ function SignalSearchCard({ metadata }) {
       padding: 16, marginTop: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 18 }}>📡</span>
+        <Icon name="radio" size={18} />
         <div style={{ fontWeight: 600, fontSize: 14 }}>{en ? 'Signal Search' : 'Recherche de signaux'}</div>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
@@ -424,14 +427,16 @@ function SignalSearchCard({ metadata }) {
       {!results ? (
         <button className="btn btn-primary" style={{ fontSize: 12, width: '100%', justifyContent: 'center' }}
           onClick={handleScan} disabled={scanning}>
-          {scanning ? (en ? 'Scanning...' : 'Scan en cours...') : (en ? '🔍 Scan for signals' : '🔍 Lancer le scan')}
+          {!scanning && <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+          {scanning ? (en ? 'Scanning...' : 'Scan en cours...') : (en ? 'Scan for signals' : 'Lancer le scan')}
         </button>
       ) : results.error ? (
         <div style={{ fontSize: 12, color: 'var(--danger)' }}>{en ? 'Scan failed' : 'Échec du scan'}</div>
       ) : (
         <div style={{ fontSize: 12 }}>
           <div style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>
-            ✅ {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
+            <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
           </div>
           <a href="/activation?section=signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
             {en ? 'View signals →' : 'Voir les signaux →'}
@@ -475,7 +480,7 @@ function NewsletterCard({ metadata }) {
       padding: 16, marginTop: 8,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 18 }}>📨</span>
+        <Icon name="send" size={18} />
         <div style={{ fontWeight: 600, fontSize: 14 }}>Newsletter</div>
       </div>
       {metadata.topic && (
@@ -500,13 +505,20 @@ function NewsletterCard({ metadata }) {
           </select>
           <button className="btn btn-primary" style={{ fontSize: 12, width: '100%', justifyContent: 'center' }}
             onClick={handleSend} disabled={sending || !selectedTemplate}>
-            {sending ? '...' : (en ? '📨 Generate & send newsletter' : '📨 Générer et envoyer')}
+            {sending ? '...' : (
+              <>
+                <Icon name="send" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {en ? 'Generate & send newsletter' : 'Générer et envoyer'}
+              </>
+            )}
           </button>
         </>
       ) : result.error ? (
         <div style={{ fontSize: 12, color: 'var(--danger)' }}>{result.error}</div>
       ) : (
-        <div style={{ fontSize: 12, color: 'var(--success)' }}>✅ {en ? 'Newsletter sent!' : 'Newsletter envoyée !'}</div>
+        <div style={{ fontSize: 12, color: 'var(--success)' }}>
+          <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Newsletter sent!' : 'Newsletter envoyée !'}
+        </div>
       )}
     </div>
   );

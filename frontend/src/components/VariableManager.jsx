@@ -7,6 +7,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { fetchVariables, createVariable, deleteVariable } from '../services/api-client';
 import { useI18n } from '../i18n';
+import Icon from './Icon';
 
 /* ─── Variable Registry (initial data) ─── */
 
@@ -38,10 +39,10 @@ const INITIAL_REGISTRY = {
 };
 
 const VAR_CATEGORIES = {
-  prospect:   { label: 'Prospect',       icon: '\u{1F464}' },
-  company:    { label: 'Entreprise',     icon: '\u{1F3E2}' },
-  enrichment: { label: 'Enrichissement', icon: '\u{1F9E0}' },
-  custom:     { label: 'Personnalisé',   icon: '\u{2699}\u{FE0F}' },
+  prospect:   { label: 'Prospect',       icon: 'user' },
+  company:    { label: 'Entreprise',     icon: 'building' },
+  enrichment: { label: 'Enrichissement', icon: 'sparkles' },
+  custom:     { label: 'Personnalisé',   icon: 'settings' },
 };
 
 const SYNC_LABELS = {
@@ -233,7 +234,7 @@ function CreateVarModal({ onClose, onCreate, existingKeys }) {
               }}
             >
               {Object.entries(VAR_CATEGORIES).map(([key, cat]) => (
-                <option key={key} value={key}>{cat.icon} {cat.label}</option>
+                <option key={key} value={key}>{cat.label}</option>
               ))}
             </select>
           </div>
@@ -519,7 +520,10 @@ export default function VariableManager({
 
             return (
               <div className="var-group" key={catKey}>
-                <div className="var-group-label">{cat.icon} {cat.label}</div>
+                <div className="var-group-label">
+                  <Icon name={cat.icon} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                  {cat.label}
+                </div>
                 <div className="var-list">
                   {vars.map((v, idx) => (
                     <VarItem
@@ -544,7 +548,8 @@ export default function VariableManager({
           {registry.custom.length === 0 && (
             <div className="var-group">
               <div className="var-group-label">
-                {VAR_CATEGORIES.custom.icon} {VAR_CATEGORIES.custom.label}
+                <Icon name={VAR_CATEGORIES.custom.icon} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {VAR_CATEGORIES.custom.label}
               </div>
               <button className="var-add-btn" onClick={() => setShowModal(true)}>
                 + Créer une variable

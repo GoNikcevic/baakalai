@@ -15,6 +15,7 @@ import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import CampaignAssistant from '../components/campaigns/CampaignAssistant';
 import AutopilotSettings from '../components/AutopilotSettings';
+import Icon from '../components/Icon';
 
 export default function CampaignsList({ onNavigateCampaign }) {
   const { campaigns, projects, setCampaigns } = useApp();
@@ -188,7 +189,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
             background: 'none', border: 'none', borderBottom: view === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
             transition: 'all 0.2s',
           }}>
-            {tab.key === 'autopilot' && '\uD83E\uDD16 '}{tab.label}
+            {tab.key === 'autopilot' && <Icon name="bot" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}{tab.label}
           </button>
         ))}
       </div>
@@ -199,7 +200,9 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
       {view === 'campaigns' && (isEmpty ? (
         <div className="empty-state">
-          <div className="empty-state-icon">{'\uD83C\uDFAF'}</div>
+          <div className="empty-state-icon" style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="target" size={36} strokeWidth={1.5} />
+          </div>
           <div className="empty-state-title">{t('campaigns.noCampaigns')}</div>
           <div className="empty-state-desc">
             {t('campaigns.noCampaignsDesc')}
@@ -438,9 +441,13 @@ function CampaignRow({ campaign: c, onClick, onArchive, onDelete, loading, t }) 
         {t('campaigns.statusActive')}
       </span>
     ) : c.status === 'archived' ? (
-      <span className="status-badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>📦 {t('campaigns.statusArchived')}</span>
+      <span className="status-badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+        <Icon name="package" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.statusArchived')}
+      </span>
     ) : (
-      <span className="status-badge status-prep">⏳ {t('campaigns.statusPrep')}</span>
+      <span className="status-badge status-prep">
+        <Icon name="clock" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.statusPrep')}
+      </span>
     );
 
   let stat1Value, stat1Label, stat2Value, stat2Label;

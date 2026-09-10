@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
+import Icon from './Icon';
 
 export default function ProductLineTags({ clientId, lang }) {
   const en = lang === 'en';
@@ -62,7 +63,8 @@ export default function ProductLineTags({ clientId, lang }) {
             background: 'rgba(110,87,250,0.1)', color: 'var(--accent)',
             fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            {pl.icon || '📦'} {pl.name}
+            {pl.icon ? <span style={{ marginRight: 5 }}>{pl.icon}</span> : <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+            {pl.name}
             <button onClick={() => handleRemove(pl.id)} style={{
               background: 'none', border: 'none', color: 'var(--text-muted)',
               cursor: 'pointer', fontSize: 10, padding: 0, marginLeft: 2,
@@ -96,7 +98,7 @@ export default function ProductLineTags({ clientId, lang }) {
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <span>{pl.icon || '📦'}</span> {pl.name}
+                    {pl.icon ? <span>{pl.icon}</span> : <Icon name="package" size={12} />} {pl.name}
                   </div>
                 ))}
               </div>

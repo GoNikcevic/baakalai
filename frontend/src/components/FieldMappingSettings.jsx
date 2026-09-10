@@ -105,7 +105,7 @@ export default function FieldMappingSettings() {
 
   const selectedField = crmFields.find(f => f.key === selectedCrmField);
   const targetOptions = selectedBaakalaiField === 'product_line'
-    ? productLines.map(pl => ({ id: pl.id, label: `${pl.icon || '📦'} ${pl.name}` }))
+    ? productLines.map(pl => ({ id: pl.id, label: pl.icon ? `${pl.icon} ${pl.name}` : pl.name }))
     : STATUS_OPTIONS;
 
   return (

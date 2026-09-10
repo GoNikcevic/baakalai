@@ -9,6 +9,7 @@ import { useApp } from '../context/useApp';
 import api, { sendRecoFeedback } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 import { useI18n } from '../i18n';
+import Icon from '../components/Icon';
 
 /* ─── Filter definitions (keyed by internal ID, labels are i18n'd in render) ─── */
 
@@ -471,12 +472,12 @@ export default function RecosPage() {
                         onClick={() => handleInsightFeedback(i, ins, 'useful')}
                         style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
                         title={en ? 'Useful' : 'Utile'}
-                      >{'\uD83D\uDC4D'}</button>
+                      ><Icon name="thumbsUp" size={14} /></button>
                       <button
                         onClick={() => handleInsightFeedback(i, ins, 'not_useful')}
                         style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
                         title={en ? 'Not useful' : 'Pas utile'}
-                      >{'\uD83D\uDC4E'}</button>
+                      ><Icon name="thumbsDown" size={14} /></button>
                     </>
                   )}
                 </div>

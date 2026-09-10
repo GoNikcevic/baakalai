@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
+import Icon from '../components/Icon';
 
 const CRM_BANNER_KEY = 'bakal_reactivation_crm_banner_dismissed';
 const CRM_BANNER_TTL = 24 * 60 * 60 * 1000; // reappears after 24h
@@ -250,7 +251,10 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
           background: 'var(--accent-glow)', border: '1px solid var(--border-light)',
           borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12,
         }}>
-          <span style={{ color: 'var(--text-secondary)' }}>{t('reactivation.crmHygieneBanner', { days: stagnantDays })}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>
+            <Icon name="pen" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {t('reactivation.crmHygieneBanner', { days: stagnantDays })}
+          </span>
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
@@ -293,6 +297,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                       )}
                       {c.hasFailedSend && (
                         <div style={{ fontSize: 11, color: 'var(--danger, #d64545)', marginTop: 4, fontWeight: 600 }}>
+                          <Icon name="alert" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
                           {t('reactivation.sendFailedBadge')}
                         </div>
                       )}

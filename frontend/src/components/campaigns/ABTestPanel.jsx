@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import { useI18n } from '../../i18n';
+import Icon from '../Icon';
 
 export default function ABTestPanel({ sequence, onConfirm, onClose, launched }) {
   const { lang } = useI18n(); const en = lang === 'en';
@@ -31,7 +32,7 @@ export default function ABTestPanel({ sequence, onConfirm, onClose, launched }) 
             padding: '8px 0',
           }}
         >
-          <span style={{ fontSize: '20px' }}>🧬</span>
+          <Icon name="flask" size={20} />
           <div>
             <div
               style={{
@@ -71,7 +72,8 @@ export default function ABTestPanel({ sequence, onConfirm, onClose, launched }) 
         }}
       >
         <div style={{ fontSize: '15px', fontWeight: 600 }}>
-          {en ? 'Configure an A/B test' : '🧬 Configurer un test A/B'}
+          <Icon name="flask" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {en ? 'Configure an A/B test' : 'Configurer un test A/B'}
         </div>
         <button
           className="btn btn-ghost"
@@ -152,7 +154,8 @@ export default function ABTestPanel({ sequence, onConfirm, onClose, launched }) 
           style={{ fontSize: '12px', padding: '8px 14px' }}
           onClick={() => onConfirm(selectedStep)}
         >
-          {en ? 'Launch test' : '🧬 Lancer le test'}
+          <Icon name="flask" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {en ? 'Launch test' : 'Lancer le test'}
         </button>
         <button
           className="btn btn-ghost"

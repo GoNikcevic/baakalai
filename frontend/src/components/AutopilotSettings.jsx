@@ -18,6 +18,7 @@ import { useState, useEffect } from 'react';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 export default function AutopilotSettings({ scope }) {
   const t = useT();
@@ -101,7 +102,8 @@ export default function AutopilotSettings({ scope }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {'🤖'} {scope === 'crm' ? t('autopilot.titleCrm') : t('autopilot.titleProspection')}
+                <Icon name="bot" size={15} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {scope === 'crm' ? t('autopilot.titleCrm') : t('autopilot.titleProspection')}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 560 }}>
                 {scope === 'crm' ? t('autopilot.descCrm') : t('autopilot.descProspection')}
@@ -136,7 +138,8 @@ export default function AutopilotSettings({ scope }) {
       {pending.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-            {'⏳'} {t('autopilot.pendingCount', { count: pending.length })}
+            <Icon name="clock" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {t('autopilot.pendingCount', { count: pending.length })}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {pending.map(q => {
@@ -147,7 +150,8 @@ export default function AutopilotSettings({ scope }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>
-                          {q.channel === 'linkedin' ? '💬' : '✉️'} {q.contact_name || q.to_name || q.to_email}
+                          <Icon name={q.channel === 'linkedin' ? 'message' : 'mail'} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                          {q.contact_name || q.to_name || q.to_email}
                           {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
                         </div>
                         {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
@@ -177,7 +181,8 @@ export default function AutopilotSettings({ scope }) {
       {sent.length > 0 && (
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-            {'✅'} {t('autopilot.sentCount', { count: sent.length })}
+            <Icon name="checkCircle" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {t('autopilot.sentCount', { count: sent.length })}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sent.slice(0, 20).map(q => {
@@ -186,7 +191,8 @@ export default function AutopilotSettings({ scope }) {
                 <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--success)' }}>
                   <div className="card-body" style={{ padding: '12px 16px' }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>
-                      {q.channel === 'linkedin' ? '💬' : '✉️'} {q.contact_name || q.to_name || q.to_email}
+                      <Icon name={q.channel === 'linkedin' ? 'message' : 'mail'} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                          {q.contact_name || q.to_name || q.to_email}
                       {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
                     </div>
                     {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
@@ -206,7 +212,9 @@ export default function AutopilotSettings({ scope }) {
 
       {enabled && pending.length === 0 && sent.length === 0 && (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>{'🤖'}</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="bot" size={28} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             {scope === 'crm' ? t('autopilot.emptyCrm') : t('autopilot.emptyProspection')}
           </div>

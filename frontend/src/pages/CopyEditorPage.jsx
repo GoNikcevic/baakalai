@@ -12,6 +12,7 @@ import VariableManager from '../components/VariableManager';
 import VarGenerator from '../components/VarGenerator';
 import { sanitizeHtml } from '../services/sanitize';
 import { useI18n } from '../i18n';
+import Icon from '../components/Icon';
 
 /* ─── Helpers ─── */
 
@@ -49,7 +50,7 @@ function getPlainTextLength(html) {
 
 /* ─── Channel metadata ─── */
 
-const CH_ICONS = { email: '✉️', linkedin: '💼', multi: '📧' };
+const CH_ICONS = { email: 'mail', linkedin: 'briefcase', multi: 'send' };
 const CH_BGS = { email: 'var(--blue-bg)', linkedin: 'rgba(151,117,250,0.15)', multi: 'var(--warning-bg)' };
 const CH_LABELS = { email: 'Email', linkedin: 'LinkedIn', multi: 'Multi-canal' };
 
@@ -64,7 +65,7 @@ function syncCampaignsFromContext(contextCampaigns) {
     result[id] = {
       _backendId: c._backendId || id,
       name: c.name,
-      icon: CH_ICONS[ch] || '✉️',
+      icon: CH_ICONS[ch] || 'mail',
       iconBg: CH_BGS[ch] || 'var(--blue-bg)',
       channel: CH_LABELS[ch] || 'Email',
       meta: `${seq.length} touchpoints · ${c.status === 'prep' ? 'En préparation' : 'Itération ' + (c.iteration || 1)}`,
@@ -112,7 +113,7 @@ function EditorSidebar({ editorCampaigns, activeCampaign, onSelect }) {
           : <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--warning)', marginLeft: '4px' }}></span>;
         return (
           <div key={key} className={`editor-campaign-item${active}`} onClick={() => onSelect(key)}>
-            <div className="eci-icon" style={{ background: c.iconBg }}>{c.icon}</div>
+            <div className="eci-icon" style={{ background: c.iconBg }}><Icon name={c.icon} size={14} /></div>
             <div>
               <div className="eci-name">{c.name} {statusDot}</div>
               <div className="eci-meta">{c.meta}</div>
@@ -858,7 +859,9 @@ export default function CopyEditorPage() {
           </div>
         </div>
         <div className="empty-state" style={{ padding: '80px 0' }}>
-          <div className="empty-state-icon">✏️</div>
+          <div className="empty-state-icon" style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="pen" size={36} strokeWidth={1.5} />
+          </div>
           <div className="empty-state-title">{en ? 'No campaigns' : 'Aucune campagne'}</div>
           <div className="empty-state-desc">
             {en ? 'Create your first campaign to start editing your sequences and touchpoints.' : 'Créez votre première campagne pour commencer à éditer vos séquences et touchpoints.'}
@@ -991,7 +994,7 @@ export default function CopyEditorPage() {
             style={{ fontSize: '13px', padding: '8px 14px', width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             onClick={() => setShowVarGenerator(!showVarGenerator)}
           >
-            <span>{'\u{1F9EC}'} Refinement A/B — Générateur de variables</span>
+            <span><Icon name="flask" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Refinement A/B — Générateur de variables</span>
             <span style={{ fontSize: '11px' }}>{showVarGenerator ? '\u25B2' : '\u25BC'}</span>
           </button>
           {showVarGenerator && (

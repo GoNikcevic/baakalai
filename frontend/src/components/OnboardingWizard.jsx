@@ -10,6 +10,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { saveKeys, request, trackEvent } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 const TOTAL_STEPS = 3;
 
@@ -869,7 +870,8 @@ export default function OnboardingWizard({ onComplete }) {
                           fontSize: 13, color: 'var(--success)', background: 'var(--paper-2)',
                           borderRadius: 8, padding: '10px 12px', lineHeight: 1.5,
                         }}>
-                          {'✅'} {t('wizard.oauthConnected').replace('{provider}', crmLabel)}
+                          <Icon name="checkCircle" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                          {t('wizard.oauthConnected').replace('{provider}', crmLabel)}
                         </div>
                       );
                     }
@@ -1133,24 +1135,32 @@ export default function OnboardingWizard({ onComplete }) {
             </div>
             <div className="wizard-checklist">
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{company ? '\u2705' : '\u2B1C'}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={company ? 'checkCircle' : 'circle'} size={14} />
+                </span>
                 <span>{t('wizard.checkCompany')} {company ? `\u2014 ${company}` : t('wizard.checkCompanyLater')}</span>
               </div>
               {/* CRM avant outreach : m\u00EAme hi\u00E9rarchie que les \u00E9tapes du wizard. */}
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{(crmKey || crmOauthConnected) && crmProvider ? '\u2705' : '\u2B1C'}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={(crmKey || crmOauthConnected) && crmProvider ? 'checkCircle' : 'circle'} size={14} />
+                </span>
                 <span>CRM {(crmKey || crmOauthConnected) && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{outreachKey && outreachProvider ? '\u2705' : '\u2B1C'}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={outreachKey && outreachProvider ? 'checkCircle' : 'circle'} size={14} />
+                </span>
                 <span>{outreachLabel} {outreachKey && outreachProvider ? `\u2014 ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{targetSectors || personaPrimary ? '\u2705' : '\u2B1C'}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={targetSectors || personaPrimary ? 'checkCircle' : 'circle'} size={14} />
+                </span>
                 <span>{t('wizard.checkTargeting')} {targetSectors ? `\u2014 ${targetSectors}` : t('wizard.checkTargetingLater')}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{'\u2705'}</span>
+                <span className="wizard-check-icon"><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>
                 <span>{t('wizard.checkStyle')} {'\u2014'} {tone}, {formality}</span>
               </div>
             </div>

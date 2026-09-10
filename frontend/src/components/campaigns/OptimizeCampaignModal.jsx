@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api-client';
 import { sanitizeHtml } from '../../services/sanitize';
 import { useI18n } from '../../i18n';
+import Icon from '../Icon';
 
 export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) {
   const { lang } = useI18n(); const en = lang === 'en';
@@ -96,7 +97,9 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
     return (
       <ModalShell onClose={onClose} title={en ? 'Analyzing' : 'Analyse en cours'}>
         <div style={{ padding: 40, textAlign: 'center' }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
+            <Icon name="search" size={36} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             {en ? 'Baakalai is analyzing your campaign performance...' : 'Baakalai analyse les performances de ta campagne...'}
           </div>
@@ -109,7 +112,9 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
     return (
       <ModalShell onClose={onClose} title={en ? 'Error' : 'Erreur'}>
         <div style={{ padding: 24 }}>
-          <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 16 }}>⚠️ {error}</div>
+          <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 16 }}>
+            <Icon name="alert" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{error}
+          </div>
           <button className="btn btn-ghost" onClick={onClose} style={{ fontSize: 12 }}>{en ? 'Close' : 'Fermer'}</button>
         </div>
       </ModalShell>
@@ -149,7 +154,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
             >
               {en
                 ? `Previous A/B test resolved: variant ${result.abResolved.winner} promoted${result.abResolved.improvement ? ` (+${result.abResolved.improvement}%)` : ''}${result.abResolved.forced ? ' (forced)' : ' (auto)'}.`
-                : `✅ Test A/B précédent résolu : variante ${result.abResolved.winner} promue${result.abResolved.improvement ? ` (+${result.abResolved.improvement}%)` : ''}${result.abResolved.forced ? ' (forcé)' : ' (auto)'}.`}
+                : `Test A/B précédent résolu : variante ${result.abResolved.winner} promue${result.abResolved.improvement ? ` (+${result.abResolved.improvement}%)` : ''}${result.abResolved.forced ? ' (forcé)' : ' (auto)'}.`}
             </div>
           )}
 
@@ -180,7 +185,8 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
               style={{ fontSize: 12, padding: '10px 18px' }}
               disabled={deploying}
             >
-              {en ? 'Variant deployed — Close' : '✅ Variante déployée — Fermer'}
+              <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {en ? 'Variant deployed — Close' : 'Variante déployée — Fermer'}
             </button>
           </div>
         </div>
@@ -217,7 +223,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
               lineHeight: 1.5,
             }}
           >
-            ⚠️ {guards.warningReason}
+            <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{guards.warningReason}
           </div>
         )}
 
@@ -234,7 +240,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
               lineHeight: 1.5,
             }}
           >
-            ⏳ {guards.cooldownWarning}
+            <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{guards.cooldownWarning}
             <div style={{ marginTop: 8 }}>
               <label style={{ fontSize: 11, cursor: 'pointer' }}>
                 <input
@@ -263,8 +269,8 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
             }}
           >
             {en
-              ? `🧬 An A/B test is currently running on this campaign but hasn't reached significance yet (${abTest.daysSinceStart}d, ${abTest.audience} prospects). Current leader: `
-              : `🧬 Un test A/B est actuellement en cours sur cette campagne mais n'a pas encore atteint son seuil de significativité (${abTest.daysSinceStart}j, ${abTest.audience} prospects). Leader actuel : `}
+              ? `An A/B test is currently running on this campaign but hasn't reached significance yet (${abTest.daysSinceStart}d, ${abTest.audience} prospects). Current leader: `
+              : `Un test A/B est actuellement en cours sur cette campagne mais n'a pas encore atteint son seuil de significativité (${abTest.daysSinceStart}j, ${abTest.audience} prospects). Leader actuel : `}
             <strong>{en ? 'Variant' : 'Variante'} {abTest.leader}</strong>
             {abTest.improvement ? ` (+${abTest.improvement}%)` : ''}.
             <div style={{ marginTop: 8 }}>
@@ -295,7 +301,8 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
               lineHeight: 1.5,
             }}
           >
-            💡 <strong>{en ? 'Baakalai recommendation:' : 'Recommandation Baakalai :'}</strong>
+            <Icon name="bulb" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            <strong>{en ? 'Baakalai recommendation:' : 'Recommandation Baakalai :'}</strong>
             {diagnostic.recommendations.map(r => (
               <div key={r.step} style={{ marginTop: 4 }}>
                 {en ? 'Regenerate' : 'Régénérer'} <strong>{r.step}</strong> — {r.reason}
@@ -357,7 +364,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
                   </div>
                   {tp.signals && tp.signals.length > 0 && (
                     <div style={{ fontSize: 10, color: 'var(--warning)', marginTop: 2 }}>
-                      ⚠️ {tp.signals.join(' · ')}
+                      <Icon name="alert" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{tp.signals.join(' · ')}
                     </div>
                   )}
                 </div>
@@ -383,7 +390,9 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
 
         {/* Error */}
         {error && (
-          <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 12 }}>⚠️ {error}</div>
+          <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 12 }}>
+            <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{error}
+          </div>
         )}
 
         {/* Actions */}
@@ -405,7 +414,8 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
             disabled={!canGenerate || optimizing}
             style={{ fontSize: 12, padding: '10px 18px' }}
           >
-            {optimizing ? (en ? 'Generating...' : '✨ Génération...') : (en ? 'Generate variant →' : 'Générer la variante →')}
+            {optimizing && <Icon name="sparkles" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+            {optimizing ? (en ? 'Generating...' : 'Génération...') : (en ? 'Generate variant →' : 'Générer la variante →')}
           </button>
         </div>
       </div>
@@ -452,7 +462,9 @@ function ModalShell({ children, onClose, title, wide }) {
             alignItems: 'center',
           }}
         >
-          <div style={{ fontSize: 15, fontWeight: 600 }}>🔄 {title}</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>
+            <Icon name="refresh" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{title}
+          </div>
           <button
             onClick={onClose}
             style={{
@@ -499,7 +511,7 @@ function VariantDiff({ variant }) {
             fontStyle: 'italic',
           }}
         >
-          💡 {variant.hypothesis}
+          <Icon name="bulb" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{variant.hypothesis}
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

@@ -16,6 +16,7 @@ import RepliesTab from './tabs/RepliesTab';
 import OptimizeCampaignModal from './OptimizeCampaignModal';
 import LoadingOverlay from '../shared/LoadingOverlay';
 import { useT } from '../../i18n';
+import Icon from '../Icon';
 
 export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns }) {
   const t = useT();
@@ -64,17 +65,17 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
 
   // Tab definitions — show conditionally based on status
   const tabs = [
-    { key: 'settings', label: t('campaigns.settings'), icon: '\u2699\uFE0F' },
-    { key: 'copy', label: t('campaigns.copy'), icon: '\u2709\uFE0F' },
-    { key: 'prospects', label: t('campaigns.prospects'), icon: '\uD83D\uDC65' },
+    { key: 'settings', label: t('campaigns.settings'), icon: 'settings' },
+    { key: 'copy', label: t('campaigns.copy'), icon: 'mail' },
+    { key: 'prospects', label: t('campaigns.prospects'), icon: 'users' },
     ...(isActive
-      ? [{ key: 'replies', label: t('campaigns.replies'), icon: '\uD83D\uDCEC' }]
+      ? [{ key: 'replies', label: t('campaigns.replies'), icon: 'inbox' }]
       : []),
-    ...(hasABTest ? [{ key: 'abtest', label: t('campaigns.abTest'), icon: '\uD83E\uDDEC' }] : []),
+    ...(hasABTest ? [{ key: 'abtest', label: t('campaigns.abTest'), icon: 'flask' }] : []),
     ...(isActive
       ? [
-          { key: 'performance', label: t('campaigns.performance'), icon: '\uD83D\uDCCA' },
-          { key: 'history', label: t('campaigns.history'), icon: '\uD83D\uDCDC' },
+          { key: 'performance', label: t('campaigns.performance'), icon: 'chart' },
+          { key: 'history', label: t('campaigns.history'), icon: 'file' },
         ]
       : []),
   ];
@@ -145,16 +146,16 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
       const stepsTotal = (result.sequenceSteps || []).length;
       const baseDesc = `${result.leads?.pushed || 0} prospects · ${stepsOk}/${stepsTotal} steps`;
       const statusLine = result.started
-        ? ` · \u2705 ${t('campaigns.started')}`
+        ? ` · ${t('campaigns.started')}`
         : result.startError
-          ? ` · \u26A0\uFE0F ${t('campaigns.startFailed', { error: result.startError })}`
-          : ` · \u2139\uFE0F ${t('campaigns.inDraft')}`;
+          ? ` · ${t('campaigns.startFailed', { error: result.startError })}`
+          : ` · ${t('campaigns.inDraft')}`;
       const batchLine = result.batch
-        ? ` · \uD83D\uDCE6 Batch ${result.batch.batch}/${result.batch.totalBatches} (${result.batch.remaining} remaining)`
+        ? ` · Batch ${result.batch.batch}/${result.batch.totalBatches} (${result.batch.remaining} remaining)`
         : '';
       setLaunchAlert({
         type: 'success',
-        title: result.batch ? `\uD83D\uDE80 ${t('campaigns.batchDeployed', { batch: result.batch.batch })}` : `\uD83D\uDE80 ${t('campaigns.deployed')}`,
+        title: result.batch ? t('campaigns.batchDeployed', { batch: result.batch.batch }) : t('campaigns.deployed'),
         desc: baseDesc + statusLine + batchLine,
       });
     } catch (err) {
@@ -230,7 +231,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
                   handleLaunch({ ...pendingLaunchOptions, batchMode: true, confirmed: true });
                 }}
               >
-                <span style={{ fontSize: 18 }}>📦</span>
+                <Icon name="package" size={18} />
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 600 }}>{t('campaigns.batchModeBtn') || 'Mode batch (recommandé)'}</div>
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
@@ -247,7 +248,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
                   handleLaunch({ ...pendingLaunchOptions, batchMode: false, confirmed: true });
                 }}
               >
-                <span style={{ fontSize: 18 }}>🚀</span>
+                <Icon name="rocket" size={18} />
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 600 }}>{t('campaigns.sendAllBtn') || 'Tout envoyer'}</div>
                   <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
@@ -271,7 +272,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
 
       <LoadingOverlay
         show={launching}
-        title={`\uD83D\uDE80 ${t('campaigns.deployToLemlist')}`}
+        title={t('campaigns.deployToLemlist')}
         steps={LEMLIST_LAUNCH_STEPS}
       />
 
@@ -290,7 +291,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             ))}
             {isPrep && (
               <span className="campaign-tag" style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
-                {'\u23F3'} {t('campaigns.prep')}
+                <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.prep')}
               </span>
             )}
             {isActive && (
@@ -300,7 +301,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             )}
             {isArchived && (
               <span className="campaign-tag" style={{ borderColor: 'var(--text-muted)', color: 'var(--text-muted)' }}>
-                {'\uD83D\uDCE6'} {t('campaigns.statusArchived')}
+                <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {t('campaigns.statusArchived')}
               </span>
             )}
           </div>
@@ -313,7 +315,12 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               onClick={handleArchive}
               disabled={archiving}
             >
-              {archiving ? '...' : `\uD83D\uDCE6 ${t('campaigns.archive')}`}
+              {archiving ? '...' : (
+                <>
+                  <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                  {t('campaigns.archive')}
+                </>
+              )}
             </button>
           )}
           {isActive && (
@@ -323,7 +330,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
                 style={{ fontSize: '12px', padding: '8px 14px' }}
                 onClick={() => setShowOptimize(true)}
               >
-                {'\uD83D\uDD04'} {t('campaigns.optimizeCampaign')}
+                <Icon name="refresh" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {t('campaigns.optimizeCampaign')}
               </button>
               <button
                 onClick={() => setShowHelp(prev => !prev)}
@@ -358,7 +366,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               onClick={handleEnrichProspects}
               disabled={enriching}
             >
-              {enriching ? `\u23F3 ${t('campaigns.enriching')}` : `\u2728 ${t('campaigns.enrichProspects')}`}
+              <Icon name={enriching ? 'clock' : 'sparkles'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {enriching ? t('campaigns.enriching') : t('campaigns.enrichProspects')}
             </button>
           )}
           {isPrep && (
@@ -368,7 +377,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               onClick={handleLaunch}
               disabled={launching}
             >
-              {launching ? `\u23F3 ${t('campaigns.launching')}` : `\uD83D\uDE80 ${t('campaigns.launch')}`}
+              <Icon name={launching ? 'clock' : 'rocket'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {launching ? t('campaigns.launching') : t('campaigns.launch')}
             </button>
           )}
           {isActive && c.batch_mode && c.current_batch < c.total_batches && (
@@ -379,8 +389,13 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               disabled={launching}
             >
               {launching
-                ? `\u23F3 ${t('campaigns.deploying')}`
-                : `\uD83D\uDCE6 ${t('campaigns.launchBatch', { current: (c.current_batch || 0) + 1, total: c.total_batches })}`}
+                ? t('campaigns.deploying')
+                : (
+                  <>
+                    <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {t('campaigns.launchBatch', { current: (c.current_batch || 0) + 1, total: c.total_batches })}
+                  </>
+                )}
             </button>
           )}
           {isPrep && senders.length > 1 && (
@@ -424,7 +439,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             gap: 12,
           }}
         >
-          <span style={{ fontSize: 18 }}>{'\u2705'}</span>
+          <span style={{ fontSize: 18 }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>{optimizeBanner.title}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -457,7 +472,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             gap: 12,
           }}
         >
-          <span style={{ fontSize: 18 }}>{enrichBanner.type === 'error' ? '\u26A0\uFE0F' : '\u2728'}</span>
+          <Icon name={enrichBanner.type === 'error' ? 'alert' : 'sparkles'} size={18} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>{enrichBanner.title}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -519,7 +534,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
           }}
         >
           <span style={{ fontSize: '18px' }}>
-            {launchAlert.type === 'error' ? '\u26A0\uFE0F' : launchAlert.type === 'success' ? '\u2705' : '\u23F3'}
+            <Icon name={launchAlert.type === 'error' ? 'alert' : launchAlert.type === 'success' ? 'checkCircle' : 'clock'} size={14} />
           </span>
           <div style={{ flex: 1 }}>
             <div
@@ -569,7 +584,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               transition: 'all 0.2s',
             }}
           >
-            {tb.icon} {tb.label}
+            <Icon name={tb.icon} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {tb.label}
           </button>
         ))}
       </div>

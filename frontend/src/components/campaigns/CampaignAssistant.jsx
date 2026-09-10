@@ -21,6 +21,7 @@ import Confetti from '../Confetti';
 import OnboardingChecklist from '../OnboardingChecklist';
 import { useT, useI18n } from '../../i18n';
 import { formatMarkdown, TypingIndicator, ThreadList, InlineSuggestions, ChatMessage } from '../chat/ChatPrimitives';
+import Icon from '../Icon';
 
 /* ─── Helpers ─── */
 
@@ -295,7 +296,7 @@ function WebSearchProspectsCard({ metadata, onActionExecute }) {
 
   return (
     <div className="chat-action-card">
-      <div className="chat-action-title">{'\uD83C\uDF10'} {t('chat.webSearch')}</div>
+      <div className="chat-action-title"><Icon name="globe" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('chat.webSearch')}</div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 8px' }}>
         {companies.length} {en ? (companies.length > 1 ? 'companies' : 'company') : `entreprise${companies.length > 1 ? 's' : ''}`} :&nbsp;
         {companies.slice(0, 5).join(', ')}{companies.length > 5 ? `, +${companies.length - 5}...` : ''}
@@ -313,7 +314,12 @@ function WebSearchProspectsCard({ metadata, onActionExecute }) {
           >
             {searching
               ? t('chat.webSearching', { count: companies.length })
-              : `\uD83D\uDD0D ${t('chat.launchWebSearch', { count: companies.length })}`}
+              : (
+                <>
+                  <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                  {t('chat.launchWebSearch', { count: companies.length })}
+                </>
+              )}
           </button>
         </div>
       )}
@@ -446,7 +452,10 @@ function ChooseSourceCard({ metadata, onActionExecute }) {
   const sources = metadata.sources || [];
   return (
     <div className="chat-action-card">
-      <div className="chat-action-title">{en ? '🎯 Which tool to use for the list?' : '🎯 Quel outil utiliser pour générer la liste ?'}</div>
+      <div className="chat-action-title">
+        <Icon name="target" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+        {en ? 'Which tool to use for the list?' : 'Quel outil utiliser pour générer la liste ?'}
+      </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 12px' }}>
         {en ? 'You have multiple outreach tools connected. Which one should generate the prospect list?' : 'Tu as plusieurs outils d\'outreach connectés. Lequel doit générer la liste de prospects ?'}
       </div>
@@ -536,7 +545,7 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
 
   return (
     <div className="chat-action-card">
-      <div className="chat-action-title">{'\uD83D\uDCCB'} {t('chat.addProspectsList')}</div>
+      <div className="chat-action-title"><Icon name="clipboard" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('chat.addProspectsList')}</div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 10px' }}>
         {t('chat.contactsDetected', { count: contacts.length, plural: contacts.length > 1 ? 's' : '', pluralDetected: contacts.length > 1 ? 's' : '' })}
         {metadata.campaignName && <> {'\u00B7'} {t('chat.destination')} <strong>{metadata.campaignName}</strong></>}
@@ -587,7 +596,7 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
 
       {savedCount > 0 ? (
         <div style={{ color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>
-          {'\u2705'} {t('chat.prospectsAdded', { count: savedCount, plural: savedCount > 1 ? 's' : '', pluralAdded: savedCount > 1 ? 's' : '' })}
+          <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('chat.prospectsAdded', { count: savedCount, plural: savedCount > 1 ? 's' : '', pluralAdded: savedCount > 1 ? 's' : '' })}
         </div>
       ) : showCampaignPicker ? (
         <div>
@@ -634,15 +643,25 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
             {saving
               ? t('prospectGen.adding')
               : metadata.campaignId
-                ? `\u2795 ${t('chat.addCountToCampaign', { count: contacts.length })}`
-                : `\u2795 ${t('chat.addCountChoose', { count: contacts.length })}`}
+                ? (
+                  <>
+                    <Icon name="plus" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {t('chat.addCountToCampaign', { count: contacts.length })}
+                  </>
+                )
+                : (
+                  <>
+                    <Icon name="plus" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {t('chat.addCountChoose', { count: contacts.length })}
+                  </>
+                )}
           </button>
         </div>
       ) : null}
 
       {error && (
         <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 8 }}>
-          {'\u26A0\uFE0F'} {error}
+          <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{error}
         </div>
       )}
     </div>
@@ -706,7 +725,8 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify, onPreview })
               onClick={handleCreate}
               disabled={creating}
             >
-              {creating ? `\u23F3 ${t('chat.creating')}` : t('chat.createCampaign')}
+              {creating && <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+              {creating ? t('chat.creating') : t('chat.createCampaign')}
             </button>
             <button className="chat-action-btn ghost" onClick={onModify} disabled={creating}>
               {t('chat.modify')}
@@ -718,7 +738,7 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify, onPreview })
             onClick={handleViewCampaign}
             disabled={!createdId}
           >
-            {'\u2705'} {t('chat.viewCampaign')}
+            <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('chat.viewCampaign')}
           </button>
         )}
       </div>
@@ -823,7 +843,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
 
   return (
     <div className="chat-action-card">
-      <div className="chat-action-title">{'\uD83C\uDFAF'} {t('chat.prospectSearch', { source: sourceLabel })}</div>
+      <div className="chat-action-title"><Icon name="target" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('chat.prospectSearch', { source: sourceLabel })}</div>
       <div className="chat-action-params">
         {criteriaSummary.map((s, i) => (
           <span key={i} className="chat-action-param">{s}</span>
@@ -837,7 +857,12 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
             onClick={handleSearch}
             disabled={searching}
           >
-            {searching ? t('chat.searchingShort') : `\uD83D\uDD0D ${t('chat.launchSearch', { limit: metadata.limit || 25 })}`}
+            {searching ? t('chat.searchingShort') : (
+              <>
+                <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {t('chat.launchSearch', { limit: metadata.limit || 25 })}
+              </>
+            )}
           </button>
         </div>
       )}
@@ -854,7 +879,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
           color: 'var(--warning, #d97706)',
           lineHeight: 1.5,
         }}
-          dangerouslySetInnerHTML={{ __html: `\u26A0\uFE0F ${t('chat.fallbackBanner')}` }}
+          dangerouslySetInnerHTML={{ __html: t('chat.fallbackBanner') }}
         />
       )}
 
@@ -871,7 +896,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
           lineHeight: 1.5,
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>
-            {'\u26A0\uFE0F'} {t('chat.diagnosticsTitle')}
+            <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('chat.diagnosticsTitle')}
           </div>
           <div>
             {t('chat.diagnosticsDropped')}&nbsp;
@@ -925,7 +950,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
 
           {savedCount > 0 ? (
             <div style={{ color: 'var(--success)', fontSize: 12, marginTop: 8, fontWeight: 600 }}>
-              {'\u2705'} {t('chat.savedToCampaign', { count: savedCount })}
+              <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('chat.savedToCampaign', { count: savedCount })}
             </div>
           ) : showCampaignPicker ? (
             <div style={{ marginTop: 12 }}>
@@ -970,8 +995,18 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
                 disabled={saving || selected.size === 0}
               >
                 {saving ? t('prospectGen.adding') : metadata.campaignId
-                  ? `\u2795 ${t('chat.addCountToCampaign', { count: selected.size })}`
-                  : `\u2795 ${t('chat.addCountChoose', { count: selected.size })}`}
+                  ? (
+                    <>
+                      <Icon name="plus" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                      {t('chat.addCountToCampaign', { count: selected.size })}
+                    </>
+                  )
+                  : (
+                    <>
+                      <Icon name="plus" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                      {t('chat.addCountChoose', { count: selected.size })}
+                    </>
+                  )}
               </button>
             </div>
           )}
@@ -980,7 +1015,7 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
 
       {error && (
         <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 8 }}>
-          {'\u26A0\uFE0F'} {error}
+          <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{error}
         </div>
       )}
     </div>
@@ -1940,10 +1975,13 @@ export default function CampaignAssistant() {
                 color: 'var(--text-secondary)',
               }}>
                 <span style={{ fontSize: '14px' }}>
-                  {file.type?.includes('csv') || file.type?.includes('spreadsheet') ? '📊'
-                    : file.type?.includes('pdf') ? '📄'
-                    : file.type?.includes('image') ? '🖼️'
-                    : '📎'}
+                  <Icon
+                    name={file.type?.includes('csv') || file.type?.includes('spreadsheet') ? 'chart'
+                      : file.type?.includes('pdf') ? 'file'
+                      : file.type?.includes('image') ? 'image'
+                      : 'paperclip'}
+                    size={14}
+                  />
                 </span>
                 <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {file.name}

@@ -189,7 +189,8 @@ export default function NurturePage() {
                     setExecuting(false);
                   }}
                 >
-                  {executing ? `\u23F3 ${t('activation.sending')}` : t('activation.sendEmails', { count: previews.reduce((s, p) => s + p.contactsCount, 0) })}
+                  {executing && <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+                  {executing ? t('activation.sending') : t('activation.sendEmails', { count: previews.reduce((s, p) => s + p.contactsCount, 0) })}
                 </button>
               )}
               <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setPreviews(null)}>
@@ -457,7 +458,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
           textAlign: 'center', padding: 50,
           background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>{'\u26A1'}</div>
+          <div style={{ fontSize: 28, marginBottom: 12 }}><Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
             {t('activation.noTriggers')}
           </div>
@@ -655,7 +656,7 @@ function EmailsSection({ emails, type, onRefresh }) {
 
               {type === 'sent' && (
                 <span style={{ fontSize: 11, color: 'var(--success)', whiteSpace: 'nowrap' }}>
-                  {'\u2705'} {en ? 'Sent' : `Envoy${'\u00E9'}`}
+                  <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Sent' : `Envoy${'\u00E9'}`}
                 </span>
               )}
             </div>
@@ -713,7 +714,9 @@ function ActivationDashboard({ metrics }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u23F0'} {en ? 'Stagnant leads' : 'Leads stagnants'}</div></div>
+          <div className="card-header"><div className="card-title">
+            <Icon name="clock" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Stagnant leads' : 'Leads stagnants'}
+          </div></div>
           <div className="card-body">
             {(topStagnant || []).length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>{t('activation.noStagnant')}</div>
@@ -734,7 +737,7 @@ function ActivationDashboard({ metrics }) {
         </div>
 
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u26A0\uFE0F'} {en ? 'Churn risk' : 'Risque de churn'}</div></div>
+          <div className="card-header"><div className="card-title"><Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Churn risk' : 'Risque de churn'}</div></div>
           <div className="card-body">
             {(topChurnRisk || []).length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>{t('activation.noRisk')}</div>
@@ -757,7 +760,7 @@ function ActivationDashboard({ metrics }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u2709\uFE0F'} {en ? 'Emails (30d)' : 'Emails (30j)'}</div></div>
+          <div className="card-header"><div className="card-title"><Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Emails (30d)' : 'Emails (30j)'}</div></div>
           <div className="card-body">
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
               {[
@@ -775,7 +778,7 @@ function ActivationDashboard({ metrics }) {
         </div>
 
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u26A1'} {en ? 'Active triggers' : 'Triggers actifs'}</div></div>
+          <div className="card-header"><div className="card-title"><Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Active triggers' : 'Triggers actifs'}</div></div>
           <div className="card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)' }}>{triggers?.active || 0}</div>
@@ -803,7 +806,7 @@ function CampaignsSection({ campaigns }) {
         textAlign: 'center', padding: 50,
         background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
       }}>
-        <div style={{ fontSize: 28, marginBottom: 12 }}>{'\u2709\uFE0F'}</div>
+        <div style={{ fontSize: 28, marginBottom: 12 }}><Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></div>
         <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
           {t('activation.noCampaigns')}
         </div>
@@ -1164,7 +1167,7 @@ function TeamCampaignsSection({ lang }) {
                 )}
                 {c.status === 'completed' && (
                   <span style={{ fontSize: 11, color: 'var(--success)' }}>
-                    {'\u2705'} {en ? 'Completed' : 'Termin\u00E9e'}
+                    <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Completed' : 'Termin\u00E9e'}
                   </span>
                 )}
               </div>

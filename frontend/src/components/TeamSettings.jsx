@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 function getRoleConfig(lang) {
   const en = lang === 'en';
@@ -101,7 +102,7 @@ export default function TeamSettings() {
     return (
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title">{'\uD83D\uDC65'} {t('team.title')}</div>
+          <div className="card-title"><Icon name="users" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('team.title')}</div>
         </div>
         <div className="card-body">
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
@@ -138,7 +139,7 @@ export default function TeamSettings() {
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div className="card-title">{'\uD83D\uDC65'} {t('team.title')}: {team.name}</div>
+          <div className="card-title"><Icon name="users" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('team.title')}: {team.name}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {members.length}/{team.max_members || 5} {t('team.members')}
           </div>
@@ -162,14 +163,15 @@ export default function TeamSettings() {
             style={{ fontSize: 11, padding: '4px 12px' }}
             onClick={handleCopyInvite}
           >
-            {copied ? `\u2705 ${t('team.copied')}` : t('team.copy')}
+            {copied && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+            {copied ? t('team.copied') : t('team.copy')}
           </button>
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '4px 12px', color: 'var(--text-muted)' }}
             onClick={handleRegenInvite}
           >
-            {'\uD83D\uDD04'}
+            <Icon name="refresh" size={12} />
           </button>
         </div>
 

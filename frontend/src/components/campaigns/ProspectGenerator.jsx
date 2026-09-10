@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../services/api-client';
 import { useT } from '../../i18n';
+import Icon from '../Icon';
 
 /**
  * 3-step prospect generator for a campaign in prep:
@@ -371,7 +372,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {'\uD83C\uDFAF'} {t('prospectGen.title')}
+            <Icon name="target" size={15} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.title')}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {existingCount > 0
@@ -390,7 +391,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             }}
             title={t('prospectGen.creditsTitle')}
           >
-            {'\uD83D\uDCB3'} {t('prospectGen.creditsLabel', { count: credits })}
+            <Icon name="creditCard" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.creditsLabel', { count: credits })}
           </div>
         )}
       </div>
@@ -447,7 +448,12 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
           disabled={searching}
           style={{ fontSize: '12px', padding: '8px 14px' }}
         >
-          {searching ? t('prospectGen.searching') : `\uD83D\uDD0D ${t('prospectGen.searchBtn')}`}
+          {searching ? t('prospectGen.searching') : (
+            <>
+              <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {t('prospectGen.searchBtn')}
+            </>
+          )}
         </button>
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('prospectGen.or')}</span>
         <button
@@ -456,7 +462,8 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
           onClick={() => setCsvOpen(v => !v)}
           style={{ fontSize: '12px', padding: '8px 14px' }}
         >
-          {'\uD83D\uDCCB'} {csvOpen ? t('prospectGen.hideCsvImport') : t('prospectGen.importCsv')}
+          <Icon name="clipboard" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {csvOpen ? t('prospectGen.hideCsvImport') : t('prospectGen.importCsv')}
         </button>
       </div>
 
@@ -484,7 +491,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
               className="btn btn-ghost"
               style={{ fontSize: 11, padding: '6px 12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              {'\uD83D\uDCC1'} {t('prospectGen.csvChooseFile')}
+              <Icon name="folder" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.csvChooseFile')}
               <input
                 type="file"
                 accept=".csv,text/csv,.txt,text/plain"
@@ -524,7 +531,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
               fontSize: 11,
               color: 'var(--danger, #dc2626)',
             }}>
-              {'\u26A0\uFE0F'} {csvError}
+              <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{csvError}
             </div>
           )}
 
@@ -575,7 +582,12 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
               >
                 {importing
                   ? t('prospectGen.csvImporting')
-                  : `\u2795 ${t('prospectGen.csvImportBtn', { count: csvParsed.length, plural: csvParsed.length > 1 ? 's' : '' })}`}
+                  : (
+                    <>
+                      <Icon name="plus" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                      {t('prospectGen.csvImportBtn', { count: csvParsed.length, plural: csvParsed.length > 1 ? 's' : '' })}
+                    </>
+                  )}
               </button>
             </div>
           )}
@@ -590,7 +602,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
               fontSize: 11,
               color: 'var(--success, #16a34a)',
             }}>
-              {'\u2705'} {t('prospectGen.csvImported', { count: importedCount, plural: importedCount > 1 ? 's' : '', pluralAdded: importedCount > 1 ? 's' : '' })}
+              <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.csvImported', { count: importedCount, plural: importedCount > 1 ? 's' : '', pluralAdded: importedCount > 1 ? 's' : '' })}
             </div>
           )}
         </div>
@@ -608,7 +620,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             fontSize: '12px',
           }}
         >
-          {'\u26A0\uFE0F'} {error}
+          <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{error}
         </div>
       )}
 
@@ -623,7 +635,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
           fontSize: 12,
           color: 'var(--warning, #d97706)',
         }}
-          dangerouslySetInnerHTML={{ __html: `\u26A0\uFE0F ${t('prospectGen.fallbackBanner')}` }}
+          dangerouslySetInnerHTML={{ __html: t('prospectGen.fallbackBanner') }}
         />
       )}
 
@@ -640,7 +652,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
           lineHeight: 1.6,
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>
-            {'\u26A0\uFE0F'} {t('prospectGen.diagnosticsTitle')}
+            <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.diagnosticsTitle')}
           </div>
           <div>
             {t('prospectGen.diagnosticsDropped')}&nbsp;
@@ -682,7 +694,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             </span>
             {revealing && (
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {'\u23F3'} {t('prospectGen.revealProgress', { done: revealProgress.done, total: revealProgress.total })}
+                <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealProgress', { done: revealProgress.done, total: revealProgress.total })}
               </span>
             )}
           </div>
@@ -741,7 +753,8 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
                 disabled={credits !== null && credits !== 'error' && credits < selectedNeedingReveal.length}
                 style={{ fontSize: '12px', padding: '8px 14px' }}
               >
-                {'\uD83D\uDCB0'} {t('prospectGen.revealBtn', {
+                <Icon name="revenue" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {t('prospectGen.revealBtn', {
                   count: selectedNeedingReveal.length,
                   plural: selectedNeedingReveal.length > 1 ? 's' : '',
                   pluralCredits: selectedNeedingReveal.length > 1 ? 's' : '',
@@ -766,14 +779,19 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
                 disabled={saving}
                 style={{ fontSize: '12px', padding: '8px 14px' }}
               >
-                {saving ? t('prospectGen.adding') : `\u2795 ${t('prospectGen.addToCampaign', { count: selectedWithEmail })}`}
+                {saving ? t('prospectGen.adding') : (
+                  <>
+                    <Icon name="plus" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {t('prospectGen.addToCampaign', { count: selectedWithEmail })}
+                  </>
+                )}
               </button>
             )}
           </div>
 
           {credits !== null && credits !== 'error' && credits < selectedNeedingReveal.length && selectedNeedingReveal.length > 0 && (
             <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6 }}>
-              {'\u26A0\uFE0F'} {t('prospectGen.insufficientCredits', { available: credits, required: selectedNeedingReveal.length })}
+              <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.insufficientCredits', { available: credits, required: selectedNeedingReveal.length })}
             </div>
           )}
         </div>
@@ -795,9 +813,9 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
 
 function Stepper({ step, t }) {
   const steps = [
-    { n: 1, label: t('prospectGen.stepSearch'), icon: '\uD83D\uDD0D' },
-    { n: 2, label: t('prospectGen.stepReveal'), icon: '\uD83D\uDCB0' },
-    { n: 3, label: t('prospectGen.stepAdd'), icon: '\u2795' },
+    { n: 1, label: t('prospectGen.stepSearch'), icon: 'search' },
+    { n: 2, label: t('prospectGen.stepReveal'), icon: 'revenue' },
+    { n: 3, label: t('prospectGen.stepAdd'), icon: 'plus' },
   ];
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
@@ -818,7 +836,8 @@ function Stepper({ step, t }) {
               whiteSpace: 'nowrap',
             }}
           >
-            {step > s.n ? '\u2713' : s.icon} {s.label}
+            <Icon name={step > s.n ? 'checkCircle' : s.icon} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {s.label}
           </div>
           {i < steps.length - 1 && (
             <div
@@ -838,10 +857,10 @@ function Stepper({ step, t }) {
 
 function RevealBadge({ status, email, error, t }) {
   if (status === 'verified' && email) {
-    return <span style={{ fontSize: 10, color: 'var(--success)', fontWeight: 600 }}>{'\u2705'} {t('prospectGen.revealVerified')}</span>;
+    return <span style={{ fontSize: 10, color: 'var(--success)', fontWeight: 600 }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealVerified')}</span>;
   }
   if (status === 'not_found') {
-    return <span style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 600 }}>{'\u274C'} {t('prospectGen.revealNotFound')}</span>;
+    return <span style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 600 }}><Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealNotFound')}</span>;
   }
   if (status === 'error') {
     return (
@@ -849,12 +868,12 @@ function RevealBadge({ status, email, error, t }) {
         style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600, cursor: 'help' }}
         title={error || t('common.error')}
       >
-        {'\u26A0\uFE0F'} {t('prospectGen.revealError')}
+        <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealError')}
       </span>
     );
   }
   if (status === 'revealing') {
-    return <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>{'\u23F3'} {t('prospectGen.revealRevealing')}</span>;
+    return <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}><Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealRevealing')}</span>;
   }
   return <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{t('prospectGen.revealPending')}</span>;
 }
@@ -888,7 +907,8 @@ function ConfirmRevealModal({ count, credits, onConfirm, onCancel, t }) {
         }}
       >
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
-          {'\uD83D\uDCB0'} {t('prospectGen.revealConfirmTitle', { count, plural: count > 1 ? 's' : '' })}
+          <Icon name="revenue" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {t('prospectGen.revealConfirmTitle', { count, plural: count > 1 ? 's' : '' })}
         </div>
         <div
           style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}

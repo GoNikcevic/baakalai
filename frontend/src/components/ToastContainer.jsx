@@ -5,12 +5,13 @@
    =============================================================================== */
 
 import { useNotifications } from '../context/NotificationContext';
+import Icon from './Icon';
 
 const ICON_MAP = {
-  success: '\u2705',
-  warning: '\u26A0\uFE0F',
-  danger: '\u274C',
-  info: '\u2139\uFE0F',
+  success: 'checkCircle',
+  warning: 'alert',
+  danger: 'close',
+  info: 'info',
 };
 
 function Toast({ toast, onClose }) {
@@ -21,7 +22,7 @@ function Toast({ toast, onClose }) {
       className={`toast ${type}${removing ? ' removing' : ''}`}
       style={{ position: 'relative' }}
     >
-      <div className={`toast-icon ${type}`}>{ICON_MAP[type] || ICON_MAP.info}</div>
+      <div className={`toast-icon ${type}`}><Icon name={ICON_MAP[type] || ICON_MAP.info} size={16} /></div>
       <div className="toast-content">
         {title && <div className="toast-title">{title}</div>}
         {message && <div className="toast-message">{message}</div>}

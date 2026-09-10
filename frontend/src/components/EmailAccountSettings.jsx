@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 function getPresets(lang) {
   const en = lang === 'en';
@@ -241,7 +242,8 @@ export default function EmailAccountSettings() {
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{acc.email_address}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {acc.provider === 'gmail' ? 'Gmail OAuth' : acc.provider === 'microsoft' ? 'Microsoft OAuth' : `${acc.smtp_host}:${acc.smtp_port}`}
-                    {' \u00B7 '}{acc.status === 'active' ? `\u2705 ${t('emailAccount.active')}` : `\u26A0\uFE0F ${t('emailAccount.expired')}`}
+                    {' \u00B7 '}<Icon name={acc.status === 'active' ? 'checkCircle' : 'alert'} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {acc.status === 'active' ? t('emailAccount.active') : t('emailAccount.expired')}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -282,7 +284,8 @@ export default function EmailAccountSettings() {
             background: testResult.success ? 'rgba(0,214,143,0.1)' : 'rgba(255,107,107,0.1)',
             color: testResult.success ? 'var(--success)' : 'var(--danger)',
           }}>
-            {testResult.success ? '\u2705 Connexion r\u00E9ussie' : `\u274C ${testResult.error}`}
+            <Icon name={testResult.success ? 'checkCircle' : 'close'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {testResult.success ? 'Connexion r\u00E9ussie' : testResult.error}
           </div>
         )}
 
@@ -325,7 +328,7 @@ export default function EmailAccountSettings() {
               </ol>
               {PRESETS[selectedPreset].note && (
                 <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 8 }}>
-                  {'\u26A0\uFE0F'} {PRESETS[selectedPreset].note}
+                  <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{PRESETS[selectedPreset].note}
                 </div>
               )}
             </div>

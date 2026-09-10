@@ -325,7 +325,8 @@ export default function ClientsPage({ scope }) {
               onClick={handleImport}
               disabled={importing}
             >
-              {importing ? `\u23F3 ${t('clients.importing')}` : t('dataQuality.dealQuality.refreshData')}
+              {importing && <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+              {importing ? t('clients.importing') : t('dataQuality.dealQuality.refreshData')}
             </button>
           ) : (
             <button
@@ -334,7 +335,8 @@ export default function ClientsPage({ scope }) {
               onClick={handleImport}
               disabled={importing}
             >
-              {importing ? `\u23F3 ${t('clients.importing')}` : `\u21BB ${t('clients.refresh')}`}
+              <Icon name={importing ? 'clock' : 'refresh'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {importing ? t('clients.importing') : t('clients.refresh')}
             </button>
           )
         ) : (
@@ -792,7 +794,7 @@ function SectorFixBox({ client, t, onSaved }) {
           disabled={saving || !value.trim()}
           onClick={handleSave}
         >
-          {saving ? '⏳' : t('dataQuality.dealQuality.saveButton')}
+          {saving ? <Icon name="clock" size={12} /> : t('dataQuality.dealQuality.saveButton')}
         </button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
@@ -849,7 +851,7 @@ function DealValueFixBox({ client, t, onSaved }) {
           disabled={saving || !isValid}
           onClick={handleSave}
         >
-          {saving ? '⏳' : t('dataQuality.dealQuality.saveButton')}
+          {saving ? <Icon name="clock" size={12} /> : t('dataQuality.dealQuality.saveButton')}
         </button>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
@@ -1103,7 +1105,12 @@ function ClientDetailPanel({ client, onClose }) {
           onClick={handleQuickEmail}
           disabled={sending || !client.email}
         >
-          {sending ? '\u23F3...' : `\u2709\uFE0F ${t('clients.sendEmail')}`}
+          {sending ? <Icon name="clock" size={12} /> : (
+            <>
+              <Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {t('clients.sendEmail')}
+            </>
+          )}
         </button>
         {client.linkedin_url && (
           <a href={client.linkedin_url} target="_blank" rel="noopener noreferrer"
@@ -1272,7 +1279,7 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
                           : item.status}
                       </span>
                     )}
-                    {item.type === 'crm_activity' && item.done && <span style={{ fontSize: 10 }}>{'\u2705'}</span>}
+                    {item.type === 'crm_activity' && item.done && <span style={{ fontSize: 10 }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>}
                   </span>
                   <span style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{formatRelativeDate(item.date, lang)}</span>
                 </div>

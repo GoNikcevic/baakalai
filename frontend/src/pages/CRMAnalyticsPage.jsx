@@ -12,6 +12,7 @@ import { useI18n, useT } from '../i18n';
 import EngagementChart from '../components/charts/EngagementChart';
 import FunnelChart from '../components/charts/FunnelChart';
 import LoadingTips from '../components/LoadingTips';
+import Icon from '../components/Icon';
 
 /* ─── Helpers ─── */
 
@@ -412,6 +413,7 @@ export default function CRMAnalyticsPage() {
           laisser croire que les chiffres sont filtrés. */}
       {!loading && tabData && (filters.productLine || filters.account) && (activeTab === 'trends' || activeTab === 'channels') && (
         <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 12 }}>
+          <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
           {t('analytics.filterNotApplied')}
         </div>
       )}
@@ -1202,11 +1204,11 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
 /* ═══ Segments Section ═══ */
 
 const SEGMENT_CONFIG = {
-  champions: { color: 'var(--purple)', icon: '\u2B50' },
-  active: { color: 'var(--success)', icon: '\u26A1' },
-  new: { color: 'var(--blue)', icon: '\u2728' },
-  at_risk: { color: 'var(--orange, #f97316)', icon: '\u26A0\uFE0F' },
-  dormant: { color: 'var(--text-muted)', icon: '\uD83D\uDCA4' },
+  champions: { color: 'var(--purple)', icon: 'award' },
+  active: { color: 'var(--success)', icon: 'zap' },
+  new: { color: 'var(--blue)', icon: 'sparkles' },
+  at_risk: { color: 'var(--orange, #f97316)', icon: 'alert' },
+  dormant: { color: 'var(--text-muted)', icon: 'moon' },
 };
 
 function SegmentsSection({ data }) {
@@ -1247,7 +1249,7 @@ function SegmentsSection({ data }) {
         gap: 12, marginBottom: 20,
       }}>
         {segments.map(seg => {
-          const cfg = SEGMENT_CONFIG[seg.key] || { color: 'var(--text-muted)', icon: '?' };
+          const cfg = SEGMENT_CONFIG[seg.key] || { color: 'var(--text-muted)', icon: 'users' };
           const isSelected = selected === seg.key;
           return (
             <div
@@ -1261,7 +1263,7 @@ function SegmentsSection({ data }) {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 18 }}>{cfg.icon}</span>
+                <Icon name={cfg.icon} size={18} color={cfg.color} />
                 <span style={{ fontSize: 14, fontWeight: 600 }}>{segmentLabels[seg.key] || seg.key}</span>
               </div>
               <div style={{ fontSize: 28, fontWeight: 700, color: cfg.color }}>{seg.count}</div>
@@ -1282,7 +1284,8 @@ function SegmentsSection({ data }) {
       {selectedSegment && (
         <div className="card">
           <div className="card-title">
-            {SEGMENT_CONFIG[selectedSegment.key]?.icon} {segmentLabels[selectedSegment.key]} ({selectedSegment.count})
+            <Icon name={SEGMENT_CONFIG[selectedSegment.key]?.icon || 'users'} size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {segmentLabels[selectedSegment.key]} ({selectedSegment.count})
           </div>
           <div className="card-body">
             <div className="crm-table">

@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../../../services/api-client';
 import { useT } from '../../../i18n';
+import Icon from '../../Icon';
 
 export default function RepliesTab({ campaign }) {
   const t = useT();
@@ -104,8 +105,8 @@ export default function RepliesTab({ campaign }) {
           borderRadius: 12,
           border: '1px solid var(--border)',
         }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>
-            {filter === 'emailsReplied' ? '\uD83D\uDCEC' : '\uD83D\uDCCA'}
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name={filter === 'emailsReplied' ? 'inbox' : 'chart'} size={28} strokeWidth={1.5} />
           </div>
           <div>{t('replies.noActivities')}</div>
         </div>
