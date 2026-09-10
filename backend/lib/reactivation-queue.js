@@ -11,7 +11,7 @@ const db = require('../db');
 const upsellDetector = require('./agents/upsell-detector');
 
 const DAY_MS = 86400000;
-const STAGNANT_DAYS = 14; // matches deal-coach.js's existing stagnation threshold
+const { getStagnantDays } = require('./stagnation');
 
 // `last_activity_at` (populated from real CRM changes) is the trustworthy staleness signal —
 // `updated_at` gets reset to now() by a DB trigger on every internal write (churn scoring,
@@ -41,17 +41,20 @@ function computeOverdue(opp) {
   };
 }
 
-function isDue(opp) {
+// Le seuil est passé par l'appelant : il vient du réglage de l'utilisateur
+// (cf. lib/stagnation.js), pas d'une constante décidée à sa place.
+function isDue(opp, stagnantDays) {
   if (opp.planned_followup_date) return new Date(opp.planned_followup_date).getTime() <= Date.now();
   const daysSinceUpdate = (Date.now() - new Date(lastRealActivity(opp)).getTime()) / DAY_MS;
-  return daysSinceUpdate >= STAGNANT_DAYS;
+  return daysSinceUpdate >= stagnantDays;
 }
 
 /**
- * List active (not won/lost) deals due for reactivation — no planned date and stagnant 14d+,
- * or a planned date that has passed. Rule-based only, no AI call.
+ * List active (not won/lost) deals due for reactivation — no planned date and stagnant past the
+ * user's threshold, or a planned date that has passed. Rule-based only, no AI call.
  */
 async function listDealsToReactivate(userId, sort = 'overdue') {
+  const stagnantDays = await getStagnantDays(userId);
   const result = await db.query(
     `SELECT * FROM opportunities
      WHERE user_id = $1 AND status NOT IN ('won', 'lost')
@@ -59,10 +62,10 @@ async function listDealsToReactivate(userId, sort = 'overdue') {
        -- eu d'échange à « réactiver » (cf. lib/crm-scope.js).
        AND campaign_id IS NULL
        AND (
-         (planned_followup_date IS NULL AND COALESCE(last_activity_at, created_at) < now() - interval '${STAGNANT_DAYS} days')
+         (planned_followup_date IS NULL AND COALESCE(last_activity_at, created_at) < now() - ($2 || ' days')::interval)
          OR (planned_followup_date IS NOT NULL AND planned_followup_date <= now())
        )`,
-    [userId]
+    [userId, String(stagnantDays)]
   );
 
   const failedIds = await failedSendIds(userId, 'deal_reactivation', result.rows.map(o => o.id));
@@ -96,6 +99,7 @@ async function listDealsToReactivate(userId, sort = 'overdue') {
  * scoring — no AI), gated by the same planned_followup_date rule as deal reactivation.
  */
 async function listClientsToUpsell(userId, sort = 'score') {
+  const stagnantDays = await getStagnantDays(userId);
   const { opportunities: scored } = await upsellDetector.run(userId);
   if (scored.length === 0) return [];
 
@@ -106,14 +110,14 @@ async function listClientsToUpsell(userId, sort = 'score') {
   );
   const oppById = new Map(oppResult.rows.map(o => [o.id, o]));
 
-  const dueIds = scored.map(c => c.contactId).filter(id => oppById.has(id) && isDue(oppById.get(id)));
+  const dueIds = scored.map(c => c.contactId).filter(id => oppById.has(id) && isDue(oppById.get(id), stagnantDays));
   const failedIds = await failedSendIds(userId, 'auto_upsell', dueIds);
 
   const candidates = scored
     .map(c => {
       const opp = oppById.get(c.contactId);
       if (!opp) return null;
-      if (!isDue(opp)) return null; // planned_followup_date set in the future — not due yet
+      if (!isDue(opp, stagnantDays)) return null; // planned_followup_date set in the future — not due yet
       const overdue = computeOverdue(opp);
       return {
         id: c.contactId,

@@ -542,8 +542,9 @@ triggerType : deal_won | deal_stagnant | inactive_contact | deal_lost | onboardi
 actionType : email | linkedin_connect | linkedin_message | linkedin_visit
 mode : auto | approval
 
-Activer ou désactiver l'autopilot de conversation (l'IA répond automatiquement aux prospects) :
-{ "action": "toggle_autopilot", "enabled": true }
+Activer ou désactiver l'autopilot de réponse, sur UNE population à la fois :
+{ "action": "toggle_autopilot", "enabled": true, "scope": "prospection" }
+scope : prospection (répondre aux prospects froids) | crm (répondre aux contacts et clients du CRM)
 
 Lister les clients avec un filtre :
 { "action": "list_clients", "filter": "won|stagnant|inactive", "days": 30 }
@@ -579,6 +580,11 @@ RÈGLES create_trigger :
 RÈGLES toggle_autopilot :
 - toggle_autopilot : quand l'utilisateur demande "active l'autopilot", "désactive l'autopilot", "laisse l'IA gérer les réponses", "arrête de répondre automatiquement".
 - enabled: true pour activer, false pour désactiver.
+- scope est OBLIGATOIRE. Si l'utilisateur ne précise pas sur qui, DEMANDE-LUI
+  avant d'agir : « Sur tes prospects froids, ou sur tes contacts et clients du
+  CRM ? » Ne devine JAMAIS : laisser l'IA répondre seule à un inconnu et la
+  laisser répondre seule dans une conversation avec un client qui paie n'ont
+  pas du tout les mêmes conséquences.
 
 RÈGLES scan_crm / clean_crm / run_nurture / import_crm :
 - scan_crm : quand l'utilisateur demande "vérifie mes données", "quel est l'état de mon CRM", "diagnostic CRM".

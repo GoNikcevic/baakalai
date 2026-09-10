@@ -27,6 +27,7 @@ const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
 const { extractActivityDate } = require('./crm-activity-date');
 const { applyMappings } = require('./crm-field-mapper');
 const { matchContacts } = require('./trigger-matching');
+const { getStagnantDays } = require('./stagnation');
 const logger = require('./logger');
 
 const DAY_MS = 86400000;
@@ -639,11 +640,15 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
     );
     const recentSet = new Set(recentEmails.rows.map(r => r.to_email?.toLowerCase()));
 
+    // Repli commun des triggers de dormance, identique à celui de la file de
+    // réactivation (cf. lib/stagnation.js).
+    const stagnantDays = await getStagnantDays(userId);
+
     for (const trigger of triggersResult.rows) {
       // Logique de matching partagée avec la preview (routes/nurture.js) —
       // toute divergence faisait mentir la preview. null = type évaluable
       // uniquement en run manuel (newsletter_* via nurture-engine).
-      let matched = matchContacts(trigger, opps, now);
+      let matched = matchContacts(trigger, opps, now, { stagnantDays });
       if (matched === null) continue;
 
       // Filter already-emailed

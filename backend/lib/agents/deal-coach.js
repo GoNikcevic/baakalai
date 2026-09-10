@@ -12,6 +12,7 @@ const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
 const { onlyCrmContacts } = require('../crm-scope');
+const { getStagnantDays } = require('../stagnation');
 const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 const { getTimingContext, getCopyContext, getPatternContext, getTeamId } = require('../email-context');
 
@@ -26,13 +27,16 @@ async function run(userId) {
     const opps = onlyCrmContacts(await db.opportunities.listByUser(userId, 500, 0));
     const now = Date.now();
 
-    // Find stagnant deals (open, no activity in 14+ days)
+    // Deals stagnants, au seuil choisi par l'utilisateur (cf. lib/stagnation.js) —
+    // le même que celui de la file de réactivation, qui coachait auparavant sur
+    // 14 jours en dur pendant que l'Activation en retenait 30.
     // `updated_at` est réécrit à chaque synchro CRM (cf. churn-scoring.js) :
     // seul `last_activity_at` reflète la vraie dernière activité côté CRM.
+    const stagnantDays = await getStagnantDays(userId);
     const stagnant = opps.filter(o => {
       if (o.status === 'won' || o.status === 'lost') return false;
       const age = (now - new Date(o.last_activity_at || o.created_at).getTime()) / DAY_MS;
-      return age >= 14;
+      return age >= stagnantDays;
     });
 
     if (stagnant.length === 0) return report;

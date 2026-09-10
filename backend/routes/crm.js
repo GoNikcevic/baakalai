@@ -2050,11 +2050,15 @@ router.get('/autopilot/settings', async (req, res, next) => {
 // PATCH /api/crm/autopilot/settings — Enable/disable autopilot
 router.patch('/autopilot/settings', async (req, res, next) => {
   try {
-    const { enabled, maxTurns, channels } = req.body;
+    // Un interrupteur par population : répondre tout seul à un prospect froid
+    // et répondre tout seul à un client en cours n'engagent pas le même risque.
+    // `enabled` est l'ancien réglage unique, encore accepté pour ne pas casser
+    // un appel existant — il ne pilote que la prospection.
+    const { prospection, crm, enabled } = req.body;
     const updates = {};
-    if (enabled !== undefined) updates.autopilot_enabled = enabled;
-    if (maxTurns !== undefined) updates.autopilot_max_turns = Math.min(Math.max(maxTurns, 1), 10);
-    if (channels !== undefined) updates.autopilot_channels = channels;
+    if (prospection !== undefined) updates.autopilot_prospection_enabled = !!prospection;
+    else if (enabled !== undefined) updates.autopilot_prospection_enabled = !!enabled;
+    if (crm !== undefined) updates.autopilot_crm_enabled = !!crm;
 
     await db.query(
       `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
@@ -2079,11 +2083,18 @@ router.patch('/autopilot/contact/:id', async (req, res, next) => {
 // GET /api/crm/autopilot/queue — List pending/sent autopilot messages
 router.get('/autopilot/queue', async (req, res, next) => {
   try {
+    // `scope` cadre la file sur une population (cf. lib/crm-scope.js) : chaque
+    // écran d'autopilot ne montre que les conversations qu'il commande.
+    // Absent = tout, pour un appel qui ne cadre pas.
+    const { scope } = req.query;
+    const scopeSql = scope === 'crm' ? 'AND o.campaign_id IS NULL'
+      : scope === 'prospection' ? 'AND o.campaign_id IS NOT NULL'
+        : '';
     const result = await db.query(
       `SELECT aq.*, o.name as contact_name, o.company
        FROM autopilot_queue aq
        LEFT JOIN opportunities o ON o.id = aq.opportunity_id
-       WHERE aq.user_id = $1
+       WHERE aq.user_id = $1 ${scopeSql}
        ORDER BY aq.created_at DESC LIMIT 50`,
       [req.user.id]
     );

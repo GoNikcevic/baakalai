@@ -21,6 +21,7 @@ const { resolveCrmForUser } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const logger = require('./logger');
+const { intentEnumForPrompt, isKnownIntent } = require('./reply-intents');
 
 const DAY_MS = 86400000;
 
@@ -288,6 +289,20 @@ async function analyzeResponses(userId) {
 /**
  * Ask Claude to analyze a reply in context of the email we sent.
  */
+/**
+ * Signale une intention hors liste. L'autopilot traite l'inconnu en poursuivant
+ * l'échange, ce qui est le comportement sûr — mais silencieux. Sans cette trace,
+ * une intention ajoutée au prompt et oubliée dans lib/reply-intents.js resterait
+ * invisible : elle ne clôturerait rien et ne déclencherait aucun RDV, sans que
+ * personne ne comprenne pourquoi.
+ */
+function checkIntent(analysis) {
+  if (analysis?.intent && !isKnownIntent(analysis.intent)) {
+    logger.warn('response-analysis', `intention hors liste : "${analysis.intent}" — a declarer dans lib/reply-intents.js`);
+  }
+  return analysis;
+}
+
 async function analyzeWithClaude(email, activityTexts) {
   const prompt = `Analyse cette r\u00E9ponse \u00E0 un email de relance B2B.
 
@@ -303,7 +318,7 @@ ${activityTexts.join('\n')}
 Analyse et retourne un JSON :
 {
   "sentiment": "positive" | "negative" | "neutral",
-  "intent": "interested" | "not_now" | "not_interested" | "unsubscribe" | "question" | "meeting_request",
+  "intent": ${intentEnumForPrompt()},
   "confidence": 0.0-1.0,
   "suggestedAction": "description courte de l'action \u00E0 prendre",
   "suggestedStatus": "interested" | "meeting" | "won" | "lost" | null,
@@ -317,10 +332,10 @@ Analyse et retourne un JSON :
       400
     );
 
-    if (result.parsed) return result.parsed;
+    if (result.parsed) return checkIntent(result.parsed);
 
     const match = (result.raw || '').match(/\{[\s\S]*"sentiment"[\s\S]*\}/);
-    if (match) try { return JSON.parse(match[0]); } catch { /* fallback below */ }
+    if (match) try { return checkIntent(JSON.parse(match[0])); } catch { /* fallback below */ }
   } catch { /* fallback below */ }
 
   return {

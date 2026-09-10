@@ -248,6 +248,18 @@
     "readStartWith": "I suggest starting with:",
     "readDays": "{days}d",
     "chooseTemplate": "Choose a template or describe your campaign.",
+    "sugOnboarding1": "🎯 Create my first prospecting campaign",
+    "sugOnboarding2": "👤 Define my ideal target (ICP)",
+    "sugOnboarding3": "✍️ Write an email sequence",
+    "sugOnboarding4": "❓ How does prospecting work on baakalai?",
+    "sugDefault1": "🚀 Launch a campaign that's in preparation",
+    "sugDefault2": "🎯 Create a new campaign",
+    "sugDefault3": "✍️ Improve the copy of my sequences",
+    "sugDefault4": "👤 Refine my target (ICP)",
+    "sugReturning1": "📊 Analyze my campaign performance",
+    "sugReturning2": "✍️ Regenerate my weakest touchpoints",
+    "sugReturning3": "🧪 Run an A/B test on a sequence",
+    "sugReturning4": "🎯 Create a new campaign",
     "defaultSubtitle": "I can help you create campaigns, refine your sequences and analyze your performance.",
     "refineCampaigns": "Refine my campaigns",
     "analyzePerf": "Analyze performance",
@@ -834,6 +846,12 @@
       "clients": "Clients",
       "crm": "CRM",
       "activation": "Activation"
+    },
+    "tabDescs": {
+      "deals": "Open pipeline and deals to reactivate",
+      "clients": "At-risk clients and upsell opportunities",
+      "crm": "Data quality and freshness",
+      "activation": "Emails sent and running campaigns"
     }
   },
   "wizard": {
@@ -1198,7 +1216,11 @@
     "sendFailedBadge": "⚠ Last send failed",
     "currentContract": "Current contract",
     "productsOwned": "Current products",
-    "productsCrossSell": "Additional products possible"
+    "productsCrossSell": "Additional products possible",
+    "stagnantAfter": "Deal dormant after",
+    "stagnantDaysUnit": "days without activity",
+    "stagnantSaved": "Threshold saved",
+    "stagnantSavedDesc": "A deal is now considered dormant after {days} days without activity."
   },
   "churn": {
     "title": "Clients at churn risk",
@@ -1220,5 +1242,30 @@
     "conversations": "Conversations",
     "welcomeTitle": "How can I help?",
     "welcomeSubtitle": "Ask about a client, how Baakalai works, or get sales/prospecting advice."
+  },
+  "autopilot": {
+    "title": "Reply Autopilot",
+    "titleProspection": "Autopilot — cold prospects",
+    "titleCrm": "Autopilot — CRM contacts and clients",
+    "descProspection": "AI answers replies from your cold prospects and runs the conversation until a meeting is booked. This setting never touches your CRM contacts.",
+    "descCrm": "AI answers replies from your CRM contacts and clients. A live client conversation has real value: only turn this on if you are comfortable letting AI answer in it.",
+    "howItWorks": "How it works",
+    "stepProspection1": "A cold prospect replies to your sequence (email or LinkedIn)",
+    "stepCrm1": "A CRM contact or client replies to an activation email",
+    "step2": "AI analyses the intent (interested, question, meeting request…)",
+    "step3": "AI drafts a reply from the conversation history and learned patterns",
+    "step4": "The reply goes out after 2-4 hours, the way a human would",
+    "step5": "The conversation continues until a meeting is accepted, or 5 turns max",
+    "enable": "Enable",
+    "active": "Active",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "pendingCount": "{count} pending reply(ies)",
+    "sentCount": "{count} auto-reply(ies) sent",
+    "cancel": "Cancel",
+    "sendsAt": "Sends at:",
+    "sentAt": "Sent:",
+    "emptyProspection": "Active. When a cold prospect replies, AI will run the conversation here.",
+    "emptyCrm": "Active. When a CRM contact replies, AI will run the conversation here."
   }
 }

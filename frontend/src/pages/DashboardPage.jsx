@@ -1,9 +1,9 @@
 /* ===============================================================================
    BAKAL — Dashboard Page (React)
    Single scrolling page, 4 sections (Deals / Clients / CRM / Activation) stacked
-   in order. Each section has its own labeled header + color accent so the
-   indicators stay visually and semantically distinct — no cross-domain mixing,
-   even without tab navigation. Global chrome (sync status, onboarding
+   in order. Each section is a block on a slightly deeper background, titled and
+   subtitled, so the indicators stay visually and semantically distinct — no
+   cross-domain mixing, even without tab navigation. Global chrome (sync status, onboarding
    checklist) sits above all 4 sections.
    =============================================================================== */
 
@@ -22,22 +22,30 @@ import CrmTab from '../components/dashboardTabs/CrmTab';
 import ActivationTab from '../components/dashboardTabs/ActivationTab';
 
 const SECTIONS = [
-  { key: 'deals', labelKey: 'dashboard.tabs.deals', icon: 'briefcase', color: 'var(--accent)' },
-  { key: 'clients', labelKey: 'dashboard.tabs.clients', icon: 'users', color: 'var(--danger)' },
-  { key: 'crm', labelKey: 'dashboard.tabs.crm', icon: 'database', color: 'var(--blue)' },
-  { key: 'activation', labelKey: 'dashboard.tabs.activation', icon: 'mail', color: 'var(--warning)' },
+  { key: 'deals', labelKey: 'dashboard.tabs.deals', descKey: 'dashboard.tabDescs.deals' },
+  { key: 'clients', labelKey: 'dashboard.tabs.clients', descKey: 'dashboard.tabDescs.clients' },
+  { key: 'crm', labelKey: 'dashboard.tabs.crm', descKey: 'dashboard.tabDescs.crm' },
+  { key: 'activation', labelKey: 'dashboard.tabs.activation', descKey: 'dashboard.tabDescs.activation' },
 ];
 
-function SectionHeader({ icon, title, color }) {
+/**
+ * Une section du dashboard, posée sur un fond légèrement plus profond que la
+ * page. La séparation ne passe plus par un trait de couleur sous le titre :
+ * quatre traits de quatre couleurs hiérarchisaient des domaines qui sont sur un
+ * pied d'égalité, et ne disaient rien de plus que le titre lui-même. Le bloc,
+ * lui, montre où commence et où finit chaque domaine. Pas de bordure : les
+ * cartes à l'intérieur en ont déjà une, et deux cadres imbriqués alourdissent.
+ */
+function Section({ title, description, children }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      marginTop: 32, marginBottom: 16,
-      paddingBottom: 8, borderBottom: `2px solid ${color}`,
+    <section style={{
+      background: 'var(--bg-elevated, var(--paper-2))',
+      borderRadius: 14, padding: 20, marginBottom: 20,
     }}>
-      <Icon name={icon} size={18} color={color} />
-      <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{title}</h2>
-    </div>
+      <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>{title}</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 16px' }}>{description}</p>
+      {children}
+    </section>
   );
 }
 
@@ -144,28 +152,34 @@ export default function DashboardPage() {
       {/* Onboarding checklist for new users */}
       <OnboardingChecklist />
 
-      {/* Deals — strictly deal/pipeline indicators */}
-      <SectionHeader icon={SECTIONS[0].icon} title={t(SECTIONS[0].labelKey)} color={SECTIONS[0].color} />
-      <DealsTab crmStats={crmStats} />
+      <div style={{ marginTop: 24 }}>
+        {/* Deals — strictly deal/pipeline indicators */}
+        <Section title={t(SECTIONS[0].labelKey)} description={t(SECTIONS[0].descKey)}>
+          <DealsTab crmStats={crmStats} />
+        </Section>
 
-      {/* Clients — churn + upsell indicators */}
-      <SectionHeader icon={SECTIONS[1].icon} title={t(SECTIONS[1].labelKey)} color={SECTIONS[1].color} />
-      <ClientsTab />
+        {/* Clients — churn + upsell indicators */}
+        <Section title={t(SECTIONS[1].labelKey)} description={t(SECTIONS[1].descKey)}>
+          <ClientsTab />
+        </Section>
 
-      {/* CRM — data quality indicators only */}
-      <SectionHeader icon={SECTIONS[2].icon} title={t(SECTIONS[2].labelKey)} color={SECTIONS[2].color} />
-      <CrmTab />
+        {/* CRM — data quality indicators only */}
+        <Section title={t(SECTIONS[2].labelKey)} description={t(SECTIONS[2].descKey)}>
+          <CrmTab />
+        </Section>
 
-      {/* Activation — emailing/campaigns indicators */}
-      <SectionHeader icon={SECTIONS[3].icon} title={t(SECTIONS[3].labelKey)} color={SECTIONS[3].color} />
-      <ActivationTab
-        isEmpty={isEmpty}
-        globalKpis={globalKpis}
-        campaigns={campaignsList}
-        recommendations={recommendations}
-        chartData={chartData}
-        onCreateCampaign={openCreator}
-      />
+        {/* Activation — emailing/campaigns indicators */}
+        <Section title={t(SECTIONS[3].labelKey)} description={t(SECTIONS[3].descKey)}>
+          <ActivationTab
+            isEmpty={isEmpty}
+            globalKpis={globalKpis}
+            campaigns={campaignsList}
+            recommendations={recommendations}
+            chartData={chartData}
+            onCreateCampaign={openCreator}
+          />
+        </Section>
+      </div>
     </div>
   );
 }

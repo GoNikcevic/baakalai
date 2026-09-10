@@ -18,6 +18,11 @@ const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', '
 export default function ReactivationQueuePage({ kind, i18nNamespace, detailRouteBase }) {
   const t = useT();
   const { lang } = useI18n();
+  // Seuil de dormance, réglable ici parce que c'est ici qu'on en voit l'effet.
+  // Il n'a de sens que pour les deals : l'upsell se déclenche sur un score.
+  const showStagnation = kind === 'deal_reactivation';
+  const [stagnation, setStagnation] = useState(null);
+  const [savingStagnation, setSavingStagnation] = useState(false);
   const dateLocale = lang === 'en' ? 'en-US' : 'fr-FR';
   const navigate = useNavigate();
   const [tab, setTab] = useState('pending');
@@ -53,6 +58,9 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   };
 
   useEffect(() => {
+    if (showStagnation) {
+      request('/reactivation/settings').then(setStagnation).catch(() => {});
+    }
     request('/crm/providers')
       .then(d => setHasCrm((d.providers || []).some(p => CRM_PROVIDERS.includes(p.provider) && p.connected)))
       .catch(() => setHasCrm(true)); // en cas de doute, ne pas afficher le CTA « connecter »
@@ -121,6 +129,45 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
           <h1 className="page-title">{t(`${i18nNamespace}.title`)}</h1>
           <div className="page-subtitle">{t(`${i18nNamespace}.subtitle`)}</div>
         </div>
+        {showStagnation && stagnation && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            <label htmlFor="stagnant-days">{t('reactivation.stagnantAfter')}</label>
+            <input
+              id="stagnant-days"
+              type="number"
+              min={stagnation.minDays}
+              max={stagnation.maxDays}
+              defaultValue={stagnation.stagnantDays}
+              disabled={savingStagnation}
+              onBlur={async (e) => {
+                const value = Number(e.target.value);
+                if (!Number.isFinite(value) || value === stagnation.stagnantDays) return;
+                setSavingStagnation(true);
+                try {
+                  const saved = await request('/reactivation/settings', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ stagnantDays: value }),
+                  });
+                  setStagnation(prev => ({ ...prev, ...saved }));
+                  e.target.value = saved.stagnantDays;
+                  showToast({ type: 'success', title: t('reactivation.stagnantSaved'), message: t('reactivation.stagnantSavedDesc', { days: saved.stagnantDays }) });
+                  loadData();
+                } catch (err) {
+                  showToast({ type: 'error', title: t('common.error'), message: err.message });
+                  e.target.value = stagnation.stagnantDays;
+                } finally {
+                  setSavingStagnation(false);
+                }
+              }}
+              style={{
+                width: 64, padding: '5px 8px', fontSize: 12, textAlign: 'right',
+                border: '1px solid var(--border)', borderRadius: 6,
+                background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            />
+            <span>{t('reactivation.stagnantDaysUnit')}</span>
+          </div>
+        )}
         {tab === 'pending' && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button

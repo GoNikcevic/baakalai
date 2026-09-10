@@ -672,12 +672,20 @@ router.post('/threads/:id/create-trigger', async (req, res, next) => {
 // POST /api/chat/threads/:id/toggle-autopilot — Enable/disable autopilot from chat
 router.post('/threads/:id/toggle-autopilot', async (req, res, next) => {
   try {
-    const { enabled } = req.body;
+    // Une portée obligatoire : « active l'autopilot » sans préciser sur qui
+    // activerait la réponse automatique dans les conversations clients en
+    // cours, ce que personne ne demande implicitement. L'Assistant doit
+    // demander laquelle (cf. RÈGLES toggle_autopilot dans api/claude.js).
+    const { enabled, scope } = req.body;
+    if (scope !== 'prospection' && scope !== 'crm') {
+      return res.status(400).json({ error: "scope must be 'prospection' or 'crm'" });
+    }
+    const key = scope === 'crm' ? 'autopilot_crm_enabled' : 'autopilot_prospection_enabled';
     await db.query(
       `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
-      [JSON.stringify({ autopilot_enabled: !!enabled }), req.user.id]
+      [JSON.stringify({ [key]: !!enabled }), req.user.id]
     );
-    res.json({ autopilot_enabled: !!enabled });
+    res.json({ scope, enabled: !!enabled });
   } catch (err) {
     next(err);
   }

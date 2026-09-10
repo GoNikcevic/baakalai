@@ -248,6 +248,18 @@
     "readStartWith": "Je vous propose de commencer par :",
     "readDays": "{days} j",
     "chooseTemplate": "Choisissez un modèle ou décrivez votre campagne.",
+    "sugOnboarding1": "🎯 Créer ma première campagne de prospection",
+    "sugOnboarding2": "👤 Définir ma cible idéale (ICP)",
+    "sugOnboarding3": "✍️ Écrire une séquence d'emails",
+    "sugOnboarding4": "❓ Comment marche la prospection sur baakalai ?",
+    "sugDefault1": "🚀 Lancer une campagne en préparation",
+    "sugDefault2": "🎯 Créer une nouvelle campagne",
+    "sugDefault3": "✍️ Améliorer le copy de mes séquences",
+    "sugDefault4": "👤 Affiner ma cible (ICP)",
+    "sugReturning1": "📊 Analyser les performances de mes campagnes",
+    "sugReturning2": "✍️ Régénérer mes touchpoints les plus faibles",
+    "sugReturning3": "🧪 Lancer un A/B test sur une séquence",
+    "sugReturning4": "🎯 Créer une nouvelle campagne",
     "defaultSubtitle": "Je peux vous aider à créer des campagnes, affiner vos séquences et analyser vos performances.",
     "refineCampaigns": "Affiner mes campagnes",
     "analyzePerf": "Analyser les performances",
@@ -834,6 +846,12 @@
       "clients": "Clients",
       "crm": "CRM",
       "activation": "Activation"
+    },
+    "tabDescs": {
+      "deals": "Pipeline en cours et deals à relancer",
+      "clients": "Clients à risque et opportunités d'upsell",
+      "crm": "Qualité et fraîcheur des données",
+      "activation": "Emails envoyés et campagnes en cours"
     }
   },
   "wizard": {
@@ -1198,7 +1216,11 @@
     "sendFailedBadge": "⚠ Dernier envoi échoué",
     "currentContract": "Contrat actuel",
     "productsOwned": "Produits actuels",
-    "productsCrossSell": "Produits additionnels possibles"
+    "productsCrossSell": "Produits additionnels possibles",
+    "stagnantAfter": "Deal dormant après",
+    "stagnantDaysUnit": "jours sans activité",
+    "stagnantSaved": "Seuil enregistré",
+    "stagnantSavedDesc": "Un deal est désormais considéré comme dormant après {days} jours sans activité."
   },
   "churn": {
     "title": "Clients à risque de churn",
@@ -1220,5 +1242,30 @@
     "conversations": "Conversations",
     "welcomeTitle": "Comment puis-je vous aider ?",
     "welcomeSubtitle": "Posez une question sur un client, sur le fonctionnement de Baakalai, ou demandez un conseil de vente ou de prospection."
+  },
+  "autopilot": {
+    "title": "Autopilot de réponse",
+    "titleProspection": "Autopilot — prospects froids",
+    "titleCrm": "Autopilot — contacts et clients du CRM",
+    "descProspection": "L'IA répond aux réponses de vos prospects froids et mène la conversation jusqu'au RDV. Ce réglage ne touche pas vos contacts CRM.",
+    "descCrm": "L'IA répond aux réponses de vos contacts et clients du CRM. Une conversation en cours avec un client a de la valeur : n'activez ceci que si vous êtes à l'aise pour que l'IA y réponde seule.",
+    "howItWorks": "Comment ça marche",
+    "stepProspection1": "Un prospect froid répond à votre séquence (email ou LinkedIn)",
+    "stepCrm1": "Un contact ou un client du CRM répond à un email d'activation",
+    "step2": "L'IA analyse l'intention (intéressé, question, demande de RDV…)",
+    "step3": "L'IA rédige une réponse à partir de l'historique et des patterns appris",
+    "step4": "La réponse part après 2 à 4h, comme le ferait un humain",
+    "step5": "La conversation continue jusqu'au RDV accepté, ou 5 tours maximum",
+    "enable": "Activer",
+    "active": "Actif",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "pendingCount": "{count} réponse(s) en attente",
+    "sentCount": "{count} réponse(s) envoyée(s)",
+    "cancel": "Annuler",
+    "sendsAt": "Envoi à :",
+    "sentAt": "Envoyé :",
+    "emptyProspection": "Actif. Quand un prospect froid répondra, l'IA gérera la conversation ici.",
+    "emptyCrm": "Actif. Quand un contact du CRM répondra, l'IA gérera la conversation ici."
   }
 }
