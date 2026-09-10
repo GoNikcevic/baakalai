@@ -38,7 +38,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 3. **Pattern writes**: `replaceOrCreate()` uses a table-based lease (`lib/db-lock.js`, `cron_locks` table) for mutual exclusion. NEVER use `pg_advisory_lock` — DATABASE_URL goes through Supavisor in transaction mode, where advisory locks leak and block forever. All pattern writes are anonymized in the DAO (`lib/anonymize.js`); `shared` is granted automatically when redaction is complete.
 4. **Email dedup**: Before inserting nurture emails, always check for existing pending/recent emails for the same contact (2-hour + 7-day windows).
 5. **Environments**: Never share credentials between prod and staging. Never point staging `APP_URL` to production.
-6. **Pré-push**: ALWAYS run `node scripts/check-conflicts.js` before any `git push`. It blocks on remote desync (someone pushed meanwhile) and warns on merge conflicts against `main`. Report the conflicting files to Goran instead of pushing blind. Hook: `.githooks/pre-push` (enable once per clone via `bash scripts/install-hooks.sh`).
+6. **Pré-push**: ALWAYS run `node scripts/check-conflicts.js` before any `git push`. It blocks on remote desync (someone pushed meanwhile) and warns on merge conflicts against `main`. Report the conflicting files to Goran instead of pushing blind — never resolve a conflict against `main` without asking him first, the arbitrations are product decisions. Two automatic reminders back this up: `.claude/hooks/session-start.sh` prints the conflict state at every session start (`--report`, non-blocking), and `.githooks/pre-push` runs the blocking check (enable once per clone via `bash scripts/install-hooks.sh`).
 
 ## 4. Architecture
 

@@ -1,25 +1,42 @@
 #!/bin/bash
-# SessionStart hook — installs backend + frontend dependencies so tests and
-# linters work in Claude Code on the web sessions (containers start with a
-# fresh clone and no node_modules).
+# SessionStart hook — deux rôles :
 #
-# Runs synchronously: the session starts only once deps are installed, which
-# avoids race conditions where Claude runs a test/lint before they're ready.
+#   1. Installer les dépendances (remote uniquement) pour que tests et linters
+#      tournent : les conteneurs démarrent sur un clone frais, sans node_modules.
+#   2. Afficher l'état des conflits dès l'ouverture de la session, pour que le
+#      sujet soit posé AVANT d'écrire du code plutôt qu'au moment du push.
+#
+# Tourne en synchrone : la session démarre une fois les deps prêtes, ce qui
+# évite qu'un test parte avant l'installation.
 set -euo pipefail
-
-# Only run in the remote (web) environment. Locally, devs manage their own deps.
-if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
-  exit 0
-fi
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"
 
-# npm install (not ci) so the post-hook container cache is reused across runs
-# and the step is a fast no-op when node_modules is already present.
-echo "→ Installing backend dependencies"
-npm install --prefix "$ROOT/backend" --no-audit --no-fund
+# --- 1. Dépendances (remote uniquement ; en local chacun gère les siennes) ---
 
-echo "→ Installing frontend dependencies"
-npm install --prefix "$ROOT/frontend" --no-audit --no-fund
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
+  # npm install (pas ci) pour réutiliser le cache conteneur entre les runs :
+  # l'étape est un no-op rapide quand node_modules est déjà là.
+  echo "→ Installing backend dependencies"
+  npm install --prefix "$ROOT/backend" --no-audit --no-fund
 
-echo "✓ Dependencies installed (backend + frontend)"
+  echo "→ Installing frontend dependencies"
+  npm install --prefix "$ROOT/frontend" --no-audit --no-fund
+
+  echo "✓ Dependencies installed (backend + frontend)"
+fi
+
+# --- 2. État des conflits ---------------------------------------------------
+#
+# Jamais bloquant : un réseau coupé, un git ancien ou un dépôt en cours de
+# bascule ne doivent pas empêcher la session de démarrer. D'où le `|| true`
+# et le timeout — la sortie est indicative, pas un garde-fou.
+
+echo ""
+echo "── État des conflits ──"
+timeout 90 node "$ROOT/scripts/check-conflicts.js" --report 2>&1 || true
+cat <<'EOF'
+RAPPEL (règle 6 de CLAUDE.md) : lancer `node scripts/check-conflicts.js` avant
+tout `git push`. Si des conflits sont listés ci-dessus, les signaler à Goran
+plutôt que de pousser sans rien dire.
+EOF

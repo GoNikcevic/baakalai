@@ -17,6 +17,7 @@
  *   node scripts/check-conflicts.js            # rapport complet
  *   node scripts/check-conflicts.js --strict   # bloque aussi sur le cas 2
  *   node scripts/check-conflicts.js --no-fetch # sans accès réseau
+ *   node scripts/check-conflicts.js --report   # lecture seule (démarrage de session)
  *
  * Branché sur le hook pre-push (voir .githooks/pre-push).
  * Contournement ponctuel : git push --no-verify
@@ -28,6 +29,7 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const STRICT = process.argv.includes('--strict');
 const NO_FETCH = process.argv.includes('--no-fetch');
+const REPORT = process.argv.includes('--report'); // lecture seule : informe, ne bloque jamais
 
 // Branche de référence pour la production. Surchargeable : BASE_BRANCH=xxx
 const BASE = process.env.BASE_BRANCH || 'main';
@@ -61,7 +63,7 @@ if (!branch || branch === 'HEAD') {
   process.exit(0);
 }
 
-console.log(`${C.bold}Check pré-push${C.reset} ${C.dim}— branche ${branch}${C.reset}`);
+console.log(`${C.bold}${REPORT ? 'État du dépôt' : 'Check pré-push'}${C.reset} ${C.dim}— branche ${branch}${C.reset}`);
 
 // --- Récupération de l'état distant --------------------------------------
 
@@ -92,11 +94,13 @@ if (!remoteBranch) {
   if (behind === 0) {
     console.log(`   ${C.green}✓${C.reset} À jour avec ${remoteBranch} (${ahead} commit(s) à pousser).`);
   } else {
-    blocking = true;
+    if (!REPORT) blocking = true;
     console.log(`   ${C.red}✗ ${behind} commit(s) sur ${remoteBranch} qu'on n'a pas en local.${C.reset}`);
-    console.log(`   ${C.dim}Quelqu'un a poussé pendant qu'on travaillait. Le push sera refusé.${C.reset}\n`);
+    console.log(`   ${C.dim}${REPORT
+      ? `Branche en retard. Récupérer avant de commencer : git pull --no-rebase origin ${branch}`
+      : "Quelqu'un a poussé pendant qu'on travaillait. Le push sera refusé."}${C.reset}\n`);
 
-    const incoming = (trySh(`git log --format=%h\u0020\u0020%an\u0020\u0020%s HEAD..${remoteBranch}`) || '')
+    const incoming = (trySh(`git log --format="%h  %an  %s" HEAD..${remoteBranch}`) || '')
       .split('\n').filter(Boolean).map(l => `     ${l}`).join('\n');
     if (incoming) console.log(`   Commits entrants :\n${incoming}\n`);
 
@@ -152,7 +156,9 @@ if (blocking) {
   process.exit(1);
 }
 if (warning) {
-  console.log(`${C.yellow}${C.bold}✓ Push autorisé — mais des conflits attendent à la fusion vers ${BASE}.${C.reset}\n`);
+  console.log(REPORT
+    ? `${C.yellow}${C.bold}⚠ Des conflits attendent à la fusion vers ${BASE}.${C.reset}\n`
+    : `${C.yellow}${C.bold}✓ Push autorisé — mais des conflits attendent à la fusion vers ${BASE}.${C.reset}\n`);
 } else {
   console.log(`${C.green}${C.bold}✓ Aucun conflit détecté.${C.reset}\n`);
 }
