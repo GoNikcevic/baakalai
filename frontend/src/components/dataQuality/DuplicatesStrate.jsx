@@ -12,6 +12,7 @@ import { request } from '../../services/api-client';
 import { showToast } from '../../services/notifications';
 import { useI18n, useT } from '../../i18n';
 import MergeReviewPanel from './MergeReviewPanel';
+import Icon from '../Icon';
 
 const PROVIDER_LABELS = {
   pipedrive: 'Pipedrive', hubspot: 'HubSpot', salesforce: 'Salesforce',
@@ -19,16 +20,16 @@ const PROVIDER_LABELS = {
 };
 
 function getOtherIssueConfig(en) { return {
-  missing_email: { icon: '📧', label: en ? 'Missing email' : 'Email manquant', color: 'var(--danger)' },
-  missing_name: { icon: '👤', label: en ? 'Missing name' : 'Nom manquant', color: 'var(--warning)' },
-  missing_company: { icon: '🏢', label: en ? 'Missing company' : 'Entreprise manquante', color: 'var(--text-muted)' },
-  invalid_email_format: { icon: '⚠️', label: en ? 'Invalid email format' : 'Format d\'email invalide', color: 'var(--danger)' },
-  invalid_email_domain: { icon: '⚠️', label: en ? 'Invalid email domain' : 'Domaine email invalide', color: 'var(--danger)' },
-  inactive: { icon: '💤', label: en ? 'Inactive contacts (6+ months)' : 'Contacts inactifs (6+ mois)', color: 'var(--text-muted)' },
-  format_name_caps: { icon: 'Aa', label: en ? 'Names in ALL CAPS' : 'Noms en MAJUSCULES', color: 'var(--blue)' },
-  email_bounced: { icon: '📛', label: en ? 'Bounced emails' : 'Emails en rebond (bounce)', color: 'var(--danger)' },
-  disposable_email: { icon: '🗑️', label: en ? 'Disposable email addresses' : 'Adresses email jetables', color: 'var(--warning)' },
-  email_typo: { icon: '✏️', label: en ? 'Probable email typo' : 'Faute de frappe probable dans l\'email', color: 'var(--blue)' },
+  missing_email: { icon: 'mail', label: en ? 'Missing email' : 'Email manquant', color: 'var(--danger)' },
+  missing_name: { icon: 'user', label: en ? 'Missing name' : 'Nom manquant', color: 'var(--warning)' },
+  missing_company: { icon: 'building', label: en ? 'Missing company' : 'Entreprise manquante', color: 'var(--text-muted)' },
+  invalid_email_format: { icon: 'alert', label: en ? 'Invalid email format' : 'Format d\'email invalide', color: 'var(--danger)' },
+  invalid_email_domain: { icon: 'alert', label: en ? 'Invalid email domain' : 'Domaine email invalide', color: 'var(--danger)' },
+  inactive: { icon: 'moon', label: en ? 'Inactive contacts (6+ months)' : 'Contacts inactifs (6+ mois)', color: 'var(--text-muted)' },
+  format_name_caps: { icon: 'edit', label: en ? 'Names in ALL CAPS' : 'Noms en MAJUSCULES', color: 'var(--blue)' },
+  email_bounced: { icon: 'ban', label: en ? 'Bounced emails' : 'Emails en rebond (bounce)', color: 'var(--danger)' },
+  disposable_email: { icon: 'trash', label: en ? 'Disposable email addresses' : 'Adresses email jetables', color: 'var(--warning)' },
+  email_typo: { icon: 'edit', label: en ? 'Probable email typo' : 'Faute de frappe probable dans l\'email', color: 'var(--blue)' },
 }; }
 
 // Issue types correctable by typing in the right value for one field — same mechanism as the
@@ -70,8 +71,9 @@ function FieldFixRow({ provider, contact, field, en, t, onSaved, suggestedValue 
 
   if (saved) {
     return (
-      <div style={{ fontSize: 12, color: 'var(--success)', padding: '4px 0' }}>
-        ✅ {contact.name || contact.email || '?'} — {value}
+      <div style={{ fontSize: 12, color: 'var(--success)', padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon name="checkCircle" size={13} />
+        <span>{contact.name || contact.email || '?'} — {value}</span>
       </div>
     );
   }
@@ -113,7 +115,7 @@ function OtherIssueCard({ provider, issue, onFixed }) {
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState(null);
   const [expanded, setExpanded] = useState(false);
-  const config = getOtherIssueConfig(en)[issue.type] || { icon: '?', label: issue.type, color: 'var(--text-muted)' };
+  const config = getOtherIssueConfig(en)[issue.type] || { icon: 'alert', label: issue.type, color: 'var(--text-muted)' };
   const count = issue.count || issue.contacts?.length || 0;
   const fixField = FIXABLE_FIELD_BY_ISSUE_TYPE[issue.type];
 
@@ -143,7 +145,8 @@ function OtherIssueCard({ provider, issue, onFixed }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600 }}>
-              {config.icon} {config.label} <span style={{ fontSize: 11, color: config.color }}>{count}</span>
+              <Icon name={config.icon} size={14} color={config.color} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {config.label} <span style={{ fontSize: 11, color: config.color }}>{count}</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
               {(issue.contacts || []).slice(0, 3).map(c => c.name || c.email || '?').join(', ')}
@@ -151,7 +154,9 @@ function OtherIssueCard({ provider, issue, onFixed }) {
             </div>
           </div>
           {fixResult ? (
-            <span style={{ fontSize: 11, color: 'var(--success)' }}>✅ {fixResult.message}</span>
+            <span style={{ fontSize: 11, color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Icon name="checkCircle" size={12} />{fixResult.message}
+            </span>
           ) : fixField ? (
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setExpanded(e => !e)}>
               {en ? 'Fix' : 'Corriger'}
@@ -216,7 +221,12 @@ function ProviderBlock({ provider, data, onRescan }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>{providerLabel}</div>
         <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={rescanning} onClick={handleRescan}>
-          {rescanning ? t('dataQuality.duplicates.scanning') : `🔄 ${t('dataQuality.duplicates.rescan')}`}
+          {rescanning ? t('dataQuality.duplicates.scanning') : (
+            <>
+              <Icon name="refresh" size={12} style={{ marginRight: 5 }} />
+              {t('dataQuality.duplicates.rescan')}
+            </>
+          )}
         </button>
       </div>
 

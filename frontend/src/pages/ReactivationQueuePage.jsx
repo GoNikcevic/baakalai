@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
+import Icon from '../components/Icon';
 
 const CRM_BANNER_KEY = 'bakal_reactivation_crm_banner_dismissed';
 const CRM_BANNER_TTL = 24 * 60 * 60 * 1000; // reappears after 24h
@@ -18,6 +19,14 @@ const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', '
 export default function ReactivationQueuePage({ kind, i18nNamespace, detailRouteBase }) {
   const t = useT();
   const { lang } = useI18n();
+  // Seuil de dormance, réglable ici parce que c'est ici qu'on en voit l'effet.
+  // Il n'a de sens que pour les deals : l'upsell se déclenche sur un score.
+  const showStagnation = kind === 'deal_reactivation';
+  const [stagnation, setStagnation] = useState(null);
+  const [savingStagnation, setSavingStagnation] = useState(false);
+  // Le seuil apparaît dans quatre phrases de la page. Sans lui, elles
+  // annonçaient « 14 jours » en dur pendant que le champ affichait autre chose.
+  const stagnantDays = stagnation?.stagnantDays ?? 14;
   const dateLocale = lang === 'en' ? 'en-US' : 'fr-FR';
   const navigate = useNavigate();
   const [tab, setTab] = useState('pending');
@@ -53,6 +62,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   };
 
   useEffect(() => {
+    request('/reactivation/settings').then(setStagnation).catch(() => {});
     request('/crm/providers')
       .then(d => setHasCrm((d.providers || []).some(p => CRM_PROVIDERS.includes(p.provider) && p.connected)))
       .catch(() => setHasCrm(true)); // en cas de doute, ne pas afficher le CTA « connecter »
@@ -119,8 +129,47 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
       <div className="page-header">
         <div>
           <h1 className="page-title">{t(`${i18nNamespace}.title`)}</h1>
-          <div className="page-subtitle">{t(`${i18nNamespace}.subtitle`)}</div>
+          <div className="page-subtitle">{t(`${i18nNamespace}.subtitle`, { days: stagnantDays })}</div>
         </div>
+        {showStagnation && stagnation && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            <label htmlFor="stagnant-days">{t('reactivation.stagnantAfter')}</label>
+            <input
+              id="stagnant-days"
+              type="number"
+              min={stagnation.minDays}
+              max={stagnation.maxDays}
+              defaultValue={stagnation.stagnantDays}
+              disabled={savingStagnation}
+              onBlur={async (e) => {
+                const value = Number(e.target.value);
+                if (!Number.isFinite(value) || value === stagnation.stagnantDays) return;
+                setSavingStagnation(true);
+                try {
+                  const saved = await request('/reactivation/settings', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ stagnantDays: value }),
+                  });
+                  setStagnation(prev => ({ ...prev, ...saved }));
+                  e.target.value = saved.stagnantDays;
+                  showToast({ type: 'success', title: t('reactivation.stagnantSaved'), message: t('reactivation.stagnantSavedDesc', { days: saved.stagnantDays }) });
+                  loadData();
+                } catch (err) {
+                  showToast({ type: 'error', title: t('common.error'), message: err.message });
+                  e.target.value = stagnation.stagnantDays;
+                } finally {
+                  setSavingStagnation(false);
+                }
+              }}
+              style={{
+                width: 64, padding: '5px 8px', fontSize: 12, textAlign: 'right',
+                border: '1px solid var(--border)', borderRadius: 6,
+                background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            />
+            <span>{t('reactivation.stagnantDaysUnit')}</span>
+          </div>
+        )}
         {tab === 'pending' && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -182,7 +231,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
               ×
             </button>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('reactivation.howTitle')}</div>
-            {[t(`${i18nNamespace}.howStep1`), t('reactivation.howStep2'), t('reactivation.howStep3')].map((step, i) => (
+            {[t(`${i18nNamespace}.howStep1`, { days: stagnantDays }), t('reactivation.howStep2'), t('reactivation.howStep3')].map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
                 <span style={{
                   flexShrink: 0, width: 18, height: 18, borderRadius: '50%', fontSize: 11, fontWeight: 700,
@@ -202,7 +251,10 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
           background: 'var(--accent-glow)', border: '1px solid var(--border-light)',
           borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12,
         }}>
-          <span style={{ color: 'var(--text-secondary)' }}>{t('reactivation.crmHygieneBanner')}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>
+            <Icon name="pen" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {t('reactivation.crmHygieneBanner', { days: stagnantDays })}
+          </span>
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
@@ -228,7 +280,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
-              {hasCrm === null ? t('reactivation.noCandidates') : t('reactivation.noCandidatesAllClear')}
+              {hasCrm === null ? t('reactivation.noCandidates') : t('reactivation.noCandidatesAllClear', { days: stagnantDays })}
             </div>
           )
         ) : (
@@ -245,6 +297,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                       )}
                       {c.hasFailedSend && (
                         <div style={{ fontSize: 11, color: 'var(--danger, #d64545)', marginTop: 4, fontWeight: 600 }}>
+                          <Icon name="alert" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
                           {t('reactivation.sendFailedBadge')}
                         </div>
                       )}

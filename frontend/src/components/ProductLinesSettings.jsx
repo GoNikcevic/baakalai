@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { useI18n } from '../i18n';
+import Icon from './Icon';
 
 export default function ProductLinesSettings() {
   const { lang } = useI18n();
@@ -79,7 +80,9 @@ export default function ProductLinesSettings() {
                 background: 'var(--bg-card)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 18 }}>{pl.icon || '\uD83D\uDCE6'}</span>
+                  <span style={{ fontSize: 18 }}>
+                    {pl.icon || <Icon name="package" size={16} />}
+                  </span>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{pl.name}</div>
                     {pl.description && (

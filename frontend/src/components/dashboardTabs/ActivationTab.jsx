@@ -17,23 +17,34 @@ import AnimatedCounter from '../AnimatedCounter';
 import ICPInsightsCard from '../ICPInsightsCard';
 import DeliverabilityCard from '../DeliverabilityCard';
 import { sendRecoFeedback } from '../../services/api-client';
+import Icon from '../Icon';
+
+// Une icône par KPI — partagée entre la grille remplie et l'état vide.
+const KPI_ICONS = {
+  contacts: 'send',
+  openRate: 'inbox',
+  replyRate: 'message',
+  interested: 'flame',
+  meetings: 'calendar',
+  stops: 'ban',
+};
 
 const KPI_LABELS = {
   fr: {
-    contacts: '\u{1F4E4} Contacts atteints',
-    openRate: "\u{1F4EC} Taux d'ouverture",
-    replyRate: '\u{1F4AC} Taux de réponse',
-    interested: '\u{1F525} Prospects intéressés',
-    meetings: '\u{1F4C5} RDV qualifiés',
-    stops: '\u{1F6AB} Stops',
+    contacts: 'Contacts atteints',
+    openRate: "Taux d'ouverture",
+    replyRate: 'Taux de réponse',
+    interested: 'Prospects intéressés',
+    meetings: 'RDV qualifiés',
+    stops: 'Stops',
   },
   en: {
-    contacts: '\u{1F4E4} Contacts reached',
-    openRate: '\u{1F4EC} Open rate',
-    replyRate: '\u{1F4AC} Reply rate',
-    interested: '\u{1F525} Interested prospects',
-    meetings: '\u{1F4C5} Qualified meetings',
-    stops: '\u{1F6AB} Stops',
+    contacts: 'Contacts reached',
+    openRate: 'Open rate',
+    replyRate: 'Reply rate',
+    interested: 'Interested prospects',
+    meetings: 'Qualified meetings',
+    stops: 'Stops',
   },
 };
 
@@ -80,7 +91,10 @@ function NonEmptyActivation({ globalKpis, campaigns, recommendations, chartData 
       <div className="kpi-grid">
         {Object.entries(globalKpis).map(([key, k]) => (
           <div className="kpi-card" key={key}>
-            <div className="kpi-label">{(en ? KPI_LABELS.en[key] : KPI_LABELS.fr[key]) || key}</div>
+            <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name={KPI_ICONS[key]} size={14} />
+              <span>{(en ? KPI_LABELS.en[key] : KPI_LABELS.fr[key]) || key}</span>
+            </div>
             <div className="kpi-value">
               <AnimatedCounter value={k.value} />
             </div>
@@ -127,7 +141,10 @@ function NonEmptyActivation({ globalKpis, campaigns, recommendations, chartData 
         {/* AI Recommendations */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">{'\u{1F4A1}'} {en ? 'Baakalai Recommendations' : 'Recommandations Baakalai'}</div>
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="bulb" size={16} color="var(--accent)" />
+              <span>{en ? 'Baakalai Recommendations' : 'Recommandations Baakalai'}</span>
+            </div>
             <Link
               to="/recos"
               className="btn btn-ghost"
@@ -153,14 +170,16 @@ function NonEmptyActivation({ globalKpis, campaigns, recommendations, chartData 
                           <>
                             <button
                               onClick={() => handleRecoFeedback(i, rec, 'useful')}
-                              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
+                              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '4px 6px', lineHeight: 1, color: 'var(--text-muted)' }}
                               title={en ? 'Useful' : 'Utile'}
-                            >{'👍'}</button>
+                              aria-label={en ? 'Useful' : 'Utile'}
+                            ><Icon name="thumbsUp" size={14} /></button>
                             <button
                               onClick={() => handleRecoFeedback(i, rec, 'not_useful')}
-                              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
+                              style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '4px 6px', lineHeight: 1, color: 'var(--text-muted)' }}
                               title={en ? 'Not useful' : 'Pas utile'}
-                            >{'👎'}</button>
+                              aria-label={en ? 'Not useful' : 'Pas utile'}
+                            ><Icon name="thumbsDown" size={14} /></button>
                           </>
                         )}
                       </div>
@@ -222,7 +241,9 @@ function CampaignTableRow({ campaign: c }) {
       Active
     </span>
   ) : (
-    <span className="status-badge status-prep">{'⏳'} {en ? 'Preparing' : 'En préparation'}</span>
+    <span className="status-badge status-prep">
+      <Icon name="clock" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Preparing' : 'En préparation'}
+    </span>
   );
 
   let openContent, replyContent, meetingsContent;
@@ -320,27 +341,16 @@ function CampaignTableRow({ campaign: c }) {
 function EmptyKpis() {
   const { lang } = useI18n();
   const en = lang === 'en';
-  const items = en ? [
-    { label: '\u{1F4E4} Contacts reached' },
-    { label: '\u{1F4EC} Open rate' },
-    { label: '\u{1F4AC} Reply rate' },
-    { label: '\u{1F525} Interested prospects' },
-    { label: '\u{1F4C5} Qualified meetings' },
-    { label: '\u{1F6AB} Stops' },
-  ] : [
-    { label: '\u{1F4E4} Contacts atteints' },
-    { label: "\u{1F4EC} Taux d'ouverture" },
-    { label: '\u{1F4AC} Taux de réponse' },
-    { label: '\u{1F525} Prospects intéressés' },
-    { label: '\u{1F4C5} RDV qualifiés' },
-    { label: '\u{1F6AB} Stops' },
-  ];
+  const labels = en ? KPI_LABELS.en : KPI_LABELS.fr;
 
   return (
     <div className="kpi-grid">
-      {items.map((k, i) => (
-        <div className="kpi-card" key={i}>
-          <div className="kpi-label">{k.label}</div>
+      {Object.keys(KPI_ICONS).map((key) => (
+        <div className="kpi-card" key={key}>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name={KPI_ICONS[key]} size={14} />
+            <span>{labels[key]}</span>
+          </div>
           <div className="kpi-value" style={{ color: 'var(--text-muted)' }}>
             &mdash;
           </div>
@@ -359,10 +369,15 @@ function EmptyOverviewGrid({ onCreateCampaign }) {
   return (
     <div className="card card-empty">
       <div className="card-header">
-        <div className="card-title">{'\u{1F3AF}'} {en ? 'Active campaigns' : 'Campagnes actives'}</div>
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="target" size={16} color="var(--accent)" />
+          <span>{en ? 'Active campaigns' : 'Campagnes actives'}</span>
+        </div>
       </div>
       <div className="card-body">
-        <div className="empty-icon">{'\u{1F4ED}'}</div>
+        <div className="empty-icon" style={{ color: 'var(--text-muted)', display: 'flex', justifyContent: 'center' }}>
+          <Icon name="inbox" size={40} strokeWidth={1.5} />
+        </div>
         <div className="empty-text">
           {en ? 'No campaigns yet. Create your first campaign to see your performance here.'
             : 'Aucune campagne pour le moment. Créez votre première campagne pour voir vos performances ici.'}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
+import Icon from '../components/Icon';
 
 const ROLES = [
   { value: 'prospection', label: 'Prospection', desc: 'Campagnes, prospects, recherche' },
@@ -42,7 +43,9 @@ export default function JoinTeamPage() {
         borderRadius: 16, padding: 32, maxWidth: 420, width: '100%',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDC65'}</div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
+            <Icon name="users" size={32} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 18, fontWeight: 700 }}>Rejoindre une {'\u00E9'}quipe</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
             Choisissez votre r{'\u00F4'}le dans l'{'\u00E9'}quipe

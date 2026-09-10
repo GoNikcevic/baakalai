@@ -23,6 +23,8 @@ const MANUAL_ONLY_TYPES = ['newsletter_inactive', 'newsletter_engaged'];
 
 /**
  * Retourne les opportunités qui matchent un trigger à l'instant `now`.
+ * `defaults.stagnantDays` fournit le repli du trigger deal_stagnant quand il ne
+ * porte pas de seuil explicite (cf. lib/stagnation.js).
  * `opps` = lignes de la table opportunities (SELECT *).
  * Retourne null si le type n'est pas évaluable depuis la base locale
  * (types MANUAL_ONLY_TYPES) — à distinguer de [] (évalué, aucun match).
@@ -33,7 +35,7 @@ const MANUAL_ONLY_TYPES = ['newsletter_inactive', 'newsletter_engaged'];
  * que cette fonction est le point de passage unique du cron (crm-agent) et
  * de la preview (routes/nurture.js) — les deux héritent donc de la règle.
  */
-function matchContacts(trigger, allOpps, now = Date.now()) {
+function matchContacts(trigger, allOpps, now = Date.now(), defaults = {}) {
   const opps = onlyCrmContacts(allOpps);
   const conditions = trigger.conditions || {};
   const days = conditions.days || 30;
@@ -60,12 +62,19 @@ function matchContacts(trigger, allOpps, now = Date.now()) {
         inWindow(ageDays(o, o.lost_date || o.updated_at), days, 7)
       );
 
-    case 'deal_stagnant':
+    case 'deal_stagnant': {
+      // Même job que la file de réactivation : à défaut de seuil explicite sur
+      // le trigger, on repart du réglage de dormance de l'utilisateur plutôt
+      // que d'un autre nombre en dur (cf. lib/stagnation.js). Un trigger qui
+      // porte son propre `days` le garde : écrire automatiquement plus tard
+      // qu'on ne regarde est un choix légitime, mais il part de la même base.
+      const stagnantDays = conditions.days || defaults.stagnantDays || days;
       return opps.filter(o => {
         if (o.status === 'won' || o.status === 'lost') return false;
         const age = ageDays(o, o.last_activity_at);
-        return age !== null && age >= days;
+        return age !== null && age >= stagnantDays;
       });
+    }
 
     case 'inactive_contact':
       return opps.filter(o => {

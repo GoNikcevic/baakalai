@@ -23,7 +23,7 @@ vi.mock('../../services/api-client', () => ({
   scoreLeads: vi.fn(),
   exportScoresToCRM: vi.fn(),
   downloadScoresCSV: vi.fn(),
-  // ClientsTab (bandeau "Risque de churn") et ActivationTab (feedback 👍/👎
+  // ClientsTab (bandeau "Risque de churn") et ActivationTab (feedback utile / pas utile
   // des recommandations) appellent ces exports nommés directement.
   getChurnSummary: vi.fn().mockResolvedValue({}),
   sendRecoFeedback: vi.fn(),

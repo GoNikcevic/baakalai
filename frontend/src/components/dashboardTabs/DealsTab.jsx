@@ -7,6 +7,7 @@
 
 import { useI18n } from '../../i18n';
 import ReactivationCard from '../ReactivationCard';
+import Icon from '../Icon';
 
 export default function DealsTab({ crmStats }) {
   return (
@@ -37,26 +38,30 @@ function RevenueKpis({ stats }) {
 
   const cards = [
     {
-      label: en ? '\u{1F4BC} Open pipeline' : '\u{1F4BC} Pipeline ouvert',
+      icon: 'briefcase',
+      label: en ? 'Open pipeline' : 'Pipeline ouvert',
       value: money(pipeline.totalValue),
       trend: en ? `${pipeline.openDeals} open deals` : `${pipeline.openDeals} deals ouverts`,
     },
     {
+      icon: 'moon',
       label: en
-        ? `\u{1F4A4} Dormant deals (${pipeline.stagnantThresholdDays || 14}d+)`
-        : `\u{1F4A4} Deals dormants (${pipeline.stagnantThresholdDays || 14}j+)`,
+        ? `Dormant deals (${pipeline.stagnantThresholdDays || 14}d+)`
+        : `Deals dormants (${pipeline.stagnantThresholdDays || 14}j+)`,
       value: String(pipeline.stagnantDeals || 0),
       trend: en ? `${money(pipeline.potentialRevenue)} to revive` : `${money(pipeline.potentialRevenue)} à réveiller`,
     },
     {
-      label: en ? '\u{1F4B0} Revenue recovered' : '\u{1F4B0} Revenu récupéré',
+      icon: 'revenue',
+      label: en ? 'Revenue recovered' : 'Revenu récupéré',
       value: money(reactivated.revenue),
       trend: en
         ? `${reactivated.count} deal${reactivated.count > 1 ? 's' : ''} reactivated`
         : `${reactivated.count} deal${reactivated.count > 1 ? 's' : ''} réactivé${reactivated.count > 1 ? 's' : ''}`,
     },
     {
-      label: en ? '\u{1F4E8} Follow-ups sent' : '\u{1F4E8} Relances envoyées',
+      icon: 'send',
+      label: en ? 'Follow-ups sent' : 'Relances envoyées',
       value: String(emails.sent || 0),
       trend: en ? `${emails.replyRate || 0}% replies` : `${emails.replyRate || 0}% de réponses`,
     },
@@ -66,7 +71,10 @@ function RevenueKpis({ stats }) {
     <div className="kpi-grid" style={{ marginBottom: 16 }}>
       {cards.map((k, i) => (
         <div className="kpi-card" key={i}>
-          <div className="kpi-label">{k.label}</div>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name={k.icon} size={14} />
+            <span>{k.label}</span>
+          </div>
           <div className="kpi-value">{k.value}</div>
           <div className="kpi-trend">{k.trend}</div>
         </div>

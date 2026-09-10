@@ -11,6 +11,7 @@ import api from '../../services/api-client';
 import { sanitizeHtml } from '../../services/sanitize';
 import LoadingOverlay from '../shared/LoadingOverlay';
 import { useI18n } from '../../i18n';
+import Icon from '../Icon';
 
 export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }) {
   const { lang } = useI18n(); const en = lang === 'en';
@@ -94,13 +95,13 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
       const stepsTotal = (result.sequenceSteps || []).length;
       const baseDesc = `${result.leads?.pushed || 0} prospects ajoutés · ${stepsOk}/${stepsTotal} étapes de séquence créées`;
       const statusLine = result.started
-        ? ' · ✅ Campagne démarrée automatiquement'
+        ? ' · Campagne démarrée automatiquement'
         : result.startError
-          ? ` · ⚠️ Démarrage auto échoué (${result.startError}) — démarrez manuellement depuis Lemlist`
+          ? ` · Démarrage auto échoué (${result.startError}) — démarrez manuellement depuis Lemlist`
           : ' · ℹ️ Campagne en draft sur Lemlist (pas de leads/étapes à envoyer)';
       setLaunchAlert({
         type: 'success',
-        title: '🚀 Campagne déployée vers Lemlist',
+        title: 'Campagne déployée vers Lemlist',
         desc: baseDesc + statusLine,
       });
     } catch (err) {
@@ -152,7 +153,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
     <div className="campaign-detail">
       <LoadingOverlay
         show={launching}
-        title={en ? 'Deploying to Lemlist' : '🚀 Déploiement vers Lemlist'}
+        title={en ? 'Deploying to Lemlist' : 'Déploiement vers Lemlist'}
         steps={LEMLIST_LAUNCH_STEPS}
       />
 
@@ -188,7 +189,8 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             style={{ fontSize: '12px', padding: '8px 14px' }}
             onClick={() => setShowEditPanel((prev) => !prev)}
           >
-            {en ? 'Edit' : '✏️ Modifier'}
+            <Icon name="pen" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {en ? 'Edit' : 'Modifier'}
           </button>
           <button
             className="btn btn-ghost"
@@ -196,7 +198,12 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             onClick={handleArchive}
             disabled={archiving}
           >
-            {archiving ? '...' : (en ? '📦 Archive' : '📦 Archiver')}
+            {archiving ? '...' : (
+              <>
+                <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {en ? 'Archive' : 'Archiver'}
+              </>
+            )}
           </button>
           <button
             className="btn btn-success"
@@ -204,7 +211,8 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             onClick={handleLaunch}
             disabled={launching}
           >
-            {launching ? (en ? '⏳ Deploying to Lemlist...' : '⏳ Déploiement Lemlist...') : (en ? '🚀 Launch to Lemlist' : '🚀 Lancer vers Lemlist')}
+            <Icon name={launching ? 'clock' : 'rocket'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {launching ? (en ? 'Deploying to Lemlist...' : 'Déploiement Lemlist...') : (en ? 'Launch to Lemlist' : 'Lancer vers Lemlist')}
           </button>
           <button
             className="btn"
@@ -212,7 +220,8 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             onClick={handleLaunchSalesforce}
             disabled={launchingSF}
           >
-            {launchingSF ? (en ? '⏳ Deploying to Salesforce...' : '⏳ Déploiement Salesforce...') : (en ? 'Deploy to Salesforce' : 'Déployer vers Salesforce')}
+            {launchingSF && <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+            {launchingSF ? (en ? 'Deploying to Salesforce...' : 'Déploiement Salesforce...') : (en ? 'Deploy to Salesforce' : 'Déployer vers Salesforce')}
           </button>
         </div>
       </div>
@@ -243,7 +252,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
           }}
         >
           <span style={{ fontSize: '18px' }}>
-            {launchAlert.type === 'error' ? '⚠️' : launchAlert.type === 'success' ? '✅' : '⏳'}
+            <Icon name={launchAlert.type === 'error' ? 'alert' : launchAlert.type === 'success' ? 'checkCircle' : 'clock'} size={14} />
           </span>
           <div>
             <div
@@ -302,7 +311,8 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             gap: '8px',
           }}
         >
-          {en ? 'Preparation checklist' : '📋 Checklist de préparation'}
+          <Icon name="clipboard" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {en ? 'Preparation checklist' : 'Checklist de préparation'}
         </div>
         <div
           style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
@@ -320,7 +330,8 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
       <div className="sequence-card">
         <div className="sequence-header">
           <div className="sequence-title">
-            {en ? 'Sequence preview — Awaiting validation' : '👁️ Aperçu des séquences — En attente de validation'}
+            <Icon name="eye" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {en ? 'Sequence preview — Awaiting validation' : 'Aperçu des séquences — En attente de validation'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {(c.sequence || []).length} touchpoints &middot; Email ({emailCount})
@@ -353,7 +364,8 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
               gap: '8px',
             }}
           >
-            {en ? 'Pre-launch recommendation — Baakalai' : '🤖 Recommandation pré-lancement — Baakalai'}
+            <Icon name="bot" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {en ? 'Pre-launch recommendation — Baakalai' : 'Recommandation pré-lancement — Baakalai'}
           </div>
           <div
             style={{
@@ -380,7 +392,8 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
                     fontWeight: 600,
                   }}
                 >
-                  {en ? 'Suggestion applied — will be integrated in sequence generation' : '✅ Suggestion appliquée — sera intégrée dans la génération des séquences'}
+                  <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                  {en ? 'Suggestion applied — will be integrated in sequence generation' : 'Suggestion appliquée — sera intégrée dans la génération des séquences'}
                 </div>
               ) : (
                 <>
@@ -389,14 +402,16 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
                     style={{ fontSize: '12px', padding: '8px 14px' }}
                     onClick={() => setRecoApplied(true)}
                   >
-                    {en ? 'Apply suggestion' : '✅ Appliquer la suggestion'}
+                    <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {en ? 'Apply suggestion' : 'Appliquer la suggestion'}
                   </button>
                   <button
                     className="btn btn-ghost"
                     style={{ fontSize: '12px', padding: '8px 14px' }}
                     onClick={() => setRecoDismissed(true)}
                   >
-                    {en ? 'Keep as is' : '❌ Garder tel quel'}
+                    <Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {en ? 'Keep as is' : 'Garder tel quel'}
                   </button>
                 </>
               )}

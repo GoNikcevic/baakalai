@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { login, register, resendVerification } from '../services/auth';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 /* ─── Inline styles matching the vanilla app's auth overlay ─── */
 const styles = {
@@ -275,7 +276,9 @@ export default function AuthGate({ onAuth, error: externalError }) {
               marginBottom: 16,
               textAlign: 'center',
             }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📬</div>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
+                <Icon name="inbox" size={32} strokeWidth={1.5} />
+              </div>
               <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
                 {t('auth.checkEmail')}
               </h3>
@@ -439,7 +442,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
             alignItems: 'center',
             gap: 8,
           }}>
-            <span>✅</span>
+            <Icon name="checkCircle" size={14} />
             <span>{t('auth.verified')}</span>
           </div>
         )}

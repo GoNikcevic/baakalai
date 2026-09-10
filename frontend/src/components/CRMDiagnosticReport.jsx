@@ -10,16 +10,17 @@ import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 const ISSUE_META = {
-  duplicate_email: { icon: '\uD83D\uDD04', color: 'var(--danger)' },
-  duplicate_name: { icon: '\uD83D\uDC65', color: 'var(--warning)' },
-  missing_email: { icon: '\uD83D\uDCE7', color: 'var(--danger)' },
-  missing_name: { icon: '\uD83D\uDC64', color: 'var(--warning)' },
-  missing_company: { icon: '\uD83C\uDFE2', color: 'var(--text-muted)' },
-  invalid_email: { icon: '\u26A0\uFE0F', color: 'var(--danger)' },
-  inactive: { icon: '\uD83D\uDE34', color: 'var(--text-muted)' },
-  format_name_caps: { icon: 'Aa', color: 'var(--blue)' },
+  duplicate_email: { icon: 'refresh', color: 'var(--danger)' },
+  duplicate_name: { icon: 'users', color: 'var(--warning)' },
+  missing_email: { icon: 'mail', color: 'var(--danger)' },
+  missing_name: { icon: 'user', color: 'var(--warning)' },
+  missing_company: { icon: 'building', color: 'var(--text-muted)' },
+  invalid_email: { icon: 'alert', color: 'var(--danger)' },
+  inactive: { icon: 'moon', color: 'var(--text-muted)' },
+  format_name_caps: { icon: 'edit', color: 'var(--blue)' },
 };
 
 const URGENCY_COLORS = {
@@ -29,12 +30,12 @@ const URGENCY_COLORS = {
 };
 
 const ACTION_ICONS = {
-  email: '\uD83D\uDCE7',
-  call: '\uD83D\uDCDE',
-  linkedin: '\uD83D\uDC64',
-  content: '\uD83D\uDCCE',
-  intro: '\uD83E\uDD1D',
-  offer: '\uD83C\uDF81',
+  email: 'mail',
+  call: 'phone',
+  linkedin: 'user',
+  content: 'paperclip',
+  intro: 'handshake',
+  offer: 'gift',
 };
 
 export default function CRMDiagnosticReport({ onClose }) {
@@ -144,7 +145,9 @@ export default function CRMDiagnosticReport({ onClose }) {
       <div style={styles.overlay}>
         <div style={styles.modal}>
           <div style={{ textAlign: 'center', padding: '60px 40px' }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>{'\u26A0\uFE0F'}</div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: 'var(--danger)' }}>
+              <Icon name="alert" size={40} strokeWidth={1.5} />
+            </div>
             <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>{t('diagnostic.error')}</div>
             <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => handleNav('/dashboard')}>
               {t('diagnostic.goToDashboard')}
@@ -161,7 +164,9 @@ export default function CRMDiagnosticReport({ onClose }) {
       <div style={styles.overlay}>
         <div style={styles.modal}>
           <div style={{ textAlign: 'center', padding: '60px 40px' }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>{'\uD83D\uDCCB'}</div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+              <Icon name="clipboard" size={40} strokeWidth={1.5} />
+            </div>
             <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>{t('diagnostic.noData')}</div>
             <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => handleNav('/clients')}>
               {t('diagnostic.goToClients')}
@@ -189,7 +194,9 @@ export default function CRMDiagnosticReport({ onClose }) {
       <div style={{ ...styles.modal, maxWidth: 720 }}>
         {/* Header */}
         <div style={styles.header}>
-          <div style={{ fontSize: 28, marginBottom: 4 }}>{'\uD83D\uDD0D'}</div>
+          <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
+            <Icon name="activity" size={28} strokeWidth={1.75} />
+          </div>
           <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
             {t('diagnostic.title')}
           </h2>
@@ -294,7 +301,7 @@ export default function CRMDiagnosticReport({ onClose }) {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {health.issues.map((issue, i) => {
-                  const meta = ISSUE_META[issue.type] || { icon: '\u2022', color: 'var(--text-muted)' };
+                  const meta = ISSUE_META[issue.type] || { icon: 'alert', color: 'var(--text-muted)' };
                   const isMergeable = issue.suggestedAction === 'merge'
                     || (issue.suggestedAction === 'review' && issue.contacts?.length >= 2);
                   const actionLabel = isMergeable ? t('diagnostic.merge')
@@ -308,7 +315,7 @@ export default function CRMDiagnosticReport({ onClose }) {
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       background: 'var(--bg-elevated)', borderRadius: 8, fontSize: 13,
                     }}>
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.icon}</span>
+                      <Icon name={meta.icon} size={16} color={meta.color} />
                       <span style={{ flex: 1, color: 'var(--text)', minWidth: 0 }}>
                         {issue.count != null && (
                           <strong style={{ color: meta.color }}>{issue.count} </strong>
@@ -382,7 +389,7 @@ export default function CRMDiagnosticReport({ onClose }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {dealCoach.suggestions.map((s, i) => {
                   const urgency = URGENCY_COLORS[s.urgency] || URGENCY_COLORS.medium;
-                  const actionIcon = ACTION_ICONS[s.action] || '\u27A1\uFE0F';
+                  const actionIcon = ACTION_ICONS[s.action] || 'target';
                   const urgencyLabel = s.urgency === 'high' ? t('diagnostic.urgencyHigh')
                     : s.urgency === 'low' ? t('diagnostic.urgencyLow')
                     : t('diagnostic.urgencyMedium');
@@ -392,7 +399,7 @@ export default function CRMDiagnosticReport({ onClose }) {
                       background: urgency.bg, border: `1px solid ${urgency.border}`,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>{actionIcon}</span>
+                        <Icon name={actionIcon} size={16} color={urgency.color} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                           {s.contactName} {s.company ? `@ ${s.company}` : ''}
                         </span>
@@ -418,8 +425,9 @@ export default function CRMDiagnosticReport({ onClose }) {
 
           {dealCoach && (!dealCoach.suggestions || dealCoach.suggestions.length === 0) && !dealCoach.skipped && (
             <div style={{ ...styles.section, textAlign: 'center', padding: 20 }}>
-              <div style={{ fontSize: 13, color: 'var(--success)' }}>
-                {'\u2705'} {t('diagnostic.dealCoachEmpty')}
+              <div style={{ fontSize: 13, color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Icon name="checkCircle" size={16} />
+                <span>{t('diagnostic.dealCoachEmpty')}</span>
               </div>
             </div>
           )}

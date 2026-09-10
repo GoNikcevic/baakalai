@@ -10,6 +10,7 @@ import VersionDiff from './VersionDiff';
 import { DiagBlock, InfoRow } from './shared';
 import api from '../../services/api-client';
 import { useI18n } from '../../i18n';
+import Icon from '../Icon';
 
 export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns }) {
   const { lang } = useI18n(); const en = lang === 'en';
@@ -56,7 +57,7 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
   }, [c, isLinkedin]);
 
   /* ── Sequence info ── */
-  const channelIcon = isLinkedin ? '💼' : '📧';
+  const channelIcon = isLinkedin ? 'briefcase' : 'mail';
   const channelName = isLinkedin ? 'LinkedIn' : 'email';
   const seqDays = (c.sequence || []).map((s) => s.timing).join(', ');
   const duration =
@@ -157,21 +158,24 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
             }}
             onClick={handlePause}
           >
-            {paused ? (en ? '▶️ Resume' : '▶️ Reprendre') : '⏸ Pause'}
+            <Icon name={paused ? 'play' : 'pause'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {paused ? (en ? 'Resume' : 'Reprendre') : 'Pause'}
           </button>
           <button
             className="btn btn-ghost"
             style={{ fontSize: '12px', padding: '8px 14px' }}
             onClick={handleExport}
           >
-            {en ? '📥 Export' : '📥 Exporter'}
+            <Icon name="download" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {en ? 'Export' : 'Exporter'}
           </button>
           <button
             className="btn btn-primary"
             style={{ fontSize: '12px', padding: '8px 14px' }}
             onClick={handleLaunchAB}
           >
-            {en ? '🧬 Launch A/B test' : '🧬 Lancer un test A/B'}
+            <Icon name="flask" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {en ? 'Launch A/B test' : 'Lancer un test A/B'}
           </button>
           <button
             className="btn btn-ghost"
@@ -179,7 +183,12 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
             onClick={handleArchive}
             disabled={deleting}
           >
-            {deleting ? '...' : (en ? '📦 Archive' : '📦 Archiver')}
+            {deleting ? '...' : (
+              <>
+                <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {en ? 'Archive' : 'Archiver'}
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -217,7 +226,8 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
       <div className="sequence-card" style={{ opacity }}>
         <div className="sequence-header">
           <div className="sequence-title">
-            {channelIcon} Sequence {channelName} — {(c.sequence || []).length}{' '}
+            <Icon name={channelIcon} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            Sequence {channelName} — {(c.sequence || []).length}{' '}
             touchpoints
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
@@ -356,7 +366,7 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
                           : 'var(--warning)',
                     }}
                   >
-                    {c.nextAction.type === 'testing' ? '🧬' : '⚡'}{' '}
+                    <Icon name={c.nextAction.type === 'testing' ? 'flask' : 'zap'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
                     {c.nextAction.text}
                   </div>
                 </div>

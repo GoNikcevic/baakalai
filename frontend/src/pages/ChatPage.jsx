@@ -1,19 +1,30 @@
 /* ===============================================================================
    BAKAL — General Assistant (first sidebar tab)
-   Answers questions about the user's CRM (via lookup_client), explains how Baakalai
-   works, and gives sales/CRM advice. Never creates or edits a campaign itself — that
-   now lives in the relocated assistant under the Campagnes tab
-   (components/campaigns/CampaignAssistant.jsx). Shares message/thread-list rendering
-   with that assistant via components/chat/ChatPrimitives.jsx.
+   L'assistant qui sait tout faire SAUF lancer une campagne de prospection froide :
+   questions sur le CRM (lookup_client, list_clients), activation (relance des deals
+   dormants, triggers, autopilot, nettoyage/import CRM, envoi d'email, signaux,
+   newsletter), fonctionnement du produit et conseil commercial.
+
+   Une seule frontière : créer/éditer/déployer une campagne de prospection froide
+   appartient à l'assistant de l'onglet Prospection
+   (components/campaigns/CampaignAssistant.jsx). Claude émet alors
+   open_campaign_assistant et l'UI propose la bascule, brief pré-rempli.
+   Rendu des messages partagé via components/chat/ChatPrimitives.jsx ; cartes
+   d'action CRM partagées via components/chat/CrmActionCards.jsx.
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
 import api, { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 import { formatMarkdown, TypingIndicator, ThreadList, InlineSuggestions, ChatMessage } from '../components/chat/ChatPrimitives';
+import {
+  SendEmailCard, CrmActionCard, CreateTriggerCard, ToggleAutopilotCard,
+  ListClientsCard, SignalSearchCard, NewsletterCard, CrmReadingSummary,
+} from '../components/chat/CrmActionCards';
+import Icon from '../components/Icon';
 
 const STATUS_LABELS = {
   new: { fr: 'Nouveau', en: 'New' },
@@ -25,10 +36,21 @@ const STATUS_LABELS = {
   lost: { fr: 'Perdu', en: 'Lost' },
 };
 
-function getExamplePrompts(lang) {
-  return lang === 'en'
-    ? ['👤 What\'s the status of my client Marc?', '❓ How does churn scoring work?', '💡 Advice on launching a campaign in fintech']
-    : ['👤 Quel est le statut de mon client Marc ?', '❓ Comment fonctionne le score de churn ?', '💡 Des conseils pour lancer une campagne dans la fintech'];
+function getExamplePrompts(t) {
+  return [t('assistant.example1'), t('assistant.example2'), t('assistant.example3'), t('assistant.example4')];
+}
+
+// Raccourcis d'activation — les trois jobs du produit sur les contacts déjà dans le
+// CRM. Ils vivaient dans l'assistant Prospection, où create_campaign ne sait pas les
+// traiter (une campagne ne lit pas le CRM). Ici l'assistant dispose des actions qui
+// conviennent : list_clients, run_nurture, create_trigger, send_email.
+function getActivationTemplates(t) {
+  return [
+    { label: t('chat.templateDormant'), desc: t('chat.templateDormantDesc'), prompt: t('chat.templateDormantPrompt') },
+    { label: t('chat.templateReactivation'), desc: t('chat.templateReactivationDesc'), prompt: t('chat.templateReactivationPrompt') },
+    { label: t('chat.templateUpsell'), desc: t('chat.templateUpsellDesc'), prompt: t('chat.templateUpsellPrompt') },
+    { label: t('chat.templateChurn'), desc: t('chat.templateChurnDesc'), prompt: t('chat.templateChurnPrompt') },
+  ];
 }
 
 /* ─── lookup_client action card — auto-fetch on mount, no confirm click (read-only) ─── */
@@ -85,8 +107,8 @@ function GeneralActionCard({ metadata }) {
       .finally(() => setLoading(false));
   }, [metadata]);
 
-  // Création de campagne : l'assistant général ne la fait pas lui-même — bouton
-  // de bascule vers l'assistant de l'onglet Campagnes, brief pré-rempli.
+  // Prospection froide : la seule chose que cet assistant ne fait pas lui-même —
+  // bouton de bascule vers l'assistant de l'onglet Prospection, brief pré-rempli.
   if (metadata?.action === 'open_campaign_assistant') {
     return (
       <div style={{ marginTop: 8 }}>
@@ -102,6 +124,26 @@ function GeneralActionCard({ metadata }) {
       </div>
     );
   }
+
+  // Actions CRM / activation — chaque carte s'exécute elle-même au clic.
+  if (metadata?.action === 'send_email') return <SendEmailCard metadata={metadata} />;
+  if (metadata?.action === 'scan_crm') {
+    return <CrmActionCard metadata={metadata} actionType="scan_crm" label={en ? 'Scan CRM' : 'Scanner le CRM'} icon="search" />;
+  }
+  if (metadata?.action === 'run_nurture') {
+    return <CrmActionCard metadata={metadata} actionType="run_nurture" label={en ? 'Run activation' : 'Lancer l\'activation'} icon="zap" />;
+  }
+  if (metadata?.action === 'import_crm') {
+    return <CrmActionCard metadata={metadata} actionType="import_crm" label={en ? 'Import from CRM' : 'Importer depuis le CRM'} icon="download" />;
+  }
+  if (metadata?.action === 'clean_crm') {
+    return <CrmActionCard metadata={metadata} actionType="clean_crm" label={en ? 'Clean CRM data' : 'Nettoyer le CRM'} icon="sparkles" />;
+  }
+  if (metadata?.action === 'list_clients') return <ListClientsCard metadata={metadata} />;
+  if (metadata?.action === 'create_trigger') return <CreateTriggerCard metadata={metadata} />;
+  if (metadata?.action === 'toggle_autopilot') return <ToggleAutopilotCard metadata={metadata} />;
+  if (metadata?.action === 'search_signals') return <SignalSearchCard metadata={metadata} />;
+  if (metadata?.action === 'send_newsletter') return <NewsletterCard metadata={metadata} />;
 
   if (metadata?.action !== 'lookup_client') return null;
 
@@ -168,6 +210,15 @@ export default function ChatPage() {
 
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Brief pré-rempli quand l'assistant Prospection renvoie ici (open_general_assistant).
+  const location = useLocation();
+  useEffect(() => {
+    if (location.state?.prefillMessage) {
+      setInputValue(location.state.prefillMessage);
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -405,15 +456,44 @@ export default function ChatPage() {
 
       <div className="chat-main">
         {showWelcome && messages.length === 0 ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>{t('assistant.welcomeTitle')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 480, marginBottom: 24 }}>{t('assistant.welcomeSubtitle')}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 420 }}>
-              {getExamplePrompts(lang).map((s) => (
-                <button key={s} className="btn btn-ghost" style={{ fontSize: 13, padding: '10px 14px', textAlign: 'left' }} onClick={() => sendMessage(s)}>
-                  {s}
-                </button>
-              ))}
+          <div className="chat-welcome" style={{ display: 'flex' }}>
+            <div className="chat-welcome-inner">
+              <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>{t('assistant.welcomeTitle')}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 480, marginBottom: 24 }}>{t('assistant.welcomeSubtitle')}</div>
+
+              {/* Compte-rendu de lecture du CRM : les deals dormants, cliquables */}
+              <CrmReadingSummary onSuggestionClick={sendMessage} />
+
+              {/* Raccourcis d'activation — les jobs du produit sur le CRM existant */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 10, marginBottom: 20, width: '100%',
+              }}>
+                {getActivationTemplates(t).map(tpl => (
+                  <button
+                    key={tpl.label}
+                    onClick={() => sendMessage(tpl.prompt)}
+                    style={{
+                      background: 'var(--paper)', border: '1px solid var(--border)',
+                      borderRadius: 'var(--r-lg)', padding: '14px 16px',
+                      textAlign: 'left', cursor: 'pointer', transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-softer)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--paper)'; }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>{tpl.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--grey-500)', lineHeight: 1.4 }}>{tpl.desc}</div>
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 420 }}>
+                {getExamplePrompts(t).map((ex) => (
+                  <button key={ex} className="btn btn-ghost" style={{ fontSize: 13, padding: '10px 14px', textAlign: 'left' }} onClick={() => sendMessage(ex)}>
+                    {ex}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (

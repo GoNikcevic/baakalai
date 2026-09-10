@@ -25,6 +25,34 @@ function validateKind(kind) {
   return VALID_KINDS.includes(kind);
 }
 
+// GET /api/reactivation/settings — seuil de dormance de l'utilisateur
+router.get('/settings', async (req, res, next) => {
+  try {
+    const { getStagnantDays, DEFAULT_STAGNANT_DAYS, MIN_DAYS, MAX_DAYS } = require('../lib/stagnation');
+    res.json({
+      stagnantDays: await getStagnantDays(req.user.id),
+      defaultDays: DEFAULT_STAGNANT_DAYS,
+      minDays: MIN_DAYS,
+      maxDays: MAX_DAYS,
+    });
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/reactivation/settings — « un deal est dormant après X jours »
+router.patch('/settings', async (req, res, next) => {
+  try {
+    const { clampDays } = require('../lib/stagnation');
+    const { stagnantDays } = req.body;
+    if (stagnantDays === undefined) return res.status(400).json({ error: 'stagnantDays required' });
+    const value = clampDays(stagnantDays);
+    await db.query(
+      `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
+      [JSON.stringify({ stagnant_days: value }), req.user.id]
+    );
+    res.json({ stagnantDays: value });
+  } catch (err) { next(err); }
+});
+
 // GET /api/reactivation/queue?kind=&sort=
 router.get('/queue', async (req, res, next) => {
   try {

@@ -10,20 +10,34 @@ import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 import { useConfirm } from '../components/ConfirmModal';
 import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
+import Icon from '../components/Icon';
+import AutopilotSettings from '../components/AutopilotSettings';
+
+// Texte dont le sens complet est dans l'infobulle : on le signale au survol,
+// sinon personne ne devine qu'il y a une explication a lire.
+const HELP_HINT = { cursor: 'help', borderBottom: '1px dotted var(--border)' };
+
+const FIELD_LABEL = {
+  display: 'block',
+  fontSize: 11,
+  fontWeight: 600,
+  color: 'var(--text-muted)',
+  marginBottom: 4,
+};
 
 function getTriggerTypes(lang) {
   const en = lang === 'en';
   return [
-    { value: 'deal_won', label: en ? 'Lead won' : 'Lead gagn\u00E9', desc: en ? 'Welcome/onboarding email when a lead is won' : 'Email de bienvenue quand un lead est gagn\u00E9', icon: '\uD83C\uDF89', defaultDays: 1, defaultName: en ? 'Welcome new client' : 'Bienvenue nouveau client' },
-    { value: 'deal_stagnant', label: en ? 'Stagnant lead' : 'Lead stagnant', desc: en ? 'Follow up when a lead is inactive for X days' : 'Relancer quand un lead est inactif depuis X jours', icon: '\u23F0', defaultDays: 30, defaultName: en ? 'Stagnant lead follow-up' : 'Relance leads stagnants' },
-    { value: 'inactive_contact', label: en ? 'Inactive contact' : 'Contact inactif', desc: en ? 'Re-engage a contact with no activity for X days' : 'R\u00E9engager un contact sans activit\u00E9 depuis X jours', icon: '\uD83D\uDCA4', defaultDays: 60, defaultName: en ? 'Re-engage inactive contacts' : 'R\u00E9activation contacts inactifs' },
-    { value: 'deal_lost', label: en ? 'Lead lost' : 'Lead perdu', desc: en ? 'Win-back email after a lost lead' : 'Email de suivi apr\u00E8s un lead perdu', icon: '\uD83D\uDC94', defaultDays: 14, defaultName: en ? 'Win-back lost leads' : 'Win-back leads perdus' },
-    { value: 'onboarding_check', label: en ? 'Onboarding check' : 'Check onboarding', desc: en ? 'Check adoption X days after signing' : 'V\u00E9rifier la prise en main X jours apr\u00E8s signature', icon: '\uD83D\uDE80', defaultDays: 7, defaultName: en ? 'Onboarding follow-up D+7' : 'Suivi onboarding J+7' },
-    { value: 'renewal_reminder', label: en ? 'Renewal' : 'Renouvellement', desc: en ? 'Reminder X days before renewal date' : 'Rappel X jours avant la date de renouvellement', icon: '\uD83D\uDD14', defaultDays: 30, defaultName: en ? 'Renewal reminder' : 'Rappel renouvellement' },
-    { value: 'upsell_opportunity', label: en ? 'Upsell opportunity' : 'Opportunit\u00E9 upsell', desc: en ? 'Suggest upgrade to active clients after X days' : 'Proposer un upgrade aux clients actifs depuis X jours', icon: '\u2B06\uFE0F', defaultDays: 90, defaultName: en ? 'Upsell proposal' : 'Proposition upsell' },
-    { value: 'feedback_request', label: en ? 'Feedback request' : 'Demande de feedback', desc: en ? 'Ask for feedback after X days' : 'Demander un retour d\'exp\u00E9rience apr\u00E8s X jours', icon: '\u2B50', defaultDays: 30, defaultName: en ? 'Testimonial request' : 'Demande de t\u00E9moignage' },
-    { value: 'newsletter_inactive', label: en ? 'Newsletter inactive' : 'Newsletter inactif', desc: en ? 'Re-engage contacts who never open newsletters (Salesforce/Fonteva)' : 'R\u00E9engager les contacts qui n\'ouvrent pas les newsletters (Salesforce/Fonteva)', icon: '\uD83D\uDCE7', defaultDays: 30, defaultName: en ? 'Newsletter re-engagement' : 'R\u00E9activation newsletter' },
-    { value: 'newsletter_engaged', label: en ? 'Newsletter engaged' : 'Newsletter engag\u00E9', desc: en ? 'Notify sales when contacts actively engage with newsletters (Salesforce/Fonteva)' : 'Alerter le commercial quand un contact engage avec les newsletters (Salesforce/Fonteva)', icon: '\uD83D\uDD25', defaultDays: 30, defaultName: en ? 'Hot newsletter lead' : 'Lead chaud newsletter' },
+    { value: 'deal_won', label: en ? 'Lead won' : 'Lead gagn\u00E9', desc: en ? 'Welcome/onboarding email when a lead is won' : 'Email de bienvenue quand un lead est gagn\u00E9', icon: 'award', defaultDays: 1, defaultName: en ? 'Welcome new client' : 'Bienvenue nouveau client' },
+    { value: 'deal_stagnant', label: en ? 'Stagnant lead' : 'Lead stagnant', desc: en ? 'Follow up when a lead is inactive for X days' : 'Relancer quand un lead est inactif depuis X jours', icon: 'moon', defaultDays: 30, defaultName: en ? 'Stagnant lead follow-up' : 'Relance leads stagnants' },
+    { value: 'inactive_contact', label: en ? 'Inactive contact' : 'Contact inactif', desc: en ? 'Re-engage a contact with no activity for X days' : 'R\u00E9engager un contact sans activit\u00E9 depuis X jours', icon: 'moon', defaultDays: 60, defaultName: en ? 'Re-engage inactive contacts' : 'R\u00E9activation contacts inactifs' },
+    { value: 'deal_lost', label: en ? 'Lead lost' : 'Lead perdu', desc: en ? 'Win-back email after a lost lead' : 'Email de suivi apr\u00E8s un lead perdu', icon: 'heartOff', defaultDays: 14, defaultName: en ? 'Win-back lost leads' : 'Win-back leads perdus' },
+    { value: 'onboarding_check', label: en ? 'Onboarding check' : 'Check onboarding', desc: en ? 'Check adoption X days after signing' : 'V\u00E9rifier la prise en main X jours apr\u00E8s signature', icon: 'rocket', defaultDays: 7, defaultName: en ? 'Onboarding follow-up D+7' : 'Suivi onboarding J+7' },
+    { value: 'renewal_reminder', label: en ? 'Renewal' : 'Renouvellement', desc: en ? 'Reminder X days before renewal date' : 'Rappel X jours avant la date de renouvellement', icon: 'bell', defaultDays: 30, defaultName: en ? 'Renewal reminder' : 'Rappel renouvellement' },
+    { value: 'upsell_opportunity', label: en ? 'Upsell opportunity' : 'Opportunit\u00E9 upsell', desc: en ? 'Suggest upgrade to active clients after X days' : 'Proposer un upgrade aux clients actifs depuis X jours', icon: 'trendingUp', defaultDays: 90, defaultName: en ? 'Upsell proposal' : 'Proposition upsell' },
+    { value: 'feedback_request', label: en ? 'Feedback request' : 'Demande de feedback', desc: en ? 'Ask for feedback after X days' : 'Demander un retour d\'exp\u00E9rience apr\u00E8s X jours', icon: 'message', defaultDays: 30, defaultName: en ? 'Testimonial request' : 'Demande de t\u00E9moignage' },
+    { value: 'newsletter_inactive', label: en ? 'Newsletter inactive' : 'Newsletter inactif', desc: en ? 'Re-engage contacts who never open newsletters (Salesforce/Fonteva)' : 'R\u00E9engager les contacts qui n\'ouvrent pas les newsletters (Salesforce/Fonteva)', icon: 'mail', defaultDays: 30, defaultName: en ? 'Newsletter re-engagement' : 'R\u00E9activation newsletter' },
+    { value: 'newsletter_engaged', label: en ? 'Newsletter engaged' : 'Newsletter engag\u00E9', desc: en ? 'Notify sales when contacts actively engage with newsletters (Salesforce/Fonteva)' : 'Alerter le commercial quand un contact engage avec les newsletters (Salesforce/Fonteva)', icon: 'flame', defaultDays: 30, defaultName: en ? 'Hot newsletter lead' : 'Lead chaud newsletter' },
   ];
 }
 
@@ -107,7 +121,12 @@ export default function NurturePage() {
               setPreviewing(false);
             }}
           >
-            {previewing ? `\u23F3 ${t('activation.previewing')}` : `\uD83D\uDD0D ${t('activation.preview')}`}
+            {previewing ? t('activation.previewing') : (
+              <>
+                <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                {t('activation.preview')}
+              </>
+            )}
           </button>
           <button
             className="btn btn-primary"
@@ -170,7 +189,8 @@ export default function NurturePage() {
                     setExecuting(false);
                   }}
                 >
-                  {executing ? `\u23F3 ${t('activation.sending')}` : t('activation.sendEmails', { count: previews.reduce((s, p) => s + p.contactsCount, 0) })}
+                  {executing && <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+                  {executing ? t('activation.sending') : t('activation.sendEmails', { count: previews.reduce((s, p) => s + p.contactsCount, 0) })}
                 </button>
               )}
               <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setPreviews(null)}>
@@ -243,7 +263,7 @@ export default function NurturePage() {
       {!loading && activeTab === 'sent' && (
         <EmailsSection emails={emails.filter(e => e.status === 'sent')} type="sent" onRefresh={loadData} />
       )}
-      {!loading && activeTab === 'autopilot' && <AutopilotSection lang={lang} />}
+      {!loading && activeTab === 'autopilot' && <AutopilotSettings scope="crm" />}
       {!loading && activeTab === 'ab' && <ABResultsSection lang={lang} />}
       {!loading && activeTab === 'newsletters' && <NewsletterAnalyticsSection lang={lang} />}
       {!loading && activeTab === 'team' && <TeamCampaignsSection lang={lang} />}
@@ -268,6 +288,18 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
     tone: 'professionnel mais chaleureux',
   });
   const [saving, setSaving] = useState(false);
+
+  // Les explications affichees sous le formulaire : le delai en jours n'a pas
+  // le meme sens selon le type de trigger (avant le renouvellement, apres la
+  // signature, depuis la derniere activite...), donc chaque type a son texte.
+  const isLinkedinAction = form.actionType.startsWith('linkedin_');
+  // Meme repli que handleCreate (`|| 30`) : l'explication doit annoncer le
+  // delai qui sera reellement enregistre, champ vide ou a zero compris.
+  const effectiveDays = parseInt(form.days, 10) || 30;
+  const daysExplanation = t(`activation.daysHint.${form.triggerType}`, { days: effectiveDays });
+  const modeExplanation = isLinkedinAction
+    ? t('activation.modeHintLinkedin')
+    : (form.mode === 'auto' ? t('activation.modeHintAuto') : t('activation.modeHintApproval'));
 
   const handleCreate = async () => {
     if (!form.name) return;
@@ -327,55 +359,85 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                 className="form-input"
                 style={{ fontSize: 13, padding: '8px 12px' }}
               />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select
-                  value={form.triggerType}
-                  onChange={e => {
-                    const tt = TRIGGER_TYPES.find(t => t.value === e.target.value);
-                    setForm(p => ({
-                      ...p,
-                      triggerType: e.target.value,
-                      name: p.name || tt?.defaultName || '',
-                      days: tt?.defaultDays || p.days,
-                    }));
-                  }}
-                  className="form-input"
-                  style={{ flex: 1, fontSize: 13, padding: '8px 12px' }}
-                >
-                  {TRIGGER_TYPES.map(t => (
-                    <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  placeholder={lang === 'en' ? 'Days' : 'Jours'}
-                  value={form.days}
-                  onChange={e => setForm(p => ({ ...p, days: e.target.value }))}
-                  className="form-input"
-                  style={{ width: 80, fontSize: 13, padding: '8px 12px' }}
-                />
-                <select
-                  value={form.actionType}
-                  onChange={e => setForm(p => ({ ...p, actionType: e.target.value }))}
-                  className="form-input"
-                  style={{ width: 160, fontSize: 13, padding: '8px 12px' }}
-                >
-                  <option value="email">{'\u2709\uFE0F'} Email</option>
-                  <option value="linkedin_connect">{'\uD83D\uDD17'} LinkedIn Connect</option>
-                  <option value="linkedin_message">{'\uD83D\uDCAC'} LinkedIn Message</option>
-                  <option value="linkedin_visit">{'\uD83D\uDC41\uFE0F'} LinkedIn Visit</option>
-                </select>
-                {!form.actionType.startsWith('linkedin_') && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 190 }}>
+                  <label style={FIELD_LABEL} htmlFor="trigger-type">{t('activation.fieldTypeLabel')}</label>
                   <select
-                    value={form.mode}
-                    onChange={e => setForm(p => ({ ...p, mode: e.target.value }))}
+                    id="trigger-type"
+                    value={form.triggerType}
+                    onChange={e => {
+                      const tt = TRIGGER_TYPES.find(t => t.value === e.target.value);
+                      setForm(p => ({
+                        ...p,
+                        triggerType: e.target.value,
+                        name: p.name || tt?.defaultName || '',
+                        days: tt?.defaultDays || p.days,
+                      }));
+                    }}
                     className="form-input"
-                    style={{ width: 140, fontSize: 13, padding: '8px 12px' }}
+                    style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
                   >
-                    <option value="approval">{lang === 'en' ? 'Approval' : 'Approbation'}</option>
-                    <option value="auto">{lang === 'en' ? 'Automatic' : 'Automatique'}</option>
+                    {TRIGGER_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
                   </select>
+                </div>
+                <div style={{ width: 110 }}>
+                  <label style={FIELD_LABEL} htmlFor="trigger-days">{t('activation.fieldDaysLabel')}</label>
+                  <input
+                    id="trigger-days"
+                    type="number"
+                    min="1"
+                    placeholder={lang === 'en' ? 'Days' : 'Jours'}
+                    value={form.days}
+                    onChange={e => setForm(p => ({ ...p, days: e.target.value }))}
+                    className="form-input"
+                    style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
+                  />
+                </div>
+                <div style={{ width: 170 }}>
+                  <label style={FIELD_LABEL} htmlFor="trigger-action">{t('activation.fieldActionLabel')}</label>
+                  <select
+                    id="trigger-action"
+                    value={form.actionType}
+                    onChange={e => setForm(p => ({ ...p, actionType: e.target.value }))}
+                    className="form-input"
+                    style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
+                  >
+                    <option value="email">Email</option>
+                    <option value="linkedin_connect">LinkedIn Connect</option>
+                    <option value="linkedin_message">LinkedIn Message</option>
+                    <option value="linkedin_visit">LinkedIn Visit</option>
+                  </select>
+                </div>
+                {!isLinkedinAction && (
+                  <div style={{ width: 150 }}>
+                    <label style={FIELD_LABEL} htmlFor="trigger-mode">{t('activation.fieldModeLabel')}</label>
+                    <select
+                      id="trigger-mode"
+                      value={form.mode}
+                      onChange={e => setForm(p => ({ ...p, mode: e.target.value }))}
+                      className="form-input"
+                      style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
+                    >
+                      <option value="approval">{lang === 'en' ? 'Approval' : 'Approbation'}</option>
+                      <option value="auto">{lang === 'en' ? 'Automatic' : 'Automatique'}</option>
+                    </select>
+                  </div>
                 )}
+              </div>
+
+              {/* Explication en clair de la config choisie : le nombre de jours
+                  et le mode d'envoi sont les deux reglages que personne ne
+                  devine depuis les seuls libelles des champs. */}
+              <div style={{
+                fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)',
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', padding: '10px 12px',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <div><strong style={{ color: 'var(--text-primary)' }}>{t('activation.fieldDaysLabel')}{en ? ':' : '\u00A0:'}</strong>{' '}{daysExplanation}</div>
+                <div><strong style={{ color: 'var(--text-primary)' }}>{isLinkedinAction ? t('activation.fieldActionLabel') : t('activation.fieldModeLabel')}{en ? ':' : '\u00A0:'}</strong>{' '}{modeExplanation}</div>
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowCreate(false)}>
@@ -396,7 +458,7 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
           textAlign: 'center', padding: 50,
           background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>{'\u26A1'}</div>
+          <div style={{ fontSize: 28, marginBottom: 12 }}><Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
             {t('activation.noTriggers')}
           </div>
@@ -414,11 +476,24 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
                 <div className="card-body" style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>
-                      {typeConfig.icon || '\u26A1'} {trigger.name}
+                      <Icon
+                        name={typeConfig.icon || 'zap'}
+                        size={14}
+                        style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 7 }}
+                      />
+                      {trigger.name}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                      {typeConfig.desc} {conditions.days ? `(${conditions.days}j)` : ''}
-                      {' \u00B7 '} {lang === 'en' ? 'Mode' : 'Mode'}: {trigger.mode === 'auto' ? (lang === 'en' ? 'automatic' : 'automatique') : (lang === 'en' ? 'approval' : 'approbation')}
+                      <span title={conditions.days ? t(`activation.daysHint.${trigger.trigger_type}`, { days: conditions.days }) : undefined} style={conditions.days ? HELP_HINT : undefined}>
+                        {typeConfig.desc}{conditions.days ? ` (${conditions.days} ${en ? 'days' : 'jours'})` : ''}
+                      </span>
+                      {' \u00B7 '}
+                      <span
+                        title={trigger.mode === 'auto' ? t('activation.modeHintAuto') : t('activation.modeHintApproval')}
+                        style={HELP_HINT}
+                      >
+                        {t('activation.fieldModeLabel')}{en ? ': ' : '\u00A0: '}{trigger.mode === 'auto' ? (lang === 'en' ? 'automatic' : 'automatique') : (lang === 'en' ? 'approval' : 'approbation')}
+                      </span>
                       {trigger.last_run && ` \u00B7 ${lang === 'en' ? 'Last run:' : 'Dernier run :'} ${new Date(trigger.last_run).toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR')}`}
                     </div>
                   </div>
@@ -503,8 +578,8 @@ function EmailsSection({ emails, type, onRefresh }) {
         textAlign: 'center', padding: 50,
         background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
       }}>
-        <div style={{ fontSize: 28, marginBottom: 12 }}>
-          {type === 'pending' ? '\uD83D\uDCEC' : '\u2705'}
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+          <Icon name={type === 'pending' ? 'inbox' : 'checkCircle'} size={28} strokeWidth={1.5} />
         </div>
         <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
           {type === 'pending' ? t('activation.noPending') : t('activation.noSent')}
@@ -581,7 +656,7 @@ function EmailsSection({ emails, type, onRefresh }) {
 
               {type === 'sent' && (
                 <span style={{ fontSize: 11, color: 'var(--success)', whiteSpace: 'nowrap' }}>
-                  {'\u2705'} {en ? 'Sent' : `Envoy${'\u00E9'}`}
+                  <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Sent' : `Envoy${'\u00E9'}`}
                 </span>
               )}
             </div>
@@ -597,10 +672,10 @@ function EmailsSection({ emails, type, onRefresh }) {
 function getSegmentConfig(lang) {
   const en = lang === 'en';
   return [
-    { key: 'active', label: en ? 'Active' : 'Actifs', color: 'var(--success)', icon: '\u2705' },
-    { key: 'won', label: en ? 'Won' : 'Gagn\u00E9s', color: 'var(--purple)', icon: '\uD83C\uDFC6' },
-    { key: 'stagnant', label: en ? 'Stagnant' : 'Stagnants', color: 'var(--warning)', icon: '\u23F0' },
-    { key: 'churnRisk', label: en ? 'Churn risk' : 'Risque churn', color: 'var(--danger)', icon: '\u26A0\uFE0F' },
+    { key: 'active', label: en ? 'Active' : 'Actifs', color: 'var(--success)', icon: 'checkCircle' },
+    { key: 'won', label: en ? 'Won' : 'Gagn\u00E9s', color: 'var(--purple)', icon: 'award' },
+    { key: 'stagnant', label: en ? 'Stagnant' : 'Stagnants', color: 'var(--warning)', icon: 'moon' },
+    { key: 'churnRisk', label: en ? 'Churn risk' : 'Risque churn', color: 'var(--danger)', icon: 'alert' },
   ];
 }
 
@@ -628,7 +703,10 @@ function ActivationDashboard({ metrics }) {
             background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
             padding: '16px 20px', borderTop: `3px solid ${seg.color}`,
           }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{seg.icon} {seg.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Icon name={seg.icon} size={12} color={seg.color} />
+              <span>{seg.label}</span>
+            </div>
             <div style={{ fontSize: 28, fontWeight: 700, color: seg.color }}>{segments[seg.key] || 0}</div>
           </div>
         ))}
@@ -636,7 +714,9 @@ function ActivationDashboard({ metrics }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u23F0'} {en ? 'Stagnant leads' : 'Leads stagnants'}</div></div>
+          <div className="card-header"><div className="card-title">
+            <Icon name="clock" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Stagnant leads' : 'Leads stagnants'}
+          </div></div>
           <div className="card-body">
             {(topStagnant || []).length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>{t('activation.noStagnant')}</div>
@@ -657,7 +737,7 @@ function ActivationDashboard({ metrics }) {
         </div>
 
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u26A0\uFE0F'} {en ? 'Churn risk' : 'Risque de churn'}</div></div>
+          <div className="card-header"><div className="card-title"><Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Churn risk' : 'Risque de churn'}</div></div>
           <div className="card-body">
             {(topChurnRisk || []).length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>{t('activation.noRisk')}</div>
@@ -680,7 +760,7 @@ function ActivationDashboard({ metrics }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u2709\uFE0F'} {en ? 'Emails (30d)' : 'Emails (30j)'}</div></div>
+          <div className="card-header"><div className="card-title"><Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Emails (30d)' : 'Emails (30j)'}</div></div>
           <div className="card-body">
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
               {[
@@ -698,7 +778,7 @@ function ActivationDashboard({ metrics }) {
         </div>
 
         <div className="card">
-          <div className="card-header"><div className="card-title">{'\u26A1'} {en ? 'Active triggers' : 'Triggers actifs'}</div></div>
+          <div className="card-header"><div className="card-title"><Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Active triggers' : 'Triggers actifs'}</div></div>
           <div className="card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)' }}>{triggers?.active || 0}</div>
@@ -726,7 +806,7 @@ function CampaignsSection({ campaigns }) {
         textAlign: 'center', padding: 50,
         background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
       }}>
-        <div style={{ fontSize: 28, marginBottom: 12 }}>{'\u2709\uFE0F'}</div>
+        <div style={{ fontSize: 28, marginBottom: 12 }}><Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></div>
         <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
           {t('activation.noCampaigns')}
         </div>
@@ -978,7 +1058,10 @@ function TeamCampaignsSection({ lang }) {
                       color: form.targetProductLines.includes(pl.id) ? 'var(--accent)' : 'var(--text-muted)',
                       cursor: 'pointer',
                     }}>
-                      {pl.icon || '\uD83D\uDCE6'} {pl.name}
+                      {pl.icon
+                        ? <span style={{ marginRight: 5 }}>{pl.icon}</span>
+                        : <Icon name="package" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />}
+                      {pl.name}
                     </button>
                   ))}
                 </div>
@@ -1027,7 +1110,9 @@ function TeamCampaignsSection({ lang }) {
           textAlign: 'center', padding: 50, background: 'var(--bg-card)',
           border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>{'\uD83D\uDCE8'}</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="send" size={28} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
             {en ? 'No team campaigns yet' : 'Aucune campagne \u00E9quipe'}
           </div>
@@ -1082,7 +1167,7 @@ function TeamCampaignsSection({ lang }) {
                 )}
                 {c.status === 'completed' && (
                   <span style={{ fontSize: 11, color: 'var(--success)' }}>
-                    {'\u2705'} {en ? 'Completed' : 'Termin\u00E9e'}
+                    <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Completed' : 'Termin\u00E9e'}
                   </span>
                 )}
               </div>
@@ -1124,178 +1209,6 @@ function TeamCampaignsSection({ lang }) {
 
 /* ═══ Autopilot Section ═══ */
 
-function AutopilotSection({ lang }) {
-  const en = lang === 'en';
-  const [settings, setSettings] = useState(null);
-  const [queue, setQueue] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      request('/crm/autopilot/settings').catch(() => ({ enabled: false })),
-      request('/crm/autopilot/queue').catch(() => ({ queue: [] })),
-    ]).then(([s, q]) => {
-      setSettings(s);
-      setQueue(q.queue || []);
-    }).finally(() => setLoading(false));
-  }, []);
-
-  const toggleEnabled = async () => {
-    const next = !settings?.enabled;
-    try {
-      await request('/crm/autopilot/settings', {
-        method: 'PATCH',
-        body: JSON.stringify({ enabled: next }),
-      });
-      setSettings(prev => ({ ...prev, enabled: next }));
-      showToast({ type: 'success', title: 'Autopilot', message: next ? (en ? 'Enabled' : 'Activé') : (en ? 'Disabled' : 'Désactivé') });
-    } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
-    }
-  };
-
-  const cancelMessage = async (id) => {
-    try {
-      await request(`/crm/autopilot/queue/${id}`, { method: 'DELETE' });
-      setQueue(prev => prev.map(q => q.id === id ? { ...q, status: 'cancelled' } : q));
-    } catch { /* ignore */ }
-  };
-
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{en ? 'Loading...' : 'Chargement...'}</div>;
-
-  const pending = queue.filter(q => q.status === 'pending');
-  const sent = queue.filter(q => q.status === 'sent');
-
-  return (
-    <div>
-      {/* Settings card */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-body" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {'\uD83E\uDD16'} {en ? 'Conversation Autopilot' : 'Autopilot de conversation'}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                {en
-                  ? 'AI manages replies to your prospects until a meeting is booked. Max 5 turns, 2-4h delay between responses.'
-                  : 'L\'IA gère les réponses à vos prospects jusqu\'à ce qu\'un RDV soit fixé. Max 5 tours, 2-4h entre chaque réponse.'}
-              </div>
-            </div>
-            <button
-              className={`btn ${settings?.enabled ? 'btn-success' : 'btn-outline'}`}
-              style={{ fontSize: 12, padding: '8px 18px', minWidth: 90 }}
-              onClick={toggleEnabled}
-            >
-              {settings?.enabled ? (en ? 'Active' : 'Actif') : (en ? 'Enable' : 'Activer')}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* How it works */}
-      {!settings?.enabled && (
-        <div className="card" style={{ marginBottom: 16, background: 'var(--bg-elevated)' }}>
-          <div className="card-body" style={{ padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{en ? 'How it works' : 'Comment ça marche'}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-              {[
-                en ? '1. A prospect replies to your email or LinkedIn message' : '1. Un prospect répond à votre email ou message LinkedIn',
-                en ? '2. AI analyzes the intent (interested, question, meeting request...)' : '2. L\'IA analyse l\'intent (intéressé, question, demande de RDV...)',
-                en ? '3. AI generates a contextual reply using your conversation history + learned patterns' : '3. L\'IA génère une réponse contextuelle avec l\'historique + les patterns appris',
-                en ? '4. Reply is sent after 2-4 hours (human-like delay)' : '4. La réponse est envoyée après 2-4h (délai naturel)',
-                en ? '5. Conversation continues until a meeting is accepted or max 5 turns' : '5. La conversation continue jusqu\'au RDV accepté ou max 5 tours',
-              ].map((step, i) => (
-                <div key={i} style={{ padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: 6, borderLeft: '2px solid var(--primary)' }}>
-                  {step}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Pending queue */}
-      {pending.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-            {'\u23F3'} {en ? `${pending.length} pending reply(ies)` : `${pending.length} réponse(s) en attente`}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {pending.map(q => {
-              const content = typeof q.content === 'string' ? (() => { try { return JSON.parse(q.content); } catch { return {}; } })() : (q.content || {});
-              return (
-                <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--warning)' }}>
-                  <div className="card-body" style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>
-                          {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.to_name || q.to_email}
-                          {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
-                        </div>
-                        {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, maxHeight: 40, overflow: 'hidden' }}>
-                          {content.body || content.message || ''}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                          {en ? 'Scheduled:' : 'Planifié :'} {new Date(q.scheduled_at).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }} onClick={() => cancelMessage(q.id)}>
-                        {en ? 'Cancel' : 'Annuler'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Sent history */}
-      {sent.length > 0 && (
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-            {'\u2705'} {en ? `${sent.length} auto-reply(ies) sent` : `${sent.length} réponse(s) auto envoyée(s)`}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {sent.slice(0, 20).map(q => {
-              const content = typeof q.content === 'string' ? (() => { try { return JSON.parse(q.content); } catch { return {}; } })() : (q.content || {});
-              return (
-                <div key={q.id} className="card" style={{ borderLeft: '3px solid var(--success)' }}>
-                  <div className="card-body" style={{ padding: '12px 16px' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>
-                      {q.channel === 'linkedin' ? '\uD83D\uDCAC' : '\u2709\uFE0F'} {q.to_name || q.to_email}
-                      {q.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> @ {q.company}</span>}
-                    </div>
-                    {content.subject && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{content.subject}</div>}
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, maxHeight: 40, overflow: 'hidden' }}>
-                      {content.body || content.message || ''}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      {en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {settings?.enabled && pending.length === 0 && sent.length === 0 && (
-        <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83E\uDD16'}</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {en ? 'Autopilot is active. Replies will appear here when prospects respond.' : 'L\'autopilot est actif. Les réponses apparaîtront ici quand vos prospects répondront.'}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ═══ A/B Results Section ═══ */
 
@@ -1374,7 +1287,9 @@ function ABResultsSection({ lang }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontSize: 13, fontWeight: 700 }}>
                         {en ? 'Variant' : 'Variante'} {variant}
-                        {isWinner ? ' 🏆' : ''}
+                        {isWinner && (
+                          <Icon name="award" size={13} color="var(--success)" style={{ display: 'inline-block', verticalAlign: '-2px', marginLeft: 5 }} />
+                        )}
                       </span>
                       <span style={{
                         fontSize: 20, fontWeight: 800,
@@ -1449,7 +1364,9 @@ function NewsletterAnalyticsSection({ lang }) {
   if (error) {
     return (
       <div className="card" style={{ padding: 30, textAlign: 'center' }}>
-        <div style={{ fontSize: 28, marginBottom: 8 }}>{'\uD83D\uDCE7'}</div>
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+          <Icon name="mail" size={28} strokeWidth={1.5} />
+        </div>
         <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 8 }}>
           {en ? 'Salesforce not connected or EmailMessage not accessible' : 'Salesforce non connect\u00E9 ou EmailMessage non accessible'}
         </div>

@@ -11,6 +11,7 @@ import api from '../../../services/api-client';
 import { sanitizeHtml } from '../../../services/sanitize';
 import SequenceTree from '../SequenceTree';
 import { useI18n } from '../../../i18n';
+import Icon from '../../Icon';
 
 /* ─── Helpers ─── */
 
@@ -30,11 +31,11 @@ function stripEditorHtml(html) {
 }
 
 const TYPE_META = {
-  email: { label: 'Email', icon: '📧', color: 'var(--blue)' },
-  linkedin_visit: { label: 'Visite profil', labelEn: 'Profile visit', icon: '👁️', color: 'var(--purple)' },
-  linkedin_invite: { label: 'Note connexion', labelEn: 'Connection note', icon: '🤝', color: 'var(--purple)' },
-  linkedin_message: { label: 'Message LinkedIn', labelEn: 'LinkedIn message', icon: '💬', color: 'var(--purple)' },
-  linkedin: { label: 'LinkedIn', icon: '💬', color: 'var(--purple)' },
+  email: { label: 'Email', icon: 'mail', color: 'var(--blue)' },
+  linkedin_visit: { label: 'Visite profil', labelEn: 'Profile visit', icon: 'eye', color: 'var(--purple)' },
+  linkedin_invite: { label: 'Note connexion', labelEn: 'Connection note', icon: 'handshake', color: 'var(--purple)' },
+  linkedin_message: { label: 'Message LinkedIn', labelEn: 'LinkedIn message', icon: 'message', color: 'var(--purple)' },
+  linkedin: { label: 'LinkedIn', icon: 'message', color: 'var(--purple)' },
 };
 
 /* ─── Char counter ─── */
@@ -59,7 +60,8 @@ function CharCounter({ bodyRef, maxChars = 300 }) {
     <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, color }}
       onClick={recompute}
     >
-      {count}/{maxChars}{count > maxChars && ' ⚠️'}
+      {count}/{maxChars}
+      {count > maxChars && <Icon name="alert" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginLeft: 4 }} />}
     </span>
   );
 }
@@ -167,7 +169,8 @@ function TouchpointEditCard({ tp, campaign, onChange }) {
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600 }}>
-              {meta.icon} {en && meta.labelEn ? meta.labelEn : meta.label} {tp.subType && `— ${tp.subType}`}
+              <Icon name={meta.icon} size={13} color={meta.color} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {en && meta.labelEn ? meta.labelEn : meta.label} {tp.subType && `— ${tp.subType}`}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tp.timing}</div>
           </div>
@@ -193,7 +196,8 @@ function TouchpointEditCard({ tp, campaign, onChange }) {
             onClick={handleRegenerate}
             disabled={regenStatus === 'loading'}
           >
-            {regenStatus === 'loading' ? '⏳' : '🔄'} {en ? 'Regenerate' : 'Régénérer'}
+            <Icon name={regenStatus === 'loading' ? 'clock' : 'refresh'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {en ? 'Regenerate' : 'Régénérer'}
           </button>
         )}
       </div>
@@ -312,11 +316,11 @@ export default function CopyTab({ campaign: c, setCampaigns }) {
       }
       setIsDirty(false);
       setSaveStatus('saved');
-      setSaveMessage(en ? 'Sequences saved' : '✅ Séquences sauvegardées');
+      setSaveMessage(en ? 'Sequences saved' : 'Séquences sauvegardées');
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (err) {
       setSaveStatus('error');
-      setSaveMessage((en ? 'Error: ' : '❌ Erreur : ') + err.message);
+      setSaveMessage((en ? 'Error: ' : 'Erreur : ') + err.message);
       setTimeout(() => setSaveStatus(null), 4000);
     }
   }, [c, isDirty, localTouchpoints, backendAvailable, setCampaigns]);
@@ -342,7 +346,8 @@ export default function CopyTab({ campaign: c, setCampaigns }) {
       >
         <div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>
-            {editingMode ? (en ? 'Editing sequences' : '✏️ Édition des séquences') : (en ? 'Sequence preview' : '👁️ Aperçu des séquences')}
+            <Icon name={editingMode ? 'pen' : 'eye'} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {editingMode ? (en ? 'Editing sequences' : 'Édition des séquences') : (en ? 'Sequence preview' : 'Aperçu des séquences')}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {(localTouchpoints || []).length} touchpoints · {emailCount} emails · {linkedinCount} LinkedIn
@@ -376,7 +381,8 @@ export default function CopyTab({ campaign: c, setCampaigns }) {
               onClick={handleSave}
               disabled={!isDirty || saveStatus === 'loading'}
             >
-              {en ? 'Save' : '💾 Sauvegarder'}
+              <Icon name="save" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {en ? 'Save' : 'Sauvegarder'}
             </button>
           )}
           <button
@@ -384,7 +390,8 @@ export default function CopyTab({ campaign: c, setCampaigns }) {
             style={{ fontSize: 12 }}
             onClick={() => setEditingMode((prev) => !prev)}
           >
-            {editingMode ? (en ? 'Preview' : '👁️ Aperçu') : (en ? 'Edit' : '✏️ Éditer')}
+            <Icon name={editingMode ? 'eye' : 'pen'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {editingMode ? (en ? 'Preview' : 'Aperçu') : (en ? 'Edit' : 'Éditer')}
           </button>
         </div>
       </div>

@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { request } from '../services/api-client';
 import { useT } from '../i18n';
+import Icon from './Icon';
 
 const CONFIDENCE_KEYS = { Haute: 'memory.high', Moyenne: 'memory.medium', Faible: 'memory.low' };
 
@@ -42,7 +43,7 @@ export default function AppliedPatternsBanner({ patternIds }) {
       margin: '10px 0',
     }}>
       <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
-        {'🧠'} {t('memory.appliedBanner', { count: patterns.length })}
+        <Icon name="sparkles" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('memory.appliedBanner', { count: patterns.length })}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {patterns.map(p => (

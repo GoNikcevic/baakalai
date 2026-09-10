@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 const URGENCY_STYLES = {
   high: { bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.15)', color: '#ef4444' },
@@ -16,12 +17,12 @@ const URGENCY_STYLES = {
 };
 
 const ACTION_CONFIG = {
-  email: { icon: '\uD83D\uDCE7', labelFr: 'Envoyer un email', labelEn: 'Send email' },
-  call: { icon: '\uD83D\uDCDE', labelFr: 'Planifier un appel', labelEn: 'Schedule call' },
-  linkedin: { icon: '\uD83D\uDC64', labelFr: 'Ouvrir LinkedIn', labelEn: 'Open LinkedIn' },
-  content: { icon: '\uD83D\uDCCE', labelFr: 'Partager du contenu', labelEn: 'Share content' },
-  intro: { icon: '\uD83E\uDD1D', labelFr: 'Demander une intro', labelEn: 'Request intro' },
-  offer: { icon: '\uD83C\uDF81', labelFr: 'Envoyer une offre', labelEn: 'Send offer' },
+  email: { icon: 'mail', labelFr: 'Envoyer un email', labelEn: 'Send email' },
+  call: { icon: 'phone', labelFr: 'Planifier un appel', labelEn: 'Schedule call' },
+  linkedin: { icon: 'user', labelFr: 'Ouvrir LinkedIn', labelEn: 'Open LinkedIn' },
+  content: { icon: 'paperclip', labelFr: 'Partager du contenu', labelEn: 'Share content' },
+  intro: { icon: 'handshake', labelFr: 'Demander une intro', labelEn: 'Request intro' },
+  offer: { icon: 'gift', labelFr: 'Envoyer une offre', labelEn: 'Send offer' },
 };
 
 export default function DealCoachCard() {
@@ -96,7 +97,10 @@ export default function DealCoachCard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-            {'\uD83C\uDFAF'} {en ? 'Leads to follow up' : 'Leads \u00e0 relancer'}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="target" size={16} color="var(--accent)" />
+              {en ? 'Leads to follow up' : 'Leads \u00e0 relancer'}
+            </span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {en ? `${suggestions.length} stagnant lead(s) detected` : `${suggestions.length} lead(s) stagnant(s) d\u00e9tect\u00e9(s)`}
@@ -141,7 +145,7 @@ export default function DealCoachCard() {
             }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 14 }}>{actionCfg.icon}</span>
+                  <Icon name={actionCfg.icon} size={14} color={urgency.color} />
                   <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                     {s.contactName}
                   </span>

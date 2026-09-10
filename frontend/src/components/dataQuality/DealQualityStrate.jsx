@@ -12,13 +12,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../../services/api-client';
 import { useT } from '../../i18n';
+import Icon from '../Icon';
 
 const ISSUE_ICONS = {
-  missing_sector: '🏷️',
-  missing_deal_value: '💰',
-  missing_won_lost_date: '📅',
-  owner_not_mapped: '👤',
-  zero_activity: '💤',
+  missing_sector: 'tag',
+  missing_deal_value: 'revenue',
+  missing_won_lost_date: 'calendar',
+  owner_not_mapped: 'user',
+  zero_activity: 'moon',
 };
 
 export default function DealQualityStrate() {
@@ -57,7 +58,8 @@ export default function DealQualityStrate() {
             <div className="card-body" style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  {ISSUE_ICONS[issue.type] || '•'} {label}
+                  <Icon name={ISSUE_ICONS[issue.type] || 'alert'} size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                  {label}
                   {count > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{t('dataQuality.common.affectedCount', { count })}</span>}
                 </div>
                 {count > 0 && (

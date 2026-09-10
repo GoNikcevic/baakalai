@@ -14,9 +14,13 @@ import { useT } from '../../i18n';
 
 const FIELD_LABELS = { name: 'Nom', email: 'Email', phone: 'Téléphone', title: 'Poste', company: 'Entreprise' };
 
-function formatActivity(counts) {
+function formatActivity(counts, t) {
   if (!counts) return '—';
-  return `✉️ ${counts.emails} · 📞 ${counts.activities} · 📦 ${counts.productLines}`;
+  return t('dataQuality.duplicates.activityCounts', {
+    emails: counts.emails,
+    activities: counts.activities,
+    lines: counts.productLines,
+  });
 }
 
 export default function MergeReviewPanel({ provider, group, onMerged }) {
@@ -124,7 +128,7 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
                 <td style={{ padding: '4px 8px', fontWeight: 600 }}>{t('dataQuality.duplicates.activityRow')}</td>
                 {diff.perContact.map(c => (
                   <td key={c.id} style={{ padding: '4px 8px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {formatActivity(activityCounts[c.id])}
+                    {formatActivity(activityCounts[c.id], t)}
                   </td>
                 ))}
               </tr>
@@ -166,7 +170,7 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
               <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
                 <input type="radio" checked={String(keepId) === String(c.id)} onChange={() => setKeepId(c.id)} />
                 {c.name || c.email}
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({formatActivity(activityCounts[c.id])})</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({formatActivity(activityCounts[c.id], t)})</span>
               </label>
             ))}
           </div>

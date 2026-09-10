@@ -434,7 +434,8 @@ export default function MemoryExplorerPage() {
                     disabled={applyingId === p.id}
                     title={t('memory.applyTooltip')}
                   >
-                    {applyingId === p.id ? '...' : p.applied ? `\u2705 ${t('memory.active')}` : t('memory.applyPattern')}
+                    {p.applied && applyingId !== p.id && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+                    {applyingId === p.id ? '...' : p.applied ? t('memory.active') : t('memory.applyPattern')}
                   </button>
                   <button
                     className="btn btn-ghost"

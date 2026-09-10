@@ -2050,11 +2050,15 @@ router.get('/autopilot/settings', async (req, res, next) => {
 // PATCH /api/crm/autopilot/settings — Enable/disable autopilot
 router.patch('/autopilot/settings', async (req, res, next) => {
   try {
-    const { enabled, maxTurns, channels } = req.body;
+    // Un interrupteur par population : répondre tout seul à un prospect froid
+    // et répondre tout seul à un client en cours n'engagent pas le même risque.
+    // `enabled` est l'ancien réglage unique, encore accepté pour ne pas casser
+    // un appel existant — il ne pilote que la prospection.
+    const { prospection, crm, enabled } = req.body;
     const updates = {};
-    if (enabled !== undefined) updates.autopilot_enabled = enabled;
-    if (maxTurns !== undefined) updates.autopilot_max_turns = Math.min(Math.max(maxTurns, 1), 10);
-    if (channels !== undefined) updates.autopilot_channels = channels;
+    if (prospection !== undefined) updates.autopilot_prospection_enabled = !!prospection;
+    else if (enabled !== undefined) updates.autopilot_prospection_enabled = !!enabled;
+    if (crm !== undefined) updates.autopilot_crm_enabled = !!crm;
 
     await db.query(
       `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
@@ -2079,11 +2083,18 @@ router.patch('/autopilot/contact/:id', async (req, res, next) => {
 // GET /api/crm/autopilot/queue — List pending/sent autopilot messages
 router.get('/autopilot/queue', async (req, res, next) => {
   try {
+    // `scope` cadre la file sur une population (cf. lib/crm-scope.js) : chaque
+    // écran d'autopilot ne montre que les conversations qu'il commande.
+    // Absent = tout, pour un appel qui ne cadre pas.
+    const { scope } = req.query;
+    const scopeSql = scope === 'crm' ? 'AND o.campaign_id IS NULL'
+      : scope === 'prospection' ? 'AND o.campaign_id IS NOT NULL'
+        : '';
     const result = await db.query(
       `SELECT aq.*, o.name as contact_name, o.company
        FROM autopilot_queue aq
        LEFT JOIN opportunities o ON o.id = aq.opportunity_id
-       WHERE aq.user_id = $1
+       WHERE aq.user_id = $1 ${scopeSql}
        ORDER BY aq.created_at DESC LIMIT 50`,
       [req.user.id]
     );
@@ -2677,11 +2688,15 @@ router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
 // du chat : « voilà ce que j'ai lu, voilà ce qui dort, voilà ce qui manque ».
 // Pur SQL sur opportunities — aucune dépendance à l'analyse IA, donc
 // disponible dans la seconde qui suit l'import.
-// Seuil de dormance : 30 jours — le standard défendable du marché (14 j
-// classait « dormant » presque tout CRM à cycle long et diluait le chiffre).
+// Seuil de dormance : celui de l'utilisateur (lib/stagnation.js), pas un nombre
+// décidé ici. Un 30 en dur cohabitait avec le seuil réglable de la file de
+// réactivation : le même deal était dormant sur un écran et pas sur l'autre, et
+// l'assistant général, qui affiche ce compte-rendu, annonçait un troisième chiffre.
 router.get('/reading-summary', async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const { getStagnantDays } = require('../lib/stagnation');
+    const stagnantDays = await getStagnantDays(userId);
 
     const [totals, topDormant] = await Promise.all([
       // Stagnance sur COALESCE(last_activity_at, created_at) — jamais
@@ -2694,17 +2709,17 @@ router.get('/reading-summary', async (req, res, next) => {
           COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0) as open_value,
           COUNT(*) FILTER (
             WHERE status NOT IN ('won', 'lost')
-              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+              AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')
               AND deal_value IS NOT NULL AND deal_value > 0
           ) as dormant_count,
           COALESCE(SUM(deal_value) FILTER (
             WHERE status NOT IN ('won', 'lost')
-              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+              AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')
               AND deal_value IS NOT NULL AND deal_value > 0
           ), 0) as dormant_value,
           COUNT(*) FILTER (
             WHERE status NOT IN ('won', 'lost')
-              AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+              AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')
               AND (deal_value IS NULL OR deal_value = 0)
           ) as dormant_no_value,
           COUNT(*) FILTER (WHERE deal_value IS NULL OR deal_value = 0) as missing_value,
@@ -2712,19 +2727,19 @@ router.get('/reading-summary', async (req, res, next) => {
           COUNT(*) FILTER (WHERE company IS NULL OR company = '') as missing_company
         FROM opportunities
         WHERE user_id = $1
-      `, [userId]),
+      `, [userId, stagnantDays]),
       // Top 3 par valeur × ancienneté : un deal moyen oublié depuis 200 jours
-      // mérite de passer devant un gros deal calme depuis 31 jours.
+      // mérite de passer devant un gros deal tout juste passé sous le seuil.
       db.query(`
         SELECT id, name, company, deal_value,
                GREATEST(0, EXTRACT(DAY FROM NOW() - COALESCE(last_activity_at, created_at)))::int as days_inactive
         FROM opportunities
         WHERE user_id = $1 AND status NOT IN ('won', 'lost')
-          AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '30 days'
+          AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')
           AND deal_value IS NOT NULL AND deal_value > 0
         ORDER BY deal_value * GREATEST(1, EXTRACT(DAY FROM NOW() - COALESCE(last_activity_at, created_at))) DESC
         LIMIT 3
-      `, [userId]),
+      `, [userId, stagnantDays]),
     ]);
 
     const row = totals.rows[0];
@@ -2743,6 +2758,9 @@ router.get('/reading-summary', async (req, res, next) => {
       totalValue: parseFloat(row.total_value) || 0,
       openDeals: parseInt(row.open_deals),
       openValue,
+      // Le seuil part avec les chiffres : la phrase « X dorment depuis plus de N
+      // jours » doit dire le N qui a servi à les compter, pas un 30 en dur.
+      stagnantDays,
       dormant: {
         count: parseInt(row.dormant_count),
         value: dormantValue,
