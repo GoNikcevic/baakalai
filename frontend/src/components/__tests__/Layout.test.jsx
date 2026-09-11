@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import Layout from '../Layout';
@@ -63,8 +63,12 @@ describe('Layout', () => {
     // "Dashboard" appears in both sidebar and mobile nav, so use getAllByText
     expect(screen.getAllByText('Dashboard').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Prospection').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('Analytics').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('Paramètres').length).toBeGreaterThanOrEqual(1);
+
+    // Analytics vit sous la section CRM, repliee par defaut a l'arrivee sur
+    // la plateforme : il faut l'ouvrir pour voir ses enfants.
+    fireEvent.click(screen.getByText('CRM'));
+    expect(screen.getAllByText('Analytics').length).toBeGreaterThanOrEqual(1);
   });
 
   it('expose une vue globale sous Deals comme sous Clients', () => {
@@ -72,6 +76,9 @@ describe('Layout', () => {
 
     // Deals et Clients sont deux populations de la meme table `opportunities` :
     // chacune a sa vue globale, cadree par la route (/deals vs /clients).
+    // Les sections sont repliees par defaut : on les ouvre avant d'asserter.
+    fireEvent.click(screen.getByText('Deals'));
+    fireEvent.click(screen.getByText('Clients'));
     expect(screen.getAllByText('Vue globale').length).toBeGreaterThanOrEqual(2);
   });
 

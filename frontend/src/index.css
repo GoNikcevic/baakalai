@@ -3564,6 +3564,9 @@ input[type="checkbox"]:checked {
 .crm-tab:hover { color: var(--text-secondary); }
 .crm-tab.active { color: var(--text-primary); border-bottom-color: var(--blue); }
 
+.assistant-nudge { transition: all 0.15s ease; }
+.assistant-nudge:hover { border-color: var(--primary); background: var(--primary-softer); color: var(--primary); }
+
 .crm-section { display: flex; flex-direction: column; gap: 20px; }
 
 .crm-kpi-row {

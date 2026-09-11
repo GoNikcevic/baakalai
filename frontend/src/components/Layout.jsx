@@ -13,6 +13,7 @@ import { logout, getUser } from '../services/auth';
 import { disconnect as disconnectSocket } from '../services/socket';
 import { useSocketEvents } from '../hooks/useSocketEvents';
 import NotificationBell from './NotificationBell';
+import AssistantNudge from './AssistantNudge';
 import HelpWidget from './HelpWidget';
 
 /* ─── Sidebar nav items (keys reference i18n nav.* keys) ─── */
@@ -90,9 +91,9 @@ export default function Layout() {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Collapsible nav sections — all open by default, state persisted per section.
+  // Collapsible nav sections — all closed by default, state persisted per section.
   const [openSections, setOpenSections] = useState(() => {
-    const defaults = { deals: true, clients: true, crm: true };
+    const defaults = { deals: false, clients: false, crm: false };
     try {
       return { ...defaults, ...JSON.parse(localStorage.getItem(NAV_SECTIONS_STORAGE_KEY) || '{}') };
     } catch {
@@ -115,7 +116,10 @@ export default function Layout() {
     disconnectSocket();
     await logout();
     setUser(null);
-    navigate('/');
+    // Full reload (not navigate('/')) : App.jsx ne relit isLoggedIn() qu'au
+    // montage, un navigate() client-side laisserait l'app affichée jusqu'à
+    // un refresh manuel.
+    window.location.href = '/';
   }
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
@@ -333,17 +337,19 @@ export default function Layout() {
 
       {/* ═══ Main content area ═══ */}
       <main className="main" style={sidebarCollapsed ? { marginLeft: 60 } : undefined}>
-        {/* Topbar with notification bell */}
+        {/* Topbar — notification bell + nudge vers l'Assistant, empilés à droite */}
         <div
           className="main-topbar"
           style={{
             display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 8,
             padding: '8px 24px 0',
           }}
         >
           <NotificationBell />
+          <AssistantNudge />
         </div>
         <Outlet />
       </main>

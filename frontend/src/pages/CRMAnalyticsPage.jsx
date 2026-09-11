@@ -114,18 +114,24 @@ function HelpTip({ text }) {
 
 /* ─── Sections ─── */
 
-// Essential tabs shown by default; advanced tabs behind "More"
 function getTabs(t, vocab) { return [
-  { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline'), essential: true },
-  { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring'), essential: true },
-  { key: 'segments', label: t('analytics.segments'), desc: t('analytics.tabDescSegments'), essential: true },
-  { key: 'geography', label: t('analytics.geoTab'), desc: t('analytics.tabDescGeo'), essential: true },
+  { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline') },
+  { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring') },
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
+  { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
+  { key: 'membership', label: t('analytics.membershipTab'), desc: t('analytics.tabDescMembership') },
+  { key: 'geography', label: t('analytics.geoTab'), desc: t('analytics.tabDescGeo') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
-  { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
-  { key: 'renewals', label: t('analytics.renewals'), desc: t('analytics.tabDescRenewals') },
 ]; }
+
+// Groups (top-level nav) — each maps to the sub-tabs it contains
+const GROUPS = [
+  { key: 'deals', labelKey: 'analytics.groupDeals', tabs: ['pipeline', 'scoring', 'attribution', 'forecast'] },
+  { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'geography'] },
+  { key: 'activation', labelKey: 'analytics.groupActivation', tabs: ['trends'] },
+  { key: 'prospection', labelKey: 'analytics.groupProspection', tabs: ['channels'] },
+];
 
 /* ═══ Main Component ═══ */
 
@@ -147,22 +153,26 @@ export default function CRMAnalyticsPage() {
   const vocab = useMemo(() => getVocabulary(mode, en), [mode, en]);
   const STATUS_LABELS = useMemo(() => getStatusLabels(vocab), [vocab]);
 
+  const [activeGroup, setActiveGroup] = useState('deals');
   const [activeTab, setActiveTab] = useState('pipeline');
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
-  const [showAllTabs, setShowAllTabs] = useState(false);
   const TABS = getTabs(t, vocab);
+  const groupTabKeys = GROUPS.find(g => g.key === activeGroup)?.tabs || [];
   const fetchedRef = useRef(new Set());
 
-  // Filtres transverses produit / compte — propagés en query string à toutes les
-  // routes analytics (le backend filtre les opportunités avant agrégation)
-  const [filters, setFilters] = useState({ productLine: '', account: '' });
+  // Changer de groupe réinitialise l'onglet actif sur le premier de ce groupe
+  useEffect(() => {
+    setActiveTab(prev => (groupTabKeys.includes(prev) ? prev : groupTabKeys[0]));
+  }, [activeGroup]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filtre transverse produit — propagé en query string aux routes analytics
+  // de Deals/Clients (le backend filtre les opportunités avant agrégation)
+  const [filters, setFilters] = useState({ productLine: '' });
   const [productLines, setProductLines] = useState([]);
-  const [accounts, setAccounts] = useState([]);
   const filterQs = useMemo(() => {
     const p = new URLSearchParams();
     if (filters.productLine) p.set('productLine', filters.productLine);
-    if (filters.account) p.set('account', filters.account);
     const s = p.toString();
     return s ? '?' + s : '';
   }, [filters]);
@@ -186,11 +196,10 @@ export default function CRMAnalyticsPage() {
     setLoading(false);
   }, [backendAvailable, filterQs]);
 
-  // Options des filtres (une fois)
+  // Options du filtre (une fois)
   useEffect(() => {
     if (!backendAvailable) return;
     api.request('/crm/product-lines').then(d => setProductLines(d.productLines || [])).catch(() => {});
-    api.request('/analytics/accounts').then(d => setAccounts(d.accounts || [])).catch(() => {});
   }, [backendAvailable]);
 
   // Changer de périmètre invalide les données affichées (dont les KPIs pipeline)
@@ -222,111 +231,76 @@ export default function CRMAnalyticsPage() {
   const contactCount = Object.keys(opportunities || {}).length;
   const hasData = contactCount > 0;
 
-  // KPI summary from pipeline data
-  const pipelineData = data.pipeline;
-  const kpis = useMemo(() => {
-    if (!pipelineData) return null;
-    const stages = pipelineData.stages || [];
-    const total = pipelineData.total || 0;
-    const won = stages.find(s => s.stage === 'won')?.count || 0;
-    const lost = stages.find(s => s.stage === 'lost')?.count || 0;
-    const active = total - won - lost;
-    const winRate = (won + lost) > 0 ? Math.round((won / (won + lost)) * 100) : 0;
-    return { total, active, won, winRate };
-  }, [pipelineData]);
-
-  // Fetch pipeline for KPIs on mount
-  useEffect(() => {
-    if (backendAvailable && !data.pipeline) fetchData('pipeline');
-  }, [backendAvailable, data.pipeline, fetchData]);
-
   return (
     <div className="dashboard-page">
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">CRM Analytics</h1>
+          <h1 className="page-title">{t('nav.analytics')}</h1>
           <div className="page-subtitle">{t('analytics.subtitle')}</div>
         </div>
       </div>
 
-      {/* KPI Summary Cards */}
-      {kpis && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: 12, marginBottom: 20,
-        }}>
-          {(() => {
-            const ch = pipelineData?.comparison?.changes;
-            return [
-              { label: en ? 'Total contacts' : 'Contacts total', value: kpis.total, delta: ch?.total },
-              { label: en ? `Active ${vocab.deal.toLowerCase()}s` : `${vocab.deal}s actifs`, value: kpis.active },
-              { label: vocab.won, value: kpis.won, delta: ch?.won },
-              { label: en ? 'Win rate' : 'Taux de conversion', value: kpis.winRate + '%', delta: ch?.winRate, suffix: 'pp' },
-            ].map((kpi, i) => (
-              <div key={i} style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: '14px 18px',
-              }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{kpi.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{kpi.value}</div>
-                {kpi.delta != null && kpi.delta !== 0 ? (
-                  <div style={{
-                    fontSize: 11, marginTop: 4,
-                    color: kpi.delta > 0 ? 'var(--success)' : 'var(--danger)',
-                  }}>
-                    {kpi.delta > 0 ? '\u25B2' : '\u25BC'}{' '}
-                    {kpi.delta > 0 ? '+' : ''}{kpi.delta}{kpi.suffix || ''}{' '}
-                    {en ? 'vs last 30d' : 'vs 30j préc.'}
-                  </div>
-                ) : kpi.delta === 0 ? (
-                  <div style={{ fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>
-                    {'—'} {en ? 'vs last 30d' : 'vs 30j préc.'}
-                  </div>
-                ) : null}
-              </div>
-            ));
-          })()}
+      {/* Groupes (Deals / Clients / Activation / Prospection) */}
+      <div style={{
+        display: 'inline-flex', gap: 2, padding: 3,
+        background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 10,
+        marginBottom: 20,
+      }}>
+        {GROUPS.map(g => (
+          <button
+            key={g.key}
+            onClick={() => setActiveGroup(g.key)}
+            style={{
+              padding: '7px 18px', border: 'none', borderRadius: 8,
+              background: activeGroup === g.key ? 'var(--bg-card, white)' : 'transparent',
+              color: activeGroup === g.key ? 'var(--text-primary)' : 'var(--text-muted)',
+              fontWeight: activeGroup === g.key ? 600 : 400,
+              fontSize: 13, cursor: 'pointer',
+              boxShadow: activeGroup === g.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {t(g.labelKey)}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab bar — sous-onglets du groupe actif */}
+      {groupTabKeys.length > 1 && (
+        <div className="crm-tabs">
+          {TABS.filter(tab => groupTabKeys.includes(tab.key)).map(tab => (
+            <button
+              key={tab.key}
+              className={`crm-tab${activeTab === tab.key ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Filtres transverses produit / compte */}
-      {backendAvailable && hasData && (productLines.length > 0 || accounts.length > 0) && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+      {/* Filtre produit — uniquement pour Deals / Clients, sous leurs onglets */}
+      {(activeGroup === 'deals' || activeGroup === 'clients') && backendAvailable && hasData && productLines.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.filterLabel')}</span>
-          {productLines.length > 0 && (
-            <select
-              value={filters.productLine}
-              onChange={e => setFilters(f => ({ ...f, productLine: e.target.value }))}
-              style={{
-                fontSize: 13, padding: '6px 10px', borderRadius: 8,
-                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
-              }}
-            >
-              <option value="">{t('analytics.filterAllProducts')}</option>
-              {productLines.map(pl => (
-                <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name}</option>
-              ))}
-            </select>
-          )}
-          {accounts.length > 0 && (
-            <select
-              value={filters.account}
-              onChange={e => setFilters(f => ({ ...f, account: e.target.value }))}
-              style={{
-                fontSize: 13, padding: '6px 10px', borderRadius: 8, maxWidth: 240,
-                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
-              }}
-            >
-              <option value="">{t('analytics.filterAllAccounts')}</option>
-              {accounts.map(a => (
-                <option key={a.company} value={a.company}>{a.company} ({a.contacts})</option>
-              ))}
-            </select>
-          )}
-          {(filters.productLine || filters.account) && (
+          <select
+            value={filters.productLine}
+            onChange={e => setFilters(f => ({ ...f, productLine: e.target.value }))}
+            style={{
+              fontSize: 13, padding: '6px 10px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+            }}
+          >
+            <option value="">{t('analytics.filterAllProducts')}</option>
+            {productLines.map(pl => (
+              <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name}</option>
+            ))}
+          </select>
+          {filters.productLine && (
             <button
-              onClick={() => setFilters({ productLine: '', account: '' })}
+              onClick={() => setFilters({ productLine: '' })}
               style={{
                 fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
                 border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)',
@@ -337,31 +311,6 @@ export default function CRMAnalyticsPage() {
           )}
         </div>
       )}
-
-      {/* Question libre sur les données — réponses ancrées sur les agrégats SQL */}
-      {backendAvailable && hasData && <AnalyticsAsk filters={filters} />}
-
-      {/* Tab bar — essential tabs + expandable advanced tabs */}
-      <div className="crm-tabs">
-        {TABS.filter(tab => tab.essential || showAllTabs || activeTab === tab.key).map(tab => (
-          <button
-            key={tab.key}
-            className={`crm-tab${activeTab === tab.key ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-        {!showAllTabs && (
-          <button
-            className="crm-tab"
-            onClick={() => setShowAllTabs(true)}
-            style={{ color: 'var(--text-muted)', fontSize: 12 }}
-          >
-            {en ? 'More' : 'Plus'} +
-          </button>
-        )}
-      </div>
 
       {/* Active tab description */}
       {(() => {
@@ -408,18 +357,19 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* Les tendances et canaux viennent des campagnes, pas des contacts — le
-          filtre produit/compte ne s'y applique pas : on le dit plutôt que de
-          laisser croire que les chiffres sont filtrés. */}
-      {!loading && tabData && (filters.productLine || filters.account) && (activeTab === 'trends' || activeTab === 'channels') && (
+      {/* Les tendances, canaux et la vue d'ensemble clients viennent des campagnes /
+          de toutes les opportunités, pas du périmètre filtré — le filtre produit
+          ne s'y applique pas : on le dit plutôt que de laisser croire que les chiffres
+          sont filtrés. */}
+      {!loading && tabData && filters.productLine && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership') && (
         <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 12 }}>
           <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
           {t('analytics.filterNotApplied')}
         </div>
       )}
 
-      {/* CSV Export button (pas de route CSV pour la géographie) */}
-      {!loading && tabData && activeTab !== 'geography' && (
+      {/* CSV Export button (pas de route CSV pour la géographie / la vue d'ensemble clients) */}
+      {!loading && tabData && activeTab !== 'geography' && activeTab !== 'membership' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             className="btn btn-ghost"
@@ -442,9 +392,8 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
-      {!loading && activeTab === 'segments' && tabData && <SegmentsSection data={tabData} />}
-      {!loading && activeTab === 'renewals' && tabData && <RenewalsSection data={tabData} />}
       {!loading && activeTab === 'geography' && tabData && <GeographySection data={tabData} />}
+      {!loading && activeTab === 'membership' && tabData && <MembershipSection data={tabData} en={en} />}
     </div>
   );
 }
@@ -1201,241 +1150,6 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
   );
 }
 
-/* ═══ Segments Section ═══ */
-
-const SEGMENT_CONFIG = {
-  champions: { color: 'var(--purple)', icon: 'award' },
-  active: { color: 'var(--success)', icon: 'zap' },
-  new: { color: 'var(--blue)', icon: 'sparkles' },
-  at_risk: { color: 'var(--orange, #f97316)', icon: 'alert' },
-  dormant: { color: 'var(--text-muted)', icon: 'moon' },
-};
-
-function SegmentsSection({ data }) {
-  const t = useT();
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const [selected, setSelected] = useState(null);
-
-  const segmentLabels = {
-    champions: t('analytics.segmentChampions'),
-    active: t('analytics.segmentActive'),
-    new: t('analytics.segmentNew'),
-    at_risk: t('analytics.segmentAtRisk'),
-    dormant: t('analytics.segmentDormant'),
-  };
-
-  const segments = data.segments || [];
-  const selectedSegment = segments.find(s => s.key === selected);
-
-  function metricLine(seg) {
-    if (seg.key === 'champions' || seg.key === 'active') {
-      return `${t('analytics.segmentTotalValue')}: $${(seg.totalValue || 0).toLocaleString()}`;
-    }
-    if (seg.key === 'at_risk') {
-      return `${t('analytics.segmentAvgChurn')}: ${seg.avgChurnScore || 0}`;
-    }
-    if (seg.key === 'dormant') {
-      return `${t('analytics.segmentDaysInactive')}: ${seg.daysSinceActivity || 0}`;
-    }
-    return '';
-  }
-
-  return (
-    <div className="crm-section">
-      {/* Segment cards grid */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 12, marginBottom: 20,
-      }}>
-        {segments.map(seg => {
-          const cfg = SEGMENT_CONFIG[seg.key] || { color: 'var(--text-muted)', icon: 'users' };
-          const isSelected = selected === seg.key;
-          return (
-            <div
-              key={seg.key}
-              onClick={() => setSelected(isSelected ? null : seg.key)}
-              style={{
-                background: 'var(--bg-card)',
-                border: `2px solid ${isSelected ? cfg.color : 'var(--border)'}`,
-                borderRadius: 12, padding: '16px 18px', cursor: 'pointer',
-                transition: 'border-color 0.15s',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Icon name={cfg.icon} size={18} color={cfg.color} />
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{segmentLabels[seg.key] || seg.key}</span>
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: cfg.color }}>{seg.count}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                {t('analytics.segmentContacts')}
-              </div>
-              {metricLine(seg) && (
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
-                  {metricLine(seg)}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Contact table for selected segment */}
-      {selectedSegment && (
-        <div className="card">
-          <div className="card-title">
-            <Icon name={SEGMENT_CONFIG[selectedSegment.key]?.icon || 'users'} size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-            {segmentLabels[selectedSegment.key]} ({selectedSegment.count})
-          </div>
-          <div className="card-body">
-            <div className="crm-table">
-              <div className="crm-table-header">
-                <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
-                <span>Email</span>
-                <span>{en ? 'Company' : 'Entreprise'}</span>
-                <span>{en ? 'Churn' : 'Churn'}<HelpTip text={t('analytics.helpChurn')} /></span>
-                <span>{en ? 'Value' : 'Valeur'}</span>
-                <span>{en ? 'Last activity' : 'Derni\u00e8re activit\u00e9'}</span>
-              </div>
-              {(selectedSegment.contacts || []).map(c => (
-                <div className="crm-table-row" key={c.id}>
-                  <span style={{ flex: 2, fontWeight: 600 }}>{c.name}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.email}</span>
-                  <span>{c.company}</span>
-                  <span>
-                    {c.churn_score > 0 ? <ScoreBadge score={c.churn_score} /> : '\u2014'}
-                  </span>
-                  <span>{c.deal_value > 0 ? `$${c.deal_value.toLocaleString()}` : '\u2014'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}
-                  </span>
-                </div>
-              ))}
-              {(selectedSegment.contacts || []).length === 0 && (
-                <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
-                  {t('analytics.segmentNoContacts')}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Hint when no segment selected */}
-      {!selectedSegment && (
-        <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
-          {t('analytics.segmentSelectToView')}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ═══ Renewals Section ═══ */
-
-function RenewalsSection({ data }) {
-  const t = useT();
-  const { lang } = useI18n();
-  const en = lang === 'en';
-
-  const allContacts = useMemo(() => {
-    const groups = [
-      ...(data.overdue?.contacts || []),
-      ...(data.next30?.contacts || []),
-      ...(data.next60?.contacts || []),
-      ...(data.next90?.contacts || []),
-    ];
-    return groups.sort((a, b) => a.days_until - b.days_until);
-  }, [data]);
-
-  function urgencyColor(days) {
-    if (days < 0) return 'var(--danger)';
-    if (days <= 30) return 'var(--orange, #f97316)';
-    if (days <= 60) return 'var(--warning)';
-    return 'var(--success)';
-  }
-
-  function urgencyBg(days) {
-    if (days < 0) return 'rgba(239, 68, 68, 0.06)';
-    if (days <= 30) return 'rgba(249, 115, 22, 0.06)';
-    if (days <= 60) return 'rgba(234, 179, 8, 0.06)';
-    return 'transparent';
-  }
-
-  return (
-    <div className="crm-section">
-      {/* KPI cards */}
-      <div className="crm-kpi-row">
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--danger)' }}>{data.overdue?.count || 0}</div>
-          <div className="crm-kpi-label">{en ? 'Overdue' : 'En retard'}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--orange, #f97316)' }}>{data.next30?.count || 0}</div>
-          <div className="crm-kpi-label">{en ? 'Next 30 days' : '30 prochains jours'}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--warning)' }}>{data.next60?.count || 0}</div>
-          <div className="crm-kpi-label">{en ? 'Next 60 days' : '60 prochains jours'}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.next90?.count || 0}</div>
-          <div className="crm-kpi-label">{en ? 'Next 90 days' : '90 prochains jours'}</div>
-        </div>
-      </div>
-
-      {/* Contacts table */}
-      <div className="card">
-        <div className="card-title">{t('analytics.renewalsUpcoming')}</div>
-        <div className="card-body">
-          <div className="crm-table">
-            <div className="crm-table-header">
-              <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
-              <span>Email</span>
-              <span>{en ? 'Company' : 'Entreprise'}</span>
-              <span>{en ? 'Renewal date' : 'Date renouvellement'}</span>
-              <span>{en ? 'Days' : 'Jours'}</span>
-              <span>{en ? 'Value' : 'Valeur'}</span>
-            </div>
-            {allContacts.map(c => (
-              <div
-                className="crm-table-row"
-                key={c.id}
-                style={{ background: urgencyBg(c.days_until) }}
-              >
-                <span style={{ flex: 2, fontWeight: 600 }}>{c.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.email}</span>
-                <span>{c.company}</span>
-                <span style={{ fontSize: 12 }}>{c.renewal_date}</span>
-                <span style={{ fontWeight: 700, color: urgencyColor(c.days_until) }}>
-                  {c.days_until < 0
-                    ? (en ? `${Math.abs(c.days_until)}d overdue` : `${Math.abs(c.days_until)}j en retard`)
-                    : (en ? `${c.days_until}d` : `${c.days_until}j`)}
-                </span>
-                <span>{c.deal_value > 0 ? `$${c.deal_value.toLocaleString()}` : '\u2014'}</span>
-              </div>
-            ))}
-            {allContacts.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
-                {t('analytics.renewalsEmpty')}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Later count */}
-      {(data.later?.count || 0) > 0 && (
-        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-          {en
-            ? `${data.later.count} more renewal(s) beyond 90 days`
-            : `${data.later.count} renouvellement(s) suppl\u00e9mentaire(s) au-del\u00e0 de 90 jours`}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ═══ Real CRM Stages (migration 092) ═══ */
 
 function StageBars({ rows, color, showValue }) {
@@ -1611,103 +1325,126 @@ function GeographySection({ data }) {
   );
 }
 
-/* ═══ Analytics Ask — question libre sur les données ═══ */
+/* ═══ Membership Section (Clients — vue d'ensemble) ═══ */
 
-function AnalyticsAsk({ filters }) {
-  const t = useT();
-  const { lang } = useI18n();
-  const [question, setQuestion] = useState('');
-  const [history, setHistory] = useState([]);
-  const [asking, setAsking] = useState(false);
-  const endRef = useRef(null);
-  const hasFilters = !!(filters?.productLine || filters?.account);
+const CHURN_BAND_COLORS = { critical: '#DC2626', high: '#F59E0B', medium: '#6E57FA', low: '#16A34A' };
 
-  useEffect(() => {
-    if (history.length > 0) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [history]);
-
-  const ask = async (raw) => {
-    const q = (raw || '').trim();
-    if (!q || asking) return;
-    setAsking(true);
-    setQuestion('');
-    try {
-      const r = await api.request('/analytics/ask', {
-        method: 'POST',
-        // Même périmètre que les onglets : les filtres actifs restreignent les agrégats
-        body: JSON.stringify({ question: q, lang, filters: hasFilters ? filters : undefined }),
-      });
-      setHistory(h => [...h, { q, a: r.answer || t('analytics.askError') }]);
-    } catch {
-      setHistory(h => [...h, { q, a: t('analytics.askError') }]);
-    }
-    setAsking(false);
-  };
-
-  const suggestions = [t('analytics.askSuggest1'), t('analytics.askSuggest2'), t('analytics.askSuggest3')];
+function MembershipSection({ data, en }) {
+  const k = data.kpis || {};
 
   return (
-    <div className="card" style={{ marginBottom: 20 }}>
-      <div className="card-title">
-        {t('analytics.askTitle')}
-        <HelpTip text={t('analytics.askHelp')} />
+    <div className="crm-section">
+      {/* KPI cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+        {[
+          { label: en ? 'Total clients' : 'Clients total', value: k.total_won || 0, color: '#6E57FA' },
+          { label: en ? 'At risk' : 'À risque', value: k.at_risk || 0, color: '#DC2626' },
+          { label: en ? 'Avg lead value' : 'Valeur moyenne', value: k.avg_deal_value ? `${k.avg_deal_value}€` : '—', color: '#16A34A' },
+          { label: en ? 'Total revenue' : 'Revenu total', value: k.total_revenue ? `${Number(k.total_revenue).toLocaleString()}€` : '—', color: '#16A34A' },
+          { label: en ? 'Avg cycle' : 'Cycle moyen', value: k.avg_cycle_days ? `${k.avg_cycle_days}j` : '—' },
+          { label: en ? 'Avg churn score' : 'Score churn moyen', value: k.avg_churn_score || '—', color: k.avg_churn_score >= 50 ? '#DC2626' : '#F59E0B' },
+        ].map((kpi, i) => (
+          <div key={i} className="card" style={{ padding: '16px 20px' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color || 'var(--text-primary)' }}>{kpi.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{kpi.label}</div>
+          </div>
+        ))}
       </div>
-      <div className="card-body">
-        {history.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14, maxHeight: 320, overflowY: 'auto' }}>
-            {history.map((item, i) => (
-              <div key={i}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{item.q}</div>
-                <div style={{
-                  fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap',
-                  background: 'var(--bg-secondary, #f5f5f4)', borderRadius: 8, padding: '10px 12px',
-                }}>{item.a}</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {/* Churn distribution */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Churn Distribution' : 'Distribution Churn'}</div>
+          {(data.churnDistribution || []).map(b => (
+            <div key={b.band} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ width: 70, fontSize: 12, fontWeight: 600, color: CHURN_BAND_COLORS[b.band] || '#737373', textTransform: 'capitalize' }}>{b.band}</span>
+              <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 4, background: CHURN_BAND_COLORS[b.band] || '#6E57FA', width: `${Math.min((parseInt(b.count) / Math.max(parseInt(k.total_contacts) || 1, 1)) * 100, 100)}%` }} />
               </div>
-            ))}
-            <div ref={endRef} />
-          </div>
-        )}
-        {history.length === 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-            {suggestions.map((s, i) => (
-              <button
-                key={i}
-                onClick={() => ask(s)}
-                disabled={asking}
-                style={{
-                  fontSize: 12, padding: '6px 12px', borderRadius: 16, cursor: 'pointer',
-                  border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
-                }}
-              >{s}</button>
-            ))}
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            value={question}
-            onChange={e => setQuestion(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') ask(question); }}
-            placeholder={t('analytics.askPlaceholder')}
-            disabled={asking}
-            style={{
-              flex: 1, padding: '9px 12px', borderRadius: 8, fontSize: 13,
-              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
-            }}
-          />
-          <button
-            className="btn btn-primary"
-            style={{ fontSize: 13, padding: '8px 18px' }}
-            onClick={() => ask(question)}
-            disabled={asking || !question.trim()}
-          >
-            {asking ? '…' : t('analytics.askButton')}
-          </button>
+              <span style={{ width: 40, fontSize: 12, textAlign: 'right', color: 'var(--text-muted)' }}>{b.count}</span>
+            </div>
+          ))}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-          {t('analytics.askDisclaimer')}
+
+        {/* Tenure distribution */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Client Tenure' : 'Ancienneté clients'}</div>
+          {(data.tenure || []).map(tr => (
+            <div key={tr.band} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+              <span>{tr.band}</span>
+              <span style={{ fontWeight: 600 }}>{tr.count} {en ? 'clients' : 'clients'}{tr.total_value ? ` · ${Number(tr.total_value).toLocaleString()}€` : ''}</span>
+            </div>
+          ))}
+          {(!data.tenure || data.tenure.length === 0) && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{en ? 'No data yet' : 'Pas de données'}</div>}
         </div>
       </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {/* Revenue by size */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Revenue by Company Size' : 'Revenu par taille entreprise'}</div>
+          {(data.bySize || []).map(s => (
+            <div key={s.segment} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+              <span>{s.segment}</span>
+              <span><strong>{s.won}</strong> {en ? 'won' : 'gagnés'} · {s.revenue ? `${Number(s.revenue).toLocaleString()}€` : '—'}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Performance by rep */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Performance by Rep' : 'Performance par commercial'}</div>
+          {(data.byOwner || []).map(o => {
+            const winRate = parseInt(o.total) > 0 ? Math.round((parseInt(o.won) / parseInt(o.total)) * 100) : 0;
+            return (
+              <div key={o.rep} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{o.rep}</span>
+                <span><strong>{winRate}%</strong> win · {o.revenue ? `${Number(o.revenue).toLocaleString()}€` : '—'}</span>
+              </div>
+            );
+          })}
+          {(!data.byOwner || data.byOwner.length === 0) && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{en ? 'No data yet' : 'Pas de données'}</div>}
+        </div>
+      </div>
+
+      {/* Monthly trend */}
+      {data.monthlyTrend?.length > 0 && (
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Monthly Wins & Revenue' : 'Gains & revenus mensuels'}</div>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 100 }}>
+            {data.monthlyTrend.map(m => {
+              const maxWins = Math.max(...data.monthlyTrend.map(x => parseInt(x.wins) || 0), 1);
+              const h = Math.max(((parseInt(m.wins) || 0) / maxWins) * 80, 4);
+              return (
+                <div key={m.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>{m.wins}</div>
+                  <div style={{ width: '100%', height: h, borderRadius: 4, background: '#6E57FA' }} title={`${m.month}: ${m.wins} wins, ${m.revenue}€`} />
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{m.month.slice(5)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming renewals */}
+      {data.upcomingRenewals?.length > 0 && (
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{en ? 'Upcoming Renewals (60 days)' : 'Renouvellements à venir (60 jours)'}</div>
+          {data.upcomingRenewals.map(r => (
+            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>{r.name}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{r.company} {r.deal_value ? `· ${r.deal_value}€` : ''}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 600 }}>{new Date(r.renewal_date).toLocaleDateString(en ? 'en-US' : 'fr-FR')}</div>
+                {r.churn_score >= 50 && <div style={{ fontSize: 10, color: '#DC2626' }}>Churn {r.churn_score}%</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

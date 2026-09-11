@@ -7,8 +7,6 @@
  * GET /api/analytics/trends        — Weekly KPI trend data
  * GET /api/analytics/channels      — Channel performance comparison
  * GET /api/analytics/health        — CRM health score + alerts
- * GET /api/analytics/renewals      — Renewal pipeline (overdue / 30 / 60 / 90 day windows)
- * GET /api/analytics/segments      — Smart segments (auto-grouping of contacts)
  * GET /api/analytics/engagement    — Engagement scoring (0-100 per contact)
  */
 
@@ -53,15 +51,13 @@ function canonicalStage(status) {
   return mapping[s] || 'new';
 }
 
-// ── Filtres transverses produit / compte (barre de filtres Analytics) ──
+// ── Filtre transverse produit (barre de filtres Analytics) ──
 // Les routes de cette page agrègent déjà en mémoire sur listByUser : on filtre
 // donc en JS après chargement — zéro changement de comportement sans filtre.
-// `productLine` = UUID de product_lines, `account` = nom de société exact
-// (insensible à la casse et aux espaces).
+// `productLine` = UUID de product_lines.
 
 async function resolveAnalyticsFilters(userId, query) {
   const productLine = String(query?.productLine || '').trim();
-  const account = String(query?.account || '').trim().toLowerCase();
   let productOppIds = null;
   if (productLine) {
     const r = await db.query(
@@ -72,15 +68,13 @@ async function resolveAnalyticsFilters(userId, query) {
     );
     productOppIds = new Set(r.rows.map(x => x.opportunity_id));
   }
-  return { productLine, account, productOppIds, active: !!(productLine || account) };
+  return { productLine, productOppIds, active: !!productLine };
 }
 
 function applyAnalyticsFilters(opps, filters) {
   if (!filters?.active) return opps;
-  let list = opps;
-  if (filters.productOppIds) list = list.filter(o => filters.productOppIds.has(o.id));
-  if (filters.account) list = list.filter(o => (o.company || '').trim().toLowerCase() === filters.account);
-  return list;
+  if (filters.productOppIds) return opps.filter(o => filters.productOppIds.has(o.id));
+  return opps;
 }
 
 async function listFilteredOpportunities(userId, query) {
@@ -795,202 +789,6 @@ router.get('/forecast', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// =============================================
-// GET /api/analytics/renewals
-// =============================================
-
-router.get('/renewals', async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const opportunities = await listFilteredOpportunities(userId, req.query);
-    const now = new Date();
-    const DAY_MS = 1000 * 60 * 60 * 24;
-
-    // Compute renewal date for each opportunity
-    // Priority: renewal_date > close_date > (won_date + 365) > (updated_at + 365)
-    const withRenewal = opportunities
-      .filter(o => canonicalStage(o.status) !== 'lost')
-      .map(o => {
-        let renewalDate = null;
-        if (o.renewal_date) {
-          renewalDate = new Date(o.renewal_date);
-        } else if (o.close_date) {
-          renewalDate = new Date(o.close_date);
-        } else if (o.won_date) {
-          renewalDate = new Date(new Date(o.won_date).getTime() + 365 * DAY_MS);
-        } else if (o.updated_at) {
-          renewalDate = new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS);
-        }
-        if (!renewalDate || isNaN(renewalDate.getTime())) return null;
-
-        const daysUntil = Math.round((renewalDate.getTime() - now.getTime()) / DAY_MS);
-        return {
-          id: o.id,
-          name: o.name,
-          email: o.email,
-          company: o.company,
-          renewal_date: renewalDate.toISOString().split('T')[0],
-          deal_value: Number(o.deal_value || 0),
-          days_until: daysUntil,
-        };
-      })
-      .filter(Boolean);
-
-    // Group by renewal window
-    const overdue = { count: 0, contacts: [] };
-    const next30 = { count: 0, contacts: [] };
-    const next60 = { count: 0, contacts: [] };
-    const next90 = { count: 0, contacts: [] };
-    const later = { count: 0 };
-
-    for (const c of withRenewal) {
-      if (c.days_until < 0) {
-        overdue.count++;
-        overdue.contacts.push(c);
-      } else if (c.days_until <= 30) {
-        next30.count++;
-        next30.contacts.push(c);
-      } else if (c.days_until <= 60) {
-        next60.count++;
-        next60.contacts.push(c);
-      } else if (c.days_until <= 90) {
-        next90.count++;
-        next90.contacts.push(c);
-      } else {
-        later.count++;
-      }
-    }
-
-    // Sort contacts by renewal date (soonest first)
-    overdue.contacts.sort((a, b) => a.days_until - b.days_until);
-    next30.contacts.sort((a, b) => a.days_until - b.days_until);
-    next60.contacts.sort((a, b) => a.days_until - b.days_until);
-    next90.contacts.sort((a, b) => a.days_until - b.days_until);
-
-    res.json({ total: withRenewal.length, overdue, next30, next60, next90, later });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// =============================================
-// GET /api/analytics/segments
-// =============================================
-
-router.get('/segments', async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const opportunities = await listFilteredOpportunities(userId, req.query);
-    const now = Date.now();
-    const DAY_MS = 1000 * 60 * 60 * 24;
-    const DAYS_30 = 30 * DAY_MS;
-    const DAYS_90 = 90 * DAY_MS;
-
-    // Compute average deal value for Champions threshold
-    const dealsWithValue = opportunities.filter(o => o.deal_value > 0);
-    const avgDealValue = dealsWithValue.length > 0
-      ? dealsWithValue.reduce((sum, o) => sum + Number(o.deal_value), 0) / dealsWithValue.length
-      : 0;
-
-    // Classify each opportunity into a segment
-    const segments = {
-      champions: { contacts: [], totalValue: 0 },
-      active: { contacts: [], totalValue: 0 },
-      new: { contacts: [] },
-      at_risk: { contacts: [], totalChurnScore: 0 },
-      dormant: { contacts: [], totalDaysSince: 0 },
-    };
-
-    for (const opp of opportunities) {
-      const stage = canonicalStage(opp.status);
-      const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : 0;
-      const createdAt = opp.created_at ? new Date(opp.created_at).getTime() : now;
-      const daysSinceActivity = (now - updatedAt) / DAY_MS;
-      const churnScore = opp.churn_score || 0;
-      const dealValue = Number(opp.deal_value || 0);
-
-      const contact = {
-        id: opp.id,
-        name: opp.name,
-        email: opp.email,
-        company: opp.company,
-        churn_score: churnScore,
-        deal_value: dealValue,
-        last_activity: opp.updated_at || opp.created_at || null,
-      };
-
-      // Champions: won + above-avg deal value + low churn
-      if (stage === 'won' && dealValue > avgDealValue && churnScore < 30) {
-        segments.champions.contacts.push(contact);
-        segments.champions.totalValue += dealValue;
-      }
-      // New: created in last 30 days
-      else if ((now - createdAt) < DAYS_30) {
-        segments.new.contacts.push(contact);
-      }
-      // Dormant: no activity in 90+ days
-      else if ((now - updatedAt) >= DAYS_90) {
-        segments.dormant.contacts.push(contact);
-        segments.dormant.totalDaysSince += daysSinceActivity;
-      }
-      // At-risk: high churn OR inactive 30-90 days and not won
-      else if (churnScore >= 50 || ((now - updatedAt) >= DAYS_30 && stage !== 'won')) {
-        segments.at_risk.contacts.push(contact);
-        segments.at_risk.totalChurnScore += churnScore;
-      }
-      // Active: recent activity + positive status
-      else if ((now - updatedAt) < DAYS_30 && (stage === 'won' || stage === 'interested' || stage === 'meeting')) {
-        segments.active.contacts.push(contact);
-        segments.active.totalValue += dealValue;
-      }
-      // Fallback: if none of the above matched, put in active
-      else {
-        segments.active.contacts.push(contact);
-        segments.active.totalValue += dealValue;
-      }
-    }
-
-    const result = [
-      {
-        key: 'champions',
-        count: segments.champions.contacts.length,
-        totalValue: Math.round(segments.champions.totalValue),
-        contacts: segments.champions.contacts.slice(0, 10),
-      },
-      {
-        key: 'active',
-        count: segments.active.contacts.length,
-        totalValue: Math.round(segments.active.totalValue),
-        contacts: segments.active.contacts.slice(0, 10),
-      },
-      {
-        key: 'new',
-        count: segments.new.contacts.length,
-        contacts: segments.new.contacts.slice(0, 10),
-      },
-      {
-        key: 'at_risk',
-        count: segments.at_risk.contacts.length,
-        avgChurnScore: segments.at_risk.contacts.length > 0
-          ? Math.round(segments.at_risk.totalChurnScore / segments.at_risk.contacts.length)
-          : 0,
-        contacts: segments.at_risk.contacts.slice(0, 10),
-      },
-      {
-        key: 'dormant',
-        count: segments.dormant.contacts.length,
-        daysSinceActivity: segments.dormant.contacts.length > 0
-          ? Math.round(segments.dormant.totalDaysSince / segments.dormant.contacts.length)
-          : 0,
-        contacts: segments.dormant.contacts.slice(0, 10),
-      },
-    ];
-
-    res.json({ segments: result, total: opportunities.length });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // =============================================
 // GET /api/analytics/engagement
@@ -1349,34 +1147,15 @@ router.get('/geography', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/accounts — options du filtre « compte »
+// buildAnalyticsContext — agrégats CRM pour l'Assistant (routes/ai.js)
 // =============================================
-
-router.get('/accounts', async (req, res, next) => {
-  try {
-    const r = await db.query(
-      `SELECT trim(company) AS company, COUNT(*)::int AS contacts
-       FROM opportunities
-       WHERE user_id = $1 AND company IS NOT NULL AND trim(company) != ''
-       GROUP BY trim(company) ORDER BY contacts DESC, company ASC LIMIT 300`,
-      [req.user.id]
-    );
-    res.json({ accounts: r.rows });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// =============================================
-// POST /api/analytics/ask — question libre sur les données du tenant
-// =============================================
-// Un seul appel Claude, ancré sur un paquet d'agrégats SQL calculés à la
-// volée : la réponse ne peut citer que ce que la base contient vraiment.
+// Paquet d'agrégats SQL calculés à la volée : les réponses de l'Assistant ne
+// peuvent citer que ce que la base contient vraiment.
 
 async function buildAnalyticsContext(userId, filterQuery = null) {
   const ctx = {};
 
-  // Restriction produit/compte éventuelle. Quand un filtre est actif, les blocs
+  // Restriction produit éventuelle. Quand un filtre est actif, les blocs
   // globaux (emails d'activation, forecast, patterns) sont omis : ils ne sont
   // pas filtrables et mélangeraient des périmètres — Claude citerait des
   // chiffres « globaux » comme s'ils étaient filtrés.
@@ -1393,7 +1172,6 @@ async function buildAnalyticsContext(userId, filterQuery = null) {
           ctx.filters_applied.product_line = pl.rows[0]?.name || filters.productLine;
         } catch { ctx.filters_applied.product_line = filters.productLine; }
       }
-      if (filters.account) ctx.filters_applied.account = filters.account;
     }
   }
 
@@ -1457,41 +1235,6 @@ async function buildAnalyticsContext(userId, filterQuery = null) {
 
   return ctx;
 }
-
-router.post('/ask', async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const question = String(req.body?.question || '').trim().slice(0, 500);
-    const lang = req.body?.lang === 'en' ? 'en' : 'fr';
-    if (!question) return res.status(400).json({ error: 'Question required' });
-
-    // Filtres produit/compte de la barre Analytics — même périmètre que les onglets
-    const context = await buildAnalyticsContext(userId, req.body?.filters || null);
-    const claude = require('../api/claude');
-
-    const systemPrompt = `Tu es l'analyste données de baakalai. On te fournit un paquet d'agrégats calculés depuis le CRM de l'utilisateur (JSON) et une question libre.
-
-Règles strictes :
-- Réponds UNIQUEMENT à partir des chiffres fournis. N'invente jamais un chiffre, une tendance ou une cause qui n'est pas dans les données.
-- Si les données ne permettent pas de répondre, dis-le clairement et indique ce qui permettrait d'y répondre (ex. « l'historique des étapes est trop récent »).
-- Réponse courte et concrète : 2 à 6 phrases, les chiffres cités tels quels, une recommandation actionnable quand elle découle des données.
-- Montants en euros (symbole €), pas de jargon.
-- win_rate_365d null = pas assez de deals clos pour un taux fiable.
-- Si "filters_applied" est présent, TOUS les chiffres sont restreints à ce périmètre (ligne produit et/ou compte) : dis-le explicitement dans ta réponse.
-- Réponds en ${lang === 'en' ? 'anglais' : 'français'}. Pas de markdown lourd : du texte simple, éventuellement des tirets.`;
-
-    const result = await claude.callClaude(
-      systemPrompt,
-      `Question : ${question}\n\nDonnées du tenant :\n${JSON.stringify(context)}`,
-      1200,
-      'analytics_ask'
-    );
-
-    res.json({ answer: (result.raw || '').trim() });
-  } catch (err) {
-    next(err);
-  }
-});
 
 module.exports = router;
 // Réutilisé par le playbook à la demande (routes/ai.js) — mêmes agrégats,
