@@ -253,6 +253,8 @@ async function getDeals(apiToken, limit = 100) {
     // close_time is Pipedrive's generic "when this deal closed" timestamp (set for both won
     // and lost); won_time/lost_time are narrower fallbacks if it's ever absent.
     closeDate: d.close_time || d.won_time || d.lost_time || null,
+    // Champ natif Pipedrive, seul provider à l'exposer de façon standard.
+    lostReason: d.lost_reason || null,
   }));
 }
 

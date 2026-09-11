@@ -2080,6 +2080,24 @@ router.patch('/autopilot/contact/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// PATCH /api/crm/opportunities/:id/lost-reason — Saisie manuelle (Analytics → Deals →
+// Raisons de perte), pour les deals sans lost_reason natif CRM (migration 095).
+router.patch('/opportunities/:id/lost-reason', async (req, res, next) => {
+  try {
+    const reason = String(req.body?.reason || '').trim().slice(0, 200);
+    if (!reason) return res.status(400).json({ error: 'Reason required' });
+
+    const owned = await db.query(
+      `SELECT id FROM opportunities WHERE id = $1 AND user_id = $2 AND status = 'lost'`,
+      [req.params.id, req.user.id]
+    );
+    if (!owned.rows[0]) return res.status(404).json({ error: 'Deal not found' });
+
+    await db.opportunities.update(req.params.id, { lostReason: reason, lostReasonSource: 'manual' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // GET /api/crm/autopilot/queue — List pending/sent autopilot messages
 router.get('/autopilot/queue', async (req, res, next) => {
   try {

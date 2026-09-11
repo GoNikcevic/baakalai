@@ -69,19 +69,6 @@ const CHANNEL_COLORS = {
   multi: 'var(--orange)',
 };
 
-function ScoreBadge({ score }) {
-  const color = score >= 70 ? 'var(--success)' : score >= 40 ? 'var(--warning)' : 'var(--danger)';
-  const label = score >= 70 ? 'High' : score >= 40 ? 'Med' : 'Low';
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      minWidth: 36, padding: '2px 8px', borderRadius: 12,
-      fontSize: 12, fontWeight: 700, color: 'white',
-      background: color,
-    }} title={label}>{score}</span>
-  );
-}
-
 function HelpTip({ text }) {
   return (
     <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 5, verticalAlign: 'middle', flexShrink: 0 }} className="helptip-wrap">
@@ -116,9 +103,9 @@ function HelpTip({ text }) {
 
 function getTabs(t, vocab) { return [
   { key: 'pipeline', label: vocab?.pipeline || 'Pipeline', desc: t('analytics.tabDescPipeline') },
-  { key: 'scoring', label: t('analytics.contactScore'), desc: t('analytics.tabDescScoring') },
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
   { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
+  { key: 'lostReasons', label: t('analytics.lostReasonsTab'), desc: t('analytics.tabDescLostReasons') },
   { key: 'membership', label: t('analytics.membershipTab'), desc: t('analytics.tabDescMembership') },
   { key: 'geography', label: t('analytics.geoTab'), desc: t('analytics.tabDescGeo') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
@@ -127,7 +114,7 @@ function getTabs(t, vocab) { return [
 
 // Groups (top-level nav) — each maps to the sub-tabs it contains
 const GROUPS = [
-  { key: 'deals', labelKey: 'analytics.groupDeals', tabs: ['pipeline', 'scoring', 'attribution', 'forecast'] },
+  { key: 'deals', labelKey: 'analytics.groupDeals', tabs: ['pipeline', 'attribution', 'forecast', 'lostReasons'] },
   { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'geography'] },
   { key: 'activation', labelKey: 'analytics.groupActivation', tabs: ['trends'] },
   { key: 'prospection', labelKey: 'analytics.groupProspection', tabs: ['channels'] },
@@ -166,13 +153,16 @@ export default function CRMAnalyticsPage() {
     setActiveTab(prev => (groupTabKeys.includes(prev) ? prev : groupTabKeys[0]));
   }, [activeGroup]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filtre transverse produit — propagé en query string aux routes analytics
-  // de Deals/Clients (le backend filtre les opportunités avant agrégation)
-  const [filters, setFilters] = useState({ productLine: '' });
+  // Filtres transverses produit / secteur — propagés en query string aux
+  // routes analytics de Deals/Clients (le backend filtre les opportunités
+  // avant agrégation)
+  const [filters, setFilters] = useState({ productLine: '', sector: '' });
   const [productLines, setProductLines] = useState([]);
+  const [sectors, setSectors] = useState([]);
   const filterQs = useMemo(() => {
     const p = new URLSearchParams();
     if (filters.productLine) p.set('productLine', filters.productLine);
+    if (filters.sector) p.set('sector', filters.sector);
     const s = p.toString();
     return s ? '?' + s : '';
   }, [filters]);
@@ -196,10 +186,11 @@ export default function CRMAnalyticsPage() {
     setLoading(false);
   }, [backendAvailable, filterQs]);
 
-  // Options du filtre (une fois)
+  // Options des filtres (une fois)
   useEffect(() => {
     if (!backendAvailable) return;
     api.request('/crm/product-lines').then(d => setProductLines(d.productLines || [])).catch(() => {});
+    api.request('/analytics/sectors').then(d => setSectors(d.sectors || [])).catch(() => {});
   }, [backendAvailable]);
 
   // Changer de périmètre invalide les données affichées (dont les KPIs pipeline)
@@ -281,37 +272,6 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* Filtre produit — uniquement pour Deals / Clients, sous leurs onglets */}
-      {(activeGroup === 'deals' || activeGroup === 'clients') && backendAvailable && hasData && productLines.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.filterLabel')}</span>
-          <select
-            value={filters.productLine}
-            onChange={e => setFilters(f => ({ ...f, productLine: e.target.value }))}
-            style={{
-              fontSize: 13, padding: '6px 10px', borderRadius: 8,
-              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
-            }}
-          >
-            <option value="">{t('analytics.filterAllProducts')}</option>
-            {productLines.map(pl => (
-              <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name}</option>
-            ))}
-          </select>
-          {filters.productLine && (
-            <button
-              onClick={() => setFilters({ productLine: '' })}
-              style={{
-                fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
-                border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)',
-              }}
-            >
-              ✕ {t('analytics.filterClear')}
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Active tab description */}
       {(() => {
         const active = TABS.find(t => t.key === activeTab);
@@ -324,6 +284,54 @@ export default function CRMAnalyticsPage() {
           </div>
         ) : null;
       })()}
+
+      {/* Filtres produit / secteur — uniquement pour Deals / Clients, sous leurs onglets */}
+      {(activeGroup === 'deals' || activeGroup === 'clients') && backendAvailable && hasData && (productLines.length > 1 || sectors.length > 1) && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.filterLabel')}</span>
+          {productLines.length > 1 && (
+            <select
+              value={filters.productLine}
+              onChange={e => setFilters(f => ({ ...f, productLine: e.target.value }))}
+              style={{
+                fontSize: 13, padding: '6px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">{t('analytics.filterAllProducts')}</option>
+              {productLines.map(pl => (
+                <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name}</option>
+              ))}
+            </select>
+          )}
+          {sectors.length > 1 && (
+            <select
+              value={filters.sector}
+              onChange={e => setFilters(f => ({ ...f, sector: e.target.value }))}
+              style={{
+                fontSize: 13, padding: '6px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">{t('analytics.filterAllSectors')}</option>
+              {sectors.map(s => (
+                <option key={s.sector} value={s.sector}>{s.sector} ({s.count})</option>
+              ))}
+            </select>
+          )}
+          {(filters.productLine || filters.sector) && (
+            <button
+              onClick={() => setFilters({ productLine: '', sector: '' })}
+              style={{
+                fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
+                border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)',
+              }}
+            >
+              ✕ {t('analytics.filterClear')}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Content */}
       {loading && <LoadingTips />}
@@ -358,18 +366,18 @@ export default function CRMAnalyticsPage() {
       )}
 
       {/* Les tendances, canaux et la vue d'ensemble clients viennent des campagnes /
-          de toutes les opportunités, pas du périmètre filtré — le filtre produit
-          ne s'y applique pas : on le dit plutôt que de laisser croire que les chiffres
+          de toutes les opportunités, pas du périmètre filtré — les filtres produit/secteur
+          ne s'y appliquent pas : on le dit plutôt que de laisser croire que les chiffres
           sont filtrés. */}
-      {!loading && tabData && filters.productLine && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership') && (
+      {!loading && tabData && (filters.productLine || filters.sector) && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership') && (
         <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 12 }}>
           <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
           {t('analytics.filterNotApplied')}
         </div>
       )}
 
-      {/* CSV Export button (pas de route CSV pour la géographie / la vue d'ensemble clients) */}
-      {!loading && tabData && activeTab !== 'geography' && activeTab !== 'membership' && (
+      {/* CSV Export button (pas de route CSV pour géographie / vue d'ensemble clients / raisons de perte) */}
+      {!loading && tabData && activeTab !== 'geography' && activeTab !== 'membership' && activeTab !== 'lostReasons' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             className="btn btn-ghost"
@@ -383,42 +391,140 @@ export default function CRMAnalyticsPage() {
 
       {!loading && activeTab === 'pipeline' && tabData && (
         <>
-          <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />
+          <PipelineSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} en={en} />
           <StagesBlock filterQs={filterQs} />
         </>
       )}
       {!loading && activeTab === 'attribution' && tabData && <AttributionSection data={tabData} />}
-      {!loading && activeTab === 'scoring' && tabData && <ScoringSection data={tabData} statusLabels={STATUS_LABELS} />}
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
       {!loading && activeTab === 'geography' && tabData && <GeographySection data={tabData} />}
       {!loading && activeTab === 'membership' && tabData && <MembershipSection data={tabData} en={en} />}
+      {!loading && activeTab === 'lostReasons' && tabData && (
+        <LostReasonsSection data={tabData} en={en} onTagged={() => fetchData('lostReasons', true)} />
+      )}
     </div>
   );
 }
 
 /* ═══ Pipeline Section ═══ */
 
-function PipelineSection({ data, statusLabels, vocab }) {
+function FlowChart({ flow, en }) {
+  const max = Math.max(1, ...flow.flatMap(f => [f.created, f.won, f.lost]));
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 11, color: 'var(--text-muted)' }}>
+        <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--purple)', marginRight: 5 }} />{en ? 'Created' : 'Créés'}</span>
+        <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--success)', marginRight: 5 }} />{en ? 'Won' : 'Gagnés'}</span>
+        <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--danger)', marginRight: 5 }} />{en ? 'Lost' : 'Perdus'}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', overflowX: 'auto', paddingBottom: 4 }}>
+        {flow.map(f => (
+          <div key={f.period} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 40, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 90 }}>
+              <div title={`${f.period}: ${f.created}`} style={{ width: 8, height: Math.max((f.created / max) * 90, f.created > 0 ? 3 : 0), background: 'var(--purple)', borderRadius: 2 }} />
+              <div title={`${f.period}: ${f.won}`} style={{ width: 8, height: Math.max((f.won / max) * 90, f.won > 0 ? 3 : 0), background: 'var(--success)', borderRadius: 2 }} />
+              <div title={`${f.period}: ${f.lost}`} style={{ width: 8, height: Math.max((f.lost / max) * 90, f.lost > 0 ? 3 : 0), background: 'var(--danger)', borderRadius: 2 }} />
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{f.period.slice(5)}</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: f.net >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+              {f.net >= 0 ? '+' : ''}{f.net}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CohortTable({ cohorts, en }) {
+  const rows = cohorts.filter(c => c.created > 0);
+  if (rows.length === 0) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'No data yet' : 'Pas de données'}</div>;
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ textAlign: 'left', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+            <th style={{ padding: '6px 8px', fontWeight: 600 }}>{en ? 'Cohort' : 'Cohorte'}</th>
+            <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right' }}>{en ? 'Created' : 'Créés'}</th>
+            <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right', color: 'var(--success)' }}>{en ? 'Won' : 'Gagnés'}</th>
+            <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right', color: 'var(--danger)' }}>{en ? 'Lost' : 'Perdus'}</th>
+            <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right' }}>{en ? 'Still open' : 'Encore ouverts'}</th>
+            <th style={{ padding: '6px 8px', fontWeight: 600, textAlign: 'right' }}>{en ? 'Win rate' : 'Taux de conversion'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(c => (
+            <tr key={c.period} style={{ borderBottom: '1px solid var(--border)' }}>
+              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.period}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right' }}>{c.created}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--success)' }}>{c.won}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--danger)' }}>{c.lost}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{c.open}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{c.winRate != null ? `${c.winRate}%` : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DealSizeBlock({ dealSize, en }) {
+  const rows = dealSize.distribution.map(d => ({ stage: d.label, count: d.count }));
+  return (
+    <>
+      <StageBars rows={rows} color="var(--blue)" />
+      {dealSize.totalOpenValue > 0 && (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12, lineHeight: 1.5 }}>
+          {en
+            ? `Your top 5 open deals represent ${dealSize.top5Pct}% of open pipeline value (${dealSize.top5Value.toLocaleString()}€ of ${dealSize.totalOpenValue.toLocaleString()}€).`
+            : `Vos 5 plus gros deals ouverts représentent ${dealSize.top5Pct}% de la valeur du pipeline ouvert (${dealSize.top5Value.toLocaleString()}€ sur ${dealSize.totalOpenValue.toLocaleString()}€).`}
+        </div>
+      )}
+    </>
+  );
+}
+
+function PipelineSection({ data, statusLabels, vocab, en }) {
   const t = useT();
   const STATUS_LABELS = statusLabels;
   const funnelStages = (data.stages || [])
     .filter(s => s.stage !== 'lost')
-    .map(s => ({ label: s.label, value: s.count }));
+    .map(s => ({ label: STATUS_LABELS[s.stage] || s.label, value: s.count }));
+  const pipelineStages = (data.stages || []).filter(s => ['new', 'interested', 'meeting', 'negotiation'].includes(s.stage));
+  const outcomeStages = (data.stages || []).filter(s => ['won', 'lost'].includes(s.stage));
+  // data.total compte TOUT le tenant (won/lost inclus) — le total affiché ici doit
+  // correspondre à la somme des étapes ouvertes juste en dessous, pas au tenant entier.
+  const totalOpen = pipelineStages.reduce((sum, s) => sum + s.count, 0);
 
   return (
     <div className="crm-section">
-      {/* KPI row */}
-      <div className="crm-kpi-row">
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value">{data.total || 0}</div>
-          <div className="crm-kpi-label">{t('analytics.totalOpportunities')}</div>
+      {/* Total en cours, seul et centré */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="crm-kpi-card" style={{ minWidth: 240 }}>
+          <div className="crm-kpi-value">{totalOpen}</div>
+          <div className="crm-kpi-label">{t('analytics.totalOpenDeals')}</div>
         </div>
-        {(data.stages || []).map(s => (
+      </div>
+
+      {/* Pipeline de conversion */}
+      <div className="crm-kpi-row-4">
+        {pipelineStages.map(s => (
           <div className="crm-kpi-card" key={s.stage}>
             <div className="crm-kpi-value" style={{ color: STAGE_COLORS[s.stage] }}>{s.count}</div>
-            <div className="crm-kpi-label">{s.label}</div>
+            <div className="crm-kpi-label">{STATUS_LABELS[s.stage] || s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Issues */}
+      <div className="crm-kpi-row-2">
+        {outcomeStages.map(s => (
+          <div className="crm-kpi-card" key={s.stage}>
+            <div className="crm-kpi-value" style={{ color: STAGE_COLORS[s.stage] }}>{s.count}</div>
+            <div className="crm-kpi-label">{STATUS_LABELS[s.stage] || s.label}</div>
           </div>
         ))}
       </div>
@@ -454,6 +560,42 @@ function PipelineSection({ data, statusLabels, vocab }) {
           </div>
         </div>
       </div>
+
+      {/* Flux mensuel : créés / gagnés / perdus, 12 derniers mois */}
+      {data.flow && (
+        <div className="card">
+          <div className="card-title">
+            {t('analytics.flowTitle')}
+            <HelpTip text={t('analytics.flowHelp')} />
+          </div>
+          <div className="card-body">
+            <FlowChart flow={data.flow} en={en} />
+          </div>
+        </div>
+      )}
+
+      {/* Cohortes de création */}
+      {data.cohorts && (
+        <div className="card">
+          <div className="card-title">
+            {t('analytics.cohortsTitle')}
+            <HelpTip text={t('analytics.cohortsHelp')} />
+          </div>
+          <div className="card-body">
+            <CohortTable cohorts={data.cohorts} en={en} />
+          </div>
+        </div>
+      )}
+
+      {/* Taille des deals ouverts */}
+      {data.dealSize && (
+        <div className="card">
+          <div className="card-title">{t('analytics.dealSizeTitle')}</div>
+          <div className="card-body">
+            <DealSizeBlock dealSize={data.dealSize} en={en} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -490,7 +632,7 @@ function DealTouchBlock({ dt }) {
               <div className="crm-kpi-card">
                 <div className="crm-kpi-value">{dt.touched.count}</div>
                 <div className="crm-kpi-label">{t('analytics.dealTouchTouched')}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>${(dt.touched.value || 0).toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(dt.touched.value || 0).toLocaleString()}€</div>
               </div>
               <div className="crm-kpi-card">
                 <div className="crm-kpi-value" style={{ color: 'var(--blue)' }}>{dt.touched.replyRate}%</div>
@@ -502,7 +644,7 @@ function DealTouchBlock({ dt }) {
               <div className="crm-kpi-card">
                 <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{dt.reactivated.count}</div>
                 <div className="crm-kpi-label">{t('analytics.dealTouchReactivated')}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>${(dt.reactivated.value || 0).toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(dt.reactivated.value || 0).toLocaleString()}€</div>
               </div>
               <div className="crm-kpi-card">
                 <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>{dt.touched.won}</div>
@@ -608,98 +750,6 @@ function AttributionSection({ data }) {
                 </span>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══ Scoring Section ═══ */
-
-function ScoringSection({ data, statusLabels }) {
-  const STATUS_LABELS = statusLabels;
-  const t = useT();
-  const { lang } = useI18n();
-  const en = lang === 'en';
-  const [filter, setFilter] = useState('all');
-
-  const filtered = useMemo(() => {
-    const leads = data.leads || [];
-    if (filter === 'high') return leads.filter(l => l.score >= 70);
-    if (filter === 'medium') return leads.filter(l => l.score >= 40 && l.score < 70);
-    if (filter === 'low') return leads.filter(l => l.score < 40);
-    return leads;
-  }, [data.leads, filter]);
-
-  return (
-    <div className="crm-section">
-      {/* Stats */}
-      <div className="crm-kpi-row">
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value">{data.avgScore?.toFixed(1) || '—'}</div>
-          <div className="crm-kpi-label">{t('analytics.avgScore')}<HelpTip text={t('analytics.helpContactScore')} /></div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.distribution?.high || 0}</div>
-          <div className="crm-kpi-label">{t('analytics.scoreHigh')}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--warning)' }}>{data.distribution?.medium || 0}</div>
-          <div className="crm-kpi-label">{t('analytics.scoreMedium')}</div>
-        </div>
-        <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--danger)' }}>{data.distribution?.low || 0}</div>
-          <div className="crm-kpi-label">{t('analytics.scoreLow')}</div>
-        </div>
-      </div>
-
-      {/* Filter + Table */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title">{t('analytics.contactScoreboard')}</div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {['all', 'high', 'medium', 'low'].map(f => (
-              <button
-                key={f}
-                className={`crm-filter-btn${filter === f ? ' active' : ''}`}
-                onClick={() => setFilter(f)}
-              >
-                {f === 'all' ? t('analytics.all') : f === 'high' ? t('analytics.high') : f === 'medium' ? t('analytics.medium') : t('analytics.low')}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="card-body">
-          <div className="crm-table">
-            <div className="crm-table-header">
-              <span>Score</span>
-              <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
-              <span>{en ? 'Company' : 'Entreprise'}</span>
-              <span>{en ? 'Status' : 'Statut'}</span>
-              <span>{en ? 'Activity' : 'Activité'}<HelpTip text={t('analytics.helpActivity')} /></span>
-              <span>Fit<HelpTip text={t('analytics.helpFit')} /></span>
-              <span>{en ? 'Last active' : 'Dern. activité'}</span>
-            </div>
-            {filtered.map(l => (
-              <div className="crm-table-row" key={l.id}>
-                <span><ScoreBadge score={l.score} /></span>
-                <span style={{ flex: 2, fontWeight: 600 }}>{l.name}</span>
-                <span>{l.company}</span>
-                <span>
-                  <span className="crm-status-dot" style={{ background: STAGE_COLORS[l.status] || 'var(--text-muted)' }} />
-                  {STATUS_LABELS[l.status] || l.status}
-                </span>
-                <span style={{ color: 'var(--blue)' }}>{l.breakdown?.activity ?? l.scoreBreakdown?.engagement ?? 0}</span>
-                <span style={{ color: 'var(--purple)' }}>{l.breakdown?.fit ?? l.scoreBreakdown?.fit ?? 0}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{l.lastActivity || l.updatedAt?.split?.('T')?.[0] || '—'}</span>
-              </div>
-            ))}
-            {filtered.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>
-                {t('analytics.noLeads')}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1012,11 +1062,11 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
       {/* KPI row */}
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--blue)' }}>${(pipeline.totalValue || 0).toLocaleString()}</div>
-          <div className="crm-kpi-label">{`Total ${vocab.pipeline}`}</div>
+          <div className="crm-kpi-value" style={{ color: 'var(--blue)' }}>{(pipeline.totalValue || 0).toLocaleString()}€</div>
+          <div className="crm-kpi-label">{en ? `Total ${vocab.pipeline}` : `${vocab.pipeline} total`}</div>
         </div>
         <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>${(pipeline.weightedForecast || 0).toLocaleString()}</div>
+          <div className="crm-kpi-value" style={{ color: 'var(--purple)' }}>{(pipeline.weightedForecast || 0).toLocaleString()}€</div>
           <div className="crm-kpi-label">{t('analytics.weightedForecast')}<HelpTip text={t('analytics.helpForecast')} /></div>
         </div>
         <div className="crm-kpi-card">
@@ -1024,31 +1074,31 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
           <div className="crm-kpi-label">{t('analytics.avgSalesCycle')}<HelpTip text={t('analytics.helpSalesCycle')} /></div>
         </div>
         <div className="crm-kpi-card">
-          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>${(retention.totalWonRevenue || 0).toLocaleString()}</div>
-          <div className="crm-kpi-label">{`${vocab.won} Revenue`}</div>
+          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{(retention.totalWonRevenue || 0).toLocaleString()}€</div>
+          <div className="crm-kpi-label">{en ? `${vocab.won} Revenue` : `Revenu ${vocab.won.toLowerCase()}`}</div>
         </div>
       </div>
 
       <div className="crm-grid-2">
         {/* Pipeline by stage */}
         <div className="card">
-          <div className="card-title">{`${vocab.pipeline} by Stage (Weighted)`}</div>
+          <div className="card-title">{en ? `${vocab.pipeline} by Stage (Weighted)` : `${vocab.pipeline} par étape (pondéré)`}</div>
           <div className="card-body">
             <div className="crm-table">
               <div className="crm-table-header">
-                <span style={{ flex: 2 }}>Stage</span>
+                <span style={{ flex: 2 }}>{en ? 'Stage' : 'Étape'}</span>
                 <span>{`${vocab.deal}s`}</span>
-                <span>Value</span>
-                <span>Win %</span>
-                <span>Weighted</span>
+                <span>{en ? 'Value' : 'Valeur'}</span>
+                <span>{en ? 'Win %' : 'Taux gain'}</span>
+                <span>{en ? 'Weighted' : 'Pondéré'}</span>
               </div>
               {(pipeline.byStage || []).map(s => (
                 <div className="crm-table-row" key={s.stage}>
-                  <span style={{ flex: 2, fontWeight: 600 }}>{s.label}</span>
+                  <span style={{ flex: 2, fontWeight: 600 }}>{STATUS_LABELS[s.stage] || s.label}</span>
                   <span>{s.deals}</span>
-                  <span>${s.totalValue.toLocaleString()}</span>
+                  <span>{s.totalValue.toLocaleString()}€</span>
                   <span style={{ color: s.probability >= 50 ? 'var(--success)' : 'var(--warning)' }}>{s.probability}%</span>
-                  <span style={{ fontWeight: 700, color: 'var(--purple)' }}>${s.weightedValue.toLocaleString()}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--purple)' }}>{s.weightedValue.toLocaleString()}€</span>
                 </div>
               ))}
             </div>
@@ -1057,19 +1107,19 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
 
         {/* Retention / churn risk */}
         <div className="card">
-          <div className="card-title">Revenue Retention</div>
+          <div className="card-title">{en ? 'Revenue Retention' : 'Rétention du revenu'}</div>
           <div className="card-body">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13 }}>Safe Revenue</span>
-                <span style={{ fontWeight: 700, color: 'var(--success)' }}>${(retention.safeRevenue || 0).toLocaleString()}</span>
+                <span style={{ fontSize: 13 }}>{en ? 'Safe Revenue' : 'Revenu sécurisé'}</span>
+                <span style={{ fontWeight: 700, color: 'var(--success)' }}>{(retention.safeRevenue || 0).toLocaleString()}€</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13 }}>At-Risk Revenue (churn 50+)</span>
-                <span style={{ fontWeight: 700, color: 'var(--danger)' }}>${(retention.atRiskRevenue || 0).toLocaleString()}</span>
+                <span style={{ fontSize: 13 }}>{en ? 'At-Risk Revenue (churn 50+)' : 'Revenu à risque (churn 50+)'}</span>
+                <span style={{ fontWeight: 700, color: 'var(--danger)' }}>{(retention.atRiskRevenue || 0).toLocaleString()}€</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13 }}>At-Risk Clients</span>
+                <span style={{ fontSize: 13 }}>{en ? 'At-Risk Clients' : 'Clients à risque'}</span>
                 <span style={{ fontWeight: 700, color: 'var(--warning)' }}>{retention.atRiskCount || 0}</span>
               </div>
               {retention.totalWonRevenue > 0 && (
@@ -1085,7 +1135,7 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
       {/* Revenue History */}
       {(data.revenueHistory || []).length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-title">{`Monthly ${vocab.won} Revenue`}</div>
+          <div className="card-title">{en ? `Monthly ${vocab.won} Revenue` : `Revenu ${vocab.won.toLowerCase()} mensuel`}</div>
           <div className="card-body">
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 120 }}>
               {data.revenueHistory.map((m, i) => {
@@ -1093,7 +1143,7 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
                 const pct = max > 0 ? (m.revenue / max) * 100 : 0;
                 return (
                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--success)' }}>${(m.revenue / 1000).toFixed(0)}k</div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--success)' }}>{(m.revenue / 1000).toFixed(0)}k€</div>
                     <div style={{ width: '100%', height: `${Math.max(pct, 4)}%`, background: 'var(--purple)', borderRadius: 4 }} />
                     <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{m.month.slice(5)}</div>
                   </div>
@@ -1107,17 +1157,17 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
       {/* Projected deals */}
       {(data.projectedDeals || []).length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-title">{`Top Projected ${vocab.deal}s`}</div>
+          <div className="card-title">{en ? `Top Projected ${vocab.deal}s` : `Top ${vocab.deal}s projetés`}</div>
           <div className="card-body">
             <div className="crm-table">
               <div className="crm-table-header">
-                <span style={{ flex: 2 }}>Name</span>
-                <span>Company</span>
-                <span>Stage</span>
-                <span>Value</span>
-                <span>Win %</span>
-                <span>Weighted</span>
-                <span>Est. Close</span>
+                <span style={{ flex: 2 }}>{en ? 'Name' : 'Nom'}</span>
+                <span>{en ? 'Company' : 'Entreprise'}</span>
+                <span>{en ? 'Stage' : 'Étape'}</span>
+                <span>{en ? 'Value' : 'Valeur'}</span>
+                <span>{en ? 'Win %' : 'Taux gain'}</span>
+                <span>{en ? 'Weighted' : 'Pondéré'}</span>
+                <span>{en ? 'Est. Close' : 'Clôture est.'}</span>
               </div>
               {data.projectedDeals.slice(0, 10).map(d => (
                 <div className="crm-table-row" key={d.id}>
@@ -1127,9 +1177,9 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
                     <span className="crm-status-dot" style={{ background: STAGE_COLORS[d.stage] || 'var(--text-muted)' }} />
                     {STATUS_LABELS[d.stage] || d.stage}
                   </span>
-                  <span>${d.dealValue.toLocaleString()}</span>
+                  <span>{d.dealValue.toLocaleString()}€</span>
                   <span style={{ color: d.probability >= 50 ? 'var(--success)' : 'var(--warning)' }}>{d.probability}%</span>
-                  <span style={{ fontWeight: 700, color: 'var(--purple)' }}>${d.weightedValue.toLocaleString()}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--purple)' }}>{d.weightedValue.toLocaleString()}€</span>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.projectedCloseDate}</span>
                 </div>
               ))}
@@ -1142,7 +1192,9 @@ function ForecastSection({ data: initialData, statusLabels, vocab }) {
       {(pipeline.byStage || []).every(s => s.deals === 0) && (
         <div className="card" style={{ marginTop: 16, textAlign: 'center', padding: 40 }}>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-            {`No ${vocab.deal.toLowerCase()}s with values in ${vocab.pipeline.toLowerCase()}. Add ${vocab.deal.toLowerCase()} values to your contacts to see revenue forecasts.`}
+            {en
+              ? `No ${vocab.deal.toLowerCase()}s with values in ${vocab.pipeline.toLowerCase()}. Add ${vocab.deal.toLowerCase()} values to your contacts to see revenue forecasts.`
+              : `Aucun ${vocab.deal.toLowerCase()} avec valeur dans le ${vocab.pipeline.toLowerCase()}. Ajoutez des valeurs à vos ${vocab.deal.toLowerCase()}s pour voir les prévisions de revenu.`}
           </div>
         </div>
       )}
@@ -1167,6 +1219,25 @@ function StageBars({ rows, color, showValue }) {
           </div>
           <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
             <div style={{ height: '100%', borderRadius: 4, width: Math.round((r.count / max) * 100) + '%', background: color }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AvgDaysByStage({ rows, en }) {
+  const max = Math.max(1, ...rows.map(r => Number(r.avg_days) || 0));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {rows.map((r, i) => (
+        <div key={i}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
+            <span style={{ fontWeight: 600 }}>{r.stage}</span>
+            <span style={{ color: 'var(--text-muted)' }}>{r.avg_days}{en ? 'd avg.' : 'j en moy.'}</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 4, width: `${Math.round((Number(r.avg_days) / max) * 100)}%`, background: 'var(--orange)' }} />
           </div>
         </div>
       ))}
@@ -1219,6 +1290,17 @@ function StagesBlock({ filterQs = '' }) {
           </div>
         )}
       </div>
+      {stagesData.avgDaysByStage?.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-title">
+            {t('analytics.avgDaysByStageTitle')}
+            <HelpTip text={t('analytics.avgDaysByStageHelp')} />
+          </div>
+          <div className="card-body">
+            <AvgDaysByStage rows={stagesData.avgDaysByStage} en={en} />
+          </div>
+        </div>
+      )}
       {stagesData.historySince && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, textAlign: 'right' }}>
           {t('analytics.crmStagesSince', { date: new Date(stagesData.historySince).toLocaleDateString(en ? 'en-US' : 'fr-FR') })}
@@ -1443,6 +1525,150 @@ function MembershipSection({ data, en }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ Lost Reasons Section (Deals) ═══ */
+
+const LOST_REASON_PRESETS_FR = ['Prix trop élevé', 'Choix d\'un concurrent', 'Plus de réponse', 'Mauvais timing', 'Budget annulé en interne', 'Produit pas adapté'];
+const LOST_REASON_PRESETS_EN = ['Price too high', 'Chose a competitor', 'Went silent', 'Bad timing', 'Internal budget cancelled', 'Not a fit'];
+
+function UntaggedDealRow({ deal, en, onTag }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customText, setCustomText] = useState('');
+  const presets = en ? LOST_REASON_PRESETS_EN : LOST_REASON_PRESETS_FR;
+
+  const submit = async (reason) => {
+    if (!reason.trim() || submitting) return;
+    setSubmitting(true);
+    await onTag(deal.id, reason.trim());
+    setSubmitting(false);
+  };
+
+  return (
+    <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{deal.name}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {deal.company}{deal.dealValue > 0 ? ` · ${deal.dealValue.toLocaleString()}€` : ''}
+            {deal.lostDate ? ` · ${new Date(deal.lostDate).toLocaleDateString(en ? 'en-US' : 'fr-FR')}` : ''}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        {presets.map(p => (
+          <button
+            key={p}
+            disabled={submitting}
+            onClick={() => submit(p)}
+            style={{
+              fontSize: 11, padding: '4px 10px', borderRadius: 14, cursor: submitting ? 'default' : 'pointer',
+              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              opacity: submitting ? 0.5 : 1,
+            }}
+          >{p}</button>
+        ))}
+        {!customOpen ? (
+          <button
+            disabled={submitting}
+            onClick={() => setCustomOpen(true)}
+            style={{
+              fontSize: 11, padding: '4px 10px', borderRadius: 14, cursor: 'pointer',
+              border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)',
+            }}
+          >{en ? '+ Other' : '+ Autre'}</button>
+        ) : (
+          <span style={{ display: 'inline-flex', gap: 4 }}>
+            <input
+              autoFocus
+              type="text"
+              value={customText}
+              onChange={e => setCustomText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submit(customText); }}
+              placeholder={en ? 'Custom reason…' : 'Raison libre…'}
+              disabled={submitting}
+              style={{
+                fontSize: 11, padding: '4px 8px', borderRadius: 8, width: 140,
+                border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            />
+            <button
+              disabled={submitting || !customText.trim()}
+              onClick={() => submit(customText)}
+              className="btn btn-primary"
+              style={{ fontSize: 11, padding: '4px 10px' }}
+            >OK</button>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LostReasonsSection({ data, en, onTagged }) {
+  const t = useT();
+
+  const handleTag = async (id, reason) => {
+    try {
+      await api.request(`/crm/opportunities/${id}/lost-reason`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      });
+      onTagged();
+    } catch { /* la ligne reste affichée, l'utilisateur peut retenter */ }
+  };
+
+  const distRows = data.distribution.map(d => ({ stage: d.reason, count: d.count, value: d.value }));
+
+  return (
+    <div className="crm-section">
+      {/* KPI row */}
+      <div className="crm-kpi-row">
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--danger)' }}>{data.totalLost}</div>
+          <div className="crm-kpi-label">{t('analytics.lostReasonsTotalLost')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value">{data.taggedCount}</div>
+          <div className="crm-kpi-label">{t('analytics.lostReasonsTagged')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: data.untaggedCount > 0 ? 'var(--warning)' : undefined }}>{data.untaggedCount}</div>
+          <div className="crm-kpi-label">{t('analytics.lostReasonsUntagged')}</div>
+        </div>
+      </div>
+
+      {distRows.length > 0 && (
+        <div className="card">
+          <div className="card-title">{t('analytics.lostReasonsDistribution')}</div>
+          <div className="card-body">
+            <StageBars rows={distRows} color="var(--danger)" showValue />
+          </div>
+        </div>
+      )}
+
+      {data.untagged.length > 0 && (
+        <div className="card">
+          <div className="card-title">
+            {t('analytics.lostReasonsUntaggedTitle', { count: data.untaggedCount })}
+            <HelpTip text={t('analytics.lostReasonsUntaggedHelp')} />
+          </div>
+          <div className="card-body" style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {data.untagged.map(deal => (
+              <UntaggedDealRow key={deal.id} deal={deal} en={en} onTag={handleTag} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.totalLost === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+          {t('analytics.lostReasonsEmpty')}
         </div>
       )}
     </div>

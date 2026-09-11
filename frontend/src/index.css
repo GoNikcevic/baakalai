@@ -3573,6 +3573,14 @@ input[type="checkbox"]:checked {
   display: grid; grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
+.crm-kpi-row-4 {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.crm-kpi-row-2 {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 12px; max-width: 480px; margin: 0 auto;
+}
 .crm-kpi-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 16px; text-align: center;
@@ -3673,10 +3681,12 @@ input[type="checkbox"]:checked {
 
 @media (max-width: 900px) {
   .crm-kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .crm-kpi-row-4 { grid-template-columns: repeat(2, 1fr); }
   .crm-grid-3 { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 768px) {
   .crm-kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .crm-kpi-row-4, .crm-kpi-row-2 { grid-template-columns: 1fr 1fr; }
   .crm-grid-2, .crm-grid-3 { grid-template-columns: 1fr; }
   .crm-tabs { overflow-x: auto; flex-wrap: nowrap; }
   .crm-conversion-labels { min-width: 120px; }

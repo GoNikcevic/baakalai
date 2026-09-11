@@ -433,7 +433,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         if (!personId) continue;
 
         const opp = await db.query(
-          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+          `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
           [userId, personId]
         );
         if (!opp.rows[0]) continue;
@@ -455,6 +455,13 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           updates.lost_date = closeDate || new Date().toISOString();
         } else if (deal.status === 'lost' && o.status === 'lost' && !o.lost_date && closeDate) {
           updates.lost_date = closeDate;
+        }
+        // Rapatrie la raison de perte native (Pipedrive) — jamais si une valeur
+        // existe déjà (CRM ou saisie manuelle), pour ne jamais écraser une
+        // correction humaine par une resynchro.
+        if (deal.lostReason && !o.lost_reason) {
+          updates.lost_reason = deal.lostReason;
+          updates.lost_reason_source = 'crm';
         }
         // Pipedrive's native "next activity" date feeds planned_followup_date — never overwrite
         // a manually-set date with null (Pipedrive is the only provider that returns this today).

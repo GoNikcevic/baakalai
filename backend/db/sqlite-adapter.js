@@ -349,6 +349,8 @@ function initSchema() {
       last_activity_at DATETIME,
       linkedin_url TEXT,
       lost_date DATETIME,
+      lost_reason TEXT,
+      lost_reason_source TEXT,
       owner_email TEXT,
       owner_id TEXT,
       personalization TEXT,
