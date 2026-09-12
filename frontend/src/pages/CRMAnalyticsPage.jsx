@@ -117,11 +117,15 @@ function getTabs(t, vocab) { return [
 ]; }
 
 // Groups (top-level nav) — each maps to the sub-tabs it contains
+// 'attribution' apparaît dans deux groupes : même clé, même fetch
+// (/analytics/attribution), mais contenu différent selon le groupe actif —
+// DealTouchBlock (deals touchés par baakalai) sous Deals, ROI campagnes sous
+// Prospection. Voir le rendu conditionnel sur activeGroup plus bas.
 const GROUPS = [
   { key: 'deals', labelKey: 'analytics.groupDeals', tabs: ['pipeline', 'attribution', 'forecast', 'lostReasons'] },
   { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'geography'] },
   { key: 'activation', labelKey: 'analytics.groupActivation', tabs: ['trends'] },
-  { key: 'prospection', labelKey: 'analytics.groupProspection', tabs: ['channels'] },
+  { key: 'prospection', labelKey: 'analytics.groupProspection', tabs: ['channels', 'attribution'] },
 ];
 
 /* ═══ Main Component ═══ */
@@ -311,8 +315,15 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* Active tab description */}
+      {/* Active tab description — 'attribution' a un sens différent par groupe */}
       {(() => {
+        if (activeTab === 'attribution' && activeGroup === 'deals') {
+          return (
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', margin: '8px 0 16px', lineHeight: 1.4 }}>
+              {t('analytics.tabDescAttributionDeals')}
+            </div>
+          );
+        }
         const active = TABS.find(t => t.key === activeTab);
         return active?.desc ? (
           <div style={{
@@ -324,8 +335,9 @@ export default function CRMAnalyticsPage() {
         ) : null;
       })()}
 
-      {/* Filtres produit / secteur — uniquement pour Deals / Clients, sous leurs onglets */}
-      {(activeGroup === 'deals' || activeGroup === 'clients') && backendAvailable && hasData && (productLines.length > 1 || sectors.length > 1) && (
+      {/* Filtres produit / secteur — Deals / Clients / Prospection (Attribution y respecte
+          ces filtres, contrairement à Canaux qui reste campagne-only, cf. avertissement plus bas) */}
+      {(activeGroup === 'deals' || activeGroup === 'clients' || activeGroup === 'prospection') && backendAvailable && hasData && (productLines.length > 1 || sectors.length > 1) && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.filterLabel')}</span>
           {productLines.length > 1 && (
@@ -380,7 +392,7 @@ export default function CRMAnalyticsPage() {
 
       {/* Filtres période — sous les filtres produit/secteur, période prédéfinie
           ou intervalle exact, mutuellement exclusifs */}
-      {(activeGroup === 'deals' || activeGroup === 'clients') && backendAvailable && hasData && (
+      {(activeGroup === 'deals' || activeGroup === 'clients' || activeGroup === 'prospection') && backendAvailable && hasData && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '0 0 12px' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.periodLabel')}</span>
           <select
@@ -482,7 +494,11 @@ export default function CRMAnalyticsPage() {
           <StagesBlock filterQs={filterQs} />
         </>
       )}
-      {!loading && activeTab === 'attribution' && tabData && <AttributionSection data={tabData} />}
+      {!loading && activeTab === 'attribution' && tabData && (
+        activeGroup === 'deals'
+          ? <DealTouchSection data={tabData} />
+          : <AttributionSection data={tabData} />
+      )}
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
@@ -792,6 +808,16 @@ function DealTouchBlock({ dt }) {
   );
 }
 
+// Deals group — deals touchés par baakalai (relances/réactivations), reste
+// distinct du ROI campagnes ci-dessous qui vit désormais sous Prospection.
+function DealTouchSection({ data }) {
+  return (
+    <div className="crm-section">
+      <DealTouchBlock dt={data.dealTouch} />
+    </div>
+  );
+}
+
 function AttributionSection({ data }) {
   const t = useT();
   const sorted = useMemo(() =>
@@ -801,9 +827,6 @@ function AttributionSection({ data }) {
 
   return (
     <div className="crm-section">
-      {/* Deals touchés par l'agent — la preuve ROI côté CRM */}
-      <DealTouchBlock dt={data.dealTouch} />
-
       {/* Totals */}
       <div className="crm-kpi-row">
         <div className="crm-kpi-card">

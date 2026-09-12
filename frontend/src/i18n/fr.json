@@ -740,6 +740,7 @@
     "crmStagesLostHelp": "Dernière étape connue des deals perdus — l'endroit du pipeline où ils sont morts. Se précise au fil des transitions observées.",
     "crmStagesSince": "Transitions suivies depuis le {date}",
     "tabDescAttribution": "Quelles campagnes génèrent le plus de conversions ? ROI par campagne et par canal.",
+    "tabDescAttributionDeals": "Les deals relancés par baakalai — taux de réponse, réactivations et deals gagnés après contact.",
     "dealTouchTitle": "Deals touchés par baakalai",
     "dealTouchHelp": "Un deal est « touché » dès qu'un email de l'agent lui a été réellement envoyé. Comparez les issues des deals touchés à celles des deals non touchés : c'est votre preuve ROI.",
     "dealTouchTouched": "Deals touchés",
