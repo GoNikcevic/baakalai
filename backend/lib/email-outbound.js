@@ -391,4 +391,8 @@ module.exports = {
   sendNurtureEmail,
   testEmailAccount,
   getDefaultAccount,
+  // Consommés par le moteur natif de prospection (lecture Gmail API pour la
+  // détection de réponses — même token OAuth que l'envoi, scope mail.google.com).
+  refreshTokenIfNeeded,
+  decryptAccount,
 };

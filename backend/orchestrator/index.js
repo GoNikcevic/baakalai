@@ -108,6 +108,32 @@ function start() {
     }
   });
 
+  // ═══════════════════════════════════════════════════
+  // Séquences natives — toutes les heures, 8h-18h, lun-ven
+  // Détection de réponses (Gmail) + envoi des steps dus des campagnes de
+  // prospection en canal natif. Le moteur borne les volumes par utilisateur ;
+  // le passage horaire étale les envois sur la journée ouvrée.
+  // ═══════════════════════════════════════════════════
+  schedule('native-sequences', '10 8-18 * * 1-5', async () => {
+    try {
+      const engine = require('../lib/native-sequence-engine');
+      const summary = await engine.run();
+      if (summary.emailsSent + summary.linkedinActions + summary.replies > 0) {
+        console.log(`[native-seq] ${summary.users} users — ${summary.emailsSent} emails, ${summary.linkedinActions} linkedin, ${summary.replies} replies`);
+      }
+      if (summary.errors.length > 0) {
+        logger.warn('orchestrator', `native-sequences errors: ${summary.errors.slice(0, 5).join(' | ')}`);
+      }
+      // La file autopilot (réponses différées 2-4h) ne se vidait qu'au passage
+      // de l'agent CRM de 9h — une réponse planifiée à 14h partait le lendemain.
+      // Le passage horaire la traite au fil de l'eau.
+      const { sendScheduledReplies } = require('../lib/conversation-autopilot');
+      await sendScheduledReplies();
+    } catch (err) {
+      logger.error('orchestrator', 'Native sequences failed: ' + err.message);
+    }
+  });
+
   // Evening batch check (8PM) — only batch orchestrator, not full agent
   schedule('evening-batch', '0 20 * * *', async () => {
     try {

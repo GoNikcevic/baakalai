@@ -120,7 +120,9 @@ function initSchema() {
       batch_mode INTEGER,
       batch_size INTEGER,
       current_batch INTEGER,
+      email_account_id TEXT,
       last_optimized_at DATETIME,
+      send_channel TEXT,
       team_id TEXT,
       total_batches INTEGER
     );
@@ -361,6 +363,8 @@ function initSchema() {
       renewal_date DATETIME,
       score INTEGER,
       score_breakdown TEXT,
+      sequence_stop_reason TEXT,
+      sequence_stopped_at DATETIME,
       team_id TEXT,
       won_date DATETIME
     );
