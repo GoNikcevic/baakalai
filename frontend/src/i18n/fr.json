@@ -646,6 +646,7 @@
     "lostReasonsTab": "Raisons de perte",
     "tabDescLostReasons": "Pourquoi vos deals sont perdus — depuis le CRM ou saisi manuellement.",
     "filterAllSectors": "Tous les secteurs",
+    "filterUnassigned": "Non assigné",
     "flowTitle": "Flux du pipeline",
     "flowHelp": "Deals créés, gagnés et perdus par mois, et le solde net (créés moins gagnés et perdus) — votre pipeline ouvert grossit-il ou se vide-t-il ?",
     "cohortsTitle": "Cohortes de création",

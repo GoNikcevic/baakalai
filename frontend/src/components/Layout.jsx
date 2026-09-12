@@ -342,14 +342,14 @@ export default function Layout() {
           className="main-topbar"
           style={{
             display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-end',
-            gap: 8,
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 12,
             padding: '8px 24px 0',
           }}
         >
-          <NotificationBell />
           <AssistantNudge />
+          <NotificationBell />
         </div>
         <Outlet />
       </main>

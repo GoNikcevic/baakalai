@@ -16,6 +16,10 @@ import Icon from '../components/Icon';
 
 /* ─── Helpers ─── */
 
+// Valeur des filtres produit/secteur pour les deals sans ligne produit ou sans
+// secteur déterminé — doit rester identique à backend/routes/analytics.js.
+const UNASSIGNED = '__unassigned__';
+
 const STAGE_COLORS = {
   new: 'var(--text-muted)',
   interested: 'var(--blue)',
@@ -189,7 +193,7 @@ export default function CRMAnalyticsPage() {
   // Options des filtres (une fois)
   useEffect(() => {
     if (!backendAvailable) return;
-    api.request('/crm/product-lines').then(d => setProductLines(d.productLines || [])).catch(() => {});
+    api.request('/analytics/product-lines').then(d => setProductLines(d.productLines || [])).catch(() => {});
     api.request('/analytics/sectors').then(d => setSectors(d.sectors || [])).catch(() => {});
   }, [backendAvailable]);
 
@@ -299,8 +303,11 @@ export default function CRMAnalyticsPage() {
               }}
             >
               <option value="">{t('analytics.filterAllProducts')}</option>
-              {productLines.map(pl => (
-                <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name}</option>
+              {productLines.filter(pl => pl.id !== UNASSIGNED).map(pl => (
+                <option key={pl.id} value={pl.id}>{pl.icon ? pl.icon + ' ' : ''}{pl.name} ({pl.count})</option>
+              ))}
+              {productLines.filter(pl => pl.id === UNASSIGNED).map(pl => (
+                <option key="unassigned" value={UNASSIGNED}>{t('analytics.filterUnassigned')} ({pl.count})</option>
               ))}
             </select>
           )}
@@ -314,8 +321,11 @@ export default function CRMAnalyticsPage() {
               }}
             >
               <option value="">{t('analytics.filterAllSectors')}</option>
-              {sectors.map(s => (
+              {sectors.filter(s => s.sector !== UNASSIGNED).map(s => (
                 <option key={s.sector} value={s.sector}>{s.sector} ({s.count})</option>
+              ))}
+              {sectors.filter(s => s.sector === UNASSIGNED).map(s => (
+                <option key="unassigned" value={UNASSIGNED}>{t('analytics.filterUnassigned')} ({s.count})</option>
               ))}
             </select>
           )}

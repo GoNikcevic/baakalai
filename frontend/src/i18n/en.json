@@ -646,6 +646,7 @@
     "lostReasonsTab": "Lost Reasons",
     "tabDescLostReasons": "Why your deals are lost — synced from your CRM or entered manually.",
     "filterAllSectors": "All sectors",
+    "filterUnassigned": "Unassigned",
     "flowTitle": "Pipeline Flow",
     "flowHelp": "Deals created, won and lost per month, and the net balance (created minus won and lost) — is your open pipeline growing or shrinking?",
     "cohortsTitle": "Creation Cohorts",

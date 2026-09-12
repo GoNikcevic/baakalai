@@ -95,7 +95,70 @@
   --transition: 200ms cubic-bezier(0.2, 0.6, 0.2, 1);
 }
 
+/* === Brand v6 — Dark theme ===
+   Activé par le bouton Réglages → Thème (Layout pose [data-theme] sur <html>,
+   main.jsx le restaure depuis localStorage au chargement). On ne redéfinit que
+   les tokens de base : tout ce qui les référence via var() (--bg-primary,
+   --text-muted, --accent, etc.) suit automatiquement. */
+:root[data-theme="dark"] {
+  /* Base: paper & ink — inversés */
+  --paper:          #18181B;
+  --paper-2:        #212124;
+  --paper-3:        #2A2A2E;
+  --ink:            #F5F5F4;
+  --ink-2:          #E4E4E2;
+  --grey-900:       #D4D4D2;
+  --grey-700:       #A8A8A5;
+  --grey-500:       #8B8B88;
+  --grey-400:       #6B6B68;
+  --grey-300:       #52524F;
+  --grey-200:       #3D3D40;
+  --grey-100:       #2A2A2E;
+  --border:         #333338;
+  --border-strong:  #454549;
+
+  /* Primary accent — variante plus claire pour rester lisible sur fond sombre
+     (--primary-on-dark existait déjà mais n'était branché nulle part) */
+  --primary:        var(--primary-on-dark);
+  --primary-deep:   #6E57FA;
+  --primary-soft:   #2D2650;
+  --primary-softer: #211C3A;
+
+  /* Secondary accent: Lavender */
+  --lavender:       #B4A3F5;
+  --lavender-soft:  #322B54;
+  --lavender-softer:#241F3D;
+  --lavender-deep:  #9A84EB;
+
+  /* Semantic (functional states) — légèrement éclaircies pour le contraste */
+  --success:        #22C55E;
+  --success-soft:   #14291D;
+  --warning:        #F59E0B;
+  --warning-soft:   #332711;
+  --danger:         #F87171;
+  --danger-soft:    #3A1B1B;
+
+  /* Legacy aliases à valeur figée (pas de var()) — à redéfinir explicitement */
+  --blue:           #60A5FA;
+  --blue-bg:        rgba(96, 165, 250, 0.12);
+  --orange:         #FB923C;
+  --accent-glow:    rgba(169, 152, 255, 0.10);
+
+  /* Shadows — plus marquées, un fond sombre a besoin de plus de contraste */
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow:         0 4px 12px -2px rgba(0, 0, 0, 0.4);
+  --shadow-md:      var(--shadow);
+  --shadow-lg:      0 20px 40px -20px rgba(0, 0, 0, 0.5), 0 40px 80px -40px rgba(0, 0, 0, 0.3);
+  --shadow-accent:  0 24px 60px -24px rgba(169, 152, 255, 0.2), 0 48px 96px -48px rgba(169, 152, 255, 0.1);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html {
+  /* Toute l'app est en px fixe (665+ fontSize inline, aucun rem) — un zoom
+     global est le seul moyen de tout agrandir proportionnellement sans
+     réécrire chaque composant. Équivaut à un zoom navigateur ~110%. */
+  zoom: 1.1;
+}
 body {
   font-family: var(--font-sans);
   font-size: 15px;

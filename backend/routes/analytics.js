@@ -58,11 +58,24 @@ function canonicalStage(status) {
 // en cache (sector_normalization_cache), jamais de classification à la volée
 // ici : coûteux (appel Claude) et hors-sujet pour un simple filtre d'écran.
 
+// Valeur spéciale des deux filtres : deals sans ligne produit / sans secteur
+// déterminé — sinon invisibles dans les deux dropdowns (ils n'apparaissent dans
+// aucune option nommée puisqu'ils n'ont justement rien d'assigné).
+const UNASSIGNED = '__unassigned__';
+
 async function resolveAnalyticsFilters(userId, query) {
   const productLine = String(query?.productLine || '').trim();
   const sector = String(query?.sector || '').trim();
   let productOppIds = null;
-  if (productLine) {
+  if (productLine === UNASSIGNED) {
+    const r = await db.query(
+      `SELECT o.id FROM opportunities o
+       LEFT JOIN opportunity_product_lines opl ON opl.opportunity_id = o.id
+       WHERE o.user_id = $1 AND opl.opportunity_id IS NULL`,
+      [userId]
+    );
+    productOppIds = new Set(r.rows.map(x => x.id));
+  } else if (productLine) {
     const r = await db.query(
       `SELECT opl.opportunity_id FROM opportunity_product_lines opl
        JOIN opportunities o ON o.id = opl.opportunity_id
@@ -72,7 +85,20 @@ async function resolveAnalyticsFilters(userId, query) {
     productOppIds = new Set(r.rows.map(x => x.opportunity_id));
   }
   let sectorOppIds = null;
-  if (sector) {
+  if (sector === UNASSIGNED) {
+    const r = await db.query(
+      `SELECT o.id FROM opportunities o
+       WHERE o.user_id = $1
+         AND o.id NOT IN (
+           SELECT o2.id FROM opportunities o2
+           JOIN sector_normalization_cache snc
+             ON lower(snc.raw_text) = lower(o2.data->>'sector') AND snc.scope = 'client_industry'
+           WHERE o2.user_id = $1 AND snc.normalized_sector != 'non_determine'
+         )`,
+      [userId]
+    );
+    sectorOppIds = new Set(r.rows.map(x => x.id));
+  } else if (sector) {
     const r = await db.query(
       `SELECT o.id FROM opportunities o
        JOIN sector_normalization_cache snc
@@ -126,7 +152,67 @@ router.get('/sectors', async (req, res, next) => {
        ORDER BY count DESC`,
       [req.user.id]
     );
-    res.json({ sectors: r.rows });
+
+    // Secteur non déterminé : brut vide, classifié "non_determine", ou jamais
+    // encore classifié — tout ce qui n'apparaît pas ci-dessus.
+    const unassigned = await db.query(
+      `SELECT COUNT(*)::int AS count FROM opportunities o
+       WHERE o.user_id = $1
+         AND o.id NOT IN (
+           SELECT o2.id FROM opportunities o2
+           JOIN sector_normalization_cache snc
+             ON lower(snc.raw_text) = lower(o2.data->>'sector') AND snc.scope = 'client_industry'
+           WHERE o2.user_id = $1 AND snc.normalized_sector != 'non_determine'
+         )`,
+      [req.user.id]
+    );
+
+    const sectors = r.rows;
+    if (unassigned.rows[0].count > 0) {
+      sectors.push({ sector: UNASSIGNED, count: unassigned.rows[0].count });
+    }
+    res.json({ sectors });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/product-lines — options du filtre « ligne produit »
+// =============================================
+// Comptages scopés sur le tenant (req.user.id), contrairement à /crm/product-lines
+// qui compte par team_id — nécessaire pour rester cohérent avec le reste des
+// filtres Analytics, tous scopés utilisateur.
+
+router.get('/product-lines', async (req, res, next) => {
+  try {
+    // LEFT JOIN : une ligne produit sans deal assigné doit rester visible
+    // (count 0), pas disparaître — le FILTER ne compte que les deals du
+    // user courant parmi celles visibles à son équipe.
+    const r = await db.query(
+      `SELECT pl.id, pl.name, pl.icon,
+              COUNT(opl.opportunity_id) FILTER (WHERE o.user_id = $1)::int AS count
+       FROM product_lines pl
+       LEFT JOIN opportunity_product_lines opl ON opl.product_line_id = pl.id
+       LEFT JOIN opportunities o ON o.id = opl.opportunity_id
+       WHERE pl.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)
+       GROUP BY pl.id, pl.name, pl.icon
+       ORDER BY count DESC`,
+      [req.user.id]
+    );
+
+    const unassigned = await db.query(
+      `SELECT COUNT(*)::int AS count FROM opportunities o
+       LEFT JOIN opportunity_product_lines opl ON opl.opportunity_id = o.id
+       WHERE o.user_id = $1 AND opl.opportunity_id IS NULL`,
+      [req.user.id]
+    );
+
+    const productLines = r.rows;
+    if (unassigned.rows[0].count > 0) {
+      productLines.push({ id: UNASSIGNED, name: null, icon: null, count: unassigned.rows[0].count });
+    }
+    res.json({ productLines });
   } catch (err) {
     next(err);
   }
