@@ -91,6 +91,21 @@ const SIGNAL_QUERIES = {
 };
 
 /**
+ * Détail du relevance_score tel que généré par l'extraction LLM — nettoyé
+ * avant insertion (le modèle peut renvoyer n'importe quoi). Retourne une
+ * chaîne JSON prête pour la colonne JSONB, ou null si rien d'exploitable :
+ * node-pg sérialise les tableaux JS en littéral Postgres, pas en JSON.
+ */
+function serializeRelevanceFactors(raw) {
+  if (!Array.isArray(raw)) return null;
+  const clean = raw
+    .filter(f => f && typeof f.label === 'string' && f.label.trim() && Number.isFinite(Number(f.weight)))
+    .slice(0, 5)
+    .map(f => ({ label: f.label.trim().slice(0, 120), weight: Math.round(Number(f.weight)) }));
+  return clean.length > 0 ? JSON.stringify(clean) : null;
+}
+
+/**
  * Scanne UNE configuration : l'unité de travail que le scheduler continu
  * (lib/signal-scheduler.js) pilote individuellement. `recentSet` (dédup titre
  * 7 jours) est fourni par l'appelant pour être partagé entre configs.
@@ -135,8 +150,8 @@ async function scanConfig(userId, config, recentSet) {
       try {
         await db.query(`
           INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
-            company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score)
-          VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13)
+            company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score, relevance_factors)
+          VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13, $14)
         `, [
           userId, config.id, signalType,
           signal.title, signal.description, signal.sourceUrl,
@@ -146,6 +161,7 @@ async function scanConfig(userId, config, recentSet) {
           enriched.email || null,
           enriched.linkedinUrl || null,
           signal.relevance || 50,
+          serializeRelevanceFactors(signal.relevanceFactors),
         ]);
         detected++;
       } catch (insertErr) {
@@ -293,12 +309,13 @@ async function scanCompanyAccount(userId, acct, recentSet) {
       try {
         await db.query(`
           INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
-            company_name, contact_name, contact_title, contact_email, relevance_score, opportunity_id)
-          VALUES ($1, NULL, $2, $3, $4, $5, 'crm_watch', $6, $7, $8, $9, $10, $11)
+            company_name, contact_name, contact_title, contact_email, relevance_score, relevance_factors, opportunity_id)
+          VALUES ($1, NULL, $2, $3, $4, $5, 'crm_watch', $6, $7, $8, $9, $10, $11, $12)
         `, [
           userId, signal.signalType, signal.title, signal.description, signal.sourceUrl,
           acct.company, acct.contact_name || null, acct.contact_title || null,
-          acct.contact_email || null, signal.relevance || 50, acct.opportunity_id,
+          acct.contact_email || null, signal.relevance || 50,
+          serializeRelevanceFactors(signal.relevanceFactors), acct.opportunity_id,
         ]);
         detected++;
       } catch (insertErr) {
@@ -420,8 +437,9 @@ For each RELEVANT result about "${acct.company}", extract:
 - signalType: one of ${VALID_SIGNAL_TYPES.join('|')}
 - sourceUrl: the URL
 - relevance: 0-100 — how strong a reason to re-engage this account now
+- relevanceFactors: 2-4 items breaking the relevance score down — [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
 
-Return JSON array: [{ title, description, signalType, sourceUrl, relevance }]
+Return JSON array: [{ title, description, signalType, sourceUrl, relevance, relevanceFactors }]
 Return [] if nothing is clearly about this company.`;
 
   try {
@@ -491,8 +509,9 @@ For each RELEVANT result (skip irrelevant ones), extract:
 - contactTitle: their role (if any)
 - sourceUrl: the URL
 - relevance: 0-100 score based on how strong this buying signal is
+- relevanceFactors: 2-4 items breaking the relevance score down — [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
 
-Return JSON array: [{ title, description, companyName, companyDomain, contactName, contactTitle, sourceUrl, relevance }]
+Return JSON array: [{ title, description, companyName, companyDomain, contactName, contactTitle, sourceUrl, relevance, relevanceFactors }]
 Return empty array [] if nothing is relevant.`;
 
   try {

@@ -58,6 +58,11 @@ export default function ScoreTrendHeader() {
   );
   const delta = data.delta30d;
   const positive = delta != null && delta >= 0;
+  // Déductions du dernier rapport du provider principal — même présentation
+  // que les facteurs churn (liste facteur + poids), poids négatifs ici.
+  const factors = mainProvider?.factors?.length
+    ? mainProvider.factors
+    : (data.providers || []).find(p => p.factors?.length)?.factors || [];
 
   return (
     <div className="card" style={{ marginBottom: 14 }}>
@@ -83,6 +88,24 @@ export default function ScoreTrendHeader() {
         {mainProvider?.points?.length > 1 && (
           <div style={{ marginLeft: 'auto' }}>
             <Sparkline points={mainProvider.points} />
+          </div>
+        )}
+        {factors.length > 0 && (
+          <div style={{
+            flexBasis: '100%', background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+              {t('dataQuality.scoreTrend.factorsTitle')}
+            </div>
+            {factors.map((f, i) => (
+              <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t(`dataQuality.scoreTrend.factor.${f.signal}`, { count: f.count })}</span>
+                <span style={{ fontWeight: 600, color: f.weight <= -10 ? 'var(--danger)' : 'var(--warning)' }}>
+                  {f.weight}
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -474,7 +474,27 @@ router.get('/score-history', async (req, res, next) => {
       if (!byProvider.has(row.provider)) byProvider.set(row.provider, []);
       byProvider.get(row.provider).push({ date: row.created_at, score: row.score });
     }
-    const providers = [...byProvider.entries()].map(([provider, points]) => ({ provider, points }));
+
+    // Déductions du dernier rapport par provider — recalculées depuis summary +
+    // total_contacts stockés (même formule que le score), rien n'est migré.
+    const latest = await db.query(
+      `SELECT DISTINCT ON (provider) provider, score, total_contacts, summary
+       FROM crm_cleaning_reports
+       WHERE user_id = $1 AND provider NOT LIKE '\\_\\_%'
+       ORDER BY provider, created_at DESC`,
+      [req.user.id]
+    );
+    const factorsByProvider = new Map();
+    for (const row of latest.rows) {
+      const summary = typeof row.summary === 'string' ? JSON.parse(row.summary || '{}') : (row.summary || {});
+      factorsByProvider.set(row.provider, crmCleaning.computeScoreFactors(summary, row.total_contacts));
+    }
+
+    const providers = [...byProvider.entries()].map(([provider, points]) => ({
+      provider,
+      points,
+      factors: factorsByProvider.get(provider) || [],
+    }));
 
     // current / delta30d : moyenne des derniers scores par provider vs il y a ~30 j
     const avgAt = (cutoff) => {

@@ -595,27 +595,8 @@ async function scanCRM(userId, provider) {
   }
 
   // Compute health score — proportional to contact base size
-  const total = persons.length || 1;
   const dupEmailCount = issues.filter(i => i.type === 'duplicate_email').reduce((s, i) => s + i.contacts.length, 0);
   const dupNameCount = issues.filter(i => i.type === 'duplicate_name').reduce((s, i) => s + i.contacts.length, 0);
-
-  // Each category can deduct up to its max weight (total = 100)
-  // Deductions scale as % of affected contacts vs total
-  const pctDupEmail = dupEmailCount / total;       // weight: 25
-  const pctDupName = dupNameCount / total;          // weight: 10
-  const pctMissingEmail = missingEmail.length / total; // weight: 20
-  const pctInvalidEmail = invalidEmails.length / total; // weight: 20
-  const pctInactive = inactive.length / total;      // weight: 15
-  const pctCaps = allCaps.length / total;           // weight: 10
-
-  let score = 100;
-  score -= Math.min(pctDupEmail * 2, 1) * 25;       // 50%+ duplicates = full 25pt deduction
-  score -= Math.min(pctDupName * 3, 1) * 10;        // 33%+ = full 10pt deduction
-  score -= Math.min(pctMissingEmail * 1.5, 1) * 20; // 67%+ missing = full 20pt deduction
-  score -= Math.min(pctInvalidEmail * 5, 1) * 20;   // 20%+ invalid = full 20pt deduction
-  score -= Math.min(pctInactive * 1.5, 1) * 15;     // 67%+ inactive = full 15pt deduction
-  score -= Math.min(pctCaps * 3, 1) * 10;           // 33%+ caps = full 10pt deduction
-  score = Math.max(0, Math.round(score));
 
   const summary = {
     duplicateEmails: dupEmailCount,
@@ -627,7 +608,36 @@ async function scanCRM(userId, provider) {
     formatIssues: allCaps.length,
   };
 
-  return { score, totalContacts: persons.length, issues, summary, provider };
+  // Le score est la somme exacte des facteurs affichés (100 + Σ poids négatifs) :
+  // chaque poids étant arrondi individuellement, il peut dévier de ±1-2 pts vs
+  // l'ancien arrondi global — accepté pour que le détail colle au total à l'UI.
+  const scoreFactors = computeScoreFactors(summary, persons.length);
+  const score = Math.max(0, 100 + scoreFactors.reduce((s, f) => s + f.weight, 0));
+
+  return { score, totalContacts: persons.length, issues, summary, scoreFactors, provider };
+}
+
+/**
+ * Déductions pondérées du health score, exposées à l'UI dans la même
+ * présentation que les facteurs churn (liste facteur + poids). Chaque
+ * catégorie déduit jusqu'à son poids max, proportionnellement à la part de
+ * contacts affectés, avec un multiplicateur de sévérité (ex. 20 %+ d'emails
+ * invalides = déduction pleine de 20 pts). Recalculable depuis un rapport
+ * stocké (summary + total_contacts) — rien à migrer.
+ */
+function computeScoreFactors(summary, totalContacts) {
+  const total = totalContacts || 1;
+  const defs = [
+    { signal: 'duplicate_email', count: summary.duplicateEmails || 0, mult: 2, max: 25 },
+    { signal: 'duplicate_name', count: summary.duplicateNames || 0, mult: 3, max: 10 },
+    { signal: 'missing_email', count: summary.missingEmails || 0, mult: 1.5, max: 20 },
+    { signal: 'invalid_email', count: summary.invalidEmails || 0, mult: 5, max: 20 },
+    { signal: 'inactive', count: summary.inactive || 0, mult: 1.5, max: 15 },
+    { signal: 'format_name_caps', count: summary.formatIssues || 0, mult: 3, max: 10 },
+  ];
+  return defs
+    .map(d => ({ signal: d.signal, count: d.count, weight: -Math.round(Math.min((d.count / total) * d.mult, 1) * d.max) }))
+    .filter(f => f.weight < 0);
 }
 
 // ── Apply Fixes ──
@@ -797,4 +807,4 @@ async function runWeeklyScans(userId) {
   return report;
 }
 
-module.exports = { scanCRM, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials, runWeeklyScans };
+module.exports = { scanCRM, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials, runWeeklyScans, computeScoreFactors };

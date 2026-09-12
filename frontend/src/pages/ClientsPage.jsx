@@ -62,8 +62,6 @@ export default function ClientsPage({ scope }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [connectedCrm, setConnectedCrm] = useState(null);
   const [connectedProviders, setConnectedProviders] = useState([]);
-  const [churnSummary, setChurnSummary] = useState(null);
-  const [scoringChurn, setScoringChurn] = useState(false);
   const [owners, setOwners] = useState([]);
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [crmFilter, setCrmFilter] = useState('all');
@@ -92,11 +90,10 @@ export default function ClientsPage({ scope }) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Parallel: providers + opportunities + churn + owners
-      const [providersData, oppsData, churnData, ownersData] = await Promise.all([
+      // Parallel: providers + opportunities + owners
+      const [providersData, oppsData, ownersData] = await Promise.all([
         request('/crm/providers').catch(() => ({ providers: [] })),
         request('/dashboard/opportunities?limit=500').catch(() => ({ opportunities: [] })),
-        getChurnSummary().catch(() => null),
         request('/crm/team-owners').catch(() => ({ owners: [] })),
       ]);
 
@@ -366,87 +363,6 @@ export default function ClientsPage({ scope }) {
           <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setImportResult(null)}>{'\u2715'}</button>
         </div>
       )}
-
-      {/* Churn risk summary — retention concept, meaningless for a not-yet-won deal;
-          hidden entirely when reached via the Deals nav item (scope="deals"). */}
-      {scope !== 'deals' && !isDealQualityContext && churnSummary && churnSummary.scored > 0 && (
-        <>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-          {t('clients.churnRiskTitle')}
-        </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          {[
-            { label: t('clients.critical'), count: churnSummary.critical, color: 'var(--danger)' },
-            { label: t('clients.high'), count: churnSummary.high, color: 'var(--warning)' },
-            { label: t('clients.medium'), count: churnSummary.medium, color: '#D97706' },
-            { label: t('clients.low'), count: churnSummary.low, color: 'var(--success)' },
-          ].map(b => (
-            <div key={b.label} style={{
-              flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderLeft: `3px solid ${b.color}`, borderRadius: 8, padding: '10px 14px',
-            }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: b.color }}>{b.count}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{b.label}</div>
-            </div>
-          ))}
-          <div style={{
-            flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-          }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{churnSummary.avgScore}<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>/100</span></div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('clients.avgScore')}</div>
-          </div>
-          <button
-            className="btn btn-outline"
-            style={{ fontSize: 11, padding: '8px 14px', alignSelf: 'center' }}
-            disabled={scoringChurn}
-            onClick={async () => {
-              setScoringChurn(true);
-              try {
-                await runChurnScoring();
-                const summary = await getChurnSummary();
-                setChurnSummary(summary);
-                await loadData();
-              } catch { showToast({ type: 'error', title: t('clients.error'), message: t('clients.churnScoringError') }); }
-              setScoringChurn(false);
-            }}
-          >
-            {scoringChurn ? t('clients.scoring') : t('clients.rescore')}
-          </button>
-        </div>
-        </>
-      )}
-
-      {scope !== 'deals' && !isDealQualityContext && (!churnSummary || churnSummary.scored === 0) ? (
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
-          padding: '16px 20px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t('clients.churnPrediction')}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {t('clients.churnPredictionDesc')}
-            </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            style={{ fontSize: 12, padding: '8px 16px' }}
-            disabled={scoringChurn}
-            onClick={async () => {
-              setScoringChurn(true);
-              try {
-                await runChurnScoring();
-                const summary = await getChurnSummary();
-                setChurnSummary(summary);
-                await loadData();
-              } catch { showToast({ type: 'error', title: t('clients.error'), message: t('clients.churnScoringError') }); }
-              setScoringChurn(false);
-            }}
-          >
-            {scoringChurn ? t('clients.scoring') : t('clients.runChurnScoring')}
-          </button>
-        </div>
-      ) : null}
 
       {/* Pipeline stages */}
       {stagesByPipeline.length > 0 && (
@@ -861,6 +777,51 @@ function DealValueFixBox({ client, t, onSaved }) {
   );
 }
 
+/* Détail du lead score — même présentation que les facteurs churn (liste
+   facteur + poids). Les factors fins (persistés dans score_breakdown.factors
+   par le scoring quotidien) priment ; ils ne couvrent que Activité + Fit, la
+   composante Statut est donc ajoutée en ligne synthétique. Les enregistrements
+   scorés avant la persistance des factors retombent sur les 3 composantes. */
+function LeadScoreBreakdown({ client }) {
+  const t = useT();
+  let bd = client.score_breakdown;
+  if (typeof bd === 'string') { try { bd = JSON.parse(bd); } catch { bd = null; } }
+  if (client.score == null || !bd) return null;
+
+  const rows = [];
+  if (Array.isArray(bd.factors) && bd.factors.length > 0) {
+    // weight 0 possible (ex. recency posé même hors fenêtre) — ligne sans information
+    for (const f of bd.factors) {
+      if (f.weight > 0) rows.push({ label: f.detail || t(`clients.scoreSignal.${f.signal}`), weight: f.weight });
+    }
+    if (bd.status > 0) rows.push({ label: t('clients.scoreSignal.pipeline_status'), weight: bd.status });
+  } else {
+    if (bd.activity > 0) rows.push({ label: t('clients.scoreSignal.activity_component'), weight: bd.activity });
+    if (bd.fit > 0) rows.push({ label: t('clients.scoreSignal.fit_component'), weight: bd.fit });
+    if (bd.status > 0) rows.push({ label: t('clients.scoreSignal.pipeline_status'), weight: bd.status });
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <div style={{
+      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+        {t('clients.scoreBreakdownTitle')}
+      </div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+          <span>{r.label}</span>
+          <span style={{ fontWeight: 600, color: r.weight >= 10 ? 'var(--success)' : 'var(--accent)' }}>
+            {r.weight >= 0 ? '+' : ''}{r.weight}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
   const t = useT();
   const { lang } = useI18n();
@@ -928,6 +889,8 @@ function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
           </span>
         )}
       </div>
+
+      <LeadScoreBreakdown client={client} />
 
       {/* Fix box — only the field matching the issue actually clicked into, never another one.
           key={client.id} : sans elle React réutilise l'instance en changeant de client et le
@@ -1079,6 +1042,8 @@ function ClientDetailPanel({ client, onClose }) {
         )}
       </div>
 
+      <LeadScoreBreakdown client={client} />
+
       {/* Churn factors — retention concept, won clients only */}
       {client.status === 'won' && client.churn_factors && client.churn_factors.length > 0 && (
         <div style={{
@@ -1091,7 +1056,9 @@ function ClientDetailPanel({ client, onClose }) {
           {client.churn_factors.map((f, i) => (
             <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
               <span>{f.detail}</span>
-              <span style={{ fontWeight: 600, color: f.weight >= 15 ? 'var(--danger)' : 'var(--warning)' }}>+{f.weight}</span>
+              <span style={{ fontWeight: 600, color: f.weight < 0 ? 'var(--success)' : f.weight >= 15 ? 'var(--danger)' : 'var(--warning)' }}>
+                {f.weight >= 0 ? '+' : ''}{f.weight}
+              </span>
             </div>
           ))}
         </div>

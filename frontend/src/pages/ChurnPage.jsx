@@ -176,7 +176,7 @@ export default function ChurnPage() {
                       {client.churn_factors.map((f, i) => (
                         <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
                           <span>{f.detail}</span>
-                          <span style={{ fontWeight: 600, color: f.weight >= 15 ? 'var(--danger)' : 'var(--warning)' }}>
+                          <span style={{ fontWeight: 600, color: f.weight < 0 ? 'var(--success)' : f.weight >= 15 ? 'var(--danger)' : 'var(--warning)' }}>
                             {f.weight >= 0 ? '+' : ''}{f.weight}
                           </span>
                         </div>

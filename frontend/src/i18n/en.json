@@ -634,6 +634,20 @@
     "owner": "Owner",
     "churnFactors": "Churn risk factors",
     "churnScoringError": "Churn scoring failed",
+    "scoreBreakdownTitle": "Score breakdown",
+    "scoreSignal": {
+      "sector_match": "Sector ∈ ICP",
+      "size_match": "Company size ∈ ICP",
+      "persona_match": "Persona ∈ ICP",
+      "crm_recency": "Recent CRM activity",
+      "email_opens": "Emails opened",
+      "email_clicks": "Email clicks",
+      "email_replies": "Email replies",
+      "recency": "Last activity",
+      "activity_component": "Activity (max 40)",
+      "fit_component": "ICP fit (max 30)",
+      "pipeline_status": "Pipeline position (max 30)"
+    },
     "error": "Error"
   },
   "analytics": {
@@ -1183,7 +1197,16 @@
     },
     "scoreTrend": {
       "title": "Quality score",
-      "deltaBadge": "{delta} pts / 30 d"
+      "deltaBadge": "{delta} pts / 30 d",
+      "factorsTitle": "Score breakdown",
+      "factor": {
+        "duplicate_email": "{count} duplicate email(s)",
+        "duplicate_name": "{count} duplicate name(s)",
+        "missing_email": "{count} contact(s) without email",
+        "invalid_email": "{count} invalid email(s)",
+        "inactive": "{count} contact(s) inactive for 6+ months",
+        "format_name_caps": "{count} name(s) in ALL CAPS"
+      }
     },
     "gdpr": {
       "explanation": "Contacts with no activity for more than {months} months, excluding active clients — candidates for a GDPR purge (data minimisation).",
