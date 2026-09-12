@@ -18,6 +18,12 @@ const PROVIDERS = {
     tokenUrl: 'https://api.hubapi.com/oauth/v1/token',
     // Doit correspondre EXACTEMENT aux scopes déclarés dans l'app HubSpot.
     scopes: 'crm.objects.contacts.read crm.objects.contacts.write crm.objects.deals.read crm.objects.deals.write oauth',
+    // Scopes optionnels (param optional_scope) — inertes tant que la variable
+    // n'est pas posée, car ils doivent AUSSI être déclarés « optional » dans
+    // l'app HubSpot, sinon l'écran de consentement affiche une erreur.
+    // Pour l'autopilot : HUBSPOT_OPTIONAL_SCOPES="sales-email-read"
+    // (lecture du corps des emails loggés par api/hubspot.js getActivities).
+    optionalScopesEnv: 'HUBSPOT_OPTIONAL_SCOPES',
     env: ['HUBSPOT_CLIENT_ID', 'HUBSPOT_CLIENT_SECRET'],
   },
   pipedrive: {
@@ -50,6 +56,8 @@ function authorizeUrl(provider, { redirectUri, state }) {
     state,
   });
   if (cfg.scopes) params.set('scope', cfg.scopes);
+  const optionalScopes = cfg.optionalScopesEnv && process.env[cfg.optionalScopesEnv];
+  if (optionalScopes) params.set('optional_scope', optionalScopes.trim());
   return `${cfg.authUrl}?${params}`;
 }
 

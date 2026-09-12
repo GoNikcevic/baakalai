@@ -17,6 +17,7 @@ import OptimizeCampaignModal from './OptimizeCampaignModal';
 import LoadingOverlay from '../shared/LoadingOverlay';
 import { useT } from '../../i18n';
 import Icon from '../Icon';
+import { showToast } from '../../services/notifications';
 
 export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns }) {
   const t = useT();
@@ -39,6 +40,11 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
   // Lemlist senders
   const [senders, setSenders] = useState([]);
   const [selectedSender, setSelectedSender] = useState(null);
+  // Canal d'envoi au lancement : Lemlist si configuré, sinon natif (boîte
+  // email de l'utilisateur + LinkedIn) — le natif rend le lancement possible
+  // sans aucun compte Lemlist, sur des volumes réduits.
+  const [lemlistConfigured, setLemlistConfigured] = useState(false);
+  const [sendChannel, setSendChannel] = useState('native');
 
   const LEMLIST_LAUNCH_STEPS = [
     t('campaigns.launchStepCreate'),
@@ -47,10 +53,18 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
     t('campaigns.launchStepActivate'),
   ];
 
+  const NATIVE_LAUNCH_STEPS = [
+    t('campaigns.nativeLaunchStepValidate'),
+    t('campaigns.nativeLaunchStepFirstSends'),
+  ];
+
   useEffect(() => {
     if (isPrep) {
       api.getLemlistSenders()
         .then(data => {
+          const configured = !!data.configured;
+          setLemlistConfigured(configured);
+          setSendChannel(configured ? 'lemlist' : 'native');
           if (data.senders && data.senders.length > 0) {
             setSenders(data.senders);
             setSelectedSender(data.senders[0].id);
@@ -92,7 +106,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
       });
     } catch (err) {
       console.error('Failed to archive campaign:', err);
-      window.alert(t('campaigns.archiveFailed', { error: err.message || 'erreur inconnue' }));
+      showToast({ type: 'error', title: t('campaigns.archive'), message: t('campaigns.archiveFailed', { error: err.message || '?' }) });
       setArchiving(false);
       return;
     }
@@ -113,6 +127,42 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
         title: t('campaigns.launchMissingSequence'),
         desc: t('campaigns.launchMissingSequenceDesc'),
       });
+      return;
+    }
+
+    // Lancement natif : pas de mode batch (le plafond journalier du moteur
+    // étale déjà les envois), une seule requête.
+    if (sendChannel === 'native' && !c.batch_mode) {
+      setLaunching(true);
+      setLaunchAlert(null);
+      try {
+        const result = await api.launchCampaignNative(c._backendId || c.id);
+        setCampaigns((prev) => ({
+          ...prev,
+          [c.id]: {
+            ...prev[c.id],
+            status: 'active',
+            send_channel: 'native',
+            iteration: 1,
+            kpis: { ...prev[c.id].kpis, contacts: result.campaign?.nb_prospects || prev[c.id].kpis?.contacts || 0 },
+          },
+        }));
+        setLaunchAlert({
+          type: 'success',
+          title: t('campaigns.nativeLaunched'),
+          desc: t('campaigns.nativeLaunchedDesc', {
+            sent: result.firstRun?.emailsSent || 0,
+            linkedin: result.firstRun?.linkedinActions || 0,
+          }),
+        });
+      } catch (err) {
+        setLaunchAlert({
+          type: 'error',
+          title: t('campaigns.launchFailed'),
+          desc: err.message || t('campaigns.launchFailedDesc'),
+        });
+      }
+      setLaunching(false);
       return;
     }
 
@@ -272,8 +322,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
 
       <LoadingOverlay
         show={launching}
-        title={t('campaigns.deployToLemlist')}
-        steps={LEMLIST_LAUNCH_STEPS}
+        title={sendChannel === 'native' ? t('campaigns.nativeLaunching') : t('campaigns.deployToLemlist')}
+        steps={sendChannel === 'native' ? NATIVE_LAUNCH_STEPS : LEMLIST_LAUNCH_STEPS}
       />
 
       {/* Back button */}
@@ -381,7 +431,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               {launching ? t('campaigns.launching') : t('campaigns.launch')}
             </button>
           )}
-          {isActive && c.batch_mode && c.current_batch < c.total_batches && (
+          {isActive && c.send_channel !== 'native' && c.batch_mode && c.current_batch < c.total_batches && (
             <button
               className="btn btn-success"
               style={{ fontSize: '12px', padding: '8px 14px' }}
@@ -398,7 +448,36 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
                 )}
             </button>
           )}
-          {isPrep && senders.length > 1 && (
+          {isPrep && lemlistConfigured && (
+            <select
+              value={sendChannel}
+              onChange={e => setSendChannel(e.target.value)}
+              style={{
+                fontSize: 11,
+                padding: '6px 10px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+              title={t('campaigns.channelTitle')}
+            >
+              <option value="lemlist">{t('campaigns.channelLemlist')}</option>
+              <option value="native">{t('campaigns.channelNative')}</option>
+            </select>
+          )}
+          {isPrep && !lemlistConfigured && (
+            <span
+              className="campaign-tag"
+              style={{ fontSize: 11 }}
+              title={t('campaigns.channelNativeHint')}
+            >
+              <Icon name="mail" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+              {t('campaigns.channelNative')}
+            </span>
+          )}
+          {isPrep && sendChannel === 'lemlist' && senders.length > 1 && (
             <select
               value={selectedSender || ''}
               onChange={e => setSelectedSender(e.target.value)}
@@ -558,6 +637,11 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
         </div>
       )}
 
+      {/* Avancement de l'envoi natif */}
+      {isActive && c.send_channel === 'native' && (
+        <NativeStatusBar campaign={c} t={t} />
+      )}
+
       {/* Tab navigation */}
       <div
         style={{
@@ -600,6 +684,83 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
         {activeTab === 'performance' && <PerformanceTab campaign={c} />}
         {activeTab === 'history' && <HistoryTab campaign={c} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Avancement d'une campagne en envoi natif : steps envoyés, plafond du jour,
+ * séquences stoppées (réponses, bounces, stops manuels) + « Traiter maintenant »
+ * pour ne pas attendre le passage horaire du moteur.
+ */
+function NativeStatusBar({ campaign, t }) {
+  const [status, setStatus] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const load = () => {
+    api.getNativeStatus(campaign._backendId || campaign.id)
+      .then(setStatus)
+      .catch(() => {});
+  };
+  useEffect(load, [campaign.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    try {
+      await api.runNativeCampaign(campaign._backendId || campaign.id);
+      load();
+    } catch { /* le bandeau reste sur les derniers chiffres connus */ }
+    setRunning(false);
+  };
+
+  if (!status) return null;
+
+  const count = (pred) => status.sends.filter(pred).reduce((sum, s) => sum + s.count, 0);
+  const emailsSent = count(s => s.channel === 'email' && s.status === 'sent');
+  const linkedinSent = count(s => s.channel !== 'email' && s.status === 'sent');
+  const stoppedTotal = status.stopped.reduce((sum, s) => sum + s.count, 0);
+
+  const items = [
+    { label: t('campaigns.nativeEmailsSent'), value: emailsSent },
+    ...(linkedinSent > 0 ? [{ label: t('campaigns.nativeLinkedinActions'), value: linkedinSent }] : []),
+    { label: t('campaigns.nativeReplies'), value: status.replies },
+    ...(stoppedTotal > 0 ? [{ label: t('campaigns.nativeStopped'), value: stoppedTotal }] : []),
+    { label: t('campaigns.nativeDailyCap'), value: `${status.sentToday}/${status.dailyCap}` },
+  ];
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20,
+        flexWrap: 'wrap',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        padding: '12px 16px',
+        marginTop: 16,
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon name="mail" size={13} />
+        {t('campaigns.nativeChannelLabel')}
+      </span>
+      {items.map((item, i) => (
+        <span key={i} style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {item.label}{' '}
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.value}</span>
+        </span>
+      ))}
+      <button
+        className="btn btn-ghost"
+        style={{ fontSize: 11, padding: '5px 12px', marginLeft: 'auto' }}
+        onClick={handleRunNow}
+        disabled={running}
+      >
+        <Icon name={running ? 'clock' : 'refresh'} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+        {running ? t('campaigns.nativeRunning') : t('campaigns.nativeRunNow')}
+      </button>
     </div>
   );
 }

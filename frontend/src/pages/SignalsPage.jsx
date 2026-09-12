@@ -359,6 +359,24 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{s.title}</div>
                     {s.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{s.description}</div>}
+                    {/* Détail du relevance_score — même présentation que les facteurs
+                        churn (liste facteur + poids), en lecture positive comme l'upsell.
+                        Absent sur les signaux antérieurs à la migration 096. */}
+                    {Array.isArray(s.relevance_factors) && s.relevance_factors.length > 0 && (
+                      <div style={{
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                        borderRadius: 8, padding: '8px 12px', marginBottom: 6, maxWidth: 520,
+                      }}>
+                        {s.relevance_factors.map((f, i) => (
+                          <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                            <span>{f.label}</span>
+                            <span style={{ fontWeight: 600, color: f.weight >= 25 ? 'var(--success)' : 'var(--accent)' }}>
+                              {f.weight >= 0 ? '+' : ''}{f.weight}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
                       {s.company_name && <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                         onClick={(e) => { e.stopPropagation(); onViewCompany?.(s.company_name); }}><Icon name="building" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.company_name}</span>}

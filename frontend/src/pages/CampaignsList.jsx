@@ -30,9 +30,11 @@ export default function CampaignsList({ onNavigateCampaign }) {
   // management views (matches this app's existing "simplified UI for non-admins" principle
   // elsewhere, e.g. Layout.jsx's simplified sidebar).
   const isAdmin = !user?.teamRole || user.teamRole === 'admin';
-  // CTAs relocated from the old /chat flow (Dashboard, Performance, onboarding, Deal Coach)
-  // land here with state.openAssistant to pre-select the Assistant tab instead of an extra click.
-  const [view, setView] = useState(location.state?.openAssistant ? 'assistant' : 'campaigns');
+  // L'écran principal de Prospection est la création de campagne (assistant) ;
+  // la liste n'est qu'un historique accessible en second onglet. Les CTAs externes
+  // (Dashboard, onboarding, Deal Coach) passent state.openAssistant — redondant
+  // désormais mais conservé ; state.openHistory permet de cibler l'historique.
+  const [view, setView] = useState(location.state?.openHistory ? 'campaigns' : 'assistant');
   const [actionLoading, setActionLoading] = useState({});
 
   // Arriving scrolled down (long campaign list, or a « Nouvelle campagne » CTA from
@@ -179,9 +181,9 @@ export default function CampaignsList({ onNavigateCampaign }) {
       {/* View tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
         {[
-          { key: 'campaigns', label: t('campaigns.title') || 'Campaigns' },
-          { key: 'autopilot', label: en ? 'Autopilot' : 'Autopilot' },
-          { key: 'assistant', label: t('campaigns.tabAssistant') },
+          { key: 'assistant', label: t('campaigns.tabCreate') },
+          { key: 'campaigns', label: t('campaigns.tabHistory') },
+          { key: 'autopilot', label: 'Autopilot' },
         ].map(tab => (
           <button key={tab.key} onClick={() => setView(tab.key)} style={{
             padding: '10px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',

@@ -894,6 +894,185 @@ router.post('/:id/launch-salesforce', async (req, res, next) => {
   }
 });
 
+/* ═══════════════════ Envoi natif (sans Lemlist) ═══════════════════ */
+
+// POST /api/campaigns/:id/launch-native
+// Lance la campagne sur le canal natif : emails depuis la boîte connectée de
+// l'utilisateur, LinkedIn via le cookie li_at. Volumes bornés par le moteur
+// (lib/native-sequence-engine) — d'où le plafond de prospects à l'entrée.
+const NATIVE_MAX_PROSPECTS = 200;
+
+router.post('/:id/launch-native', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.user_id && campaign.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const [touchpoints, prospects] = await Promise.all([
+      db.touchpoints.listByCampaign(campaign.id),
+      db.opportunities.listByCampaign(campaign.id),
+    ]);
+
+    const engine = require('../lib/native-sequence-engine');
+    const path = engine.buildMainPath(touchpoints);
+    if (path.length === 0) {
+      return res.status(400).json({ code: 'no_sequence', error: 'Aucune séquence générée. Générez les messages avant de lancer.' });
+    }
+
+    if (prospects.length > NATIVE_MAX_PROSPECTS) {
+      return res.status(400).json({
+        code: 'too_many_prospects',
+        error: `Le canal natif est limité à ${NATIVE_MAX_PROSPECTS} prospects par campagne (protection de votre boîte email). Réduisez la liste ou utilisez Lemlist.`,
+        max: NATIVE_MAX_PROSPECTS,
+      });
+    }
+
+    const hasEmailSteps = path.some(tp => tp.type === 'email');
+    const hasLinkedinSteps = path.some(tp => tp.type !== 'email');
+
+    if (hasEmailSteps) {
+      const emailOutbound = require('../lib/email-outbound');
+      const account = await emailOutbound.getDefaultAccount(req.user.id);
+      if (!account) {
+        return res.status(400).json({ code: 'no_email_account', error: 'Aucune boîte email connectée. Connectez Gmail ou SMTP dans Réglages → Email sortant.' });
+      }
+      if (prospects.filter(p => p.email).length === 0) {
+        return res.status(400).json({ code: 'no_prospects', error: 'Aucun prospect avec email. Ajoutez des prospects avant de lancer.' });
+      }
+      await db.campaigns.update(campaign.id, { emailAccountId: account.id });
+    }
+
+    if (hasLinkedinSteps && !hasEmailSteps) {
+      const cookie = await getUserKey(req.user.id, 'linkedin');
+      if (!cookie) {
+        return res.status(400).json({ code: 'no_linkedin', error: 'Séquence LinkedIn sans compte LinkedIn connecté. Ajoutez votre cookie li_at dans Intégrations.' });
+      }
+      if (prospects.filter(p => p.linkedin_url).length === 0) {
+        return res.status(400).json({ code: 'no_prospects', error: 'Aucun prospect avec URL LinkedIn. Ajoutez des prospects avant de lancer.' });
+      }
+    }
+
+    const eligibleCount = prospects.filter(p => p.email || p.linkedin_url).length;
+    await db.campaigns.update(campaign.id, {
+      status: 'active',
+      sendChannel: 'native',
+      startDate: new Date().toISOString().split('T')[0],
+      nbProspects: eligibleCount,
+      planned: eligibleCount,
+    });
+
+    // Premier passage immédiat : l'utilisateur voit les premiers envois partir
+    // sans attendre le cron horaire.
+    const report = await engine.runForUser(req.user.id, { campaignId: campaign.id });
+
+    const updated = await db.campaigns.get(campaign.id);
+    notifyCampaignUpdate(req.user.id, updated);
+    logger.info('launch-native', `Campaign ${campaign.id} launched natively — ${report.emailsSent} emails, ${report.linkedinActions} linkedin on first run`);
+
+    res.json({ success: true, campaign: updated, firstRun: report });
+  } catch (err) {
+    logger.error('launch-native', `Fatal: ${err.message}`);
+    next(err);
+  }
+});
+
+// POST /api/campaigns/:id/native-run — « Traiter maintenant » : détecte les
+// réponses et envoie les steps dus, sans attendre le cron.
+router.post('/:id/native-run', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.user_id && campaign.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (campaign.send_channel !== 'native' || campaign.status !== 'active') {
+      return res.status(400).json({ error: 'Campaign is not an active native campaign' });
+    }
+
+    const engine = require('../lib/native-sequence-engine');
+    const report = await engine.runForUser(req.user.id, { campaignId: campaign.id });
+    const updated = await db.campaigns.get(campaign.id);
+    notifyCampaignUpdate(req.user.id, updated);
+    res.json({ success: true, report, campaign: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/campaigns/:id/native-status — avancement de l'envoi natif.
+router.get('/:id/native-status', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.user_id && campaign.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const [sends, stops, replies] = await Promise.all([
+      db.query(
+        `SELECT channel, status, COUNT(*) AS n FROM campaign_sends
+         WHERE campaign_id = $1 GROUP BY channel, status`,
+        [campaign.id]
+      ),
+      db.query(
+        `SELECT sequence_stop_reason AS reason, COUNT(*) AS n FROM opportunities
+         WHERE campaign_id = $1 AND sequence_stopped_at IS NOT NULL GROUP BY sequence_stop_reason`,
+        [campaign.id]
+      ),
+      db.query(
+        `SELECT COUNT(*) AS n FROM prospect_activities
+         WHERE campaign_id = $1 AND type = 'emailsReplied'`,
+        [campaign.id]
+      ),
+    ]);
+
+    const engine = require('../lib/native-sequence-engine');
+    const sentToday = await db.query(
+      `SELECT COUNT(*) AS n FROM campaign_sends
+       WHERE user_id = $1 AND channel = 'email' AND status = 'sent'
+         AND sent_at >= date_trunc('day', now())`,
+      [req.user.id]
+    );
+
+    res.json({
+      sends: sends.rows.map(r => ({ channel: r.channel, status: r.status, count: parseInt(r.n, 10) })),
+      stopped: stops.rows.map(r => ({ reason: r.reason, count: parseInt(r.n, 10) })),
+      replies: parseInt(replies.rows[0].n, 10),
+      dailyCap: engine.NATIVE_EMAIL_DAILY_CAP,
+      sentToday: parseInt(sentToday.rows[0].n, 10),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/campaigns/:id/prospects/:prospectId/stop-sequence — stop manuel
+// (le prospect a répondu ailleurs, ou on veut le sortir de la séquence).
+router.post('/:id/prospects/:prospectId/stop-sequence', async (req, res, next) => {
+  try {
+    const campaign = await db.campaigns.get(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.user_id && campaign.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const result = await db.query(
+      `UPDATE opportunities SET sequence_stopped_at = now(), sequence_stop_reason = 'manual'
+       WHERE id = $1 AND campaign_id = $2 AND user_id = $3 AND sequence_stopped_at IS NULL
+       RETURNING id`,
+      [req.params.prospectId, campaign.id, req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Prospect not found or already stopped' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /api/campaigns/:id — batch delete related data (no N+1)
 router.delete('/:id', async (req, res, next) => {
   try {

@@ -104,6 +104,13 @@ export function transformCampaign(c, sequence, diagnostics, history) {
     iteration: c.iteration || 0,
     startDate: c.start_date || '',
     lemlistRef: c.lemlist_id || null,
+    send_channel: c.send_channel || null,
+    nb_prospects: c.nb_prospects || 0,
+    // Champs batch — sans eux le bouton « Lancer batch suivant » ne peut
+    // jamais s'afficher (CampaignDetailLayout les lit directement).
+    batch_mode: c.batch_mode || false,
+    current_batch: c.current_batch || 0,
+    total_batches: c.total_batches || 0,
     nextAction: null,
     kpis: {
       contacts: c.nb_prospects || 0,
@@ -792,6 +799,19 @@ export async function launchCampaignToSalesforce(campaignId, options = {}) {
   });
 }
 
+/** Lancement natif — envoi depuis la boîte email connectée + LinkedIn, sans Lemlist */
+export async function launchCampaignNative(campaignId) {
+  return request(`/campaigns/${campaignId}/launch-native`, { method: 'POST' });
+}
+
+export async function runNativeCampaign(campaignId) {
+  return request(`/campaigns/${campaignId}/native-run`, { method: 'POST' });
+}
+
+export async function getNativeStatus(campaignId) {
+  return request(`/campaigns/${campaignId}/native-status`);
+}
+
 /** Get Lemlist credit balance */
 export async function getLemlistCredits() {
   return request('/ai/lemlist-credits');
@@ -969,6 +989,9 @@ const BakalAPI = {
   listCampaignProspects,
   launchCampaignToLemlist,
   launchCampaignToSalesforce,
+  launchCampaignNative,
+  runNativeCampaign,
+  getNativeStatus,
   getLemlistCredits,
   revealEmails,
   webSearchProspects,

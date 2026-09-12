@@ -216,6 +216,8 @@ const campaigns = {
       batch_size: 'batch_size', batchSize: 'batch_size',
       current_batch: 'current_batch', currentBatch: 'current_batch',
       total_batches: 'total_batches', totalBatches: 'total_batches',
+      send_channel: 'send_channel', sendChannel: 'send_channel',
+      email_account_id: 'email_account_id', emailAccountId: 'email_account_id',
     };
 
     const seen = new Set();

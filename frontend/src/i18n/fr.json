@@ -168,7 +168,25 @@
     "enrichDoneDesc": "{skipped} ignoré(s) · {errors} erreur(s)",
     "enrichFailed": "Échec de la personnalisation",
     "enrichFailedDesc": "Erreur inconnue — vérifiez votre clé API Brave Search.",
-    "tabAssistant": "Créer une campagne"
+    "tabCreate": "Créer une campagne",
+    "tabHistory": "Historique",
+    "channelTitle": "Canal d'envoi",
+    "channelLemlist": "Envoyer via Lemlist",
+    "channelNative": "Envoyer depuis ma boîte email",
+    "channelNativeHint": "Les emails partent de votre boîte connectée (Gmail/Microsoft/SMTP), les steps LinkedIn via votre compte LinkedIn. Volumes limités pour protéger votre délivrabilité.",
+    "nativeLaunching": "Lancement de la campagne...",
+    "nativeLaunchStepValidate": "Vérification de la boîte email et des prospects",
+    "nativeLaunchStepFirstSends": "Premiers envois",
+    "nativeLaunched": "Campagne lancée depuis votre boîte email",
+    "nativeLaunchedDesc": "{sent} email(s) et {linkedin} action(s) LinkedIn au premier passage. Le reste s'étale automatiquement, dans la limite quotidienne.",
+    "nativeChannelLabel": "Envoi natif",
+    "nativeEmailsSent": "Emails envoyés :",
+    "nativeLinkedinActions": "Actions LinkedIn :",
+    "nativeReplies": "Réponses :",
+    "nativeStopped": "Séquences stoppées :",
+    "nativeDailyCap": "Aujourd'hui :",
+    "nativeRunNow": "Traiter maintenant",
+    "nativeRunning": "Traitement..."
   },
   "prospectGen": {
     "title": "Générer des prospects",
@@ -633,6 +651,20 @@
     "owner": "Commercial",
     "churnFactors": "Facteurs de risque churn",
     "churnScoringError": "Le scoring churn a échoué",
+    "scoreBreakdownTitle": "Détail du score",
+    "scoreSignal": {
+      "sector_match": "Secteur ∈ ICP",
+      "size_match": "Taille d'entreprise ∈ ICP",
+      "persona_match": "Persona ∈ ICP",
+      "crm_recency": "Activité CRM récente",
+      "email_opens": "Emails ouverts",
+      "email_clicks": "Clics email",
+      "email_replies": "Réponses email",
+      "recency": "Dernière activité",
+      "activity_component": "Activité (max 40)",
+      "fit_component": "Fit ICP (max 30)",
+      "pipeline_status": "Position pipeline (max 30)"
+    },
     "error": "Erreur"
   },
   "analytics": {
@@ -1190,7 +1222,16 @@
     },
     "scoreTrend": {
       "title": "Score de qualité",
-      "deltaBadge": "{delta} pts / 30 j"
+      "deltaBadge": "{delta} pts / 30 j",
+      "factorsTitle": "Détail du score",
+      "factor": {
+        "duplicate_email": "{count} doublon(s) d'email",
+        "duplicate_name": "{count} doublon(s) de nom",
+        "missing_email": "{count} contact(s) sans email",
+        "invalid_email": "{count} email(s) invalide(s)",
+        "inactive": "{count} contact(s) inactif(s) depuis 6 mois+",
+        "format_name_caps": "{count} nom(s) tout en majuscules"
+      }
     },
     "gdpr": {
       "explanation": "Contacts sans aucune activité depuis plus de {months} mois, hors clients actifs — candidats à la purge RGPD (minimisation des données).",
