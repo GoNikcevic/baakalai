@@ -168,7 +168,8 @@
     "enrichDoneDesc": "{skipped} ignoré(s) · {errors} erreur(s)",
     "enrichFailed": "Échec de la personnalisation",
     "enrichFailedDesc": "Erreur inconnue — vérifiez votre clé API Brave Search.",
-    "tabAssistant": "Créer une campagne"
+    "tabCreate": "Créer une campagne",
+    "tabHistory": "Historique"
   },
   "prospectGen": {
     "title": "Générer des prospects",

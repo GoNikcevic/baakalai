@@ -117,6 +117,7 @@ function NonEmptyActivation({ globalKpis, campaigns, recommendations, chartData 
             <div className="card-title">{t('dashboard.activeCampaigns')}</div>
             <Link
               to="/campaigns"
+              state={{ openHistory: true }}
               className="btn btn-ghost"
               style={{ padding: '6px 12px', fontSize: '12px' }}
             >

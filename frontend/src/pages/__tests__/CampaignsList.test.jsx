@@ -87,8 +87,10 @@ vi.mock('../../context/useApp', () => ({
 }));
 
 function renderList(props = {}) {
+  // L'écran par défaut de /campaigns est désormais l'assistant de création ;
+  // ces tests portent sur la liste (onglet Historique), ciblée via openHistory.
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[{ pathname: '/campaigns', state: { openHistory: true } }]}>
       <CampaignsList onNavigateCampaign={vi.fn()} {...props} />
     </MemoryRouter>
   );
