@@ -23,32 +23,34 @@ export default function PerformanceChart({ data }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
-      <BarChart data={data} barGap={2} barSize={18}>
-        <XAxis
-          dataKey="label"
-          axisLine={false}
-          tickLine={false}
-          tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-        />
-        <YAxis
-          axisLine={false}
-          tickLine={false}
-          tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-          width={30}
-        />
-        <Tooltip
-          contentStyle={TOOLTIP_STYLE}
-          cursor={{ fill: 'var(--accent-glow)' }}
-        />
-        <Legend
-          iconType="circle"
-          iconSize={8}
-          wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
-        />
-        <Bar dataKey="email" name="Email" fill="var(--blue)" radius={[3, 3, 0, 0]} />
-        <Bar dataKey="linkedin" name="LinkedIn" fill="var(--purple)" radius={[3, 3, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="chart-zoom-reset">
+      <ResponsiveContainer width="100%" height={180}>
+        <BarChart data={data} barGap={2} barSize={18}>
+          <XAxis
+            dataKey="label"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+          />
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+            width={30}
+          />
+          <Tooltip
+            contentStyle={TOOLTIP_STYLE}
+            cursor={{ fill: 'var(--accent-glow)' }}
+          />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
+          />
+          <Bar dataKey="email" name="Email" fill="var(--blue)" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="linkedin" name="LinkedIn" fill="var(--purple)" radius={[3, 3, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

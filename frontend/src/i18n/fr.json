@@ -670,6 +670,7 @@
     "channels": "Canaux",
     "crmHealth": "Santé CRM",
     "totalOpenDeals": "Deals en cours",
+    "outcomes30dTitle": "30 derniers jours",
     "pipelineFunnel": "Entonnoir du pipeline",
     "conversionRates": "Taux de conversion entre étapes",
     "totalProspects": "Prospects total",

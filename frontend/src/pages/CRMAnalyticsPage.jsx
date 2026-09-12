@@ -209,6 +209,17 @@ export default function CRMAnalyticsPage() {
     fetchData(activeTab);
   }, [activeTab, fetchData]);
 
+  // Résumé "Deals en cours" affiché entre les groupes et les sous-onglets —
+  // fetch indépendant du cache activeTab/loading, pour rester visible quel
+  // que soit le sous-onglet consulté (Attribution, Forecast, Raisons de perte…).
+  const [dealsSummary, setDealsSummary] = useState(null);
+  useEffect(() => {
+    if (!backendAvailable || activeGroup !== 'deals') return;
+    let cancelled = false;
+    api.request('/analytics/pipeline' + filterQs).then(d => { if (!cancelled) setDealsSummary(d); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [backendAvailable, activeGroup, filterQs]);
+
   // Auto-refresh after CRM sync completes
   useEffect(() => {
     if (!socket) return;
@@ -260,6 +271,11 @@ export default function CRMAnalyticsPage() {
           </button>
         ))}
       </div>
+
+      {/* Résumé Deals — visible quel que soit le sous-onglet actif */}
+      {activeGroup === 'deals' && dealsSummary && (
+        <DealsGroupSummary data={dealsSummary} statusLabels={STATUS_LABELS} />
+      )}
 
       {/* Tab bar — sous-onglets du groupe actif */}
       {groupTabKeys.length > 1 && (
@@ -497,48 +513,66 @@ function DealSizeBlock({ dealSize, en }) {
   );
 }
 
+// Résumé persistant du groupe Deals — entre la barre de groupes et les
+// sous-onglets, visible quel que soit le sous-onglet actif (pas seulement Pipeline).
+function DealsGroupSummary({ data, statusLabels }) {
+  const t = useT();
+  const STATUS_LABELS = statusLabels;
+  const pipelineStages = (data.stages || []).filter(s => ['new', 'interested', 'meeting', 'negotiation'].includes(s.stage));
+  // data.total compte TOUT le tenant (won/lost inclus) — le total affiché ici doit
+  // correspondre à la somme des étapes ouvertes juste en dessous, pas au tenant entier.
+  const totalOpen = pipelineStages.reduce((sum, s) => sum + s.count, 0);
+  const outcomes30d = data.outcomes30d || { won: 0, lost: 0 };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
+      {/* Zone 1 : pipeline en cours (total + étapes ouvertes) */}
+      <div style={{ background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 14, padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <div className="crm-kpi-card" style={{ minWidth: 240 }}>
+            <div className="crm-kpi-value">{totalOpen}</div>
+            <div className="crm-kpi-label">{t('analytics.totalOpenDeals')}</div>
+          </div>
+        </div>
+        <div className="crm-kpi-row-4" style={{ marginTop: 16 }}>
+          {pipelineStages.map(s => (
+            <div className="crm-kpi-card" key={s.stage}>
+              <div className="crm-kpi-value" style={{ color: STAGE_COLORS[s.stage] }}>{s.count}</div>
+              <div className="crm-kpi-label">{STATUS_LABELS[s.stage] || s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Zone 2 : issues sur les 30 derniers jours */}
+      <div style={{ background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 14, padding: 20 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 16px', textAlign: 'center' }}>
+          {t('analytics.outcomes30dTitle')}
+        </h3>
+        <div className="crm-kpi-row-4 crm-kpi-outcome-row">
+          <div className="crm-kpi-card" key="won">
+            <div className="crm-kpi-value" style={{ color: STAGE_COLORS.won }}>{outcomes30d.won}</div>
+            <div className="crm-kpi-label">{STATUS_LABELS.won}</div>
+          </div>
+          <div className="crm-kpi-card" key="lost">
+            <div className="crm-kpi-value" style={{ color: STAGE_COLORS.lost }}>{outcomes30d.lost}</div>
+            <div className="crm-kpi-label">{STATUS_LABELS.lost}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PipelineSection({ data, statusLabels, vocab, en }) {
   const t = useT();
   const STATUS_LABELS = statusLabels;
   const funnelStages = (data.stages || [])
     .filter(s => s.stage !== 'lost')
     .map(s => ({ label: STATUS_LABELS[s.stage] || s.label, value: s.count }));
-  const pipelineStages = (data.stages || []).filter(s => ['new', 'interested', 'meeting', 'negotiation'].includes(s.stage));
-  const outcomeStages = (data.stages || []).filter(s => ['won', 'lost'].includes(s.stage));
-  // data.total compte TOUT le tenant (won/lost inclus) — le total affiché ici doit
-  // correspondre à la somme des étapes ouvertes juste en dessous, pas au tenant entier.
-  const totalOpen = pipelineStages.reduce((sum, s) => sum + s.count, 0);
 
   return (
     <div className="crm-section">
-      {/* Total en cours, seul et centré */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div className="crm-kpi-card" style={{ minWidth: 240 }}>
-          <div className="crm-kpi-value">{totalOpen}</div>
-          <div className="crm-kpi-label">{t('analytics.totalOpenDeals')}</div>
-        </div>
-      </div>
-
-      {/* Pipeline de conversion */}
-      <div className="crm-kpi-row-4">
-        {pipelineStages.map(s => (
-          <div className="crm-kpi-card" key={s.stage}>
-            <div className="crm-kpi-value" style={{ color: STAGE_COLORS[s.stage] }}>{s.count}</div>
-            <div className="crm-kpi-label">{STATUS_LABELS[s.stage] || s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Issues */}
-      <div className="crm-kpi-row-2">
-        {outcomeStages.map(s => (
-          <div className="crm-kpi-card" key={s.stage}>
-            <div className="crm-kpi-value" style={{ color: STAGE_COLORS[s.stage] }}>{s.count}</div>
-            <div className="crm-kpi-label">{STATUS_LABELS[s.stage] || s.label}</div>
-          </div>
-        ))}
-      </div>
-
       <div className="crm-grid-2">
         {/* Visual funnel */}
         <div className="card">

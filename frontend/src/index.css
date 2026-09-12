@@ -93,6 +93,9 @@
   --font:       var(--font-sans);
 
   --transition: 200ms cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  /* Zoom global (agrandissement de police, cf. règle html plus bas). */
+  --global-zoom: 1.1;
 }
 
 /* === Brand v6 — Dark theme ===
@@ -157,8 +160,20 @@ html {
   /* Toute l'app est en px fixe (665+ fontSize inline, aucun rem) — un zoom
      global est le seul moyen de tout agrandir proportionnellement sans
      réécrire chaque composant. Équivaut à un zoom navigateur ~110%. */
-  zoom: 1.1;
+  zoom: var(--global-zoom);
 }
+
+/* Recharts calcule la position de la souris (survol/tooltip) d'une façon qui
+   ne suit pas correctement un zoom CSS ancêtre — décalage entre la barre
+   survolée et celle mise en valeur. On neutralise le zoom localement autour
+   de chaque graphique (1 / --global-zoom compense exactement le zoom de
+   html), pour que Recharts retrouve un espace de coordonnées cohérent.
+   Le graphique lui-même retrouve sa taille "native" (avant zoom) — léger
+   décalage visuel accepté en échange d'un survol fiable. */
+.chart-zoom-reset {
+  zoom: calc(1 / var(--global-zoom));
+}
+
 body {
   font-family: var(--font-sans);
   font-size: 15px;
@@ -3640,10 +3655,13 @@ input[type="checkbox"]:checked {
   display: grid; grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
-.crm-kpi-row-2 {
-  display: grid; grid-template-columns: repeat(2, 1fr);
-  gap: 12px; max-width: 480px; margin: 0 auto;
-}
+/* Ligne Gagné/Perdu : 2 cartes centrées dans les colonnes 2-3 d'une grille à 4
+   colonnes, pour garder exactement la même largeur que la ligne du dessus.
+   Repasse en placement naturel dès que .crm-kpi-row-4 lui-même passe à 2
+   colonnes (medias ci-dessous), sinon les cartes déborderaient sur une
+   colonne 3 inexistante. */
+.crm-kpi-outcome-row > :nth-child(1) { grid-column: 2; }
+.crm-kpi-outcome-row > :nth-child(2) { grid-column: 3; }
 .crm-kpi-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 16px; text-align: center;
@@ -3745,11 +3763,13 @@ input[type="checkbox"]:checked {
 @media (max-width: 900px) {
   .crm-kpi-row { grid-template-columns: repeat(3, 1fr); }
   .crm-kpi-row-4 { grid-template-columns: repeat(2, 1fr); }
+  .crm-kpi-outcome-row > :nth-child(1),
+  .crm-kpi-outcome-row > :nth-child(2) { grid-column: auto; }
   .crm-grid-3 { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 768px) {
   .crm-kpi-row { grid-template-columns: repeat(2, 1fr); }
-  .crm-kpi-row-4, .crm-kpi-row-2 { grid-template-columns: 1fr 1fr; }
+  .crm-kpi-row-4 { grid-template-columns: 1fr 1fr; }
   .crm-grid-2, .crm-grid-3 { grid-template-columns: 1fr; }
   .crm-tabs { overflow-x: auto; flex-wrap: nowrap; }
   .crm-conversion-labels { min-width: 120px; }

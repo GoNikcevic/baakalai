@@ -339,7 +339,16 @@ router.get('/pipeline', async (req, res, next) => {
       top5Pct: totalOpenValue > 0 ? Math.round((top5Value / totalOpenValue) * 100) : 0,
     };
 
-    res.json({ stages, conversions, total, flow, cohorts, dealSize });
+    // Gagnés/perdus sur les 30 derniers jours — distinct des comptages "stages"
+    // qui sont all-time. La date qui compte est celle de clôture (won_date /
+    // lost_date), pas la date de création.
+    const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const outcomes30d = {
+      won: opportunities.filter(o => o.won_date && new Date(o.won_date).getTime() >= cutoff30).length,
+      lost: opportunities.filter(o => o.lost_date && new Date(o.lost_date).getTime() >= cutoff30).length,
+    };
+
+    res.json({ stages, conversions, total, flow, cohorts, dealSize, outcomes30d });
   } catch (err) {
     next(err);
   }

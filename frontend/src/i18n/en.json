@@ -670,6 +670,7 @@
     "channels": "Channels",
     "crmHealth": "CRM Health",
     "totalOpenDeals": "Open Deals",
+    "outcomes30dTitle": "Last 30 days",
     "pipelineFunnel": "Pipeline funnel",
     "conversionRates": "Stage conversion rates",
     "totalProspects": "Total prospects",
