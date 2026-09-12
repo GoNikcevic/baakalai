@@ -1,9 +1,9 @@
 /**
  * Response Analysis Agent
  *
- * Reads replies/activities from the user's connected CRM (Pipedrive, Salesforce, or
- * Odoo — HubSpot and the no-activity-feed providers Notion/Airtable/Folk aren't
- * supported yet), analyzes them with Claude, and tracks nurture campaign effectiveness.
+ * Reads replies/activities from the user's connected CRM (Pipedrive, Salesforce,
+ * Odoo, or HubSpot — the no-activity-feed providers Notion/Airtable/Folk aren't
+ * supported), analyzes them with Claude, and tracks nurture campaign effectiveness.
  *
  * Flow:
  * 1. Fetch recent activities from the connected CRM (emails received, notes)
@@ -25,8 +25,10 @@ const { intentEnumForPrompt, isKnownIntent } = require('./reply-intents');
 
 const DAY_MS = 86400000;
 
-// Providers with a getActivities-equivalent feed. HubSpot has none today, and
-// Notion/Airtable/Folk have no activity concept at all (same as the deal-sync gap).
+// Providers with a getActivities-equivalent feed. Notion/Airtable/Folk have no
+// activity concept at all (same as the deal-sync gap). HubSpot lit les
+// engagements (emails loggés + notes) — le corps des emails demande le scope
+// sales-email-read sur l'app OAuth, sans lui il retombe sur les notes seules.
 async function fetchActivities(crmProvider, creds, contactId) {
   if (!contactId) return [];
   if (crmProvider === 'pipedrive') {
@@ -39,6 +41,10 @@ async function fetchActivities(crmProvider, creds, contactId) {
   if (crmProvider === 'odoo') {
     const odoo = require('../api/odoo');
     return odoo.getActivities(creds, parseInt(contactId, 10));
+  }
+  if (crmProvider === 'hubspot') {
+    const hubspot = require('../api/hubspot');
+    return hubspot.getActivities(creds, contactId);
   }
   return [];
 }

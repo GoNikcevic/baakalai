@@ -174,6 +174,84 @@ async function associateContactToDeal(accessToken, contactId, dealId) {
 // Notes (engagements)
 // =============================================
 
+/**
+ * Read a contact's engagements (logged emails + notes) for the
+ * response-analysis-agent. Same shape as pipedrive/odoo getActivities:
+ * { id, type, subject, note, dueDate }.
+ *
+ * Le contenu des emails loggés exige le scope `sales-email-read` (et la
+ * lecture des notes peut être refusée selon le portail) : chaque type
+ * d'objet dégrade en silence sur 403 au lieu de faire échouer l'analyse.
+ */
+async function getActivities(accessToken, contactId) {
+  const [emails, notes] = await Promise.all([
+    fetchContactEngagements(accessToken, contactId, 'emails',
+      ['hs_email_subject', 'hs_email_text', 'hs_email_direction', 'hs_timestamp']),
+    fetchContactEngagements(accessToken, contactId, 'notes',
+      ['hs_note_body', 'hs_timestamp']),
+  ]);
+
+  // Seuls les emails ENTRANTS comptent : HubSpot logge aussi nos propres
+  // envois (direction EMAIL/FORWARDED_EMAIL), qui ne sont pas des réponses.
+  const activities = [
+    ...emails
+      .filter(e => e.properties?.hs_email_direction === 'INCOMING_EMAIL')
+      .map(e => ({
+        id: e.id,
+        type: 'email_received',
+        subject: e.properties?.hs_email_subject || '',
+        note: stripHtml(e.properties?.hs_email_text || ''),
+        dueDate: e.properties?.hs_timestamp || null,
+      })),
+    ...notes.map(n => ({
+      id: n.id,
+      type: 'note',
+      subject: '',
+      note: stripHtml(n.properties?.hs_note_body || ''),
+      dueDate: n.properties?.hs_timestamp || null,
+    })),
+  ];
+
+  return activities
+    .sort((a, b) => new Date(b.dueDate || 0) - new Date(a.dueDate || 0))
+    .slice(0, 50);
+}
+
+async function fetchContactEngagements(accessToken, contactId, objectType, properties) {
+  try {
+    const assoc = await hubspotFetch(
+      accessToken,
+      `/crm/v4/objects/contacts/${contactId}/associations/${objectType}?limit=50`
+    );
+    const ids = (assoc?.results || []).map(r => r.toObjectId).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    const batch = await hubspotFetch(accessToken, `/crm/v3/objects/${objectType}/batch/read`, {
+      method: 'POST',
+      body: JSON.stringify({
+        inputs: ids.map(id => ({ id: String(id) })),
+        properties,
+      }),
+    });
+    return batch?.results || [];
+  } catch (err) {
+    if (err.status === 403) return []; // scope manquant sur ce type d'objet
+    throw err;
+  }
+}
+
+// hs_note_body (et parfois hs_email_text) arrivent en HTML.
+function stripHtml(html) {
+  return String(html)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function createNote(accessToken, body, associations = {}) {
   const payload = {
     properties: {
@@ -383,8 +461,9 @@ module.exports = {
   listDealsForDiagnostic,
   // Associations
   associateContactToDeal,
-  // Notes
+  // Notes / engagements
   createNote,
+  getActivities,
   // Helpers
   mapOpportunityToContact,
   mapOpportunityToDeal,
