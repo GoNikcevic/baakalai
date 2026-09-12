@@ -1556,7 +1556,7 @@ router.post('/product-lines/:id/assign', async (req, res, next) => {
 
     for (const oppId of filtered) {
       await db.query(
-        `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id, added_at) VALUES ($1, $2, now()) ON CONFLICT DO NOTHING`,
         [oppId, req.params.id]
       );
     }

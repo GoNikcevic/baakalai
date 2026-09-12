@@ -112,6 +112,8 @@ function getTabs(t, vocab) { return [
   { key: 'lostReasons', label: t('analytics.lostReasonsTab'), desc: t('analytics.tabDescLostReasons') },
   { key: 'membership', label: t('analytics.membershipTab'), desc: t('analytics.tabDescMembership') },
   { key: 'geography', label: t('analytics.geoTab'), desc: t('analytics.tabDescGeo') },
+  { key: 'upsell-performance', label: t('analytics.upsellPerformanceTab'), desc: t('analytics.tabDescUpsellPerformance') },
+  { key: 'churn-risk-performance', label: t('analytics.churnRiskTab'), desc: t('analytics.tabDescChurnRisk') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
 ]; }
@@ -123,7 +125,7 @@ function getTabs(t, vocab) { return [
 // Prospection. Voir le rendu conditionnel sur activeGroup plus bas.
 const GROUPS = [
   { key: 'deals', labelKey: 'analytics.groupDeals', tabs: ['pipeline', 'attribution', 'forecast', 'lostReasons'] },
-  { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'geography'] },
+  { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'upsell-performance', 'churn-risk-performance', 'geography'] },
   { key: 'activation', labelKey: 'analytics.groupActivation', tabs: ['trends'] },
   { key: 'prospection', labelKey: 'analytics.groupProspection', tabs: ['channels', 'attribution'] },
 ];
@@ -468,7 +470,7 @@ export default function CRMAnalyticsPage() {
           de toutes les opportunités, pas du périmètre filtré — les filtres produit/secteur/
           période ne s'y appliquent pas : on le dit plutôt que de laisser croire que les
           chiffres sont filtrés. */}
-      {!loading && tabData && (filters.productLine || filters.sector || filters.period || filters.dateFrom || filters.dateTo) && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership') && (
+      {!loading && tabData && (filters.productLine || filters.sector || filters.period || filters.dateFrom || filters.dateTo) && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership' || activeTab === 'upsell-performance' || activeTab === 'churn-risk-performance') && (
         <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 12 }}>
           <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
           {t('analytics.filterNotApplied')}
@@ -476,7 +478,7 @@ export default function CRMAnalyticsPage() {
       )}
 
       {/* CSV Export button (pas de route CSV pour géographie / vue d'ensemble clients / raisons de perte) */}
-      {!loading && tabData && activeTab !== 'geography' && activeTab !== 'membership' && activeTab !== 'lostReasons' && (
+      {!loading && tabData && activeTab !== 'geography' && activeTab !== 'membership' && activeTab !== 'lostReasons' && activeTab !== 'upsell-performance' && activeTab !== 'churn-risk-performance' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             className="btn btn-ghost"
@@ -504,6 +506,8 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
       {!loading && activeTab === 'geography' && tabData && <GeographySection data={tabData} />}
       {!loading && activeTab === 'membership' && tabData && <MembershipSection data={tabData} en={en} />}
+      {!loading && activeTab === 'upsell-performance' && tabData && <UpsellPerformanceSection data={tabData} en={en} />}
+      {!loading && activeTab === 'churn-risk-performance' && tabData && <AtRiskPerformanceSection data={tabData} en={en} />}
       {!loading && activeTab === 'lostReasons' && tabData && (
         <LostReasonsSection data={tabData} en={en} onTagged={() => fetchData('lostReasons', true)} />
       )}
@@ -1656,6 +1660,207 @@ function MembershipSection({ data, en }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ═══ Upsell Performance Section (Clients) ═══ */
+
+function UpsellPerformanceSection({ data }) {
+  const t = useT();
+  const hasCandidates = data.candidatesCount > 0;
+  const hasEmails = data.emailsSent > 0;
+  const maxCrossSell = Math.max(1, ...(data.crossSellBreakdown || []).map(c => c.count));
+
+  return (
+    <div className="crm-section">
+      <div className="crm-kpi-row-4">
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value">{data.candidatesCount}</div>
+          <div className="crm-kpi-label">{t('analytics.upsellCandidates')}<HelpTip text={t('analytics.upsellHelp')} /></div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value">{hasCandidates ? data.avgScore : '—'}</div>
+          <div className="crm-kpi-label">{t('analytics.upsellAvgScore')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value">{data.emailsSent}</div>
+          <div className="crm-kpi-label">{t('analytics.upsellEmailsSent')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value">{hasEmails ? `${data.replyRate}%` : '—'}</div>
+          <div className="crm-kpi-label">{t('analytics.upsellReplyRate')}</div>
+        </div>
+      </div>
+
+      {!hasCandidates && (
+        <div className="card" style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+          {t('analytics.upsellNoCandidates')}
+        </div>
+      )}
+
+      {hasCandidates && !hasEmails && (
+        <div className="card" style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+          {t('analytics.upsellNoEmails')}
+        </div>
+      )}
+
+      {hasEmails && (
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{t('analytics.upsellConversionTitle')}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{data.convertedCount}/{data.emailedOpportunities}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('analytics.upsellConversionRate')} · {data.conversionRate}%</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--success)' }}>{data.convertedRevenue.toLocaleString()}€</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('analytics.upsellConversionRevenue')}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('analytics.upsellConversionCaveat')}</div>
+        </div>
+      )}
+
+      {(data.crossSellBreakdown || []).length > 0 && (
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{t('analytics.upsellCrossSellTitle')}</div>
+          {data.crossSellBreakdown.map(c => (
+            <div key={c.product} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ width: 140, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.product}</span>
+              <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 4, background: '#6E57FA', width: `${Math.min((c.count / maxCrossSell) * 100, 100)}%` }} />
+              </div>
+              <span style={{ width: 30, fontSize: 12, textAlign: 'right', color: 'var(--text-muted)' }}>{c.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ At-Risk Performance Section (Clients) ═══ */
+
+const CHURN_FACTOR_LABEL_KEYS = {
+  inactivity: 'churnFactorInactivity',
+  deal_stagnant: 'churnFactorDealStagnant',
+  deals_lost: 'churnFactorDealsLost',
+  no_reply: 'churnFactorNoReply',
+  negative_sentiment: 'churnFactorNegativeSentiment',
+  no_emails: 'churnFactorNoEmails',
+  email_bounced: 'churnFactorEmailBounced',
+  incomplete_profile: 'churnFactorIncompleteProfile',
+  status_lost: 'churnFactorStatusLost',
+  client_silent: 'churnFactorClientSilent',
+  external_signals: 'churnFactorExternalSignals',
+  insolvency_proceeding: 'churnFactorInsolvencyProceeding',
+  company_dissolved: 'churnFactorCompanyDissolved',
+  insolvency_safeguard: 'churnFactorInsolvencySafeguard',
+  revenue_drop: 'churnFactorRevenueDrop',
+  upsell_ignored: 'churnFactorUpsellIgnored',
+  sector_weight: 'churnFactorSectorWeight',
+};
+
+function AtRiskPerformanceSection({ data }) {
+  const t = useT();
+  const distTotal = Object.values(data.distribution || {}).reduce((s, n) => s + n, 0);
+  const maxFactor = Math.max(1, ...(data.topFactors || []).map(f => f.count));
+
+  return (
+    <div className="crm-section">
+      <div className="crm-kpi-row">
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: '#DC2626' }}>{data.atRiskCount}</div>
+          <div className="crm-kpi-label">{t('analytics.riskAtRiskCount')}<HelpTip text={t('analytics.riskHelp')} /></div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value">{data.atRiskRevenue.toLocaleString()}€</div>
+          <div className="crm-kpi-label">{t('analytics.riskAtRiskRevenue')}</div>
+        </div>
+        <div className="crm-kpi-card">
+          <div className="crm-kpi-value" style={{ color: 'var(--success)' }}>{data.safeRevenue.toLocaleString()}€</div>
+          <div className="crm-kpi-label">{t('analytics.riskSafeRevenue')}</div>
+        </div>
+      </div>
+
+      {distTotal === 0 && (
+        <div className="card" style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>
+          {t('analytics.riskEmpty')}
+        </div>
+      )}
+
+      {distTotal > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{t('analytics.riskDistributionTitle')}</div>
+            {Object.entries(data.distribution).map(([band, count]) => (
+              <div key={band} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ width: 70, fontSize: 12, fontWeight: 600, color: CHURN_BAND_COLORS[band] || '#737373', textTransform: 'capitalize' }}>{band}</span>
+                <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 4, background: CHURN_BAND_COLORS[band] || '#6E57FA', width: `${Math.min((count / distTotal) * 100, 100)}%` }} />
+                </div>
+                <span style={{ width: 30, fontSize: 12, textAlign: 'right', color: 'var(--text-muted)' }}>{count}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{t('analytics.riskTopFactorsTitle')}</div>
+            {(data.topFactors || []).length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</div>}
+            {(data.topFactors || []).map(f => (
+              <div key={f.signal} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ width: 140, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {CHURN_FACTOR_LABEL_KEYS[f.signal] ? t('analytics.' + CHURN_FACTOR_LABEL_KEYS[f.signal]) : f.signal}
+                </span>
+                <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 4, background: '#F59E0B', width: `${Math.min((f.count / maxFactor) * 100, 100)}%` }} />
+                </div>
+                <span style={{ width: 30, fontSize: 12, textAlign: 'right', color: 'var(--text-muted)' }}>{f.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{t('analytics.riskNoRecentTitle')}</div>
+        {(data.noRecentActivity || []).length === 0 && (
+          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('analytics.riskNoRecentEmpty')}</div>
+        )}
+        {(data.noRecentActivity || []).map(c => (
+          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{c.company}{c.dealValue > 0 ? ` · ${c.dealValue.toLocaleString()}€` : ''}</div>
+            </div>
+            <span style={{ fontWeight: 700, color: '#DC2626', flexShrink: 0, marginLeft: 8 }}>{c.churnScore}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{t('analytics.riskSavedTitle')}</div>
+        {!data.enoughHistory && (
+          <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('analytics.riskSavedBuilding')}</div>
+        )}
+        {data.enoughHistory && data.savedVsChurned && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--success)' }}>{data.savedVsChurned.saved}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('analytics.riskSaved')}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#DC2626' }}>{data.savedVsChurned.churned}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('analytics.riskChurned')}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#F59E0B' }}>{data.savedVsChurned.stillAtRisk}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('analytics.riskStillAtRisk')}</div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

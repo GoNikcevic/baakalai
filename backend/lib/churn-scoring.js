@@ -371,6 +371,20 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
     } catch (err) {
       logger.error('churn-scoring', `Batch update failed (batch ${Math.floor(i / BATCH_SIZE)}): ${err.message}`);
     }
+
+    // Snapshot dans churn_score_history — opportunities.churn_score est écrasé
+    // à chaque run, seul cet historique permet de comparer un score passé au
+    // statut actuel (cf. GET /api/analytics/churn-risk-performance).
+    try {
+      const historyValues = batch.map((r, idx) => `($1, $${idx * 3 + 2}::uuid, $${idx * 3 + 3}::int, $${idx * 3 + 4}::jsonb)`).join(', ');
+      const historyParams = [userId, ...batch.flatMap(r => [r.id, r.score, r.factors])];
+      await db.query(
+        `INSERT INTO churn_score_history (user_id, opportunity_id, score, factors) VALUES ${historyValues}`,
+        historyParams
+      );
+    } catch (err) {
+      logger.error('churn-scoring', `History insert failed (batch ${Math.floor(i / BATCH_SIZE)}): ${err.message}`);
+    }
   }
 
   logger.info('churn-scoring', `User ${userId}: scored ${scored} contacts, ${atRisk} at risk`);

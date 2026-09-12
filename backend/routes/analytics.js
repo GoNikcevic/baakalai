@@ -1292,6 +1292,193 @@ router.get('/lost-reasons', async (req, res, next) => {
 });
 
 // =============================================
+// GET /api/analytics/upsell-performance — performance de la détection upsell
+// =============================================
+// Vue d'ensemble du portefeuille entier, non filtrée par produit/secteur/
+// période (même granularité que trends/channels/membership) — cohérent avec
+// GET /api/crm/upsell/summary, déjà non filtré.
+
+router.get('/upsell-performance', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const upsellDetector = require('../lib/agents/upsell-detector');
+    const detected = await upsellDetector.run(userId);
+    const candidates = detected.opportunities || [];
+
+    const avgScore = candidates.length > 0
+      ? Math.round(candidates.reduce((sum, c) => sum + c.score, 0) / candidates.length)
+      : 0;
+
+    const crossSellCounts = {};
+    for (const c of candidates) {
+      for (const p of c.crossSellProducts || []) {
+        crossSellCounts[p] = (crossSellCounts[p] || 0) + 1;
+      }
+    }
+    const crossSellBreakdown = Object.entries(crossSellCounts)
+      .map(([product, count]) => ({ product, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const emailStats = await db.query(
+      `SELECT COUNT(*) FILTER (WHERE status = 'sent') AS sent,
+              COUNT(*) FILTER (WHERE status = 'sent' AND replied_at IS NOT NULL) AS replied,
+              COUNT(DISTINCT opportunity_id) FILTER (WHERE status = 'sent') AS emailed_opps
+       FROM nurture_emails
+       WHERE user_id = $1 AND metadata->>'chain' = 'auto_upsell'`,
+      [userId]
+    );
+    const sent = parseInt(emailStats.rows[0].sent, 10) || 0;
+    const replied = parseInt(emailStats.rows[0].replied, 10) || 0;
+    const emailedOpps = parseInt(emailStats.rows[0].emailed_opps, 10) || 0;
+
+    // Conversion : ligne produit ajoutée après le dernier email d'upsell envoyé
+    // sur ce même deal — corrélation temporelle (pas de FK directe entre l'email
+    // et l'assignation), added_at posé par migration 098.
+    const conversions = await db.query(
+      `SELECT DISTINCT o.id, o.deal_value
+       FROM opportunities o
+       JOIN opportunity_product_lines opl ON opl.opportunity_id = o.id AND opl.added_at IS NOT NULL
+       JOIN LATERAL (
+         SELECT MAX(sent_at) AS last_sent
+         FROM nurture_emails
+         WHERE opportunity_id = o.id AND metadata->>'chain' = 'auto_upsell' AND status = 'sent'
+       ) ne ON true
+       WHERE o.user_id = $1 AND ne.last_sent IS NOT NULL AND opl.added_at > ne.last_sent`,
+      [userId]
+    );
+    const convertedCount = conversions.rows.length;
+    const convertedRevenue = conversions.rows.reduce((sum, r) => sum + Number(r.deal_value || 0), 0);
+
+    res.json({
+      candidatesCount: candidates.length,
+      avgScore,
+      crossSellBreakdown,
+      emailsSent: sent,
+      emailsReplied: replied,
+      replyRate: sent > 0 ? Math.round((replied / sent) * 100) : 0,
+      emailedOpportunities: emailedOpps,
+      convertedCount,
+      convertedRevenue: Math.round(convertedRevenue),
+      conversionRate: emailedOpps > 0 ? Math.round((convertedCount / emailedOpps) * 100) : 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/churn-risk-performance — performance de la détection churn
+// =============================================
+// Vue d'ensemble du portefeuille entier (clients gagnés uniquement), non
+// filtrée par produit/secteur/période — cohérent avec /api/crm/churn/summary.
+
+router.get('/churn-risk-performance', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { AT_RISK_THRESHOLD } = require('../lib/churn-scoring');
+
+    const oppsResult = await db.query(
+      `SELECT id, name, company, deal_value, churn_score, churn_factors
+       FROM opportunities WHERE user_id = $1 AND status = 'won' AND churn_score IS NOT NULL`,
+      [userId]
+    );
+    const opps = oppsResult.rows;
+
+    const distribution = { critical: 0, high: 0, medium: 0, low: 0 };
+    let atRiskCount = 0, atRiskRevenue = 0, safeRevenue = 0, totalRevenue = 0;
+    const factorCounts = {};
+    for (const o of opps) {
+      const v = Number(o.deal_value || 0);
+      totalRevenue += v;
+      if (o.churn_score >= 76) distribution.critical++;
+      else if (o.churn_score >= 51) distribution.high++;
+      else if (o.churn_score >= 26) distribution.medium++;
+      else distribution.low++;
+
+      if (o.churn_score >= AT_RISK_THRESHOLD) {
+        atRiskCount++;
+        atRiskRevenue += v;
+        for (const f of (Array.isArray(o.churn_factors) ? o.churn_factors : [])) {
+          if (!f?.signal) continue;
+          factorCounts[f.signal] = (factorCounts[f.signal] || 0) + 1;
+        }
+      } else {
+        safeRevenue += v;
+      }
+    }
+    const topFactors = Object.entries(factorCounts)
+      .map(([signal, count]) => ({ signal, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const noRecentActivity = await db.query(
+      `SELECT o.id, o.name, o.company, o.churn_score, o.deal_value
+       FROM opportunities o
+       WHERE o.user_id = $1 AND o.status = 'won' AND o.churn_score >= $2
+         AND NOT EXISTS (
+           SELECT 1 FROM nurture_emails ne WHERE ne.opportunity_id = o.id AND ne.created_at > now() - interval '30 days'
+         )
+       ORDER BY o.churn_score DESC LIMIT 20`,
+      [userId, AT_RISK_THRESHOLD]
+    );
+
+    // Sauvés vs perdus — nécessite un historique constitué depuis ~45j minimum
+    // (churn_score_history démarre vide, migration 098) : sans ça, on ne peut
+    // pas savoir qui était à risque il y a 45-75 jours.
+    const historyRange = await db.query(
+      `SELECT MIN(scored_at) AS since FROM churn_score_history WHERE user_id = $1`,
+      [userId]
+    );
+    const historySince = historyRange.rows[0].since;
+    const enoughHistory = !!historySince && (Date.now() - new Date(historySince).getTime()) >= 45 * 24 * 60 * 60 * 1000;
+
+    let savedVsChurned = null;
+    if (enoughHistory) {
+      const result = await db.query(
+        `WITH past_at_risk AS (
+           SELECT DISTINCT ON (opportunity_id) opportunity_id, score AS past_score
+           FROM churn_score_history
+           WHERE user_id = $1 AND scored_at BETWEEN now() - interval '75 days' AND now() - interval '45 days'
+           ORDER BY opportunity_id, scored_at DESC
+         )
+         SELECT
+           COUNT(*) FILTER (WHERE o.status = 'lost') AS churned,
+           COUNT(*) FILTER (WHERE o.status = 'won' AND o.churn_score < $2) AS saved,
+           COUNT(*) FILTER (WHERE o.status = 'won' AND o.churn_score >= $2) AS still_at_risk
+         FROM past_at_risk par
+         JOIN opportunities o ON o.id = par.opportunity_id
+         WHERE par.past_score >= $2`,
+        [userId, AT_RISK_THRESHOLD]
+      );
+      const row = result.rows[0];
+      savedVsChurned = {
+        churned: parseInt(row.churned, 10) || 0,
+        saved: parseInt(row.saved, 10) || 0,
+        stillAtRisk: parseInt(row.still_at_risk, 10) || 0,
+      };
+    }
+
+    res.json({
+      distribution,
+      atRiskCount,
+      atRiskRevenue: Math.round(atRiskRevenue),
+      safeRevenue: Math.round(safeRevenue),
+      totalRevenue: Math.round(totalRevenue),
+      topFactors,
+      noRecentActivity: noRecentActivity.rows.map(r => ({
+        id: r.id, name: r.name, company: r.company,
+        churnScore: r.churn_score, dealValue: Number(r.deal_value || 0),
+      })),
+      savedVsChurned,
+      historySince,
+      enoughHistory,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
 // GET /api/analytics/geography — répartition géographique du portefeuille
 // =============================================
 // Pays = colonne CRM (migration 093) normalisée en ISO-2, sinon TLD de l'email.
