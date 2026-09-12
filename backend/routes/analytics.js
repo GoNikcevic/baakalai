@@ -108,7 +108,11 @@ async function resolveAnalyticsFilters(userId, query) {
     );
     sectorOppIds = new Set(r.rows.map(x => x.id));
   }
-  return { productLine, productOppIds, sector, sectorOppIds, active: !!(productLine || sector) };
+  // Période : filtre sur created_at (date d'entrée du deal dans le pipeline),
+  // même convention que les cohortes de création et le flux mensuel.
+  const from = String(query?.from || '').trim();
+  const to = String(query?.to || '').trim();
+  return { productLine, productOppIds, sector, sectorOppIds, from, to, active: !!(productLine || sector || from || to) };
 }
 
 function applyAnalyticsFilters(opps, filters) {
@@ -116,6 +120,15 @@ function applyAnalyticsFilters(opps, filters) {
   let list = opps;
   if (filters.productOppIds) list = list.filter(o => filters.productOppIds.has(o.id));
   if (filters.sectorOppIds) list = list.filter(o => filters.sectorOppIds.has(o.id));
+  if (filters.from) {
+    const fromTs = new Date(filters.from).getTime();
+    if (!isNaN(fromTs)) list = list.filter(o => o.created_at && new Date(o.created_at).getTime() >= fromTs);
+  }
+  if (filters.to) {
+    // Inclusif de toute la journée "to" (fin de journée, pas minuit).
+    const toTs = new Date(filters.to).getTime() + 24 * 60 * 60 * 1000 - 1;
+    if (!isNaN(toTs)) list = list.filter(o => o.created_at && new Date(o.created_at).getTime() <= toTs);
+  }
   return list;
 }
 

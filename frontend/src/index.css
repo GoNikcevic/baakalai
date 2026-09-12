@@ -3655,13 +3655,6 @@ input[type="checkbox"]:checked {
   display: grid; grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
-/* Ligne Gagné/Perdu : 2 cartes centrées dans les colonnes 2-3 d'une grille à 4
-   colonnes, pour garder exactement la même largeur que la ligne du dessus.
-   Repasse en placement naturel dès que .crm-kpi-row-4 lui-même passe à 2
-   colonnes (medias ci-dessous), sinon les cartes déborderaient sur une
-   colonne 3 inexistante. */
-.crm-kpi-outcome-row > :nth-child(1) { grid-column: 2; }
-.crm-kpi-outcome-row > :nth-child(2) { grid-column: 3; }
 .crm-kpi-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 16px; text-align: center;
@@ -3763,8 +3756,6 @@ input[type="checkbox"]:checked {
 @media (max-width: 900px) {
   .crm-kpi-row { grid-template-columns: repeat(3, 1fr); }
   .crm-kpi-row-4 { grid-template-columns: repeat(2, 1fr); }
-  .crm-kpi-outcome-row > :nth-child(1),
-  .crm-kpi-outcome-row > :nth-child(2) { grid-column: auto; }
   .crm-grid-3 { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 768px) {

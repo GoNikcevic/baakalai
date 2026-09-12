@@ -157,16 +157,27 @@ export default function CRMAnalyticsPage() {
     setActiveTab(prev => (groupTabKeys.includes(prev) ? prev : groupTabKeys[0]));
   }, [activeGroup]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filtres transverses produit / secteur — propagés en query string aux
-  // routes analytics de Deals/Clients (le backend filtre les opportunités
-  // avant agrégation)
-  const [filters, setFilters] = useState({ productLine: '', sector: '' });
+  // Filtres transverses produit / secteur / période — propagés en query string
+  // aux routes analytics de Deals/Clients (le backend filtre les opportunités
+  // avant agrégation). period et dateFrom/dateTo sont mutuellement exclusifs :
+  // choisir l'un efface l'autre, la query string calcule from/to dans les deux cas.
+  const [filters, setFilters] = useState({ productLine: '', sector: '', period: '', dateFrom: '', dateTo: '' });
   const [productLines, setProductLines] = useState([]);
   const [sectors, setSectors] = useState([]);
   const filterQs = useMemo(() => {
     const p = new URLSearchParams();
     if (filters.productLine) p.set('productLine', filters.productLine);
     if (filters.sector) p.set('sector', filters.sector);
+    if (filters.period) {
+      const to = new Date();
+      const from = new Date();
+      from.setMonth(from.getMonth() - parseInt(filters.period, 10));
+      p.set('from', from.toISOString().split('T')[0]);
+      p.set('to', to.toISOString().split('T')[0]);
+    } else {
+      if (filters.dateFrom) p.set('from', filters.dateFrom);
+      if (filters.dateTo) p.set('to', filters.dateTo);
+    }
     const s = p.toString();
     return s ? '?' + s : '';
   }, [filters]);
@@ -197,11 +208,15 @@ export default function CRMAnalyticsPage() {
     api.request('/analytics/sectors').then(d => setSectors(d.sectors || [])).catch(() => {});
   }, [backendAvailable]);
 
-  // Changer de périmètre invalide les données affichées (dont les KPIs pipeline)
+  // Changer de périmètre invalide les données affichées (dont les KPIs pipeline).
+  // fetchedRef doit être vidé en même temps que data : sinon revenir à un
+  // filterQs déjà visité (ex. "Toute la période" après être passé par "1 mois")
+  // saute le refetch en le croyant en cache, alors que data vient d'être effacé.
   const prevQsRef = useRef(filterQs);
   useEffect(() => {
     if (prevQsRef.current === filterQs) return;
     prevQsRef.current = filterQs;
+    fetchedRef.current.clear();
     setData({});
   }, [filterQs]);
 
@@ -212,13 +227,17 @@ export default function CRMAnalyticsPage() {
   // Résumé "Deals en cours" affiché entre les groupes et les sous-onglets —
   // fetch indépendant du cache activeTab/loading, pour rester visible quel
   // que soit le sous-onglet consulté (Attribution, Forecast, Raisons de perte…).
+  // Volontairement SANS filterQs : ce résumé doit toujours représenter la base
+  // entière, jamais le périmètre filtré (produit/secteur/période) appliqué
+  // au contenu en dessous — seuls Gagné/Perdu ont leur propre fenêtre fixe
+  // de 30 jours, indépendante des filtres.
   const [dealsSummary, setDealsSummary] = useState(null);
   useEffect(() => {
     if (!backendAvailable || activeGroup !== 'deals') return;
     let cancelled = false;
-    api.request('/analytics/pipeline' + filterQs).then(d => { if (!cancelled) setDealsSummary(d); }).catch(() => {});
+    api.request('/analytics/pipeline').then(d => { if (!cancelled) setDealsSummary(d); }).catch(() => {});
     return () => { cancelled = true; };
-  }, [backendAvailable, activeGroup, filterQs]);
+  }, [backendAvailable, activeGroup]);
 
   // Auto-refresh after CRM sync completes
   useEffect(() => {
@@ -345,9 +364,9 @@ export default function CRMAnalyticsPage() {
               ))}
             </select>
           )}
-          {(filters.productLine || filters.sector) && (
+          {(filters.productLine || filters.sector || filters.period || filters.dateFrom || filters.dateTo) && (
             <button
-              onClick={() => setFilters({ productLine: '', sector: '' })}
+              onClick={() => setFilters({ productLine: '', sector: '', period: '', dateFrom: '', dateTo: '' })}
               style={{
                 fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer',
                 border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)',
@@ -356,6 +375,48 @@ export default function CRMAnalyticsPage() {
               ✕ {t('analytics.filterClear')}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Filtres période — sous les filtres produit/secteur, période prédéfinie
+          ou intervalle exact, mutuellement exclusifs */}
+      {(activeGroup === 'deals' || activeGroup === 'clients') && backendAvailable && hasData && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '0 0 12px' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.periodLabel')}</span>
+          <select
+            value={filters.period}
+            onChange={e => setFilters(f => ({ ...f, period: e.target.value, dateFrom: '', dateTo: '' }))}
+            style={{
+              fontSize: 13, padding: '6px 10px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+            }}
+          >
+            <option value="">{t('analytics.periodAll')}</option>
+            <option value="1">{t('analytics.period1m')}</option>
+            <option value="3">{t('analytics.period3m')}</option>
+            <option value="6">{t('analytics.period6m')}</option>
+            <option value="12">{t('analytics.period12m')}</option>
+          </select>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('analytics.periodOr')}</span>
+          <input
+            type="date"
+            value={filters.dateFrom}
+            onChange={e => setFilters(f => ({ ...f, dateFrom: e.target.value, period: '' }))}
+            style={{
+              fontSize: 13, padding: '6px 10px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+            }}
+          />
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('analytics.periodTo')}</span>
+          <input
+            type="date"
+            value={filters.dateTo}
+            onChange={e => setFilters(f => ({ ...f, dateTo: e.target.value, period: '' }))}
+            style={{
+              fontSize: 13, padding: '6px 10px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)',
+            }}
+          />
         </div>
       )}
 
@@ -392,10 +453,10 @@ export default function CRMAnalyticsPage() {
       )}
 
       {/* Les tendances, canaux et la vue d'ensemble clients viennent des campagnes /
-          de toutes les opportunités, pas du périmètre filtré — les filtres produit/secteur
-          ne s'y appliquent pas : on le dit plutôt que de laisser croire que les chiffres
-          sont filtrés. */}
-      {!loading && tabData && (filters.productLine || filters.sector) && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership') && (
+          de toutes les opportunités, pas du périmètre filtré — les filtres produit/secteur/
+          période ne s'y appliquent pas : on le dit plutôt que de laisser croire que les
+          chiffres sont filtrés. */}
+      {!loading && tabData && (filters.productLine || filters.sector || filters.period || filters.dateFrom || filters.dateTo) && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership') && (
         <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 12 }}>
           <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
           {t('analytics.filterNotApplied')}
@@ -445,16 +506,16 @@ function FlowChart({ flow, en }) {
         <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--success)', marginRight: 5 }} />{en ? 'Won' : 'Gagnés'}</span>
         <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--danger)', marginRight: 5 }} />{en ? 'Lost' : 'Perdus'}</span>
       </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', overflowX: 'auto', paddingBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         {flow.map(f => (
-          <div key={f.period} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 40, flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 90 }}>
-              <div title={`${f.period}: ${f.created}`} style={{ width: 8, height: Math.max((f.created / max) * 90, f.created > 0 ? 3 : 0), background: 'var(--purple)', borderRadius: 2 }} />
-              <div title={`${f.period}: ${f.won}`} style={{ width: 8, height: Math.max((f.won / max) * 90, f.won > 0 ? 3 : 0), background: 'var(--success)', borderRadius: 2 }} />
-              <div title={`${f.period}: ${f.lost}`} style={{ width: 8, height: Math.max((f.lost / max) * 90, f.lost > 0 ? 3 : 0), background: 'var(--danger)', borderRadius: 2 }} />
+          <div key={f.period} style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4, flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', justifyContent: 'center', height: 90 }}>
+              <div title={`${f.period}: ${f.created}`} style={{ width: '30%', maxWidth: 16, height: Math.max((f.created / max) * 90, f.created > 0 ? 3 : 0), background: 'var(--purple)', borderRadius: 2 }} />
+              <div title={`${f.period}: ${f.won}`} style={{ width: '30%', maxWidth: 16, height: Math.max((f.won / max) * 90, f.won > 0 ? 3 : 0), background: 'var(--success)', borderRadius: 2 }} />
+              <div title={`${f.period}: ${f.lost}`} style={{ width: '30%', maxWidth: 16, height: Math.max((f.lost / max) * 90, f.lost > 0 ? 3 : 0), background: 'var(--danger)', borderRadius: 2 }} />
             </div>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{f.period.slice(5)}</div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: f.net >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center' }}>{f.period.slice(5)}/{f.period.slice(2, 4)}</div>
+            <div style={{ fontSize: 9, fontWeight: 700, textAlign: 'center', color: f.net >= 0 ? 'var(--success)' : 'var(--danger)' }}>
               {f.net >= 0 ? '+' : ''}{f.net}
             </div>
           </div>
@@ -544,17 +605,18 @@ function DealsGroupSummary({ data, statusLabels }) {
         </div>
       </div>
 
-      {/* Zone 2 : issues sur les 30 derniers jours */}
-      <div style={{ background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 14, padding: 20 }}>
+      {/* Zone 2 : issues sur les 30 derniers jours — boîte resserrée autour
+          des 2 cartes, centrée sur la page */}
+      <div style={{ background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 14, padding: 20, width: 'fit-content', margin: '0 auto' }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 16px', textAlign: 'center' }}>
           {t('analytics.outcomes30dTitle')}
         </h3>
-        <div className="crm-kpi-row-4 crm-kpi-outcome-row">
-          <div className="crm-kpi-card" key="won">
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="crm-kpi-card" style={{ minWidth: 160 }} key="won">
             <div className="crm-kpi-value" style={{ color: STAGE_COLORS.won }}>{outcomes30d.won}</div>
             <div className="crm-kpi-label">{STATUS_LABELS.won}</div>
           </div>
-          <div className="crm-kpi-card" key="lost">
+          <div className="crm-kpi-card" style={{ minWidth: 160 }} key="lost">
             <div className="crm-kpi-value" style={{ color: STAGE_COLORS.lost }}>{outcomes30d.lost}</div>
             <div className="crm-kpi-label">{STATUS_LABELS.lost}</div>
           </div>
