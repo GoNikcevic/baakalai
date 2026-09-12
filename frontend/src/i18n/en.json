@@ -765,7 +765,7 @@
     "tabDescEngagement": "How engaged are your contacts? Scored from 0-100 based on recent activity.",
     "tabDescHealth": "Data quality audit: duplicates, missing fields, invalid emails. Clean your CRM in one click.",
     "geoTab": "Geography",
-    "tabDescGeo": "Geographic breakdown of your contacts and deals — CRM country when available, otherwise inferred from the email domain.",
+    "geoRespectsFilters": "This section respects the product/sector/period filters above, unlike the rest of this view.",
     "upsellPerformanceTab": "Upsell Performance",
     "tabDescUpsellPerformance": "Concrete results of baakalai's upsell detection — candidates, emails sent, reply rate, and conversions.",
     "churnRiskTab": "At-Risk Clients",

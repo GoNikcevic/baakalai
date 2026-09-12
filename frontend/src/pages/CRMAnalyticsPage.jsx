@@ -111,7 +111,6 @@ function getTabs(t, vocab) { return [
   { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
   { key: 'lostReasons', label: t('analytics.lostReasonsTab'), desc: t('analytics.tabDescLostReasons') },
   { key: 'membership', label: t('analytics.membershipTab'), desc: t('analytics.tabDescMembership') },
-  { key: 'geography', label: t('analytics.geoTab'), desc: t('analytics.tabDescGeo') },
   { key: 'upsell-performance', label: t('analytics.upsellPerformanceTab'), desc: t('analytics.tabDescUpsellPerformance') },
   { key: 'churn-risk-performance', label: t('analytics.churnRiskTab'), desc: t('analytics.tabDescChurnRisk') },
   { key: 'trends', label: t('analytics.trends'), desc: t('analytics.tabDescTrends') },
@@ -125,7 +124,7 @@ function getTabs(t, vocab) { return [
 // Prospection. Voir le rendu conditionnel sur activeGroup plus bas.
 const GROUPS = [
   { key: 'deals', labelKey: 'analytics.groupDeals', tabs: ['pipeline', 'attribution', 'forecast', 'lostReasons'] },
-  { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'upsell-performance', 'churn-risk-performance', 'geography'] },
+  { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'upsell-performance', 'churn-risk-performance'] },
   { key: 'activation', labelKey: 'analytics.groupActivation', tabs: ['trends'] },
   { key: 'prospection', labelKey: 'analytics.groupProspection', tabs: ['channels', 'attribution'] },
 ];
@@ -478,7 +477,7 @@ export default function CRMAnalyticsPage() {
       )}
 
       {/* CSV Export button (pas de route CSV pour géographie / vue d'ensemble clients / raisons de perte) */}
-      {!loading && tabData && activeTab !== 'geography' && activeTab !== 'membership' && activeTab !== 'lostReasons' && activeTab !== 'upsell-performance' && activeTab !== 'churn-risk-performance' && (
+      {!loading && tabData && activeTab !== 'membership' && activeTab !== 'lostReasons' && activeTab !== 'upsell-performance' && activeTab !== 'churn-risk-performance' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
           <button
             className="btn btn-ghost"
@@ -504,8 +503,7 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
-      {!loading && activeTab === 'geography' && tabData && <GeographySection data={tabData} />}
-      {!loading && activeTab === 'membership' && tabData && <MembershipSection data={tabData} en={en} />}
+      {!loading && activeTab === 'membership' && tabData && <MembershipSection data={tabData} en={en} filterQs={filterQs} />}
       {!loading && activeTab === 'upsell-performance' && tabData && <UpsellPerformanceSection data={tabData} en={en} />}
       {!loading && activeTab === 'churn-risk-performance' && tabData && <AtRiskPerformanceSection data={tabData} en={en} />}
       {!loading && activeTab === 'lostReasons' && tabData && (
@@ -1540,11 +1538,38 @@ function GeographySection({ data }) {
   );
 }
 
+// Auto-fetch : la géographie vit maintenant au bas de l'onglet Vue d'ensemble
+// (plus un onglet séparé), mais /analytics/geography reste filtré par
+// produit/secteur/période — contrairement au reste de cet onglet — d'où le
+// petit texte le précisant plutôt que de le mélanger silencieusement.
+function GeographyBlock({ filterQs = '' }) {
+  const t = useT();
+  const [geoData, setGeoData] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.request('/analytics/geography' + filterQs)
+      .then(d => { if (alive) setGeoData(d); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [filterQs]);
+
+  if (!geoData) return null;
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{t('analytics.geoTab')}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>{t('analytics.geoRespectsFilters')}</div>
+      <GeographySection data={geoData} />
+    </div>
+  );
+}
+
 /* ═══ Membership Section (Clients — vue d'ensemble) ═══ */
 
 const CHURN_BAND_COLORS = { critical: '#DC2626', high: '#F59E0B', medium: '#6E57FA', low: '#16A34A' };
 
-function MembershipSection({ data, en }) {
+function MembershipSection({ data, en, filterQs }) {
   const k = data.kpis || {};
 
   return (
@@ -1660,6 +1685,8 @@ function MembershipSection({ data, en }) {
           ))}
         </div>
       )}
+
+      <GeographyBlock filterQs={filterQs} />
     </div>
   );
 }
