@@ -111,7 +111,7 @@ export default function TeamSettings() {
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               type="text"
-              placeholder="Nom de l'\u00E9quipe"
+              placeholder={t('team.teamName')}
               value={teamName}
               onChange={e => setTeamName(e.target.value)}
               className="form-input"
@@ -123,7 +123,7 @@ export default function TeamSettings() {
               onClick={handleCreate}
               disabled={creating || !teamName.trim()}
             >
-              {creating ? 'Cr\u00E9ation...' : 'Cr\u00E9er'}
+              {creating ? t('team.creating') : t('team.create')}
             </button>
           </div>
         </div>
@@ -188,7 +188,7 @@ export default function TeamSettings() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>
                     {m.name}
-                    {isCreator && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>cr{'\u00E9'}ateur</span>}
+                    {isCreator && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>{t('team.creator')}</span>}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.email}</div>
                 </div>

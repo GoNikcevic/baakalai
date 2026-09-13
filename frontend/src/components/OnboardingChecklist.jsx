@@ -108,7 +108,7 @@ export default function OnboardingChecklist() {
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, var(--blue-bg, #eff6ff) 0%, var(--purple-bg, #f5f3ff) 100%)',
+      background: 'linear-gradient(135deg, var(--blue-bg) 0%, var(--purple-bg) 100%)',
       border: '1px solid rgba(59, 130, 246, 0.15)',
       borderRadius: 12,
       padding: '20px 24px',

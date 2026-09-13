@@ -8,9 +8,13 @@ import { useT } from '../i18n';
 import SettingsPage from './SettingsPage';
 import ProfilePage from './ProfilePage';
 import MemoryExplorerPage from './MemoryExplorerPage';
+import TeamSettings from '../components/TeamSettings';
+import BillingSettings from '../components/BillingSettings';
 
 const SECTIONS = [
   { key: 'integrations', i18n: 'nav.integrations' },
+  { key: 'team', i18n: 'nav.team' },
+  { key: 'billing', i18n: 'nav.billing' },
   { key: 'profile', i18n: 'nav.profile' },
   { key: 'memory', i18n: 'nav.memory' },
 ];
@@ -47,6 +51,8 @@ export default function SettingsWrapper() {
       </div>
 
       {section === 'integrations' && <SettingsPage />}
+      {section === 'team' && <TeamSettings />}
+      {section === 'billing' && <BillingSettings />}
       {section === 'profile' && <ProfilePage />}
       {section === 'memory' && <MemoryExplorerPage />}
     </div>

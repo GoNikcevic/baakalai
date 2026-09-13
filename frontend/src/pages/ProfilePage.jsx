@@ -338,7 +338,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Product Lines / Projects — wraps all profile sections */}
+      {/* Product Lines — wraps all profile sections */}
       <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect}
         docProps={{ files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize }} />
 
@@ -416,7 +416,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
         await request(`/crm/product-lines/${activeTab}`, { method: 'PATCH', body: JSON.stringify(form) });
         await load();
       }
-    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: 'Failed to save project' })); }
+    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to save product' : 'Échec de la sauvegarde du produit' })); }
     setSaving(false);
   };
 
@@ -427,7 +427,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
       const remaining = lines.filter(l => l.id !== id);
       setLines(remaining);
       setActiveTab(remaining.length > 0 ? remaining[0].id : null);
-    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: 'Failed to delete project' })); }
+    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to delete product' : 'Échec de la suppression du produit' })); }
   };
 
   if (loading) return null;
@@ -444,7 +444,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
 
   return (
     <>
-      {/* Project tabs */}
+      {/* Product tabs */}
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: -1 }}>
         {lines.map(pl => (
           <button key={pl.id} onClick={() => setActiveTab(pl.id)} style={tabStyle(activeTab === pl.id, false)}>
@@ -455,18 +455,18 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
           </button>
         ))}
         <button onClick={() => setActiveTab('new')} style={tabStyle(activeTab === 'new', true)}>
-          + {en ? 'New project' : 'Nouveau projet'}
+          + {en ? 'New product' : 'Nouveau produit'}
         </button>
       </div>
 
-      {/* Active project content */}
+      {/* Active product content */}
       {activeTab && (
         <div className="card" style={{ marginBottom: 16, borderTopLeftRadius: 0 }}>
           <div className="card-body" style={{ paddingTop: 20 }}>
 
-            {/* Project identity */}
+            {/* Product identity */}
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {en ? 'Project identity' : 'Identit\u00e9 du projet'}
+              {en ? 'Product identity' : 'Identit\u00e9 du produit'}
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <div className="form-group" style={{ width: 70 }}>
@@ -475,7 +475,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                   style={{ fontSize: 18, textAlign: 'center', padding: '6px' }} maxLength={2} placeholder="📦" />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">{en ? 'Project name' : 'Nom du projet'}</label>
+                <label className="form-label">{en ? 'Product name' : 'Nom du produit'}</label>
                 <input className="form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                   placeholder={en ? 'e.g., Cybersecurity Solutions' : 'ex: Solutions Cybers\u00e9curit\u00e9'} />
               </div>
@@ -515,7 +515,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                 placeholder={en ? 'e.g., Finance, Healthcare, Telecom' : 'ex: Finance, Sant\u00e9, T\u00e9l\u00e9com'} />
             </div>
 
-            {/* Global profile fields (shared across projects) */}
+            {/* Global profile fields (shared across products) */}
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {en ? 'Company info (shared)' : 'Informations entreprise (partag\u00e9es)'}
             </div>
@@ -623,13 +623,13 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                 {activeTab !== 'new' && (
                   <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--danger)' }}
                     onClick={() => handleDelete(activeTab, form.name)}>
-                    {en ? 'Delete project' : 'Supprimer le projet'}
+                    {en ? 'Delete product' : 'Supprimer le produit'}
                   </button>
                 )}
               </div>
               <button className="btn btn-primary" style={{ fontSize: 12, padding: '8px 20px' }}
                 onClick={handleSave} disabled={saving || !form.name.trim()}>
-                {saving ? '...' : activeTab === 'new' ? (en ? 'Create project' : 'Cr\u00e9er le projet') : (en ? 'Save project' : 'Sauvegarder le projet')}
+                {saving ? '...' : activeTab === 'new' ? (en ? 'Create product' : 'Cr\u00e9er le produit') : (en ? 'Save product' : 'Sauvegarder le produit')}
               </button>
             </div>
           </div>
@@ -639,7 +639,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
       {/* Empty state */}
       {lines.length === 0 && activeTab !== 'new' && (
         <div className="card" style={{ marginBottom: 16, textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
-          {en ? 'No projects yet. Click "+ New project" to get started.' : 'Aucun projet. Cliquez sur "+ Nouveau projet" pour commencer.'}
+          {en ? 'No products yet. Click "+ New product" to get started.' : 'Aucun produit. Cliquez sur "+ Nouveau produit" pour commencer.'}
         </div>
       )}
     </>

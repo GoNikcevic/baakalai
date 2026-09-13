@@ -650,6 +650,7 @@ function PipelineSection({ data, statusLabels, vocab, en }) {
   const funnelStages = (data.stages || [])
     .filter(s => s.stage !== 'lost')
     .map(s => ({ label: STATUS_LABELS[s.stage] || s.label, value: s.count }));
+  const flowNetTotal = data.flowNetTotal ?? (data.flow || []).reduce((sum, f) => sum + f.net, 0);
 
   return (
     <div className="crm-section">
@@ -688,9 +689,17 @@ function PipelineSection({ data, statusLabels, vocab, en }) {
       {/* Flux mensuel : créés / gagnés / perdus, 12 derniers mois */}
       {data.flow && (
         <div className="card">
-          <div className="card-title">
-            {t('analytics.flowTitle')}
-            <HelpTip text={t('analytics.flowHelp')} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '0 0 12px' }}>
+            <div className="card-title" style={{ padding: 0 }}>
+              {t('analytics.flowTitle')}
+              <HelpTip text={t('analytics.flowHelp')} />
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>{t('analytics.flowNetTotal')}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: flowNetTotal >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                {flowNetTotal >= 0 ? '+' : ''}{flowNetTotal}
+              </span>
+            </div>
           </div>
           <div className="card-body">
             <FlowChart flow={data.flow} en={en} />
@@ -1145,48 +1154,16 @@ function MemoryForecastBlock({ mf }) {
 
 /* ═══ Forecast Section ═══ */
 
-function ForecastSection({ data: initialData, statusLabels, vocab }) {
+function ForecastSection({ data, statusLabels, vocab }) {
   const STATUS_LABELS = statusLabels;
   const { t, lang } = useI18n();
   const en = lang === 'en';
-  const [forecastData, setForecastData] = useState(initialData);
-  const defaultFrom = useMemo(() => {
-    const d = new Date(); d.setDate(d.getDate() - 90);
-    return d.toISOString().split('T')[0];
-  }, []);
-  const defaultTo = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const [fromDate, setFromDate] = useState(defaultFrom);
-  const [toDate, setToDate] = useState(defaultTo);
-
-  useEffect(() => {
-    if (fromDate === defaultFrom && toDate === defaultTo) {
-      setForecastData(initialData);
-      return;
-    }
-    let cancelled = false;
-    api.request(`/analytics/forecast?from=${fromDate}&to=${toDate}`).then(result => {
-      if (!cancelled) setForecastData(result);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [fromDate, toDate, defaultFrom, defaultTo, initialData]);
-
-  const data = forecastData;
   const pipeline = data.pipeline || {};
   const retention = data.retention || {};
   const cycle = data.salesCycle || {};
 
   return (
     <div className="crm-section">
-      {/* Date range picker */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-        <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'From' : 'De'}</label>
-        <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-          className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
-        <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{en ? 'To' : '\u00C0'}</label>
-        <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-          className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }} />
-      </div>
-
       {/* Intelligent forecast (memory-calibrated) — renders nothing when memoryForecast is null/empty */}
       <MemoryForecastBlock mf={data.memoryForecast} />
 

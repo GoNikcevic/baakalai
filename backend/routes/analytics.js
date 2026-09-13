@@ -238,7 +238,9 @@ router.get('/product-lines', async (req, res, next) => {
 router.get('/pipeline', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await listFilteredOpportunities(userId, req.query);
+    const rawOpportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const filters = await resolveAnalyticsFilters(userId, req.query);
+    const opportunities = applyAnalyticsFilters(rawOpportunities, filters);
     const total = opportunities.length;
 
     // Count per stage
@@ -287,9 +289,15 @@ router.get('/pipeline', async (req, res, next) => {
     for (let i = 11; i >= 0; i--) {
       months.push(monthKey(new Date(refNow.getFullYear(), refNow.getMonth() - i, 1)));
     }
+    // Le flux mensuel et les cohortes sont une vue historique sur 12 mois glissants :
+    // leur appliquer le filtre de période (créé après telle date) viderait à tort la
+    // plupart des mois — un deal créé avant la fenêtre mais gagné/perdu dedans en
+    // disparaîtrait complètement. Seuls produit/secteur s'y appliquent ; la période
+    // n'alimente que le total net affiché à droite du titre (calculé plus bas).
+    const historyOpportunities = applyAnalyticsFilters(rawOpportunities, { ...filters, from: '', to: '' });
     const flowMap = Object.fromEntries(months.map(m => [m, { period: m, created: 0, won: 0, lost: 0 }]));
     const cohortMap = Object.fromEntries(months.map(m => [m, { period: m, created: 0, won: 0, lost: 0, open: 0 }]));
-    for (const opp of opportunities) {
+    for (const opp of historyOpportunities) {
       const stage = canonicalStage(opp.status);
       if (opp.created_at) {
         const k = monthKey(opp.created_at);
@@ -314,6 +322,35 @@ router.get('/pipeline', async (req, res, next) => {
       const f = flowMap[m];
       return { ...f, net: f.created - f.won - f.lost };
     });
+    // Total net affiché à droite du titre : contrairement aux barres, il reflète
+    // la période sélectionnée. Recalculé indépendamment sur les 3 dates (créé/
+    // gagné/perdu) plutôt qu'en filtrant sur created_at seul, qui exclurait à tort
+    // les deals gagnés/perdus dans la période mais créés avant.
+    let flowNetTotal;
+    if (filters.from || filters.to) {
+      const inRange = (dateStr) => {
+        if (!dateStr) return false;
+        const ts = new Date(dateStr).getTime();
+        if (filters.from) {
+          const fromTs = new Date(filters.from).getTime();
+          if (!isNaN(fromTs) && ts < fromTs) return false;
+        }
+        if (filters.to) {
+          const toTs = new Date(filters.to).getTime() + 24 * 60 * 60 * 1000 - 1;
+          if (!isNaN(toTs) && ts > toTs) return false;
+        }
+        return true;
+      };
+      let created = 0, won = 0, lost = 0;
+      for (const o of historyOpportunities) {
+        if (inRange(o.created_at)) created++;
+        if (inRange(o.won_date)) won++;
+        if (inRange(o.lost_date)) lost++;
+      }
+      flowNetTotal = created - won - lost;
+    } else {
+      flowNetTotal = flow.reduce((sum, f) => sum + f.net, 0);
+    }
     // Cohortes de création : issue ACTUELLE des deals créés ce mois-là (pas leur
     // date de clôture) — répond à « les deals créés en mars, où en sont-ils aujourd'hui ? »
     const cohorts = months.map(m => {
@@ -361,7 +398,7 @@ router.get('/pipeline', async (req, res, next) => {
       lost: opportunities.filter(o => o.lost_date && new Date(o.lost_date).getTime() >= cutoff30).length,
     };
 
-    res.json({ stages, conversions, total, flow, cohorts, dealSize, outcomes30d });
+    res.json({ stages, conversions, total, flow, flowNetTotal, cohorts, dealSize, outcomes30d });
   } catch (err) {
     next(err);
   }
@@ -374,12 +411,16 @@ router.get('/pipeline', async (req, res, next) => {
 router.get('/attribution', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const [allCampaigns, allOpportunities, touchAgg, touchedDeals] = await Promise.all([
+    const [allCampaigns, allOpportunities, oppIds] = await Promise.all([
       db.campaigns.list({ userId }),
       listFilteredOpportunities(userId, req.query),
-      // Attribution deals touchés/non touchés : un deal est « touché » dès
-      // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé.
-      // Périmètre plus large que /crm/reactivation-stats (chains seules).
+      filteredOppIds(userId, req.query),
+    ]);
+    // Attribution deals touchés/non touchés : un deal est « touché » dès
+    // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé.
+    // Périmètre plus large que /crm/reactivation-stats (chains seules).
+    // oppIds respecte les filtres produit/secteur/période (null = aucun filtre actif).
+    const [touchAgg, touchedDeals] = await Promise.all([
       db.query(`
         WITH touch AS (
           SELECT o.id, o.deal_value, o.status, o.reactivated_at,
@@ -388,7 +429,7 @@ router.get('/attribution', async (req, res, next) => {
           FROM opportunities o
           LEFT JOIN nurture_emails ne
             ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
-          WHERE o.user_id = $1
+          WHERE o.user_id = $1 AND ($2::uuid[] IS NULL OR o.id = ANY($2))
           GROUP BY o.id
         )
         SELECT
@@ -403,7 +444,7 @@ router.get('/attribution', async (req, res, next) => {
           COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL) AS reactivated_count,
           COALESCE(SUM(deal_value) FILTER (WHERE reactivated_at IS NOT NULL), 0) AS reactivated_value
         FROM touch
-      `, [userId]),
+      `, [userId, oppIds]),
       db.query(`
         SELECT o.name, o.company, o.deal_value, o.status, o.reactivated_at,
                COUNT(ne.id) AS emails_sent,
@@ -412,11 +453,11 @@ router.get('/attribution', async (req, res, next) => {
         FROM opportunities o
         JOIN nurture_emails ne
           ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
-        WHERE o.user_id = $1
+        WHERE o.user_id = $1 AND ($2::uuid[] IS NULL OR o.id = ANY($2))
         GROUP BY o.id, o.name, o.company, o.deal_value, o.status, o.reactivated_at
         ORDER BY MAX(ne.sent_at) DESC
         LIMIT 50
-      `, [userId]),
+      `, [userId, oppIds]),
     ]);
 
     // Group opportunities by campaign_id
