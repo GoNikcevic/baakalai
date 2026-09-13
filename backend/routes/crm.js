@@ -2548,20 +2548,29 @@ router.get('/reactivation-stats', async (req, res, next) => {
         WHERE user_id = $1 AND metadata->>'chain' = 'deal_reactivation'
           AND created_at > NOW() - INTERVAL '90 days'
       `, [userId]),
-      // Pipeline ouvert + deals stagnants. Stagnance mesurée sur
-      // last_activity_at (signal métier) et non updated_at, réécrit en masse
-      // par chaque import — même piège que stepNurture, corrigé le 04/08.
+      // Pipeline ouvert + deals stagnants. Mêmes critères que la vraie file
+      // « Deals à relancer » (lib/reactivation-queue.js listDealsToReactivate) :
+      // stagnance sur last_activity_at (signal métier, pas updated_at qui est
+      // réécrit en masse par chaque import), OU date de relance planifiée
+      // (« Reporter ») dépassée même si le deal a eu de l'activité récente.
+      // Contacts CRM uniquement (campaign_id IS NULL), pas de filtre sur la
+      // valeur — seul le seuil reste fixe à 14j ici (pas le réglage utilisateur,
+      // par choix produit pour cette carte).
       db.query(`
         SELECT
           COUNT(*) as open_count,
           COALESCE(SUM(deal_value), 0) as open_value,
           COUNT(*) FILTER (
-            WHERE COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
-              AND deal_value IS NOT NULL AND deal_value > 0
+            WHERE campaign_id IS NULL AND (
+              (planned_followup_date IS NULL AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days')
+              OR (planned_followup_date IS NOT NULL AND planned_followup_date <= NOW())
+            )
           ) as count,
           COALESCE(SUM(deal_value) FILTER (
-            WHERE COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days'
-              AND deal_value IS NOT NULL AND deal_value > 0
+            WHERE campaign_id IS NULL AND (
+              (planned_followup_date IS NULL AND COALESCE(last_activity_at, created_at) < NOW() - INTERVAL '14 days')
+              OR (planned_followup_date IS NOT NULL AND planned_followup_date <= NOW())
+            )
           ), 0) as potential_revenue
         FROM opportunities
         WHERE user_id = $1 AND status NOT IN ('won', 'lost')

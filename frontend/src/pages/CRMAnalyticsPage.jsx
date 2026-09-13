@@ -13,6 +13,8 @@ import EngagementChart from '../components/charts/EngagementChart';
 import FunnelChart from '../components/charts/FunnelChart';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
+import HelpTip from '../components/HelpTip';
+import DealPipelineKpis from '../components/DealPipelineKpis';
 
 /* ─── Helpers ─── */
 
@@ -56,6 +58,26 @@ function getVocabulary(mode, en) {
   };
 }
 
+// Pluriel français pour les légendes de compte (« combien de deals sont... »,
+// cf. DealsGroupSummary) — distinct du vocab singulier utilisé ailleurs
+// (badge d'un seul deal, en-têtes de colonne). L'anglais n'accorde pas les
+// adjectifs : on y réutilise tel quel le vocabulaire singulier.
+function getVocabularyPlural(mode, en) {
+  if (en) return getVocabulary(mode, en);
+  if (mode === 'membership') {
+    return {
+      ...getVocabulary(mode, en),
+      won: 'Renouvelés', lost: 'Expirés', new: 'Nouveaux membres', interested: 'Engagés',
+      meeting: 'Actifs', negotiation: 'À risque',
+    };
+  }
+  return {
+    ...getVocabulary(mode, en),
+    won: 'Gagnés', lost: 'Perdus', new: 'Nouveaux', interested: 'Intéressés',
+    meeting: 'RDV', negotiation: 'Négos',
+  };
+}
+
 function getStatusLabels(vocab) {
   return {
     new: vocab.new,
@@ -72,36 +94,6 @@ const CHANNEL_COLORS = {
   linkedin: 'var(--purple)',
   multi: 'var(--orange)',
 };
-
-function HelpTip({ text }) {
-  return (
-    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 5, verticalAlign: 'middle', flexShrink: 0 }} className="helptip-wrap">
-      <span
-        style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: 16, height: 16, borderRadius: '50%',
-          fontSize: 10, fontWeight: 700, cursor: 'help',
-          background: 'var(--border)', color: 'var(--text-muted)',
-        }}
-      >?</span>
-      <span className="helptip-bubble">{text}</span>
-      <style>{`
-        .helptip-wrap .helptip-bubble {
-          visibility: hidden; opacity: 0;
-          position: absolute; bottom: calc(100% + 8px); left: 50%;
-          transform: translateX(-50%); width: 260px;
-          padding: 10px 12px; border-radius: 8px;
-          background: var(--bg-primary, #fff); color: var(--text-primary, #0a0a0a);
-          font-size: 12px; font-weight: 400; line-height: 1.5;
-          box-shadow: 0 4px 16px rgba(0,0,0,.12); border: 1px solid var(--border, #e5e5e5);
-          pointer-events: none; transition: opacity .15s; z-index: 999;
-          white-space: normal; text-align: left;
-        }
-        .helptip-wrap:hover .helptip-bubble { visibility: visible; opacity: 1; }
-      `}</style>
-    </span>
-  );
-}
 
 /* ─── Sections ─── */
 
@@ -148,6 +140,7 @@ export default function CRMAnalyticsPage() {
   }, [opportunities]);
   const vocab = useMemo(() => getVocabulary(mode, en), [mode, en]);
   const STATUS_LABELS = useMemo(() => getStatusLabels(vocab), [vocab]);
+  const STATUS_LABELS_PLURAL = useMemo(() => getStatusLabels(getVocabularyPlural(mode, en)), [mode, en]);
 
   const [activeGroup, setActiveGroup] = useState('deals');
   const [activeTab, setActiveTab] = useState('pipeline');
@@ -298,7 +291,7 @@ export default function CRMAnalyticsPage() {
 
       {/* Résumé Deals — visible quel que soit le sous-onglet actif */}
       {activeGroup === 'deals' && dealsSummary && (
-        <DealsGroupSummary data={dealsSummary} statusLabels={STATUS_LABELS} />
+        <DealsGroupSummary data={dealsSummary} statusLabels={STATUS_LABELS} statusLabelsPlural={STATUS_LABELS_PLURAL} />
       )}
 
       {/* Tab bar — sous-onglets du groupe actif */}
@@ -594,30 +587,33 @@ function DealSizeBlock({ dealSize, en }) {
 
 // Résumé persistant du groupe Deals — entre la barre de groupes et les
 // sous-onglets, visible quel que soit le sous-onglet actif (pas seulement Pipeline).
-function DealsGroupSummary({ data, statusLabels }) {
+function DealsGroupSummary({ data, statusLabels, statusLabelsPlural }) {
   const t = useT();
   const STATUS_LABELS = statusLabels;
+  const STATUS_LABELS_PLURAL = statusLabelsPlural || statusLabels;
   const pipelineStages = (data.stages || []).filter(s => ['new', 'interested', 'meeting', 'negotiation'].includes(s.stage));
-  // data.total compte TOUT le tenant (won/lost inclus) — le total affiché ici doit
-  // correspondre à la somme des étapes ouvertes juste en dessous, pas au tenant entier.
-  const totalOpen = pipelineStages.reduce((sum, s) => sum + s.count, 0);
   const outcomes30d = data.outcomes30d || { won: 0, lost: 0 };
+
+  // Mêmes 3 cartes que le Dashboard (onglet Deals) — fetch indépendant du
+  // filterQs de la page, comme StagesBlock/GeographyBlock, pour toujours
+  // refléter le portefeuille entier ici.
+  const [reactivationStats, setReactivationStats] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api.request('/crm/reactivation-stats').then(d => { if (alive) setReactivationStats(d); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
-      {/* Zone 1 : pipeline en cours (total + étapes ouvertes) */}
+      {/* Zone 1 : pipeline en cours (KPIs + étapes ouvertes) */}
       <div style={{ background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 14, padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <div className="crm-kpi-card" style={{ minWidth: 240 }}>
-            <div className="crm-kpi-value">{totalOpen}</div>
-            <div className="crm-kpi-label">{t('analytics.totalOpenDeals')}</div>
-          </div>
-        </div>
+        <DealPipelineKpis stats={reactivationStats} />
         <div className="crm-kpi-row-4" style={{ marginTop: 16 }}>
           {pipelineStages.map(s => (
             <div className="crm-kpi-card" key={s.stage}>
               <div className="crm-kpi-value" style={{ color: STAGE_COLORS[s.stage] }}>{s.count}</div>
-              <div className="crm-kpi-label">{STATUS_LABELS[s.stage] || s.label}</div>
+              <div className="crm-kpi-label">{STATUS_LABELS_PLURAL[s.stage] || STATUS_LABELS[s.stage] || s.label}</div>
             </div>
           ))}
         </div>
@@ -632,11 +628,11 @@ function DealsGroupSummary({ data, statusLabels }) {
         <div style={{ display: 'flex', gap: 12 }}>
           <div className="crm-kpi-card" style={{ minWidth: 160 }} key="won">
             <div className="crm-kpi-value" style={{ color: STAGE_COLORS.won }}>{outcomes30d.won}</div>
-            <div className="crm-kpi-label">{STATUS_LABELS.won}</div>
+            <div className="crm-kpi-label">{STATUS_LABELS_PLURAL.won}</div>
           </div>
           <div className="crm-kpi-card" style={{ minWidth: 160 }} key="lost">
             <div className="crm-kpi-value" style={{ color: STAGE_COLORS.lost }}>{outcomes30d.lost}</div>
-            <div className="crm-kpi-label">{STATUS_LABELS.lost}</div>
+            <div className="crm-kpi-label">{STATUS_LABELS_PLURAL.lost}</div>
           </div>
         </div>
       </div>

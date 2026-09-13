@@ -59,8 +59,8 @@ export default function DashboardPage() {
   const openCreator = useCallback(() => navigate('/campaigns', { state: { openAssistant: true } }), [navigate]);
   const { socket } = useSocket();
   const [syncStatus, setSyncStatus] = useState(null);
-  // Stats CRM (pipeline, dormants, récupéré) — fetch unique, partagé entre la
-  // grille RevenueKpis et la ReactivationCard (toutes deux dans DealsTab).
+  // Stats CRM (pipeline, dormants, récupéré) — alimente DealPipelineKpis
+  // dans DealsTab (et le même endpoint réutilisé côté Analytics).
   const [crmStats, setCrmStats] = useState(null);
   // Diagnostic CRM à la demande — le même rapport que celui affiché après le
   // premier import, rejouable depuis le haut du dashboard.

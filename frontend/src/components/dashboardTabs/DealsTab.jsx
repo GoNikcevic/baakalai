@@ -1,84 +1,78 @@
 /* ═══════════════════════════════════════════════════
    Dashboard — Deals tab
-   Strictly deal/pipeline data: open pipeline, dormant deals,
-   revenue recovered, follow-ups sent, reactivation hero metric.
+   Strictly deal/pipeline data: open pipeline, deals to follow up,
+   top-3 deals to relaunch (deep-links to /deals-to-reactivate).
    No churn/upsell/emailing content here.
    ═══════════════════════════════════════════════════ */
 
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useI18n } from '../../i18n';
-import ReactivationCard from '../ReactivationCard';
-import Icon from '../Icon';
+import { request } from '../../services/api-client';
+import DealPipelineKpis from '../DealPipelineKpis';
 
 export default function DealsTab({ crmStats }) {
   return (
     <div>
-      <RevenueKpis stats={crmStats} />
-      <ReactivationCard stats={crmStats} />
+      <DealPipelineKpis stats={crmStats} />
+      <TopDealsToFollowUp />
     </div>
   );
 }
 
-/* ── KPIs revenue — la langue du produit ──
-   Pipeline ouvert, deals dormants, revenu récupéré, relances : le
-   « 1 deal récupéré = l'outil est payé » en chiffres. Rend null tant
-   que le CRM n'a rien donné. */
-function RevenueKpis({ stats }) {
+/* ── Top 3 deals à relancer — mêmes fetch/style que le TOP 3 upsell du
+   Clients tab (dashboardTabs/ClientsTab.jsx), avec un CTA vers la file
+   complète pour que l'utilisateur aille approuver/envoyer les emails. */
+function TopDealsToFollowUp() {
   const { lang } = useI18n();
   const en = lang === 'en';
-  if (!stats) return null;
-  const { pipeline = {}, reactivated = {}, emails = {} } = stats;
-  if (!pipeline.openDeals && !reactivated.count) return null;
+  const [candidates, setCandidates] = useState(null);
 
-  const money = (n) => {
-    if (!n) return '0 €';
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M €`;
-    if (n >= 1000) return `${Math.round(n / 1000)}k €`;
-    return `${Math.round(n)} €`;
-  };
+  useEffect(() => {
+    let cancelled = false;
+    request('/reactivation/queue?kind=deal_reactivation&sort=overdue').then(d => {
+      if (!cancelled) setCandidates(d.candidates || []);
+    }).catch(() => { if (!cancelled) setCandidates([]); });
+    return () => { cancelled = true; };
+  }, []);
 
-  const cards = [
-    {
-      icon: 'briefcase',
-      label: en ? 'Open pipeline' : 'Pipeline ouvert',
-      value: money(pipeline.totalValue),
-      trend: en ? `${pipeline.openDeals} open deals` : `${pipeline.openDeals} deals ouverts`,
-    },
-    {
-      icon: 'moon',
-      label: en
-        ? `Dormant deals (${pipeline.stagnantThresholdDays || 14}d+)`
-        : `Deals dormants (${pipeline.stagnantThresholdDays || 14}j+)`,
-      value: String(pipeline.stagnantDeals || 0),
-      trend: en ? `${money(pipeline.potentialRevenue)} to revive` : `${money(pipeline.potentialRevenue)} à réveiller`,
-    },
-    {
-      icon: 'revenue',
-      label: en ? 'Revenue recovered' : 'Revenu récupéré',
-      value: money(reactivated.revenue),
-      trend: en
-        ? `${reactivated.count} deal${reactivated.count > 1 ? 's' : ''} reactivated`
-        : `${reactivated.count} deal${reactivated.count > 1 ? 's' : ''} réactivé${reactivated.count > 1 ? 's' : ''}`,
-    },
-    {
-      icon: 'send',
-      label: en ? 'Follow-ups sent' : 'Relances envoyées',
-      value: String(emails.sent || 0),
-      trend: en ? `${emails.replyRate || 0}% replies` : `${emails.replyRate || 0}% de réponses`,
-    },
-  ];
+  if (candidates === null) return null;
 
   return (
-    <div className="kpi-grid" style={{ marginBottom: 16 }}>
-      {cards.map((k, i) => (
-        <div className="kpi-card" key={i}>
-          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name={k.icon} size={14} />
-            <span>{k.label}</span>
+    <div className="card">
+      <div className="card-header">
+        <div className="card-title">{en ? 'Deals to follow up' : 'Deals à relancer'}</div>
+      </div>
+      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {candidates.length > 0 && (
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 0.3 }}>
+            TOP 3
           </div>
-          <div className="kpi-value">{k.value}</div>
-          <div className="kpi-trend">{k.trend}</div>
-        </div>
-      ))}
+        )}
+        {candidates.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>
+            {en ? 'No deal to follow up right now.' : 'Aucun deal à relancer pour l’instant.'}
+          </div>
+        ) : candidates.slice(0, 3).map((c, i, arr) => (
+          <div key={c.id || i} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '8px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', fontSize: 13,
+          }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>{c.name}{c.company ? ` · ${c.company}` : ''}</div>
+              {c.reason && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.reason}</div>}
+            </div>
+            {c.dealValue > 0 && <span style={{ fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>{Math.round(c.dealValue)} €</span>}
+          </div>
+        ))}
+        <Link
+          to="/deals-to-reactivate"
+          className="btn btn-primary btn-sm"
+          style={{ alignSelf: 'flex-start', marginTop: 8 }}
+        >
+          {en ? 'Go follow up' : 'Aller relancer'}
+        </Link>
+      </div>
     </div>
   );
 }
