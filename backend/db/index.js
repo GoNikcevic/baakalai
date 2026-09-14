@@ -594,17 +594,34 @@ const versions = {
  * Règles :
  * - la rédaction ne peut jamais faire échouer une écriture (un pattern rédigé
  *   partiellement vaut mieux qu'un agent qui plante) ;
- * - politique de partage (décision produit 2026-08-04) : `shared` est accordé
- *   automatiquement dès que la rédaction est complète — lexique réellement
- *   chargé ET aucun résidu détecté sur le texte du pattern. Le mérite
- *   (confiance Haute) n'entre pas ici : il est filtré à la lecture par
- *   `listForPrompt`, ce qui laisse un pattern monter en confiance après coup
- *   sans réécriture. L'accord n'a lieu que si l'appel porte le texte du
- *   pattern (`data.pattern` présent) : sur une mise à jour partielle, la garde
- *   n'a pas vu le vrai texte et ne peut rien promettre. Un `shared: false`
- *   explicite de l'appelant est respecté ; l'inverse (`shared: true` non sûr)
- *   est toujours retiré.
+ * - politique de partage (décision produit 2026-08-04, révisée 2026-09-14) :
+ *   `shared` est accordé automatiquement dès que la rédaction est complète —
+ *   lexique réellement chargé ET aucun résidu détecté sur le texte du pattern
+ *   — SAUF pour les sources d'agrégats business (NEVER_AUTO_SHARE_SOURCES
+ *   ci-dessous). Le mérite (confiance Haute) n'entre pas ici : il est filtré
+ *   à la lecture par `listForPrompt`, ce qui laisse un pattern monter en
+ *   confiance après coup sans réécriture. L'accord n'a lieu que si l'appel
+ *   porte le texte du pattern (`data.pattern` présent) : sur une mise à jour
+ *   partielle, la garde n'a pas vu le vrai texte et ne peut rien promettre.
+ *   Un `shared: false` explicite de l'appelant est respecté ; l'inverse
+ *   (`shared: true` non sûr) est toujours retiré.
  */
+
+/**
+ * Sources jamais partagées automatiquement (révision du 2026-09-14, migration
+ * 100 pour le stock) : ces patterns sont des agrégats business d'UN tenant —
+ * « taux de conversion CRM : 34 % », taux de réponse, calibration de forecast.
+ * Anonymes au sens entités, mais ce sont les chiffres d'un client : ils
+ * restent scopés tenant. Le pool global reste ouvert aux apprentissages
+ * généralisables (timing, copy, verdicts A/B, consolidation, registres).
+ * L'admin peut toujours partager à la main via toggle-share (update sans
+ * texte de pattern → cette garde ne s'applique pas).
+ */
+const NEVER_AUTO_SHARE_SOURCES = new Set([
+  'crm_sync', 'crm_analysis',
+  'response_analysis_email', 'response_analysis_linkedin', 'response_analysis_global',
+  'churn_feedback', 'reactivation_outcomes', 'forecast_calibration',
+]);
 async function anonymizeBeforeWrite(data, op) {
   if (!data || typeof data !== 'object') return data;
   if (data.pattern === undefined && data.data === undefined) return data;
@@ -624,8 +641,10 @@ async function anonymizeBeforeWrite(data, op) {
     // Retrait : un partage demandé mais non sûr est toujours refusé.
     if (out.shared === true && !result.safeToShare) out.shared = false;
     // Accord : rédaction complète + texte du pattern présent + pas de refus
-    // explicite de l'appelant → le pattern rejoint le pool global.
-    if (out.shared === undefined && data.pattern !== undefined && result.safeToShare) {
+    // explicite de l'appelant + source hors agrégats business → le pattern
+    // rejoint le pool global.
+    if (out.shared === undefined && data.pattern !== undefined && result.safeToShare
+        && !NEVER_AUTO_SHARE_SOURCES.has(data.source)) {
       out.shared = true;
     }
 

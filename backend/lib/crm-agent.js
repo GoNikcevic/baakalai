@@ -890,7 +890,10 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Wrap create to auto-inject the tenant. userId en repli quand l'utilisateur
   // n'a pas d'équipe : sans lui, le pattern naissait orphelin (ni team_id ni
   // user_id) et devenait invisible pour son propre créateur avec le DAO scopé.
-  const createPattern = (data) => db.memoryPatterns.create({ ...data, teamId, userId: teamId ? null : userId });
+  // source au niveau colonne : c'est elle que lit la politique de partage du
+  // DAO (agrégats business jamais auto-partagés) — le data JSON garde le
+  // détail (crm_analysis / title_analysis / multitouch_analysis).
+  const createPattern = (data) => db.memoryPatterns.create({ source: 'crm_analysis', ...data, teamId, userId: teamId ? null : userId });
   // Les gardes anti-doublon doivent chercher dans la mémoire DU tenant.
   // Historiquement list() sans tenant renvoyait les patterns de TOUS les
   // clients : dès qu'un client avait son « taux de conversion CRM », plus
