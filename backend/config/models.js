@@ -14,20 +14,23 @@
  * globale — c'est le commutateur du panneau Settings.
  *
  * ────────────────────────────────────────────────────────────────────────────
- * ⚠️ AVANT DE PASSER EN GÉNÉRATION 5 (claude-sonnet-5 / claude-opus-5)
+ * ⚠️ GÉNÉRATION 5 (claude-sonnet-5 / claude-opus-5)
  *
- * Sur ces modèles la réflexion (« thinking ») est ACTIVE PAR DÉFAUT quand le
- * paramètre est omis, alors qu'elle était inactive sur Sonnet 4.6 / Opus 4.8.
- * Or `max_tokens` plafonne la réflexion ET la réponse ensemble : une action à
- * `max_tokens: 300` se ferait tronquer au milieu.
+ * Le palier `deep` est passé sur claude-opus-5. Sur les modèles gen 5 la
+ * réflexion (« thinking ») est ACTIVE PAR DÉFAUT quand le paramètre est omis,
+ * alors qu'elle était inactive sur Sonnet 4.6 / Opus 4.8. Or `max_tokens`
+ * plafonne la réflexion ET la réponse ensemble : une action à `max_tokens: 300`
+ * se ferait tronquer au milieu.
  *
- * C'est pourquoi chaque action à sortie courte déclare ici `thinking: 'disabled'`.
- * Aujourd'hui c'est un no-op (les modèles 4.x ne pensent pas sans qu'on le
- * demande) ; au moment de la bascule, c'est ce qui évite la régression.
+ * C'est pourquoi chaque action à sortie courte déclare ici `thinking: 'disabled'`
+ * — y compris les actions `deep` à sortie JSON serrée (icp_refiner,
+ * win_loss_analysis, competitor_watch, generateIcebreaker). No-op sur les
+ * modèles 4.x, indispensable sur gen 5. Contrainte Opus 5 : `disabled` n'est
+ * accepté qu'à effort `high` ou moins (on n'envoie pas d'effort, défaut = high).
  *
- * Second point : Sonnet 5 utilise un tokenizer différent (~30 % de tokens en
- * plus pour le même texte). Re-mesurer avec count_tokens avant d'ajuster les
- * budgets, ne pas appliquer un facteur au jugé.
+ * ⚠️ AVANT DE PASSER `balanced` SUR SONNET 5 : tokenizer différent (~30 % de
+ * tokens en plus pour le même texte). Re-mesurer avec count_tokens avant
+ * d'ajuster les budgets, ne pas appliquer un facteur au jugé.
  * ────────────────────────────────────────────────────────────────────────────
  */
 
@@ -38,7 +41,7 @@ const TIERS = {
   // Génération et analyse courantes — le gros du produit.
   balanced: process.env.CLAUDE_TIER_BALANCED || 'claude-sonnet-4-6',
   // Raisonnement lourd, faible volume.
-  deep:     process.env.CLAUDE_TIER_DEEP     || process.env.CLAUDE_OPUS_MODEL || 'claude-opus-4-8',
+  deep:     process.env.CLAUDE_TIER_DEEP     || process.env.CLAUDE_OPUS_MODEL || 'claude-opus-5',
 };
 
 /**
@@ -59,9 +62,11 @@ const ACTIONS = {
   analyzeCampaign:         { tier: 'balanced' },
 
   // ---- Chat ----
-  chat:                    { tier: 'balanced' },
-  chatStream:              { tier: 'balanced' },
-  chat_reactivation:       { tier: 'balanced' },
+  // Interactif : thinking désactivé pour la latence, et pour que la surcharge
+  // globale Opus (Settings) ne fasse pas tronquer les 3000 tokens de budget.
+  chat:                    { tier: 'balanced', thinking: 'disabled' },
+  chatStream:              { tier: 'balanced', thinking: 'disabled' },
+  chat_reactivation:       { tier: 'balanced', thinking: 'disabled' },
 
   // ---- Mémoire ----
   consolidateMemory:       { tier: 'deep' },
@@ -70,9 +75,11 @@ const ACTIONS = {
   // ---- Agents stratégiques ----
   deal_coach:              { tier: 'balanced', thinking: 'disabled' },
   copy_optimizer:          { tier: 'balanced' },
-  icp_refiner:             { tier: 'deep' },
-  win_loss_analysis:       { tier: 'deep' },
-  competitor_watch:        { tier: 'deep' },
+  // Sorties JSON courtes (800-1000 tokens de budget) : thinking désactivé
+  // sinon la réflexion par défaut d'Opus 5 mange le budget et tronque le JSON.
+  icp_refiner:             { tier: 'deep', thinking: 'disabled' },
+  win_loss_analysis:       { tier: 'deep', thinking: 'disabled' },
+  competitor_watch:        { tier: 'deep', thinking: 'disabled' },
   analyzeICP:              { tier: 'balanced' },
 
   // ---- Chaînes autonomes ----
@@ -92,7 +99,7 @@ const ACTIONS = {
   linkedin_followup:       { tier: 'fast',     thinking: 'disabled' },
 
   // ---- Enrichissement et prospection ----
-  generateIcebreaker:      { tier: 'deep' },
+  generateIcebreaker:      { tier: 'deep', thinking: 'disabled' },
   personalization:         { tier: 'fast',     thinking: 'disabled' },
   enrichment:              { tier: 'fast',     thinking: 'disabled' },
   web_search_prospects:    { tier: 'fast' },

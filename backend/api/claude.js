@@ -315,12 +315,16 @@ async function generateVariables(params) {
 async function generateIcebreaker(params) {
   const action = 'generateIcebreaker';
   const model = resolveModel(action);
+  // Sortie courte (300 tokens) : sans ceci, la réflexion par défaut d'Opus 5
+  // consommerait tout le budget. Cf. config/models.js.
+  const thinking = models.thinkingFor(action);
   const systemPrompt = prompts.icebreakerExecutionPrompt(params);
   let response;
   try {
     response = await withRetry(() => getClient().messages.create({
       model,
       max_tokens: 300,
+      ...(thinking ? { thinking } : {}),
       system: toSystemBlocks(systemPrompt),
       messages: [{ role: 'user', content: 'Génère l\'icebreaker.' }],
     }), { maxRetries: 3, baseDelay: 2000 });
@@ -337,7 +341,8 @@ async function generateIcebreaker(params) {
   });
 
   return {
-    icebreaker: response.content[0].text.trim(),
+    // Pas de content[0] en dur : sur gen 5 un bloc thinking peut précéder le texte.
+    icebreaker: (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim(),
     usage: response.usage,
     model,
   };
@@ -777,11 +782,13 @@ function buildGeneralSystem(context) {
 async function chat(messages, context) {
   const action = 'chat';
   const model = resolveModel(action);
+  const thinking = models.thinkingFor(action);
   let response;
   try {
     response = await withRetry(() => getClient().messages.create({
       model,
       max_tokens: 3000,
+      ...(thinking ? { thinking } : {}),
       system: buildChatSystem(context),
       messages,
     }), { maxRetries: 3, baseDelay: 2000 });
@@ -798,7 +805,8 @@ async function chat(messages, context) {
   });
 
   return {
-    content: response.content[0].text,
+    // Pas de content[0] en dur : sur gen 5 un bloc thinking peut précéder le texte.
+    content: (response.content || []).filter(b => b.type === 'text').map(b => b.text).join(''),
     usage: response.usage,
     model,
   };
@@ -811,6 +819,7 @@ async function chat(messages, context) {
 async function chatStream(messages, context, onChunk, { assistantType = 'campaign' } = {}) {
   const action = 'chatStream';
   const model = resolveModel(action);
+  const thinking = models.thinkingFor(action);
   let fullText = '';
 
   try {
@@ -818,6 +827,7 @@ async function chatStream(messages, context, onChunk, { assistantType = 'campaig
     const stream = getClient().messages.stream({
       model,
       max_tokens: 3000,
+      ...(thinking ? { thinking } : {}),
       system,
       messages,
     });
