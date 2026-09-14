@@ -337,6 +337,7 @@ export default function OnboardingWizard({ onComplete }) {
   const [sfConsumerSecret, setSfConsumerSecret] = useState('');
   const [sfBusy, setSfBusy] = useState(false);
   const [sfShowManual, setSfShowManual] = useState(false);
+  const [sfShowAdminHelp, setSfShowAdminHelp] = useState(false);
 
   // Step 3 — Target
   const [targetSectors, setTargetSectors] = useState('');
@@ -909,6 +910,28 @@ export default function OnboardingWizard({ onComplete }) {
                           >
                             {t('wizard.sfManualLink')}
                           </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => setSfShowAdminHelp(v => !v)}
+                            style={{ width: '100%', marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}
+                          >
+                            {t('wizard.sfAdminHelpLink')}
+                          </button>
+                          {sfShowAdminHelp && (
+                            <div style={{
+                              fontSize: 12, background: 'var(--paper-2)', borderRadius: 8,
+                              padding: '10px 12px', marginTop: 6, lineHeight: 1.6, color: 'var(--grey-700)',
+                            }}>
+                              <strong>{t('wizard.sfAdminHelpTitle')}</strong><br/>
+                              {t('wizard.sfAdminHelpIntro')}<br/>
+                              1. {t('wizard.sfAdminHelpStep1')}<br/>
+                              2. {t('wizard.sfAdminHelpStep2')}<br/>
+                              3. {t('wizard.sfAdminHelpStep3')}<br/>
+                              4. {t('wizard.sfAdminHelpStep4')}<br/>
+                              {t('wizard.sfAdminHelpOutro')}
+                            </div>
+                          )}
                         </>
                       );
                     }

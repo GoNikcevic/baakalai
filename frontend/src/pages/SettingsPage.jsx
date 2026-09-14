@@ -1536,6 +1536,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
   const [consumerSecret, setConsumerSecret] = useState('');
   const [useTokenFallback, setUseTokenFallback] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [showAdminHelp, setShowAdminHelp] = useState(false);
   const [status, setStatus] = useState(null);
 
   // Un-clic via l'app centrale Baakalai : aucun setup côté client. Si le
@@ -1643,6 +1644,36 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
           onClick={() => setShowManual(true)}>
           {en ? 'Or use your own Connected App (Consumer Key + Secret)' : 'Ou utiliser votre propre Connected App (Consumer Key + Secret)'}
         </button>
+        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 2, width: '100%', color: 'var(--text-muted)' }}
+          onClick={() => setShowAdminHelp(v => !v)}>
+          {en ? '? OAuth error / restricted org — admin approval guide' : '? Erreur OAuth / org restreinte — guide pour votre admin'}
+        </button>
+        {showAdminHelp && (
+          <div style={{
+            fontSize: 11, color: 'var(--text-muted)', marginTop: 4,
+            background: 'var(--bg-elevated)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+          }}>
+            {en
+              ? <>
+                  <strong>Seeing an "OAuth Error" (OAUTH_APPROVAL_ERROR_GENERIC)?</strong><br/>
+                  Your Salesforce org restricts third-party apps — your admin needs to approve Baakal.ai first:<br/>
+                  1. In Salesforce Setup, search for <strong>"Connected Apps OAuth Usage"</strong><br/>
+                  2. Find <strong>Baakal.ai</strong> in the list and click <strong>Install</strong> (the app appears after a connection attempt — if missing, retry connecting, then refresh the page)<br/>
+                  3. <strong>Manage Policies</strong> &gt; allow your profile (or set "All users may self-authorize")<br/>
+                  4. Check your user profile has the <strong>API Enabled</strong> permission<br/>
+                  Then retry "Connect with Salesforce". If your admin prefers not to approve external apps, use your own Connected App above instead.
+                </>
+              : <>
+                  <strong>Vous voyez une {'«'} OAuth Error {'»'} (OAUTH_APPROVAL_ERROR_GENERIC) ?</strong><br/>
+                  Votre org Salesforce restreint les apps tierces {'—'} votre admin doit d'abord approuver Baakal.ai :<br/>
+                  1. Dans la Configuration Salesforce, recherchez <strong>{'«'} Utilisation OAuth des applications connect{'é'}es {'»'}</strong> (Connected Apps OAuth Usage)<br/>
+                  2. Rep{'é'}rez <strong>Baakal.ai</strong> dans la liste et cliquez <strong>Installer</strong> (l'app appara{'î'}t apr{'è'}s une tentative de connexion {'—'} si absente, retentez une connexion puis actualisez la page)<br/>
+                  3. <strong>G{'é'}rer les strat{'é'}gies</strong> &gt; autorisez votre profil (ou {'«'} Tous les utilisateurs peuvent s'auto-autoriser {'»'})<br/>
+                  4. V{'é'}rifiez que votre profil utilisateur a la permission <strong>API activ{'é'}e</strong> (API Enabled)<br/>
+                  Puis retentez {'«'} Connecter via Salesforce {'»'}. Si votre admin ne souhaite pas approuver d'app externe, utilisez votre propre Connected App ci-dessus.
+                </>}
+          </div>
+        )}
       </div>
     );
   }
