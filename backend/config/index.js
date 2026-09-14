@@ -28,6 +28,14 @@ const config = {
     parentPageId: process.env.NOTION_PARENT_PAGE_ID,
   },
 
+  // Clé centrale baakalai pour la recherche d'emails (option payante, opt-in).
+  // Sans DROPCONTACT_API_KEY posée sur Railway, l'option n'apparaît pas.
+  reveal: {
+    dropcontactKey: process.env.DROPCONTACT_API_KEY || '',
+    unitPriceCents: parseInt(process.env.REVEAL_PRICE_CENTS, 10) || 10,
+    monthlyCap: parseInt(process.env.REVEAL_MONTHLY_CAP, 10) || 500,
+  },
+
   claude: {
     apiKey: process.env.ANTHROPIC_API_KEY,
     // Défaut global. Conserve son rôle de commutateur Settings : s'il contient

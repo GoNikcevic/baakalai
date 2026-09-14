@@ -369,6 +369,18 @@ function initSchema() {
       won_date DATETIME
     );
 
+    CREATE TABLE IF NOT EXISTS reveal_usage (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      campaign_id TEXT,
+      provider TEXT NOT NULL DEFAULT 'dropcontact',
+      submitted INTEGER NOT NULL DEFAULT 0,
+      found INTEGER NOT NULL DEFAULT 0,
+      unit_price_cents INTEGER NOT NULL DEFAULT 0,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS reports (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
       user_id TEXT REFERENCES users(id),

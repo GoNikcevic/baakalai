@@ -253,7 +253,18 @@
     "revealRevealing": "Révélation…",
     "revealPending": "(email non révélé)",
     "revealCannotValidate": "Impossible de révéler : Lemlist exige un profil LinkedIn OU (nom + entreprise + domaine). {errors} contacts ne respectent pas ces critères.",
-    "balanceUnknown": "inconnu"
+    "balanceUnknown": "inconnu",
+    "revealSourceChoice": "Méthode de recherche",
+    "revealSourceLemlist": "Mes crédits Lemlist (inclus dans mon abonnement Lemlist)",
+    "revealSourceBaakal": "Via baakalai — {price} € par email trouvé (option payante)",
+    "revealPaidWarning": "Recherche de {count} email{plural} via baakalai : <strong>{price} € par email trouvé et vérifié</strong>, soit <strong>{max} € maximum</strong> pour ce lot, ajoutés à votre facture baakalai.",
+    "revealPaidOnlyFound": "Seuls les emails trouvés ET vérifiés sont facturés — aucun résultat, aucun coût.",
+    "revealPaidUsedMonth": "Déjà consommé ce mois-ci : {amount} € ({count} recherches sur {cap}).",
+    "revealPaidConfirmBtn": "J'accepte le coût — lancer la recherche",
+    "revealNoSource": "Aucune méthode de recherche d'email disponible. Connectez Lemlist dans Intégrations.",
+    "revealRisky": "Email non vérifié",
+    "revealRiskyTitle": "Email trouvé mais non vérifié — risque de bounce si vous l'ajoutez à la campagne. Non facturé.",
+    "revealBillingSummary": "{found} email{plural} trouvé{plural} et vérifié{plural} · {amount} € facturés"
   },
   "chat": {
     "welcome": "Bienvenue",

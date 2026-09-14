@@ -817,11 +817,17 @@ export async function getLemlistCredits() {
   return request('/ai/lemlist-credits');
 }
 
-/** Start email reveal enrichment for a batch of leads. Returns { jobId, total, dispatched } */
-export async function revealEmails(source, leads) {
+/** Which email-reveal paths are available (own Lemlist credits vs paid baakalai option) */
+export async function getRevealOptions() {
+  return request('/ai/reveal-options');
+}
+
+/** Start email reveal enrichment for a batch of leads. Returns { jobId, total, dispatched }.
+ * Source 'baakal' (clé centrale, payant) exige opts.confirmCharge: true. */
+export async function revealEmails(source, leads, opts = {}) {
   return request('/ai/reveal-emails', {
     method: 'POST',
-    body: JSON.stringify({ source, leads }),
+    body: JSON.stringify({ source, leads, ...opts }),
   });
 }
 
@@ -997,6 +1003,7 @@ const BakalAPI = {
   webSearchProspects,
   getLemlistSenders,
   pollRevealEmails,
+  getRevealOptions,
   getABCategories,
   getABRecommendations,
   recordABWinner,

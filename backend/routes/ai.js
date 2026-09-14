@@ -988,6 +988,38 @@ router.get('/prospect-sources', async (req, res, next) => {
   }
 });
 
+// GET /api/ai/reveal-options — which email-reveal paths this user can use.
+// 'lemlist' = ses propres crédits ; 'baakal' = clé centrale DropContact,
+// option payante opt-in (le prix affiché ici est celui que la route
+// reveal-emails exigera de confirmer avant toute consommation).
+router.get('/reveal-options', async (req, res, next) => {
+  try {
+    const { config, getValidatedIntegrations } = require('../config');
+    const connected = await getValidatedIntegrations(req.user.id, ['lemlist']);
+
+    let baakal = { available: false };
+    if (config.reveal.dropcontactKey) {
+      const used = await db.query(
+        `SELECT COALESCE(SUM(submitted), 0) AS submitted, COALESCE(SUM(amount_cents), 0) AS amount_cents
+         FROM reveal_usage
+         WHERE user_id = $1 AND created_at >= date_trunc('month', now())`,
+        [req.user.id]
+      );
+      baakal = {
+        available: true,
+        unitPriceCents: config.reveal.unitPriceCents,
+        monthlyCap: config.reveal.monthlyCap,
+        usedThisMonth: parseInt(used.rows[0].submitted, 10),
+        amountThisMonthCents: parseInt(used.rows[0].amount_cents, 10),
+      };
+    }
+
+    res.json({ lemlist: { available: connected.includes('lemlist') }, baakal });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/ai/ab-categories — return the closed set of A/B test categories
 router.get('/ab-categories', async (req, res, next) => {
   try {
@@ -1141,14 +1173,112 @@ function pruneOldRevealJobs() {
   }
 }
 
+// Reveal via la clé centrale DropContact de baakalai — option payante, opt-in.
+// Jamais de consommation sans confirmCharge: true dans le body : c'est le
+// verrou serveur derrière la modal d'avertissement du frontend.
+async function startCentralReveal(req, res, leads, { confirmCharge, campaignId }) {
+  const { config } = require('../config');
+  const { unitPriceCents, monthlyCap, dropcontactKey } = config.reveal;
+
+  if (!dropcontactKey) {
+    return res.status(400).json({
+      error: "La recherche d'emails via baakalai n'est pas disponible sur cet environnement.",
+      code: 'NOT_AVAILABLE',
+    });
+  }
+  if (confirmCharge !== true) {
+    return res.status(400).json({
+      error: 'Confirmation du coût requise avant de lancer la recherche.',
+      code: 'CONFIRM_REQUIRED',
+      unitPriceCents,
+      maxAmountCents: leads.length * unitPriceCents,
+    });
+  }
+  if (leads.length > 100) {
+    return res.status(400).json({ error: 'Max 100 leads par lot' });
+  }
+
+  const used = await db.query(
+    `SELECT COALESCE(SUM(submitted), 0) AS submitted
+     FROM reveal_usage
+     WHERE user_id = $1 AND created_at >= date_trunc('month', now())`,
+    [req.user.id]
+  );
+  const submittedThisMonth = parseInt(used.rows[0].submitted, 10);
+  if (submittedThisMonth + leads.length > monthlyCap) {
+    return res.status(400).json({
+      error: `Plafond mensuel de recherche atteint (${monthlyCap} contacts/mois).`,
+      code: 'MONTHLY_CAP',
+      usedThisMonth: submittedThisMonth,
+      monthlyCap,
+    });
+  }
+
+  const { submitBatch, buildEnrichInput } = require('../api/dropcontact');
+  const preErrors = {};
+  const inputs = [];
+  const inputLeadIds = [];
+  for (const l of leads) {
+    const input = buildEnrichInput(l);
+    if (input) {
+      inputs.push(input);
+      inputLeadIds.push(l.id);
+    } else {
+      preErrors[l.id] = {
+        status: 'error',
+        email: null,
+        error: 'MISSING_INPUTS: prénom + nom + entreprise requis pour la recherche',
+      };
+    }
+  }
+  if (inputs.length === 0) {
+    return res.status(400).json({ error: 'Aucun lead exploitable : prénom + nom + entreprise requis.' });
+  }
+
+  let requestId;
+  try {
+    requestId = await submitBatch(dropcontactKey, inputs);
+  } catch (err) {
+    logger.error('reveal', `DropContact submit failed: ${err.message}`);
+    return res.status(502).json({ error: `Recherche indisponible : ${err.message}` });
+  }
+
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  _revealJobs.set(jobId, {
+    userId: req.user.id,
+    provider: 'baakal',
+    requestId,
+    leads,
+    inputLeadIds,
+    campaignId: campaignId || null,
+    unitPriceCents,
+    usageRecorded: false,
+    done: false,
+    createdAt: Date.now(),
+    results: preErrors,
+  });
+
+  res.json({
+    jobId,
+    total: leads.length,
+    dispatched: inputs.length,
+    errors: Object.keys(preErrors).length,
+    unitPriceCents,
+  });
+}
+
 // POST /api/ai/reveal-emails
-// Body: { source, leads: [{id, firstName, lastName, company, linkedinUrl}] }
+// Body: { source, leads: [{id, firstName, lastName, company, linkedinUrl}],
+//         confirmCharge?, campaignId? } — confirmCharge requis pour source 'baakal'
 router.post('/reveal-emails', async (req, res, next) => {
   try {
     pruneOldRevealJobs();
-    const { source, leads } = req.body;
+    const { source, leads, confirmCharge, campaignId } = req.body;
     if (!Array.isArray(leads) || leads.length === 0) {
       return res.status(400).json({ error: 'leads array required' });
+    }
+    if (source === 'baakal') {
+      return await startCentralReveal(req, res, leads, { confirmCharge, campaignId });
     }
     if (source && source !== 'lemlist') {
       return res.status(400).json({ error: `Reveal not yet supported for source: ${source}` });
@@ -1242,12 +1372,90 @@ router.post('/reveal-emails', async (req, res, next) => {
   }
 });
 
+// Sonde un job DropContact central. À la complétion : résultats figés sur le
+// job, puis enregistrement de l'usage UNE seule fois — facturé uniquement sur
+// les emails trouvés ET vérifiés (les not_found et les risky sont gratuits).
+async function pollCentralReveal(req, res, job) {
+  const { config } = require('../config');
+  const { fetchBatch, parseBatchEntry } = require('../api/dropcontact');
+
+  if (!job.done) {
+    try {
+      const batch = await fetchBatch(config.reveal.dropcontactKey, job.requestId);
+      if (!batch.pending) {
+        batch.entries.forEach((entry, i) => {
+          const leadId = job.inputLeadIds[i];
+          if (!leadId) return;
+          const parsed = parseBatchEntry(entry);
+          if (parsed.email && parsed.verified) {
+            job.results[leadId] = { status: 'verified', email: parsed.email };
+          } else if (parsed.email) {
+            job.results[leadId] = { status: 'risky', email: parsed.email };
+          } else {
+            job.results[leadId] = { status: 'not_found', email: null };
+          }
+        });
+        for (const id of job.inputLeadIds) {
+          if (!job.results[id]) job.results[id] = { status: 'error', email: null };
+        }
+        job.done = true;
+      }
+    } catch (err) {
+      logger.error('reveal', `DropContact poll failed: ${err.message}`);
+      for (const id of job.inputLeadIds) {
+        if (!job.results[id]) job.results[id] = { status: 'error', email: null, error: err.message };
+      }
+      job.done = true;
+    }
+
+    if (job.done && !job.usageRecorded) {
+      job.usageRecorded = true;
+      const found = Object.values(job.results).filter(r => r.status === 'verified').length;
+      job.billing = {
+        found,
+        unitPriceCents: job.unitPriceCents,
+        amountCents: found * job.unitPriceCents,
+      };
+      // Enregistré même à 0 trouvé : le plafond mensuel compte les soumissions
+      // (c'est la dépense DropContact réelle), pas seulement les succès.
+      try {
+        await db.query(
+          `INSERT INTO reveal_usage (user_id, campaign_id, provider, submitted, found, unit_price_cents, amount_cents)
+           VALUES ($1, $2, 'dropcontact', $3, $4, $5, $6)`,
+          [job.userId, job.campaignId, job.inputLeadIds.length, found, job.unitPriceCents, found * job.unitPriceCents]
+        );
+      } catch (err) {
+        logger.error('reveal', `Failed to record reveal usage: ${err.message}`);
+      }
+    }
+  }
+
+  const total = job.leads.length;
+  const done = job.done ? total : Object.keys(job.results).length;
+  res.json({
+    jobId: req.params.jobId,
+    status: job.done ? 'done' : 'pending',
+    done,
+    total,
+    billing: job.billing || null,
+    results: job.leads.map(l => ({
+      id: l.id,
+      name: l.name,
+      ...(job.results[l.id] || { status: 'pending', email: null }),
+    })),
+  });
+}
+
 // GET /api/ai/reveal-emails/:jobId — poll enrichment results
 router.get('/reveal-emails/:jobId', async (req, res, next) => {
   try {
     const job = _revealJobs.get(req.params.jobId);
     if (!job) return res.status(404).json({ error: 'Job not found or expired' });
     if (job.userId !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+
+    if (job.provider === 'baakal') {
+      return await pollCentralReveal(req, res, job);
+    }
 
     const { getUserKey } = require('../config');
     const { getEnrichmentResult } = require('../api/lemlist');

@@ -42,6 +42,10 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
   const [revealJobId, setRevealJobId] = useState(null);
   const [revealProgress, setRevealProgress] = useState({ done: 0, total: 0 });
   const [showRevealConfirm, setShowRevealConfirm] = useState(false);
+  // Chemins de reveal disponibles (crédits Lemlist du user vs option payante baakalai)
+  const [revealOptions, setRevealOptions] = useState(null);
+  const [revealSource, setRevealSource] = useState(null); // choix explicite du user dans la modal
+  const [revealBilling, setRevealBilling] = useState(null); // récap facturation après un reveal baakal
 
   // Credits
   const [credits, setCredits] = useState(null); // null = unknown, number = value, 'error' = failed
@@ -62,6 +66,9 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
         else setCredits(data.credits);
       })
       .catch(() => setCredits('error'));
+    api.getRevealOptions()
+      .then(setRevealOptions)
+      .catch(() => {});
   }, [campaign._backendId, campaign.id]);
 
   // Cleanup polling on unmount
@@ -77,6 +84,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
     setSelected(new Set());
     setSearchDiagnostics(null);
     setSearchFallback(null);
+    setRevealBilling(null);
     try {
       const criteria = {
         titles: titles.split(',').map(s => s.trim()).filter(Boolean),
@@ -114,13 +122,30 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
     c => selected.has(c.id) && !c.email && c.revealStatus !== 'not_found' && c.revealStatus !== 'error'
   );
 
-  const startReveal = async () => {
+  // Chemins disponibles. Tant que reveal-options n'a pas répondu, on retombe
+  // sur le signal historique (clé Lemlist configurée) pour ne rien bloquer.
+  const lemlistAvailable = revealOptions ? !!revealOptions.lemlist?.available : creditsConfigured;
+  const baakalAvailable = !!revealOptions?.baakal?.available;
+  const effectiveRevealSource = revealSource
+    || (lemlistAvailable ? 'lemlist' : baakalAvailable ? 'baakal' : null);
+
+  const startReveal = async (chosenSource) => {
     setShowRevealConfirm(false);
     setRevealing(true);
     setError(null);
+    setRevealBilling(null);
     try {
       const leadsToReveal = selectedNeedingReveal;
-      const data = await api.revealEmails(source || 'lemlist', leadsToReveal);
+      // 'baakal' = clé centrale, payant : confirmCharge matérialise côté
+      // serveur que le user a vu et accepté le coût dans la modal.
+      // Le reveal Lemlist passe toujours par l'enrichissement Lemlist, quelle
+      // que soit la source de la recherche (le backend n'accepte que 'lemlist').
+      const data = chosenSource === 'baakal'
+        ? await api.revealEmails('baakal', leadsToReveal, {
+            confirmCharge: true,
+            campaignId: campaign._backendId || campaign.id,
+          })
+        : await api.revealEmails('lemlist', leadsToReveal);
       setRevealJobId(data.jobId);
       setRevealProgress({ done: 0, total: leadsToReveal.length });
 
@@ -157,12 +182,18 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             pollRef.current = null;
             setRevealing(false);
             setRevealJobId(null);
-            // Refresh credits
-            api.getLemlistCredits()
-              .then(data => {
-                if (data.credits != null) setCredits(data.credits);
-              })
-              .catch(() => {});
+            if (status.billing) {
+              // Reveal baakal : montre ce qui sera réellement facturé
+              setRevealBilling(status.billing);
+              api.getRevealOptions().then(setRevealOptions).catch(() => {});
+            } else {
+              // Refresh credits
+              api.getLemlistCredits()
+                .then(data => {
+                  if (data.credits != null) setCredits(data.credits);
+                })
+                .catch(() => {});
+            }
           }
         } catch (err) {
           console.warn('Poll error:', err.message);
@@ -750,7 +781,11 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
               <button
                 className="btn btn-primary"
                 onClick={() => setShowRevealConfirm(true)}
-                disabled={credits !== null && credits !== 'error' && credits < selectedNeedingReveal.length}
+                disabled={
+                  !effectiveRevealSource
+                  || (effectiveRevealSource === 'lemlist' && !baakalAvailable
+                      && credits !== null && credits !== 'error' && credits < selectedNeedingReveal.length)
+                }
                 style={{ fontSize: '12px', padding: '8px 14px' }}
               >
                 <Icon name="revenue" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
@@ -789,9 +824,26 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             )}
           </div>
 
-          {credits !== null && credits !== 'error' && credits < selectedNeedingReveal.length && selectedNeedingReveal.length > 0 && (
+          {effectiveRevealSource === 'lemlist' && credits !== null && credits !== 'error' && credits < selectedNeedingReveal.length && selectedNeedingReveal.length > 0 && (
             <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6 }}>
               <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.insufficientCredits', { available: credits, required: selectedNeedingReveal.length })}
+            </div>
+          )}
+
+          {!effectiveRevealSource && selectedNeedingReveal.length > 0 && !revealing && (
+            <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6 }}>
+              <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealNoSource')}
+            </div>
+          )}
+
+          {revealBilling && !revealing && (
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
+              <Icon name="creditCard" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {t('prospectGen.revealBillingSummary', {
+                found: revealBilling.found,
+                plural: revealBilling.found > 1 ? 's' : '',
+                amount: formatEuros(revealBilling.amountCents),
+              })}
             </div>
           )}
         </div>
@@ -802,6 +854,10 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
         <ConfirmRevealModal
           count={selectedNeedingReveal.length}
           credits={credits}
+          revealSource={effectiveRevealSource}
+          onSourceChange={setRevealSource}
+          lemlistAvailable={lemlistAvailable}
+          baakalOption={baakalAvailable ? revealOptions.baakal : null}
           onConfirm={startReveal}
           onCancel={() => setShowRevealConfirm(false)}
           t={t}
@@ -862,6 +918,16 @@ function RevealBadge({ status, email, error, t }) {
   if (status === 'not_found') {
     return <span style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 600 }}><Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealNotFound')}</span>;
   }
+  if (status === 'risky') {
+    return (
+      <span
+        style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 600, cursor: 'help' }}
+        title={t('prospectGen.revealRiskyTitle')}
+      >
+        <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('prospectGen.revealRisky')}
+      </span>
+    );
+  }
   if (status === 'error') {
     return (
       <span
@@ -878,9 +944,11 @@ function RevealBadge({ status, email, error, t }) {
   return <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{t('prospectGen.revealPending')}</span>;
 }
 
-function ConfirmRevealModal({ count, credits, onConfirm, onCancel, t }) {
+function ConfirmRevealModal({ count, credits, revealSource, onSourceChange, lemlistAvailable, baakalOption, onConfirm, onCancel, t }) {
   const creditDisplay = credits === null || credits === 'error' ? t('prospectGen.balanceUnknown') : credits;
   const afterReveal = typeof credits === 'number' ? credits - count : null;
+  const bothAvailable = lemlistAvailable && !!baakalOption;
+  const isPaid = revealSource === 'baakal';
 
   return (
     <div
@@ -910,16 +978,84 @@ function ConfirmRevealModal({ count, credits, onConfirm, onCancel, t }) {
           <Icon name="revenue" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
           {t('prospectGen.revealConfirmTitle', { count, plural: count > 1 ? 's' : '' })}
         </div>
-        <div
-          style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}
-          dangerouslySetInnerHTML={{
-            __html: t('prospectGen.revealConfirmBody', { count, plural: count > 1 ? 's' : '' }) +
-              `<br />${t('prospectGen.revealConfirmBalance')} <strong>${creditDisplay}</strong>` +
-              (afterReveal !== null
-                ? ` → <strong style="color: ${afterReveal < 10 ? 'var(--warning)' : 'var(--text-primary)'}">${t('prospectGen.revealConfirmAfter', { count: afterReveal })}</strong>`
-                : '')
-          }}
-        />
+        {/* Choix de la méthode quand les deux chemins existent */}
+        {bothAvailable && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+              {t('prospectGen.revealSourceChoice')}
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 4, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="revealSource"
+                checked={revealSource === 'lemlist'}
+                onChange={() => onSourceChange('lemlist')}
+              />
+              {t('prospectGen.revealSourceLemlist')}
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="revealSource"
+                checked={revealSource === 'baakal'}
+                onChange={() => onSourceChange('baakal')}
+              />
+              {t('prospectGen.revealSourceBaakal', { price: formatEuros(baakalOption.unitPriceCents) })}
+            </label>
+          </div>
+        )}
+
+        {!isPaid && (
+          <div
+            style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}
+            dangerouslySetInnerHTML={{
+              __html: t('prospectGen.revealConfirmBody', { count, plural: count > 1 ? 's' : '' }) +
+                `<br />${t('prospectGen.revealConfirmBalance')} <strong>${creditDisplay}</strong>` +
+                (afterReveal !== null
+                  ? ` → <strong style="color: ${afterReveal < 10 ? 'var(--warning)' : 'var(--text-primary)'}">${t('prospectGen.revealConfirmAfter', { count: afterReveal })}</strong>`
+                  : '')
+            }}
+          />
+        )}
+
+        {/* Avertissement coût — option payante via la clé centrale baakalai */}
+        {isPaid && baakalOption && (
+          <div style={{ marginBottom: 16 }}>
+            <div
+              style={{
+                padding: '10px 12px',
+                background: 'rgba(251, 191, 36, 0.08)',
+                border: '1px solid rgba(251, 191, 36, 0.35)',
+                borderRadius: 8,
+                fontSize: 13,
+                lineHeight: 1.6,
+                marginBottom: 8,
+              }}
+              dangerouslySetInnerHTML={{
+                __html: t('prospectGen.revealPaidWarning', {
+                  count,
+                  plural: count > 1 ? 's' : '',
+                  price: formatEuros(baakalOption.unitPriceCents),
+                  max: formatEuros(count * baakalOption.unitPriceCents),
+                }),
+              }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              {t('prospectGen.revealPaidOnlyFound')}
+              {typeof baakalOption.amountThisMonthCents === 'number' && (
+                <>
+                  {' '}
+                  {t('prospectGen.revealPaidUsedMonth', {
+                    amount: formatEuros(baakalOption.amountThisMonthCents),
+                    count: baakalOption.usedThisMonth,
+                    cap: baakalOption.monthlyCap,
+                  })}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 20 }}>
           {t('prospectGen.revealConfirmAsync')}
         </div>
@@ -927,8 +1063,8 @@ function ConfirmRevealModal({ count, credits, onConfirm, onCancel, t }) {
           <button className="btn btn-ghost" onClick={onCancel} style={{ fontSize: 12 }}>
             {t('common.cancel')}
           </button>
-          <button className="btn btn-primary" onClick={onConfirm} style={{ fontSize: 12 }}>
-            {t('prospectGen.revealConfirmBtn')}
+          <button className="btn btn-primary" onClick={() => onConfirm(revealSource)} style={{ fontSize: 12 }}>
+            {isPaid ? t('prospectGen.revealPaidConfirmBtn') : t('prospectGen.revealConfirmBtn')}
           </button>
         </div>
       </div>
@@ -949,6 +1085,14 @@ function Field({ label, value, onChange, placeholder }) {
       />
     </div>
   );
+}
+
+// Cents → "0,10" / "2,50" (séparateur selon la locale du navigateur)
+function formatEuros(cents) {
+  return ((cents || 0) / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function mapSizeToApollo(size) {
