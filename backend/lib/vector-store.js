@@ -43,18 +43,25 @@ function cacheSet(text, embedding) {
 }
 
 /**
- * Recherche sémantique sur les patterns.
+ * Recherche sémantique sur les patterns, scopée au tenant.
  *
- * La mémoire est un pool mutualisé entre clients (décision produit) : la
- * recherche porte donc sur l'ensemble des patterns non dismissés. `userId` est
- * conservé dans la signature pour la compatibilité des appelants mais n'est pas
- * utilisé comme filtre.
+ * Même modèle d'accès que `findRelevantPatterns` et `listForPrompt` : les
+ * patterns du tenant (user + ses équipes), plus le pool global anonymisé
+ * (`shared = true AND confidence = 'Haute'`). Sans userId, seul le pool
+ * partagé est visible — jamais la table entière tous tenants confondus.
  */
-async function searchSimilar(_userId, query, limit = 5) {
+async function searchSimilar(userId, query, limit = 5) {
   if (!ENABLED) return [];
 
   const queryEmbedding = await generateEmbedding(query);
   if (!queryEmbedding) return [];
+
+  let tenantFilter = `AND shared = true AND confidence = 'Haute'`;
+  const params = [JSON.stringify(queryEmbedding), limit];
+  if (userId) {
+    tenantFilter = `AND (user_id = $3 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $3) OR (shared = true AND confidence = 'Haute'))`;
+    params.push(userId);
+  }
 
   try {
     const result = await db.query(
@@ -62,9 +69,10 @@ async function searchSimilar(_userId, query, limit = 5) {
               1 - (embedding <=> $1::vector) AS similarity
        FROM memory_patterns
        WHERE embedding IS NOT NULL AND dismissed_at IS NULL
+         ${tenantFilter}
        ORDER BY embedding <=> $1::vector
        LIMIT $2`,
-      [JSON.stringify(queryEmbedding), limit]
+      params
     );
 
     return result.rows.map(r => ({
