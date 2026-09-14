@@ -1036,7 +1036,7 @@ router.post('/ab-recommendations', async (req, res, next) => {
   try {
     const { getAllRecommendations } = require('../lib/ab-memory');
     const segment = req.body || {};
-    const recommendations = await getAllRecommendations(segment);
+    const recommendations = await getAllRecommendations(segment, req.user.id);
     res.json({ recommendations });
   } catch (err) {
     next(err);
@@ -1090,6 +1090,7 @@ router.post('/ab-record-winner', async (req, res, next) => {
         if (!aStrat || !bStrat) continue;
 
         await recordABPattern({
+          userId: req.user.id,
           segment: {
             sectors: campaign.sector ? [campaign.sector] : [],
             targets: campaign.position ? [campaign.position] : [],

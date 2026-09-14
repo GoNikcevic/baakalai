@@ -81,7 +81,18 @@ async function recordABPattern({
   metric,           // 'reply_rate' | 'open_rate' | 'accept_rate'
   sourceTestId,     // versions.id
   testedOn,         // 'E1' | 'LI1'
+  userId,           // tenant du verdict — le pool cross-user passe par shared, pas par team_id NULL
 }) {
+  // Tenant des patterns (audit 02/09) : l'équipe si l'utilisateur en a une,
+  // sinon l'utilisateur — jamais les deux (règle DAO, migration 089).
+  let tenant = userId ? { userId } : {};
+  if (userId) {
+    try {
+      const team = await db.teams.getByUser(userId);
+      if (team) tenant = { teamId: team.id };
+    } catch { /* résolution d'équipe indisponible : le pattern reste scopé user */ }
+  }
+
   const anon = anonymizeSegment(segment);
   const winnerLabel = winner === 'B' ? variantB : variantA;
   const loserLabel = winner === 'B' ? variantA : variantB;
@@ -98,13 +109,23 @@ async function recordABPattern({
 
   const pattern = `Sur ${sectorStr} ${sizeStr} (${targetStr}), l'angle "${winnerLabel}" bat "${loserLabel}" de +${improvement_pct}% en ${metricLabel} (touchpoint ${testedOn})`;
 
-  // Check if a similar pattern already exists → increment confirmations instead of duplicate
+  // Check if a similar pattern already exists → increment confirmations instead of duplicate.
+  // category est stocké avec son label ('Angle'), pas sa clé ('angle') — l'ancien
+  // filtre sur la clé ne matchait jamais et dupliquait le pattern à chaque verdict.
   const existing = await db.memoryPatterns.list({
-    category: category,
+    category: categoryLabelFor(category),
     limit: 100,
+    ...(userId ? { userId } : {}),
   });
 
+  // On ne confirme (update) que les patterns de son propre tenant : un pattern
+  // shared équivalent d'un autre client reste intouché, on crée le sien.
+  const sameTenant = p => tenant.teamId ? p.team_id === tenant.teamId
+    : tenant.userId ? p.user_id === tenant.userId
+    : (p.team_id == null && p.user_id == null);
+
   const dupe = existing.find(p =>
+    sameTenant(p) &&
     p.ab_category === category &&
     Array.isArray(p.sectors) && p.sectors.includes(sectorStr) &&
     Array.isArray(p.targets) && p.targets.includes(targetStr) &&
@@ -134,6 +155,7 @@ async function recordABPattern({
   if (sample_size >= 500 && improvement_pct >= 5) confidence = 'Haute';
 
   const created = await db.memoryPatterns.create({
+    ...tenant,
     pattern,
     category: categoryLabelFor(category),
     ab_category: category,
@@ -162,9 +184,14 @@ function categoryLabelFor(key) {
  * Find the best recommendation for a given segment + category.
  * Used when proposing A/B tests at campaign creation time.
  */
-async function getRecommendation(segment, category) {
+async function getRecommendation(segment, category, userId = null) {
   const anon = anonymizeSegment(segment);
-  const patterns = await db.memoryPatterns.list({ category: categoryLabelFor(category), limit: 50 });
+  // Avec userId : ses patterns + pool shared Haute. Sans : pool global seul.
+  const patterns = await db.memoryPatterns.list({
+    category: categoryLabelFor(category),
+    limit: 50,
+    ...(userId ? { userId } : {}),
+  });
 
   // Match sectors + targets
   const relevant = patterns.filter(p =>
@@ -184,7 +211,8 @@ async function getRecommendation(segment, category) {
   );
 
   const top = relevant[0];
-  const data = typeof top.data === 'string' ? JSON.parse(top.data) : (top.data || {});
+  let data = top.data || {};
+  if (typeof data === 'string') { try { data = JSON.parse(data); } catch { data = {}; } }
   return {
     winner: data.winner_variant,
     loser: data.loser_variant,
@@ -200,10 +228,10 @@ async function getRecommendation(segment, category) {
  * Get all recommendations across all categories for a segment.
  * Returns { angle: {...} | null, tone: {...} | null, ... }
  */
-async function getAllRecommendations(segment) {
+async function getAllRecommendations(segment, userId = null) {
   const result = {};
   for (const category of Object.keys(AB_CATEGORIES)) {
-    result[category] = await getRecommendation(segment, category);
+    result[category] = await getRecommendation(segment, category, userId);
   }
   return result;
 }

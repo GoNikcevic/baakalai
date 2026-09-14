@@ -207,11 +207,20 @@ Sois spécifique et actionnable.`;
     });
 
     // Save patterns
+    // Tenant (audit 02/09) : l'équipe si l'utilisateur en a une, sinon
+    // l'utilisateur — jamais les deux (règle DAO, migration 089). Les artefacts
+    // crm_sync restent purgés/régénérés par source, le scoping n'y change rien.
+    let tenant = { userId };
+    try {
+      const team = await db.teams.getByUser(userId);
+      if (team) tenant = { teamId: team.id };
+    } catch { /* résolution d'équipe indisponible : le pattern reste scopé user */ }
     let patternsCount = 0;
     if (result.parsed && result.parsed.patterns) {
       for (const p of result.parsed.patterns) {
         try {
           await db.memoryPatterns.create({
+            ...tenant,
             pattern: p.pattern,
             category: p.category || 'Cible',
             // source au niveau colonne (migration 068) : c'est elle qui permet
