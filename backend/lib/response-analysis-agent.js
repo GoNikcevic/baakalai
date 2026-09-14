@@ -463,8 +463,8 @@ async function createMemoryPattern(userId, report) {
     const emailPositive = emailActions.filter(a => a.sentiment === 'positive').length;
     const emailRate = Math.round((emailPositive / emailActions.length) * 100);
     const emailPattern = emailRate >= 50
-      ? `Les emails d'activation g\u00E9n\u00E8rent ${emailRate}% de r\u00E9ponses positives (${emailPositive}/${emailActions.length})`
-      : `Les emails d'activation ont un taux de r\u00E9ponse positive de ${emailRate}% \u2014 envisager d'ajuster le ton ou le timing`;
+      ? `Les emails automatiques g\u00E9n\u00E8rent ${emailRate}% de r\u00E9ponses positives (${emailPositive}/${emailActions.length})`
+      : `Les emails automatiques ont un taux de r\u00E9ponse positive de ${emailRate}% \u2014 envisager d'ajuster le ton ou le timing`;
     try {
       await db.memoryPatterns.replaceOrCreate({
         ...tenant,

@@ -115,8 +115,8 @@ describe('Layout', () => {
     expect(screen.getByText('Chat')).toBeInTheDocument();
     // "Prospection" appears in both sidebar and mobile nav
     expect(screen.getAllByText('Prospection').length).toBeGreaterThanOrEqual(2);
-    // "Activation" appears in both sidebar and mobile nav
-    expect(screen.getAllByText('Activation').length).toBeGreaterThanOrEqual(2);
+    // "Automatisation" appears in both sidebar and mobile nav
+    expect(screen.getAllByText('Automatisation').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders the main content outlet area', () => {

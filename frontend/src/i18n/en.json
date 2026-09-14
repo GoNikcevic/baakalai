@@ -13,8 +13,8 @@
     "memory": "AI Memory",
     "clients": "Clients",
     "signals": "Signals",
-    "nurture": "Activation",
-    "activation": "Activation",
+    "nurture": "Automation",
+    "activation": "Automation",
     "analytics": "Analytics",
     "help": "Help",
     "openSidebar": "Open sidebar",
@@ -545,7 +545,7 @@
     "unknownProspect": "Unknown prospect"
   },
   "activation": {
-    "title": "Activation",
+    "title": "Automation",
     "subtitle": "Automate your client follow-up emails",
     "overview": "Overview",
     "campaigns": "Sequences",
@@ -587,8 +587,8 @@
     "contactsToContact": "{count} contact(s) to email",
     "noContactsToEmail": "No contacts to email",
     "triggersActive": "{count} active trigger(s)",
-    "noTriggers": "No triggers configured. Create your first trigger to automate activation emails.",
-    "noCampaigns": "No activation campaigns sent. Set up a trigger or send an email from the chat.",
+    "noTriggers": "No triggers configured. Create your first trigger to automate client follow-ups.",
+    "noCampaigns": "No automated emails sent. Set up a trigger or send an email from the chat.",
     "noPending": "No emails pending approval",
     "noSent": "No emails sent",
     "disable": "Disable",
@@ -613,7 +613,7 @@
     "emailsFailed": "Failed",
     "activeTriggersTitle": "Active triggers",
     "outOf": "out of {total}",
-    "connectCrm": "Connect Pipedrive and import your contacts to see activation metrics."
+    "connectCrm": "Connect Pipedrive and import your contacts to see automation metrics."
   },
   "clients": {
     "title": "Clients",
@@ -678,7 +678,7 @@
     "subtitle": "Dig deeper into your CRM and campaign data",
     "groupDeals": "Deals",
     "groupClients": "Clients",
-    "groupActivation": "Activation",
+    "groupActivation": "Automation",
     "groupProspection": "Prospection",
     "membershipTab": "Overview",
     "tabDescMembership": "Tenure, lifetime value, churn distribution and upcoming renewals.",
@@ -930,7 +930,7 @@
   },
   "emailAccount": {
     "title": "Outbound email",
-    "subtitle": "Connect your email to send personalized activation emails",
+    "subtitle": "Connect your email to send personalized automated emails",
     "add": "+ Add",
     "test": "Test",
     "delete": "Delete",
@@ -939,7 +939,7 @@
     "connectionOk": "Connection successful",
     "save": "Save",
     "saving": "Saving...",
-    "noAccount": "No email configured. Add your account to send activation emails.",
+    "noAccount": "No email configured. Add your account to send automated emails.",
     "appPasswordRequired": "App password required (not your regular Gmail password)",
     "steps": "Steps"
   },
@@ -960,7 +960,7 @@
       "deals": "Deals",
       "clients": "Clients",
       "crm": "CRM",
-      "activation": "Activation"
+      "activation": "Automation"
     },
     "tabDescs": {
       "deals": "Open pipeline and deals to reactivate",
@@ -1379,7 +1379,7 @@
     "descCrm": "AI answers replies from your CRM contacts and clients. A live client conversation has real value: only turn this on if you are comfortable letting AI answer in it.",
     "howItWorks": "How it works",
     "stepProspection1": "A cold prospect replies to your sequence (email or LinkedIn)",
-    "stepCrm1": "A CRM contact or client replies to an activation email",
+    "stepCrm1": "A CRM contact or client replies to an automated email",
     "step2": "AI analyses the intent (interested, question, meeting request…)",
     "step3": "AI drafts a reply from the conversation history and learned patterns",
     "step4": "The reply goes out after 2-4 hours, the way a human would",

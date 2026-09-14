@@ -1010,7 +1010,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       const hasTitle = existing.some(p => p.pattern.includes('fonction qui r\u00E9pond le mieux'));
       if (!hasTitle) {
         await createPattern({
-          pattern: `La fonction qui r\u00E9pond le mieux aux emails d'activation : ${topTitle.title} (${topTitle.count} r\u00E9ponses)`,
+          pattern: `La fonction qui r\u00E9pond le mieux aux emails automatiques : ${topTitle.title} (${topTitle.count} r\u00E9ponses)`,
           category: 'Cible',
           data: JSON.stringify({ source: 'title_analysis', title: topTitle.title, count: parseInt(topTitle.count, 10) }),
           confidence: parseInt(topTitle.count, 10) >= 10 ? 'Haute' : 'Moyenne',

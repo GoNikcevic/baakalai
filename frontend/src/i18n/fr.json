@@ -13,8 +13,8 @@
     "memory": "Mémoire IA",
     "clients": "Clients",
     "signals": "Signaux",
-    "nurture": "Activation",
-    "activation": "Activation",
+    "nurture": "Automatisation",
+    "activation": "Automatisation",
     "analytics": "Analytics",
     "help": "Aide",
     "openSidebar": "Ouvrir la sidebar",
@@ -545,7 +545,7 @@
     "unknownProspect": "Prospect inconnu"
   },
   "activation": {
-    "title": "Activation",
+    "title": "Automatisation",
     "subtitle": "Automatisez vos emails de suivi client",
     "overview": "Vue d'ensemble",
     "campaigns": "Séquences",
@@ -587,8 +587,8 @@
     "contactsToContact": "{count} contact(s) à contacter",
     "noContactsToEmail": "Aucun contact à contacter",
     "triggersActive": "{count} trigger(s) actif(s)",
-    "noTriggers": "Aucun trigger configuré. Créez votre premier trigger pour automatiser vos emails d'activation.",
-    "noCampaigns": "Aucune campagne d'activation envoyée. Configurez un trigger ou envoyez un email depuis le chat.",
+    "noTriggers": "Aucun trigger configuré. Créez votre premier trigger pour automatiser vos relances client.",
+    "noCampaigns": "Aucun email automatique envoyé. Configurez un trigger ou envoyez un email depuis le chat.",
     "noPending": "Aucun email en attente d'approbation",
     "noSent": "Aucun email envoyé",
     "disable": "Désactiver",
@@ -613,7 +613,7 @@
     "emailsFailed": "Échoués",
     "activeTriggersTitle": "Triggers actifs",
     "outOf": "sur {total}",
-    "connectCrm": "Connectez Pipedrive et importez vos contacts pour voir les métriques d'activation."
+    "connectCrm": "Connectez Pipedrive et importez vos contacts pour voir les métriques d'automatisation."
   },
   "clients": {
     "title": "Clients",
@@ -678,7 +678,7 @@
     "subtitle": "Analysez plus finement les données de votre CRM et de vos campagnes",
     "groupDeals": "Deals",
     "groupClients": "Clients",
-    "groupActivation": "Activation",
+    "groupActivation": "Automatisation",
     "groupProspection": "Prospection",
     "membershipTab": "Vue d'ensemble",
     "tabDescMembership": "Ancienneté, valeur vie client, distribution du churn et renouvellements à venir.",
@@ -930,7 +930,7 @@
   },
   "emailAccount": {
     "title": "Email sortant",
-    "subtitle": "Connectez votre email pour envoyer des emails d'activation personnalisés",
+    "subtitle": "Connectez votre email pour envoyer des emails automatiques personnalisés",
     "add": "+ Ajouter",
     "test": "Tester",
     "delete": "Supprimer",
@@ -939,7 +939,7 @@
     "connectionOk": "Connexion réussie",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
-    "noAccount": "Aucun email configuré. Ajoutez votre compte pour envoyer des emails d'activation.",
+    "noAccount": "Aucun email configuré. Ajoutez votre compte pour envoyer des emails automatiques.",
     "appPasswordRequired": "Mot de passe d'application requis (pas votre mot de passe Gmail habituel)",
     "steps": "Étapes"
   },
@@ -960,7 +960,7 @@
       "deals": "Deals",
       "clients": "Clients",
       "crm": "CRM",
-      "activation": "Activation"
+      "activation": "Automatisation"
     },
     "tabDescs": {
       "deals": "Pipeline en cours et deals à relancer",
@@ -1379,7 +1379,7 @@
     "descCrm": "L'IA répond aux réponses de vos contacts et clients du CRM. Une conversation en cours avec un client a de la valeur : n'activez ceci que si vous êtes à l'aise pour que l'IA y réponde seule.",
     "howItWorks": "Comment ça marche",
     "stepProspection1": "Un prospect froid répond à votre séquence (email ou LinkedIn)",
-    "stepCrm1": "Un contact ou un client du CRM répond à un email d'activation",
+    "stepCrm1": "Un contact ou un client du CRM répond à un email automatique",
     "step2": "L'IA analyse l'intention (intéressé, question, demande de RDV…)",
     "step3": "L'IA rédige une réponse à partir de l'historique et des patterns appris",
     "step4": "La réponse part après 2 à 4h, comme le ferait un humain",

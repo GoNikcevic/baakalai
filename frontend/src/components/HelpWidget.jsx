@@ -16,9 +16,9 @@ const FAQ_FR = [
     ],
   },
   {
-    category: 'Activation & Nurture',
+    category: 'Automatisation & Nurture',
     items: [
-      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger envoie automatiquement un email personnalise quand une condition est remplie (lead stagnant, contact inactif, lead gagne...). Configure-les dans Activation → Triggers.' },
+      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger envoie automatiquement un email personnalise quand une condition est remplie (lead stagnant, contact inactif, lead gagne...). Configure-les dans Automatisation → Triggers.' },
       { q: 'Mode "auto" vs "approbation" ?', a: 'En auto, l\'email part immediatement. En approbation, il est mis en file d\'attente pour validation.' },
       { q: 'Qu\'est-ce que le churn score ?', a: 'Score de 0 a 100 qui predit le risque de perte d\'un client. Base sur : inactivite, sentiment, duree du lead, retard de paiement.' },
     ],
@@ -49,9 +49,9 @@ const FAQ_EN = [
     ],
   },
   {
-    category: 'Activation & Nurture',
+    category: 'Automation & Nurture',
     items: [
-      { q: 'What is a trigger?', a: 'A trigger automatically sends a personalized email when a condition is met (stagnant lead, inactive contact, lead won...). Configure them in Activation → Triggers.' },
+      { q: 'What is a trigger?', a: 'A trigger automatically sends a personalized email when a condition is met (stagnant lead, inactive contact, lead won...). Configure them in Automation → Triggers.' },
       { q: '"Auto" vs "approval" mode?', a: 'In auto mode, the email is sent immediately. In approval mode, it\'s queued for validation.' },
       { q: 'What is the churn score?', a: 'A 0-100 score predicting client loss risk. Based on: inactivity, sentiment, lead duration, payment delays.' },
     ],

@@ -37,7 +37,7 @@ const ONBOARDING_SEQUENCE = [
         <p style="font-size: 14px; font-weight: 600; margin-bottom: 16px;">Pour démarrer en 3 étapes :</p>
         <ol style="color: #71717a; font-size: 14px; line-height: 2; padding-left: 20px; margin-bottom: 24px;">
           <li>Connecte ton CRM (Pipedrive, HubSpot, Odoo...)</li>
-          <li>Configure ton premier trigger d'activation</li>
+          <li>Configure ton premier trigger d'automatisation</li>
           <li>Lance ta première campagne via le chat IA</li>
         </ol>
         <a href="${APP_URL}/chat" style="display: inline-block; background: #6E57FA; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">

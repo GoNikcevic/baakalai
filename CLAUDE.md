@@ -8,7 +8,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 **Naming rule:** baakalai is *a system* (singular, the product identity), made of *12 agents* (plural, the architecture). Never call the product "the agent" — the singular contradicts the multi-agent architecture we sell, and "system" is only credible because the 12 agents are real. Category anchor is **RevOps** (a function nobody owns), never "revenue intelligence" (the category Gong defined and owns). Never claim baakalai *is* a RevOps platform — no consolidated forecasting, territories, comp or CPQ. Always "the job a RevOps would do".
 
-**3 pillars:** CRM Intelligence > Activation > Prospection (prospection = door, not the product).
+**3 pillars:** CRM Intelligence > Automatisation (ex-« Activation », renommée 2026-09-14) > Prospection (prospection = door, not the product).
 
 **Pricing:** Starter 49€/mo, Growth 149€/mo, Scale 349€/mo. Team plan up to 5 members.
 

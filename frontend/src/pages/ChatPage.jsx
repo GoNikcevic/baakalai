@@ -131,7 +131,7 @@ function GeneralActionCard({ metadata }) {
     return <CrmActionCard metadata={metadata} actionType="scan_crm" label={en ? 'Scan CRM' : 'Scanner le CRM'} icon="search" />;
   }
   if (metadata?.action === 'run_nurture') {
-    return <CrmActionCard metadata={metadata} actionType="run_nurture" label={en ? 'Run activation' : 'Lancer l\'activation'} icon="zap" />;
+    return <CrmActionCard metadata={metadata} actionType="run_nurture" label={en ? 'Run automation' : 'Lancer l\'automatisation'} icon="zap" />;
   }
   if (metadata?.action === 'import_crm') {
     return <CrmActionCard metadata={metadata} actionType="import_crm" label={en ? 'Import from CRM' : 'Importer depuis le CRM'} icon="download" />;

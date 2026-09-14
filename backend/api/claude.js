@@ -680,7 +680,7 @@ Relancer les contacts inactifs :
 Importer les contacts depuis le CRM :
 { "action": "import_crm", "provider": "pipedrive" }
 
-Créer un trigger d'activation (relance automatique sur condition CRM) :
+Créer un trigger d'automatisation (relance automatique sur condition CRM) :
 { "action": "create_trigger", "name": "Relance deals stagnants", "triggerType": "deal_stagnant", "actionType": "email", "days": 30, "mode": "approval" }
 triggerType : deal_won | deal_stagnant | inactive_contact | deal_lost | onboarding_check | renewal_reminder | upsell_opportunity | feedback_request
 actionType : email | linkedin_connect | linkedin_message | linkedin_visit
