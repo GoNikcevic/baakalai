@@ -820,7 +820,15 @@
     "sfConnect": "Connecter Salesforce →",
     "sfConnecting": "Connexion à Salesforce…",
     "sfOneClickNote": "Connexion en un clic : identifiez-vous sur Salesforce et autorisez baakalai. Rien à créer de votre côté.",
-    "sfManualLink": "Ou utiliser votre propre Connected App (Consumer Key + Secret)"
+    "sfManualLink": "Ou utiliser votre propre Connected App (Consumer Key + Secret)",
+    "sfAdminHelpLink": "? Erreur OAuth / org restreinte — guide pour votre admin",
+    "sfAdminHelpTitle": "Vous voyez une « OAuth Error » (OAUTH_APPROVAL_ERROR_GENERIC) ?",
+    "sfAdminHelpIntro": "Votre org Salesforce restreint les apps tierces — votre admin doit d'abord approuver Baakal.ai :",
+    "sfAdminHelpStep1": "Dans la Configuration Salesforce, recherchez « Utilisation OAuth des applications connectées » (Connected Apps OAuth Usage)",
+    "sfAdminHelpStep2": "Repérez Baakal.ai dans la liste et cliquez Installer (l'app apparaît après une tentative de connexion — si absente, retentez une connexion puis actualisez la page)",
+    "sfAdminHelpStep3": "Gérer les stratégies > autorisez votre profil (ou « Tous les utilisateurs peuvent s'auto-autoriser »)",
+    "sfAdminHelpStep4": "Vérifiez que votre profil utilisateur a la permission API activée (API Enabled)",
+    "sfAdminHelpOutro": "Puis retentez la connexion. Si votre admin ne souhaite pas approuver d'app externe, utilisez votre propre Connected App."
   },
   "triggers": {
     "dealWon": "Deal gagné",
