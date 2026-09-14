@@ -258,7 +258,7 @@
   "chat": {
     "welcome": "Welcome",
     "hello": "Hello {name}!",
-    "readyToProspect": "Which deals shall we revive today, {name}?",
+    "readyToProspect": "Who are we prospecting today, {name}?",
     "openCampaignAssistant": "Open the Prospecting assistant →",
     "readSummary": "I read your {count} deals — {value} in open pipeline.",
     "readDormant": "{count} have been dormant for {days}+ days.",
