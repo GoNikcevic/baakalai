@@ -293,10 +293,13 @@ const touchpoints = {
     }
 
     // Enforce 300-char limit on connection invites + null subject
-    let body = data.body || '';
-    let subject = data.subject || null;
-    let bodyB = data.bodyB || data.body_b || null;
-    let subjectB = data.subjectB || data.subject_b || null;
+    // Règle produit : la copy de séquence ne contient jamais de tiret
+    // cadratin (marqueur IA) — filet appliqué à l'écriture (lib/human-style).
+    const { humanize } = require('../lib/human-style');
+    let body = humanize(data.body) || '';
+    let subject = humanize(data.subject) || null;
+    let bodyB = humanize(data.bodyB || data.body_b) || null;
+    let subjectB = humanize(data.subjectB || data.subject_b) || null;
     let maxChars = data.maxChars || null;
 
     if (type === 'linkedin_invite') {
@@ -382,11 +385,14 @@ const touchpoints = {
       accept_rate_b: 'accept_rate_b', acceptRateB: 'accept_rate_b',
     };
     const seen = new Set();
+    // Même filet anti-tiret cadratin que create() sur la copy (lib/human-style).
+    const { humanize } = require('../lib/human-style');
+    const TEXT_COLS = new Set(['subject', 'body', 'subject_b', 'body_b']);
     for (const [inputKey, col] of Object.entries(mapping)) {
       if (data[inputKey] !== undefined && !seen.has(col)) {
         seen.add(col);
         sets.push(`${col} = $${i++}`);
-        values.push(data[inputKey]);
+        values.push(TEXT_COLS.has(col) ? humanize(data[inputKey]) : data[inputKey]);
       }
     }
     if (sets.length === 0) return null;

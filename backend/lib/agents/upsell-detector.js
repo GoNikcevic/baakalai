@@ -212,6 +212,7 @@ RULES:
 - Naturally introduce the upsell/cross-sell value proposition
 - Tone: appreciative, not pushy — this is a valued client
 - Do NOT mention scores or automated systems
+${require('../human-style').HUMAN_STYLE_RULES}
 
 Return JSON: { "subject": "...", "body": "..." }`;
 
@@ -223,11 +224,12 @@ Return JSON: { "subject": "...", "body": "..." }`;
   }
   if (!email?.subject || !email?.body) return { error: 'generation_failed' };
 
+  const { humanize } = require('../human-style');
   return {
     opportunity: opp,
     patternIds: patternCtx.ids,
-    subject: email.subject,
-    body: email.body,
+    subject: humanize(email.subject),
+    body: humanize(email.body),
     crossSellProducts: unassignedPLs.map(pl => pl.name),
   };
 }

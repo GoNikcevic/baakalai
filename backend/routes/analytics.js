@@ -417,45 +417,75 @@ router.get('/attribution', async (req, res, next) => {
       filteredOppIds(userId, req.query),
     ]);
     // Attribution deals touchés/non touchés : un deal est « touché » dès
-    // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé.
+    // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé,
+    // OU qu'un workflow de relance (enrollment, migration 103) a exécuté au
+    // moins un step (email ou LinkedIn) pour lui.
     // Périmètre plus large que /crm/reactivation-stats (chains seules).
     // oppIds respecte les filtres produit/secteur/période (null = aucun filtre actif).
     const [touchAgg, touchedDeals] = await Promise.all([
       db.query(`
-        WITH touch AS (
+        WITH wf AS (
+          SELECT se.opportunity_id,
+                 COUNT(cs.id) AS wf_actions,
+                 BOOL_OR(se.stop_reason = 'replied') AS wf_replied
+          FROM sequence_enrollments se
+          JOIN campaign_sends cs ON cs.enrollment_id = se.id AND cs.status = 'sent'
+          WHERE se.user_id = $1
+          GROUP BY se.opportunity_id
+        ),
+        touch AS (
           SELECT o.id, o.deal_value, o.status, o.reactivated_at,
                  COUNT(ne.id) AS emails_sent,
-                 BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+                 COALESCE(MAX(wf.wf_actions), 0) AS wf_actions,
+                 (COALESCE(BOOL_OR(ne.replied_at IS NOT NULL), false)
+                  OR COALESCE(BOOL_OR(wf.wf_replied), false)) AS replied
           FROM opportunities o
           LEFT JOIN nurture_emails ne
             ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
+          LEFT JOIN wf ON wf.opportunity_id = o.id
           WHERE o.user_id = $1 AND ($2::uuid[] IS NULL OR o.id = ANY($2))
           GROUP BY o.id
         )
         SELECT
-          COUNT(*) FILTER (WHERE emails_sent > 0) AS touched_count,
-          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0), 0) AS touched_value,
-          COUNT(*) FILTER (WHERE emails_sent = 0) AS untouched_count,
-          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent = 0), 0) AS untouched_value,
-          COUNT(*) FILTER (WHERE emails_sent > 0 AND status = 'won') AS touched_won,
-          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0 AND status = 'won'), 0) AS touched_won_value,
-          COUNT(*) FILTER (WHERE emails_sent = 0 AND status = 'won') AS untouched_won,
-          COUNT(*) FILTER (WHERE emails_sent > 0 AND replied) AS touched_replied,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions > 0) AS touched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent + wf_actions > 0), 0) AS touched_value,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions = 0) AS untouched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent + wf_actions = 0), 0) AS untouched_value,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions > 0 AND status = 'won') AS touched_won,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent + wf_actions > 0 AND status = 'won'), 0) AS touched_won_value,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions = 0 AND status = 'won') AS untouched_won,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions > 0 AND replied) AS touched_replied,
+          COUNT(*) FILTER (WHERE wf_actions > 0) AS workflow_touched_count,
+          COUNT(*) FILTER (WHERE wf_actions > 0 AND replied) AS workflow_replied_count,
           COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL) AS reactivated_count,
           COALESCE(SUM(deal_value) FILTER (WHERE reactivated_at IS NOT NULL), 0) AS reactivated_value
         FROM touch
       `, [userId, oppIds]),
       db.query(`
+        WITH wf AS (
+          SELECT se.opportunity_id,
+                 COUNT(cs.id) AS wf_actions,
+                 MAX(cs.sent_at) AS wf_last_at,
+                 BOOL_OR(se.stop_reason = 'replied') AS wf_replied
+          FROM sequence_enrollments se
+          JOIN campaign_sends cs ON cs.enrollment_id = se.id AND cs.status = 'sent'
+          WHERE se.user_id = $1
+          GROUP BY se.opportunity_id
+        )
         SELECT o.name, o.company, o.deal_value, o.status, o.reactivated_at,
                COUNT(ne.id) AS emails_sent,
-               MAX(ne.sent_at) AS last_touch_at,
-               BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+               COALESCE(MAX(wf.wf_actions), 0) AS wf_actions,
+               GREATEST(MAX(ne.sent_at), MAX(wf.wf_last_at)) AS last_touch_at,
+               (COALESCE(BOOL_OR(ne.replied_at IS NOT NULL), false)
+                OR COALESCE(BOOL_OR(wf.wf_replied), false)) AS replied
         FROM opportunities o
-        JOIN nurture_emails ne
+        LEFT JOIN nurture_emails ne
           ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
+        LEFT JOIN wf ON wf.opportunity_id = o.id
         WHERE o.user_id = $1 AND ($2::uuid[] IS NULL OR o.id = ANY($2))
         GROUP BY o.id, o.name, o.company, o.deal_value, o.status, o.reactivated_at
-        ORDER BY MAX(ne.sent_at) DESC
+        HAVING COUNT(ne.id) + COALESCE(MAX(wf.wf_actions), 0) > 0
+        ORDER BY GREATEST(MAX(ne.sent_at), MAX(wf.wf_last_at)) DESC
         LIMIT 50
       `, [userId, oppIds]),
     ]);
@@ -524,12 +554,21 @@ router.get('/attribution', async (req, res, next) => {
         won: parseInt(ta.untouched_won),
       },
       reactivated: { count: parseInt(ta.reactivated_count), value: num(ta.reactivated_value) },
+      // Deals touchés par un workflow de relance (sous-ensemble de touched) —
+      // permet de mesurer cadence multicanal vs one-shot.
+      workflow: {
+        count: parseInt(ta.workflow_touched_count),
+        replied: parseInt(ta.workflow_replied_count),
+        replyRate: ta.workflow_touched_count > 0
+          ? Math.round((ta.workflow_replied_count / ta.workflow_touched_count) * 100) : 0,
+      },
       deals: touchedDeals.rows.map(d => ({
         name: d.name,
         company: d.company,
         dealValue: num(d.deal_value),
         status: d.status,
         emailsSent: parseInt(d.emails_sent),
+        workflowActions: parseInt(d.wf_actions),
         lastTouchAt: d.last_touch_at,
         replied: d.replied,
         reactivatedAt: d.reactivated_at,

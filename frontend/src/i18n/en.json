@@ -785,6 +785,9 @@
     "dealTouchReactivated": "Reactivated deals",
     "dealTouchWon": "Won after touch",
     "dealTouchWonVs": "vs {count} untouched",
+    "dealTouchWorkflow": "Via workflow",
+    "dealTouchWorkflowReplies": "{rate}% replied",
+    "dealTouchWorkflowChip": "+{count} workflow",
     "dealTouchDeal": "Deal",
     "dealTouchEmails": "Emails",
     "dealTouchLastTouch": "Last touch",
@@ -1403,7 +1406,11 @@
     "propose": "Propose a workflow",
     "resumeDraft": "Resume draft",
     "badgeActive": "Workflow active — step {done}/{total}",
-    "badgePaused": "Workflow paused — step {done}/{total}"
+    "badgePaused": "Workflow paused — step {done}/{total}",
+    "addStep": "Add a step",
+    "editSequence": "Edit sequence",
+    "editSaved": "Sequence updated",
+    "editingHint": "Steps already sent can no longer be edited. Your changes only apply after saving."
   },
   "reactivation": {
     "sortByValue": "Sort by value",

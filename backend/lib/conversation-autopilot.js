@@ -195,6 +195,7 @@ RÈGLES :
 - Tutoyer si le prospect tutoie, sinon vouvoyer
 - ${channel === 'linkedin' ? 'Format message LinkedIn (pas de subject)' : 'Format email avec subject et body'}
 - Langue : détecter la langue du prospect et répondre dans la même langue
+${require('./human-style').HUMAN_STYLE_RULES_FR}
 
 ${channel === 'linkedin'
     ? 'Retourne un JSON : { "message": "..." }'
@@ -207,11 +208,12 @@ ${channel === 'linkedin'
     'conversation_autopilot'
   );
 
-  if (result.parsed) return result.parsed;
+  const { humanizeFields } = require('./human-style');
+  if (result.parsed) return humanizeFields(result.parsed, ['subject', 'body', 'message']);
 
   const match = (result.raw || '').match(/\{[\s\S]*(?:"message"|"subject")[\s\S]*\}/);
   if (match) {
-    try { return JSON.parse(match[0]); } catch { /* fallthrough */ }
+    try { return humanizeFields(JSON.parse(match[0]), ['subject', 'body', 'message']); } catch { /* fallthrough */ }
   }
 
   // Fallback

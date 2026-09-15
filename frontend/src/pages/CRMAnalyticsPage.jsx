@@ -782,6 +782,15 @@ function DealTouchBlock({ dt }) {
                   {t('analytics.dealTouchWonVs', { count: dt.untouched.won })}
                 </div>
               </div>
+              {dt.workflow?.count > 0 && (
+                <div className="crm-kpi-card">
+                  <div className="crm-kpi-value" style={{ color: 'var(--accent)' }}>{dt.workflow.count}</div>
+                  <div className="crm-kpi-label">{t('analytics.dealTouchWorkflow')}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {t('analytics.dealTouchWorkflowReplies', { rate: dt.workflow.replyRate })}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="crm-table" style={{ marginTop: 12 }}>
               <div className="crm-table-header">
@@ -798,7 +807,17 @@ function DealTouchBlock({ dt }) {
                       <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — ${d.dealValue.toLocaleString()}</span>
                     )}
                   </span>
-                  <span>{d.emailsSent}</span>
+                  <span>
+                    {d.emailsSent}
+                    {d.workflowActions > 0 && (
+                      <span style={{
+                        marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--accent)',
+                        background: 'var(--accent-glow)', borderRadius: 4, padding: '1px 5px',
+                      }}>
+                        {t('analytics.dealTouchWorkflowChip', { count: d.workflowActions })}
+                      </span>
+                    )}
+                  </span>
                   <span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span>
                   <span style={{ fontWeight: 600, color: d.reactivatedAt ? 'var(--success)' : d.replied ? 'var(--blue)' : 'var(--text-muted)' }}>
                     {d.reactivatedAt ? t('analytics.dealTouchOutcomeReactivated')

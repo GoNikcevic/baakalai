@@ -785,6 +785,9 @@
     "dealTouchReactivated": "Deals réactivés",
     "dealTouchWon": "Gagnés après contact",
     "dealTouchWonVs": "vs {count} sans contact",
+    "dealTouchWorkflow": "Par workflow",
+    "dealTouchWorkflowReplies": "{rate}% de réponses",
+    "dealTouchWorkflowChip": "+{count} workflow",
     "dealTouchDeal": "Deal",
     "dealTouchEmails": "Emails",
     "dealTouchLastTouch": "Dernier contact",
@@ -1403,7 +1406,11 @@
     "propose": "Proposer un workflow",
     "resumeDraft": "Reprendre le brouillon",
     "badgeActive": "Workflow actif — étape {done}/{total}",
-    "badgePaused": "Workflow en pause — étape {done}/{total}"
+    "badgePaused": "Workflow en pause — étape {done}/{total}",
+    "addStep": "Ajouter une étape",
+    "editSequence": "Modifier la séquence",
+    "editSaved": "Séquence mise à jour",
+    "editingHint": "Les étapes déjà envoyées ne sont plus modifiables. Vos changements ne partent qu'après enregistrement."
   },
   "reactivation": {
     "sortByValue": "Trier par valeur",

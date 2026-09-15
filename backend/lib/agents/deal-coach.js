@@ -15,6 +15,7 @@ const { onlyCrmContacts } = require('../crm-scope');
 const { getStagnantDays } = require('../stagnation');
 const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 const { getTimingContext, getCopyContext, getPatternContext, getTeamId } = require('../email-context');
+const { HUMAN_STYLE_RULES, humanize, humanizeFields } = require('../human-style');
 
 const DAY_MS = 86400000;
 
@@ -183,6 +184,7 @@ RULES:
 - "reason" explains briefly, in French, why this deal needs reactivating now
 - Email: max 6 lines, must sound human and personal (NOT marketing)
 - Tone: professional but warm — the goal is to re-engage, not to sell aggressively
+${HUMAN_STYLE_RULES}
 
 Return JSON:
 { "reason": "...", "urgency": "high|medium|low", "subject": "...", "body": "..." }`;
@@ -198,8 +200,8 @@ Return JSON:
   return {
     opportunity: deal,
     patternIds: patternCtx.ids,
-    subject: draft.subject,
-    body: draft.body,
+    subject: humanize(draft.subject),
+    body: humanize(draft.body),
     reason: draft.reason || '',
     urgency: draft.urgency || 'medium',
   };
@@ -281,6 +283,7 @@ RULES:
 - linkedin_visit: no subject, no body. linkedin_invite: no subject, body max 300 characters, warm note (no pitch).
 - ${hasEmail && hasLinkedin ? 'If you include a linkedin_invite, give it EXACTLY two children: one with conditionType "accepted" (a linkedin_message continuing the conversation) and one with conditionType "not_accepted" (an email taking a different angle). Steps after the fork go back to the top-level array.' : 'No conditional branches (single channel).'}
 - "reason": 2-3 French sentences explaining WHY this plan for THIS deal (cite the signals: dormancy, opens, patterns). Shown to the user before approval.
+${HUMAN_STYLE_RULES}
 
 Return JSON:
 {
@@ -310,7 +313,10 @@ Return JSON:
   const channelOk = (tp) => (tp.type === 'email' ? hasEmail : hasLinkedin);
   const filterSteps = (steps) => steps
     .filter(channelOk)
-    .map(tp => ({ ...tp, children: Array.isArray(tp.children) ? filterSteps(tp.children) : [] }));
+    .map(tp => ({
+      ...humanizeFields(tp, ['subject', 'body']),
+      children: Array.isArray(tp.children) ? filterSteps(tp.children) : [],
+    }));
   const steps = filterSteps(plan.steps);
   if (steps.length === 0) return { error: 'generation_failed' };
 

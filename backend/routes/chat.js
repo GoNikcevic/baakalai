@@ -870,6 +870,7 @@ RULES:
 - Tone: professional but warm
 - The goal is to re-engage, not to sell aggressively
 - Write in the user's language
+${require('../lib/human-style').HUMAN_STYLE_RULES}
 
 Return JSON: { "subject": "...", "body": "..." }`;
 

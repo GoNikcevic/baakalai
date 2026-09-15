@@ -177,7 +177,9 @@ Contact: ${s.contact_name || 'Decision maker'} (${s.contact_title || ''}) at ${s
 Signal type: ${s.signal_type}
 
 Write a 4-5 line email that references the signal naturally (don't say "I saw a signal").
-Be specific and relevant. Return JSON: { "subject": "...", "body": "..." }`;
+Be specific and relevant.
+${require('../lib/human-style').HUMAN_STYLE_RULES}
+Return JSON: { "subject": "...", "body": "..." }`;
 
       const result = await claude.callClaude('Return only valid JSON.', prompt, 500, 'signal_outreach');
       let email = result.parsed;
@@ -234,7 +236,7 @@ router.post('/:id/linkedin-outreach', async (req, res, next) => {
     // Generate note
     const noteResult = await claude.callClaude('Return only valid JSON.', `Write a LinkedIn connection note (max 280 chars).
 Signal: ${s.title}. Contact: ${s.contact_name} at ${s.company_name}.
-Be specific, reference the signal naturally. Return JSON: { "note": "..." }`, 300, 'linkedin_note');
+Be specific, reference the signal naturally. Never use em dashes (— –); write like a busy human, no AI-sounding phrasing. Return JSON: { "note": "..." }`, 300, 'linkedin_note');
 
     let note = noteResult.parsed?.note || `Bonjour, votre profil a retenu mon attention. Curieux d'échanger.`;
     const publicId = s.contact_linkedin.match(/\/in\/([^/?]+)/)?.[1];
@@ -354,6 +356,7 @@ Generate 3 touchpoints:
 - E3 (Day 7): Break-up email
 
 Each email: personal tone, max 5 lines, reference the signal naturally.
+${require('../lib/human-style').HUMAN_STYLE_RULES}
 Return JSON:
 {
   "name": "Campaign name",

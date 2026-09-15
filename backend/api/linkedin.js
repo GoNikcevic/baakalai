@@ -154,9 +154,11 @@ async function searchPeople(cookie, { keywords, title, company, location, limit 
 async function sendConnectionRequest(cookie, { profileUrn, message }, userId) {
   checkLimit(userId, 'connections', 30);
 
+  // Règle produit : pas de tiret cadratin dans le contenu généré (cf. lib/human-style).
+  const { humanize } = require('../lib/human-style');
   const body = {
     trackingId: generateTrackingId(),
-    message: message?.slice(0, 300) || '', // LinkedIn limits to 300 chars
+    message: humanize(message)?.slice(0, 300) || '', // LinkedIn limits to 300 chars
     invitations: [],
     excludeInvitations: [],
     invitee: {
@@ -183,6 +185,9 @@ async function sendConnectionRequest(cookie, { profileUrn, message }, userId) {
  */
 async function sendMessage(cookie, { recipientUrn, message }, userId) {
   checkLimit(userId, 'messages', 20);
+
+  // Règle produit : pas de tiret cadratin dans le contenu généré (cf. lib/human-style).
+  message = require('../lib/human-style').humanize(message);
 
   const body = {
     eventCreate: {

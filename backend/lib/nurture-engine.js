@@ -280,7 +280,8 @@ Instructions :
 - L'email doit sembler écrit par un humain, pas généré
 - Pas de template marketing, pas de header/footer fancy
 - Maximum 6 lignes
-- Tutoiement : ${template.formality === 'tu' ? 'oui' : 'non, vouvoyer'}${buildPatternsBlock(patternCtx)}
+- Tutoiement : ${template.formality === 'tu' ? 'oui' : 'non, vouvoyer'}
+${require('./human-style').HUMAN_STYLE_RULES_FR}${buildPatternsBlock(patternCtx)}
 
 Retourne un JSON : { "subject": "...", "body": "..." }`;
 
@@ -290,18 +291,19 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
     500
   );
 
-  if (result.parsed) return result.parsed;
+  const { humanizeFields } = require('./human-style');
+  if (result.parsed) return humanizeFields(result.parsed, ['subject', 'body']);
 
   // Fallback: try to extract JSON from the response
   const text = result.raw || '';
   const jsonMatch = text.match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
   if (jsonMatch) {
-    try { return JSON.parse(jsonMatch[0]); } catch { /* fall through */ }
+    try { return humanizeFields(JSON.parse(jsonMatch[0]), ['subject', 'body']); } catch { /* fall through */ }
   }
 
   return {
-    subject: `Suivi — ${contact.company}`,
-    body: `Bonjour ${contact.name.split(' ')[0]},\n\nJe me permets de revenir vers vous concernant notre échange.\n\nBien cordialement`,
+    subject: `Des nouvelles de ${contact.company}`,
+    body: `Bonjour ${contact.name.split(' ')[0]},\n\nOù en êtes-vous de votre côté sur notre dernier échange ? Un mot suffit, je m'adapte.\n\nBien cordialement`,
   };
 }
 
@@ -326,7 +328,8 @@ Instructions :
 - Ton naturel, pas commercial
 - Référencer le contexte business de manière subtile
 - Finir par une ouverture (curiosité ou valeur)
-- Max 280 caractères${buildPatternsBlock(patternCtx)}
+- Max 280 caractères
+${require('./human-style').HUMAN_STYLE_RULES_FR}${buildPatternsBlock(patternCtx)}
 
 Retourne un JSON : { "note": "..." }`
     : `Tu es un commercial B2B. Génère un message LinkedIn personnalisé (3-4 phrases max).
@@ -341,7 +344,8 @@ Instructions :
 - Ton : ${template.tone || 'professionnel mais chaleureux'}
 - Message court et naturel, pas de pitch
 - Proposer une valeur concrète ou poser une question pertinente
-- ${template.formality === 'tu' ? 'Tutoyer' : 'Vouvoyer'}${buildPatternsBlock(patternCtx)}
+- ${template.formality === 'tu' ? 'Tutoyer' : 'Vouvoyer'}
+${require('./human-style').HUMAN_STYLE_RULES_FR}${buildPatternsBlock(patternCtx)}
 
 Retourne un JSON : { "message": "..." }`;
 
@@ -352,17 +356,18 @@ Retourne un JSON : { "message": "..." }`;
     'nurture_linkedin'
   );
 
+  const { humanize } = require('./human-style');
   if (isConnect) {
     const note = result.parsed?.note
       || (result.raw || '').match(/"note"\s*:\s*"([^"]+)"/)?.[1]
       || `Bonjour ${contact.name.split(' ')[0]}, votre profil a retenu mon attention.`;
-    return { note: note.slice(0, maxChars) };
+    return { note: humanize(note).slice(0, maxChars) };
   }
 
   const message = result.parsed?.message
     || (result.raw || '').match(/"message"\s*:\s*"([^"]+)"/)?.[1]
-    || `Bonjour ${contact.name.split(' ')[0]}, je me permets de vous contacter suite à notre échange.`;
-  return { message: message.slice(0, maxChars) };
+    || `Bonjour ${contact.name.split(' ')[0]}, on avait échangé il y a quelque temps. Où en êtes-vous sur le sujet ?`;
+  return { message: humanize(message).slice(0, maxChars) };
 }
 
 /**

@@ -229,24 +229,28 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// PUT /api/enrollments/:id/sequence — remplace la séquence d'un BROUILLON.
-// Sans envoi effectué, delete/recreate est sûr (pas de journal à préserver).
+// PUT /api/enrollments/:id/sequence — édite la séquence d'un workflow.
+// Brouillon comme workflow actif/en pause : réconciliation partagée
+// (lib/sequence-reconcile) — les steps existants (id présent) sont mis à
+// jour en place, le journal d'envoi survit, les prospects gardent leur
+// position. Un workflow terminé/arrêté ne s'édite plus.
 router.put('/:id/sequence', async (req, res, next) => {
   try {
     const enrollment = await getOwned(req, res);
     if (!enrollment) return;
-    if (enrollment.status !== 'draft') {
-      return res.status(400).json({ code: 'not_editable', error: 'La séquence n\'est éditable qu\'avant approbation.' });
+    if (!['draft', 'active', 'paused'].includes(enrollment.status)) {
+      return res.status(400).json({ code: 'not_editable', error: 'Ce workflow est terminé, sa séquence ne s\'édite plus.' });
     }
     const steps = req.body.steps || req.body.sequence || [];
     if (!Array.isArray(steps) || steps.length === 0) {
       return res.status(400).json({ error: 'steps: au moins une étape est requise' });
     }
 
-    await db.touchpoints.deleteByEnrollment(enrollment.id);
-    await createSteps(enrollment.id, steps);
-    const created = await db.touchpoints.listByEnrollment(enrollment.id);
-    res.json({ sequence: buildTree(created) });
+    const { reconcileSequence } = require('../lib/sequence-reconcile');
+    const existing = await db.touchpoints.listByEnrollment(enrollment.id);
+    await reconcileSequence(steps, existing, { enrollmentId: enrollment.id });
+    const updated = await db.touchpoints.listByEnrollment(enrollment.id);
+    res.json({ sequence: buildTree(updated) });
   } catch (err) {
     next(err);
   }

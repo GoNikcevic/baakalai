@@ -232,6 +232,14 @@ function applySignature(mailOptions, account, body) {
  * @returns {{ success, messageId, error, code }}
  */
 async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo }) {
+  // Règle produit : aucun contenu généré ne part avec un tiret cadratin
+  // (marqueur IA). Appliqué ici, au transport, pour couvrir tous les
+  // appelants ; la signature du compte (texte de l'utilisateur) est ajoutée
+  // après et n'est jamais réécrite.
+  const { humanize } = require('./human-style');
+  subject = humanize(subject);
+  body = humanize(body);
+
   let account = await getDefaultAccount(userId);
   if (!account) {
     return {

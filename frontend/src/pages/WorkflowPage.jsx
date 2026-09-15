@@ -43,9 +43,13 @@ function flatten(tree) {
   return out;
 }
 
-/** Arbre d'état → payload PUT /enrollments/:id/sequence. */
+/** Arbre d'état → payload PUT /enrollments/:id/sequence.
+ *  L'id backend est conservé : la réconciliation met à jour les steps
+ *  existants en place (le journal d'envoi survit) — un id client temporaire
+ *  ("new-…", étape ajoutée dans l'UI) est omis pour déclencher une création. */
 function serialize(tree) {
   const node = (tp) => ({
+    ...(tp.id && !String(tp.id).startsWith('new-') ? { id: tp.id } : {}),
     step: tp.step,
     type: tp.type,
     timing: tp.timing,
@@ -56,6 +60,22 @@ function serialize(tree) {
     children: (tp.children || []).map(node),
   });
   return (tree || []).map(node);
+}
+
+let newStepCounter = 0;
+function blankStep() {
+  newStepCounter += 1;
+  return {
+    id: `new-${newStepCounter}`,
+    step: `N${newStepCounter}`,
+    type: 'email',
+    timing: 'J+3',
+    subject: '',
+    body: '',
+    condition_type: null,
+    branch_label: null,
+    children: [],
+  };
 }
 
 const mapTree = (tree, id, patch) => tree.map(tp => {
@@ -83,6 +103,8 @@ export default function WorkflowPage({ goal, backBase }) {
   const [contact, setContact] = useState(null);
   const [expanded, setExpanded] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
+  // Édition d'un workflow déjà actif/en pause (les brouillons sont toujours éditables).
+  const [editing, setEditing] = useState(false);
 
   const loadEnrollment = useCallback(async (id) => {
     const data = await request(`/enrollments/${id}`);
@@ -154,6 +176,44 @@ export default function WorkflowPage({ goal, backBase }) {
   const removeStep = async (id) => {
     if (!await confirm(t('workflow.removeConfirm'))) return;
     setSequence(prev => filterTree(prev, id));
+  };
+  const addStepAfter = (index) => {
+    const step = blankStep();
+    setSequence(prev => {
+      const next = [...prev];
+      next.splice(index + 1, 0, step);
+      return next;
+    });
+    setExpanded(prev => new Set(prev).add(step.id));
+  };
+  const changeStepType = (id, type) => {
+    const patch = { type };
+    if (type === 'linkedin_visit') { patch.subject = null; patch.body = ''; }
+    if (type === 'linkedin_invite') { patch.subject = null; }
+    if (type === 'linkedin_message') { patch.subject = null; }
+    updateStep(id, patch);
+  };
+
+  const handleSaveEdit = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await request(`/enrollments/${enrollment.id}/sequence`, {
+        method: 'PUT',
+        body: JSON.stringify({ steps: serialize(sequence) }),
+      });
+      showToast({ type: 'success', title: t('workflow.editSaved'), message: '' });
+      setEditing(false);
+      await loadEnrollment(enrollment.id);
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const handleCancelEdit = async () => {
+    setEditing(false);
+    await loadEnrollment(enrollment.id);
   };
 
   const handleApprove = async () => {
@@ -270,7 +330,10 @@ export default function WorkflowPage({ goal, backBase }) {
     const send = consumed.get(tp.id) || sends.find(s => s.touchpoint_id === tp.id);
     const isCurrent = !isDraft && status === 'active' && currentStep?.id === tp.id;
     const isOpen = expanded.has(tp.id);
-    const hasContent = tp.type !== 'linkedin_visit';
+    // Un step déjà consommé (envoyé/ignoré) ne se réécrit pas, même en édition.
+    const consumedThis = send && (send.status === 'sent' || send.status === 'skipped');
+    const canEdit = (isDraft || editing) && !consumedThis;
+    const hasContent = tp.type !== 'linkedin_visit' || canEdit;
     const isInvite = tp.type === 'linkedin_invite';
 
     let statusLine = null;
@@ -320,7 +383,7 @@ export default function WorkflowPage({ goal, backBase }) {
             {tp.type === 'email' ? (tp.subject || t('workflow.stepEmailUntitled')) : t(meta.labelKey)}
           </span>
           <span style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{statusLine}</span>
-          {isDraft && (
+          {canEdit && (
             <button
               className="btn btn-ghost"
               style={{ fontSize: 12, padding: '1px 7px', flexShrink: 0 }}
@@ -335,9 +398,19 @@ export default function WorkflowPage({ goal, backBase }) {
 
         {hasContent && isOpen && (
           <div style={{ borderTop: '1px solid var(--border-light)', padding: '12px 14px' }}>
-            {isDraft ? (
+            {canEdit ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                  <select
+                    value={tp.type}
+                    onChange={(e) => changeStepType(tp.id, e.target.value)}
+                    style={{ fontSize: 11, padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="email">{t('workflow.chipEmail')}</option>
+                    <option value="linkedin_visit">{t('workflow.chipLinkedinVisit')}</option>
+                    <option value="linkedin_invite">{t('workflow.chipLinkedinInvite')}</option>
+                    <option value="linkedin_message">{t('workflow.chipLinkedinMessage')}</option>
+                  </select>
                   <label>{t('workflow.timingLabel')}</label>
                   <input
                     type="number" min={0} max={30}
@@ -359,16 +432,18 @@ export default function WorkflowPage({ goal, backBase }) {
                     }}
                   />
                 )}
-                <textarea
-                  value={tp.body || ''}
-                  onChange={(e) => updateStep(tp.id, { body: isInvite ? e.target.value.slice(0, 300) : e.target.value })}
-                  rows={isInvite ? 3 : 6}
-                  style={{
-                    width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 10px', lineHeight: 1.5,
-                    border: '1px solid var(--border)', borderRadius: 6, resize: 'vertical',
-                    background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit',
-                  }}
-                />
+                {tp.type !== 'linkedin_visit' && (
+                  <textarea
+                    value={tp.body || ''}
+                    onChange={(e) => updateStep(tp.id, { body: isInvite ? e.target.value.slice(0, 300) : e.target.value })}
+                    rows={isInvite ? 3 : 6}
+                    style={{
+                      width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 10px', lineHeight: 1.5,
+                      border: '1px solid var(--border)', borderRadius: 6, resize: 'vertical',
+                      background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit',
+                    }}
+                  />
+                )}
                 {isInvite && (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', marginTop: 4 }}>
                     {(tp.body || '').length} / 300
@@ -398,9 +473,10 @@ export default function WorkflowPage({ goal, backBase }) {
     const accepted = (tp.children || []).filter(c => c.condition_type === 'accepted');
     const others = (tp.children || []).filter(c => c.condition_type !== 'accepted');
     const hasFork = accepted.length > 0;
+    const editable = isDraft || editing;
 
     return (
-      <div key={tp.id} style={{ position: 'relative', paddingLeft: 34, paddingBottom: 14 }}>
+      <div key={tp.id} style={{ position: 'relative', paddingLeft: 34, paddingBottom: editable ? 4 : 14 }}>
         {/* trait + pastille */}
         <div style={{ position: 'absolute', left: 10, top: 26, bottom: 0, width: 2, background: 'var(--border-light)' }} />
         <div style={{
@@ -439,6 +515,18 @@ export default function WorkflowPage({ goal, backBase }) {
             </div>
           )
         )}
+
+        {editable && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 6px' }}>
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 11, padding: '2px 12px', color: 'var(--accent)', border: '1px dashed var(--border)', borderRadius: 14 }}
+              onClick={() => addStepAfter(index)}
+            >
+              + {t('workflow.addStep')}
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -446,7 +534,7 @@ export default function WorkflowPage({ goal, backBase }) {
   /* ── page ── */
 
   return (
-    <div className="dashboard-page" style={{ paddingBottom: isDraft ? 90 : undefined }}>
+    <div className="dashboard-page" style={{ paddingBottom: (isDraft || editing) ? 90 : undefined }}>
       <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px', marginBottom: 12 }} onClick={() => navigate(backBase)}>
         ← {t('workflow.backToQueue')}
       </button>
@@ -473,7 +561,7 @@ export default function WorkflowPage({ goal, backBase }) {
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               {t('workflow.progress', { done: doneCount, total: flat.length })}
             </span>
-            {status === 'active' && (
+            {!editing && status === 'active' && (
               <>
                 <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={busy} onClick={() => doAction('run')}>
                   {t('workflow.runNow')}
@@ -483,15 +571,20 @@ export default function WorkflowPage({ goal, backBase }) {
                 </button>
               </>
             )}
-            {status === 'paused' && (
+            {!editing && status === 'paused' && (
               <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} disabled={busy} onClick={() => doAction('approve')}>
                 {t('workflow.resume')}
               </button>
             )}
-            {(status === 'active' || status === 'paused') && (
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={busy} onClick={() => doAction('stop', 'workflow.stopConfirm')}>
-                {t('workflow.stop')}
-              </button>
+            {!editing && (status === 'active' || status === 'paused') && (
+              <>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={busy} onClick={() => setEditing(true)}>
+                  {t('workflow.editSequence')}
+                </button>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={busy} onClick={() => doAction('stop', 'workflow.stopConfirm')}>
+                  {t('workflow.stop')}
+                </button>
+              </>
             )}
           </div>
         )}
@@ -524,6 +617,29 @@ export default function WorkflowPage({ goal, backBase }) {
       <div style={{ maxWidth: 640 }}>
         {sequence.map((tp, i) => renderNode(tp, i))}
       </div>
+
+      {/* barre d'enregistrement du mode édition (workflow actif/en pause) */}
+      {editing && (
+        <div style={{
+          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 20,
+          background: 'var(--bg-card)', borderTop: '1px solid var(--border)',
+        }}>
+          <div style={{
+            maxWidth: 900, margin: '0 auto', padding: '10px 20px',
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('workflow.editingHint')}</span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+              <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }} disabled={busy} onClick={handleCancelEdit}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '7px 18px' }} disabled={busy || flat.length === 0} onClick={handleSaveEdit}>
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* barre d'action du brouillon */}
       {isDraft && (

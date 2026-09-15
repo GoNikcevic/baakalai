@@ -169,6 +169,32 @@ async function stopEnrollment(enrollmentId, reason) {
   await db.sequenceEnrollments.setStatus(enrollmentId, 'stopped', { stopReason: reason });
 }
 
+/**
+ * Cookie li_at expiré : les steps LinkedIn sont silencieusement reportés à
+ * chaque passage — sans signal, l'utilisateur ne s'en aperçoit jamais.
+ * Notification persistée + socket (lib/notify), au plus une par 24 h.
+ */
+async function notifyLinkedinExpired(userId) {
+  try {
+    const recent = await db.query(
+      `SELECT id FROM notifications
+       WHERE user_id = $1 AND type = 'linkedin_expired' AND created_at > now() - interval '24 hours'
+       LIMIT 1`,
+      [userId]
+    );
+    if (recent.rows.length > 0) return;
+    const { createNotification } = require('./notify');
+    await createNotification(userId, {
+      type: 'linkedin_expired',
+      title: 'Session LinkedIn expirée',
+      body: 'Vos étapes LinkedIn (visites, invitations, messages) sont en pause. Recollez votre cookie li_at dans Réglages → LinkedIn pour reprendre.',
+      metadata: { source: 'native-sequence-engine' },
+    });
+  } catch (err) {
+    logger.warn('native-seq', `notify linkedin_expired: ${err.message}`);
+  }
+}
+
 async function emailsSentToday(userId) {
   const r = await db.query(
     `SELECT COUNT(*) AS n FROM campaign_sends
@@ -289,6 +315,7 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
   } catch (err) {
     if (err.code === 'RATE_LIMITED' || err.code === 'SESSION_EXPIRED') {
       ctx.linkedinExhausted = true; // on réessaiera au prochain passage
+      if (err.code === 'SESSION_EXPIRED') await notifyLinkedinExpired(userId);
       return 'waiting';
     }
     await recordSend({ ...base, status: 'failed', error: err.message });
@@ -622,6 +649,7 @@ async function runForUser(userId, { campaignId, enrollmentId } = {}) {
               }
             } catch (err) {
               if (err.code === 'RATE_LIMITED' || err.code === 'SESSION_EXPIRED') this.linkedinExhausted = true;
+              if (err.code === 'SESSION_EXPIRED') await notifyLinkedinExpired(userId);
             }
           }
           this._acceptedSet = set;

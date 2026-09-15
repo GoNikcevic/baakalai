@@ -125,7 +125,7 @@ Chaque touchpoint doit suivre un rôle précis dans la séquence :
 - Structure idéale : Salutation courte → Point commun OU compliment pro spécifique → Question ouverte légère
 - Exemples valides (TOUS sous 300 chars) :
   * "Bonjour {{firstName}}, j'ai vu votre poste de {{jobTitle}} chez {{companyName}}. Je travaille avec d'autres acteurs du secteur sur la qualité microbiologique en bioproduction. Ouvert à connecter ?" (210 chars)
-  * "Bonjour {{firstName}}, votre parcours en {{jobTitle}} m'intéresse — j'échange en ce moment avec plusieurs équipes biotech sur les défis de contrôle qualité. Heureux de connecter." (192 chars)
+  * "Bonjour {{firstName}}, votre parcours en {{jobTitle}} m'intéresse. J'échange en ce moment avec plusieurs équipes biotech sur les défis de contrôle qualité. Heureux de connecter." (192 chars)
 - INTERDIT : pitch produit, mention de prix, mention "automatisé/IA", phrase >300 chars
 
 ### Message LinkedIn post-connexion (linkedin_message)
@@ -145,6 +145,7 @@ Chaque touchpoint doit suivre un rôle précis dans la séquence :
 5. **Les objets** : max 50 caractères, pas de majuscules abusives, pas de ponctuation excessive
 6. **Le ton** doit être cohérent sur toute la séquence
 7. **La séquence** doit raconter une histoire progressive, pas des messages isolés
+${require('../lib/human-style').HUMAN_STYLE_RULES_FR}
 
 ## Lignes d'objet — Règles spécifiques
 - Variante A : directe, orientée bénéfice
