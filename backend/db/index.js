@@ -323,13 +323,16 @@ const touchpoints = {
     }
 
     const result = await query(`
-      INSERT INTO touchpoints (campaign_id, step, type, label, sub_type, timing,
+      INSERT INTO touchpoints (campaign_id, enrollment_id, step, type, label, sub_type, timing,
         subject, body, subject_b, body_b, max_chars, sort_order,
         parent_step_id, condition_type, condition_value, branch_label, is_root)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
-      campaignId,
+      campaignId || null,
+      // Conteneur alternatif : workflow de relance d'un contact CRM
+      // (migration 103) — exactement un des deux doit être posé.
+      data.enrollmentId || null,
       data.step,
       type,
       data.label || null,
@@ -411,6 +414,77 @@ const touchpoints = {
   async deleteByCampaign(campaignId) {
     const result = await query('DELETE FROM touchpoints WHERE campaign_id = $1', [campaignId]);
     return { changes: result.rowCount };
+  },
+
+  async listByEnrollment(enrollmentId) {
+    const result = await query(
+      'SELECT * FROM touchpoints WHERE enrollment_id = $1 ORDER BY sort_order',
+      [enrollmentId]
+    );
+    return result.rows;
+  },
+
+  async deleteByEnrollment(enrollmentId) {
+    const result = await query('DELETE FROM touchpoints WHERE enrollment_id = $1', [enrollmentId]);
+    return { changes: result.rowCount };
+  },
+
+  // Suppression unitaire — la réconciliation de séquence (PUT /:id/sequence)
+  // ne retire que les steps réellement supprimés par l'utilisateur ; le
+  // journal campaign_sends survit en ON DELETE SET NULL (migration 103).
+  async remove(id) {
+    const result = await query('DELETE FROM touchpoints WHERE id = $1', [id]);
+    return { changes: result.rowCount };
+  },
+};
+
+// =============================================
+// Sequence enrollments — workflows de relance CRM (migration 103)
+// =============================================
+
+const sequenceEnrollments = {
+  async create({ userId, opportunityId, goal, rationale, createdBy }) {
+    const result = await query(
+      `INSERT INTO sequence_enrollments (user_id, opportunity_id, goal, rationale, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [userId, opportunityId, goal, rationale || null, createdBy || 'agent']
+    );
+    return result.rows[0];
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM sequence_enrollments WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async listByUser(userId, { status, opportunityId } = {}) {
+    const conds = ['user_id = $1'];
+    const values = [userId];
+    if (status) { values.push(status); conds.push(`status = $${values.length}`); }
+    if (opportunityId) { values.push(opportunityId); conds.push(`opportunity_id = $${values.length}`); }
+    const result = await query(
+      `SELECT * FROM sequence_enrollments WHERE ${conds.join(' AND ')} ORDER BY created_at DESC`,
+      values
+    );
+    return result.rows;
+  },
+
+  async setStatus(id, status, { stopReason } = {}) {
+    const stamps = {
+      active: 'approved_at = COALESCE(approved_at, now()), started_at = COALESCE(started_at, now())',
+      completed: 'completed_at = now()',
+      stopped: 'stopped_at = now()',
+    };
+    const extra = stamps[status] ? `, ${stamps[status]}` : '';
+    const result = await query(
+      `UPDATE sequence_enrollments
+       SET status = $1, stop_reason = COALESCE($2, stop_reason), updated_at = now()${extra}
+       WHERE id = $3
+       RETURNING *`,
+      [status, stopReason || null, id]
+    );
+    return result.rows[0] || null;
   },
 };
 
@@ -2225,6 +2299,7 @@ module.exports = {
   healthCheck,
   campaigns,
   touchpoints,
+  sequenceEnrollments,
   diagnostics,
   versions,
   memoryPatterns,

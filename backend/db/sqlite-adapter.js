@@ -156,6 +156,8 @@ function initSchema() {
       open_rate_b REAL,
       reply_rate_b REAL,
       accept_rate_b REAL,
+      -- Conteneur alternatif : workflow de relance CRM (migration 103)
+      enrollment_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

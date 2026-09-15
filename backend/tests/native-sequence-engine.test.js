@@ -9,7 +9,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { buildMainPath, parseTiming, renderTemplate } = require('../lib/native-sequence-engine');
+const { buildMainPath, hasAcceptedBranch, parseTiming, renderTemplate } = require('../lib/native-sequence-engine');
 
 /* ── parseTiming ── */
 
@@ -52,6 +52,31 @@ test('arbre conditionnel : suit les branches négatives/default, ignore les posi
     tp('followup-2', { parent_step_id: 'followup', condition_type: 'not_replied', sort_order: 1, timing: 'J+4' }),
   ]);
   assert.deepStrictEqual(path.map(s => s.id), ['root', 'followup', 'followup-2']);
+});
+
+test('branche accepted : exclue par défaut, suivie avec { accepted: true } qui écarte not_accepted', () => {
+  const tree = [
+    tp('li1', { sort_order: 1, type: 'linkedin_invite' }),
+    tp('lm1', { parent_step_id: 'li1', condition_type: 'accepted', sort_order: 1, timing: 'J+2', type: 'linkedin_message' }),
+    tp('e2', { parent_step_id: 'li1', condition_type: 'not_accepted', sort_order: 2, timing: 'J+4' }),
+  ];
+  // Défaut (invitation pas acceptée) : comportement historique inchangé.
+  assert.deepStrictEqual(buildMainPath(tree).map(s => s.id), ['li1', 'e2']);
+  // Invitation acceptée : la branche accepted remplace la branche not_accepted.
+  assert.deepStrictEqual(buildMainPath(tree, { accepted: true }).map(s => s.id), ['li1', 'lm1']);
+});
+
+test('accepted: true laisse les branches négatives ordinaires en place', () => {
+  const path = buildMainPath([
+    tp('root', { sort_order: 1 }),
+    tp('followup', { parent_step_id: 'root', condition_type: 'not_replied', sort_order: 1, timing: 'J+3' }),
+  ], { accepted: true });
+  assert.deepStrictEqual(path.map(s => s.id), ['root', 'followup']);
+});
+
+test('hasAcceptedBranch détecte la présence d\'une branche accepted', () => {
+  assert.strictEqual(hasAcceptedBranch([tp('a'), tp('b', { condition_type: 'accepted' })]), true);
+  assert.strictEqual(hasAcceptedBranch([tp('a'), tp('b', { condition_type: 'not_accepted' })]), false);
 });
 
 test('les enfants sans condition_type font partie du chemin principal', () => {

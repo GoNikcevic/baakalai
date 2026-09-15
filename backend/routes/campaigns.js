@@ -121,26 +121,81 @@ router.put('/:id/sequence', async (req, res, next) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    await db.touchpoints.deleteByCampaign(campaign.id);
-    const sequence = [];
+    // Réconciliation, PAS delete/recreate : campaign_sends référence les
+    // touchpoints en ON DELETE CASCADE — supprimer la séquence d'une campagne
+    // native active effaçait le journal d'envoi et faisait repartir tous les
+    // prospects à E1. Les steps envoyés (id présent) sont mis à jour en place,
+    // les nouveaux créés, et seuls les steps réellement retirés sont supprimés.
+    const existing = await db.touchpoints.listByCampaign(campaign.id);
+    const existingIds = new Set(existing.map((t) => t.id));
     const tps = req.body.sequence || [];
+
+    // Deux formes de payload : plat avec parentStepId = id backend du parent
+    // (CopyTab/CopyEditorPage via sequenceToBackend), ou imbriqué via children.
+    // On reconstruit un arbre unique avant de descendre.
+    const byId = new Map(tps.filter((t) => t.id).map((t) => [t.id, t]));
+    const flatChildren = new Map();
+    const roots = [];
+    for (const tp of tps) {
+      const parent = tp.parentStepId && byId.get(tp.parentStepId);
+      if (parent && parent !== tp) {
+        if (!flatChildren.has(tp.parentStepId)) flatChildren.set(tp.parentStepId, []);
+        flatChildren.get(tp.parentStepId).push(tp);
+      } else {
+        roots.push(tp);
+      }
+    }
+
+    const sequence = [];
+    const keptIds = new Set();
     let sortCounter = 0;
-    const createNode = async (tp, parentBackendId = null, isRoot = true) => {
-      const created = await db.touchpoints.create(campaign.id, {
-        ...tp,
+    const upsertNode = async (tp, parentBackendId = null, isRoot = true) => {
+      const fields = {
+        step: tp.step,
+        type: tp.type,
+        label: tp.label || null,
+        subType: tp.subType || null,
+        timing: tp.timing || null,
+        subject: tp.subject ?? null,
+        body: tp.body || '',
+        subjectB: tp.subjectB ?? tp.subject_b ?? null,
+        bodyB: tp.bodyB ?? tp.body_b ?? null,
+        maxChars: tp.maxChars || null,
         sortOrder: sortCounter++,
         parentStepId: parentBackendId,
+        conditionType: tp.conditionType ?? null,
+        branchLabel: tp.branchLabel ?? null,
         isRoot,
-      });
-      sequence.push({ ...tp, id: created.id, parentStepId: parentBackendId });
-      if (Array.isArray(tp.children) && tp.children.length > 0) {
-        for (const child of tp.children) {
-          await createNode(child, created.id, false);
-        }
+      };
+      if (fields.type === 'linkedin_invite') {
+        fields.subject = null;
+        fields.body = (fields.body || '').slice(0, 300);
+        fields.maxChars = 300;
+      }
+      let backendId;
+      if (tp.id && existingIds.has(tp.id)) {
+        backendId = tp.id;
+        await db.touchpoints.update(backendId, fields);
+      } else {
+        const created = await db.touchpoints.create(campaign.id, fields);
+        backendId = created.id;
+      }
+      keptIds.add(backendId);
+      sequence.push({ ...tp, id: backendId, parentStepId: parentBackendId });
+      const children = [
+        ...(flatChildren.get(tp.id) || []),
+        ...(Array.isArray(tp.children) ? tp.children : []),
+      ];
+      for (const child of children) {
+        await upsertNode(child, backendId, false);
       }
     };
-    for (const tp of tps) {
-      await createNode(tp, null, true);
+    for (const tp of roots) {
+      await upsertNode(tp, null, true);
+    }
+
+    for (const old of existing) {
+      if (!keptIds.has(old.id)) await db.touchpoints.remove(old.id);
     }
 
     res.json({ sequence });
