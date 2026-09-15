@@ -51,6 +51,12 @@ baakalai, et la maintenir.
    (session), pas de collecte de données de navigation.
 4. Reporter l'URL d'installation dans le guide Réglages → LinkedIn
    (`SettingsPage.jsx`, étape « Installer l'extension »).
+5. **CORS backend** : le serveur n'accepte une origine `chrome-extension://`
+   que si son ID figure dans la variable `ALLOWED_EXTENSION_IDS` (Railway,
+   liste séparée par des virgules — sinon POST → 500). Ajouter l'ID stable
+   attribué par le Web Store sur **prod ET staging**. (Les IDs d'installs
+   non empaquetées sont propres à chaque machine — celui de Goran est déjà
+   posé sur staging.)
 
 ## Test local (sans store)
 
