@@ -1031,10 +1031,10 @@ export default function SettingsPage() {
       {/* Email sortant */}
       <EmailAccountSettings />
 
-      {/* Preferences */}
+      {/* Envoi — cadence et fenêtres des emails sortants */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title">{t('settings.preferences')}</div>
+          <div className="card-title">{t('settings.sendingTitle')}</div>
         </div>
         <div className="card-body">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1075,20 +1075,58 @@ export default function SettingsPage() {
                 <option value="Tous les jours">{en ? 'Every day' : 'Tous les jours'}</option>
               </select>
             </div>
-            <div className="settings-pref-row">
-              <label className="settings-pref-label">{t('settings.claudeModel')}</label>
-              <select
-                className="form-input"
-                value={preferences.claudeModel}
-                onChange={e => updatePreference('claudeModel', e.target.value)}
-              >
-                <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                <option value="claude-opus-5">Claude Opus 5</option>
-                <option value="claude-opus-4-8">Claude Opus 4.8</option>
-                <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
-              </select>
-            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Emails de baakalai — adresse de notification + opt-out RGPD */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">{t('settings.baakalaiEmailsTitle')}</div>
+        </div>
+        <div className="card-body">
+          <div className="settings-pref-row">
+            <label className="settings-pref-label">{en ? 'Notification email' : 'Email de notification'}</label>
+            <input
+              className="form-input"
+              type="email"
+              placeholder={en ? "your@email.com" : "votre@email.com"}
+              value={preferences.notificationEmail}
+              onChange={e => updatePreference('notificationEmail', e.target.value)}
+            />
+          </div>
+
+          {emailPrefs && (
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                {t('settings.emailPrefsIntro')}
+              </div>
+              {[
+                { key: 'crm_digest', label: t('settings.emailPrefCrmDigest'), desc: t('settings.emailPrefCrmDigestDesc') },
+                { key: 'weekly_report', label: t('settings.emailPrefWeeklyReport'), desc: t('settings.emailPrefWeeklyReportDesc') },
+                { key: 'tips', label: t('settings.emailPrefTips'), desc: t('settings.emailPrefTipsDesc') },
+              ].map(({ key, label, desc }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{desc}</div>
+                  </div>
+                  <div
+                    role="switch"
+                    aria-checked={emailPrefs[key] !== false}
+                    aria-label={label}
+                    tabIndex={0}
+                    className={`toggle-switch${emailPrefs[key] !== false ? ' on' : ''}`}
+                    onClick={() => toggleEmailPref(key)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEmailPref(key); } }}
+                  />
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+                {t('settings.emailPrefsHint')}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1096,6 +1134,28 @@ export default function SettingsPage() {
       <SlaSection t={t} showToast={showToast} lang={lang} />
 
       <div className="settings-group-title">{t('settings.groupAccount')}</div>
+
+      {/* Preferences — modèle IA (les réglages d'envoi ont rejoint le groupe Emails) */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">{t('settings.preferences')}</div>
+        </div>
+        <div className="card-body">
+          <div className="settings-pref-row">
+            <label className="settings-pref-label">{t('settings.claudeModel')}</label>
+            <select
+              className="form-input"
+              value={preferences.claudeModel}
+              onChange={e => updatePreference('claudeModel', e.target.value)}
+            >
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+              <option value="claude-opus-5">Claude Opus 5</option>
+              <option value="claude-opus-4-8">Claude Opus 4.8</option>
+              <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       {/* Theme toggle */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -1164,57 +1224,6 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Notification email */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">{en ? 'Notifications' : 'Notifications'}</div>
-        </div>
-        <div className="card-body">
-          <div className="settings-pref-row">
-            <label className="settings-pref-label">{en ? 'Notification email' : 'Email de notification'}</label>
-            <input
-              className="form-input"
-              type="email"
-              placeholder={en ? "your@email.com" : "votre@email.com"}
-              value={preferences.notificationEmail}
-              onChange={e => updatePreference('notificationEmail', e.target.value)}
-            />
-          </div>
-
-          {emailPrefs && (
-            <div style={{ marginTop: 18 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
-                {t('settings.emailPrefsIntro')}
-              </div>
-              {[
-                { key: 'crm_digest', label: t('settings.emailPrefCrmDigest'), desc: t('settings.emailPrefCrmDigestDesc') },
-                { key: 'weekly_report', label: t('settings.emailPrefWeeklyReport'), desc: t('settings.emailPrefWeeklyReportDesc') },
-                { key: 'tips', label: t('settings.emailPrefTips'), desc: t('settings.emailPrefTipsDesc') },
-              ].map(({ key, label, desc }) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--border)' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{desc}</div>
-                  </div>
-                  <div
-                    role="switch"
-                    aria-checked={emailPrefs[key] !== false}
-                    aria-label={label}
-                    tabIndex={0}
-                    className={`toggle-switch${emailPrefs[key] !== false ? ' on' : ''}`}
-                    onClick={() => toggleEmailPref(key)}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEmailPref(key); } }}
-                  />
-                </div>
-              ))}
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                {t('settings.emailPrefsHint')}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
