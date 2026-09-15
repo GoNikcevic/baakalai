@@ -132,6 +132,7 @@ export default function SettingsPage() {
 
   const [syncStatus, setSyncStatus] = useState(null);
   const [crmSyncStatus, setCrmSyncStatus] = useState(null);
+  const [crmSummary, setCrmSummary] = useState(null);
   const [activeCrm, setActiveCrm] = useState(null);
   const { socket } = useSocket();
   const { showToast: notifyToast } = useNotifications();
@@ -247,15 +248,38 @@ export default function SettingsPage() {
 
   /* ─── Socket listener for CRM sync progress ─── */
 
+  // Compteurs actionnables affichés une fois l'analyse terminée. Les deux
+  // endpoints existent déjà (dashboard + data-quality) ; si l'un échoue on
+  // retombe sur les CTA génériques, jamais sur un état cassé.
+  const loadCrmSummary = useCallback(async () => {
+    const [activation, quality] = await Promise.all([
+      request('/dashboard/activation').catch(() => null),
+      request('/data-quality/dashboard-summary').catch(() => null),
+    ]);
+    if (!activation && !quality) return;
+    const q = quality
+      ? (quality.duplicates || 0) + (quality.general || 0) + (quality.dealQuality || 0) + (quality.clientQuality || 0)
+      : 0;
+    setCrmSummary({
+      stagnant: activation?.segments?.stagnant ?? 0,
+      churnRisk: activation?.segments?.churnRisk ?? 0,
+      qualityIssues: q,
+    });
+  }, []);
+
   useEffect(() => {
     if (!socket) return;
     const onCrmSync = (data) => {
       setCrmSyncStatus(data);
       if (data.status === 'done') {
+        setCrmSummary(null);
+        loadCrmSummary();
         notifyToast({
           type: 'success',
           title: en ? 'CRM analysis' : 'Analyse CRM',
-          message: data.message,
+          message: data.dealsCount != null
+            ? t('settings.crmDoneSummary', { deals: data.dealsCount, patterns: data.patternsCount ?? 0 })
+            : data.message,
           duration: 5000,
         });
       } else if (data.status === 'error') {
@@ -269,7 +293,7 @@ export default function SettingsPage() {
     };
     socket.on('crm:sync', onCrmSync);
     return () => socket.off('crm:sync', onCrmSync);
-  }, [socket, notifyToast, en]);
+  }, [socket, notifyToast, en, t, loadCrmSummary]);
 
   /* ─── Outreach sync handler ─── */
 
@@ -893,7 +917,9 @@ export default function SettingsPage() {
               <div style={{ fontSize: 12, color: crmSyncStatus.status === 'done' ? 'var(--success)' : crmSyncStatus.status === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
                 {crmSyncStatus.status === 'done' && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
                 {crmSyncStatus.status === 'error' && <Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
-                {crmSyncStatus.message || ''}
+                {crmSyncStatus.status === 'done' && crmSyncStatus.dealsCount != null
+                  ? t('settings.crmDoneSummary', { deals: crmSyncStatus.dealsCount, patterns: crmSyncStatus.patternsCount ?? 0 })
+                  : (crmSyncStatus.message || '')}
               </div>
               {crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error' && (
                 <LoadingTips
@@ -903,22 +929,69 @@ export default function SettingsPage() {
               )}
               {crmSyncStatus.status === 'done' && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
-                    {en
-                      ? 'Your CRM data is now synced. Here\'s what you can do next:'
-                      : 'Vos données CRM sont synchronisées. Voici ce que vous pouvez faire :'}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
-                      {en ? 'View Analytics' : 'Voir les Analytics'}
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/clients')}>
-                      {en ? 'Browse Clients' : 'Voir les Clients'}
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
-                      {en ? 'Ask the AI' : 'Demander à l\'IA'}
-                    </button>
-                  </div>
+                  {crmSummary ? (
+                    (() => {
+                      const rows = [
+                        { key: 'stagnant', count: crmSummary.stagnant, icon: 'flame', label: t('settings.crmFoundStagnant', { count: crmSummary.stagnant }), to: '/deals-to-reactivate' },
+                        { key: 'churn', count: crmSummary.churnRisk, icon: 'alert', label: t('settings.crmFoundChurn', { count: crmSummary.churnRisk }), to: '/churn-risk' },
+                        { key: 'quality', count: crmSummary.qualityIssues, icon: 'sparkles', label: t('settings.crmFoundQuality', { count: crmSummary.qualityIssues }), to: '/data-quality' },
+                      ].filter(r => r.count > 0);
+                      return (
+                        <>
+                          {rows.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                              {rows.map((r, i) => (
+                                <div key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  <Icon name={r.icon} size={14} style={{ flexShrink: 0, color: i === 0 ? 'var(--primary, #6E57FA)' : 'var(--text-muted)' }} />
+                                  <span style={{ flex: 1 }}>{r.label}</span>
+                                  <button
+                                    className={`btn btn-sm ${i === 0 ? 'btn-primary' : 'btn-ghost'}`}
+                                    onClick={() => navigate(r.to)}
+                                  >
+                                    {t('settings.crmSee')}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
+                              {t('settings.crmFoundNothing')}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {rows.length === 0 && (
+                              <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
+                                {t('settings.crmCtaAnalytics')}
+                              </button>
+                            )}
+                            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
+                              {t('settings.crmCtaAsk')}
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()
+                  ) : (
+                    /* Résumé pas (encore) chargé — CTA génériques en secours */
+                    <>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
+                        {en
+                          ? 'Your CRM data is now synced. Here\'s what you can do next:'
+                          : 'Vos données CRM sont synchronisées. Voici ce que vous pouvez faire :'}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
+                          {en ? 'View Analytics' : 'Voir les Analytics'}
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/clients')}>
+                          {en ? 'Browse Clients' : 'Voir les Clients'}
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
+                          {en ? 'Ask the AI' : 'Demander à l\'IA'}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
