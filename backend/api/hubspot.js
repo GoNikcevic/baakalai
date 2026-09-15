@@ -132,30 +132,40 @@ async function getDealPipelines(accessToken) {
   }));
 }
 
-async function getDeals(accessToken, limit = 100) {
+async function getDeals(accessToken, limit = 10000) {
   // hs_is_closed / hs_is_closed_won are default calculated properties on every HubSpot portal —
   // the native won/lost signal, independent of the pipeline's (fully customizable) dealstage IDs.
-  const params = new URLSearchParams({
-    limit: String(Math.min(limit, 100)),
-    associations: 'contacts',
-    properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate',
-  });
-  const data = await hubspotFetch(accessToken, `/crm/v3/objects/deals?${params.toString()}`);
-  return (data.results || []).map(d => {
-    const p = d.properties || {};
-    const isWon = p.hs_is_closed_won === 'true';
-    const isClosed = p.hs_is_closed === 'true';
-    return {
-      id: d.id,
-      name: p.dealname || '',
-      stage: p.dealstage || '',
-      status: isWon ? 'won' : (isClosed ? 'lost' : 'open'),
-      value: p.amount ? parseFloat(p.amount) : null,
-      personId: d.associations?.contacts?.results?.[0]?.id || null,
-      closeDate: p.closedate || null,
-      updatedAt: p.hs_lastmodifieddate || null,
-    };
-  });
+  // Paginé via le curseur `after` (pages de 100, le max de l'API v3) : le plafond
+  // de 100 sans pagination laissait les deals anciens des vrais portails sans
+  // mapping won/lost — donc invisibles comme clients.
+  const deals = [];
+  let after = null;
+  do {
+    const params = new URLSearchParams({
+      limit: String(Math.min(limit - deals.length, 100)),
+      associations: 'contacts',
+      properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate',
+    });
+    if (after) params.set('after', after);
+    const data = await hubspotFetch(accessToken, `/crm/v3/objects/deals?${params.toString()}`);
+    for (const d of data.results || []) {
+      const p = d.properties || {};
+      const isWon = p.hs_is_closed_won === 'true';
+      const isClosed = p.hs_is_closed === 'true';
+      deals.push({
+        id: d.id,
+        name: p.dealname || '',
+        stage: p.dealstage || '',
+        status: isWon ? 'won' : (isClosed ? 'lost' : 'open'),
+        value: p.amount ? parseFloat(p.amount) : null,
+        personId: d.associations?.contacts?.results?.[0]?.id || null,
+        closeDate: p.closedate || null,
+        updatedAt: p.hs_lastmodifieddate || null,
+      });
+    }
+    after = data.paging?.next?.after || null;
+  } while (after && deals.length < limit);
+  return deals;
 }
 
 // =============================================

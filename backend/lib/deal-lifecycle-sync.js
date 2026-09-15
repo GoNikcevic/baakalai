@@ -28,7 +28,7 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
     let deals = [];
     if (crmProvider === 'pipedrive') { const pipedrive = require('../api/pipedrive'); deals = await pipedrive.getDeals(token, 500); }
     else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
-    else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token, 100); }
+    else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token); }
     else if (crmProvider === 'odoo') { const odooApi = require('../api/odoo'); deals = await odooApi.getDeals(token, { limit: 500 }); }
 
     // Étapes de pipeline (migration 092) : carte id → libellé résolue une fois

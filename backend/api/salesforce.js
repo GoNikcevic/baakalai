@@ -78,29 +78,40 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
   });
 }
 
-async function getDeals(instanceUrl, accessToken, limit = 100) {
+async function getDeals(instanceUrl, accessToken, limit = 10000) {
   // LastActivityDate / LastModifiedDate : sans elles, la récence d'un deal est
   // inconnue et rien ne peut être signalé comme dormant. Voir lib/crm-activity-date.js.
   // IsWon/IsClosed are native Opportunity fields (true source of truth for won/lost — no need
   // to cross-reference OpportunityStage). The OpportunityContactRoles subquery resolves the
   // primary contact, since Opportunity has no direct contact lookup (only AccountId).
+  // Paginé via nextRecordsUrl (comme listContacts) : le plafond de 100 sans
+  // pagination laissait les opportunités anciennes des vrais orgs sans mapping
+  // won/lost — donc invisibles comme clients.
   const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed,
     (SELECT ContactId FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
     FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
-  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  return (result.records || []).map(r => ({
-    id: r.Id,
-    name: r.Name,
-    stage: r.StageName,
-    status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
-    value: r.Amount,
-    personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
-    closeDate: r.CloseDate,
-    createdAt: r.CreatedDate,
-    updatedAt: r.LastModifiedDate,
-    // Sans ces deux champs le deal remonte sans recence, donc jamais dormant.
-    lastActivityAt: extractActivityDate('salesforce', r),
-  }));
+  const deals = [];
+  let result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
+  for (;;) {
+    for (const r of result.records || []) {
+      deals.push({
+        id: r.Id,
+        name: r.Name,
+        stage: r.StageName,
+        status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
+        value: r.Amount,
+        personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
+        closeDate: r.CloseDate,
+        createdAt: r.CreatedDate,
+        updatedAt: r.LastModifiedDate,
+        // Sans ces deux champs le deal remonte sans recence, donc jamais dormant.
+        lastActivityAt: extractActivityDate('salesforce', r),
+      });
+    }
+    if (result.done || !result.nextRecordsUrl || deals.length >= limit) break;
+    result = await sfFetch(instanceUrl, accessToken, result.nextRecordsUrl.replace('/services/data/v58.0', ''));
+  }
+  return deals;
 }
 
 // Diagnostic public (lead magnet) : lecture unique et anonyme des
