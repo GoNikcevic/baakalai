@@ -11,6 +11,7 @@ import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 import Icon from '../components/Icon';
+import { useConfirm } from '../components/ConfirmModal';
 
 const CRM_BANNER_KEY = 'bakal_reactivation_crm_banner_dismissed';
 const CRM_BANNER_TTL = 24 * 60 * 60 * 1000; // reappears after 24h
@@ -37,6 +38,10 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   const [sort, setSort] = useState('overdue');
   const [postponeFor, setPostponeFor] = useState(null);
   const [postponeDate, setPostponeDate] = useState('');
+  const confirm = useConfirm();
+  const [selected, setSelected] = useState(() => new Set());
+  // null = pas d'envoi groupé en cours ; sinon { phase: 'drafting'|'sending', done, total }
+  const [bulk, setBulk] = useState(null);
   // null = pas encore su ; l'état vide ne s'affiche qu'une fois la réponse connue
   const [hasCrm, setHasCrm] = useState(null);
   const [showCrmBanner, setShowCrmBanner] = useState(() => {
@@ -76,6 +81,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
     } catch {
       setCandidates([]);
     }
+    setSelected(new Set()); // la liste a changé, une sélection sur l'ancienne n'a plus de sens
     setLoading(false);
   }, [kind, sort]);
 
@@ -107,6 +113,81 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
     if (eventType === 'sent') return 'var(--accent)';
     if (eventType === 'postponed') return 'var(--text-muted)';
     return 'var(--text-secondary)';
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = candidates.length > 0 && selected.size === candidates.length;
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(candidates.map(c => c.id)));
+  };
+
+  // Plafond de POST /nurture/emails/approve-batch — au-delà on ré-appelle par tranches.
+  const APPROVE_BATCH_MAX = 20;
+
+  const handleBulkSend = async () => {
+    const targets = candidates.filter(c => selected.has(c.id));
+    if (!targets.length || bulk) return;
+    if (!await confirm(t('reactivation.bulkConfirm', { count: targets.length }))) return;
+
+    // Phase 1 — brouillons séquentiels : un appel IA par deal, et un compte SMTP
+    // perso n'aime pas les rafales de toute façon. Le endpoint réutilise un
+    // brouillon pending existant sans le régénérer.
+    setBulk({ phase: 'drafting', done: 0, total: targets.length });
+    const emailIds = [];
+    const nameByEmailId = {};
+    const failures = [];
+    for (const c of targets) {
+      const label = c.name || c.company || c.email;
+      try {
+        const data = await request(`/reactivation/${c.id}/draft?kind=${kind}`);
+        emailIds.push(data.email.id);
+        nameByEmailId[data.email.id] = label;
+      } catch (err) {
+        failures.push(`${label} — ${err.message}`);
+      }
+      setBulk(prev => (prev ? { ...prev, done: prev.done + 1 } : prev));
+    }
+
+    // Phase 2 — envoi en lot par tranches de 20.
+    let sent = 0;
+    if (emailIds.length) {
+      setBulk({ phase: 'sending', done: 0, total: emailIds.length });
+      for (let i = 0; i < emailIds.length; i += APPROVE_BATCH_MAX) {
+        const chunk = emailIds.slice(i, i + APPROVE_BATCH_MAX);
+        try {
+          const result = await request('/nurture/emails/approve-batch', {
+            method: 'POST',
+            body: JSON.stringify({ ids: chunk }),
+          });
+          sent += result.sent || 0;
+          for (const r of result.results || []) {
+            if (!r.success) failures.push(`${nameByEmailId[r.id] || r.id} — ${r.error || ''}`);
+          }
+        } catch (err) {
+          chunk.forEach(id => failures.push(`${nameByEmailId[id]} — ${err.message}`));
+        }
+        setBulk(prev => (prev ? { ...prev, done: i + chunk.length } : prev));
+      }
+    }
+
+    setBulk(null);
+    if (failures.length === 0) {
+      showToast({ type: 'success', title: t('reactivation.bulkDone', { sent }), message: '' });
+    } else {
+      showToast({
+        type: sent > 0 ? 'warning' : 'error',
+        title: t('reactivation.bulkPartial', { sent, failed: failures.length }),
+        message: failures.slice(0, 3).join('\n'),
+      });
+    }
+    loadData(); // les envoyés sortent de la file (cooldown 7 j), les échecs restent
   };
 
   const handlePostpone = async (id) => {
@@ -265,6 +346,28 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
         </div>
       )}
 
+      {tab === 'pending' && !loading && candidates.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, minHeight: 28 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: bulk ? 'default' : 'pointer' }}>
+            <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} disabled={!!bulk} />
+            {t('reactivation.selectAll')}
+          </label>
+          {bulk ? (
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>
+              {t(bulk.phase === 'drafting' ? 'reactivation.bulkDrafting' : 'reactivation.bulkSending', { done: bulk.done, total: bulk.total })}
+            </span>
+          ) : selected.size > 0 && (
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 11, padding: '4px 12px' }}
+              onClick={handleBulkSend}
+            >
+              {t('reactivation.bulkSend', { count: selected.size })}
+            </button>
+          )}
+        </div>
+      )}
+
       {tab === 'pending' ? (
         loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>...</div>
@@ -289,6 +392,14 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
               <div key={c.id} className="card">
                 <div className="card-body" style={{ padding: '14px 18px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.id)}
+                      onChange={() => toggleSelect(c.id)}
+                      disabled={!!bulk}
+                      aria-label={t('reactivation.selectOne', { name: c.name || c.company || c.email })}
+                      style={{ marginTop: 3, marginRight: 12, flexShrink: 0, cursor: bulk ? 'default' : 'pointer' }}
+                    />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name || c.company || c.email}</div>
                       {c.company && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.company}</div>}

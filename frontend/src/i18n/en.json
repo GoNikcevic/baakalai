@@ -1363,7 +1363,15 @@
     "stagnantAfter": "Deal dormant after",
     "stagnantDaysUnit": "days without activity",
     "stagnantSaved": "Threshold saved",
-    "stagnantSavedDesc": "A deal is now considered dormant after {days} days without activity."
+    "stagnantSavedDesc": "A deal is now considered dormant after {days} days without activity.",
+    "selectAll": "Select all",
+    "selectOne": "Select {name}",
+    "bulkSend": "Send selection ({count})",
+    "bulkConfirm": "Send {count} follow-up email(s)?\nbaakalai drafts each email from your CRM data and sends them as is, without individual review. Allow a few seconds of drafting per email — stay on this page.",
+    "bulkDrafting": "Drafting... {done}/{total}",
+    "bulkSending": "Sending... {done}/{total}",
+    "bulkDone": "{sent} email(s) sent",
+    "bulkPartial": "{sent} sent, {failed} failed"
   },
   "churn": {
     "title": "Clients at churn risk",

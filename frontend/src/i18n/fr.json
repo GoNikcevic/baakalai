@@ -1363,7 +1363,15 @@
     "stagnantAfter": "Deal dormant après",
     "stagnantDaysUnit": "jours sans activité",
     "stagnantSaved": "Seuil enregistré",
-    "stagnantSavedDesc": "Un deal est désormais considéré comme dormant après {days} jours sans activité."
+    "stagnantSavedDesc": "Un deal est désormais considéré comme dormant après {days} jours sans activité.",
+    "selectAll": "Tout sélectionner",
+    "selectOne": "Sélectionner {name}",
+    "bulkSend": "Envoyer la sélection ({count})",
+    "bulkConfirm": "Envoyer {count} email(s) de relance ?\nbaakalai rédige chaque brouillon à partir de votre CRM puis les envoie tels quels, sans relecture individuelle. Comptez quelques secondes de rédaction par email — restez sur cette page.",
+    "bulkDrafting": "Rédaction des brouillons... {done}/{total}",
+    "bulkSending": "Envoi... {done}/{total}",
+    "bulkDone": "{sent} email(s) envoyé(s)",
+    "bulkPartial": "{sent} envoyé(s), {failed} en échec"
   },
   "churn": {
     "title": "Clients à risque de churn",
