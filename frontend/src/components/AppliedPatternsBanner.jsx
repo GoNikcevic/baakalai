@@ -38,17 +38,23 @@ export default function AppliedPatternsBanner({ patternIds }) {
       background: 'var(--bg-elevated, rgba(110,87,250,0.05))',
       border: '1px solid var(--border)',
       borderRadius: 10,
-      padding: '10px 14px',
+      padding: '14px 16px',
       fontSize: 12,
       margin: '10px 0',
     }}>
-      <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+      <div style={{ fontWeight: 600, marginBottom: 10, color: 'var(--text-primary)' }}>
         <Icon name="sparkles" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('memory.appliedBanner', { count: patterns.length })}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {patterns.map(p => (
-          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ flex: 1, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{p.pattern}</span>
+          <div key={p.id} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            background: 'var(--bg-default, #fff)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '8px 12px',
+          }}>
+            <span style={{ flex: 1, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{p.pattern}</span>
             {p.applied ? (
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,

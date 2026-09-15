@@ -13,7 +13,7 @@
 
 const { Router } = require('express');
 const db = require('../db');
-const { listDealsToReactivate, listClientsToUpsell, postponeOpportunity, getHistory } = require('../lib/reactivation-queue');
+const { listDealsToReactivate, listClientsToUpsell, postponeOpportunity, getHistory, computeOverdue } = require('../lib/reactivation-queue');
 const dealCoach = require('../lib/agents/deal-coach');
 const upsellDetector = require('../lib/agents/upsell-detector');
 
@@ -23,6 +23,42 @@ const VALID_KINDS = ['deal_reactivation', 'auto_upsell'];
 
 function validateKind(kind) {
   return VALID_KINDS.includes(kind);
+}
+
+/**
+ * Facts shown next to a draft so the user understands WHY this email exists:
+ * where the relationship stands (stage, value, inactivity, churn) plus the
+ * AI's own justification stored in the draft's metadata (reason/urgency for
+ * deal reactivation, cross-sell products for upsell). Raw data only — labels
+ * are built frontend-side for i18n.
+ */
+async function buildDraftContext(userId, opportunityId, metadata) {
+  const result = await db.query(
+    `SELECT name, title, company, status, crm_stage, deal_value, churn_score,
+            last_activity_at, created_at, planned_followup_date
+     FROM opportunities WHERE id = $1 AND user_id = $2`,
+    [opportunityId, userId]
+  );
+  const opp = result.rows[0];
+  if (!opp) return null;
+  const overdue = computeOverdue(opp);
+  const meta = metadata || {};
+  return {
+    contactName: opp.name,
+    contactTitle: opp.title,
+    company: opp.company,
+    status: opp.status,
+    stage: opp.crm_stage,
+    dealValue: opp.deal_value,
+    churnScore: opp.churn_score,
+    lastActivityAt: opp.last_activity_at || opp.created_at,
+    hasPlannedDate: overdue.hasPlannedDate,
+    plannedFollowupDate: opp.planned_followup_date,
+    overdueDays: overdue.overdueDays,
+    reason: meta.reason || null,
+    urgency: meta.urgency || null,
+    crossSellProducts: meta.cross_sell_products || null,
+  };
 }
 
 // GET /api/reactivation/settings — seuil de dormance de l'utilisateur
@@ -95,7 +131,10 @@ router.get('/:opportunityId/draft', async (req, res, next) => {
        ORDER BY created_at DESC LIMIT 1`,
       [req.user.id, opportunityId, kind]
     );
-    if (existing.rows[0] && force !== 'true') return res.json({ email: existing.rows[0] });
+    if (existing.rows[0] && force !== 'true') {
+      const context = await buildDraftContext(req.user.id, opportunityId, existing.rows[0].metadata);
+      return res.json({ email: existing.rows[0], context });
+    }
 
     const draft = kind === 'deal_reactivation'
       ? await dealCoach.coachAndDraftOne(req.user.id, opportunityId)
@@ -138,7 +177,8 @@ router.get('/:opportunityId/draft', async (req, res, next) => {
       );
     }
 
-    res.json({ email });
+    const context = await buildDraftContext(req.user.id, opportunityId, metadata);
+    res.json({ email, context });
   } catch (err) {
     next(err);
   }

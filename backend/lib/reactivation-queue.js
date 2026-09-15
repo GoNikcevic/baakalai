@@ -235,4 +235,4 @@ async function getHistory(userId, kind) {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-module.exports = { listDealsToReactivate, listClientsToUpsell, postponeOpportunity, failedSendIds, getHistory };
+module.exports = { listDealsToReactivate, listClientsToUpsell, postponeOpportunity, failedSendIds, getHistory, computeOverdue };
