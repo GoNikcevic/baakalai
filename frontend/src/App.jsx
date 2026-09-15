@@ -36,6 +36,7 @@ const DealsToReactivatePage = lazyRetry(() => import('./pages/DealsToReactivateP
 const ClientsToUpsellPage = lazyRetry(() => import('./pages/ClientsToUpsellPage'))
 const DealReactivationDetailRoute = lazyRetry(() => import('./pages/DealReactivationDetailRoute'))
 const UpsellDetailRoute = lazyRetry(() => import('./pages/UpsellDetailRoute'))
+const WorkflowPage = lazyRetry(() => import('./pages/WorkflowPage'))
 const DataQualityPage = lazyRetry(() => import('./pages/DataQualityPage'))
 const ChurnPage = lazyRetry(() => import('./pages/ChurnPage'))
 const ActivationPage = lazyRetry(() => import('./pages/ActivationPage'))
@@ -200,8 +201,10 @@ export default function App() {
             <Route path="/clients" element={<ClientsPage scope="clients" />} />
             <Route path="/deals-to-reactivate" element={<DealsToReactivatePage />} />
             <Route path="/deals-to-reactivate/:opportunityId" element={<DealReactivationDetailRoute />} />
+            <Route path="/deals-to-reactivate/:opportunityId/workflow" element={<WorkflowPage goal="reactivation" backBase="/deals-to-reactivate" />} />
             <Route path="/clients-to-upsell" element={<ClientsToUpsellPage />} />
             <Route path="/clients-to-upsell/:opportunityId" element={<UpsellDetailRoute />} />
+            <Route path="/clients-to-upsell/:opportunityId/workflow" element={<WorkflowPage goal="upsell" backBase="/clients-to-upsell" />} />
             <Route path="/data-quality" element={<DataQualityPage />} />
             <Route path="/churn-risk" element={<ChurnPage />} />
             <Route path="/activation" element={<ActivationPage />} />

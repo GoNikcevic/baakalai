@@ -64,12 +64,95 @@ async function createSteps(enrollmentId, steps) {
   }
 }
 
-// GET /api/enrollments?status=&opportunityId=
+// GET /api/enrollments?status=&opportunityId= — avec progression (étape x/n)
+// pour les badges de la file de relance.
 router.get('/', async (req, res, next) => {
   try {
     const { status, opportunityId } = req.query;
     const enrollments = await db.sequenceEnrollments.listByUser(req.user.id, { status, opportunityId });
+
+    if (enrollments.length > 0) {
+      const ids = enrollments.map(e => e.id);
+      const [totals, consumed] = await Promise.all([
+        db.query(
+          `SELECT enrollment_id, COUNT(*) AS n FROM touchpoints
+           WHERE enrollment_id = ANY($1) GROUP BY enrollment_id`,
+          [ids]
+        ),
+        db.query(
+          `SELECT enrollment_id, COUNT(*) AS n FROM campaign_sends
+           WHERE enrollment_id = ANY($1) AND touchpoint_id IS NOT NULL
+             AND status IN ('sent', 'skipped')
+           GROUP BY enrollment_id`,
+          [ids]
+        ),
+      ]);
+      const totalById = new Map(totals.rows.map(r => [r.enrollment_id, parseInt(r.n, 10)]));
+      const doneById = new Map(consumed.rows.map(r => [r.enrollment_id, parseInt(r.n, 10)]));
+      for (const e of enrollments) {
+        e.total_steps = totalById.get(e.id) || 0;
+        e.done_steps = doneById.get(e.id) || 0;
+      }
+    }
+
     res.json({ enrollments });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/enrollments/propose — le Deal Coach conçoit un workflow de
+// relance pour un deal et le dépose en BROUILLON (aucun envoi sans
+// approbation). 409 avec l'enrollment existant si un workflow est déjà vivant.
+router.post('/propose', async (req, res, next) => {
+  try {
+    const { opportunityId, goal } = req.body || {};
+    if (!opportunityId || !GOALS.includes(goal)) {
+      return res.status(400).json({ error: `opportunityId et goal (${GOALS.join('|')}) sont requis` });
+    }
+
+    const opportunity = await db.opportunities.get(opportunityId);
+    if (!opportunity || opportunity.user_id !== req.user.id) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+    if (!isCrmContact(opportunity)) {
+      return res.status(400).json({ code: 'not_crm_contact', error: 'Ce contact appartient à une campagne de prospection — sa séquence de campagne est son seul canal.' });
+    }
+
+    const existing = await db.sequenceEnrollments.listByUser(req.user.id, { opportunityId });
+    const live = existing.find(e => ['draft', 'active', 'paused'].includes(e.status));
+    if (live) {
+      return res.status(409).json({ code: 'already_enrolled', enrollment: live });
+    }
+
+    const dealCoach = require('../lib/agents/deal-coach');
+    const plan = await dealCoach.proposeWorkflow(req.user.id, opportunityId, goal);
+    if (plan.error) {
+      const httpCode = plan.error === 'not_found' ? 404 : 400;
+      return res.status(httpCode).json({ code: plan.error, error: plan.error });
+    }
+
+    let enrollment;
+    try {
+      enrollment = await db.sequenceEnrollments.create({
+        userId: req.user.id,
+        opportunityId,
+        goal,
+        rationale: plan.reason,
+        createdBy: 'agent',
+      });
+    } catch (err) {
+      if (err.code === '23505') {
+        return res.status(409).json({ code: 'already_enrolled', error: 'Un workflow est déjà en cours pour ce contact.' });
+      }
+      throw err;
+    }
+
+    await createSteps(enrollment.id, plan.steps);
+    const created = await db.touchpoints.listByEnrollment(enrollment.id);
+
+    logger.info('enrollments', `Proposed ${enrollment.id} (${goal}, ${plan.urgency}) — ${created.length} steps for ${opportunity.name || opportunityId}`);
+    res.status(201).json({ enrollment, sequence: buildTree(created), contact: opportunity, urgency: plan.urgency });
   } catch (err) {
     next(err);
   }

@@ -205,4 +205,122 @@ Return JSON:
   };
 }
 
-module.exports = { run, coachAndDraftOne };
+/**
+ * Workflow de relance multicanal pour UN deal (phase 2 enrollments).
+ * Même assemblage de contexte que coachAndDraftOne, mais le modèle produit un
+ * plan complet : 4-6 steps email/LinkedIn étalés sur ~2 semaines, avec une
+ * bifurcation « si l'invitation LinkedIn est acceptée » exécutable par le
+ * moteur natif (migration 103). Le résultat est un BROUILLON — rien ne part
+ * sans approbation explicite de l'utilisateur.
+ * Returns { reason, urgency, steps, patternIds } ou { error }.
+ */
+async function proposeWorkflow(userId, opportunityId, goal = 'reactivation') {
+  const oppResult = await db.query(
+    'SELECT * FROM opportunities WHERE id = $1 AND user_id = $2',
+    [opportunityId, userId]
+  );
+  const deal = oppResult.rows[0];
+  if (!deal) return { error: 'not_found' };
+  if (deal.status === 'won' && goal === 'reactivation') return { error: 'not_eligible' };
+  if (deal.status === 'lost') return { error: 'not_eligible' };
+  if (!deal.email && !deal.linkedin_url) return { error: 'no_channel' };
+
+  const [patterns, emails, teamId] = await Promise.all([
+    db.memoryPatterns.list({ confidence: 'Haute', limit: 10 }),
+    deal.email
+      ? db.query(
+          `SELECT to_email, subject, sentiment, status, created_at FROM nurture_emails
+           WHERE user_id = $1 AND to_email = $2 AND created_at > now() - interval '60 days'
+           ORDER BY created_at DESC`,
+          [userId, deal.email]
+        )
+      : Promise.resolve({ rows: [] }),
+    getTeamId(userId),
+  ]);
+  const [timing, copyCtx, patternCtx] = await Promise.all([
+    getTimingContext(userId),
+    getCopyContext(userId),
+    getPatternContext(teamId, userId),
+  ]);
+
+  const contactEmails = emails.rows;
+  const patternCtxText = patterns.map(p => `- ${p.pattern}`).join('\n');
+  const daysSinceUpdate = Math.round((Date.now() - new Date(deal.last_activity_at || deal.created_at).getTime()) / DAY_MS);
+  const hasEmail = !!deal.email;
+  const hasLinkedin = !!deal.linkedin_url;
+
+  const goalBrief = {
+    reactivation: 'Réactiver un deal dormant : recréer le dialogue, comprendre le blocage, obtenir une réponse.',
+    upsell: 'Proposer une extension à un client existant : partir de la valeur déjà livrée, jamais agressif.',
+    churn_prevention: 'Retenir un client à risque : prendre des nouvelles sincèrement, détecter le problème avant la résiliation.',
+  }[goal] || 'Réactiver la relation.';
+
+  const prompt = `You are a B2B sales coach and copywriter. Design a complete multichannel
+follow-up workflow for this CRM contact — an existing relationship, NOT a cold prospect.
+
+GOAL: ${goalBrief}
+
+Contact: ${deal.name} (${deal.title || 'N/A'}) at ${deal.company || 'N/A'}
+Deal status: ${deal.status || 'open'}${deal.deal_value ? ` — value ${deal.deal_value} €` : ''}
+Days since last activity: ${daysSinceUpdate}
+Churn risk score: ${deal.churn_score || 'N/A'}/100
+Churn factors: ${formatChurnFactors(deal.churn_factors)}
+Emails sent (60d): ${contactEmails.length}
+Last email sentiment: ${contactEmails[0]?.sentiment || 'N/A'}
+Channels available: ${hasEmail ? 'email' : ''}${hasEmail && hasLinkedin ? ' + ' : ''}${hasLinkedin ? 'LinkedIn' : ''}
+
+${patternCtxText ? `PATTERNS THAT WORK:\n${patternCtxText}` : ''}
+${copyCtx ? `\nCOPY PATTERNS THAT WORK:\n${copyCtx}` : ''}
+${patternCtx.text ? `\nMEMORY PATTERNS:\n${patternCtx.text}` : ''}
+${timing.bestDay ? `\nBEST SEND TIMING: ${timing.bestDay}${timing.bestHour != null ? ` at ${timing.bestHour}h` : ''}` : ''}
+
+RULES:
+- 4 to 6 steps over 10-15 days. "timing" is "J+N" = N days AFTER the PREVIOUS step (J+0 for the first).
+- Types: "email", "linkedin_visit", "linkedin_invite", "linkedin_message".${hasLinkedin ? '' : ' NO LinkedIn steps — this contact has no LinkedIn URL.'}${hasEmail ? '' : ' NO email steps — this contact has no email address.'}
+- Everything the contact reads is in FRENCH. Emails max 6 lines, human and personal (NOT marketing). This person KNOWS the sender — reference the existing relationship, never introduce yourself like a stranger.
+- linkedin_visit: no subject, no body. linkedin_invite: no subject, body max 300 characters, warm note (no pitch).
+- ${hasEmail && hasLinkedin ? 'If you include a linkedin_invite, give it EXACTLY two children: one with conditionType "accepted" (a linkedin_message continuing the conversation) and one with conditionType "not_accepted" (an email taking a different angle). Steps after the fork go back to the top-level array.' : 'No conditional branches (single channel).'}
+- "reason": 2-3 French sentences explaining WHY this plan for THIS deal (cite the signals: dormancy, opens, patterns). Shown to the user before approval.
+
+Return JSON:
+{
+  "reason": "...",
+  "urgency": "high|medium|low",
+  "steps": [
+    { "step": "E1", "type": "email", "timing": "J+0", "subject": "...", "body": "..." },
+    { "step": "LI1", "type": "linkedin_invite", "timing": "J+3", "body": "...",
+      "children": [
+        { "step": "LM1", "type": "linkedin_message", "timing": "J+2", "conditionType": "accepted", "branchLabel": "Si accepté", "body": "..." },
+        { "step": "E2", "type": "email", "timing": "J+4", "conditionType": "not_accepted", "branchLabel": "Si pas de réponse", "subject": "...", "body": "..." }
+      ] }
+  ]
+}`;
+
+  const result = await claude.callClaude('Return only valid JSON.', prompt, 2000, 'workflow_proposal');
+  let plan = result.parsed;
+  if (!plan) {
+    const m = (result.raw || '').match(/\{[\s\S]*"steps"[\s\S]*\}/);
+    if (m) { try { plan = JSON.parse(m[0]); } catch { plan = null; } }
+  }
+  if (!Array.isArray(plan?.steps) || plan.steps.length === 0) return { error: 'generation_failed' };
+
+  // Filet : retirer les steps sur un canal indisponible (le modèle respecte
+  // presque toujours la consigne, mais un step email vers un contact sans
+  // email serait skippé en boucle par le moteur).
+  const channelOk = (tp) => (tp.type === 'email' ? hasEmail : hasLinkedin);
+  const filterSteps = (steps) => steps
+    .filter(channelOk)
+    .map(tp => ({ ...tp, children: Array.isArray(tp.children) ? filterSteps(tp.children) : [] }));
+  const steps = filterSteps(plan.steps);
+  if (steps.length === 0) return { error: 'generation_failed' };
+
+  return {
+    opportunity: deal,
+    patternIds: patternCtx.ids,
+    reason: plan.reason || '',
+    urgency: plan.urgency || 'medium',
+    steps,
+  };
+}
+
+module.exports = { run, coachAndDraftOne, proposeWorkflow };

@@ -44,6 +44,9 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   const [bulk, setBulk] = useState(null);
   // null = pas encore su ; l'état vide ne s'affiche qu'une fois la réponse connue
   const [hasCrm, setHasCrm] = useState(null);
+  // Workflows de relance vivants (draft/active/paused), indexés par contact —
+  // pour remplacer les boutons d'action par l'état du workflow en cours.
+  const [workflows, setWorkflows] = useState(() => new Map());
   const [showCrmBanner, setShowCrmBanner] = useState(() => {
     try {
       const ts = parseInt(localStorage.getItem(CRM_BANNER_KEY) || '0', 10);
@@ -81,6 +84,14 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
     } catch {
       setCandidates([]);
     }
+    try {
+      const data = await request('/enrollments');
+      const map = new Map();
+      for (const e of data.enrollments || []) {
+        if (['draft', 'active', 'paused'].includes(e.status)) map.set(e.opportunity_id, e);
+      }
+      setWorkflows(map);
+    } catch { /* la file reste utilisable sans l'état des workflows */ }
     setSelected(new Set()); // la liste a changé, une sélection sur l'ancienne n'a plus de sens
     setLoading(false);
   }, [kind, sort]);
@@ -477,9 +488,39 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {(() => {
+                      const wf = workflows.get(c.id);
+                      if (wf?.status === 'active' || wf?.status === 'paused') {
+                        // Un workflow tourne : l'état remplace les actions.
+                        return (
+                          <button
+                            className="btn btn-ghost"
+                            style={{
+                              fontSize: 11, padding: '4px 12px', fontWeight: 700,
+                              color: wf.status === 'active' ? 'var(--success)' : 'var(--text-secondary)',
+                              border: `1px solid ${wf.status === 'active' ? 'var(--success)' : 'var(--border)'}`,
+                            }}
+                            onClick={() => navigate(`${detailRouteBase}/${c.id}/workflow`)}
+                          >
+                            {t(wf.status === 'active' ? 'workflow.badgeActive' : 'workflow.badgePaused', {
+                              done: wf.done_steps ?? 0, total: wf.total_steps ?? 0,
+                            })}
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: 11, padding: '4px 12px' }}
+                          onClick={() => navigate(`${detailRouteBase}/${c.id}/workflow`)}
+                        >
+                          {t(wf?.status === 'draft' ? 'workflow.resumeDraft' : 'workflow.propose')}
+                        </button>
+                      );
+                    })()}
                     <button
-                      className="btn btn-primary"
+                      className="btn btn-ghost"
                       style={{ fontSize: 11, padding: '4px 12px' }}
                       onClick={() => navigate(`${detailRouteBase}/${c.id}`)}
                     >
