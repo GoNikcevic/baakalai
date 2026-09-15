@@ -69,8 +69,14 @@ function getExtendedTools(lang) {
         helpSteps: ['Get your API credentials from your Informz admin', 'Format: username:password:brandId', 'Your server IP must be whitelisted by Informz'] },
     ]},
     { label: 'LinkedIn', keys: [
-      { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'li_at cookie — enrichment + automated outreach' : 'Cookie li_at — enrichissement + outreach automatisé', placeholder: en ? 'Your li_at cookie (from browser)' : 'Votre cookie li_at (depuis le navigateur)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
-        helpSteps: en ? ['Log in to linkedin.com', 'Open DevTools (F12) → Application → Cookies', 'Copy the value of the "li_at" cookie', 'Paste it here'] : ['Connectez-vous à linkedin.com', 'Ouvrez les DevTools (F12) → Application → Cookies', 'Copiez la valeur du cookie "li_at"', 'Collez-la ici'] },
+      { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'Your LinkedIn session — powers LinkedIn steps in your follow-up workflows' : 'Votre session LinkedIn — alimente les étapes LinkedIn de vos workflows de relance', placeholder: en ? 'Your li_at cookie (or use the extension)' : 'Votre cookie li_at (ou passez par l\'extension)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
+        helpSteps: en ? [
+          'Easiest: install the "baakalai — LinkedIn Connect" Chrome extension, log in to linkedin.com, click "Connect". The connection then stays up to date on its own.',
+          'Manual fallback: log in to linkedin.com, open DevTools (F12) → Application → Cookies, copy the "li_at" value and paste it here.',
+        ] : [
+          'Le plus simple : installez l\'extension Chrome « baakalai — LinkedIn Connect », connectez-vous à linkedin.com, cliquez sur « Connecter ». La connexion se maintient ensuite toute seule.',
+          'Méthode manuelle : connectez-vous à linkedin.com, ouvrez les DevTools (F12) → Application → Cookies, copiez la valeur de « li_at » et collez-la ici.',
+        ] },
     ]},
   ];
 }

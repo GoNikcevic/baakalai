@@ -1,56 +1,60 @@
-# Extension Chrome « Baakalai — LinkedIn Connect » — PARQUÉE
+# Extension Chrome « baakalai — LinkedIn Connect »
 
-**Statut : hors périmètre. Ne pas publier, ne pas distribuer.** Décidé le 2026-09-01.
+**Statut : ravivée le 2026-09-15 en périmètre minimal** (décision Goran — « il
+faut un moyen plus simple que DevTools pour les users »). Elle avait été
+parquée le 2026-09-01 ; ce fichier documente les deux décisions pour que ni
+l'une ni l'autre ne soit reprise sans contexte.
 
-Le code est conservé, pas supprimé : une partie a de la valeur pour plus tard
-(voir « Ce qui mérite d'être repris »). Ce fichier existe pour que la décision
-ne soit pas reprise sans son contexte.
+## Périmètre v1.1 — cookie-connect, rien d'autre
 
-## Pourquoi elle est parquée
+Une seule mission : relier la session LinkedIn de l'utilisateur à son compte
+baakalai, et la maintenir.
 
-**Usage réel : nul.** Vérifié en base de production le 2026-09-01 —
-1 seul compte LinkedIn connecté (celui du fondateur, inchangé depuis le
-2026-05-13), et la table `linkedin_outreach` contient **0 ligne depuis sa
-création**. L'extension n'a jamais produit une seule action.
+- **Connexion un clic** (popup) : détection du compte baakalai depuis un onglet
+  ouvert, lecture du cookie `li_at` via `chrome.cookies` (il est httpOnly —
+  aucun bookmarklet ni script de page ne peut le lire, l'extension est le seul
+  moyen plus simple que DevTools), envoi vers `POST /api/settings/keys`.
+- **Resync automatique** (`background.js`) : quand LinkedIn fait tourner ou
+  renouvelle le cookie (reconnexion de l'utilisateur), il est renvoyé au
+  backend — l'expiration devient auto-réparatrice tant que l'extension est
+  installée et l'utilisateur connecté à LinkedIn. Garde-fou : le resync ne
+  démarre qu'APRÈS un premier partage explicite dans le popup, et s'arrête à
+  la déconnexion.
+- **Pas de content-script** : `content.js` (overlay/scraping DOM LinkedIn)
+  n'est plus référencé par le manifest. Le fichier reste dans le repo à titre
+  d'archive — c'était la partie fragile (sélecteurs qui cassent) et la plus
+  exposée côté CGU.
 
-**Elle contredit le positionnement.** Son manifeste annonce « Enables
-automated outreach and enrichment » : c'est de l'outillage prospection. Or la
-prospection est une porte d'entrée, pas le produit — la publier au Chrome Web
-Store remettrait ce « ET » dans la vitrine la plus visible qui soit.
+## Pourquoi le parquage de 2026-09-01 ne tient plus (en partie)
 
-**Elle capture le cookie de session LinkedIn.** `popup.js` lit `li_at` via
-`chrome.cookies.get` et l'envoie au backend. Ce n'est pas un OAuth périmétré :
-c'est un accès complet et permanent au compte LinkedIn de l'utilisateur.
-Les CGU LinkedIn l'interdisent, et le compte banni serait **celui du client**.
-C'est aussi un passif de sécurité incompatible avec la posture RGPD du produit
-(anonymisation des patterns, RLS) au moment d'ouvrir une beta payante.
+1. **« Usage réel : nul »** — obsolète. Depuis, le moteur d'envoi natif
+   (2026-09-12) et les workflows de relance (2026-09-15) font de LinkedIn un
+   canal cœur du produit : visites, invitations, messages exécutés par
+   `lib/native-sequence-engine` pour les relances clients.
+2. **« Contredit le positionnement »** — corrigé : le manifest ne parle plus
+   d'« automated outreach » mais de relance de clients existants, et la
+   publication doit se faire en **visibilité « unlisted »** (installable par
+   lien direct uniquement, invisible dans la recherche du store).
+3. **« Capture le cookie de session »** — inchangé sur le fond, mais ce risque
+   est porté par le PRODUIT (toute la chaîne `api/linkedin.js` est active en
+   prod), pas par le mode de capture : coller le cookie via DevTools expose
+   exactement autant. L'extension ne change que l'ergonomie. Le trancher à
+   nouveau = décision produit sur le canal LinkedIn lui-même, pas sur
+   l'extension.
 
-**Coût de maintenance non nul pour zéro retour** : Manifest V3, sélecteurs DOM
-LinkedIn qui cassent à chaque refonte, publication au store à entretenir.
+## Publication (action Goran)
 
-## Ce qui mérite d'être repris
+1. Compte développeur Chrome Web Store (5 $ one-shot).
+2. Zipper le dossier (sans `content.js` ni `icons/generate.html`).
+3. **Visibilité : Unlisted.** Justification vie privée à remplir : cookies
+   (connexion du compte LinkedIn de l'utilisateur, à sa demande), storage
+   (session), pas de collecte de données de navigation.
+4. Reporter l'URL d'installation dans le guide Réglages → LinkedIn
+   (`SettingsPage.jsx`, étape « Installer l'extension »).
 
-**L'overlay** — et lui seul. `backend/routes/extension.js` affiche, sur un
-profil LinkedIn, la fiche CRM du contact (notes, campagnes, patterns) avec
-ajout de note, enrichissement et email rapide. C'est de l'affichage, pas de
-l'automation : aucun risque CGU, et c'est exactement le positionnement —
-l'intelligence CRM là où le commercial travaille déjà.
+## Test local (sans store)
 
-La suite naturelle n'est probablement pas LinkedIn mais **le CRM lui-même**
-(injecter les signaux dans Pipedrive / HubSpot / Salesforce). Voir
-`hubspot-app/`, qui est le début de ce chemin par la voie officielle.
-
-## Risque résiduel — hors extension
-
-Le cookie `li_at` n'est pas consommé que par l'extension. Toute une chaîne
-backend en dépend et reste **active** :
-
-- `backend/api/linkedin.js` — appelle l'API interne Voyager de LinkedIn
-- `backend/lib/agents/linkedin-outreach.js`
-- `backend/routes/signals.js` → `POST /api/signals/:id/linkedin-outreach`
-  (envoi de demandes de connexion, déclenchable par l'utilisateur)
-
-Dormant en pratique (1 cookie stocké, 0 envoi jamais effectué), mais le code
-est en production. **Le retirer est une décision distincte du parquage de
-l'extension** : ça touche `routes/signals.js`, qui est vivant et fonctionne.
-À trancher avant l'ouverture de la beta payante.
+`chrome://extensions` → mode développeur → « Charger l'extension non
+empaquetée » → ce dossier. Pour viser staging :
+dans la console du service worker, `chrome.storage.local.set({ baakalai_api:
+'https://baakal-staging.up.railway.app/api' })`.
