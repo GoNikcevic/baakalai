@@ -61,11 +61,17 @@ async function init() {
   }
 }
 
-// ── Auto-detect token from any open app.baakal.ai tab ──
+// ── Auto-detect token from any open baakalai tab (prod ou staging) ──
+// C'est LE chemin de connexion pour les comptes Google OAuth : pas de mot de
+// passe à taper, l'extension emprunte la session de l'app ouverte. La base
+// API suit l'origine de l'onglet détecté — détecter depuis staging branche
+// automatiquement l'extension sur staging.
+
+const APP_URLS = ['https://app.baakal.ai/*', 'https://baakal-staging.up.railway.app/*'];
 
 async function detectFromBaakalaiTab() {
   try {
-    const tabs = await chrome.tabs.query({ url: 'https://app.baakal.ai/*' });
+    const tabs = await chrome.tabs.query({ url: APP_URLS });
     for (const tab of tabs) {
       try {
         const results = await chrome.scripting.executeScript({
@@ -78,6 +84,8 @@ async function detectFromBaakalaiTab() {
         const data = results?.[0]?.result;
         if (data?.token) {
           await saveTokens(data.token, data.refresh);
+          API_BASE = `${new URL(tab.url).origin}/api`;
+          await new Promise((resolve) => chrome.storage.local.set({ baakalai_api: API_BASE }, resolve));
           return true;
         }
       } catch { /* tab not accessible */ }
@@ -146,13 +154,13 @@ function showLoginForm() {
   content.innerHTML = `
     <div class="status disconnected">
       <div class="label">Connexion à baakalai</div>
-      <div class="detail">Connectez-vous, ou détection automatique depuis un onglet baakalai ouvert.</div>
+      <div class="detail">Ouvrez baakalai dans un onglet et connectez-vous (Google inclus), puis cliquez sur Détecter : l'extension reprend votre session.</div>
     </div>
     <button class="btn btn-primary" id="auto-detect" style="margin-bottom:8px;">
       Détecter depuis baakalai
     </button>
     <div style="text-align:center;margin:6px 0;">
-      <span style="font-size:11px;color:#737373;">ou connexion manuelle</span>
+      <span style="font-size:11px;color:#737373;">ou connexion par email + mot de passe</span>
     </div>
     <input id="email" type="email" placeholder="Email" autocomplete="email"
       style="width:100%;padding:8px 12px;border:1px solid #E5E5E3;border-radius:8px;font-size:12px;margin-bottom:8px;">
