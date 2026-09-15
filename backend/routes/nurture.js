@@ -71,7 +71,8 @@ router.post('/email-accounts', async (req, res, next) => {
 router.get('/email-accounts', async (req, res, next) => {
   try {
     const result = await db.query(
-      `SELECT id, provider, email_address, smtp_host, smtp_port, status, is_default, created_at
+      `SELECT id, provider, email_address, smtp_host, smtp_port, status, is_default, created_at,
+              signature_text, signature_image
        FROM email_accounts WHERE user_id = $1 ORDER BY is_default DESC`,
       [req.user.id]
     );
@@ -93,6 +94,38 @@ router.post('/email-accounts/test', async (req, res, next) => {
 
     const result = await testEmailAccount(account.rows[0]);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/nurture/email-accounts/:id/signature — { signatureText, signatureImage }
+// Texte ≤ 2000 caractères ; image en data-URI (png/jpeg/gif/webp) ≤ 300 Ko
+// décodés, embarquée inline CID à l'envoi (lib/email-outbound.js). null efface.
+router.patch('/email-accounts/:id/signature', async (req, res, next) => {
+  try {
+    const { signatureText, signatureImage } = req.body || {};
+
+    const text = signatureText == null ? null : String(signatureText).trim().slice(0, 2000) || null;
+
+    let image = null;
+    if (signatureImage != null && signatureImage !== '') {
+      const m = String(signatureImage).match(/^data:(image\/(?:png|jpe?g|gif|webp));base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return res.status(400).json({ error: 'Image must be a png/jpeg/gif/webp data URI' });
+      if (Buffer.from(m[2], 'base64').length > 300 * 1024) {
+        return res.status(400).json({ error: 'Image too large (max 300 KB)' });
+      }
+      image = signatureImage;
+    }
+
+    const result = await db.query(
+      `UPDATE email_accounts SET signature_text = $1, signature_image = $2, updated_at = now()
+       WHERE id = $3 AND user_id = $4
+       RETURNING id, signature_text, signature_image`,
+      [text, image, req.params.id, req.user.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Account not found' });
+    res.json({ account: result.rows[0] });
   } catch (err) {
     next(err);
   }

@@ -149,6 +149,52 @@ export default function EmailAccountSettings() {
     } catch { /* ignore */ }
   };
 
+  /* ─── Signature par compte (migration 102) ─── */
+  const [sigOpenId, setSigOpenId] = useState(null);
+  const [sigText, setSigText] = useState('');
+  const [sigImage, setSigImage] = useState(null);
+  const [sigSaving, setSigSaving] = useState(false);
+  const [sigStatus, setSigStatus] = useState(null);
+
+  const openSignature = (acc) => {
+    if (sigOpenId === acc.id) { setSigOpenId(null); return; }
+    setSigOpenId(acc.id);
+    setSigText(acc.signature_text || '');
+    setSigImage(acc.signature_image || null);
+    setSigStatus(null);
+  };
+
+  const handleSigImageUpload = (file) => {
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) {
+      setSigStatus({ success: false, message: t('emailAccount.signatureBadType') });
+      return;
+    }
+    if (file.size > 300 * 1024) {
+      setSigStatus({ success: false, message: t('emailAccount.signatureTooBig') });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => { setSigImage(reader.result); setSigStatus(null); };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSigSave = async (accountId) => {
+    setSigSaving(true);
+    setSigStatus(null);
+    try {
+      await request(`/nurture/email-accounts/${accountId}/signature`, {
+        method: 'PATCH',
+        body: JSON.stringify({ signatureText: sigText || null, signatureImage: sigImage || null }),
+      });
+      setSigStatus({ success: true, message: t('emailAccount.signatureSaved') });
+      await loadAccounts();
+    } catch (err) {
+      setSigStatus({ success: false, message: err.message });
+    }
+    setSigSaving(false);
+  };
+
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -228,45 +274,103 @@ export default function EmailAccountSettings() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: showForm ? 16 : 0 }}>
             {accounts.map(acc => (
               <div key={acc.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 14px', borderRadius: 8,
+                borderRadius: 8,
                 border: `1px solid ${acc.status === 'active' ? 'var(--success)' : 'var(--warning)'}`,
                 background: acc.status === 'active' ? 'rgba(0,214,143,0.04)' : 'rgba(255,170,0,0.04)',
               }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{acc.email_address}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {acc.provider === 'gmail' ? 'Gmail OAuth' : acc.provider === 'microsoft' ? 'Microsoft OAuth' : `${acc.smtp_host}:${acc.smtp_port}`}
-                    {' \u00B7 '}<Icon name={acc.status === 'active' ? 'checkCircle' : 'alert'} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-                    {acc.status === 'active' ? t('emailAccount.active') : t('emailAccount.expired')}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{acc.email_address}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {acc.provider === 'gmail' ? 'Gmail OAuth' : acc.provider === 'microsoft' ? 'Microsoft OAuth' : `${acc.smtp_host}:${acc.smtp_port}`}
+                      {' \u00B7 '}<Icon name={acc.status === 'active' ? 'checkCircle' : 'alert'} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                      {acc.status === 'active' ? t('emailAccount.active') : t('emailAccount.expired')}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {acc.status === 'expired' && (acc.provider === 'gmail' || acc.provider === 'microsoft') && (
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 10, padding: '4px 10px' }}
+                        onClick={() => handleOAuthConnect(acc.provider)}
+                      >
+                        {lang === 'en' ? 'Reconnect' : 'Reconnecter'}
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 10, padding: '4px 10px', fontWeight: (acc.signature_text || acc.signature_image) ? 600 : 400 }}
+                      onClick={() => openSignature(acc)}
+                    >
+                      {t('emailAccount.signature')}{(acc.signature_text || acc.signature_image) ? ' \u2713' : ''}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 10, padding: '4px 10px' }}
+                      onClick={() => handleTest(acc.id)}
+                      disabled={testing}
+                    >
+                      {testing ? '...' : t('emailAccount.test')}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 10, padding: '4px 10px', color: 'var(--danger)' }}
+                      onClick={() => handleDelete(acc.id)}
+                    >
+                      {t('emailAccount.delete')}
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {acc.status === 'expired' && (acc.provider === 'gmail' || acc.provider === 'microsoft') && (
-                    <button
-                      className="btn btn-primary"
-                      style={{ fontSize: 10, padding: '4px 10px' }}
-                      onClick={() => handleOAuthConnect(acc.provider)}
-                    >
-                      {lang === 'en' ? 'Reconnect' : 'Reconnecter'}
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 10, padding: '4px 10px' }}
-                    onClick={() => handleTest(acc.id)}
-                    disabled={testing}
-                  >
-                    {testing ? '...' : t('emailAccount.test')}
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 10, padding: '4px 10px', color: 'var(--danger)' }}
-                    onClick={() => handleDelete(acc.id)}
-                  >
-                    {t('emailAccount.delete')}
-                  </button>
-                </div>
+
+                {sigOpenId === acc.id && (
+                  <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      {t('emailAccount.signatureHint')}
+                    </div>
+                    <textarea
+                      className="form-input"
+                      rows={4}
+                      placeholder={t('emailAccount.signatureTextPlaceholder')}
+                      value={sigText}
+                      onChange={e => setSigText(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 12px', resize: 'vertical', fontFamily: 'inherit' }}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                      {sigImage ? (
+                        <>
+                          <img src={sigImage} alt="" style={{ maxWidth: 160, maxHeight: 60, borderRadius: 4, border: '1px solid var(--border)' }} />
+                          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }} onClick={() => setSigImage(null)}>
+                            {t('emailAccount.signatureRemoveImage')}
+                          </button>
+                        </>
+                      ) : (
+                        <label className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer' }}>
+                          {t('emailAccount.signatureUpload')}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/gif,image/webp"
+                            style={{ display: 'none' }}
+                            onChange={e => { handleSigImageUpload(e.target.files?.[0]); e.target.value = ''; }}
+                          />
+                        </label>
+                      )}
+                      <div style={{ flex: 1 }} />
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 11, padding: '5px 14px' }}
+                        onClick={() => handleSigSave(acc.id)}
+                        disabled={sigSaving}
+                      >
+                        {sigSaving ? t('emailAccount.saving') : t('emailAccount.save')}
+                      </button>
+                    </div>
+                    {sigStatus && (
+                      <div style={{ fontSize: 11, marginTop: 8, color: sigStatus.success ? 'var(--success)' : 'var(--danger)' }}>
+                        {sigStatus.message}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

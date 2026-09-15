@@ -180,6 +180,46 @@ async function getDefaultAccount(userId) {
   return result.rows[0] || null;
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Ajoute la signature du compte au mailOptions (texte + version HTML + image
+ * inline CID). No-op si le compte n'a pas de signature — l'email reste texte
+ * seul, comportement historique.
+ */
+function applySignature(mailOptions, account, body) {
+  const sigText = (account.signature_text || '').trim();
+  const sigImage = account.signature_image || null;
+  if (!sigText && !sigImage) return;
+
+  // Séparateur "-- " : convention de signature reconnue par les clients mail.
+  mailOptions.text = body + '\n\n-- \n' + (sigText || '');
+
+  const imageMatch = sigImage ? sigImage.match(/^data:(image\/(?:png|jpe?g|gif|webp));base64,([A-Za-z0-9+/=]+)$/) : null;
+  const parts = [];
+  if (sigText) parts.push(escapeHtml(sigText).replace(/\n/g, '<br>'));
+  if (imageMatch) parts.push('<img src="cid:baakal-signature" alt="" style="max-width:220px;height:auto;display:block;margin-top:8px;">');
+
+  mailOptions.html =
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#111;">` +
+    `${escapeHtml(body).replace(/\n/g, '<br>')}<br><br>` +
+    `<span style="color:#666;">-- </span><br>${parts.join('<br>')}</div>`;
+
+  if (imageMatch) {
+    mailOptions.attachments = [
+      ...(mailOptions.attachments || []),
+      {
+        cid: 'baakal-signature',
+        filename: `signature.${imageMatch[1].split('/')[1].replace('jpeg', 'jpg')}`,
+        content: Buffer.from(imageMatch[2], 'base64'),
+        contentType: imageMatch[1],
+      },
+    ];
+  }
+}
+
 /**
  * Send a personal email via user's own email account.
  *
@@ -218,9 +258,15 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
     to: toName ? `${toName} <${to}>` : to,
     subject,
     text: body,
-    // No HTML — looks like a real personal email
+    // Sans signature : texte seul — looks like a real personal email.
     replyTo: replyTo || account.email_address,
   };
+
+  // Signature du compte (migration 102) : dès qu'elle existe, on passe en
+  // multipart texte+HTML — le format des vrais emails composés dans Gmail,
+  // donc toujours « personnel ». L'image part en pièce inline CID (comme les
+  // signatures Outlook) : pas d'hébergement externe, pas d'URL de tracking.
+  applySignature(mailOptions, account, body);
 
   try {
     const info = await transport.sendMail(mailOptions);

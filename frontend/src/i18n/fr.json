@@ -968,7 +968,15 @@
     "saving": "Enregistrement...",
     "noAccount": "Aucun email configuré. Ajoutez votre compte pour envoyer des emails automatiques.",
     "appPasswordRequired": "Mot de passe d'application requis (pas votre mot de passe Gmail habituel)",
-    "steps": "Étapes"
+    "steps": "Étapes",
+    "signature": "Signature",
+    "signatureTextPlaceholder": "Prénom Nom\nFonction · Société\n+33 6 12 34 56 78\nhttps://votresite.com",
+    "signatureHint": "Ajoutée à la fin de chaque email envoyé depuis cette boîte (relances, nurture, prospection).",
+    "signatureUpload": "Ajouter un logo / une image",
+    "signatureRemoveImage": "Retirer l'image",
+    "signatureSaved": "Signature enregistrée",
+    "signatureTooBig": "Image trop lourde (max 300 Ko)",
+    "signatureBadType": "Format non supporté (PNG, JPEG, GIF ou WebP)"
   },
   "dashboard": {
     "weeklyReport": "Rapport hebdo & tendances",

@@ -968,7 +968,15 @@
     "saving": "Saving...",
     "noAccount": "No email configured. Add your account to send automated emails.",
     "appPasswordRequired": "App password required (not your regular Gmail password)",
-    "steps": "Steps"
+    "steps": "Steps",
+    "signature": "Signature",
+    "signatureTextPlaceholder": "First Last\nRole · Company\n+1 555 123 4567\nhttps://yoursite.com",
+    "signatureHint": "Appended to every email sent from this mailbox (follow-ups, nurture, prospecting).",
+    "signatureUpload": "Add a logo / image",
+    "signatureRemoveImage": "Remove image",
+    "signatureSaved": "Signature saved",
+    "signatureTooBig": "Image too large (max 300 KB)",
+    "signatureBadType": "Unsupported format (PNG, JPEG, GIF or WebP)"
   },
   "dashboard": {
     "weeklyReport": "Weekly report & trends",
