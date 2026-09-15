@@ -7,25 +7,12 @@ import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 import Icon from './Icon';
 
+/* Gmail et Outlook passent par OAuth uniquement : les app passwords Google sont
+   souvent indisponibles (2FA/politique Workspace) et Microsoft a coupé l'auth
+   basique SMTP. Le SMTP manuel reste pour les autres fournisseurs. */
 function getPresets(lang) {
   const en = lang === 'en';
   return [
-    {
-      label: 'Gmail', host: 'smtp.gmail.com', port: 587,
-      help: en ? 'App password required (not your regular Gmail password)' : 'Mot de passe d\'application requis (pas votre mot de passe Gmail habituel)',
-      steps: en
-        ? ['Go to myaccount.google.com/apppasswords', 'Sign in with your Google account', 'Select "Other" and name it "baakalai"', 'Copy the 16-character password and paste it below']
-        : ['Allez sur myaccount.google.com/apppasswords', 'Connectez-vous avec votre compte Google', 'S\u00E9lectionnez "Autre" et nommez-le "baakalai"', 'Copiez le mot de passe g\u00E9n\u00E9r\u00E9 et collez-le ci-dessous'],
-      note: en ? '2-factor authentication must be enabled on your Google account.' : 'La double authentification doit \u00EAtre activ\u00E9e sur votre compte Google.',
-    },
-    {
-      label: 'Outlook / O365', host: 'smtp.office365.com', port: 587,
-      help: en ? 'Use your Microsoft password or an app password' : 'Utilisez votre mot de passe Microsoft ou un mot de passe d\'application',
-      steps: en
-        ? ['Use your full Outlook/Microsoft email', 'If 2FA enabled: create an app password at account.microsoft.com', 'Otherwise: use your regular password']
-        : ['Utilisez votre email Outlook/Microsoft complet', 'Si la double auth est activ\u00E9e : cr\u00E9ez un mot de passe d\'app sur account.microsoft.com', 'Sinon : utilisez votre mot de passe habituel'],
-      note: null,
-    },
     {
       label: 'OVH', host: 'ssl0.ovh.net', port: 587,
       help: en ? 'Password for your OVH mailbox' : 'Mot de passe de votre boite email OVH',
@@ -61,7 +48,7 @@ export default function EmailAccountSettings() {
 
   const [form, setForm] = useState({
     emailAddress: '',
-    smtpHost: 'smtp.gmail.com',
+    smtpHost: 'ssl0.ovh.net',
     smtpPort: 587,
     smtpUser: '',
     smtpPass: '',
@@ -101,6 +88,14 @@ export default function EmailAccountSettings() {
     }
   };
 
+  const oauthProviderFor = (email) => {
+    const e = (email || '').toLowerCase();
+    if (/@(gmail|googlemail)\./.test(e)) return 'gmail';
+    if (/@(outlook|hotmail|live|msn)\./.test(e)) return 'microsoft';
+    return null;
+  };
+  const oauthHint = oauthProviderFor(form.emailAddress);
+
   const handlePreset = (idx) => {
     setSelectedPreset(idx);
     const p = PRESETS[idx];
@@ -123,7 +118,7 @@ export default function EmailAccountSettings() {
         }),
       });
       setShowForm(false);
-      setForm({ emailAddress: '', smtpHost: 'smtp.gmail.com', smtpPort: 587, smtpUser: '', smtpPass: '' });
+      setForm({ emailAddress: '', smtpHost: 'ssl0.ovh.net', smtpPort: 587, smtpUser: '', smtpPass: '' });
       await loadAccounts();
     } catch (err) {
       setTestResult({ success: false, error: err.message });
@@ -223,7 +218,7 @@ export default function EmailAccountSettings() {
               </button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
-              {lang === 'en' ? 'or configure SMTP manually below' : 'ou configurer SMTP manuellement ci-dessous'}
+              {lang === 'en' ? 'Other provider (OVH, Zoho…)? Configure SMTP manually below' : 'Autre fournisseur (OVH, Zoho…) ? Configurez le SMTP manuellement ci-dessous'}
             </div>
           </div>
         )}
@@ -343,6 +338,28 @@ export default function EmailAccountSettings() {
                 className="form-input"
                 style={{ fontSize: 13, padding: '8px 12px' }}
               />
+              {oauthHint && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                  padding: '8px 12px', borderRadius: 8, fontSize: 12,
+                  background: 'rgba(255,170,0,0.08)', color: 'var(--warning)',
+                }}>
+                  <span>
+                    <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {lang === 'en'
+                      ? `For ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, use the one-click connection — no password needed.`
+                      : `Pour ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, utilisez la connexion en un clic — aucun mot de passe nécessaire.`}
+                  </span>
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                    onClick={() => handleOAuthConnect(oauthHint)}
+                    disabled={!!connectingOAuth}
+                  >
+                    {connectingOAuth ? '...' : (lang === 'en' ? 'Connect' : 'Connecter')} {oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}
+                  </button>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   type="text"
@@ -363,7 +380,7 @@ export default function EmailAccountSettings() {
               </div>
               <input
                 type="password"
-                placeholder="Mot de passe ou mot de passe d'application"
+                placeholder={lang === 'en' ? 'Mailbox password' : 'Mot de passe de la boite email'}
                 value={form.smtpPass}
                 onChange={e => setForm(p => ({ ...p, smtpPass: e.target.value }))}
                 className="form-input"
