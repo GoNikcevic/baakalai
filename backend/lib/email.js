@@ -6,7 +6,7 @@ const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : 'http://localhost:5173');
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, headers }) {
   if (!RESEND_API_KEY) {
     logger.warn('email', `Email not sent (no RESEND_API_KEY): ${subject} → ${to}`);
     return { success: false, reason: 'no_api_key' };
@@ -19,7 +19,9 @@ async function sendEmail({ to, subject, html }) {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: FROM_EMAIL, to, subject, html }),
+      // `headers` : en-têtes SMTP de l'email lui-même (ex. List-Unsubscribe,
+      // cf. lib/email-prefs.js), pas ceux de l'appel API.
+      body: JSON.stringify({ from: FROM_EMAIL, to, subject, html, ...(headers ? { headers } : {}) }),
     });
 
     if (!res.ok) {

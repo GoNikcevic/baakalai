@@ -282,7 +282,10 @@ function initSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       -- Colonnes ajoutées par migration, répliquées ici pour le miroir de test
-      weekly_report INTEGER
+      weekly_report INTEGER,
+      email_crm_digest INTEGER DEFAULT 1,
+      email_weekly_report INTEGER DEFAULT 1,
+      email_tips INTEGER DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS project_files (

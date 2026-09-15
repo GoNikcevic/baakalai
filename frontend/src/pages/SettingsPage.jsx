@@ -148,6 +148,25 @@ export default function SettingsPage() {
     document.documentElement.getAttribute('data-theme') || 'light'
   );
 
+  /* ─── Email preferences (RGPD opt-out, migration 101) ─── */
+  const [emailPrefs, setEmailPrefs] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    request('/settings/email-prefs')
+      .then(d => { if (!cancelled) setEmailPrefs(d.prefs || null); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const toggleEmailPref = async (category) => {
+    const next = !(emailPrefs?.[category] !== false);
+    setEmailPrefs(prev => ({ ...prev, [category]: next }));
+    try {
+      await request('/settings/email-prefs', { method: 'PATCH', body: JSON.stringify({ [category]: next }) });
+    } catch {
+      setEmailPrefs(prev => ({ ...prev, [category]: !next }));
+    }
+  };
+
   /* ─── Load key status ─── */
 
   const loadKeys = useCallback(async () => {
@@ -1164,6 +1183,38 @@ export default function SettingsPage() {
               onChange={e => updatePreference('notificationEmail', e.target.value)}
             />
           </div>
+
+          {emailPrefs && (
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                {t('settings.emailPrefsIntro')}
+              </div>
+              {[
+                { key: 'crm_digest', label: t('settings.emailPrefCrmDigest'), desc: t('settings.emailPrefCrmDigestDesc') },
+                { key: 'weekly_report', label: t('settings.emailPrefWeeklyReport'), desc: t('settings.emailPrefWeeklyReportDesc') },
+                { key: 'tips', label: t('settings.emailPrefTips'), desc: t('settings.emailPrefTipsDesc') },
+              ].map(({ key, label, desc }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{desc}</div>
+                  </div>
+                  <div
+                    role="switch"
+                    aria-checked={emailPrefs[key] !== false}
+                    aria-label={label}
+                    tabIndex={0}
+                    className={`toggle-switch${emailPrefs[key] !== false ? ' on' : ''}`}
+                    onClick={() => toggleEmailPref(key)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEmailPref(key); } }}
+                  />
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+                {t('settings.emailPrefsHint')}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

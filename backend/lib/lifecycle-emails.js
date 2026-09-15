@@ -190,6 +190,11 @@ async function processOnboarding() {
       const sentEmails = userData._onboarding_sent || [];
       const daysSinceSignup = Math.floor((Date.now() - new Date(user.created_at).getTime()) / DAY_MS);
 
+      // Opt-out RGPD : catégorie tips (lib/email-prefs.js, migration 101) —
+      // couvre l'onboarding ET la rétention, désinscriptible en un clic.
+      const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('./email-prefs');
+      if (!(await isEmailEnabled(user.id, 'tips'))) { report.skipped = (report.skipped || 0) + 1; continue; }
+
       for (const step of ONBOARDING_SEQUENCE) {
         if (sentEmails.includes(step.key)) continue;
         if (daysSinceSignup < step.delay) continue;
@@ -210,7 +215,8 @@ async function processOnboarding() {
           await sendEmail({
             to: user.email,
             subject: step.subject,
-            html: step.html(user),
+            html: step.html(user) + emailFooter(user.id, 'tips'),
+            headers: unsubscribeHeaders(user.id, 'tips'),
           });
 
           sentEmails.push(step.key);
@@ -257,10 +263,15 @@ async function processRetention() {
        WHERE u.created_at < now() - interval '14 days'`
     );
 
+    const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('./email-prefs');
     for (const user of users.rows) {
       let daysInactive = Math.floor(parseFloat(user.days_inactive) || 0);
       const userData = (typeof user.data === 'string' ? JSON.parse(user.data) : user.data) || {};
       const sentRetention = userData._retention_sent || [];
+
+      // Opt-out RGPD : la rétention est la séquence la plus « marketing » du
+      // produit — même catégorie tips que l'onboarding (décision Goran 15/09).
+      if (!(await isEmailEnabled(user.id, 'tips'))) { report.skipped++; continue; }
 
       // Plancher d'inactivité : posé au rallumage de l'orchestrateur
       // (2026-08-04) sur les comptes existants, pour que la reprise ne
@@ -310,7 +321,8 @@ async function processRetention() {
         await sendEmail({
           to: user.email,
           subject: step.subject,
-          html: step.html(user, stats),
+          html: step.html(user, stats) + emailFooter(user.id, 'tips'),
+          headers: unsubscribeHeaders(user.id, 'tips'),
         });
 
         // Les paliers moins profonds sont marqués aussi : une fois le

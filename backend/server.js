@@ -152,6 +152,9 @@ app.use('/api/webhooks', require('./routes/webhooks'));
 // Diagnostic CRM public (lead magnet, sans compte — rate-limité par IP dans la route)
 app.use('/api/public/diagnostic', require('./routes/public-diagnostic'));
 
+// Désinscription emails (public — le lien arrive en boîte mail, token HMAC, pas de login)
+app.use('/api/public/email-prefs', require('./routes/email-prefs'));
+
 // OAuth email callbacks (public — user returns from Google/Microsoft redirect, no auth needed)
 const { gmailCallback, microsoftCallback } = require('./routes/nurture');
 app.get('/api/nurture/email-accounts/callback/gmail', gmailCallback);

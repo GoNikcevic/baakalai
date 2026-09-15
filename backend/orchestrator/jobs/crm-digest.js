@@ -7,8 +7,9 @@
  * attente d'approbation, signaux — la même liste priorisée que le dashboard
  * (lib/priorities.js), sans appel LLM (données déjà prescriptives).
  *
- * Opt-out : réutilise profiles.weekly_report (un seul interrupteur pour tous
- * les emails de rapport). Digest vide → pas d'envoi.
+ * Opt-out : catégorie `crm_digest` (lib/email-prefs.js, migration 101 —
+ * l'ancien interrupteur unique profiles.weekly_report a été migré).
+ * Digest vide → pas d'envoi.
  */
 
 const db = require('../../db');
@@ -102,8 +103,10 @@ async function sendDigestToUser(userId, userRow = null) {
   await takeSnapshot(user.id).catch((err) =>
     logger.warn('crm-digest', `Forecast snapshot failed for ${user.email}: ${err.message}`));
 
-  const profile = await db.profiles.get(user.id).catch(() => null);
-  if (profile && profile.weekly_report === false) {
+  // Catégorie crm_digest (migration 101) — remplace l'interrupteur unique
+  // profiles.weekly_report, dont les opt-outs existants ont été migrés.
+  const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('../../lib/email-prefs');
+  if (!(await isEmailEnabled(user.id, 'crm_digest'))) {
     return { sent: false, reason: 'opted_out' };
   }
 
@@ -123,7 +126,8 @@ async function sendDigestToUser(userId, userRow = null) {
   await sendEmail({
     to: user.email,
     subject,
-    html: buildDigestHTML(user, list, lang, dqTrend),
+    html: buildDigestHTML(user, list, lang, dqTrend) + emailFooter(user.id, 'crm_digest', lang),
+    headers: unsubscribeHeaders(user.id, 'crm_digest'),
   });
 
   return { sent: true, count };

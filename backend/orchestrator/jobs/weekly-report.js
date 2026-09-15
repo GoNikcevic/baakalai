@@ -30,9 +30,9 @@ async function runWeeklyReports() {
 
   for (const user of users) {
     try {
-      // Check opt-out
-      const profile = await db.profiles.get(user.id).catch(() => null);
-      if (profile && profile.weekly_report === false) {
+      // Opt-out : catégorie weekly_report (lib/email-prefs.js, migration 101)
+      const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('../../lib/email-prefs');
+      if (!(await isEmailEnabled(user.id, 'weekly_report'))) {
         skipped++;
         continue;
       }
@@ -43,7 +43,8 @@ async function runWeeklyReports() {
       await sendEmail({
         to: user.email,
         subject: report.subject,
-        html: report.html,
+        html: report.html + emailFooter(user.id, 'weekly_report', user.language || 'fr'),
+        headers: unsubscribeHeaders(user.id, 'weekly_report'),
       });
 
       sent++;

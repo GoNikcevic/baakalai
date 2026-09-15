@@ -234,6 +234,33 @@ router.post('/keys/sync-crm', async (req, res, next) => {
   }
 });
 
+// ── Préférences d'emails système (RGPD — voir lib/email-prefs.js) ──
+
+// GET /api/settings/email-prefs — { crm_digest, weekly_report, tips }
+router.get('/email-prefs', async (req, res, next) => {
+  try {
+    const { getEmailPrefs } = require('../lib/email-prefs');
+    res.json({ prefs: await getEmailPrefs(req.user.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/settings/email-prefs — body: { crm_digest?: bool, weekly_report?: bool, tips?: bool }
+router.patch('/email-prefs', async (req, res, next) => {
+  try {
+    const { getEmailPrefs, setEmailPref, isValidCategory } = require('../lib/email-prefs');
+    const entries = Object.entries(req.body || {}).filter(([k, v]) => isValidCategory(k) && typeof v === 'boolean');
+    if (entries.length === 0) return res.status(400).json({ error: 'No valid preference provided' });
+    for (const [category, enabled] of entries) {
+      await setEmailPref(req.user.id, category, enabled);
+    }
+    res.json({ prefs: await getEmailPrefs(req.user.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function validateKeyFormat(field, value) {
   if (value.length < 8) return { valid: false, error: 'Key too short (minimum 8 characters)' };
   if (field === 'notionToken' && !value.startsWith('ntn_') && !value.startsWith('secret_')) {
