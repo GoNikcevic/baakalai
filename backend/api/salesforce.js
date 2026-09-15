@@ -87,7 +87,7 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
   // Paginé via nextRecordsUrl (comme listContacts) : le plafond de 100 sans
   // pagination laissait les opportunités anciennes des vrais orgs sans mapping
   // won/lost — donc invisibles comme clients.
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed,
+  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed, AccountId,
     (SELECT ContactId FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
     FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const deals = [];
@@ -101,6 +101,7 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
         status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
         value: r.Amount,
         personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
+        accountId: r.AccountId || null,
         closeDate: r.CloseDate,
         createdAt: r.CreatedDate,
         updatedAt: r.LastModifiedDate,
@@ -111,6 +112,38 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
     if (result.done || !result.nextRecordsUrl || deals.length >= limit) break;
     result = await sfFetch(instanceUrl, accessToken, result.nextRecordsUrl.replace('/services/data/v58.0', ''));
   }
+
+  // Fallback contact role manquant (décision Goran 15/09) : beaucoup d'orgs ne
+  // remplissent pas les OpportunityContactRoles — sans eux, personId reste null
+  // et le deal n'est jamais rattaché (donc jamais mappé won/lost côté app). Si
+  // le compte de l'opp n'a qu'UN seul contact emailable, on rattache le deal à
+  // ce contact : zéro ambiguïté. À 2 contacts ou plus, on s'abstient — on ne
+  // devine jamais qui est le bon interlocuteur. Best-effort : ne fait jamais
+  // échouer getDeals.
+  const orphans = deals.filter(d => !d.personId && d.accountId);
+  if (orphans.length > 0) {
+    try {
+      const contactsByAccount = new Map();
+      let res = await sfFetch(instanceUrl, accessToken,
+        `/query?q=${encodeURIComponent('SELECT Id, AccountId FROM Contact WHERE AccountId != null AND Email != null')}`);
+      for (;;) {
+        for (const c of res.records || []) {
+          const list = contactsByAccount.get(c.AccountId) || [];
+          list.push(c.Id);
+          contactsByAccount.set(c.AccountId, list);
+        }
+        if (res.done || !res.nextRecordsUrl) break;
+        res = await sfFetch(instanceUrl, accessToken, res.nextRecordsUrl.replace('/services/data/v58.0', ''));
+      }
+      for (const d of orphans) {
+        const contacts = contactsByAccount.get(d.accountId);
+        if (contacts && contacts.length === 1) d.personId = contacts[0];
+      }
+    } catch (err) {
+      console.warn('[salesforce] Single-contact fallback failed:', err.message);
+    }
+  }
+
   return deals;
 }
 
