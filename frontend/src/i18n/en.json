@@ -971,7 +971,7 @@
     "steps": "Steps",
     "signature": "Signature",
     "signatureTextPlaceholder": "First Last\nRole · Company\n+1 555 123 4567\nhttps://yoursite.com",
-    "signatureHint": "Appended to every email sent from this mailbox (follow-ups, nurture, prospecting).",
+    "signatureHint": "Appended to every email sent from this mailbox (follow-ups, nurture, prospecting). Emails sent by baakalai do not include the signature configured in Gmail/Outlook — set it here. Exception: if your company appends a server-side signature (Exchange, Exclaimer…), leave this empty to avoid duplicates.",
     "signatureUpload": "Add a logo / image",
     "signatureRemoveImage": "Remove image",
     "signatureSaved": "Signature saved",
