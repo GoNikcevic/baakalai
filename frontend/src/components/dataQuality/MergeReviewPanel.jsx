@@ -107,6 +107,19 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
   const others = group.contacts.filter(c => String(c.id) !== String(keepId));
   const kept = group.contacts.find(c => String(c.id) === String(keepId));
 
+  // Tout champ à trancher : soit deux valeurs non vides divergentes (conflit),
+  // soit une seule valeur présente mais absente d'un autre contact (à importer).
+  // Les champs identiques partout ne demandent aucun choix.
+  const resolvableFields = diff.fields
+    .map(field => {
+      const values = diff.diffs[field].values;
+      const someEmpty = diff.perContact.some(c => !c[field]);
+      const isConflict = values.length > 1;
+      const isGap = values.length === 1 && someEmpty;
+      return { field, values, someEmpty, isConflict, show: isConflict || isGap };
+    })
+    .filter(f => f.show);
+
   return (
     <div className="card" style={{ marginTop: 8, border: '1px solid var(--border)' }}>
       <div className="card-body" style={{ padding: '14px 16px' }}>
@@ -178,19 +191,27 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
           {t('dataQuality.duplicates.historyMergedNote')}
         </div>
 
-        {diff.fields.filter(f => diff.diffs[f].conflict).map(field => (
-          <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 12 }}>
-            <span style={{ minWidth: 80, fontWeight: 600 }}>{FIELD_LABELS[field] || field}</span>
-            <span style={{ fontSize: 10, color: 'var(--warning)' }}>{t('dataQuality.duplicates.conflictBadge')}</span>
-            <select
-              value={resolvedFields[field] || ''}
-              onChange={e => setResolvedFields(prev => ({ ...prev, [field]: e.target.value }))}
-              style={{ fontSize: 12, padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border)' }}
-            >
-              {diff.diffs[field].values.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
+        {resolvableFields.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>{t('dataQuality.duplicates.resolveTitle')}</div>
+            {resolvableFields.map(({ field, values, someEmpty, isConflict }) => (
+              <div key={field} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 12 }}>
+                <span style={{ minWidth: 80, fontWeight: 600 }}>{FIELD_LABELS[field] || field}</span>
+                <span style={{ fontSize: 10, color: isConflict ? 'var(--warning)' : 'var(--text-muted)' }}>
+                  {isConflict ? t('dataQuality.duplicates.conflictBadge') : t('dataQuality.duplicates.gapFillBadge')}
+                </span>
+                <select
+                  value={resolvedFields[field] ?? ''}
+                  onChange={e => setResolvedFields(prev => ({ ...prev, [field]: e.target.value }))}
+                  style={{ fontSize: 12, padding: '3px 6px', borderRadius: 6, border: '1px solid var(--border)' }}
+                >
+                  {values.map(v => <option key={v} value={v}>{v}</option>)}
+                  {someEmpty && <option value="">{t('dataQuality.duplicates.emptyOption')}</option>}
+                </select>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
 
         {kept && (
           <div style={{ marginTop: 10, fontSize: 12 }}>
