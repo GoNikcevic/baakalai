@@ -78,6 +78,35 @@ function blankStep() {
   };
 }
 
+/** Logo baakalai animé pendant la génération : le nœud central pulse, les
+ *  satellites s'allument tour à tour — le système « réfléchit ». */
+function LogoPulse() {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <style>{`
+        .wf-logo .wf-core { animation: wf-pulse 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+        .wf-logo .wf-sat { animation: wf-blink 1.6s ease-in-out infinite; }
+        .wf-logo .wf-sat2 { animation-delay: .35s; }
+        .wf-logo .wf-sat3 { animation-delay: .7s; }
+        @keyframes wf-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+        @keyframes wf-blink { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+        @media (prefers-reduced-motion: reduce) {
+          .wf-logo .wf-core, .wf-logo .wf-sat { animation: none; }
+        }
+      `}</style>
+      <svg className="wf-logo" width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round" />
+        <line x1="50" y1="50" x2="82" y2="30" stroke="#9A84EB" strokeWidth="5" strokeLinecap="round" />
+        <line x1="50" y1="50" x2="30" y2="80" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round" />
+        <circle className="wf-sat wf-sat1" cx="22" cy="26" r="7" fill="#C4B5FD" />
+        <circle className="wf-sat wf-sat2" cx="82" cy="30" r="8" fill="#9A84EB" />
+        <circle className="wf-sat wf-sat3" cx="30" cy="80" r="7" fill="#C4B5FD" />
+        <circle className="wf-core" cx="50" cy="50" r="13" fill="#6E57FA" />
+      </svg>
+    </div>
+  );
+}
+
 const mapTree = (tree, id, patch) => tree.map(tp => {
   if (tp.id === id) return { ...tp, ...patch };
   return tp.children?.length ? { ...tp, children: mapTree(tp.children, id, patch) } : tp;
@@ -271,6 +300,7 @@ export default function WorkflowPage({ goal, backBase }) {
     return (
       <div className="dashboard-page">
         <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+          {phase === 'generating' && <LogoPulse />}
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
             {t(phase === 'generating' ? 'workflow.generating' : 'common.loading')}
           </div>
