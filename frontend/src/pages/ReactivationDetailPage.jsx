@@ -32,7 +32,9 @@ function ContextFact({ label, children }) {
 }
 
 /* Why this email exists: where the relationship with this account stands
-   (stage, value, inactivity, churn) + the AI's own justification. */
+   (stage, value, inactivity) + the AI's own justification. Churn risk is a
+   client-side concept (post-sale retention) — it doesn't belong on a deal
+   reactivation card, which is pre-sale. */
 function DraftContextCard({ context, kind }) {
   const t = useT();
   const { lang } = useI18n();
@@ -82,9 +84,6 @@ function DraftContextCard({ context, kind }) {
             ? t('reactivation.ctxPlanned', { date: new Date(context.plannedFollowupDate).toLocaleDateString(dateLocale) })
             : t('reactivation.ctxInactive', { days: context.overdueDays })}
         </ContextFact>
-        {isDeal && context.churnScore != null && (
-          <ContextFact label={t('reactivation.ctxChurn')}>{context.churnScore}/100</ContextFact>
-        )}
       </div>
 
       {isDeal && context.reason && (

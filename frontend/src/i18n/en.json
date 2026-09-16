@@ -1502,7 +1502,6 @@
     "ctxActivity": "Activity",
     "ctxInactive": "Inactive for {days} days",
     "ctxPlanned": "Follow-up planned for {date}",
-    "ctxChurn": "Churn risk",
     "ctxWhyNow": "Why now:",
     "ctxCrossSell": "Products to pitch:",
     "urgency_high": "High urgency",

@@ -1502,7 +1502,6 @@
     "ctxActivity": "Activité",
     "ctxInactive": "Inactif depuis {days} j",
     "ctxPlanned": "Relance prévue le {date}",
-    "ctxChurn": "Risque de churn",
     "ctxWhyNow": "Pourquoi maintenant :",
     "ctxCrossSell": "Produits à proposer :",
     "urgency_high": "Urgence haute",

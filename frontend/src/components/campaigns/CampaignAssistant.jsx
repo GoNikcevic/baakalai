@@ -1844,7 +1844,7 @@ export default function CampaignAssistant() {
       <div className={`chat-sidebar${chatSidebarOpen ? '' : ' collapsed'}`}>
         <div className="chat-sidebar-header">
           <span style={{ fontWeight: 600, fontSize: '14px' }}>Conversations</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
             <AiStatusBadge online={backendAvailable} />
             <button
               className="chat-sidebar-toggle"

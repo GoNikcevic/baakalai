@@ -16,7 +16,7 @@
 // Bloc pour les prompts rédigés en anglais.
 const HUMAN_STYLE_RULES = `
 WRITING STYLE, the reader must NEVER suspect an AI wrote this:
-- NEVER use em dashes or en dashes (  ). Use a comma, a period or a colon instead.
+- NEVER use em dashes or en dashes (— –). Use a comma, a period or a colon instead.
 - Banned openings/phrases (FR): "J'espère que vous allez bien", "J'espère que ce message vous trouve", "Je me permets de", "N'hésitez pas à", "Je reviens vers vous concernant", "dans le cadre de", "Au plaisir d'échanger".
 - Banned (EN): "I hope this finds you well", "I wanted to reach out", "Just checking in", "delve", "leverage", "I trust this email".
 - No triads ("simple, rapide et efficace"), no "Ce n'est pas X, c'est Y" constructions, no stacked rhetorical questions.
@@ -25,7 +25,7 @@ WRITING STYLE, the reader must NEVER suspect an AI wrote this:
 // Même bloc pour les prompts rédigés en français.
 const HUMAN_STYLE_RULES_FR = `
 STYLE D'ÉCRITURE, le lecteur ne doit JAMAIS soupçonner une IA :
-- JAMAIS de tiret cadratin ni demi-cadratin (  ). Utiliser une virgule, un point ou deux-points.
+- JAMAIS de tiret cadratin ni demi-cadratin (— –). Utiliser une virgule, un point ou deux-points.
 - Tournures interdites : « J'espère que vous allez bien », « Je me permets de », « N'hésitez pas à », « Je reviens vers vous concernant », « dans le cadre de », « Au plaisir d'échanger ».
 - Pas de triades (« simple, rapide et efficace »), pas de « Ce n'est pas X, c'est Y », pas de questions rhétoriques empilées.
 - Écrire comme un humain pressé : phrases courtes, faits concrets, une idée par phrase.`;
@@ -39,12 +39,12 @@ function humanize(text) {
   if (typeof text !== 'string' || !text) return text;
   return text
     // puce de liste : " · item" → "- item"
-.replace(/^[ \t]*[  ][ \t]*/gm, '- ')
-    // fin de segment : "mot · " en fin de ligne → "mot,"... un tiret suspendu
+    .replace(/^[ \t]*[—–][ \t]*/gm, '- ')
+    // fin de segment : "mot — " en fin de ligne → "mot."... un tiret suspendu
     // devient un point (fin de pensée).
-.replace(/[ \t]*[  ][ \t]*$/gm, '.')
-    // au milieu d'une phrase : "mot · mot" → "mot, mot"
-.replace(/[ \t]*[  ][ \t]*/g, ', ')
+    .replace(/[ \t]*[—–][ \t]*$/gm, '.')
+    // au milieu d'une phrase : "mot — mot" → "mot, mot"
+    .replace(/[ \t]*[—–][ \t]*/g, ', ')
     // nettoyage des doublons créés (", ," / ",  ")
     .replace(/,\s*,/g, ',')
     .replace(/,[ \t]+/g, ', ');
