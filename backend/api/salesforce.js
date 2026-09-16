@@ -18,16 +18,26 @@ async function sfFetch(instanceUrl, accessToken, endpoint, options = {}) {
   }
   const url = `${instanceUrl}/services/data/v58.0${endpoint}`;
 
+  const fetchOptions = {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      ...options.headers,
+    },
+  };
+
   let res;
   for (let attempt = 0; ; attempt++) {
-    res = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-        ...options.headers,
-      },
-    });
+    try {
+      res = await fetch(url, fetchOptions);
+    } catch (netErr) {
+      // Pendant une maintenance, Salesforce coupe des connexions (fetch failed) :
+      // c'est transitoire, on retente comme pour un 503 avant d'abandonner.
+      if (attempt >= TRANSIENT_RETRIES) throw netErr;
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+      continue;
+    }
     if (res.ok || !TRANSIENT_STATUSES.has(res.status) || attempt >= TRANSIENT_RETRIES) break;
     await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
   }
@@ -229,16 +239,30 @@ function mapOpportunityToContact(opp) {
 // ── Update Contact ──
 
 async function updateContact(instanceUrl, accessToken, contactId, data) {
-  await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      FirstName: data.firstName,
-      LastName: data.lastName,
-      Email: data.email,
-      Title: data.title,
-      ...(data.company ? { Account: { Name: data.company } } : {}),
-    }),
-  });
+  // Le nom arrive soit éclaté (firstName/lastName, push CRM), soit combiné
+  // (name, resolvedFields de la fusion Data Quality). On ne touche JAMAIS à
+  // Account : Salesforce rejette un {Account:{Name}} imbriqué (Name n'est pas un
+  // External ID), et l'appartenance à un compte est portée par AccountId, pas le
+  // nom — d'où l'INVALID_FIELD qui faisait échouer chaque fusion.
+  const body = {};
+  if (data.firstName !== undefined || data.lastName !== undefined) {
+    if (data.firstName !== undefined) body.FirstName = data.firstName;
+    if (data.lastName !== undefined) body.LastName = data.lastName;
+  } else if (data.name) {
+    const parts = String(data.name).trim().split(/\s+/);
+    if (parts.length > 1) { body.FirstName = parts[0]; body.LastName = parts.slice(1).join(' '); }
+    else body.LastName = parts[0];
+  }
+  if (data.email) body.Email = data.email;
+  if (data.title !== undefined && data.title !== null) body.Title = data.title;
+  if (data.phone) body.Phone = data.phone;
+
+  if (Object.keys(body).length > 0) {
+    await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
   return { id: contactId };
 }
 
