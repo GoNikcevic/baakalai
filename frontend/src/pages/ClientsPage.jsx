@@ -133,10 +133,12 @@ export default function ClientsPage({ scope }) {
         request(`/crm/import/${p}`, { method: 'POST' }).catch(err => ({ error: err.message, provider: p }))
       ));
       const failed = results.filter(r => r.error);
+      // Un CRM en maintenance (502/503/504) mérite un message lisible, pas le corps brut de l'erreur
+      const prettify = (msg) => (/API 50[234]\b|maintenance/i.test(msg) ? t('clients.crmTransientError') : msg);
       const aggregated = {
         imported: results.reduce((sum, r) => sum + (r.imported || 0), 0),
         skipped: results.reduce((sum, r) => sum + (r.skipped || 0), 0),
-        error: failed.length > 0 ? failed.map(f => `${f.provider}: ${f.error}`).join(' · ') : null,
+        error: failed.length > 0 ? failed.map(f => `${f.provider}: ${prettify(f.error)}`).join(' · ') : null,
       };
       setImportResult(aggregated);
       await loadData();
@@ -148,7 +150,7 @@ export default function ClientsPage({ scope }) {
       setImportResult({ error: err.message });
     }
     setImporting(false);
-  }, [loadData, connectedCrm, connectedProviders, clients.length]);
+  }, [loadData, connectedCrm, connectedProviders, clients.length, t]);
 
   const filtered = useMemo(() => clients.filter(c => {
     // If highlight param is set, only show those contacts — et, en contexte deal quality,

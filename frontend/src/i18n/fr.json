@@ -676,6 +676,7 @@
     "dealsInCrm": "{count} deal(s) en cours dans votre CRM",
     "refresh": "Actualiser",
     "importing": "Import...",
+    "crmTransientError": "CRM momentanément indisponible (maintenance). Réessayez dans quelques instants.",
     "connectCrm": "Connecter un CRM",
     "imported": "{count} importé(s), {skipped} déjà présent(s)",
     "search": "Rechercher...",

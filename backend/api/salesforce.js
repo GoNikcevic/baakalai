@@ -7,25 +7,41 @@
 
 const { extractActivityDate } = require('../lib/crm-activity-date');
 
+// Les orgs Salesforce renvoient parfois un 502/503/504 transitoire (page HTML
+// « We are down for maintenance ») : on retente avant de remonter l'erreur.
+const TRANSIENT_STATUSES = new Set([502, 503, 504]);
+const TRANSIENT_RETRIES = 2;
+
 async function sfFetch(instanceUrl, accessToken, endpoint, options = {}) {
   if (!accessToken || !instanceUrl) {
     throw new Error('Salesforce credentials required (accessToken + instanceUrl)');
   }
   const url = `${instanceUrl}/services/data/v58.0${endpoint}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
-  });
+
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...options.headers,
+      },
+    });
+    if (res.ok || !TRANSIENT_STATUSES.has(res.status) || attempt >= TRANSIENT_RETRIES) break;
+    await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+  }
 
   if (!res.ok) {
-    const body = await res.text();
+    let body = await res.text();
+    const transient = TRANSIENT_STATUSES.has(res.status);
+    // Ne jamais propager une page HTML (maintenance, proxy) dans le message
+    if (/^\s*</.test(body)) {
+      body = transient ? 'temporarily unavailable (maintenance)' : `HTML error page (${body.length} chars)`;
+    }
     throw Object.assign(
       new Error(`Salesforce API ${res.status}: ${body}`),
-      { status: res.status }
+      { status: res.status, transient }
     );
   }
 
