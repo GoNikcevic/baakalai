@@ -227,7 +227,7 @@ export default function ActiveCampaignDetail({ campaign: c, onBack, setCampaigns
         <div className="sequence-header">
           <div className="sequence-title">
             <Icon name={channelIcon} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-            Sequence {channelName} — {(c.sequence || []).length}{' '}
+            Sequence {channelName}, {(c.sequence || []).length}{' '}
             touchpoints
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>

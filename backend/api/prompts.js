@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   BAKAL — Prompt System
+   BAKAL · Prompt System
    Master Prompt + 7 Sub-Prompts + Variable Generator + Refinement Prompts
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // =============================================
-// Master Prompt — Full Sequence Generation
+// Master Prompt · Full Sequence Generation
 // =============================================
 
 function masterPrompt(params) {
@@ -34,29 +34,29 @@ function masterPrompt(params) {
   } = params;
 
   // Le prompt demande au modèle de remplir ab_config.memory_used / recommendation_source
-  // « memory » — sans cette section, il citait une mémoire qu'on ne lui donnait jamais
-  // (champ au mieux null, au pire halluciné — audit mémoire 02/09).
+  // « memory » · sans cette section, il citait une mémoire qu'on ne lui donnait jamais
+  // (champ au mieux null, au pire halluciné · audit mémoire 02/09).
   const memorySection = memory && memory.length > 0
-    ? `\nMÉMOIRE CROSS-CAMPAGNE (patterns appris — applique en priorité les [APPROVED], cite le pattern utilisé dans ab_config.memory_used) :\n${memory.map(m => `- ${m.applied ? '[APPROVED]' : `[${m.confidence}]`} ${m.category}: ${m.pattern}`).join('\n')}\n`
+    ? `\nMÉMOIRE CROSS-CAMPAGNE (patterns appris, applique en priorité les [APPROVED], cite le pattern utilisé dans ab_config.memory_used) :\n${memory.map(m => `- ${m.applied ? '[APPROVED]' : `[${m.confidence}]`} ${m.category}: ${m.pattern}`).join('\n')}\n`
     : '';
 
   const channelInstructions = {
     email: `Génère une séquence EMAIL uniquement avec ${touchpointCount} touchpoints (E1 à E${touchpointCount}). Tous les types doivent être "email".`,
     linkedin: `Génère une séquence LINKEDIN uniquement avec cette structure OBLIGATOIRE :
-- LV1 (linkedin_visit, J+0) — visite de profil, PAS de body, PAS de subject (juste un signal de visibilité)
-- LI1 (linkedin_invite, J+1) — note de connexion, MAX 300 caractères, PAS de subject, PAS de pitch commercial
-- LM1 (linkedin_message, J+3, conditionType "accepted") — message post-connexion conversationnel
+- LV1 (linkedin_visit, J+0), visite de profil, PAS de body, PAS de subject (juste un signal de visibilité)
+- LI1 (linkedin_invite, J+1), note de connexion, MAX 300 caractères, PAS de subject, PAS de pitch commercial
+- LM1 (linkedin_message, J+3, conditionType "accepted"), message post-connexion conversationnel
 - Optionnel : LM2 (linkedin_message, J+7) en relance
 JAMAIS de type "linkedin" générique. Toujours linkedin_visit, linkedin_invite, ou linkedin_message.`,
     multi: `Génère une séquence MULTI-CANAL combinant email et LinkedIn avec ${touchpointCount} touchpoints au total. Structure RECOMMANDÉE :
-- LV1 (linkedin_visit, J+0) — visite de profil discrète
-- LI1 (linkedin_invite, J+1) — note de connexion MAX 300 chars (pas de pitch)
-- E1 (email, J+2) — email initial avec hook personnalisé
-- LM1 (linkedin_message, J+4, conditionType "accepted") — message LinkedIn si la connexion a été acceptée
-- E2 (email, J+5) — email de valeur (preuve / case study)
-- E3 (email, J+9) — email de relance avec angle différent
-- E4 (email, J+14) — break-up email court
-Adapte selon le nombre de touchpoints demandé. JAMAIS de type "linkedin" générique — utilise linkedin_visit, linkedin_invite, ou linkedin_message.`,
+- LV1 (linkedin_visit, J+0), visite de profil discrète
+- LI1 (linkedin_invite, J+1), note de connexion MAX 300 chars (pas de pitch)
+- E1 (email, J+2), email initial avec hook personnalisé
+- LM1 (linkedin_message, J+4, conditionType "accepted"), message LinkedIn si la connexion a été acceptée
+- E2 (email, J+5), email de valeur (preuve / case study)
+- E3 (email, J+9), email de relance avec angle différent
+- E4 (email, J+14), break-up email court
+Adapte selon le nombre de touchpoints demandé. JAMAIS de type "linkedin" générique, utilise linkedin_visit, linkedin_invite, ou linkedin_message.`,
   };
 
   return `Tu es un copywriter expert en prospection B2B multicanal (Email + LinkedIn).
@@ -114,12 +114,12 @@ Chaque touchpoint doit suivre un rôle précis dans la séquence :
 - Longueur : 3-4 phrases MAX (même si "Long" demandé)
 
 ### Visite de profil LinkedIn (linkedin_visit)
-- AUCUN body, AUCUN subject — c'est juste une action automatique
+- AUCUN body, AUCUN subject, c'est juste une action automatique
 - Sert à apparaître dans les "qui a consulté votre profil" du prospect avant la note de connexion
 - Toujours type "linkedin_visit", body vide ""
 
 ### Note de connexion LinkedIn (linkedin_invite)
-- MAX 300 CARACTÈRES ABSOLUS — c'est une contrainte plateforme NON NÉGOCIABLE
+- MAX 300 CARACTÈRES ABSOLUS, c'est une contrainte plateforme NON NÉGOCIABLE
 - COMPTE LES CARACTÈRES AVANT D'ÉCRIRE LA RÉPONSE
 - JAMAIS de pitch commercial, jamais de "j'aimerais vous présenter notre solution"
 - Structure idéale : Salutation courte → Point commun OU compliment pro spécifique → Question ouverte légère
@@ -147,7 +147,7 @@ Chaque touchpoint doit suivre un rôle précis dans la séquence :
 7. **La séquence** doit raconter une histoire progressive, pas des messages isolés
 ${require('../lib/human-style').HUMAN_STYLE_RULES_FR}
 
-## Lignes d'objet — Règles spécifiques
+## Lignes d'objet, Règles spécifiques
 - Variante A : directe, orientée bénéfice
 - Variante B : curiosité ou question
 - Pas de mots spam : "gratuit", "offre", "urgent", "dernière chance"
@@ -247,10 +247,10 @@ Si le canal est "multi" ou "linkedin", tu DOIS générer AU MOINS UNE branche co
 Utilise la propriété "children" avec "conditionType" et "branchLabel" pour créer des embranchements.
 
 Conditions disponibles :
-- "opened" / "not_opened" — basé sur l'ouverture de l'email
-- "replied" / "not_replied" — basé sur la réponse
-- "clicked" / "not_clicked" — basé sur le clic d'un lien
-- "accepted" / "not_accepted" — basé sur l'acceptation LinkedIn
+- "opened" / "not_opened", basé sur l'ouverture de l'email
+- "replied" / "not_replied", basé sur la réponse
+- "clicked" / "not_clicked", basé sur le clic d'un lien
+- "accepted" / "not_accepted", basé sur l'acceptation LinkedIn
 
 Scénarios standards à appliquer :
 1. **linkedin_invite → SI accepté → linkedin_message / SI PAS accepté → email** (à utiliser systématiquement en multi-canal)
@@ -266,7 +266,7 @@ Règles pour les branches :
 }
 
 // =============================================
-// Sub-Prompts — Specialized per touchpoint type
+// Sub-Prompts · Specialized per touchpoint type
 // =============================================
 
 const subPrompts = {
@@ -529,7 +529,7 @@ ${touchpointStats || 'Aucune stat par touchpoint disponible'}
 ## Séquences conditionnelles
 Si la séquence contient des branches conditionnelles (touchpoints avec parent_step_id et condition_type), analyse la performance de CHAQUE branche séparément.
 Indique quelle condition/branche performe le mieux et pourquoi.
-Les priorités de régénération doivent spécifier le step ET la branche concernée (ex: "E2a — branche Si ouvert").
+Les priorités de régénération doivent spécifier le step ET la branche concernée (ex: "E2a, branche Si ouvert").
 
 ## Ta mission
 
@@ -585,7 +585,7 @@ function regenerationPrompt(params) {
 
   const memorySection = memory && memory.length > 0
     ? `## Mémoire Cross-Campagne (patterns connus)
-${memory.map(m => `- [${m.confidence || 'N/A'}] ${m.category}: ${m.pattern} — ${m.data || ''}`).join('\n')}`
+${memory.map(m => `- [${m.confidence || 'N/A'}] ${m.category}: ${m.pattern}, ${m.data || ''}`).join('\n')}`
     : '## Mémoire Cross-Campagne\nAucun pattern enregistré pour l\'instant.';
 
   const instructionsSection = regenerationInstructions

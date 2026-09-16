@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — General Assistant (first sidebar tab)
+   BAKAL · General Assistant (first sidebar tab)
    L'assistant qui sait tout faire SAUF lancer une campagne de prospection froide :
    questions sur le CRM (lookup_client, list_clients), activation (relance des deals
    dormants, triggers, autopilot, nettoyage/import CRM, envoi d'email, signaux,
@@ -40,7 +40,7 @@ function getExamplePrompts(t) {
   return [t('assistant.example1'), t('assistant.example2'), t('assistant.example3'), t('assistant.example4')];
 }
 
-// Raccourcis d'activation — les trois jobs du produit sur les contacts déjà dans le
+// Raccourcis d'activation · les trois jobs du produit sur les contacts déjà dans le
 // CRM. Ils vivaient dans l'assistant Prospection, où create_campaign ne sait pas les
 // traiter (une campagne ne lit pas le CRM). Ici l'assistant dispose des actions qui
 // conviennent : list_clients, run_nurture, create_trigger, send_email.
@@ -53,11 +53,11 @@ function getActivationTemplates(t) {
   ];
 }
 
-/* ─── lookup_client action card — auto-fetch on mount, no confirm click (read-only) ─── */
+/* ─── lookup_client action card · auto-fetch on mount, no confirm click (read-only) ─── */
 
 function ClientResultRow({ client, lang, t }) {
   const en = lang === 'en';
-  const statusLabel = STATUS_LABELS[client.status]?.[en ? 'en' : 'fr'] || client.status || '—';
+  const statusLabel = STATUS_LABELS[client.status]?.[en ? 'en' : 'fr'] || client.status || ' ';
   const lastActivity = client.last_activity_at
     ? new Date(client.last_activity_at).toLocaleDateString(en ? 'en-US' : 'fr-FR')
     : (en ? 'no logged activity' : 'aucune activité enregistrée');
@@ -66,7 +66,7 @@ function ClientResultRow({ client, lang, t }) {
     <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{client.name || client.email || '—'}</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{client.name || client.email || ' '}</div>
           {client.company && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{client.company}</div>}
         </div>
         <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: 'var(--accent-glow)', color: 'var(--accent)', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -107,7 +107,7 @@ function GeneralActionCard({ metadata }) {
       .finally(() => setLoading(false));
   }, [metadata]);
 
-  // Prospection froide : la seule chose que cet assistant ne fait pas lui-même —
+  // Prospection froide : la seule chose que cet assistant ne fait pas lui-même · 
   // bouton de bascule vers l'assistant de l'onglet Prospection, brief pré-rempli.
   if (metadata?.action === 'open_campaign_assistant') {
     return (
@@ -125,7 +125,7 @@ function GeneralActionCard({ metadata }) {
     );
   }
 
-  // Actions CRM / activation — chaque carte s'exécute elle-même au clic.
+  // Actions CRM / activation · chaque carte s'exécute elle-même au clic.
   if (metadata?.action === 'send_email') return <SendEmailCard metadata={metadata} />;
   if (metadata?.action === 'scan_crm') {
     return <CrmActionCard metadata={metadata} actionType="scan_crm" label={en ? 'Scan CRM' : 'Scanner le CRM'} icon="search" />;
@@ -167,11 +167,11 @@ function GeneralActionCard({ metadata }) {
       </div>
     );
   }
-  // 2+ matches — disambiguation
+  // 2+ matches · disambiguation
   return (
     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        {en ? `${results.length} clients match — which one?` : `${results.length} clients correspondent — lequel ?`}
+        {en ? `${results.length} clients match, which one?` : `${results.length} clients correspondent, lequel ?`}
       </div>
       {results.map(c => (
         <button
@@ -180,7 +180,7 @@ function GeneralActionCard({ metadata }) {
           style={{ textAlign: 'left', fontSize: 12, padding: '8px 12px', justifyContent: 'flex-start' }}
           onClick={() => setSelected(c)}
         >
-          {c.name || c.email}{c.company ? ` — ${c.company}` : ''}
+          {c.name || c.email}{c.company ? `, ${c.company}` : ''}
         </button>
       ))}
     </div>
@@ -464,7 +464,7 @@ export default function ChatPage() {
               {/* Compte-rendu de lecture du CRM : les deals dormants, cliquables */}
               <CrmReadingSummary onSuggestionClick={sendMessage} />
 
-              {/* Raccourcis d'activation — les jobs du produit sur le CRM existant */}
+              {/* Raccourcis d'activation · les jobs du produit sur le CRM existant */}
               <div style={{
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                 gap: 10, marginBottom: 20, width: '100%',

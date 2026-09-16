@@ -1,12 +1,12 @@
 /**
- * Team Campaigns Routes — Admin launches email campaigns for the sales team
+ * Team Campaigns Routes · Admin launches email campaigns for the sales team
  *
- * POST   /api/team-campaigns           — Create a team campaign
- * GET    /api/team-campaigns           — List team campaigns
- * GET    /api/team-campaigns/:id       — Get campaign details
- * POST   /api/team-campaigns/:id/preview — Preview: who gets emailed, sample emails
- * POST   /api/team-campaigns/:id/launch  — Launch: generate + send emails per owner
- * POST   /api/team-campaigns/:id/cancel  — Cancel a running campaign
+ * POST   /api/team-campaigns · Create a team campaign
+ * GET    /api/team-campaigns · List team campaigns
+ * GET    /api/team-campaigns/:id · Get campaign details
+ * POST   /api/team-campaigns/:id/preview · Preview: who gets emailed, sample emails
+ * POST   /api/team-campaigns/:id/launch · Launch: generate + send emails per owner
+ * POST   /api/team-campaigns/:id/cancel · Cancel a running campaign
  */
 
 const { Router } = require('express');
@@ -37,7 +37,7 @@ async function isTeamAdmin(userId) {
   return !result.rows[0] || result.rows[0].role === 'admin';
 }
 
-// POST /api/team-campaigns — Create
+// POST /api/team-campaigns · Create
 router.post('/', async (req, res, next) => {
   try {
     const { name, targetOwners, targetProductLines, emailPrompt, emailTone } = req.body;
@@ -69,7 +69,7 @@ router.post('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/team-campaigns — List
+// GET /api/team-campaigns · List
 router.get('/', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -84,7 +84,7 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/team-campaigns/:id — Details
+// GET /api/team-campaigns/:id · Details
 router.get('/:id', async (req, res, next) => {
   try {
     const tc = await verifyCampaignAccess(req.params.id, req.user.id);
@@ -103,7 +103,7 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/team-campaigns/:id/preview — Preview contacts grouped by owner (admin only)
+// POST /api/team-campaigns/:id/preview · Preview contacts grouped by owner (admin only)
 router.post('/:id/preview', async (req, res, next) => {
   try {
     if (!await isTeamAdmin(req.user.id)) return res.status(403).json({ error: 'Admin only' });
@@ -113,7 +113,7 @@ router.post('/:id/preview', async (req, res, next) => {
     // Get matching contacts
     const contacts = await getTargetContacts(tc);
 
-    // Même mémoire que le launch — la preview doit montrer ce qui partira vraiment
+    // Même mémoire que le launch · la preview doit montrer ce qui partira vraiment
     const patternCtx = await getCampaignPatternContext(tc);
 
     // Group by owner
@@ -161,7 +161,7 @@ router.post('/:id/preview', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/team-campaigns/:id/launch — Generate + send emails (admin only)
+// POST /api/team-campaigns/:id/launch · Generate + send emails (admin only)
 router.post('/:id/launch', async (req, res, next) => {
   try {
     if (!await isTeamAdmin(req.user.id)) return res.status(403).json({ error: 'Admin only' });
@@ -172,7 +172,7 @@ router.post('/:id/launch', async (req, res, next) => {
 
     await db.query(`UPDATE team_campaigns SET status = 'running' WHERE id = $1`, [tc.id]);
 
-    // Respond immediately — process in background
+    // Respond immediately · process in background
     res.status(202).json({ status: 'running', message: 'Campaign launched in background' });
 
     // Background processing
@@ -182,7 +182,7 @@ router.post('/:id/launch', async (req, res, next) => {
         const contacts = await getTargetContacts(tc);
 
         // Mémoire résolue une fois pour toute la campagne (mêmes patterns
-        // pour chaque contact) — injectée dans les prompts et tracée en base
+        // pour chaque contact) · injectée dans les prompts et tracée en base
         // via patternIds pour que les réponses/réactivations créditent les
         // bons patterns.
         const patternCtx = await getCampaignPatternContext(tc);
@@ -302,7 +302,7 @@ async function getTargetContacts(tc) {
 
 /**
  * Mémoire de l'équipe (c'est une campagne d'ÉQUIPE : le tenant est tc.team_id).
- * Best-effort — sans mémoire la campagne part quand même, elle n'apprend rien.
+ * Best-effort · sans mémoire la campagne part quand même, elle n'apprend rien.
  */
 async function getCampaignPatternContext(tc) {
   try {

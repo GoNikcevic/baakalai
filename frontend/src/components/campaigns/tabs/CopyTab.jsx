@@ -99,7 +99,7 @@ function TouchpointEditCard({ tp, campaign, onChange }) {
       const currentSubject = subjectRef.current ? stripEditorHtml(subjectRef.current.innerHTML) : (tp.subject || '');
       const result = await api.regenerateSequence(
         backendId,
-        `${tp.id} — A regénérer : message à améliorer`,
+        `${tp.id}, A regénérer : message à améliorer`,
         [{ step: tp.id, subject: currentSubject, body: currentBody }],
         {
           tone: campaign.tone,
@@ -123,7 +123,7 @@ function TouchpointEditCard({ tp, campaign, onChange }) {
         });
       }
       setRegenStatus('done');
-      setRegenMsg(en ? 'Regenerated — check the result before saving' : 'Régénéré — vérifie le résultat avant de sauvegarder');
+      setRegenMsg(en ? 'Regenerated, check the result before saving' : 'Régénéré, vérifie le résultat avant de sauvegarder');
     } catch (err) {
       setRegenStatus('error');
       setRegenMsg((en ? 'Error: ' : 'Erreur : ') + err.message);
@@ -170,7 +170,7 @@ function TouchpointEditCard({ tp, campaign, onChange }) {
           <div>
             <div style={{ fontSize: 13, fontWeight: 600 }}>
               <Icon name={meta.icon} size={13} color={meta.color} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-              {en && meta.labelEn ? meta.labelEn : meta.label} {tp.subType && `— ${tp.subType}`}
+              {en && meta.labelEn ? meta.labelEn : meta.label} {tp.subType && ` ${tp.subType}`}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{tp.timing}</div>
           </div>
@@ -221,7 +221,7 @@ function TouchpointEditCard({ tp, campaign, onChange }) {
 
       {isLinkedinVisit ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>
-          {en ? 'Automatic profile visit — no message to edit' : 'Visite automatique du profil — pas de message à éditer'}
+          {en ? 'Automatic profile visit, no message to edit' : 'Visite automatique du profil, pas de message à éditer'}
         </div>
       ) : (
         <>

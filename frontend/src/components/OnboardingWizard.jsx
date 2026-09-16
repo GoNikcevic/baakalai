@@ -1,9 +1,9 @@
 /* ===============================================================================
-   BAKAL — Onboarding Wizard (React)
+   BAKAL · Onboarding Wizard (React)
    Multi-step wizard shown on first login. Steps:
    1. Company basics + documents
-   2. CRM first (hero job — 7 providers), then outreach + targeting (optional)
-   3. Done — recap + first CRM import
+   2. CRM first (hero job · 7 providers), then outreach + targeting (optional)
+   3. Done · recap + first CRM import
    Sets localStorage 'bakal_onboarding_complete' on finish.
    =============================================================================== */
 
@@ -67,7 +67,7 @@ function renderReadingSummary(s, t) {
               <li key={d.id}>
                 <strong>{d.name}</strong>
                 {d.company ? ` (${d.company})` : ''}
-                {' — '}{moneyEUR(d.dealValue)}
+                {', '}{moneyEUR(d.dealValue)}
                 {' · '}{t('wizard.readDaysInactive').replace('{days}', d.daysInactive)}
               </li>
             ))}
@@ -313,14 +313,14 @@ export default function OnboardingWizard({ onComplete }) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Step 1 — Company
+  // Step 1 · Company
   const [company, setCompany] = useState('');
   const [sector, setSector] = useState('');
   const [sectorOpen, setSectorOpen] = useState(false);
   const [website, setWebsite] = useState('');
   const [teamSize, setTeamSize] = useState('');
 
-  // Step 2 — Keys
+  // Step 2 · Keys
   const [outreachProvider, setOutreachProvider] = useState('');
   const [outreachKey, setOutreachKey] = useState('');
   const [crmProvider, setCrmProvider] = useState('');
@@ -331,7 +331,7 @@ export default function OnboardingWizard({ onComplete }) {
   const [oauthUnavailable, setOauthUnavailable] = useState(false);
   const [showKeyField, setShowKeyField] = useState(false);
   const [keySaveStatus, setKeySaveStatus] = useState(null); // 'saved' | 'error' | null
-  // Salesforce : pas de clé API — Connected App du client (3 champs) puis OAuth.
+  // Salesforce : pas de clé API · Connected App du client (3 champs) puis OAuth.
   const [sfInstanceUrl, setSfInstanceUrl] = useState('');
   const [sfConsumerKey, setSfConsumerKey] = useState('');
   const [sfConsumerSecret, setSfConsumerSecret] = useState('');
@@ -339,13 +339,13 @@ export default function OnboardingWizard({ onComplete }) {
   const [sfShowManual, setSfShowManual] = useState(false);
   const [sfShowAdminHelp, setSfShowAdminHelp] = useState(false);
 
-  // Step 3 — Target
+  // Step 3 · Target
   const [targetSectors, setTargetSectors] = useState('');
   const [targetSize, setTargetSize] = useState('');
   const [targetZones, setTargetZones] = useState('');
   const [personaPrimary, setPersonaPrimary] = useState('');
 
-  // Step 4 — Style
+  // Step 4 · Style
   const [tone, setTone] = useState('Pro décontracté');
   const [formality, setFormality] = useState('Vous');
   const [valueProp, setValueProp] = useState('');
@@ -529,7 +529,7 @@ export default function OnboardingWizard({ onComplete }) {
     // Valider la clé CRM AVANT de la sauvegarder : sans ce contrôle, un token
     // invalide donnait une coche verte « CRM connecté » et l'utilisateur
     // découvrait le mensonge sur un import raté. On ne bloque que sur un refus
-    // explicite du fournisseur (401) — un fournisseur injoignable ou non
+    // explicite du fournisseur (401) · un fournisseur injoignable ou non
     // testable (Salesforce) laisse passer.
     const crmField = crmKey.trim() && crmProvider ? CRM_FIELD_MAP[crmProvider] : null;
     if (crmField) {
@@ -577,7 +577,7 @@ export default function OnboardingWizard({ onComplete }) {
 
     // Le bouton de l'etape 3 est cliquable deux fois : une fois pour lancer
     // l'import, une fois pour entrer dans l'app. Sans ce garde-fou, le second
-    // clic renverrait le profil et relancerait la synchro outreach — donc un
+    // clic renverrait le profil et relancerait la synchro outreach · donc un
     // double import chez le fournisseur.
     if (setupDoneRef.current) {
       finalize(token);
@@ -629,7 +629,7 @@ export default function OnboardingWizard({ onComplete }) {
     // Import CRM : volontairement PAS en fire-and-forget.
     //
     // L'appel précédent ne visait que /keys/sync-crm, qui déclenche l'ANALYSE
-    // des deals — pas l'import des contacts. Résultat : un utilisateur
+    // des deals · pas l'import des contacts. Résultat : un utilisateur
     // Pipedrive ou HubSpot terminait l'inscription avec zéro opportunité en
     // base, donc `segments.total === 0`, donc la QuickWinCard du dashboard
     // renvoyait null. Le « wow » n'avait aucune matière sur laquelle porter.
@@ -666,7 +666,7 @@ export default function OnboardingWizard({ onComplete }) {
       setImportState({ status: 'done', imported: body.imported ?? 0, error: null });
 
       // Compte-rendu de lecture : pur SQL, disponible immédiatement. Échec
-      // non bloquant — on retombe sur le message générique importDone.
+      // non bloquant · on retombe sur le message générique importDone.
       request('/crm/reading-summary')
         .then(setReadingSummary)
         .catch((err) => { console.warn('reading-summary failed:', err.message); });
@@ -791,7 +791,7 @@ export default function OnboardingWizard({ onComplete }) {
               </div>
             </div>
 
-            {/* Document upload — required */}
+            {/* Document upload · required */}
             <div style={{ marginTop: 20, padding: 16, border: `2px dashed ${uploadedDocs.length > 0 ? 'var(--success)' : 'var(--accent)'}`, borderRadius: 12, background: 'var(--bg-elevated)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
                 {t('wizard.uploadTitle')}
@@ -829,7 +829,7 @@ export default function OnboardingWizard({ onComplete }) {
             <div className="wizard-core-keys">
               {/* CRM en premier : c'est le hero job (réactivation de deals),
                   pas un à-côté. L'outreach et le ciblage descendent en bloc
-                  optionnel — l'inverse de la version précédente. */}
+                  optionnel · l'inverse de la version précédente. */}
               <div className="wizard-key-row">
                 <div className="wizard-key-icon">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1025,7 +1025,7 @@ export default function OnboardingWizard({ onComplete }) {
                     );
 
                     // HubSpot / Pipedrive : le geste par défaut est le bouton
-                    // OAuth — la clé API devient le « mode avancé ».
+                    // OAuth · la clé API devient le « mode avancé ».
                     const hasOauth = crmProvider === 'hubspot' || crmProvider === 'pipedrive';
                     if (hasOauth && !oauthUnavailable) {
                       return (

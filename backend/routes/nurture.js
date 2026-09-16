@@ -1,23 +1,23 @@
 /**
- * Nurture Routes — Email accounts, triggers, and nurture email management
+ * Nurture Routes · Email accounts, triggers, and nurture email management
  *
- * POST /api/nurture/email-accounts       — Add SMTP email account
- * GET  /api/nurture/email-accounts       — List email accounts
- * POST /api/nurture/email-accounts/test  — Test email connection
- * DELETE /api/nurture/email-accounts/:id — Remove email account
+ * POST /api/nurture/email-accounts · Add SMTP email account
+ * GET  /api/nurture/email-accounts · List email accounts
+ * POST /api/nurture/email-accounts/test · Test email connection
+ * DELETE /api/nurture/email-accounts/:id · Remove email account
  *
- * POST /api/nurture/triggers             — Create a nurture trigger
- * GET  /api/nurture/triggers             — List triggers
- * PATCH /api/nurture/triggers/:id        — Update trigger
- * DELETE /api/nurture/triggers/:id       — Delete trigger
- * POST /api/nurture/triggers/:id/run     — Manually run a trigger
+ * POST /api/nurture/triggers · Create a nurture trigger
+ * GET  /api/nurture/triggers · List triggers
+ * PATCH /api/nurture/triggers/:id · Update trigger
+ * DELETE /api/nurture/triggers/:id · Delete trigger
+ * POST /api/nurture/triggers/:id/run · Manually run a trigger
  *
- * GET  /api/nurture/emails               — List nurture emails (pending/sent), optional ?chain= filter
- * POST /api/nurture/emails/:id/approve   — Approve a pending email
- * POST /api/nurture/emails/:id/cancel    — Cancel a pending email
- * POST /api/nurture/run                  — Run nurture engine for current user
+ * GET  /api/nurture/emails · List nurture emails (pending/sent), optional ?chain= filter
+ * POST /api/nurture/emails/:id/approve · Approve a pending email
+ * POST /api/nurture/emails/:id/cancel · Cancel a pending email
+ * POST /api/nurture/run · Run nurture engine for current user
  *
- * POST /api/nurture/send                 — Send a one-off personal email
+ * POST /api/nurture/send · Send a one-off personal email
  */
 
 const { Router } = require('express');
@@ -36,14 +36,14 @@ const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
   : 'http://localhost:5173');
 
 // ═══════════════════════════════════════════════════
-//  Stats — historique consolidé de l'automatisation
+//  Stats · historique consolidé de l'automatisation
 // ═══════════════════════════════════════════════════
 
-// GET /api/nurture/stats — l'équivalent des KPIs de l'Historique de
+// GET /api/nurture/stats · l'équivalent des KPIs de l'Historique de
 // prospection, côté Automatisation : emails de relance (nurture_emails),
 // actions des workflows (campaign_sends liées à un enrollment), workflows par
 // objectif et envois par mois. Les réponses viennent des enrollments stoppés
-// pour cause de réponse — c'est le signal de succès du moteur, pas un
+// pour cause de réponse · c'est le signal de succès du moteur, pas un
 // tracking d'ouverture (inexistant sur ces envois).
 router.get('/stats', async (req, res, next) => {
   try {
@@ -113,7 +113,7 @@ router.get('/stats', async (req, res, next) => {
 //  Email Accounts
 // ═══════════════════════════════════════════════════
 
-// POST /api/nurture/email-accounts — Add SMTP account
+// POST /api/nurture/email-accounts · Add SMTP account
 router.post('/email-accounts', async (req, res, next) => {
   try {
     const { provider, emailAddress, smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
@@ -156,7 +156,7 @@ router.get('/email-accounts', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/email-accounts/test — Test connection
+// POST /api/nurture/email-accounts/test · Test connection
 router.post('/email-accounts/test', async (req, res, next) => {
   try {
     const { id } = req.body;
@@ -173,7 +173,7 @@ router.post('/email-accounts/test', async (req, res, next) => {
   }
 });
 
-// PATCH /api/nurture/email-accounts/:id/signature — { signatureText, signatureImage }
+// PATCH /api/nurture/email-accounts/:id/signature · { signatureText, signatureImage }
 // Texte ≤ 2000 caractères ; image en data-URI (png/jpeg/gif/webp) ≤ 300 Ko
 // décodés, embarquée inline CID à l'envoi (lib/email-outbound.js). null efface.
 router.patch('/email-accounts/:id/signature', async (req, res, next) => {
@@ -302,7 +302,7 @@ router.delete('/triggers/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/triggers/:id/run — Manually run a specific trigger
+// POST /api/nurture/triggers/:id/run · Manually run a specific trigger
 router.post('/triggers/:id/run', async (req, res, next) => {
   try {
     const result = await runNurtureEngine(req.user.id);
@@ -316,7 +316,7 @@ router.post('/triggers/:id/run', async (req, res, next) => {
 //  Nurture Emails
 // ═══════════════════════════════════════════════════
 
-// GET /api/nurture/emails — List emails (with optional status filter)
+// GET /api/nurture/emails · List emails (with optional status filter)
 router.get('/emails', async (req, res, next) => {
   try {
     const status = req.query.status || null;
@@ -345,13 +345,13 @@ router.get('/emails', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/emails/:id/approve — Approve and send a pending email
+// POST /api/nurture/emails/:id/approve · Approve and send a pending email
 //
 // Un échec d'envoi doit sortir en NON-2xx. Avant ce correctif la route
 // répondait 200 avec `{ success: false, error }` : le client (`services/
 // api-client.js`) ne lève que sur `!res.ok`, donc le `catch` des appelants
 // n'était jamais atteint et le clic « Approuver » ne produisait ni envoi ni
-// message — l'email restait pending, puis mourait 14 jours plus tard sur
+// message · l'email restait pending, puis mourait 14 jours plus tard sur
 // l'expiration de `stepNurture`. C'est la cause du « 0 email envoyé » :
 // aucune boîte mail n'a jamais été connectée et rien ne le disait.
 router.post('/emails/:id/approve', async (req, res, next) => {
@@ -374,7 +374,7 @@ router.post('/emails/:id/approve', async (req, res, next) => {
     });
 
     // If this email came from an autonomous chain (deal_reactivation/auto_upsell),
-    // keep agent_chain_executions in sync with the real send outcome — before any
+    // keep agent_chain_executions in sync with the real send outcome · before any
     // early return, so a failed send is recorded too.
     await db.query(
       `UPDATE agent_chain_executions SET status = $1, executed_at = now()
@@ -407,7 +407,7 @@ router.post('/emails/:id/approve', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/emails/approve-batch — Approve and send up to 20 pending
+// POST /api/nurture/emails/approve-batch · Approve and send up to 20 pending
 // emails in one call. Envois séquentiels (un compte SMTP perso n'aime pas les
 // rafales) ; au-delà de 20, le front ré-appelle avec le reste.
 const APPROVE_BATCH_MAX = 20;
@@ -461,7 +461,7 @@ router.post('/emails/approve-batch', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/emails/cancel-batch — Cancel pending emails in bulk
+// POST /api/nurture/emails/cancel-batch · Cancel pending emails in bulk
 // (purge d'un backlog obsolète sans cliquer 70 fois).
 router.post('/emails/cancel-batch', async (req, res, next) => {
   try {
@@ -499,7 +499,7 @@ router.post('/emails/:id/cancel', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/run — Run CRM agent (sync + clean + nurture)
+// POST /api/nurture/run · Run CRM agent (sync + clean + nurture)
 router.post('/run', async (req, res, next) => {
   try {
     const { runAgent } = require('../lib/crm-agent');
@@ -510,7 +510,7 @@ router.post('/run', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/preview — Preview what would happen without sending
+// POST /api/nurture/preview · Preview what would happen without sending
 router.post('/preview', async (req, res, next) => {
   try {
     const { getUserCrmToken } = require('../lib/crm-token');
@@ -545,7 +545,7 @@ router.post('/preview', async (req, res, next) => {
     const previews = [];
 
     for (const trigger of triggers.rows) {
-      // Même logique de matching que le cron (lib/trigger-matching.js) —
+      // Même logique de matching que le cron (lib/trigger-matching.js) · 
       // la preview affichait des contacts calculés sur updated_at alors que
       // le cron déclenchait sur last_activity_at.
       let matched = matchContacts(trigger, opps, now, { stagnantDays });
@@ -634,7 +634,7 @@ setInterval(() => {
   }
 }, 300000).unref();
 
-// GET /api/nurture/email-accounts/connect/gmail — Start Gmail OAuth flow
+// GET /api/nurture/email-accounts/connect/gmail · Start Gmail OAuth flow
 router.get('/email-accounts/connect/gmail', (req, res, next) => {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -658,7 +658,7 @@ router.get('/email-accounts/connect/gmail', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/nurture/email-accounts/callback/gmail — Gmail OAuth callback
+// GET /api/nurture/email-accounts/callback/gmail · Gmail OAuth callback
 async function gmailCallback(req, res) {
   const { code, state } = req.query;
   const oauthData = _oauthStates.get(state);
@@ -725,7 +725,7 @@ async function gmailCallback(req, res) {
   }
 }
 
-// GET /api/nurture/email-accounts/connect/microsoft — Start Microsoft OAuth flow
+// GET /api/nurture/email-accounts/connect/microsoft · Start Microsoft OAuth flow
 router.get('/email-accounts/connect/microsoft', (req, res, next) => {
   try {
     const clientId = process.env.MICROSOFT_CLIENT_ID;
@@ -748,7 +748,7 @@ router.get('/email-accounts/connect/microsoft', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/nurture/email-accounts/callback/microsoft — Microsoft OAuth callback
+// GET /api/nurture/email-accounts/callback/microsoft · Microsoft OAuth callback
 async function microsoftCallback(req, res) {
   const { code, state } = req.query;
   const oauthData = _oauthStates.get(state);
@@ -815,7 +815,7 @@ async function microsoftCallback(req, res) {
   }
 }
 
-// GET /api/nurture/ab-results — Get A/B test results
+// GET /api/nurture/ab-results · Get A/B test results
 router.get('/ab-results', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -846,7 +846,7 @@ router.get('/ab-results', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/nurture/send — Send a one-off personal email (from chat or UI)
+// POST /api/nurture/send · Send a one-off personal email (from chat or UI)
 router.post('/send', async (req, res, next) => {
   try {
     const { to, toName, subject, body, opportunityId } = req.body;

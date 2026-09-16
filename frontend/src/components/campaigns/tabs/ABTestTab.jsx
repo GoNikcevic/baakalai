@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   A/B Test Tab — side-by-side diff + winner promotion
+   A/B Test Tab · side-by-side diff + winner promotion
    ═══════════════════════════════════════════════════ */
 
 import { useState, useMemo } from 'react';
@@ -24,7 +24,7 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
 
   const hasAB = abConfig && testedTouchpoints.length > 0;
 
-  // Compute aggregated stats — avant l'early return : un hook après un
+  // Compute aggregated stats · avant l'early return : un hook après un
   // return conditionnel change l'ordre des hooks entre rendus (crash React).
   const stats = useMemo(() => {
     let aReplyAvg = 0, bReplyAvg = 0, aOpenAvg = 0, bOpenAvg = 0, count = 0;
@@ -349,7 +349,7 @@ function TouchpointDiff({ tp }) {
       }}
     >
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-        {tp.id} — {tp.label || tp.type}
+        {tp.id}, {tp.label || tp.type}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>

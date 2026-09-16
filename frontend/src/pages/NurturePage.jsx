@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Nurture Page
+   BAKAL · Nurture Page
    Configure triggers, view pending/sent emails, manage client nurturing.
    =============================================================================== */
 

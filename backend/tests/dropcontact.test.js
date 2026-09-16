@@ -1,5 +1,5 @@
 /**
- * Tests du client DropContact — fonctions pures uniquement.
+ * Tests du client DropContact · fonctions pures uniquement.
  *
  * buildEnrichInput décide quels leads partent en recherche (donc ce qui peut
  * être facturé) ; parseBatchEntry décide ce qui compte comme « trouvé et

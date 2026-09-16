@@ -1,9 +1,9 @@
 /* ===============================================================================
-   BAKAL — Workflow de relance (enrollments, phase 2)
+   BAKAL · Workflow de relance (enrollments, phase 2)
    Reached from ReactivationQueuePage's "Proposer un workflow". The Deal Coach
    drafts a bespoke multichannel sequence for ONE CRM contact (rationale + steps
    with an optional "accepted" LinkedIn fork). The user reviews/edits the DRAFT,
-   then approves — nothing is sent before approval. Once active, the same page
+   then approves · nothing is sent before approval. Once active, the same page
    shows execution progress from the campaign_sends journal.
    =============================================================================== */
 
@@ -45,7 +45,7 @@ function flatten(tree) {
 
 /** Arbre d'état → payload PUT /enrollments/:id/sequence.
  *  L'id backend est conservé : la réconciliation met à jour les steps
- *  existants en place (le journal d'envoi survit) — un id client temporaire
+ *  existants en place (le journal d'envoi survit) · un id client temporaire
  *  ("new-…", étape ajoutée dans l'UI) est omis pour déclencher une création. */
 function serialize(tree) {
   const node = (tp) => ({
@@ -79,7 +79,7 @@ function blankStep() {
 }
 
 /** Logo baakalai animé pendant la génération : le nœud central pulse, les
- *  satellites s'allument tour à tour — le système « réfléchit ». */
+ *  satellites s'allument tour à tour · le système « réfléchit ». */
 function LogoPulse() {
   return (
     <div style={{ marginBottom: 18 }}>

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Lemlist Auto-Sync & Analysis
+   BAKAL · Lemlist Auto-Sync & Analysis
    Background task: pulls campaign history from Lemlist, analyzes with Claude,
    and populates memory_patterns table.
    =============================================================================== */
@@ -12,7 +12,7 @@ const { notifyUser } = require('../socket');
 
 /**
  * Sync all Lemlist campaigns and analyze them with Claude.
- * Runs in background — emits socket progress events throughout.
+ * Runs in background · emits socket progress events throughout.
  *
  * @param {string} userId - The user's UUID
  * @returns {{ campaigns: number, patterns: number }}
@@ -126,11 +126,11 @@ Sois spécifique et actionnable. Base-toi uniquement sur les données fournies.`
       }
     }
 
-    // Step 5: Done — notify
+    // Step 5: Done · notify
     notifyUser(userId, 'lemlist:sync', {
       status: 'done',
       progress: 100,
-      message: `Analyse terminée — ${patternsCount} patterns identifiés sur ${allStats.length} campagnes`,
+      message: `Analyse terminée, ${patternsCount} patterns identifiés sur ${allStats.length} campagnes`,
       patternsCount,
       campaignsCount: allStats.length,
     });

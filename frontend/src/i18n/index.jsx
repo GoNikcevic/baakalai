@@ -18,7 +18,7 @@ const translations = { fr, en };
 // Contexte par défaut, utilisé quand un composant est monté hors du Provider.
 // `t` y renvoyait la clé brute : un composant rendu hors Provider affichait
 // « common.tagline » à l'écran au lieu du texte. Il traduit maintenant en
-// français, la langue par défaut du produit — même repli que le Provider
+// français, la langue par défaut du produit · même repli que le Provider
 // lui-même, qui retombe déjà sur `fr` quand une clé manque dans la langue
 // active. La clé nue ne reste que si elle n'existe dans aucun des deux
 // fichiers, ce qui est une vraie erreur de développement.
@@ -46,7 +46,7 @@ function interpolate(str, params) {
 }
 
 /**
- * Provider component — wrap your app with this.
+ * Provider component · wrap your app with this.
  * Reads initial language from localStorage or browser locale.
  */
 export function I18nProvider({ children }) {
@@ -90,7 +90,7 @@ export function I18nProvider({ children }) {
 
 /**
  * Hook to access the translation function.
- * Returns t(key, params?) — resolves the key and interpolates placeholders.
+ * Returns t(key, params?) · resolves the key and interpolates placeholders.
  */
 export function useT() {
   return useContext(I18nContext).t;

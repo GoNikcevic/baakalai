@@ -3,8 +3,8 @@
  *
  * La liste vivait en double : énumérée dans le prompt d'analyse, rejouée dans
  * l'autopilot sous forme de deux tableaux et d'un switch. Une intention ajoutée
- * d'un côté seulement tombait dans la branche par défaut — « continue la
- * conversation » — soit l'inverse de l'effet recherché. Ces tests verrouillent
+ * d'un côté seulement tombait dans la branche par défaut · « continue la
+ * conversation » · soit l'inverse de l'effet recherché. Ces tests verrouillent
  * la source unique.
  */
 

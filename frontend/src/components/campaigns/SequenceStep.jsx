@@ -22,7 +22,7 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
 
   const meta = TYPE_META[s.type] || TYPE_META.email;
   const metaLabel = en && meta.labelEn ? meta.labelEn : meta.label;
-  const typeLabel = `${meta.icon} ${metaLabel}${s.subType ? ' — ' + s.subType : ''}`;
+  const typeLabel = `${meta.icon} ${metaLabel}${s.subType ? ', ' + s.subType : ''}`;
   const isLinkedinInvite = s.type === 'linkedin_invite';
   const isLinkedinVisit = s.type === 'linkedin_visit';
   const charCount = (s.body || '').length;
@@ -32,9 +32,9 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
   if (!hasStats) {
     statsContent = (
       <>
-        <StepStat value="—" label="Pas encore lance" color="var(--text-muted)" />
-        <StepStat value="—" label="" color="var(--text-muted)" />
-        <StepStat value="—" label="" color="var(--text-muted)" />
+        <StepStat value=" " label="Pas encore lance" color="var(--text-muted)" />
+        <StepStat value=" " label="" color="var(--text-muted)" />
+        <StepStat value=" " label="" color="var(--text-muted)" />
       </>
     );
   } else if (s.type === 'linkedin' && s.stats.accept !== undefined) {
@@ -46,7 +46,7 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
           color="var(--success)"
           pct={s.stats.accept}
         />
-        <StepStat value="—" label="—" color="var(--text-muted)" />
+        <StepStat value=" " label=" " color="var(--text-muted)" />
         <StepStat
           value="0%"
           label="Ignore"
@@ -66,8 +66,8 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
           pct={s.stats.reply * 10}
         />
         <StepStat
-          value={s.stats.interested || '—'}
-          label={s.stats.interested ? 'Interesses' : '—'}
+          value={s.stats.interested || ' '}
+          label={s.stats.interested ? 'Interesses' : ' '}
           color="var(--warning)"
         />
         <StepStat
@@ -153,7 +153,7 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
           <div
             style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}
           >
-            Visite automatique du profil — pas de message
+            Visite automatique du profil, pas de message
           </div>
         ) : (
           <div

@@ -1,16 +1,16 @@
-# CLAUDE.md — Baakalai
+# CLAUDE.md · Baakalai
 
-> Context file for AI assistants working on this codebase. Keep concise — use Grep/Glob for file discovery.
+> Context file for AI assistants working on this codebase. Keep concise, use Grep/Glob for file discovery.
 
 ## 1. What is Baakalai
 
-baakalai is the AI system that exploits your CRM to generate revenue. It connects to existing CRMs (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable, Folk) and reads data 24/7 — spotting stagnant deals to reactivate, clients ready to upsell, accounts about to churn. It sends the right follow-up, at the right time, from the user's own email. 12 AI agents build a collective memory that compounds.
+baakalai is the AI system that exploits your CRM to generate revenue. It connects to existing CRMs (Pipedrive, HubSpot, Salesforce, Odoo, Notion, Airtable, Folk) and reads data 24/7 : spotting stagnant deals to reactivate, clients ready to upsell, accounts about to churn. It sends the right follow-up, at the right time, from the user's own email. 12 AI agents build a collective memory that compounds.
 
-**Naming rule:** baakalai is *a system* (singular, the product identity), made of *12 agents* (plural, the architecture). Never call the product "the agent" — the singular contradicts the multi-agent architecture we sell, and "system" is only credible because the 12 agents are real. Category anchor is **RevOps** (a function nobody owns), never "revenue intelligence" (the category Gong defined and owns). Never claim baakalai *is* a RevOps platform — no consolidated forecasting, territories, comp or CPQ. Always "the job a RevOps would do".
+**Naming rule:** baakalai is *a system* (singular, the product identity), made of *12 agents* (plural, the architecture). Never call the product "the agent" : the singular contradicts the multi-agent architecture we sell, and "system" is only credible because the 12 agents are real. Category anchor is **RevOps** (a function nobody owns), never "revenue intelligence" (the category Gong defined and owns). Never claim baakalai *is* a RevOps platform : no consolidated forecasting, territories, comp or CPQ. Always "the job a RevOps would do".
 
 **3 pillars:** CRM Intelligence > Automatisation (ex-« Activation », renommée 2026-09-14) > Prospection (prospection = door, not the product).
 
-**Pricing:** 69 €/siège/mois, produit complet (décision Goran 2026-09-03, remplace l'ancienne grille 49/149/349). Annuel : 2 mois offerts. Founding members beta : −50 % à la sortie publique. Team plan up to 5 members. Affiché publiquement sur la landing depuis le 2026-09-16. ⚠️ Le socle Stripe (migration 078) est construit pour 3 tiers — à adapter en un price unique × quantité de sièges.
+**Pricing:** 69 €/siège/mois, produit complet (décision Goran 2026-09-03, remplace l'ancienne grille 49/149/349). Annuel : 2 mois offerts. Founding members beta : −50 % à la sortie publique. Team plan up to 5 members. Affiché publiquement sur la landing depuis le 2026-09-16. ⚠️ Le socle Stripe (migration 078) est construit pour 3 tiers : à adapter en un price unique × quantité de sièges.
 
 ## 2. Tech Stack
 
@@ -35,13 +35,13 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 1. **i18n**: NEVER hardcode French text in JSX. Always use `t('key')` from `useI18n()`. Add keys to BOTH `fr.json` AND `en.json` in the same commit.
 2. **Active CRM**: Always use `users.active_crm_provider` to determine which CRM to sync/display. Never hardcode provider priority order.
-3. **Pattern writes**: `replaceOrCreate()` uses a table-based lease (`lib/db-lock.js`, `cron_locks` table) for mutual exclusion. NEVER use `pg_advisory_lock` — DATABASE_URL goes through Supavisor in transaction mode, where advisory locks leak and block forever. All pattern writes are anonymized in the DAO (`lib/anonymize.js`); `shared` is granted automatically when redaction is complete.
+3. **Pattern writes**: `replaceOrCreate()` uses a table-based lease (`lib/db-lock.js`, `cron_locks` table) for mutual exclusion. NEVER use `pg_advisory_lock` : DATABASE_URL goes through Supavisor in transaction mode, where advisory locks leak and block forever. All pattern writes are anonymized in the DAO (`lib/anonymize.js`); `shared` is granted automatically when redaction is complete.
 4. **Email dedup**: Before inserting nurture emails, always check for existing pending/recent emails for the same contact (2-hour + 7-day windows).
 5. **Environments**: Never share credentials between prod and staging. Never point staging `APP_URL` to production.
-6. **Pré-push**: ALWAYS run `node scripts/check-conflicts.js` before any `git push`. It blocks on remote desync (someone pushed meanwhile) and warns on merge conflicts against `main`. Report the conflicting files to Goran instead of pushing blind — never resolve a conflict against `main` without asking him first, the arbitrations are product decisions. Two automatic reminders back this up: `.claude/hooks/session-start.sh` prints the conflict state at every session start (`--report`, non-blocking), and `.githooks/pre-push` runs the blocking check (enable once per clone via `bash scripts/install-hooks.sh`).
-7. **Pré-modif (pull)**: ALWAYS `git fetch origin <branche> && git pull origin <branche>` BEFORE starting any modification — never edit files on a stale checkout. Goran works from several machines and sessions; a branch left untouched for a few hours is routinely dozens of commits behind. If the pull brings in changes touching the files about to be modified, re-read them before editing.
-8. **Style des contenus générés (décision Goran 2026-09-15)**: tout texte rédigé par baakalai et lu par un contact (emails, notes/messages LinkedIn, copy de séquence) ne doit JAMAIS contenir de tiret cadratin/demi-cadratin (— –) ni de tournures reconnaissables d'IA (« J'espère que vous allez bien », « Je me permets de », « N'hésitez pas à », triades, « Ce n'est pas X, c'est Y »…). Double verrou obligatoire via `lib/human-style.js` : concaténer `HUMAN_STYLE_RULES` (ou `_FR`) dans tout nouveau prompt de génération de contenu contact, et laisser les chokepoints `humanize()` en place (email-outbound.sendPersonalEmail, api/linkedin send*, DAO touchpoints). Ne jamais appliquer `humanize()` au contenu écrit par l'utilisateur (signatures, messages manuels).
-9. **Jamais de push inachevé**: NEVER push while a modification, a feature or a fix is incomplete — half-wired code, missing i18n keys, an untested migration, a TODO left in the flow. This holds even if Goran explicitly asks to push: answer no, list precisely what is left to finish, and push only once it is done (or once he confirms in a second message that he wants the partial state pushed anyway). Committing locally on an in-progress state is fine; pushing is not — `staging` auto-deploys.
+6. **Pré-push**: ALWAYS run `node scripts/check-conflicts.js` before any `git push`. It blocks on remote desync (someone pushed meanwhile) and warns on merge conflicts against `main`. Report the conflicting files to Goran instead of pushing blind : never resolve a conflict against `main` without asking him first, the arbitrations are product decisions. Two automatic reminders back this up: `.claude/hooks/session-start.sh` prints the conflict state at every session start (`--report`, non-blocking), and `.githooks/pre-push` runs the blocking check (enable once per clone via `bash scripts/install-hooks.sh`).
+7. **Pré-modif (pull)**: ALWAYS `git fetch origin <branche> && git pull origin <branche>` BEFORE starting any modification : never edit files on a stale checkout. Goran works from several machines and sessions; a branch left untouched for a few hours is routinely dozens of commits behind. If the pull brings in changes touching the files about to be modified, re-read them before editing.
+8. **Style (décision Goran 2026-09-15, portée élargie le 2026-09-16)**: **aucun tiret cadratin (U+2014) ni demi-cadratin (U+2013) nulle part dans baakalai** : landing, app, backend, emails, commentaires de code. Purge faite le 2026-09-16 (204 sur la landing, 519 dans `frontend/src`, 920 dans le backend, 179 dans les traductions). Le repo est à zéro, ne pas en réintroduire. Remplacer selon le sens, jamais par un `sed` aveugle : deux-points pour « libellé : explication », virgule pour un complément, parenthèses pour une incise encadrée par deux tirets, « à » pour une fourchette chiffrée, « : » pour un séparateur de titre. **Typographie française : espace AVANT les deux-points** (« Réactivation : repère »), pas en anglais (« Reactivation: spots »). Dans un fichier où FR et EN cohabitent sur la même ligne (JSX), préférer la virgule pour ne pas avoir à trancher. En complément, tout texte lu par un contact ne doit contenir aucune tournure reconnaissable d'IA (« J'espère que vous allez bien », « Je me permets de », « N'hésitez pas à », triades, « Ce n'est pas X, c'est Y »…). Double verrou obligatoire via `lib/human-style.js` : concaténer `HUMAN_STYLE_RULES` (ou `_FR`) dans tout nouveau prompt de génération de contenu contact, et laisser les chokepoints `humanize()` en place (email-outbound.sendPersonalEmail, api/linkedin send*, DAO touchpoints). Ne jamais appliquer `humanize()` au contenu écrit par l'utilisateur (signatures, messages manuels).
+9. **Jamais de push inachevé**: NEVER push while a modification, a feature or a fix is incomplete : half-wired code, missing i18n keys, an untested migration, a TODO left in the flow. This holds even if Goran explicitly asks to push: answer no, list precisely what is left to finish, and push only once it is done (or once he confirms in a second message that he wants the partial state pushed anyway). Committing locally on an in-progress state is fine; pushing is not : `staging` auto-deploys.
 
 ## 4. Architecture
 
@@ -57,10 +57,10 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 | Reporting | Monday 9AM | Anomaly detection, weekly report |
 
 **Key patterns:**
-- `db.memoryPatterns.replaceOrCreate()` — atomic upsert with advisory lock + pgvector semantic dedup
-- Delta sync — only sync what changed since last run
-- Owner resolver — unified CRM owner → team member mapping (`lib/crm-owner-resolver.js`)
-- CRM field mapper — map CRM custom fields to product lines/status (`lib/crm-field-mapper.js`)
+- `db.memoryPatterns.replaceOrCreate()` : atomic upsert with advisory lock + pgvector semantic dedup
+- Delta sync : only sync what changed since last run
+- Owner resolver : unified CRM owner → team member mapping (`lib/crm-owner-resolver.js`)
+- CRM field mapper : map CRM custom fields to product lines/status (`lib/crm-field-mapper.js`)
 
 ### Database (key tables)
 
@@ -81,7 +81,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 ## 6. Current Gaps
 
-- [x] Stripe billing + paywall — socle livré (routes /api/billing, webhook, migration 078, section Réglages, paywall d'essai expiré). Inerte tant que STRIPE_SECRET_KEY + price IDs ne sont pas posés sur Railway ; comptes existants exemptés (trial_ends_at NULL).
+- [x] Stripe billing + paywall : socle livré (routes /api/billing, webhook, migration 078, section Réglages, paywall d'essai expiré). Inerte tant que STRIPE_SECRET_KEY + price IDs ne sont pas posés sur Railway ; comptes existants exemptés (trial_ends_at NULL).
 - [ ] Microsoft OAuth publisher verification (beta testers can't consent Outlook)
 - [ ] Salesforce campaigns (contacts + deals done, missing campaigns)
 - [ ] A/B testing on activation emails (only prospection currently)
@@ -90,8 +90,8 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 ## 7. Business Context
 
-- **ICP** (élargi 2026-09-02): PME B2B 5-200 pers, ≥12 mois historique CRM, base clients existante, pas d'équipe RevOps constituée, ≤5 personnes sur le CRM (plafond produit actuel). L'effectif est un proxy — qualifier sur ces 4 critères.
-- **Wedge**: Revenue intelligence for SMBs — structurally inaccessible to Gong/Clari
+- **ICP** (élargi 2026-09-02): PME B2B 5-200 pers, ≥12 mois historique CRM, base clients existante, pas d'équipe RevOps constituée, ≤5 personnes sur le CRM (plafond produit actuel). L'effectif est un proxy : qualifier sur ces 4 critères.
+- **Wedge**: Revenue intelligence for SMBs : structurally inaccessible to Gong/Clari
 - **Hero job**: Deal reactivation ("1 deal recovered = tool paid for itself")
 - **4 jobs**: Reactivation > Upsell > Churn > Data cleaning
 - **Competitors**: Attio ($29-69/seat, no outbound), Lemlist/Apollo (outreach only, no CRM intelligence)

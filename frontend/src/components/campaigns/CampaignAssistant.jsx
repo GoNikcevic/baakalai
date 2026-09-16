@@ -1,11 +1,11 @@
 /* ===============================================================================
-   BAKAL — Assistant Prospection (onglet Prospection → Assistant)
+   BAKAL · Assistant Prospection (onglet Prospection → Assistant)
    Constructeur conversationnel de campagnes de PROSPECTION FROIDE : cible/ICP,
    sourcing de prospects, séquences, copy, A/B, analyse de performance.
 
    Périmètre volontairement fermé : tout ce qui concerne des contacts déjà présents
    dans le CRM (relance de deals dormants, upsell, churn, triggers, nettoyage, envoi
-   d'un email à un contact) appartient à l'assistant général (pages/ChatPage.jsx) —
+   d'un email à un contact) appartient à l'assistant général (pages/ChatPage.jsx) · 
    create_campaign ne sait pas lire le CRM. Claude émet alors open_general_assistant
    et l'UI propose la bascule, brief pré-rempli.
    Rendu des messages partagé via components/chat/ChatPrimitives.jsx.
@@ -38,7 +38,7 @@ function getDefaultSuggestions(t) {
 }
 
 // Tout premier écran (campaignCount === 0) : on ouvre sur la cible et la première
-// séquence, pas sur le CRM — l'utilisateur est ici pour prospecter.
+// séquence, pas sur le CRM · l'utilisateur est ici pour prospecter.
 function getOnboardingSuggestions(t) {
   return [t('chat.sugOnboarding1'), t('chat.sugOnboarding2'), t('chat.sugOnboarding3'), t('chat.sugOnboarding4')];
 }
@@ -67,17 +67,17 @@ function getActionPrompts(lang) {
   };
 }
 
-// Templates de campagne — prospection froide uniquement. Les templates
+// Templates de campagne · prospection froide uniquement. Les templates
 // « deals dormants », « relance clients » et « upsell » ont été déplacés vers
 // l'assistant général (pages/ChatPage.jsx) : ils visent des contacts déjà dans le
 // CRM, que create_campaign ne sait pas traiter (cf. CHAT_SYSTEM_RULES).
 // La prospection s'appuie sur le profil/ICP de l'utilisateur, pas sur une cible inventée.
 function getCampaignTemplates(t) {
   return [
-    { label: t('chat.templateProspection'), desc: t('chat.templateProspectionDesc'), prompt: 'Create a prospecting campaign based on my company profile and ICP. If my profile is incomplete, ask me who I want to target — don\'t invent a target. Channel: email. Professional, direct tone. Generate the full sequence.' },
+    { label: t('chat.templateProspection'), desc: t('chat.templateProspectionDesc'), prompt: 'Create a prospecting campaign based on my company profile and ICP. If my profile is incomplete, ask me who I want to target, don\'t invent a target. Channel: email. Professional, direct tone. Generate the full sequence.' },
     { label: t('chat.templateMeeting'), desc: t('chat.templateMeetingDesc'), prompt: 'Create a short email campaign (3 touchpoints) to book a 15-minute meeting. Direct and concise tone. Each email under 5 lines. CTA is always a time slot proposal. Use my profile info to personalize.' },
     { label: t('chat.templateMulti'), desc: t('chat.templateMultiDesc'), prompt: 'Create a multichannel prospecting campaign (email + LinkedIn) on my ICP. Alternate the channels: LinkedIn connection request, then email, then LinkedIn message. 4 touchpoints over 3 weeks.' },
-    { label: t('chat.templateBreakup'), desc: t('chat.templateBreakupDesc'), prompt: 'Write a short breakup sequence for the cold prospects who never answered my current campaigns: one last email, honest and no pressure, that gives them an easy way out — and often gets a reply.' },
+    { label: t('chat.templateBreakup'), desc: t('chat.templateBreakupDesc'), prompt: 'Write a short breakup sequence for the cold prospects who never answered my current campaigns: one last email, honest and no pressure, that gives them an easy way out, and often gets a reply.' },
   ];
 }
 
@@ -819,10 +819,10 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
 
   const handleSaveClick = async () => {
     if (metadata.campaignId) {
-      // Pre-linked campaign — save directly
+      // Pre-linked campaign · save directly
       await saveToCampaign(metadata.campaignId);
     } else {
-      // No campaign linked — show picker
+      // No campaign linked · show picker
       setShowCampaignPicker(true);
     }
   };
@@ -1090,14 +1090,14 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
         <h2 className="chat-welcome-title" style={{ marginBottom: 10 }}>{title}</h2>
         <p className="chat-welcome-text" style={{ marginBottom: 32, fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 480 }}>{subtitle}</p>
 
-        {/* Onboarding checklist — shown for new users */}
+        {/* Onboarding checklist · shown for new users */}
         {(!hasProfile || campaignCount === 0) && (
           <div style={{ maxWidth: 520, width: '100%', marginBottom: 16 }}>
             <OnboardingChecklist />
           </div>
         )}
 
-        {/* Memory insights — shown when patterns exist */}
+        {/* Memory insights · shown when patterns exist */}
         {topInsights.length > 0 && (
           <div style={{
             background: 'var(--bg-elevated, var(--paper-2))',
@@ -1123,7 +1123,7 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
           </div>
         )}
 
-        {/* Campaign templates — shown when user has profile but no/few campaigns */}
+        {/* Campaign templates · shown when user has profile but no/few campaigns */}
         {(hasProfile && campaignCount === 0) && (
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -1410,7 +1410,7 @@ export default function CampaignAssistant() {
       return en ? ['View new versions', 'Deploy changes', 'Change approach'] : ['Voir les nouvelles versions', 'D\u00E9ployer les modifications', 'Modifier l\'approche'];
     }
     // Les actions CRM (scan_crm, run_nurture, create_trigger, toggle_autopilot,
-    // send_email, list_clients) ne sont plus émises ici — cet assistant ne les
+    // send_email, list_clients) ne sont plus émises ici · cet assistant ne les
     // déclare plus. Leurs suggestions de suite vivent avec elles, côté assistant
     // général (pages/ChatPage.jsx).
     if (metadata.action === 'search_prospects' || metadata.action === 'web_search_prospects') {
@@ -1604,7 +1604,7 @@ export default function CampaignAssistant() {
         });
         setShowTyping(false);
 
-        // HTTP response arrived — only add if stream didn't already add it
+        // HTTP response arrived · only add if stream didn't already add it
         if (!streamedMessageAddedRef.current) {
           const assistantMsg = {
             id: data.message.id || Date.now() + 1,
@@ -1893,7 +1893,7 @@ export default function CampaignAssistant() {
               <div style={{ fontSize: '28px', marginBottom: '8px' }}>+</div>
               {lang === 'en' ? 'Drop your files here' : 'Déposez vos fichiers ici'}
               <div style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)', marginTop: '4px' }}>
-                {lang === 'en' ? 'CSV, Excel, PDF, DOCX — max 20 MB' : 'CSV, Excel, PDF, DOCX — max 20 Mo'}
+                {lang === 'en' ? 'CSV, Excel, PDF, DOCX, max 20 MB' : 'CSV, Excel, PDF, DOCX, max 20 Mo'}
               </div>
             </div>
           </div>

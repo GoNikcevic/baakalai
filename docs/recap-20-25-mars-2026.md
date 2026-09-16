@@ -1,4 +1,4 @@
-# Baakal — Résumé du développement (20-25 mars 2026)
+# Baakal : Résumé du développement (20-25 mars 2026)
 
 **16 commits · 13 PRs mergées · 1 semaine**
 
@@ -20,7 +20,7 @@
 
 ### Clé Claude retirée des paramètres utilisateur
 - Les users n'ont plus besoin de leur propre clé Claude
-- Baakal paie l'API — la clé système est utilisée
+- Baakal paie l'API : la clé système est utilisée
 - Core keys simplifiées : Lemlist + CRM uniquement
 
 ---
@@ -39,11 +39,11 @@
 - Gère automatiquement les 429/503/timeout
 
 ### 5 fixes haute/moyenne priorité (PR #66)
-- **A/B rollback Lemlist** — snapshot des touchpoints avant régénération, endpoint `/rollback/:versionId`
-- **Session revocation** — logout invalide TOUS les refresh tokens
-- **Memory pruning** — cron mensuel supprime les patterns "Faible" > 90 jours
-- **Logging structuré** — JSON logger avec niveaux et catégories (LOG_LEVEL)
-- **Input sanitization** — strip HTML/JS des campagnes et messages chat
+- **A/B rollback Lemlist** : snapshot des touchpoints avant régénération, endpoint `/rollback/:versionId`
+- **Session revocation** : logout invalide TOUS les refresh tokens
+- **Memory pruning** : cron mensuel supprime les patterns "Faible" > 90 jours
+- **Logging structuré** : JSON logger avec niveaux et catégories (LOG_LEVEL)
+- **Input sanitization** : strip HTML/JS des campagnes et messages chat
 
 ---
 
@@ -116,7 +116,7 @@
 
 ## 🌐 Domaine & Déploiement
 
-### baakal.ai — LIVE
+### baakal.ai : LIVE
 - Domaine acheté sur Cloudflare (baakal.ai + baakal.com)
 - DNS configuré vers Railway (CNAME)
 - CORS configuré pour les deux domaines
@@ -195,4 +195,4 @@
 
 ---
 
-*Document rédigé le 25 mars 2026 — Baakal*
+*Document rédigé le 25 mars 2026 : Baakal*

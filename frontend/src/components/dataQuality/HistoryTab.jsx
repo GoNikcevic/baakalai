@@ -1,8 +1,8 @@
 /* ===============================================================================
-   BAKAL — History Tab
+   BAKAL · History Tab
    Everything that has happened via Baakalai's Data Quality page, grouped by user
-   action (one merge = one group, even if it touched several contacts). Full undo —
-   restoring the complete prior state — for any group still 'applied'.
+   action (one merge = one group, even if it touched several contacts). Full undo · 
+   restoring the complete prior state · for any group still 'applied'.
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -11,7 +11,7 @@ import { showToast } from '../../services/notifications';
 import { useT } from '../../i18n';
 
 function formatFieldValue(t, field, value) {
-  if (value == null || value === '') return '—';
+  if (value == null || value === '') return ' ';
   if (field === 'dealValue') return `${Math.round(value).toLocaleString('fr-FR')} €`;
   if (field === 'sector' && value === 'non_determine') return t('dataQuality.dealQuality.sectorNotClassified');
   return value;
@@ -83,7 +83,7 @@ export default function HistoryTab() {
                   {!g.canUndo && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>({t('dataQuality.history.undone')})</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {names.join(', ')} — {date}
+                  {names.join(', ')}, {date}
                 </div>
                 <FieldChangeDetail t={t} fieldChange={g.rows[0]?.fieldChange} />
                 {g.rows.some(r => r.remoteAction === 'manual_required') && (

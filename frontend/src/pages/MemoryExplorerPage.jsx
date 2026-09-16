@@ -167,7 +167,7 @@ export default function MemoryExplorerPage() {
     }
   }, [undoPattern]);
 
-  // Playbook à la demande — jamais en cron, un clic = une génération.
+  // Playbook à la demande · jamais en cron, un clic = une génération.
   const [playbook, setPlaybook] = useState(null);
   const [playbookLoading, setPlaybookLoading] = useState(false);
   const [playbookError, setPlaybookError] = useState(null);
@@ -503,7 +503,7 @@ export default function MemoryExplorerPage() {
                             {story.recentEmails.slice(0, 5).map((e, i) => (
                               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
                                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: e.sentiment === 'positive' ? '#16a34a' : e.sentiment === 'negative' ? '#ef4444' : '#9ca3af', flexShrink: 0 }} />
-                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.to} — {e.subject}</span>
+                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.to}, {e.subject}</span>
                                 <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{e.sentAt ? new Date(e.sentAt).toLocaleDateString() : ''}</span>
                               </div>
                             ))}
@@ -564,7 +564,7 @@ export default function MemoryExplorerPage() {
   );
 }
 
-/* ═══ Playbook Modal — aperçu + téléchargement du playbook généré ═══ */
+/* ═══ Playbook Modal · aperçu + téléchargement du playbook généré ═══ */
 
 function renderMarkdownLine(line, i) {
   const bold = (text) => {

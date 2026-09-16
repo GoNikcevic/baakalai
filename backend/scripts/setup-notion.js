@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Bakal — Notion Database Setup Script
+ * Bakal · Notion Database Setup Script
  *
  * Creates the 4 required databases in your Notion workspace:
- *   1. Campagnes — Résultats
- *   2. Campagnes — Diagnostics
- *   3. Campagnes — Historique Versions
+ *   1. Campagnes · Résultats
+ *   2. Campagnes · Diagnostics
+ *   3. Campagnes · Historique Versions
  *   4. Mémoire Cross-Campagne
  *
  * Prerequisites:
@@ -36,7 +36,7 @@ async function findParentPage() {
   }
 
   // Auto-discover: search workspace for any page the integration has access to
-  console.log('🔍 No NOTION_PARENT_PAGE_ID set — searching workspace...');
+  console.log('🔍 No NOTION_PARENT_PAGE_ID set, searching workspace...');
   const search = await notion.search({
     filter: { property: 'object', value: 'page' },
     page_size: 20,
@@ -92,7 +92,7 @@ function appendToEnv(entries) {
 }
 
 async function main() {
-  console.log('🔧 Bakal — Notion Database Setup\n');
+  console.log('🔧 Bakal, Notion Database Setup\n');
 
   if (!process.env.NOTION_TOKEN) {
     console.error('❌ NOTION_TOKEN is not set. Add it to your .env file.');
@@ -117,9 +117,9 @@ async function main() {
   });
 
   const dbNames = {
-    resultats: 'Campagnes — Résultats',
-    diagnostics: 'Campagnes — Diagnostics',
-    historique: 'Campagnes — Historique Versions',
+    resultats: 'Campagnes, Résultats',
+    diagnostics: 'Campagnes, Diagnostics',
+    historique: 'Campagnes, Historique Versions',
     memoire: 'Mémoire Cross-Campagne',
   };
 
@@ -153,13 +153,13 @@ async function main() {
   const created = { ...found };
 
   // ──────────────────────────────────────────
-  // 1. Campagnes — Résultats
+  // 1. Campagnes · Résultats
   // ──────────────────────────────────────────
   if (!created.resultats) {
-    console.log('\n📊 Creating "Campagnes — Résultats"...');
+    console.log('\n📊 Creating "Campagnes, Résultats"...');
     const resultats = await notion.databases.create({
       parent: { type: 'page_id', page_id: parentPageId },
-      title: [{ type: 'text', text: { content: 'Campagnes — Résultats' } }],
+      title: [{ type: 'text', text: { content: 'Campagnes, Résultats' } }],
       icon: { type: 'emoji', emoji: '📊' },
       properties: {
         'Nom campagne': { title: {} },
@@ -207,13 +207,13 @@ async function main() {
   }
 
   // ──────────────────────────────────────────
-  // 2. Campagnes — Diagnostics
+  // 2. Campagnes · Diagnostics
   // ──────────────────────────────────────────
   if (!created.diagnostics) {
-    console.log('🩺 Creating "Campagnes — Diagnostics"...');
+    console.log('🩺 Creating "Campagnes, Diagnostics"...');
     const diagnostics = await notion.databases.create({
       parent: { type: 'page_id', page_id: parentPageId },
-      title: [{ type: 'text', text: { content: 'Campagnes — Diagnostics' } }],
+      title: [{ type: 'text', text: { content: 'Campagnes, Diagnostics' } }],
       icon: { type: 'emoji', emoji: '🩺' },
       properties: {
         'Campagne': { title: {} },
@@ -240,13 +240,13 @@ async function main() {
   }
 
   // ──────────────────────────────────────────
-  // 3. Campagnes — Historique Versions
+  // 3. Campagnes · Historique Versions
   // ──────────────────────────────────────────
   if (!created.historique) {
-    console.log('📝 Creating "Campagnes — Historique Versions"...');
+    console.log('📝 Creating "Campagnes, Historique Versions"...');
     const historique = await notion.databases.create({
       parent: { type: 'page_id', page_id: parentPageId },
-      title: [{ type: 'text', text: { content: 'Campagnes — Historique Versions' } }],
+      title: [{ type: 'text', text: { content: 'Campagnes, Historique Versions' } }],
       icon: { type: 'emoji', emoji: '📝' },
       properties: {
         'Campagne': { title: {} },

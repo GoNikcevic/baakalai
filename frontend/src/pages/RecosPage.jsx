@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Recommendations Page (React)
+   BAKAL · Recommendations Page (React)
    Ported from app/recos.js + HTML mockup.
    Shows AI recommendations with filter, apply/modify/dismiss actions, diff panels.
    =============================================================================== */
@@ -74,7 +74,7 @@ export default function RecosPage() {
         });
       });
 
-      // Always sync — even if empty (user should see empty state, not stale demo)
+      // Always sync · even if empty (user should see empty state, not stale demo)
       setRecos(realRecos);
 
       // Build insights from memory patterns
@@ -329,7 +329,7 @@ export default function RecosPage() {
               </div>
             )}
 
-            {/* Applied diff — show only the applied version */}
+            {/* Applied diff · show only the applied version */}
             {isApplied && reco.after && (
               <div className="reco-diff">
                 <div className="reco-diff-panel">
@@ -418,7 +418,7 @@ export default function RecosPage() {
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--text-muted)' }}>{stats.ignored}</div>
           <div className="reco-stat-label">{en ? 'Dismissed' : 'Ignor\u00E9es'}</div>
-          <div className="reco-stat-trend" style={{ color: 'var(--text-muted)' }}>{'—'}</div>
+          <div className="reco-stat-trend" style={{ color: 'var(--text-muted)' }}>{' '}</div>
         </div>
       </div>
 

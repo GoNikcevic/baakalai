@@ -5,7 +5,7 @@ const { withRetry } = require('./retry');
 /**
  * Search contacts on Apollo by criteria
  * @param {string} userId
- * @param {object} criteria — { titles, sectors, companySizes, locations, limit }
+ * @param {object} criteria · { titles, sectors, companySizes, locations, limit }
  * @returns {array} enriched contacts
  */
 async function searchContacts(userId, criteria) {

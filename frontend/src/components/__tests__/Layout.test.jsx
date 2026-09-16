@@ -6,7 +6,7 @@ import { AppProvider } from '../../context/AppContext';
 import { NotificationProvider } from '../../context/NotificationContext';
 import { I18nProvider } from '../../i18n';
 
-// Assertions below are on the French labels — force fr before I18nProvider reads it
+// Assertions below are on the French labels · force fr before I18nProvider reads it
 localStorage.setItem('baakalai_lang', 'fr');
 
 // Mock auth service so AppProvider doesn't hit localStorage issues

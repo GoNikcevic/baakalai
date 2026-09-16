@@ -52,7 +52,7 @@ async function searchPeople(apiKey, query) {
   return folkFetch(apiKey, `/people?search=${encodeURIComponent(query)}&limit=10`);
 }
 
-// 404 = supprimé côté Folk ; toute autre erreur remonte — une clé invalide ne
+// 404 = supprimé côté Folk ; toute autre erreur remonte · une clé invalide ne
 // doit pas passer pour « le contact n'existe plus » et déclencher une recréation.
 async function personExists(apiKey, personId) {
   try {

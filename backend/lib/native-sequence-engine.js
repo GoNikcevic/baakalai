@@ -2,9 +2,9 @@
  * Moteur d'envoi natif des séquences.
  *
  * Deux conteneurs partagent le même moteur depuis la migration 103 :
- *  - les campagnes de prospection en canal natif (send_channel = 'native') —
+ *  - les campagnes de prospection en canal natif (send_channel = 'native') · 
  *    une séquence partagée par tous les prospects de la campagne ;
- *  - les enrollments (sequence_enrollments) — un workflow de relance sur
+ *  - les enrollments (sequence_enrollments) · un workflow de relance sur
  *    mesure pour UN contact CRM (réactivation, upsell, prévention churn),
  *    proposé par l'agent et approuvé par l'utilisateur avant tout envoi.
  * La frontière crm-scope reste intacte : un enrollment référence le contact
@@ -14,26 +14,26 @@
  * Alternative à Lemlist : les emails partent de la boîte connectée de
  * l'utilisateur (Gmail/Microsoft/SMTP via lib/email-outbound), les steps
  * LinkedIn passent par le cookie li_at (api/linkedin, quotas journaliers
- * intégrés). Contrepartie assumée : volumes réduits — une boîte perso n'est
+ * intégrés). Contrepartie assumée : volumes réduits · une boîte perso n'est
  * pas une infra d'emailing froid.
  *
  * Garde-fous :
  *  - NATIVE_EMAIL_DAILY_CAP emails / jour / utilisateur (campagnes ET
- *    relances confondues — c'est la même boîte qui protège sa délivrabilité),
+ *    relances confondues · c'est la même boîte qui protège sa délivrabilité),
  *    NATIVE_EMAILS_PER_RUN par passage (le cron horaire étale la journée) ;
- *  - arrêt de séquence par prospect sur réponse détectée (Gmail API — même
+ *  - arrêt de séquence par prospect sur réponse détectée (Gmail API · même
  *    token OAuth que l'envoi, scope mail.google.com), bounce définitif,
  *    désinscription ou stop manuel ;
- *  - un seul passage à la fois par utilisateur (bail lib/db-lock — le cron
+ *  - un seul passage à la fois par utilisateur (bail lib/db-lock · le cron
  *    et le bouton « Traiter maintenant » peuvent se chevaucher).
  *
  * Séquences conditionnelles : le moteur suit le chemin principal de l'arbre
  * (branches négatives/default : not_opened, not_replied…). Exception depuis
  * la migration 103 : la branche « accepted » d'une invitation LinkedIn est
- * exécutable — l'acceptation est vérifiée à l'exécution via le journal
+ * exécutable · l'acceptation est vérifiée à l'exécution via le journal
  * linkedin_connect_accepted (lib/linkedin-response-sync) et l'état live des
  * invitations envoyées. Les autres branches positives (opened, clicked)
- * supposent un tracking d'ouverture qu'un envoi natif n'a pas — elles restent
+ * supposent un tracking d'ouverture qu'un envoi natif n'a pas · elles restent
  * réservées au canal Lemlist. Comme toute réponse stoppe la séquence, le
  * chemin « pas de réponse » EST le chemin réel.
  */
@@ -125,7 +125,7 @@ function renderTemplate(text, prospect) {
   return text
     .replace(/\{\{\s*(\w+)\s*\}\}/g, (m, key) => (vars[key] !== undefined ? vars[key] : ''))
     // Les substitutions vides laissent parfois des doubles espaces ou des
-    // lignes orphelines — on nettoie sans toucher à la mise en forme voulue.
+    // lignes orphelines · on nettoie sans toucher à la mise en forme voulue.
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -171,7 +171,7 @@ async function stopEnrollment(enrollmentId, reason) {
 
 /**
  * Cookie li_at expiré : les steps LinkedIn sont silencieusement reportés à
- * chaque passage — sans signal, l'utilisateur ne s'en aperçoit jamais.
+ * chaque passage · sans signal, l'utilisateur ne s'en aperçoit jamais.
  * Notification persistée + socket (lib/notify), au plus une par 24 h.
  */
 async function notifyLinkedinExpired(userId) {
@@ -208,7 +208,7 @@ async function emailsSentToday(userId) {
 /* ═══════════════════ Avancement d'un prospect dans son chemin ═══════════════════ */
 
 /**
- * Envoie LE prochain step dû d'un prospect dans son chemin — un step max par
+ * Envoie LE prochain step dû d'un prospect dans son chemin · un step max par
  * passage, le rythme reste humain. Retourne :
  *   'sent' | 'skipped' | 'failed' | 'stopped' | 'waiting' | 'sequence_done'
  * `ids` = { campaignId } ou { enrollmentId } selon le conteneur ;
@@ -277,7 +277,7 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
     return 'failed';
   }
 
-  // Steps LinkedIn — best-effort : cookie absent ou quota atteint ne
+  // Steps LinkedIn · best-effort : cookie absent ou quota atteint ne
   // doivent pas bloquer les emails.
   if (ctx.linkedinExhausted) return 'waiting';
   const cookie = await ctx.getLinkedinCookie();
@@ -324,7 +324,7 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
   }
 }
 
-/* ═══════════════════ Envoi des steps dus — campagnes ═══════════════════ */
+/* ═══════════════════ Envoi des steps dus · campagnes ═══════════════════ */
 
 async function processCampaign(campaign, ctx) {
   const report = { emailsSent: 0, linkedinActions: 0, skipped: 0, failed: 0, stopped: 0 };
@@ -338,7 +338,7 @@ async function processCampaign(campaign, ctx) {
 
   const pathDefault = buildMainPath(touchpoints);
   if (pathDefault.length === 0) return report;
-  // La branche « accepted » n'est aplatie que si l'arbre en contient une —
+  // La branche « accepted » n'est aplatie que si l'arbre en contient une · 
   // et l'état d'acceptation n'est consulté que dans ce cas (un appel
   // LinkedIn par passage au maximum, mutualisé dans ctx).
   const withAccepted = hasAcceptedBranch(touchpoints);
@@ -346,7 +346,7 @@ async function processCampaign(campaign, ctx) {
 
   const sendsByProspect = new Map();
   for (const s of sends) {
-    if (!s.touchpoint_id) continue; // journal orphelin (step supprimé) — historique seulement
+    if (!s.touchpoint_id) continue; // journal orphelin (step supprimé), historique seulement
     if (!sendsByProspect.has(s.opportunity_id)) sendsByProspect.set(s.opportunity_id, new Map());
     sendsByProspect.get(s.opportunity_id).set(s.touchpoint_id, s);
   }
@@ -384,7 +384,7 @@ async function processCampaign(campaign, ctx) {
   return report;
 }
 
-/* ═══════════════════ Envoi des steps dus — enrollments (relances CRM) ═══════════════════ */
+/* ═══════════════════ Envoi des steps dus · enrollments (relances CRM) ═══════════════════ */
 
 async function processEnrollments(enrollments, ctx) {
   const report = { emailsSent: 0, linkedinActions: 0, skipped: 0, failed: 0, stopped: 0, completed: 0 };
@@ -451,7 +451,7 @@ async function gmailFetch(accessToken, url) {
 /**
  * Détecte les réponses des prospects (campagnes natives ET enrollments) dans
  * la boîte Gmail de l'utilisateur, stoppe leur séquence et passe la main à
- * l'autopilot. Microsoft/SMTP : pas de scope lecture — stop manuel + bounce
+ * l'autopilot. Microsoft/SMTP : pas de scope lecture · stop manuel + bounce
  * automatique.
  */
 async function checkReplies(userId, campaigns, enrollments) {
@@ -502,7 +502,7 @@ async function checkReplies(userId, campaigns, enrollments) {
   const replied = new Set();
 
   try {
-    // Requêtes par lot de 15 adresses — Gmail accepte les groupes from:(a OR b).
+    // Requêtes par lot de 15 adresses · Gmail accepte les groupes from:(a OR b).
     for (let i = 0; i < emails.length; i += 15) {
       const chunk = emails.slice(i, i + 15);
       const q = encodeURIComponent(`in:inbox newer_than:${REPLY_LOOKBACK_DAYS}d from:(${chunk.join(' OR ')})`);
@@ -524,7 +524,7 @@ async function checkReplies(userId, campaigns, enrollments) {
         await insertActivity(userId, prospect.campaign_id, prospect, 'emailsReplied', m.id);
         report.replies++;
 
-        // Classification d'intention puis autopilot — best-effort : la
+        // Classification d'intention puis autopilot · best-effort : la
         // séquence est déjà stoppée, c'est l'essentiel.
         try {
           const claude = require('../api/claude');
@@ -613,7 +613,7 @@ async function runForUser(userId, { campaignId, enrollmentId } = {}) {
        * L'invitation LinkedIn de ce prospect a-t-elle été acceptée ?
        * Sources, chargées une fois par passage : le journal
        * linkedin_connect_accepted (posé par lib/linkedin-response-sync) et
-       * l'état live des invitations envoyées (best-effort — un échec API ne
+       * l'état live des invitations envoyées (best-effort · un échec API ne
        * bloque pas le passage, la branche négative reste le défaut).
        */
       async isAccepted(prospect) {
@@ -634,7 +634,7 @@ async function runForUser(userId, { campaignId, enrollmentId } = {}) {
                 if (content?.publicId) set.add(String(content.publicId).toLowerCase());
                 const fromUrl = (content?.linkedin_url || '').match(/\/in\/([^/?]+)/)?.[1];
                 if (fromUrl) set.add(fromUrl.toLowerCase());
-              } catch { /* ligne illisible — on passe */ }
+              } catch { /* ligne illisible, on passe */ }
             }
           } catch (err) {
             logger.warn('native-seq', `accepted set (db): ${err.message}`);

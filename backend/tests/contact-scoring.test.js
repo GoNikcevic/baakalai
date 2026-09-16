@@ -15,7 +15,7 @@ test('le secteur du compte prime sur celui de la campagne', () => {
   const opp = { data: { sector: 'Immobilier' } };
   const campaign = { sector: 'Finance' };
   const { score } = computeFit(opp, campaign, profile);
-  assert.equal(score, 0, 'Immobilier ∉ ICP — le secteur campagne ne doit pas être utilisé');
+  assert.equal(score, 0, 'Immobilier ∉ ICP, le secteur campagne ne doit pas être utilisé');
 });
 
 test('fallback campagne quand le compte n a pas de secteur', () => {

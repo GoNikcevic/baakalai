@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Data Quality score trend header
+   BAKAL · Data Quality score trend header
    Compact card at the top of the Data Quality page: current overall score, 30-day
    delta badge (green when improving, red otherwise) and a small inline SVG sparkline
    of the main provider's score history (the provider with the most data points).
@@ -58,7 +58,7 @@ export default function ScoreTrendHeader() {
   );
   const delta = data.delta30d;
   const positive = delta != null && delta >= 0;
-  // Déductions du dernier rapport du provider principal — même présentation
+  // Déductions du dernier rapport du provider principal · même présentation
   // que les facteurs churn (liste facteur + poids), poids négatifs ici.
   const factors = mainProvider?.factors?.length
     ? mainProvider.factors

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — CRM Token Resolver (shared utility)
+   BAKAL · CRM Token Resolver (shared utility)
    Returns a valid CRM token for any provider.
    For Salesforce OAuth: auto-refreshes if token expires within 5 minutes.
    For other providers: delegates to getUserKey from config.
@@ -55,7 +55,7 @@ async function getUserCrmToken(userId, provider) {
     } catch { return null; }
   }
   // HubSpot / Pipedrive : soit clé API (legacy), soit OAuth produit
-  // (metadata.oauth, app baakalai — lib/crm-oauth.js). En OAuth on
+  // (metadata.oauth, app baakalai · lib/crm-oauth.js). En OAuth on
   // rafraîchit avant expiration ; pour Pipedrive on renvoie un objet
   // { oauth, accessToken, apiDomain } que api/pipedrive.js sait consommer
   // (Bearer sur le domaine société, pas api_token sur api.pipedrive.com).

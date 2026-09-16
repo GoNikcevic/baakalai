@@ -1,5 +1,5 @@
 #!/bin/bash
-# SessionStart hook — deux rôles :
+# SessionStart hook : deux rôles :
 #
 #   1. Installer les dépendances (remote uniquement) pour que tests et linters
 #      tournent : les conteneurs démarrent sur un clone frais, sans node_modules.
@@ -30,7 +30,7 @@ fi
 #
 # Jamais bloquant : un réseau coupé, un git ancien ou un dépôt en cours de
 # bascule ne doivent pas empêcher la session de démarrer. D'où le `|| true`
-# et le timeout — la sortie est indicative, pas un garde-fou.
+# et le timeout : la sortie est indicative, pas un garde-fou.
 
 echo ""
 echo "── État des conflits ──"

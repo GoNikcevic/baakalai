@@ -1,11 +1,11 @@
 /**
- * Géographie des contacts — normalisation pays + fallback TLD email.
+ * Géographie des contacts · normalisation pays + fallback TLD email.
  *
  * Deux sources, par fiabilité décroissante :
- * 1. opportunities.country (rapatrié du CRM, migration 093) — libellé libre
+ * 1. opportunities.country (rapatrié du CRM, migration 093) · libellé libre
  *    ("France", "FR", "united states") → normalisé en ISO-2 à la lecture.
  * 2. Le TLD de l'email (.fr → FR). Les TLD génériques (.com, .io…) ne disent
- *    rien : on retourne null plutôt que d'inventer — l'analytics affiche
+ *    rien : on retourne null plutôt que d'inventer · l'analytics affiche
  *    honnêtement la part « non déterminé ».
  *
  * L'affichage des noms de pays se fait côté frontend via Intl.DisplayNames
@@ -62,7 +62,7 @@ function normalizeCountry(raw) {
   if (COUNTRY_ALIASES[key]) return COUNTRY_ALIASES[key];
   const noAccents = stripAccents(key);
   if (COUNTRY_ALIASES[noAccents]) return COUNTRY_ALIASES[noAccents];
-  // Code ISO-2 déjà propre ("FR", "de") — on fait confiance au format.
+  // Code ISO-2 déjà propre ("FR", "de") · on fait confiance au format.
   if (/^[a-z]{2}$/.test(key)) return key.toUpperCase();
   return null;
 }

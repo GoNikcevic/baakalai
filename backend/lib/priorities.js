@@ -1,5 +1,5 @@
 /**
- * Priorities — agrégation « À traiter aujourd'hui ».
+ * Priorities · agrégation « À traiter aujourd'hui ».
  *
  * Source partagée entre la route GET /api/priorities/today (dashboard) et le
  * digest email hebdo (orchestrator/jobs/crm-digest.js). Chaque source est
@@ -20,11 +20,11 @@
  * externes sont décotés de 20 % car non vérifiés.
  *
  * Dédup : un même contact (email, sinon nom+société) peut sortir de plusieurs
- * sources — on garde l'item au score le plus haut et on liste les autres
+ * sources · on garde l'item au score le plus haut et on liste les autres
  * sources dans `alsoFlaggedBy`.
  *
  * Les items Deal Coach / Upsell viennent du dernier run persisté dans
- * strategic_results (cron 9h30, migration 073) — fenêtre 7 jours, generatedAt
+ * strategic_results (cron 9h30, migration 073) · fenêtre 7 jours, generatedAt
  * permet d'afficher l'âge.
  */
 
@@ -161,7 +161,7 @@ async function buildTodayList(userId) {
       sourceUrl: s.source_url || null,
     });
   }
-  // 6. Violations SLA (seuils admin, opt-in — lib/sla.js, SQL pur sans IA).
+  // 6. Violations SLA (seuils admin, opt-in · lib/sla.js, SQL pur sans IA).
   // Un SLA est une promesse explicite de l'admin : sa violation prime sur les
   // suggestions heuristiques (base 70) et grimpe avec le retard, sans jamais
   // écraser un churn critique (plafond 90).

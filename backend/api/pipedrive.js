@@ -16,7 +16,7 @@ async function pdFetch(apiToken, endpoint, options = {}) {
   // Deux modes d'auth (lib/crm-token.js) :
   // - string : clé API classique → api.pipedrive.com + ?api_token=
   // - objet { oauth, accessToken, apiDomain } : OAuth → Bearer sur le domaine
-  //   de la société ({api_domain}/api/v1) — api.pipedrive.com refuse les
+  //   de la société ({api_domain}/api/v1) · api.pipedrive.com refuse les
   //   tokens OAuth.
   const isOauth = typeof apiToken === 'object';
   return withRetry(async () => {
@@ -85,7 +85,7 @@ async function searchPersonByEmail(apiToken, email) {
   return items[0]?.item || items[0] || null;
 }
 
-// 404 = supprimé côté Pipedrive ; toute autre erreur remonte — un token
+// 404 = supprimé côté Pipedrive ; toute autre erreur remonte · un token
 // invalide ne doit pas passer pour « la personne n'existe plus ».
 async function getPerson(apiToken, personId) {
   try {
@@ -154,7 +154,7 @@ async function listAllPersons(apiToken, { limit = 500 } = {}) {
     const data = await pdFetch(apiToken, `/persons?start=${start}&limit=${limit}`);
     if (!data || !Array.isArray(data)) break;
     all.push(...data);
-    // Check for more pages — pdFetch returns json.data, but we need additional_data
+    // Check for more pages · pdFetch returns json.data, but we need additional_data
     // which is at json level. Workaround: if we got exactly `limit` results, there might be more.
     if (data.length < limit) break;
     start += limit;
@@ -250,7 +250,7 @@ async function updateDeal(apiToken, dealId, data) {
   });
 }
 
-// Diagnostic public : liste paginée avec les champs d'activité — getDeals()
+// Diagnostic public : liste paginée avec les champs d'activité · getDeals()
 // ne remonte ni last_activity_date ni org_name et ne pagine pas.
 async function listDealsForDiagnostic(apiToken, { maxDeals = 2000 } = {}) {
   const deals = [];

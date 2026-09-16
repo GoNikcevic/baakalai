@@ -1,5 +1,5 @@
 /**
- * Diagnostic CRM public — lead magnet sans compte.
+ * Diagnostic CRM public · lead magnet sans compte.
  *
  * POST /api/public/diagnostic      { provider, apiToken, lang } → { id, report }
  * GET  /api/public/diagnostic/:id  → { report (anonymisé), lang, createdAt }
@@ -57,7 +57,7 @@ function computeReport(deals) {
     .slice(0, 3)
     .map(d => ({ name: d.name, company: d.company, dealValue: d.value, daysInactive: d.daysInactive }));
 
-  // Score de santé CRM /100 — « l'audit qu'un RevOps ferait » : complétude
+  // Score de santé CRM /100 · « l'audit qu'un RevOps ferait » : complétude
   // des trois champs qui conditionnent l'exploitabilité de la base. Donne de
   // la valeur même aux CRM jeunes, là où le volet réactivation est maigre.
   const n = deals.length;
@@ -95,7 +95,7 @@ function computeReport(deals) {
   };
 }
 
-// GET /oauth/:provider/start — diagnostic sans compte via le bouton OAuth.
+// GET /oauth/:provider/start · diagnostic sans compte via le bouton OAuth.
 // Réutilise le callback produit (/api/crm/:provider/callback, seul redirect
 // enregistré chez les fournisseurs) avec un state marqué diagnostic:true.
 // Salesforce passe par l'app centrale Baakalai (org DE) et le scope api
@@ -140,7 +140,7 @@ router.get('/oauth/:provider(hubspot|pipedrive|salesforce)/start', publicDiagLim
 });
 
 // Appelé par le callback OAuth (routes/crm.js) pour un state diagnostic :
-// une seule lecture avec le token, puis il est jeté — seul le rapport reste.
+// une seule lecture avec le token, puis il est jeté · seul le rapport reste.
 // owner_key distingue la vue propriétaire (redirect ?r=&k=) de la vue
 // partagée anonymisée.
 async function runOauthDiagnostic(provider, tokens, lang) {

@@ -32,7 +32,7 @@ function isValidOdooUrl(url) {
 
 async function jsonRpc(url, service, method, args) {
   if (!isValidOdooUrl(url)) {
-    throw new Error('Invalid Odoo URL — must be HTTPS with a valid domain (e.g. https://mycompany.odoo.com)');
+    throw new Error('Invalid Odoo URL, must be HTTPS with a valid domain (e.g. https://mycompany.odoo.com)');
   }
   return withRetry(async () => {
     const res = await fetch(`${url}/jsonrpc`, {
@@ -61,7 +61,7 @@ async function authenticate(creds) {
   if (_uidCache.has(cacheKey)) return _uidCache.get(cacheKey);
 
   const uid = await jsonRpc(url, 'common', 'authenticate', [db, username, password, {}]);
-  if (!uid) throw new Error('Odoo authentication failed — check credentials');
+  if (!uid) throw new Error('Odoo authentication failed, check credentials');
   _uidCache.set(cacheKey, uid);
   return uid;
 }
@@ -150,7 +150,7 @@ async function updateContact(creds, contactId, data) {
   return { id: contactId };
 }
 
-// Archive (not `unlink`) — res.partner is frequently FK-referenced by crm.lead/account.move,
+// Archive (not `unlink`) · res.partner is frequently FK-referenced by crm.lead/account.move,
 // so a hard delete can fail on those constraints and is irreversible anyway, defeating undo.
 // `listContacts`'s search implicitly excludes active=false records (Odoo ORM default), so
 // archived contacts disappear from future scans with no extra filtering needed.
@@ -167,7 +167,7 @@ async function unarchiveContact(creds, contactId) {
 async function upsertContact(creds, data) {
   // L'ID connu (posé par un import ou un push précédent) prime sur l'email :
   // l'email peut diverger entre baakalai et Odoo, et un contact sans email
-  // n'a aucun autre critère de matching — chaque re-sync le recréait.
+  // n'a aucun autre critère de matching · chaque re-sync le recréait.
   if (data.contactId) {
     const id = parseInt(data.contactId, 10);
     if (Number.isInteger(id) && await contactExists(creds, id)) {
@@ -190,7 +190,7 @@ async function upsertContact(creds, data) {
 
 async function getDeals(creds, { limit = 100 } = {}) {
   // A bare [] domain implicitly filters active=true in Odoo's ORM, silently excluding lost
-  // leads (Odoo marks a lead "lost" by archiving it, active=false) — the '|' includes both.
+  // leads (Odoo marks a lead "lost" by archiving it, active=false) · the '|' includes both.
   const ids = await call(creds, 'crm.lead', 'search', [['|', ['active', '=', true], ['active', '=', false]]], { limit, order: 'write_date desc' });
   if (!ids || ids.length === 0) return [];
 
@@ -198,7 +198,7 @@ async function getDeals(creds, { limit = 100 } = {}) {
     fields: ['id', 'name', 'partner_id', 'stage_id', 'probability', 'expected_revenue', 'type', 'write_date', 'create_date', 'active', 'date_closed'],
   });
 
-  // is_won lives on crm.stage, not crm.lead itself — resolve once and cross-reference.
+  // is_won lives on crm.stage, not crm.lead itself · resolve once and cross-reference.
   const stages = await getStages(creds);
   const wonStageIds = new Set(stages.filter(s => s.isWon).map(s => s.id));
 
@@ -224,7 +224,7 @@ async function getDeals(creds, { limit = 100 } = {}) {
   });
 }
 
-// active_test:false — une lead « perdue » est archivée par Odoo, elle existe
+// active_test:false · une lead « perdue » est archivée par Odoo, elle existe
 // toujours ; sans le contexte, on la croirait supprimée et on la recréerait.
 async function dealExists(creds, dealId) {
   const ids = await call(creds, 'crm.lead', 'search', [

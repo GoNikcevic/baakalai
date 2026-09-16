@@ -107,7 +107,7 @@ describe('SettingsPage', () => {
   // Le sélecteur de thème est devenu un simple bouton, qui affiche la cible du
   // basculement (« Sombre » quand on est en clair). Les phrases « Mode sombre
   // activé » et la classe .theme-toggle ont disparu : ces tests vérifient
-  // désormais l'effet réel — l'attribut data-theme sur <html> — plutôt que la
+  // désormais l'effet réel · l'attribut data-theme sur <html> · plutôt que la
   // formulation, qui rebougera au prochain ajustement de copie.
   it('renders the theme toggle section', async () => {
     renderSettings();

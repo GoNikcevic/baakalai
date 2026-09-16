@@ -110,7 +110,7 @@ export default function ABTestPanel({ sequence, onConfirm, onClose, launched }) 
           >
             {sequence.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.id} — {s.label}
+                {s.id}, {s.label}
               </option>
             ))}
           </select>

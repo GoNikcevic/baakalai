@@ -19,7 +19,7 @@ const PROPERTY_ALIASES = {
   companySize: ['Company Size', 'Taille', 'Size', 'Effectif', 'Employees'],
   linkedin: ['LinkedIn', 'linkedin', 'LinkedIn URL', 'Profil LinkedIn', 'LinkedIn Profile'],
   // Dans beaucoup de bases CRM Notion, la propriété title est l'ENTREPRISE et
-  // la personne vit dans une propriété texte séparée — d'où ce champ dédié.
+  // la personne vit dans une propriété texte séparée · d'où ce champ dédié.
   contact: ['Contact Principal', 'Contact', 'Nom du contact', 'Personne', 'Person'],
   status: ['Statut', 'Status', 'Étape', 'Etape', 'Stage', 'État', 'Etat', 'Pipeline'],
   dealValue: [
@@ -30,7 +30,7 @@ const PROPERTY_ALIASES = {
 
 /**
  * Ramène un statut libre de CRM Notion aux trois états canoniques du produit
- * (won / lost / open) — la condition pour que won_date, le win/loss analysis
+ * (won / lost / open) · la condition pour que won_date, le win/loss analysis
  * et la LTV fonctionnent. « Churned » devient lost : couplé à won_date, c'est
  * ce qui permet le calcul de tenure/LTV dans les analytics.
  * Renvoie null si le libellé est vide (statut inconnu ≠ statut absent).
@@ -49,9 +49,9 @@ function normalizeNotionStatus(label) {
  * Discover which property names exist in a Notion database
  * and return a mapping from our field keys to actual property names + types.
  *
- * @param {Client} notion — initialized Notion client
+ * @param {Client} notion · initialized Notion client
  * @param {string} databaseId
- * @returns {object} — { name: { key, type }, email: { key, type }, ... }
+ * @returns {object} · { name: { key, type }, email: { key, type }, ... }
  */
 async function discoverSchema(notion, databaseId) {
   const db = await notion.databases.retrieve({ database_id: databaseId });
@@ -60,7 +60,7 @@ async function discoverSchema(notion, databaseId) {
 
   const mapping = {};
 
-  // Find the title property (required by Notion — every DB has exactly one)
+  // Find the title property (required by Notion · every DB has exactly one)
   const titleProp = propNames.find((k) => props[k].type === 'title');
   if (titleProp) {
     mapping.name = { key: titleProp, type: 'title' };
@@ -85,9 +85,9 @@ async function discoverSchema(notion, databaseId) {
 /**
  * Build Notion page properties from prospect data based on discovered schema.
  *
- * @param {object} schema — mapping from discoverSchema()
- * @param {object} prospect — { name, email, title, company, company_size, linkedin_url }
- * @returns {object} — Notion properties object
+ * @param {object} schema · mapping from discoverSchema()
+ * @param {object} prospect · { name, email, title, company, company_size, linkedin_url }
+ * @returns {object} · Notion properties object
  */
 function buildProperties(schema, prospect) {
   const properties = {};
@@ -145,10 +145,10 @@ function buildProperties(schema, prospect) {
 /**
  * Push a prospect to a Notion database as a page.
  *
- * @param {string} notionToken — user's Notion integration token
- * @param {string} databaseId — user's Notion database ID for contacts
- * @param {object} prospect — { name, email, title, company, company_size, linkedin_url }
- * @returns {{ pageId: string }} — the created Notion page ID
+ * @param {string} notionToken · user's Notion integration token
+ * @param {string} databaseId · user's Notion database ID for contacts
+ * @param {object} prospect · { name, email, title, company, company_size, linkedin_url }
+ * @returns {{ pageId: string }} · the created Notion page ID
  */
 async function pushProspectToNotion(notionToken, databaseId, prospect) {
   if (!notionToken) throw new Error('Notion token is required');
@@ -223,7 +223,7 @@ async function pushProspectsToNotion(notionToken, databaseId, prospects) {
  * List databases accessible to the user's Notion integration.
  * Uses the Notion search API to find all databases the integration can access.
  *
- * @param {string} notionToken — user's Notion integration token
+ * @param {string} notionToken · user's Notion integration token
  * @returns {Array<{ id: string, title: string, url: string }>}
  */
 async function listDatabases(notionToken) {
@@ -319,7 +319,7 @@ async function queryContacts(notionToken, databaseId) {
 /**
  * Écrit une note baakalai sur la page d'un contact.
  *
- * Bloc callout ajouté en fin de page — et non commentaire Notion : les
+ * Bloc callout ajouté en fin de page · et non commentaire Notion : les
  * commentaires demandent la capability « comment » que les intégrations des
  * utilisateurs n'ont pas forcément accordée, alors que l'append de contenu
  * utilise la même capability « insert content » que pushProspectToNotion,

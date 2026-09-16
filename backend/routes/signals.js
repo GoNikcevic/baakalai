@@ -1,13 +1,13 @@
 /**
- * Signal Routes — Signal-based prospecting
+ * Signal Routes · Signal-based prospecting
  *
- * GET    /api/signals             — List detected signals (with filters)
- * GET    /api/signals/configs     — List signal configs
- * POST   /api/signals/configs     — Create a signal config
- * PATCH  /api/signals/configs/:id — Update config
- * DELETE /api/signals/configs/:id — Delete config
- * POST   /api/signals/:id/action  — Take action on a signal (add to CRM, email, dismiss)
- * POST   /api/signals/scan        — Manually trigger signal scan
+ * GET    /api/signals · List detected signals (with filters)
+ * GET    /api/signals/configs · List signal configs
+ * POST   /api/signals/configs · Create a signal config
+ * PATCH  /api/signals/configs/:id · Update config
+ * DELETE /api/signals/configs/:id · Delete config
+ * POST   /api/signals/:id/action · Take action on a signal (add to CRM, email, dismiss)
+ * POST   /api/signals/scan · Manually trigger signal scan
  */
 
 const { Router } = require('express');
@@ -16,7 +16,7 @@ const logger = require('../lib/logger');
 
 const router = Router();
 
-// GET /api/signals — List signals
+// GET /api/signals · List signals
 router.get('/', async (req, res, next) => {
   try {
     const status = req.query.status || null;
@@ -53,7 +53,7 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/preferences — Cadence de la veille automatique
+// GET /api/signals/preferences · Cadence de la veille automatique
 router.get('/preferences', async (req, res, next) => {
   try {
     const r = await db.query(`SELECT signal_scan_frequency FROM users WHERE id = $1`, [req.user.id]);
@@ -61,7 +61,7 @@ router.get('/preferences', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PUT /api/signals/preferences — Choix de cadence (off = scan manuel uniquement)
+// PUT /api/signals/preferences · Choix de cadence (off = scan manuel uniquement)
 router.put('/preferences', async (req, res, next) => {
   try {
     const { frequency } = req.body;
@@ -73,7 +73,7 @@ router.put('/preferences', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/configs — List configs
+// GET /api/signals/configs · List configs
 router.get('/configs', async (req, res, next) => {
   try {
     const result = await db.query(
@@ -84,7 +84,7 @@ router.get('/configs', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/configs — Create config
+// POST /api/signals/configs · Create config
 router.post('/configs', async (req, res, next) => {
   try {
     const { name, signalTypes, targetSectors, targetTitles, targetCompanySizes, targetKeywords, targetCompetitors, frequency } = req.body;
@@ -144,7 +144,7 @@ router.delete('/configs/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/:id/action — Take action on a signal
+// POST /api/signals/:id/action · Take action on a signal
 router.post('/:id/action', async (req, res, next) => {
   try {
     const { action } = req.body; // add_to_crm, send_email, add_to_lemlist, dismiss
@@ -209,7 +209,7 @@ Return JSON: { "subject": "...", "body": "..." }`;
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/scan — Manual signal scan
+// POST /api/signals/scan · Manual signal scan
 router.post('/scan', async (req, res, next) => {
   try {
     const { run } = require('../lib/agents/signal-agent');
@@ -218,7 +218,7 @@ router.post('/scan', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/:id/linkedin-outreach — Send LinkedIn connection from signal
+// POST /api/signals/:id/linkedin-outreach · Send LinkedIn connection from signal
 router.post('/:id/linkedin-outreach', async (req, res, next) => {
   try {
     const signal = await db.query(`SELECT * FROM signals WHERE id = $1 AND user_id = $2`, [req.params.id, req.user.id]);
@@ -236,7 +236,7 @@ router.post('/:id/linkedin-outreach', async (req, res, next) => {
     // Generate note
     const noteResult = await claude.callClaude('Return only valid JSON.', `Write a LinkedIn connection note (max 280 chars).
 Signal: ${s.title}. Contact: ${s.contact_name} at ${s.company_name}.
-Be specific, reference the signal naturally. Never use em dashes (— –); write like a busy human, no AI-sounding phrasing. Return JSON: { "note": "..." }`, 300, 'linkedin_note');
+Be specific, reference the signal naturally. Never use em dashes (  ); write like a busy human, no AI-sounding phrasing. Return JSON: { "note": "..." }`, 300, 'linkedin_note');
 
     let note = noteResult.parsed?.note || `Bonjour, votre profil a retenu mon attention. Curieux d'échanger.`;
     const publicId = s.contact_linkedin.match(/\/in\/([^/?]+)/)?.[1];
@@ -254,7 +254,7 @@ Be specific, reference the signal naturally. Never use em dashes (— –); writ
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/linkedin/status — LinkedIn connection status + daily counts
+// GET /api/signals/linkedin/status · LinkedIn connection status + daily counts
 router.get('/linkedin/status', async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
@@ -264,12 +264,12 @@ router.get('/linkedin/status', async (req, res, next) => {
     const linkedin = require('../api/linkedin');
     const counts = linkedin.getDailyCounts(req.user.id);
 
-    // Cookie exists = connected (skip live test — LinkedIn blocks datacenter IPs)
+    // Cookie exists = connected (skip live test · LinkedIn blocks datacenter IPs)
     res.json({ connected: true, name: 'LinkedIn', counts });
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/stats — Signal dashboard KPIs
+// GET /api/signals/stats · Signal dashboard KPIs
 router.get('/stats', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -308,7 +308,7 @@ router.get('/stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/company/:name — Signal history for a company
+// GET /api/signals/company/:name · Signal history for a company
 router.get('/company/:name', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -335,7 +335,7 @@ router.get('/company/:name', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/:id/create-sequence — Create a mini outreach sequence from a signal
+// POST /api/signals/:id/create-sequence · Create a mini outreach sequence from a signal
 router.post('/:id/create-sequence', async (req, res, next) => {
   try {
     const signal = await db.query(`SELECT * FROM signals WHERE id = $1 AND user_id = $2`, [req.params.id, req.user.id]);
@@ -378,7 +378,7 @@ Return JSON:
       return res.status(500).json({ error: 'Could not generate sequence' });
     }
 
-    // E1 part dans la file d'approbation nurture si le contact a un email —
+    // E1 part dans la file d'approbation nurture si le contact a un email · 
     // avec la dédup standard (7 jours création / 2 heures envoi).
     let queuedEmailId = null;
     if (s.contact_email) {

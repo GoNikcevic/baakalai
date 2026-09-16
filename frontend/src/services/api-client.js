@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   BAKAL — API Client (ES Module)
+   BAKAL · API Client (ES Module)
    Connects the frontend to the Express backend via Vite proxy.
    Transforms backend snake_case → frontend camelCase data shapes.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -22,7 +22,7 @@ export async function request(path, opts = {}) {
 
   let res = await fetch(url, { headers, ...opts });
 
-  // Handle 401 — try refreshing the access token before giving up
+  // Handle 401 · try refreshing the access token before giving up
   if (res.status === 401) {
     const newToken = await refreshAccessToken();
     if (newToken) {
@@ -31,7 +31,7 @@ export async function request(path, opts = {}) {
       res = await fetch(url, { headers, ...opts });
     }
 
-    // Still 401 after refresh — session is dead
+    // Still 401 after refresh · session is dead
     if (res.status === 401) {
       clearSession();
       throw Object.assign(new Error('Session expired'), { status: 401 });
@@ -69,7 +69,7 @@ const resultTextMap = {
   testing:  '⏳ En cours',
   improved: '▲ Amélioré',
   degraded: '▼ Dégradé',
-  neutral:  '— Neutre',
+  neutral:  ' Neutre',
 };
 
 /* ─── Transform: backend campaign row → frontend BAKAL campaign shape ─── */
@@ -106,7 +106,7 @@ export function transformCampaign(c, sequence, diagnostics, history) {
     lemlistRef: c.lemlist_id || null,
     send_channel: c.send_channel || null,
     nb_prospects: c.nb_prospects || 0,
-    // Champs batch — sans eux le bouton « Lancer batch suivant » ne peut
+    // Champs batch · sans eux le bouton « Lancer batch suivant » ne peut
     // jamais s'afficher (CampaignDetailLayout les lit directement).
     batch_mode: c.batch_mode || false,
     current_batch: c.current_batch || 0,
@@ -197,7 +197,7 @@ export function transformVersion(v) {
 
 export function buildDefaultChecklist() {
   return [
-    { icon: '✅', title: 'Paramètres de campagne configurés', desc: 'Cible, canal, angle, ton — tout est défini', status: 'Fait', statusColor: 'success', done: true },
+    { icon: '✅', title: 'Paramètres de campagne configurés', desc: 'Cible, canal, angle, ton, tout est défini', status: 'Fait', statusColor: 'success', done: true },
     { icon: '⬜', title: 'Séquences à générer par Baakalai', desc: 'En attente de génération IA', status: 'À faire', statusColor: 'text-muted', done: false },
     { icon: '⬜', title: 'Liste de prospects à importer', desc: 'Import Lemlist en attente', status: 'À faire', statusColor: 'text-muted', done: false },
     { icon: '⬜', title: 'Validation par le client', desc: 'Après génération des séquences', status: 'À faire', statusColor: 'text-muted', done: false },
@@ -268,8 +268,8 @@ export function transformReport(r) {
     scoreLabel: r.score_label || scoreEmojiMap[r.score] || r.score,
     metrics: {
       contacts: r.contacts || 0,
-      openRate: r.open_rate != null ? r.open_rate + '%' : '—',
-      replyRate: r.reply_rate != null ? r.reply_rate + '%' : '—',
+      openRate: r.open_rate != null ? r.open_rate + '%' : ' ',
+      replyRate: r.reply_rate != null ? r.reply_rate + '%' : ' ',
       interested: r.interested || 0,
       meetings: r.meetings || 0,
     },
@@ -411,11 +411,11 @@ export async function fetchDashboard() {
 
   return {
     contacts: { value: kpis.total_contacts || 0, trend: kpis.active_campaigns ? kpis.active_campaigns + ' campagne(s)' : '', direction: 'up' },
-    openRate: { value: openRate ? openRate + '%' : '—', trend: openRate >= 50 ? '✓ Au-dessus du benchmark' : openRate ? '↗ Objectif : 50%' : '', direction: openRate >= 50 ? 'up' : 'flat' },
-    replyRate: { value: replyRate ? replyRate + '%' : '—', trend: replyRate >= 5 ? '✓ Au-dessus du benchmark' : replyRate ? '↗ Objectif : 5%' : '', direction: replyRate >= 5 ? 'up' : 'flat' },
+    openRate: { value: openRate ? openRate + '%' : ' ', trend: openRate >= 50 ? '✓ Au-dessus du benchmark' : openRate ? '↗ Objectif : 50%' : '', direction: openRate >= 50 ? 'up' : 'flat' },
+    replyRate: { value: replyRate ? replyRate + '%' : ' ', trend: replyRate >= 5 ? '✓ Au-dessus du benchmark' : replyRate ? '↗ Objectif : 5%' : '', direction: replyRate >= 5 ? 'up' : 'flat' },
     interested: { value: kpis.total_interested || 0, trend: '', direction: 'up' },
     meetings: { value: kpis.total_meetings || 0, trend: '', direction: 'up' },
-    stops: { value: '—', trend: '', direction: 'up' },
+    stops: { value: ' ', trend: '', direction: 'up' },
   };
 }
 
@@ -716,7 +716,7 @@ export function exportReportPdf() {
 /** Upload files (multipart/form-data)
  *  @param {File[]} files
  *  @param {object} [options]
- *  @param {string} [options.source] — 'chat' tags files as chat_attachment (excluded from profile docs)
+ *  @param {string} [options.source] · 'chat' tags files as chat_attachment (excluded from profile docs)
  */
 export async function uploadFiles(files, options = {}) {
   const formData = new FormData();
@@ -736,7 +736,7 @@ export async function uploadFiles(files, options = {}) {
   const headers = {};
   const token = getToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  // Do NOT set Content-Type — browser sets multipart boundary automatically
+  // Do NOT set Content-Type · browser sets multipart boundary automatically
 
   const res = await fetch(url, { method: 'POST', headers, body: formData });
 
@@ -799,7 +799,7 @@ export async function launchCampaignToSalesforce(campaignId, options = {}) {
   });
 }
 
-/** Lancement natif — envoi depuis la boîte email connectée + LinkedIn, sans Lemlist */
+/** Lancement natif · envoi depuis la boîte email connectée + LinkedIn, sans Lemlist */
 export async function launchCampaignNative(campaignId) {
   return request(`/campaigns/${campaignId}/launch-native`, { method: 'POST' });
 }

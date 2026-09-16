@@ -1,11 +1,11 @@
 /**
- * Intentions de réponse — définition unique, partagée par l'analyse et l'autopilot.
+ * Intentions de réponse · définition unique, partagée par l'analyse et l'autopilot.
  *
  * La liste vivait en double : énumérée dans le prompt d'analyse
  * (response-analysis-agent.js) et rejouée dans l'autopilot sous forme de deux
  * tableaux et d'un switch. Une intention ajoutée d'un côté seulement tombait
- * silencieusement dans la branche par défaut du switch — « continue la
- * conversation » — c'est-à-dire le contraire de ce qu'on voulait en l'ajoutant.
+ * silencieusement dans la branche par défaut du switch · « continue la
+ * conversation » · c'est-à-dire le contraire de ce qu'on voulait en l'ajoutant.
  *
  * Tout se déclare donc ici. Ajouter une intention = ajouter une entrée : le
  * prompt l'énumère automatiquement et l'autopilot sait quoi en faire.
@@ -18,7 +18,7 @@
  *   instruction ce qu'on demande au rédacteur quand outcome vaut 'continue'
  *
  * Ce que ce fichier ne porte pas : les effets de bord. `not_now` planifie une
- * relance à trois semaines, et cette écriture reste dans l'autopilot — la
+ * relance à trois semaines, et cette écriture reste dans l'autopilot · la
  * déclarer ici demanderait d'y loger du code, ce qui rendrait le fichier moins
  * lisible qu'il ne le doit. Une nouvelle intention qui agit sur la base
  * demandera donc aussi une ligne dans conversation-autopilot.js.
@@ -55,7 +55,7 @@ const INTENTS = [
   },
 ];
 
-/** Instruction de repli — intention inconnue, ou absente de la réponse d'analyse. */
+/** Instruction de repli · intention inconnue, ou absente de la réponse d'analyse. */
 const FALLBACK_INSTRUCTION =
   'Continue the conversation naturally. Be helpful and professional. Try to understand their needs and move toward a meeting.';
 

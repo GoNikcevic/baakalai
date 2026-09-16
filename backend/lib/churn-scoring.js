@@ -11,7 +11,7 @@
  *   76-100 = Critical (red)
  *
  * Sector weights (sector_churn_weights) are static/hand-tuned for now. Recalibrating them
- * from real churn_outcomes feedback is future work — intended to reuse the memory_patterns
+ * from real churn_outcomes feedback is future work · intended to reuse the memory_patterns
  * cross-user learning pattern (memory_patterns.sectors) via the existing Sunday Memory Agent,
  * not a separate learning system. This phase only wires up the data collection.
  */
@@ -22,7 +22,7 @@ const { getSectorMultiplier } = require('./sector-classifier');
 
 const DAY_MS = 86400000;
 
-// Seuil unique « client à risque » — utilisé par le badge de nav, la liste
+// Seuil unique « client à risque » · utilisé par le badge de nav, la liste
 // « À traiter aujourd'hui » et le compteur atRisk. Le scan de signaux externes
 // (churn-external-signals.js) reste volontairement plus large (>= 50) : on
 // surveille dès le risque moyen, on n'alerte qu'à partir d'ici.
@@ -47,7 +47,7 @@ function scoreOpportunity(opp, {
 
   // ── 1. Inactivity (max 30 pts) ──
   // `updated_at` est réécrit à chaque synchro CRM : s'en servir ici rendait le
-  // critère d'inactivité — 30 points sur 100, le plus lourd — impossible à
+  // critère d'inactivité · 30 points sur 100, le plus lourd · impossible à
   // déclencher. Mesuré avant correction : 286 scores à 0, aucun au-dessus de 40.
   // `last_activity_at` porte la date réelle côté CRM (lib/crm-activity-date.js).
   const lastActivity = opp.last_activity_at || opp.created_at;
@@ -71,7 +71,7 @@ function scoreOpportunity(opp, {
   // `deals` ne vient que des APIs Pipedrive/Salesforce. Pour les 5 autres
   // providers il est toujours vide, ce qui plafonnait mécaniquement le score
   // à 45/100 (mesuré : max=45 sur 373 opps Notion). Fallback : l'opportunité
-  // elle-même est le deal — un statut 'open' qui vieillit sans conclusion
+  // elle-même est le deal · un statut 'open' qui vieillit sans conclusion
   // est le même signal, quel que soit le CRM.
   const oppDeals = deals.filter(d =>
     d.person_id === opp.crm_contact_id || d.personId === opp.crm_contact_id
@@ -155,11 +155,11 @@ function scoreOpportunity(opp, {
   }
 
   // Adresse bouncée définitivement (posé par email-outbound sur rejet 5xx) :
-  // le contact a probablement quitté la société — précurseur classique de churn,
+  // le contact a probablement quitté la société · précurseur classique de churn,
   // surtout si c'était le champion du compte.
   if (opp.email_bounced_at) {
     score += 10;
-    factors.push({ signal: 'email_bounced', weight: 10, detail: `Email invalide depuis le ${new Date(opp.email_bounced_at).toLocaleDateString('fr-FR')} — contact probablement parti` });
+    factors.push({ signal: 'email_bounced', weight: 10, detail: `Email invalide depuis le ${new Date(opp.email_bounced_at).toLocaleDateString('fr-FR')}, contact probablement parti` });
   }
 
   // ── 4. Contact completeness (max 10 pts) ──
@@ -177,7 +177,7 @@ function scoreOpportunity(opp, {
     score += 15;
     factors.push({ signal: 'status_lost', weight: 15, detail: 'Statut: perdu' });
   } else if (opp.status === 'won') {
-    // Un client (won) silencieux est LE signal de churn du produit — l'alourdir,
+    // Un client (won) silencieux est LE signal de churn du produit · l'alourdir,
     // pas le réduire. L'offset -15 ne s'applique qu'aux clients encore actifs.
     if (daysSinceActivity >= 90) {
       score += 20;
@@ -185,7 +185,7 @@ function scoreOpportunity(opp, {
     } else {
       score = Math.max(0, score - 15);
       if (score > 0) {
-        factors.push({ signal: 'status_won_offset', weight: -15, detail: 'Client actif (won) — risque réduit' });
+        factors.push({ signal: 'status_won_offset', weight: -15, detail: 'Client actif (won), risque réduit' });
       }
     }
   }
@@ -219,7 +219,7 @@ function scoreOpportunity(opp, {
   // ── 8. External web signals (last 30 days) ──
   // Dédup avec le facteur 9 : si un registre officiel a confirmé une procédure,
   // le « financial_distress » attrapé par mots-clés Brave est le même événement
-  // en moins fiable — il ne doit pas s'empiler.
+  // en moins fiable · il ne doit pas s'empiler.
   const registryTypes = new Set(registrySignals.map(s => s.signal_type));
   const registryConfirmedDistress = registryTypes.has('insolvency_proceeding')
     || registryTypes.has('insolvency_safeguard') || registryTypes.has('company_dissolved');
@@ -231,7 +231,7 @@ function scoreOpportunity(opp, {
     factors.push({ signal: 'external_signals', weight: bump, detail: `Signal(aux) externe(s) détecté(s) : ${braveTypes.join(', ')}` });
   }
 
-  // ── 9. Santé financière — registres officiels (90 jours) ──
+  // ── 9. Santé financière · registres officiels (90 jours) ──
   // BODACC / Companies House / CourtListener / OpenCorporates. Signaux durs et datés,
   // volontairement NON pondérés par le secteur (facteur 6) : une liquidation
   // judiciaire est critique quel que soit le secteur.
@@ -289,7 +289,7 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
   }
 
   // Load external signals grouped by opportunity, split by source :
-  // Brave (news, 30 jours — périmé vite) vs registres officiels (90 jours —
+  // Brave (news, 30 jours · périmé vite) vs registres officiels (90 jours · 
   // une procédure collective reste un risque des mois durant).
   const externalSignalsByOpp = new Map();
   const registrySignalsByOpp = new Map();
@@ -310,7 +310,7 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
         externalSignalsByOpp.get(s.opportunity_id).push(s);
       }
     }
-  } catch { /* table may be empty — fine */ }
+  } catch { /* table may be empty, fine */ }
 
   // Resolve the user's own-business sector multiplier once (not per-opportunity)
   let ownSectorMultiplier = 1.0;
@@ -372,7 +372,7 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
       logger.error('churn-scoring', `Batch update failed (batch ${Math.floor(i / BATCH_SIZE)}): ${err.message}`);
     }
 
-    // Snapshot dans churn_score_history — opportunities.churn_score est écrasé
+    // Snapshot dans churn_score_history · opportunities.churn_score est écrasé
     // à chaque run, seul cet historique permet de comparer un score passé au
     // statut actuel (cf. GET /api/analytics/churn-risk-performance).
     try {

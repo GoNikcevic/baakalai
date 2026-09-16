@@ -1,13 +1,13 @@
-# Orchestrator — planificateur des agents
+# Orchestrator : planificateur des agents
 
 > **Statut : câblé et opérationnel.** `server.js` fait `require('./orchestrator')`
 > au démarrage. Les crons ne s'enregistrent que si `ORCHESTRATOR_ENABLED === 'true'`
-> (voir `index.js:27`) — sinon le module log une ligne et sort sans rien planifier.
+> (voir `index.js:27`) : sinon le module log une ligne et sort sans rien planifier.
 
 ## ⚠️ Piège vécu : le flag doit être lu, pas seulement défini
 
 En production, la variable Railway avait été créée sous le nom `" ORCHESTRATOR_ENABLED"`
-— **avec une espace en tête**. Sa valeur était bien `true`, mais le code lit
+ **avec une espace en tête**. Sa valeur était bien `true`, mais le code lit
 `process.env.ORCHESTRATOR_ENABLED`, qui valait `undefined`. Résultat : aucun cron
 enregistré pendant des mois, sans le moindre message d'erreur.
 
@@ -15,7 +15,7 @@ Pour vérifier que le planificateur tourne réellement, ne pas se fier au tablea
 de bord Railway. Chercher au démarrage la ligne :
 
 ```
-[orchestrator] Started — 8 cron jobs registered
+[orchestrator] Started : 8 cron jobs registered
 ```
 
 Si l'on voit `[orchestrator] Disabled (set ORCHESTRATOR_ENABLED=true to activate).`,
@@ -64,13 +64,13 @@ le module n'était même pas chargé dans le process. Voir migration `065`.
 Le planificateur déclenche des envois d'emails réels et environ 25 à 30 appels
 LLM par utilisateur et par jour. Points à traiter avant de basculer le flag :
 
-- **Idempotence** — aucun verrou au niveau des tâches planifiées. `node-cron` est
+- **Idempotence** : aucun verrou au niveau des tâches planifiées. `node-cron` est
   in-process : deux instances (ou un redéploiement qui chevauche un créneau)
   exécutent tout en double, emails compris.
-- **Déduplication des emails** — les gardes sont des *check-then-act* sans
+- **Déduplication des emails** : les gardes sont des *check-then-act* sans
   contrainte d'unicité en base.
-- **Quota journalier** — `countTodayExecutions()` ne compte que les exécutions
+- **Quota journalier** : `countTodayExecutions()` ne compte que les exécutions
   `executed` ; en mode approbation les lignes restent `pending`, donc
   `max_per_day` ne s'incrémente jamais.
-- **Coût** — les tokens sont journalisés mais jamais agrégés. Aucune table
+- **Coût** : les tokens sont journalisés mais jamais agrégés. Aucune table
   d'usage, aucun budget.

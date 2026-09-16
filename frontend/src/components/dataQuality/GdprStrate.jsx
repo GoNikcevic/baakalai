@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Conformité strate (Data Quality's GDPR tab)
+   BAKAL · Conformité strate (Data Quality's GDPR tab)
    Contacts with zero activity for more than {thresholdMonths} months (active clients
-   excluded) — candidates for GDPR data-minimisation purge. The purge button only
+   excluded) · candidates for GDPR data-minimisation purge. The purge button only
    unlocks after the current selection has been exported to CSV (we keep a trace
    before deleting anything). Purge itself goes through the generic Data Quality
    history circuit (data_quality_changes, change_type 'gdpr_purge') so it is fully
@@ -169,7 +169,7 @@ export default function GdprStrate() {
                   {c.company && <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{c.company}</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {[c.email, c.status].filter(Boolean).join(' — ')}
+                  {[c.email, c.status].filter(Boolean).join(', ')}
                 </div>
               </div>
               <div style={{ fontSize: 11, color: 'var(--warning)', flexShrink: 0, textAlign: 'right' }}>

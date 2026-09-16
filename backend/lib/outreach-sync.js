@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Unified Outreach Sync & Analysis
+   BAKAL · Unified Outreach Sync & Analysis
    Background task: pulls campaign history from Apollo/Instantly/Smartlead,
    analyzes with Claude, and populates memory_patterns table.
    =============================================================================== */
@@ -110,7 +110,7 @@ const PROVIDERS = {
 /**
  * Sync any outreach tool and analyze with Claude.
  * @param {string} userId
- * @param {string} provider — 'apollo' | 'instantly' | 'smartlead'
+ * @param {string} provider · 'apollo' | 'instantly' | 'smartlead'
  */
 async function syncOutreach(userId, provider) {
   const providerConfig = PROVIDERS[provider];
@@ -207,7 +207,7 @@ Sois spécifique et actionnable. Base-toi uniquement sur les données fournies.`
 
     notifyUser(userId, eventName, {
       status: 'done', progress: 100,
-      message: `Analyse terminée — ${patternsCount} patterns identifiés sur ${allStats.length} campagnes (${providerConfig.name})`,
+      message: `Analyse terminée, ${patternsCount} patterns identifiés sur ${allStats.length} campagnes (${providerConfig.name})`,
       patternsCount, campaignsCount: allStats.length, provider: providerConfig.name,
     });
 

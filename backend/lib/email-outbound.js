@@ -186,7 +186,7 @@ function escapeHtml(s) {
 
 /**
  * Ajoute la signature du compte au mailOptions (texte + version HTML + image
- * inline CID). No-op si le compte n'a pas de signature — l'email reste texte
+ * inline CID). No-op si le compte n'a pas de signature · l'email reste texte
  * seul, comportement historique.
  */
 function applySignature(mailOptions, account, body) {
@@ -266,12 +266,12 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
     to: toName ? `${toName} <${to}>` : to,
     subject,
     text: body,
-    // Sans signature : texte seul — looks like a real personal email.
+    // Sans signature : texte seul · looks like a real personal email.
     replyTo: replyTo || account.email_address,
   };
 
   // Signature du compte (migration 102) : dès qu'elle existe, on passe en
-  // multipart texte+HTML — le format des vrais emails composés dans Gmail,
+  // multipart texte+HTML · le format des vrais emails composés dans Gmail,
   // donc toujours « personnel ». L'image part en pièce inline CID (comme les
   // signatures Outlook) : pas d'hébergement externe, pas d'URL de tracking.
   applySignature(mailOptions, account, body);
@@ -291,13 +291,13 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
       );
       _transportCache.delete(account.id);
       // Le compte vient de passer 'expired' : getDefaultAccount ne le renverra
-      // plus, l'utilisateur doit reconnecter — c'est la même action corrective
+      // plus, l'utilisateur doit reconnecter · c'est la même action corrective
       // que l'absence de compte, d'où le même code.
       return { success: false, code: 'no_email_account', error: err.message };
     }
 
     // Rejet DÉFINITIF du destinataire (5xx « user unknown ») ≠ erreur transitoire :
-    // l'adresse n'existe plus — la personne a probablement quitté la société.
+    // l'adresse n'existe plus · la personne a probablement quitté la société.
     // Code distinct pour que l'appelant tamponne le contact (data quality + churn).
     const permanentCodes = [550, 551, 553];
     const bounceText = /user unknown|no such user|does not exist|recipient .*(rejected|not found)|mailbox (unavailable|not found|does not exist)|address rejected|invalid recipient/i;
@@ -315,7 +315,7 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
  *
  * existingEmailId : id d'une ligne nurture_emails déjà en file (status
  * 'pending'). Dans ce cas on met à jour cette ligne au lieu d'en insérer une
- * nouvelle — sinon l'approbation créait un doublon et l'original restait
+ * nouvelle · sinon l'approbation créait un doublon et l'original restait
  * bloqué en 'pending' pour toujours.
  */
 async function sendNurtureEmail(userId, {
@@ -380,7 +380,7 @@ async function sendNurtureEmail(userId, {
   } else if (result.code === 'no_email_account') {
     // Aucune boîte mail connectée : rien ne cloche avec CET email, c'est le
     // compte qui n'est pas configuré. Le passer en 'failed' le sortirait de la
-    // file — or la contrainte unique 067 (un seul pending par contact) libère
+    // file · or la contrainte unique 067 (un seul pending par contact) libère
     // alors le contact, et le cron du lendemain regénère un brouillon tout
     // aussi inenvoyable, à nouveau facturé en tokens. On laisse donc la ligne
     // en 'pending' : on enregistre juste la raison, la file est préservée et
@@ -395,7 +395,7 @@ async function sendNurtureEmail(userId, {
       [result.error, nurture.id]
     );
 
-    // Bounce définitif : tamponner le contact — lu par le scan data quality
+    // Bounce définitif : tamponner le contact · lu par le scan data quality
     // (issue email_bounced) et par le scoring churn (contact probablement parti).
     if (result.code === 'recipient_bounced') {
       if (opportunityId) {
@@ -407,7 +407,7 @@ async function sendNurtureEmail(userId, {
 
       // Pénalité mémoire : un bounce n'est PAS un échec du copy (le contenu
       // n'a jamais été lu), mais laisser l'envoi compter comme neutre-positif
-      // fausserait la boucle — les patterns de cet email seraient crédités
+      // fausserait la boucle · les patterns de cet email seraient crédités
       // d'un « envoi » vers une adresse morte. On décrémente donc d'un cran,
       // plancher à 0. Best-effort : la pénalité ne doit jamais faire échouer
       // le traitement du bounce lui-même.
@@ -446,7 +446,7 @@ module.exports = {
   testEmailAccount,
   getDefaultAccount,
   // Consommés par le moteur natif de prospection (lecture Gmail API pour la
-  // détection de réponses — même token OAuth que l'envoi, scope mail.google.com).
+  // détection de réponses · même token OAuth que l'envoi, scope mail.google.com).
   refreshTokenIfNeeded,
   decryptAccount,
 };

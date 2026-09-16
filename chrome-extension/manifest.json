@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "baakalai — LinkedIn Connect",
+  "name": "baakalai, LinkedIn Connect",
   "version": "1.1.0",
   "description": "Connectez votre session LinkedIn à baakalai en un clic pour relancer vos clients existants. La connexion se maintient toute seule.",
   "permissions": ["cookies", "storage", "scripting", "tabs", "alarms"],

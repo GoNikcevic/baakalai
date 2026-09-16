@@ -1,14 +1,14 @@
 /* ===============================================================================
-   BAKAL — CRM / Activation action cards (shared chat primitives)
+   BAKAL · CRM / Activation action cards (shared chat primitives)
    Cartes d'action rendues par l'assistant général (pages/ChatPage.jsx) quand Claude
    propose une action côté CRM : scan, nettoyage, import, relance, trigger, autopilot,
-   envoi d'email, signaux, newsletter — plus le compte-rendu de lecture du CRM affiché
+   envoi d'email, signaux, newsletter · plus le compte-rendu de lecture du CRM affiché
    sur son écran d'accueil.
 
    Ces composants vivaient dans components/campaigns/CampaignAssistant.jsx. Ils en ont
    été sortis parce que l'onglet Prospection ne traite que la prospection froide : tout
    ce qui touche aux contacts déjà présents dans le CRM appartient à l'assistant général.
-   Chaque carte s'exécute elle-même (elle appelle son endpoint au clic) — aucune n'a
+   Chaque carte s'exécute elle-même (elle appelle son endpoint au clic) · aucune n'a
    besoin d'un dispatcher côté page.
    =============================================================================== */
 
@@ -105,7 +105,7 @@ function IssueRow({ issue, en }) {
         <div style={{ marginLeft: 22, marginTop: 4, marginBottom: 6, fontSize: 11, color: 'var(--text-muted)' }}>
           {contacts.slice(0, 10).map((c, j) => (
             <div key={j} style={{ padding: '2px 0' }}>
-              {c.name ? `${c.name} — ` : ''}<span style={{ color: 'var(--danger)' }}>{c.email}</span>
+              {c.name ? `${c.name}, ` : ''}<span style={{ color: 'var(--danger)' }}>{c.email}</span>
             </div>
           ))}
           {contacts.length > 10 && (
@@ -167,16 +167,16 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
         <div>
           <div style={{ fontSize: 12, color: 'var(--success)', marginBottom: 8 }}>
             <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Done' : 'Termin\u00E9'}
-            {result?.score != null && !result?.health && ` — ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
-            {result?.imported != null && ` — ${result.imported} ${en ? 'contact(s) imported' : 'contact(s) import\u00E9(s)'}`}
-            {result?.sent != null && ` — ${result.sent} ${en ? 'email(s) sent' : 'email(s) envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
-            {result?.triggered != null && ` — ${result.triggered} trigger(s), ${result.sent || 0} ${en ? 'sent' : 'envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
-            {result?.health?.score != null && ` — ${en ? 'Health' : 'Sant\u00E9'}: ${result.health.score}/100`}
-            {result?.contacts?.total != null && ` — ${result.contacts.total} contacts`}
-            {result?.autoFixed != null && ` — ${result.autoFixed} ${en ? 'fixed' : 'corrig\u00E9(s)'}, ${result.remainingManual || 0} ${en ? 'remaining' : 'restant(s)'}`}
-            {result?.message && ` — ${result.message}`}
+            {result?.score != null && !result?.health && `, ${en ? 'CRM Score' : 'Score CRM'}: ${result.score}/100`}
+            {result?.imported != null && `, ${result.imported} ${en ? 'contact(s) imported' : 'contact(s) import\u00E9(s)'}`}
+            {result?.sent != null && `, ${result.sent} ${en ? 'email(s) sent' : 'email(s) envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
+            {result?.triggered != null && `, ${result.triggered} trigger(s), ${result.sent || 0} ${en ? 'sent' : 'envoy\u00E9(s)'}, ${result.queued || 0} ${en ? 'pending' : 'en attente'}`}
+            {result?.health?.score != null && `, ${en ? 'Health' : 'Sant\u00E9'}: ${result.health.score}/100`}
+            {result?.contacts?.total != null && `, ${result.contacts.total} contacts`}
+            {result?.autoFixed != null && `, ${result.autoFixed} ${en ? 'fixed' : 'corrig\u00E9(s)'}, ${result.remainingManual || 0} ${en ? 'remaining' : 'restant(s)'}`}
+            {result?.message && `, ${result.message}`}
           </div>
-          {/* Detailed results inline — from health scan or CRM scan */}
+          {/* Detailed results inline · from health scan or CRM scan */}
           {(result?.health?.issues?.length > 0 || result?.issues?.length > 0) && (
             <div style={{ fontSize: 12, marginTop: 6, padding: '10px 12px', background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 8 }}>
               <div style={{ fontWeight: 600, marginBottom: 6 }}>
@@ -246,7 +246,7 @@ function CreateTriggerCard({ metadata }) {
         <Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Create trigger' : 'Créer un trigger'}
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-        <strong>{metadata.name}</strong> — {metadata.triggerType?.replace(/_/g, ' ')} · {metadata.days || 30} {en ? 'days' : 'jours'} · {actionLabel} · {metadata.mode === 'auto' ? (en ? 'Automatic' : 'Automatique') : (en ? 'Approval' : 'Approbation')}
+        <strong>{metadata.name}</strong>, {metadata.triggerType?.replace(/_/g, ' ')} · {metadata.days || 30} {en ? 'days' : 'jours'} · {actionLabel} · {metadata.mode === 'auto' ? (en ? 'Automatic' : 'Automatique') : (en ? 'Approval' : 'Approbation')}
       </div>
       {status === 'ready' && (
         <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }} onClick={handleCreate}>
@@ -390,7 +390,7 @@ function SignalSearchCard({ metadata }) {
     try {
       // Create a temporary config and scan
       // signal_types must come from the fixed set understood by the signal-agent
-      // (SIGNAL_QUERIES) — free-text keywords go in targetKeywords only.
+      // (SIGNAL_QUERIES) · free-text keywords go in targetKeywords only.
       const VALID_SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
       const requestedTypes = (metadata.signalTypes || []).filter(k => VALID_SIGNAL_TYPES.includes(k));
       await request('/signals/configs', {
@@ -498,7 +498,7 @@ function NewsletterCard({ metadata }) {
         <>
           <select className="form-input" style={{ fontSize: 12, marginBottom: 8 }}
             value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
-            <option value="">{en ? '— Select a template —' : '— Choisir un template —'}</option>
+            <option value="">{en ? ' Select a template ' : ' Choisir un template '}</option>
             {templates.map((t, i) => (
               <option key={t.Id || i} value={t.Id || t.id || i}>{t.Name || t.name || `Template ${i + 1}`}</option>
             ))}
@@ -525,7 +525,7 @@ function NewsletterCard({ metadata }) {
 }
 
 /* Premier dialogue : ce que baakalai a lu dans le CRM, avec les deals
-   dormants cliquables — un clic lance la conversation sur un vrai deal.
+   dormants cliquables · un clic lance la conversation sur un vrai deal.
    Rendu uniquement quand l'utilisateur a un profil mais aucune campagne. */
 function CrmReadingSummary({ onSuggestionClick }) {
   const t = useT();
@@ -548,8 +548,8 @@ function CrmReadingSummary({ onSuggestionClick }) {
   };
 
   const revivePrompt = (d) => (lang === 'en'
-    ? `Draft a follow-up for the deal "${d.name}"${d.company ? ` (${d.company})` : ''} — no activity for ${d.daysInactive} days.`
-    : `Prépare une relance pour le deal « ${d.name} »${d.company ? ` (${d.company})` : ''} — sans activité depuis ${d.daysInactive} jours.`);
+    ? `Draft a follow-up for the deal "${d.name}"${d.company ? ` (${d.company})` : ''}, no activity for ${d.daysInactive} days.`
+    : `Prépare une relance pour le deal « ${d.name} »${d.company ? ` (${d.company})` : ''}, sans activité depuis ${d.daysInactive} jours.`);
 
   return (
     <div style={{

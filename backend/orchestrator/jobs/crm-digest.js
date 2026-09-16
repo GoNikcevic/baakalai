@@ -1,13 +1,13 @@
 /**
- * CRM Digest — email hebdo « À traiter cette semaine ».
+ * CRM Digest · email hebdo « À traiter cette semaine ».
  *
  * Lundi 8h45 Paris (avant le reporting agent de 9h). Là où weekly-report ne
  * couvre que les utilisateurs avec campagnes de prospection actives, ce digest
  * s'adresse aux utilisateurs CRM : churn, deals stagnants, upsells, emails en
- * attente d'approbation, signaux — la même liste priorisée que le dashboard
+ * attente d'approbation, signaux · la même liste priorisée que le dashboard
  * (lib/priorities.js), sans appel LLM (données déjà prescriptives).
  *
- * Opt-out : catégorie `crm_digest` (lib/email-prefs.js, migration 101 —
+ * Opt-out : catégorie `crm_digest` (lib/email-prefs.js, migration 101 · 
  * l'ancien interrupteur unique profiles.weekly_report a été migré).
  * Digest vide → pas d'envoi.
  */
@@ -32,7 +32,7 @@ const TYPE_LABELS = {
   sla_breach: { fr: 'SLA dépassé', en: 'SLA breach', color: '#dc2626' },
 };
 
-// Détail lisible d'une violation SLA — le digest est le seul rendu backend
+// Détail lisible d'une violation SLA · le digest est le seul rendu backend
 // bilingue, les items ne portent que slaKind/daysOverdue (le front traduit).
 function slaDetail(item, isEN) {
   const d = item.daysOverdue;
@@ -97,13 +97,13 @@ async function sendDigestToUser(userId, userRow = null) {
     logger.warn('crm-digest', `Weekly DQ scan failed for ${user.email}: ${err.message}`));
   const dqTrend = await computeDqTrend(user.id).catch(() => null);
 
-  // Photo hebdo du forecast — matière première de la calibration dominicale
+  // Photo hebdo du forecast · matière première de la calibration dominicale
   // (forecast-engine.calibrate). Avant les early returns, même logique que DQ.
   const { takeSnapshot } = require('../../lib/forecast-engine');
   await takeSnapshot(user.id).catch((err) =>
     logger.warn('crm-digest', `Forecast snapshot failed for ${user.email}: ${err.message}`));
 
-  // Catégorie crm_digest (migration 101) — remplace l'interrupteur unique
+  // Catégorie crm_digest (migration 101) · remplace l'interrupteur unique
   // profiles.weekly_report, dont les opt-outs existants ont été migrés.
   const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('../../lib/email-prefs');
   if (!(await isEmailEnabled(user.id, 'crm_digest'))) {
@@ -167,14 +167,14 @@ function buildDigestHTML(user, list, lang, dqTrend = null) {
   const isEN = lang === 'en';
   const c = list.counts;
 
-  // Alerte uniquement sur une vraie dégradation (> 5 pts en une semaine) —
+  // Alerte uniquement sur une vraie dégradation (> 5 pts en une semaine) · 
   // un score stable ou en hausse ne mérite pas de place dans le digest.
   const dqWarningHTML = (dqTrend && dqTrend.delta != null && dqTrend.delta < -5) ? `
     <tr><td style="padding:10px 24px;">
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;color:#991b1b;">
         ${isEN
-          ? `⚠️ Your CRM data quality score dropped from ${dqTrend.previous} to ${dqTrend.current} this week — check the Data Quality page.`
-          : `⚠️ Votre score de qualité CRM est passé de ${dqTrend.previous} à ${dqTrend.current} cette semaine — jetez un œil à la page Data Quality.`}
+          ? `⚠️ Your CRM data quality score dropped from ${dqTrend.previous} to ${dqTrend.current} this week, check the Data Quality page.`
+          : `⚠️ Votre score de qualité CRM est passé de ${dqTrend.previous} à ${dqTrend.current} cette semaine, jetez un œil à la page Data Quality.`}
       </div>
     </td></tr>` : '';
 
@@ -279,7 +279,7 @@ function buildDigestHTML(user, list, lang, dqTrend = null) {
   <!-- Footer -->
   <tr><td style="background:#fafafa;padding:16px 32px;border-top:1px solid #f0f0f0;">
     <div style="font-size:11px;color:#a1a1aa;text-align:center;">
-      Powered by <a href="${APP_URL}" style="color:#71717a;">Baakalai</a> — baakal.ai
+      Powered by <a href="${APP_URL}" style="color:#71717a;">Baakalai</a>, baakal.ai
     </div>
   </td></tr>
 

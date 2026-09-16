@@ -1,11 +1,11 @@
 /**
- * Vector Store — recherche sémantique pgvector sur les patterns mémoire.
+ * Vector Store · recherche sémantique pgvector sur les patterns mémoire.
  *
  * Feature-flag : actif uniquement si PGVECTOR_ENABLED=true. Sinon, no-op.
  *
  * Source de vérité unique : `memory_patterns.embedding` (vector(1024), index HNSW).
- * La table `memory_embeddings` — jumelle historique en ivfflat, restée vide en
- * production — a été supprimée (migration 065). Elle dupliquait chaque écriture
+ * La table `memory_embeddings` · jumelle historique en ivfflat, restée vide en
+ * production · a été supprimée (migration 065). Elle dupliquait chaque écriture
  * et ses chemins de fallback ne pouvaient jamais rien renvoyer.
  */
 
@@ -19,7 +19,7 @@ const ENABLED = process.env.PGVECTOR_ENABLED === 'true';
  *
  * Voyage est facturé à l'appel et ne propose pas de batching ici : embedder deux
  * fois le même texte est du gaspillage pur. Le cache est volontairement simple
- * (Map + éviction FIFO) — il couvre le cas dominant, à savoir le même texte
+ * (Map + éviction FIFO) · il couvre le cas dominant, à savoir le même texte
  * embedé plusieurs fois dans un même cycle d'agent.
  */
 const EMBED_CACHE_MAX = 500;
@@ -48,7 +48,7 @@ function cacheSet(text, embedding) {
  * Même modèle d'accès que `findRelevantPatterns` et `listForPrompt` : les
  * patterns du tenant (user + ses équipes), plus le pool global anonymisé
  * (`shared = true AND confidence = 'Haute'`). Sans userId, seul le pool
- * partagé est visible — jamais la table entière tous tenants confondus.
+ * partagé est visible · jamais la table entière tous tenants confondus.
  */
 async function searchSimilar(userId, query, limit = 5) {
   if (!ENABLED) return [];
@@ -93,7 +93,7 @@ async function searchSimilar(userId, query, limit = 5) {
  * Cherche un pattern sémantiquement proche (déduplication).
  *
  * Retourne aussi l'embedding calculé (`embedding`) pour que l'appelant puisse le
- * réutiliser lors de l'écriture, au lieu de le recalculer — c'était un doublon
+ * réutiliser lors de l'écriture, au lieu de le recalculer · c'était un doublon
  * de facturation Voyage sur chaque création de pattern.
  */
 async function findSimilarPattern(text, threshold = 0.85) {
@@ -134,8 +134,8 @@ async function findSimilarPattern(text, threshold = 0.85) {
  * Écrit (ou met à jour) l'embedding d'un pattern.
  * @param {string} patternId
  * @param {string} text
- * @param {object} [_metadata] — conservé pour compatibilité, non stocké
- * @param {number[]} [precomputed] — embedding déjà calculé, pour éviter un
+ * @param {object} [_metadata] · conservé pour compatibilité, non stocké
+ * @param {number[]} [precomputed] · embedding déjà calculé, pour éviter un
  *   second appel Voyage sur le même texte.
  */
 async function upsertPatternEmbedding(patternId, text, _metadata = {}, precomputed = null) {
@@ -162,11 +162,11 @@ async function upsertPatternEmbedding(patternId, text, _metadata = {}, precomput
  *
  * Corrections audit 02/09 :
  * - le tri commençait par `applied DESC`, qui passait DEVANT la distance
- *   vectorielle — tout pattern épinglé écrasait le classement sémantique.
+ *   vectorielle · tout pattern épinglé écrasait le classement sémantique.
  *   `applied` reste un bonus (+0.10 de similarité), plus un tri prioritaire ;
  * - seuil de similarité 0.60 : en dessous, injecter du bruit est pire que rien ;
  * - filtre tenant : ce chemin (le nominal quand pgvector est actif) contournait
- *   la porte `shared` — il lisait la table entière, tous tenants confondus.
+ *   la porte `shared` · il lisait la table entière, tous tenants confondus.
  */
 async function findRelevantPatterns(contextText, limit = 10, { teamId = null, userId = null } = {}) {
   if (!ENABLED) return [];
@@ -227,7 +227,7 @@ const VOYAGE_MODEL = 'voyage-3';
 
 async function generateEmbedding(text) {
   if (!VOYAGE_API_KEY) {
-    logger.warn('vector-store', 'VOYAGE_API_KEY not set — skipping embedding');
+    logger.warn('vector-store', 'VOYAGE_API_KEY not set, skipping embedding');
     return null;
   }
 

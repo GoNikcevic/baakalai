@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Engagement Trends Line Chart (Recharts)
+   BAKAL · Engagement Trends Line Chart (Recharts)
    Multi-line chart for open rate, reply rate, linkedin acceptance over time.
    Used in the Analytics section.
    =============================================================================== */

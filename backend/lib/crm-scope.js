@@ -1,5 +1,5 @@
 /**
- * CRM Scope — frontière unique entre les deux populations de `opportunities`.
+ * CRM Scope · frontière unique entre les deux populations de `opportunities`.
  *
  * La table `opportunities` mélange deux populations que le produit présente
  * comme deux univers séparés :
@@ -39,7 +39,7 @@ function onlyCrmContacts(opps) {
 }
 
 /**
- * À quelle population appartient ce contact — 'crm' ou 'prospection'.
+ * À quelle population appartient ce contact · 'crm' ou 'prospection'.
  *
  * Sert partout où un réglage se décline par population plutôt que de
  * s'appliquer aveuglément aux deux (l'autopilot de réponse, par exemple) :

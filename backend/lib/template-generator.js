@@ -64,7 +64,7 @@ Retourne un JSON :
       if (anonymizeResult.parsed) {
         const tpl = anonymizeResult.parsed;
         await db.templates.create({
-          name: tpl.name || `${campaign.sector} — ${campaign.angle}`,
+          name: tpl.name || `${campaign.sector}, ${campaign.angle}`,
           sector: campaign.sector || 'Général',
           channel: campaign.channel,
           description: tpl.description || `Template basé sur une campagne performante (${campaign.open_rate}% open, ${campaign.reply_rate}% reply)`,
@@ -143,7 +143,7 @@ Retourne un JSON :
       if (result.parsed) {
         const tpl = result.parsed;
         await db.templates.create({
-          name: tpl.name || `${sector} — Template IA`,
+          name: tpl.name || `${sector}, Template IA`,
           sector,
           channel: tpl.channel || 'email',
           description: tpl.description || `Template généré par IA basé sur ${sectorPats.length} patterns validés`,

@@ -1,5 +1,5 @@
 /**
- * Test helpers — sets up an isolated Express app with a fresh SQLite DB.
+ * Test helpers · sets up an isolated Express app with a fresh SQLite DB.
  *
  * Usage:
  *   const { setup, teardown, request, registerAndLogin } = require('./helpers');

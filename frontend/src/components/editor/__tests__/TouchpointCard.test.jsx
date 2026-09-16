@@ -39,7 +39,7 @@ const tpWithSuggestion = {
   ...emailTp,
   id: 'E3',
   suggestion: {
-    label: 'Suggestion IA — Changer l\'angle',
+    label: 'Suggestion IA, Changer l\'angle',
     text: 'L\'angle est anxiogene. <strong>Proposition :</strong> "Autre approche" -> mieux.',
   },
 };

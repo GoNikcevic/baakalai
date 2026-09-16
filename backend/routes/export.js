@@ -50,7 +50,7 @@ function sequenceToCsv(campaign, touchpoints) {
   return csvLines.join('\n');
 }
 
-// GET /api/export/campaigns/csv — export all campaigns as CSV
+// GET /api/export/campaigns/csv · export all campaigns as CSV
 router.get('/campaigns/csv', async (req, res, next) => {
   try {
     const campaigns = await db.campaigns.list({ userId: req.user.id });
@@ -64,7 +64,7 @@ router.get('/campaigns/csv', async (req, res, next) => {
   }
 });
 
-// GET /api/export/campaigns/:id/csv — export a single campaign + sequence as CSV
+// GET /api/export/campaigns/:id/csv · export a single campaign + sequence as CSV
 router.get('/campaigns/:id/csv', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
@@ -94,8 +94,8 @@ function campaignsToPdfHtml(campaigns, kpis) {
       <td>${esc(c.status)}</td>
       <td>${esc(c.channel)}</td>
       <td>${c.nb_prospects || 0}</td>
-      <td>${c.open_rate != null ? c.open_rate + '%' : '—'}</td>
-      <td>${c.reply_rate != null ? c.reply_rate + '%' : '—'}</td>
+      <td>${c.open_rate != null ? c.open_rate + '%' : ' '}</td>
+      <td>${c.reply_rate != null ? c.reply_rate + '%' : ' '}</td>
       <td>${c.interested || 0}</td>
       <td>${c.meetings || 0}</td>
     </tr>
@@ -123,7 +123,7 @@ function campaignsToPdfHtml(campaigns, kpis) {
   </style>
 </head>
 <body>
-  <h1>Rapport de performance — Bakal</h1>
+  <h1>Rapport de performance, Bakal</h1>
   <div class="subtitle">Genere le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
 
   <div class="kpi-grid">
@@ -136,11 +136,11 @@ function campaignsToPdfHtml(campaigns, kpis) {
       <div class="kpi-label">Prospects contactes</div>
     </div>
     <div class="kpi">
-      <div class="kpi-value">${kpis.avg_open_rate ? kpis.avg_open_rate + '%' : '—'}</div>
+      <div class="kpi-value">${kpis.avg_open_rate ? kpis.avg_open_rate + '%' : ' '}</div>
       <div class="kpi-label">Taux ouverture moy.</div>
     </div>
     <div class="kpi">
-      <div class="kpi-value">${kpis.avg_reply_rate ? kpis.avg_reply_rate + '%' : '—'}</div>
+      <div class="kpi-value">${kpis.avg_reply_rate ? kpis.avg_reply_rate + '%' : ' '}</div>
       <div class="kpi-label">Taux reponse moy.</div>
     </div>
     <div class="kpi">
@@ -160,7 +160,7 @@ function campaignsToPdfHtml(campaigns, kpis) {
   </table>
 
   <div class="footer">
-    Bakal — Rapport genere automatiquement. Donnees en date du ${new Date().toLocaleDateString('fr-FR')}.
+    Bakal, Rapport genere automatiquement. Donnees en date du ${new Date().toLocaleDateString('fr-FR')}.
   </div>
 </body>
 </html>`;
@@ -171,7 +171,7 @@ function esc(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// GET /api/export/report/pdf — generate a printable HTML report (save as PDF via browser)
+// GET /api/export/report/pdf · generate a printable HTML report (save as PDF via browser)
 router.get('/report/pdf', async (req, res, next) => {
   try {
     const campaigns = await db.campaigns.list({ userId: req.user.id });
@@ -185,7 +185,7 @@ router.get('/report/pdf', async (req, res, next) => {
   }
 });
 
-// GET /api/export/opportunities/csv — export all opportunities with scores
+// GET /api/export/opportunities/csv · export all opportunities with scores
 router.get('/opportunities/csv', async (req, res, next) => {
   try {
     const opps = await db.opportunities.list(req.user.id);
@@ -218,7 +218,7 @@ router.get('/opportunities/csv', async (req, res, next) => {
   }
 });
 
-// GET /api/export/crm-report/pdf — CRM analytics PDF report
+// GET /api/export/crm-report/pdf · CRM analytics PDF report
 router.get('/crm-report/pdf', async (req, res, next) => {
   try {
     const campaigns = await db.campaigns.list({ userId: req.user.id });
@@ -242,7 +242,7 @@ router.get('/crm-report/pdf', async (req, res, next) => {
     const campRows = campaigns.map(c => `<tr><td>${esc(c.name)}</td><td>${esc(c.channel)}</td><td>${c.nb_prospects || 0}</td><td>${c.interested || 0}</td><td>${c.meetings || 0}</td></tr>`).join('');
 
     const html = `<!DOCTYPE html>
-<html lang="fr"><head><meta charset="utf-8"><title>CRM Report — Bakal</title>
+<html lang="fr"><head><meta charset="utf-8"><title>CRM Report, Bakal</title>
 <style>
 body { font-family: 'Segoe UI', sans-serif; margin: 40px; color: #1a1a2e; }
 h1 { font-size: 22px; margin-bottom: 4px; }
@@ -258,7 +258,7 @@ td { padding: 8px 12px; border-bottom: 1px solid #eee; }
 .footer { margin-top: 40px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 12px; }
 @media print { body { margin: 20px; } }
 </style></head><body>
-<h1>Rapport CRM — Bakal</h1>
+<h1>Rapport CRM, Bakal</h1>
 <div class="subtitle">Généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
 <div class="kpi-grid">
   <div class="kpi"><div class="kpi-value">${opps.length}</div><div class="kpi-label">Opportunités totales</div></div>
@@ -270,7 +270,7 @@ td { padding: 8px 12px; border-bottom: 1px solid #eee; }
 <table><thead><tr><th>Étape</th><th>Nombre</th></tr></thead><tbody>${stageRows}</tbody></table>
 <h2>Attribution par campagne</h2>
 <table><thead><tr><th>Campagne</th><th>Canal</th><th>Prospects</th><th>Intéressés</th><th>RDV</th></tr></thead><tbody>${campRows}</tbody></table>
-<div class="footer">Bakal — Rapport CRM généré automatiquement. Données au ${new Date().toLocaleDateString('fr-FR')}.</div>
+<div class="footer">Bakal, Rapport CRM généré automatiquement. Données au ${new Date().toLocaleDateString('fr-FR')}.</div>
 </body></html>`;
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -280,7 +280,7 @@ td { padding: 8px 12px; border-bottom: 1px solid #eee; }
   }
 });
 
-// GET /api/export/account — Full user data export (GDPR data portability)
+// GET /api/export/account · Full user data export (GDPR data portability)
 router.get('/account', async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -317,7 +317,7 @@ router.get('/account', async (req, res, next) => {
       campaigns: campaignsResult.rows,
       contacts: opportunitiesResult.rows,
       chat_threads: threadsResult.rows,
-      documents: documentsResult.rows.map(d => ({ ...d, note: 'File content not included — download separately' })),
+      documents: documentsResult.rows.map(d => ({...d, note: 'File content not included, download separately' })),
       nurture_triggers: triggersResult.rows,
       nurture_emails: emailsResult.rows,
       reports: reportsResult.rows,

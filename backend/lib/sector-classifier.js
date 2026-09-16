@@ -2,7 +2,7 @@
  * Sector Classifier
  *
  * Normalizes freeform sector text (user_profiles.sector / opportunities.data->>'sector')
- * into a canonical sector name used by sector_churn_weights, via Claude — matching an
+ * into a canonical sector name used by sector_churn_weights, via Claude · matching an
  * existing normalized sector or proposing a new, finer-grained one. Results are cached
  * per raw-text string so the same input never re-triggers a classification call.
  *
@@ -40,7 +40,7 @@ ${existingSectors.length > 0 ? existingSectors.join(', ') : '(aucun)'}
 
 Rattache ce texte à un secteur normalisé existant s'il correspond clairement, ou propose un
 NOUVEAU secteur normalisé plus fin si aucun ne correspond (ex: "SaaS B2B RH" plutôt que
-simplement "Tech" — vise une granularité utile, pas une méga-catégorie).
+simplement "Tech", vise une granularité utile, pas une méga-catégorie).
 
 Règles strictes :
 - Si le texte est vide, ambigu, ou ne décrit pas un vrai secteur d'activité (ex: "N/A", un nom
@@ -80,7 +80,7 @@ Retourne uniquement du JSON : { "sector": "..." }`;
 
 /**
  * Classify + look up the churn multiplier in one call.
- * Returns { multiplier, sector } — sector is null and multiplier is 1.0 (neutral)
+ * Returns { multiplier, sector } · sector is null and multiplier is 1.0 (neutral)
  * when the input couldn't be classified.
  */
 async function getSectorMultiplier(rawText, scope) {

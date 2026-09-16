@@ -42,7 +42,7 @@ async function sendVerificationEmail(email, token) {
   const link = `${APP_URL}/api/auth/verify-email?token=${token}`;
   return sendEmail({
     to: email,
-    subject: 'Vérifiez votre email — Baakalai',
+    subject: 'Vérifiez votre email, Baakalai',
     html: `
       <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
         <div style="text-align: center; margin-bottom: 32px;">
@@ -67,7 +67,7 @@ async function sendPasswordResetEmail(email, token) {
   const link = `${APP_URL}/reset-password?token=${token}`;
   return sendEmail({
     to: email,
-    subject: 'Réinitialiser votre mot de passe — Baakalai',
+    subject: 'Réinitialiser votre mot de passe, Baakalai',
     html: `
       <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
         <div style="text-align: center; margin-bottom: 32px;">

@@ -1,10 +1,10 @@
 /* ===============================================================================
-   BAKAL — Icon
+   BAKAL · Icon
    Jeu d'icônes SVG unique de l'app (trait 2px, viewBox 24, `currentColor`).
    Remplace les emoji dans l'UI : rendu identique sur tous les OS, couleur et
    taille pilotées par le CSS parent, et aucune dépendance externe.
 
-   Usage : <Icon name="mail" />                     — 16px, couleur héritée
+   Usage : <Icon name="mail" /> · 16px, couleur héritée
            <Icon name="mail" size={18} />
            <Icon name="mail" color="var(--danger)" />
 

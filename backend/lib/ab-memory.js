@@ -1,5 +1,5 @@
 /**
- * A/B Test Memory — cross-user anonymized pattern library.
+ * A/B Test Memory · cross-user anonymized pattern library.
  *
  * All patterns stored here are ANONYMIZED:
  * - No verbatim message text
@@ -81,10 +81,10 @@ async function recordABPattern({
   metric,           // 'reply_rate' | 'open_rate' | 'accept_rate'
   sourceTestId,     // versions.id
   testedOn,         // 'E1' | 'LI1'
-  userId,           // tenant du verdict — le pool cross-user passe par shared, pas par team_id NULL
+  userId,           // tenant du verdict, le pool cross-user passe par shared, pas par team_id NULL
 }) {
   // Tenant des patterns (audit 02/09) : l'équipe si l'utilisateur en a une,
-  // sinon l'utilisateur — jamais les deux (règle DAO, migration 089).
+  // sinon l'utilisateur · jamais les deux (règle DAO, migration 089).
   let tenant = userId ? { userId } : {};
   if (userId) {
     try {
@@ -110,7 +110,7 @@ async function recordABPattern({
   const pattern = `Sur ${sectorStr} ${sizeStr} (${targetStr}), l'angle "${winnerLabel}" bat "${loserLabel}" de +${improvement_pct}% en ${metricLabel} (touchpoint ${testedOn})`;
 
   // Check if a similar pattern already exists → increment confirmations instead of duplicate.
-  // category est stocké avec son label ('Angle'), pas sa clé ('angle') — l'ancien
+  // category est stocké avec son label ('Angle'), pas sa clé ('angle') · l'ancien
   // filtre sur la clé ne matchait jamais et dupliquait le pattern à chaque verdict.
   const existing = await db.memoryPatterns.list({
     category: categoryLabelFor(category),
@@ -135,7 +135,7 @@ async function recordABPattern({
   );
 
   if (dupe) {
-    // Confirm existing pattern — boost confidence
+    // Confirm existing pattern · boost confidence
     const newConfirmations = (dupe.confirmations || 1) + 1;
     let newConfidence = dupe.confidence;
     if (newConfirmations >= 3) newConfidence = 'Haute';
@@ -149,7 +149,7 @@ async function recordABPattern({
     return { action: 'confirmed', patternId: dupe.id, confirmations: newConfirmations };
   }
 
-  // New pattern — initial confidence based on sample size
+  // New pattern · initial confidence based on sample size
   let confidence = 'Faible';
   if (sample_size >= 200) confidence = 'Moyenne';
   if (sample_size >= 500 && improvement_pct >= 5) confidence = 'Haute';

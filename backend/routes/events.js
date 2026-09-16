@@ -1,9 +1,9 @@
 /**
- * POST /api/events — point d'entrée frontend de l'instrumentation produit.
+ * POST /api/events · point d'entrée frontend de l'instrumentation produit.
  *
  * Fire-and-forget côté client (trackEvent dans api-client.js). Validation
  * stricte : nom d'événement [a-z0-9_], metadata < 2 ko. On répond 204 même
- * quand l'insert échoue — l'analytics ne doit jamais faire de bruit côté UX.
+ * quand l'insert échoue · l'analytics ne doit jamais faire de bruit côté UX.
  */
 
 const { Router } = require('express');

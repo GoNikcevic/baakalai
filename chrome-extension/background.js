@@ -1,5 +1,5 @@
 /**
- * baakalai — LinkedIn Connect : resync automatique du cookie li_at.
+ * baakalai : LinkedIn Connect : resync automatique du cookie li_at.
  *
  * Le point de douleur n'est pas seulement la première connexion (le popup la
  * règle en un clic) : c'est l'EXPIRATION. Un cookie li_at meurt au bout de

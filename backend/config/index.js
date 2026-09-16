@@ -41,7 +41,7 @@ const config = {
     // Défaut global. Conserve son rôle de commutateur Settings : s'il contient
     // "opus", il surcharge TOUTES les actions (cf. resolveModel).
     model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
-    // Le routage par action vit désormais dans config/models.js — une seule
+    // Le routage par action vit désormais dans config/models.js · une seule
     // source de vérité, exhaustive, surchargeable par CLAUDE_MODEL_<ACTION>
     // et CLAUDE_TIER_<TIER>.
   },
@@ -61,7 +61,7 @@ async function getUserKey(userId, provider) {
     const row = await db.userIntegrations.get(userId, provider);
     if (row) return decrypt(row.access_token);
   } catch {
-    // Decryption or DB error — fall through to .env
+    // Decryption or DB error · fall through to .env
   }
 
   // Fallback to .env values for core services
@@ -74,10 +74,10 @@ async function getUserKey(userId, provider) {
 }
 
 /**
- * Which of these providers does this user have a genuinely usable connection for — a
+ * Which of these providers does this user have a genuinely usable connection for · a
  * user_integrations row whose access_token actually decrypts to a non-empty value. Deliberately
  * does NOT fall back to .env system-level tokens like getUserKey() does (those back internal
- * features, e.g. template generation's own Notion access — they say nothing about whether THIS
+ * features, e.g. template generation's own Notion access · they say nothing about whether THIS
  * user has their own working connection), so a row with a corrupted/placeholder token (e.g. test
  * data seeded directly in the DB, bypassing the normal encrypt-on-save flow) is correctly treated
  * as not connected, instead of silently appearing configured everywhere "connected" is checked.

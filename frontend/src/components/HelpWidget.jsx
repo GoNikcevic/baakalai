@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Floating Help Widget
+   BAKAL · Floating Help Widget
    FAQ accordion in a slide-up panel, always accessible via "?" button.
    =============================================================================== */
 

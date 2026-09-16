@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Socket Context (React)
+   BAKAL · Socket Context (React)
    Provides a shared Socket.io connection to all components.
    Connects on auth, disconnects on logout.
    =============================================================================== */

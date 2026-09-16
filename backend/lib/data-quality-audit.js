@@ -1,10 +1,10 @@
 /**
- * Data Quality — generic audit + undo (shared "Historique" mechanism for all 3 strates)
+ * Data Quality · generic audit + undo (shared "Historique" mechanism for all 3 strates)
  *
  * Every change-producing endpoint in routes/data-quality.js calls recordChange() with a full
  * before/after snapshot. undoGroup() is one generic operation that works for every change type
- * by branching only on `remote_action` (what actually happened to the live CRM record) — never
- * on `change_type` — which is what lets this be a single table/function instead of one per type.
+ * by branching only on `remote_action` (what actually happened to the live CRM record) · never
+ * on `change_type` · which is what lets this be a single table/function instead of one per type.
  *
  * In this iteration only 3 change_types are ever produced: 'merge_keep'/'merge_delete' (from
  * POST /duplicates/:provider/confirm-merge) and 'enrichment' (from POST /enrich-field). The
@@ -16,10 +16,10 @@ const crmCleaning = require('./crm-cleaning-agent');
 
 /**
  * Build the { crm, local, productLineIds } snapshot shape shared by before_data/after_data.
- * `productLineIds` must be the contact's REAL current set (or [] if genuinely none) — passing
+ * `productLineIds` must be the contact's REAL current set (or [] if genuinely none) · passing
  * null/undefined here and letting it default to [] would make undo wipe out product lines that
  * existed before the change but were never captured (this bit a merge_keep contact's own
- * pre-merge assignments before relinkedChildren was introduced — see confirm-merge).
+ * pre-merge assignments before relinkedChildren was introduced · see confirm-merge).
  */
 function snapshotContact(provider, normalizedCrmContact, opportunityRow, productLineIds, extra) {
   return {
@@ -55,17 +55,17 @@ function describeFieldChange(row) {
   return null;
 }
 
-// Child tables that reference opportunities(id) and hold real activity/relationship history —
+// Child tables that reference opportunities(id) and hold real activity/relationship history · 
 // merging a duplicate must re-link these onto the surviving contact rather than let them go
 // orphaned (SET NULL) or be destroyed (CASCADE, for churn_external_signals) when the duplicate
 // row is deleted. Deliberately excludes opportunity_product_lines (handled separately via
-// productLineIds, since a client can only be linked to a product line once — it's a merge/union,
+// productLineIds, since a client can only be linked to a product line once · it's a merge/union,
 // not a re-link) and data_quality_changes (this module's own audit log).
 const RELINKABLE_TABLES = ['nurture_emails', 'prospect_activities', 'churn_outcomes', 'autopilot_queue', 'signals', 'churn_external_signals'];
 
 /**
  * Move every child record from one opportunity to another (used when a duplicate is about to be
- * deleted during a merge) and return which record ids were moved, per table — so undo can move
+ * deleted during a merge) and return which record ids were moved, per table · so undo can move
  * them back precisely, without guessing which of the kept contact's records came from the merge.
  */
 async function captureAndRelinkChildren(fromOppId, toOppId) {
@@ -81,7 +81,7 @@ async function captureAndRelinkChildren(fromOppId, toOppId) {
   return relinked;
 }
 
-/** Reverse captureAndRelinkChildren — move the specific record ids back to the restored contact. */
+/** Reverse captureAndRelinkChildren · move the specific record ids back to the restored contact. */
 async function revertRelink(relinked, restoredOppId) {
   for (const [table, ids] of Object.entries(relinked || {})) {
     if (!RELINKABLE_TABLES.includes(table) || !ids || ids.length === 0) continue;
@@ -120,7 +120,7 @@ async function recordChange(userId, groupId, {
 
 // JSONB columns come back from `SELECT *` already parsed into JS objects/arrays (e.g.
 // churn_factors is a JSONB array) and must be re-stringified on the way back in; Dates must
-// NOT be — pg serializes those natively, and double-encoding would corrupt them. `opportunities`
+// NOT be · pg serializes those natively, and double-encoding would corrupt them. `opportunities`
 // has no genuinely native Postgres ARRAY-typed column, so every array here is JSONB.
 function toSqlValue(v) {
   if (v !== null && typeof v === 'object' && !(v instanceof Date)) {
@@ -162,7 +162,7 @@ async function restoreProductLines(opportunityId, productLineIds) {
  * Scope boundary: this restores the contact/opportunity row's own field values and its
  * product-line assignments as of the change. It does NOT attempt to restore other
  * cascade-deleted child rows (nurture_emails, churn_outcomes, etc.) that may have referenced
- * the deleted opportunity via ON DELETE CASCADE/SET NULL — full transitive-relational undo was
+ * the deleted opportunity via ON DELETE CASCADE/SET NULL · full transitive-relational undo was
  * not part of this scope.
  */
 async function undoGroup(userId, groupId) {
@@ -188,7 +188,7 @@ async function undoGroup(userId, groupId) {
             await adapter.unarchivePerson(token, row.crm_contact_id);
           } else if (typeof adapter.createPerson === 'function') {
             const recreated = await adapter.createPerson(token, before.crm);
-            // Hard-delete providers (Salesforce) issue a NEW id on recreate — Odoo's
+            // Hard-delete providers (Salesforce) issue a NEW id on recreate · Odoo's
             // archive/unarchive keeps the original id, so this only fires for the former.
             if (recreated?.id != null && String(recreated.id) !== String(row.crm_contact_id) && before.local?.id) {
               await db.query(`UPDATE opportunities SET crm_contact_id = $1 WHERE id = $2`, [String(recreated.id), before.local.id]);
@@ -203,13 +203,13 @@ async function undoGroup(userId, groupId) {
       // 'manual_required' / 'none': no remote call to make.
 
       // 2. Local opportunities mirror row. merge_delete and gdpr_purge are the only
-      // change types that hard-delete a local row — everything else only updates fields.
+      // change types that hard-delete a local row · everything else only updates fields.
       if (before.local) {
         if (row.change_type === 'merge_delete' || row.change_type === 'gdpr_purge') {
           const existing = await db.query(`SELECT id FROM opportunities WHERE id = $1`, [before.local.id]);
           if (existing.rows.length === 0) await reinsertOpportunityRow(before.local);
           // Move the emails/activities/etc. that confirm-merge re-linked onto the kept contact
-          // back onto this now-restored one — precise, by record id, not "everything the kept
+          // back onto this now-restored one · precise, by record id, not "everything the kept
           // contact currently has" (which could include its own unrelated history).
           if (before.relinkedChildren) await revertRelink(before.relinkedChildren, before.local.id);
         } else {
@@ -231,7 +231,7 @@ async function undoGroup(userId, groupId) {
     }
   }
 
-  // Undo just changed contact data (recreated/reverted) — invalidate the cached scan for every
+  // Undo just changed contact data (recreated/reverted) · invalidate the cached scan for every
   // provider touched so the next GET /duplicates reflects the restored state instead of the
   // stale post-merge snapshot (same reasoning as confirm-merge's own cache invalidation).
   const touchedProviders = [...new Set(rows.map(r => r.provider).filter(Boolean))];
@@ -240,7 +240,7 @@ async function undoGroup(userId, groupId) {
   }
 
   // Enrichments (sector/dealValue/...) are cached under a strate-level sentinel, not a real
-  // provider — invalidate those too, or an undone fix (e.g. deal value reverted to empty)
+  // provider · invalidate those too, or an undone fix (e.g. deal value reverted to empty)
   // would keep looking "resolved" on the Deal/Client Quality list until the 24h cache expires.
   const touchedStrates = [...new Set(rows.map(r => r.strate).filter(s => s === 'deal_quality' || s === 'client_quality'))];
   for (const strate of touchedStrates) {

@@ -1,8 +1,8 @@
 /* ===============================================================================
-   BAKAL — Dashboard Page (React)
+   BAKAL · Dashboard Page (React)
    Single scrolling page, 4 sections (Deals / Clients / CRM / Activation) stacked
    in order. Each section is a block on a slightly deeper background, titled and
-   subtitled, so the indicators stay visually and semantically distinct — no
+   subtitled, so the indicators stay visually and semantically distinct · no
    cross-domain mixing, even without tab navigation. Global chrome (sync status, onboarding
    checklist) sits above all 4 sections.
    =============================================================================== */
@@ -59,10 +59,10 @@ export default function DashboardPage() {
   const openCreator = useCallback(() => navigate('/campaigns', { state: { openAssistant: true } }), [navigate]);
   const { socket } = useSocket();
   const [syncStatus, setSyncStatus] = useState(null);
-  // Stats CRM (pipeline, dormants, récupéré) — alimente DealPipelineKpis
+  // Stats CRM (pipeline, dormants, récupéré) · alimente DealPipelineKpis
   // dans DealsTab (et le même endpoint réutilisé côté Analytics).
   const [crmStats, setCrmStats] = useState(null);
-  // Diagnostic CRM à la demande — le même rapport que celui affiché après le
+  // Diagnostic CRM à la demande · le même rapport que celui affiché après le
   // premier import, rejouable depuis le haut du dashboard.
   const [showDiagnostic, setShowDiagnostic] = useState(false);
 
@@ -145,7 +145,7 @@ export default function DashboardPage() {
             borderTopColor: 'transparent', borderRadius: '50%',
             animation: 'spin 0.8s linear infinite',
           }} />
-          <span>{en ? `${syncStatus.type} analysis in progress` : `Analyse ${syncStatus.type} en cours`} — {syncStatus.message || `${syncStatus.progress || 0}%`}</span>
+          <span>{en ? `${syncStatus.type} analysis in progress` : `Analyse ${syncStatus.type} en cours`}, {syncStatus.message || `${syncStatus.progress || 0}%`}</span>
         </div>
       )}
 
@@ -153,22 +153,22 @@ export default function DashboardPage() {
       <OnboardingChecklist />
 
       <div style={{ marginTop: 24 }}>
-        {/* Deals — strictly deal/pipeline indicators */}
+        {/* Deals · strictly deal/pipeline indicators */}
         <Section title={t(SECTIONS[0].labelKey)} description={t(SECTIONS[0].descKey)}>
           <DealsTab crmStats={crmStats} />
         </Section>
 
-        {/* Clients — churn + upsell indicators */}
+        {/* Clients · churn + upsell indicators */}
         <Section title={t(SECTIONS[1].labelKey)} description={t(SECTIONS[1].descKey)}>
           <ClientsTab />
         </Section>
 
-        {/* CRM — data quality indicators only */}
+        {/* CRM · data quality indicators only */}
         <Section title={t(SECTIONS[2].labelKey)} description={t(SECTIONS[2].descKey)}>
           <CrmTab />
         </Section>
 
-        {/* Activation — emailing/campaigns indicators */}
+        {/* Activation · emailing/campaigns indicators */}
         <Section title={t(SECTIONS[3].labelKey)} description={t(SECTIONS[3].descKey)}>
           <ActivationTab
             isEmpty={isEmpty}

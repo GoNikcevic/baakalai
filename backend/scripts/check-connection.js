@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bakal — Connection health check script
+ * Bakal · Connection health check script
  * Tests end-to-end connectivity to PostgreSQL (Supabase), Claude API, and Lemlist.
  *
  * Usage: node scripts/check-connection.js
@@ -124,7 +124,7 @@ async function checkNotion() {
 }
 
 (async () => {
-  console.log('\n  Bakal — Connection Health Check\n  ================================\n');
+  console.log('\n  Bakal, Connection Health Check\n  ================================\n');
 
   await checkPostgres();
   await checkClaude();

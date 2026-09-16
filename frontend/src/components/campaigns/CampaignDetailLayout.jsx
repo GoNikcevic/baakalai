@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Campaign Detail Layout — Tabbed view
+   Campaign Detail Layout · Tabbed view
    Single page per campaign with Settings / Copy / Prospects /
    Performance / History tabs.
    ═══════════════════════════════════════════════════ */
@@ -41,7 +41,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
   const [senders, setSenders] = useState([]);
   const [selectedSender, setSelectedSender] = useState(null);
   // Canal d'envoi au lancement : Lemlist si configuré, sinon natif (boîte
-  // email de l'utilisateur + LinkedIn) — le natif rend le lancement possible
+  // email de l'utilisateur + LinkedIn) · le natif rend le lancement possible
   // sans aucun compte Lemlist, sur des volumes réduits.
   const [lemlistConfigured, setLemlistConfigured] = useState(false);
   const [sendChannel, setSendChannel] = useState('native');
@@ -77,7 +77,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
   // Show A/B tab if campaign has an active test config
   const hasABTest = !!c.abConfig;
 
-  // Tab definitions — show conditionally based on status
+  // Tab definitions · show conditionally based on status
   const tabs = [
     { key: 'settings', label: t('campaigns.settings'), icon: 'settings' },
     { key: 'copy', label: t('campaigns.copy'), icon: 'mail' },

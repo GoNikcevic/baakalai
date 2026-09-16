@@ -7,7 +7,7 @@ const hubspotSync = require('../orchestrator/jobs/hubspot-sync');
 
 const router = Router();
 
-// GET /api/dashboard — Aggregated KPIs + active campaigns (cached 5 min)
+// GET /api/dashboard · Aggregated KPIs + active campaigns (cached 5 min)
 router.get('/', async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -40,7 +40,7 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * Background stats sync — pulls fresh stats from Lemlist for all
+ * Background stats sync · pulls fresh stats from Lemlist for all
  * user campaigns and updates the DB. Called automatically when the
  * dashboard detects stale data (open_rate == null).
  */
@@ -78,7 +78,7 @@ async function syncStatsBackground(userId) {
   }
 }
 
-// POST /api/dashboard/refresh-stats — Manual refresh of Lemlist stats (rate limited)
+// POST /api/dashboard/refresh-stats · Manual refresh of Lemlist stats (rate limited)
 const rateLimit = require('express-rate-limit');
 const refreshLimiter = rateLimit({ windowMs: 60000, max: 3, message: { error: 'Too many refresh requests, please wait' } });
 router.post('/refresh-stats', refreshLimiter, async (req, res, next) => {
@@ -118,7 +118,7 @@ router.post('/refresh-stats', refreshLimiter, async (req, res, next) => {
   }
 });
 
-// GET /api/dashboard/memory — Cross-campaign patterns (paginated)
+// GET /api/dashboard/memory · Cross-campaign patterns (paginated)
 router.get('/memory', async (req, res, next) => {
   try {
     const { category, confidence, lang } = req.query;
@@ -207,7 +207,7 @@ router.get('/chart-data', async (req, res, next) => {
   }
 });
 
-// POST /api/dashboard/opportunities — Create opportunity (invalidates KPI cache)
+// POST /api/dashboard/opportunities · Create opportunity (invalidates KPI cache)
 router.post('/opportunities', async (req, res, next) => {
   try {
     const { name, email, company, companySize, title, status, timing, linkedinUrl, campaignId } = req.body;
@@ -281,7 +281,7 @@ router.post('/recommendation-feedback', async (req, res, next) => {
   }
 });
 
-// GET /api/dashboard/activation — Activation/retention metrics
+// GET /api/dashboard/activation · Activation/retention metrics
 router.get('/activation', async (req, res, next) => {
   try {
     const opps = await db.opportunities.listByUser(req.user.id, 500, 0);
@@ -341,8 +341,8 @@ router.get('/activation', async (req, res, next) => {
       },
       // `slice(0, 5)` sur un tableau non trié montrait cinq deals au hasard.
       // Pour une carte dont tout l'intérêt est de frapper juste, on classe :
-      // d'abord les contacts joignables — un deal sans email n'est pas
-      // actionnable, donc inutile de l'exposer en tête — puis les plus dormants.
+      // d'abord les contacts joignables · un deal sans email n'est pas
+      // actionnable, donc inutile de l'exposer en tête · puis les plus dormants.
       topStagnant: rankForAction(stagnant),
       topChurnRisk: rankForAction(churnRisk),
       emailsLast30d: emailStats,

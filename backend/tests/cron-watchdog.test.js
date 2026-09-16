@@ -1,5 +1,5 @@
 /**
- * Dead-man's switch des crons — logique pure de détection.
+ * Dead-man's switch des crons · logique pure de détection.
  * Contexte : les crons ont été éteints ~3 mois (variable Railway avec espace)
  * sans aucun signal. findStaleJobs est la détection de cette absence.
  */

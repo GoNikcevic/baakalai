@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Churn Risk Page
+   BAKAL · Churn Risk Page
    Explainable weighted churn score per client, extracted from ClientsPage's former
    churn block. Adds the outcome-marking feedback loop (true/false positive/negative).
    =============================================================================== */
@@ -59,7 +59,7 @@ export default function ChurnPage() {
         getChurnSummary().catch(() => null),
       ]);
       const all = oppsData.opportunities || [];
-      // "Clients à risque de churn" is a retention concept — it only applies to won clients,
+      // "Clients à risque de churn" is a retention concept · it only applies to won clients,
       // never to still-active deals (churn_score is computed for every status internally, but
       // this page must not mix the deal/client approaches: an active deal isn't a client yet).
       setClients(all.filter(c => c.status === 'won' && c.churn_score != null).sort((a, b) => (b.churn_score || 0) - (a.churn_score || 0)));

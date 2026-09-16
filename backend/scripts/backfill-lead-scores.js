@@ -1,7 +1,7 @@
 /**
  * Backfill du lead score unifié (opportunities.score + score_breakdown).
  *
- * Le score n'était calculé qu'à la volée pour l'affichage analytics — jamais
+ * Le score n'était calculé qu'à la volée pour l'affichage analytics · jamais
  * persisté, donc NULL partout et absent des notes poussées vers le CRM.
  * Le cron quotidien (crm-agent Step 5c) le maintient désormais ; ce script
  * initialise l'existant.
@@ -65,7 +65,7 @@ async function main() {
       totalScored += r.scored;
       totalUpdated += r.updated;
     } catch (err) {
-      console.error(`  ${u.email}: ÉCHEC — ${err.message}`);
+      console.error(`  ${u.email}: ÉCHEC, ${err.message}`);
     }
   }
   console.log(`Terminé : ${totalScored} scorés, ${totalUpdated} lignes mises à jour.`);

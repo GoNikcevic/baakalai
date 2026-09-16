@@ -1,10 +1,10 @@
 /**
  * CRM Sync Routes (per-user HubSpot)
  *
- * POST /api/crm/sync-opportunity   — Push a single opportunity to HubSpot (contact + deal)
- * POST /api/crm/push-contacts      — Bulk push opportunities to HubSpot
- * POST /api/crm/sync-patterns      — Push high-confidence memory patterns as HubSpot notes
- * GET  /api/crm/status              — Check HubSpot connection status for the current user
+ * POST /api/crm/sync-opportunity · Push a single opportunity to HubSpot (contact + deal)
+ * POST /api/crm/push-contacts · Bulk push opportunities to HubSpot
+ * POST /api/crm/sync-patterns · Push high-confidence memory patterns as HubSpot notes
+ * GET  /api/crm/status · Check HubSpot connection status for the current user
  */
 
 const { Router } = require('express');
@@ -46,7 +46,7 @@ async function getUserHubspotToken(userId) {
 }
 
 // =============================================
-// GET /api/crm/status — Check HubSpot connection for this user
+// GET /api/crm/status · Check HubSpot connection for this user
 // =============================================
 
 router.get('/status', async (req, res, next) => {
@@ -57,7 +57,7 @@ router.get('/status', async (req, res, next) => {
     }
     // Verify the token works by fetching a contact
     await hubspot.getContact(token, '1').catch(() => null);
-    // If we get a 404 that's fine — means the API is reachable
+    // If we get a 404 that's fine · means the API is reachable
     res.json({ connected: true });
   } catch (err) {
     res.json({ connected: false, reason: err.message });
@@ -65,7 +65,7 @@ router.get('/status', async (req, res, next) => {
 });
 
 // =============================================
-// POST /api/crm/sync-opportunity — Sync one opportunity
+// POST /api/crm/sync-opportunity · Sync one opportunity
 // =============================================
 
 router.post('/sync-opportunity', async (req, res, next) => {
@@ -84,7 +84,7 @@ router.post('/sync-opportunity', async (req, res, next) => {
 });
 
 // =============================================
-// POST /api/crm/push-contacts — Bulk push
+// POST /api/crm/push-contacts · Bulk push
 // =============================================
 
 router.post('/push-contacts', async (req, res, next) => {
@@ -114,7 +114,7 @@ router.post('/push-contacts', async (req, res, next) => {
 });
 
 // =============================================
-// POST /api/crm/sync-patterns — Push memory patterns as notes
+// POST /api/crm/sync-patterns · Push memory patterns as notes
 // =============================================
 
 router.post('/sync-patterns', async (req, res, next) => {
@@ -143,7 +143,7 @@ router.post('/sync-patterns', async (req, res, next) => {
       const instanceUrl = integration?.instance_url;
       if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
       const noteBody = allPatterns.map(p => `[${p.type}] ${p.pattern} (${p.confidence})`).join('\n');
-      const note = await salesforce.createNote(instanceUrl, token, { title: 'Baakal.ai — Memory Patterns', body: noteBody, parentId: dealId });
+      const note = await salesforce.createNote(instanceUrl, token, { title: 'Baakal.ai, Memory Patterns', body: noteBody, parentId: dealId });
       res.json({ synced: true, noteId: note.id, patternsCount: allPatterns.length });
     } else {
       res.json({ synced: false, reason: `Pattern sync not yet supported for ${provider}` });
@@ -152,7 +152,7 @@ router.post('/sync-patterns', async (req, res, next) => {
 });
 
 // =============================================
-// Shared sync logic — sync one opportunity to any CRM
+// Shared sync logic · sync one opportunity to any CRM
 // =============================================
 
 async function syncOpportunityToProvider(userId, provider, opportunity) {
@@ -171,13 +171,13 @@ async function syncOpportunityToProvider(userId, provider, opportunity) {
     const contactData = salesforce.mapOpportunityToContact(opportunity);
     contactData.contactId = fromSf ? opportunity.crm_contact_id : null;
     const { id: contactId, created } = await salesforce.upsertContact(instanceUrl, token, contactData);
-    // Réutiliser l'Opportunity déjà poussée — la création inconditionnelle
+    // Réutiliser l'Opportunity déjà poussée · la création inconditionnelle
     // dupliquait le deal à chaque re-sync. On ne réécrit pas son contenu :
     // les éditions faites dans Salesforce priment.
     let dealId = fromSf && opportunity.crm_deal_id ? opportunity.crm_deal_id : null;
     if (dealId && !(await salesforce.dealExists(instanceUrl, token, dealId))) dealId = null;
     if (!dealId) {
-      const deal = await salesforce.createDeal(instanceUrl, token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, status: opportunity.status });
+      const deal = await salesforce.createDeal(instanceUrl, token, { name: `${opportunity.name}, ${opportunity.company || 'Bakal'}`, status: opportunity.status });
       dealId = deal.id;
     }
     await db.opportunities.update(opportunity.id, { crm_provider: 'salesforce', crm_contact_id: contactId, crm_deal_id: dealId });
@@ -192,14 +192,14 @@ async function syncOpportunityToProvider(userId, provider, opportunity) {
     let dealId = fromPd && opportunity.crm_deal_id ? parseInt(opportunity.crm_deal_id, 10) : null;
     if (dealId && !(await pipedrive.getDeal(token, dealId))) dealId = null;
     if (!dealId) {
-      const deal = await pipedrive.createDeal(token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, personId: person.id, status: opportunity.status });
+      const deal = await pipedrive.createDeal(token, { name: `${opportunity.name}, ${opportunity.company || 'Bakal'}`, personId: person.id, status: opportunity.status });
       dealId = deal.id;
     }
     await db.opportunities.update(opportunity.id, { crm_provider: 'pipedrive', crm_contact_id: person.id, crm_deal_id: dealId });
     return { opportunityId: opportunity.id, provider: 'pipedrive', personId: person.id, dealId, action };
   } else if (provider === 'folk') {
     // Connecteur en création seule : si le contact déjà poussé vit encore
-    // côté Folk, ne rien recréer — c'était un doublon à chaque re-sync.
+    // côté Folk, ne rien recréer · c'était un doublon à chaque re-sync.
     if (opportunity.crm_provider === 'folk' && opportunity.crm_contact_id
         && await folk.personExists(token, opportunity.crm_contact_id)) {
       return { opportunityId: opportunity.id, provider: 'folk', personId: opportunity.crm_contact_id, action: 'unchanged' };
@@ -244,13 +244,13 @@ async function syncOpportunityToProvider(userId, provider, opportunity) {
       title: opportunity.title,
       company: opportunity.company,
     });
-    // Réutiliser la crm.lead déjà poussée — la création inconditionnelle
+    // Réutiliser la crm.lead déjà poussée · la création inconditionnelle
     // dupliquait le deal à chaque re-sync. On ne réécrit pas son contenu :
     // les éditions faites dans Odoo priment.
     let dealId = fromOdoo && opportunity.crm_deal_id ? parseInt(opportunity.crm_deal_id, 10) : null;
     if (dealId && !(await odoo.dealExists(creds, dealId))) dealId = null;
     if (!dealId) {
-      const deal = await odoo.createDeal(creds, { name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`, contactId: id });
+      const deal = await odoo.createDeal(creds, { name: `${opportunity.name}, ${opportunity.company || 'Baakalai'}`, contactId: id });
       dealId = deal.id;
     }
     await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(dealId) });
@@ -298,7 +298,7 @@ async function syncOpportunityToHubspot(accessToken, opportunity) {
   // --- Association ---
   if (contactId && dealId) {
     await hubspot.associateContactToDeal(accessToken, contactId, dealId).catch(() => {
-      // Association may already exist — non-blocking
+      // Association may already exist · non-blocking
     });
   }
 
@@ -321,7 +321,7 @@ async function syncOpportunityToHubspot(accessToken, opportunity) {
 }
 
 // =============================================
-// GET /api/crm/providers — List all CRM connection statuses
+// GET /api/crm/providers · List all CRM connection statuses
 // =============================================
 
 router.get('/providers', async (req, res, next) => {
@@ -329,7 +329,7 @@ router.get('/providers', async (req, res, next) => {
     const providers = ['hubspot', 'salesforce', 'pipedrive', 'odoo', 'folk', 'notion', 'airtable'];
     const labelMap = { hubspot: 'HubSpot', salesforce: 'Salesforce', pipedrive: 'Pipedrive', odoo: 'Odoo', folk: 'Folk', notion: 'Notion', airtable: 'Airtable' };
 
-    // A row existing in user_integrations isn't enough on its own — only count providers whose
+    // A row existing in user_integrations isn't enough on its own · only count providers whose
     // stored access_token actually decrypts (excludes stale/placeholder rows, e.g. test data
     // seeded directly in the DB, from silently appearing "connected" everywhere this is checked).
     const [validated, userResult] = await Promise.all([
@@ -351,7 +351,7 @@ router.get('/providers', async (req, res, next) => {
   }
 });
 
-// PUT /api/crm/active — Set the user's active/primary CRM provider
+// PUT /api/crm/active · Set the user's active/primary CRM provider
 router.put('/active', async (req, res, next) => {
   try {
     const { provider } = req.body;
@@ -375,7 +375,7 @@ router.put('/active', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/crm/notion/databases — List user's Notion databases
+// GET /api/crm/notion/databases · List user's Notion databases
 // =============================================
 
 router.get('/notion/databases', async (req, res, next) => {
@@ -400,7 +400,7 @@ router.get('/notion/databases', async (req, res, next) => {
 });
 
 // =============================================
-// POST /api/crm/sync-to/:provider — Sync opportunity to any CRM
+// POST /api/crm/sync-to/:provider · Sync opportunity to any CRM
 // =============================================
 
 router.post('/sync-to/:provider', async (req, res, next) => {
@@ -438,7 +438,7 @@ router.post('/sync-to/:provider', async (req, res, next) => {
 });
 
 // =============================================
-// POST /api/crm/bulk-sync/:provider — Bulk push to any CRM
+// POST /api/crm/bulk-sync/:provider · Bulk push to any CRM
 // =============================================
 
 router.post('/bulk-sync/:provider', async (req, res, next) => {
@@ -477,7 +477,7 @@ router.post('/bulk-sync/:provider', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/crm/airtable/tables — List tables in user's Airtable base
+// GET /api/crm/airtable/tables · List tables in user's Airtable base
 // =============================================
 
 router.get('/airtable/tables', async (req, res, next) => {
@@ -510,7 +510,7 @@ router.get('/airtable/tables', async (req, res, next) => {
 
 const crmCleaning = require('../lib/crm-cleaning-agent');
 
-// GET /api/crm/scan/:provider — Return cached scan report (<24h) or run fresh scan
+// GET /api/crm/scan/:provider · Return cached scan report (<24h) or run fresh scan
 router.get('/scan/:provider', async (req, res, next) => {
   try {
     const { provider } = req.params;
@@ -525,7 +525,7 @@ router.get('/scan/:provider', async (req, res, next) => {
         cachedAt: cached.created_at,
       });
     }
-    // No recent report — run a fresh scan
+    // No recent report · run a fresh scan
     const report = await crmCleaning.scanCRM(req.user.id, provider);
     const saved = await db.crmCleaningReports.create({
       userId: req.user.id,
@@ -541,7 +541,7 @@ router.get('/scan/:provider', async (req, res, next) => {
   }
 });
 
-// POST /api/crm/scan/:provider — Run a CRM health scan (always fresh)
+// POST /api/crm/scan/:provider · Run a CRM health scan (always fresh)
 router.post('/scan/:provider', scanLimit, async (req, res, next) => {
   try {
     const { provider } = req.params;
@@ -563,7 +563,7 @@ router.post('/scan/:provider', scanLimit, async (req, res, next) => {
   }
 });
 
-// POST /api/crm/clean/:provider — Apply selected fixes
+// POST /api/crm/clean/:provider · Apply selected fixes
 router.post('/clean/:provider', cleanLimit, async (req, res, next) => {
   try {
     const { provider } = req.params;
@@ -626,7 +626,7 @@ router.post('/clean/:provider', cleanLimit, async (req, res, next) => {
       });
     }
 
-    // Invalidate the cached scan for this provider regardless — a fix just changed contact
+    // Invalidate the cached scan for this provider regardless · a fix just changed contact
     // data (caps corrected, contact archived/deleted, emails verified), so the next scan read
     // (e.g. Data Quality's Duplicates tab, which doesn't pass reportId) must not keep serving
     // the pre-fix snapshot.
@@ -638,7 +638,7 @@ router.post('/clean/:provider', cleanLimit, async (req, res, next) => {
   }
 });
 
-// GET /api/crm/cleaning-reports — List user's cleaning reports
+// GET /api/crm/cleaning-reports · List user's cleaning reports
 router.get('/cleaning-reports', async (req, res, next) => {
   try {
     const reports = await db.crmCleaningReports.listByUser(req.user.id);
@@ -648,7 +648,7 @@ router.get('/cleaning-reports', async (req, res, next) => {
   }
 });
 
-// POST /api/crm/enrich — Enrich contacts with missing data via web search
+// POST /api/crm/enrich · Enrich contacts with missing data via web search
 router.post('/enrich', async (req, res, next) => {
   try {
     const { issueType = 'all', contactIds, limit = 20 } = req.body;
@@ -658,7 +658,7 @@ router.post('/enrich', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/crm/bulk-update — Update multiple contacts at once
+// POST /api/crm/bulk-update · Update multiple contacts at once
 router.post('/bulk-update', async (req, res, next) => {
   try {
     const { ids, update } = req.body;
@@ -689,7 +689,7 @@ router.post('/bulk-update', async (req, res, next) => {
   }
 });
 
-// POST /api/crm/bulk-delete — Delete multiple contacts
+// POST /api/crm/bulk-delete · Delete multiple contacts
 router.post('/bulk-delete', async (req, res, next) => {
   try {
     const { ids } = req.body;
@@ -706,7 +706,7 @@ router.post('/bulk-delete', async (req, res, next) => {
   }
 });
 
-// POST /api/crm/import/:provider — Import contacts/deals FROM CRM INTO Baakalai
+// POST /api/crm/import/:provider · Import contacts/deals FROM CRM INTO Baakalai
 router.post('/import/:provider', async (req, res, next) => {
   try {
     const { provider } = req.params;
@@ -944,7 +944,7 @@ router.post('/import/:provider', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/crm/stages — Étapes du pipeline, tous CRM confondus
+// GET /api/crm/stages · Étapes du pipeline, tous CRM confondus
 // =============================================
 //
 // Remplace le branchement par CRM côté page Clients, qui n'avait jamais été
@@ -952,7 +952,7 @@ router.post('/import/:provider', async (req, res, next) => {
 // stockées sur les deals, mais aucune route ne permettait de les relire, donc
 // la barre de pipeline restait vide pour ces deux CRM.
 //
-// ATTENTION — le champ `id` renvoyé doit être exactement ce que
+// ATTENTION · le champ `id` renvoyé doit être exactement ce que
 // lib/stage-tracking.js écrit dans opportunities.crm_stage_id, sinon le
 // rapprochement échoue et les compteurs affichent 0 :
 //   pipedrive / odoo : identifiant numérique de l'étape
@@ -989,7 +989,7 @@ router.get('/stages', async (req, res, next) => {
     let stages = [];
 
     if (provider === 'pipedrive') {
-      // Sans pipelineId, Pipedrive renvoie les étapes de TOUS les pipelines —
+      // Sans pipelineId, Pipedrive renvoie les étapes de TOUS les pipelines · 
       // l'ancien code ne prenait que le premier et masquait donc les autres.
       const [pipelines, raw] = await Promise.all([
         pipedrive.getPipelines(token).catch(() => []),
@@ -1045,7 +1045,7 @@ router.get('/stages', async (req, res, next) => {
   }
 });
 
-// GET /api/crm/pipedrive/pipelines — List Pipedrive pipelines
+// GET /api/crm/pipedrive/pipelines · List Pipedrive pipelines
 router.get('/pipedrive/pipelines', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'pipedrive');
@@ -1057,7 +1057,7 @@ router.get('/pipedrive/pipelines', async (req, res, next) => {
   }
 });
 
-// GET /api/crm/pipedrive/stages/:pipelineId — List stages for a pipeline
+// GET /api/crm/pipedrive/stages/:pipelineId · List stages for a pipeline
 router.get('/pipedrive/stages/:pipelineId', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'pipedrive');
@@ -1071,7 +1071,7 @@ router.get('/pipedrive/stages/:pipelineId', async (req, res, next) => {
 
 // ── Salesforce-specific routes ──
 
-// GET /api/crm/salesforce/campaigns — List Salesforce campaigns
+// GET /api/crm/salesforce/campaigns · List Salesforce campaigns
 router.get('/salesforce/campaigns', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'salesforce');
@@ -1088,7 +1088,7 @@ router.get('/salesforce/campaigns', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/salesforce/campaigns/:id/members — List campaign members
+// GET /api/crm/salesforce/campaigns/:id/members · List campaign members
 router.get('/salesforce/campaigns/:id/members', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'salesforce');
@@ -1105,7 +1105,7 @@ router.get('/salesforce/campaigns/:id/members', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/crm/salesforce/campaigns — Create a Salesforce campaign
+// POST /api/crm/salesforce/campaigns · Create a Salesforce campaign
 router.post('/salesforce/campaigns', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'salesforce');
@@ -1122,7 +1122,7 @@ router.post('/salesforce/campaigns', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/crm/salesforce/campaigns/:id/add-member — Add contact to campaign
+// POST /api/crm/salesforce/campaigns/:id/add-member · Add contact to campaign
 router.post('/salesforce/campaigns/:id/add-member', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'salesforce');
@@ -1141,7 +1141,7 @@ router.post('/salesforce/campaigns/:id/add-member', async (req, res, next) => {
 
 // ── Salesforce Email Messages (Fonteva / transactional) ──
 
-// GET /api/crm/salesforce/emails — List email messages (Fonteva + SF transactional)
+// GET /api/crm/salesforce/emails · List email messages (Fonteva + SF transactional)
 router.get('/salesforce/emails', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'salesforce');
@@ -1163,7 +1163,7 @@ router.get('/salesforce/emails', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/salesforce/email-stats — Aggregated email stats
+// GET /api/crm/salesforce/email-stats · Aggregated email stats
 router.get('/salesforce/email-stats', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'salesforce');
@@ -1182,7 +1182,7 @@ router.get('/salesforce/email-stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/salesforce/contact-emails/:email — Email activity for a specific contact
+// GET /api/crm/salesforce/contact-emails/:email · Email activity for a specific contact
 router.get('/salesforce/contact-emails/:email', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'salesforce');
@@ -1201,7 +1201,7 @@ router.get('/salesforce/contact-emails/:email', async (req, res, next) => {
 
 // ── Odoo-specific routes ──
 
-// GET /api/crm/odoo/stages — List CRM stages
+// GET /api/crm/odoo/stages · List CRM stages
 router.get('/odoo/stages', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'odoo');
@@ -1215,7 +1215,7 @@ router.get('/odoo/stages', async (req, res, next) => {
   }
 });
 
-// GET /api/crm/odoo/invoices — List invoices (optionally for a contact)
+// GET /api/crm/odoo/invoices · List invoices (optionally for a contact)
 router.get('/odoo/invoices', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'odoo');
@@ -1230,7 +1230,7 @@ router.get('/odoo/invoices', async (req, res, next) => {
   }
 });
 
-// GET /api/crm/odoo/deals — List CRM deals/opportunities
+// GET /api/crm/odoo/deals · List CRM deals/opportunities
 router.get('/odoo/deals', async (req, res, next) => {
   try {
     const token = await getUserCrmToken(req.user.id, 'odoo');
@@ -1244,8 +1244,8 @@ router.get('/odoo/deals', async (req, res, next) => {
   }
 });
 
-// GET /api/crm/client/search?q=... — Fuzzy name/email/company search (general assistant's
-// lookup_client action). Must stay registered BEFORE /client/:id below — both match a single
+// GET /api/crm/client/search?q=... · Fuzzy name/email/company search (general assistant's
+// lookup_client action). Must stay registered BEFORE /client/:id below · both match a single
 // path segment, and Express tries routes in registration order, so /client/search would
 // otherwise be swallowed by /client/:id with id="search".
 router.get('/client/search', async (req, res, next) => {
@@ -1259,7 +1259,7 @@ router.get('/client/search', async (req, res, next) => {
   }
 });
 
-// GET /api/crm/client/:id — Get full client detail (opportunity + nurture emails + CRM activities)
+// GET /api/crm/client/:id · Get full client detail (opportunity + nurture emails + CRM activities)
 router.get('/client/:id', async (req, res, next) => {
   try {
     const opp = await db.opportunities.get(req.params.id);
@@ -1311,7 +1311,7 @@ router.get('/client/:id', async (req, res, next) => {
 });
 
 // =============================================
-// POST /api/crm/churn/score — Run churn scoring for current user
+// POST /api/crm/churn/score · Run churn scoring for current user
 // =============================================
 router.post('/churn/score', async (req, res, next) => {
   try {
@@ -1342,11 +1342,11 @@ router.post('/churn/score', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/crm/churn/summary — Get churn risk summary
+// GET /api/crm/churn/summary · Get churn risk summary
 // =============================================
 router.get('/churn/summary', async (req, res, next) => {
   try {
-    // Churn risk is a retention concept scoped to won clients — an active deal isn't a client
+    // Churn risk is a retention concept scoped to won clients · an active deal isn't a client
     // yet, so it must never be counted here (see ChurnPage.jsx / ClientsPage.jsx for the
     // matching frontend filters).
     const result = await db.query(
@@ -1373,8 +1373,8 @@ router.get('/churn/summary', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/crm/upsell/summary — Band strip équivalent à /churn/summary pour
-// le Dashboard : total de clients éligibles à l'upsell (score >= 25, tous —
+// GET /api/crm/upsell/summary · Band strip équivalent à /churn/summary pour
+// le Dashboard : total de clients éligibles à l'upsell (score >= 25, tous · 
 // pas seulement ceux "dus" aujourd'hui comme /reactivation/queue), score
 // moyen, et emails d'upsell envoyés sur 14 jours.
 // =============================================
@@ -1404,7 +1404,7 @@ router.get('/upsell/summary', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/crm/team-owners — List team members with their contact counts
+// GET /api/crm/team-owners · List team members with their contact counts
 // =============================================
 router.get('/team-owners', async (req, res, next) => {
   try {
@@ -1427,7 +1427,7 @@ router.get('/team-owners', async (req, res, next) => {
 // Product Lines (verticals / multi-product support)
 // =============================================
 
-// GET /api/crm/product-lines — List product lines for the team
+// GET /api/crm/product-lines · List product lines for the team
 router.get('/product-lines', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -1442,7 +1442,7 @@ router.get('/product-lines', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/crm/product-lines — Create a product line
+// POST /api/crm/product-lines · Create a product line
 router.post('/product-lines', async (req, res, next) => {
   try {
     const { name, description, icon, targetSectors, valueProp, painPoints } = req.body;
@@ -1476,7 +1476,7 @@ router.post('/product-lines', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PATCH /api/crm/product-lines/:id — Update a product line
+// PATCH /api/crm/product-lines/:id · Update a product line
 router.patch('/product-lines/:id', async (req, res, next) => {
   try {
     const { name, description, icon, targetSectors, valueProp, painPoints } = req.body;
@@ -1510,7 +1510,7 @@ router.delete('/product-lines/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/crm/product-lines/:id/assign — Assign contacts to a product line
+// POST /api/crm/product-lines/:id/assign · Assign contacts to a product line
 router.post('/product-lines/:id/assign', async (req, res, next) => {
   try {
     const { opportunityIds } = req.body;
@@ -1535,14 +1535,14 @@ router.post('/product-lines/:id/assign', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/crm/product-lines/:id/unassign — Remove contacts from a product line
+// POST /api/crm/product-lines/:id/unassign · Remove contacts from a product line
 router.post('/product-lines/:id/unassign', async (req, res, next) => {
   try {
     const { opportunityIds } = req.body;
     if (!Array.isArray(opportunityIds) || opportunityIds.length === 0) {
       return res.status(400).json({ error: 'opportunityIds array required' });
     }
-    // Validate opportunity ownership — même garde que /assign, sinon un
+    // Validate opportunity ownership · même garde que /assign, sinon un
     // utilisateur authentifié pourrait détacher des opportunités d'un autre
     // user en devinant leurs IDs.
     const validOpps = await db.query(
@@ -1562,7 +1562,7 @@ router.post('/product-lines/:id/unassign', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/client/:id/timeline — Unified activity timeline
+// GET /api/crm/client/:id/timeline · Unified activity timeline
 router.get('/client/:id/timeline', async (req, res, next) => {
   try {
     const opp = await db.opportunities.get(req.params.id);
@@ -1655,7 +1655,7 @@ router.get('/client/:id/timeline', async (req, res, next) => {
   }
 });
 
-// GET /api/crm/client/:id/product-lines — Get product lines for a contact
+// GET /api/crm/client/:id/product-lines · Get product lines for a contact
 router.get('/client/:id/product-lines', async (req, res, next) => {
   try {
     const opp = await db.query(`SELECT id FROM opportunities WHERE id = $1 AND user_id = $2`, [req.params.id, req.user.id]);
@@ -1675,7 +1675,7 @@ router.get('/client/:id/product-lines', async (req, res, next) => {
 // CRM Field Mappings
 // =============================================
 
-// GET /api/crm/fields/:provider — Fetch available CRM fields
+// GET /api/crm/fields/:provider · Fetch available CRM fields
 router.get('/fields/:provider', async (req, res, next) => {
   try {
     const { fetchCrmFields } = require('../lib/crm-field-mapper');
@@ -1703,7 +1703,7 @@ router.get('/fields/:provider', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/mappings — Get saved field mappings
+// GET /api/crm/mappings · Get saved field mappings
 router.get('/mappings', async (req, res, next) => {
   try {
     const { getMappings } = require('../lib/crm-field-mapper');
@@ -1712,7 +1712,7 @@ router.get('/mappings', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/crm/mappings — Save a field mapping
+// POST /api/crm/mappings · Save a field mapping
 router.post('/mappings', async (req, res, next) => {
   try {
     const { saveMapping } = require('../lib/crm-field-mapper');
@@ -1725,7 +1725,7 @@ router.post('/mappings', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// DELETE /api/crm/mappings/:id — Delete a mapping
+// DELETE /api/crm/mappings/:id · Delete a mapping
 router.delete('/mappings/:id', async (req, res, next) => {
   try {
     const { deleteMapping } = require('../lib/crm-field-mapper');
@@ -1841,7 +1841,7 @@ async function importContactsForUser(userId, provider) {
 }
 
 // =============================================
-// POST /api/crm/first-diagnostic — Run full CRM diagnostic after first import
+// POST /api/crm/first-diagnostic · Run full CRM diagnostic after first import
 // Returns: health scan + deal coach + churn summary + quick stats
 // =============================================
 router.post('/first-diagnostic', async (req, res, next) => {
@@ -1859,7 +1859,7 @@ router.post('/first-diagnostic', async (req, res, next) => {
       }
     }
 
-    // Load contacts — auto-import if DB is empty but CRM is connected
+    // Load contacts · auto-import if DB is empty but CRM is connected
     let opps = await db.opportunities.listByUser(userId, 500);
     if (opps.length === 0 && connectedProvider) {
       try {
@@ -1947,7 +1947,7 @@ router.post('/first-diagnostic', async (req, res, next) => {
 });
 
 // =============================================
-// POST /api/crm/auto-clean — Auto-fix safe CRM issues (no thread required)
+// POST /api/crm/auto-clean · Auto-fix safe CRM issues (no thread required)
 // =============================================
 router.post('/auto-clean', cleanLimit, async (req, res, next) => {
   try {
@@ -1974,10 +1974,10 @@ router.post('/auto-clean', cleanLimit, async (req, res, next) => {
       if (issue.type === 'format_name_caps' && issue.contacts?.length > 0) {
         safeFixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
       } else if (issue.type === 'duplicate_email' && issue.contacts?.length >= 2) {
-        // Duplicates require manual review — no auto-merge
+        // Duplicates require manual review · no auto-merge
         reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       } else if (issue.type === 'invalid_email' && issue.contacts?.length > 0) {
-        // Invalid emails require manual review — no auto-delete
+        // Invalid emails require manual review · no auto-delete
         reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       }
     }
@@ -2018,13 +2018,13 @@ router.get('/autopilot/settings', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PATCH /api/crm/autopilot/settings — Enable/disable autopilot
+// PATCH /api/crm/autopilot/settings · Enable/disable autopilot
 router.patch('/autopilot/settings', async (req, res, next) => {
   try {
     // Un interrupteur par population : répondre tout seul à un prospect froid
     // et répondre tout seul à un client en cours n'engagent pas le même risque.
     // `enabled` est l'ancien réglage unique, encore accepté pour ne pas casser
-    // un appel existant — il ne pilote que la prospection.
+    // un appel existant · il ne pilote que la prospection.
     const { prospection, crm, enabled } = req.body;
     const updates = {};
     if (prospection !== undefined) updates.autopilot_prospection_enabled = !!prospection;
@@ -2039,7 +2039,7 @@ router.patch('/autopilot/settings', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PATCH /api/crm/autopilot/contact/:id — Enable/disable autopilot per contact
+// PATCH /api/crm/autopilot/contact/:id · Enable/disable autopilot per contact
 router.patch('/autopilot/contact/:id', async (req, res, next) => {
   try {
     const { enabled } = req.body;
@@ -2051,7 +2051,7 @@ router.patch('/autopilot/contact/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PATCH /api/crm/opportunities/:id/lost-reason — Saisie manuelle (Analytics → Deals →
+// PATCH /api/crm/opportunities/:id/lost-reason · Saisie manuelle (Analytics → Deals →
 // Raisons de perte), pour les deals sans lost_reason natif CRM (migration 095).
 router.patch('/opportunities/:id/lost-reason', async (req, res, next) => {
   try {
@@ -2069,7 +2069,7 @@ router.patch('/opportunities/:id/lost-reason', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/autopilot/queue — List pending/sent autopilot messages
+// GET /api/crm/autopilot/queue · List pending/sent autopilot messages
 router.get('/autopilot/queue', async (req, res, next) => {
   try {
     // `scope` cadre la file sur une population (cf. lib/crm-scope.js) : chaque
@@ -2091,7 +2091,7 @@ router.get('/autopilot/queue', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// DELETE /api/crm/autopilot/queue/:id — Cancel a pending autopilot message
+// DELETE /api/crm/autopilot/queue/:id · Cancel a pending autopilot message
 router.delete('/autopilot/queue/:id', async (req, res, next) => {
   try {
     await db.query(
@@ -2120,12 +2120,12 @@ setInterval(() => {
   }
 }, 300000).unref();
 
-// GET /api/crm/salesforce/connect — Start Salesforce OAuth flow using client's own Connected App
+// GET /api/crm/salesforce/connect · Start Salesforce OAuth flow using client's own Connected App
 router.get('/salesforce/connect', async (req, res, next) => {
   try {
     if (_sfOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
-    // Connected App du client (DB) sinon app centrale Baakalai (env) —
+    // Connected App du client (DB) sinon app centrale Baakalai (env) · 
     // le un-clic marche alors sans aucune intégration préexistante.
     const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
     const metadata = typeof integration?.metadata === 'string' ? JSON.parse(integration.metadata) : (integration?.metadata || {});
@@ -2174,7 +2174,7 @@ router.get('/salesforce/connect', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/salesforce/callback — Salesforce OAuth callback (public, no auth)
+// GET /api/crm/salesforce/callback · Salesforce OAuth callback (public, no auth)
 router.get('/salesforce/callback', async (req, res) => {
   logger.info('salesforce-oauth', `Callback hit: ${req.originalUrl}, APP_URL=${APP_URL}`);
 
@@ -2187,7 +2187,7 @@ router.get('/salesforce/callback', async (req, res) => {
 
   // Handle user denial or Salesforce error
   if (req.query.error) {
-    logger.warn('salesforce-oauth', `OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
+    logger.warn('salesforce-oauth', `OAuth error: ${req.query.error}, ${req.query.error_description || ''}`);
     if (isDiagnostic) {
       sharedStates.delete(req.query.state);
       return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=` + encodeURIComponent(req.query.error));
@@ -2225,7 +2225,7 @@ router.get('/salesforce/callback', async (req, res) => {
         return res.redirect(`${LANDING_URL}/diagnostic?oauth_error=token`);
       }
       const tokens = await tokenRes.json();
-      // Une seule lecture avec le token, jamais stocké — seul le rapport reste.
+      // Une seule lecture avec le token, jamais stocké · seul le rapport reste.
       const { runOauthDiagnostic } = require('./public-diagnostic');
       const { id, ownerKey } = await runOauthDiagnostic('salesforce', tokens, diagData.lang);
       return res.redirect(`${LANDING_URL}/diagnostic?r=${id}&k=${ownerKey}`);
@@ -2321,7 +2321,7 @@ router.get('/salesforce/callback', async (req, res) => {
   }
 });
 
-// POST /api/crm/salesforce/refresh-token — Refresh Salesforce access token
+// POST /api/crm/salesforce/refresh-token · Refresh Salesforce access token
 router.post('/salesforce/refresh-token', async (req, res, next) => {
   try {
     const integration = await db.userIntegrations.get(req.user.id, 'salesforce');
@@ -2362,7 +2362,7 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
 
     // Si Salesforce fait tourner le refresh token (rotation), persister le
-    // nouveau — l'ancien devient invalide.
+    // nouveau · l'ancien devient invalide.
     await db.userIntegrations.upsert(req.user.id, 'salesforce', {
       accessToken: encryptedAccess,
       ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
@@ -2385,7 +2385,7 @@ router.post('/salesforce/refresh-token', async (req, res, next) => {
 // https origin, or null si invalide. On ne garde jamais le chemin : un
 // utilisateur colle souvent l'URL de la page où il se trouve
 // (.../lightning/page/home) et les appels API concatènent /services/data
-// dessus. lightning.force.com est l'hôte de l'UI, pas de l'API — on le
+// dessus. lightning.force.com est l'hôte de l'UI, pas de l'API · on le
 // convertit vers my.salesforce.com (même sous-domaine).
 function normalizeSalesforceUrl(url) {
   try {
@@ -2400,10 +2400,10 @@ function normalizeSalesforceUrl(url) {
   } catch { return null; }
 }
 
-// POST /api/crm/salesforce/manual-connect — Two payload shapes:
-// { consumerKey, consumerSecret, instanceUrl } — save the user's External Client App
+// POST /api/crm/salesforce/manual-connect · Two payload shapes:
+// { consumerKey, consumerSecret, instanceUrl } · save the user's External Client App
 //   credentials, then the client calls GET /salesforce/connect to run the OAuth flow.
-// { accessToken, instanceUrl } — store a session/bearer token pasted directly
+// { accessToken, instanceUrl } · store a session/bearer token pasted directly
 //   (fallback: expires in 2-24h, never auto-refreshed).
 router.post('/salesforce/manual-connect', async (req, res, next) => {
   try {
@@ -2464,7 +2464,7 @@ router.post('/salesforce/manual-connect', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PATCH /api/crm/salesforce/instance-url — Update just the instance URL for existing connection
+// PATCH /api/crm/salesforce/instance-url · Update just the instance URL for existing connection
 router.patch('/salesforce/instance-url', async (req, res, next) => {
   try {
     const { instanceUrl } = req.body;
@@ -2493,7 +2493,7 @@ router.patch('/salesforce/instance-url', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/reactivation-stats — Reactivation KPIs
+// GET /api/crm/reactivation-stats · Reactivation KPIs
 router.get('/reactivation-stats', async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -2525,7 +2525,7 @@ router.get('/reactivation-stats', async (req, res, next) => {
       // réécrit en masse par chaque import), OU date de relance planifiée
       // (« Reporter ») dépassée même si le deal a eu de l'activité récente.
       // Contacts CRM uniquement (campaign_id IS NULL), pas de filtre sur la
-      // valeur — seul le seuil reste fixe à 14j ici (pas le réglage utilisateur,
+      // valeur · seul le seuil reste fixe à 14j ici (pas le réglage utilisateur,
       // par choix produit pour cette carte).
       db.query(`
         SELECT
@@ -2579,7 +2579,7 @@ router.get('/reactivation-stats', async (req, res, next) => {
 });
 
 // =============================================
-// OAuth produit — HubSpot & Pipedrive
+// OAuth produit · HubSpot & Pipedrive
 // =============================================
 // Contrairement à Salesforce (Connected App par client), l'app OAuth est la
 // nôtre : credentials en env (HUBSPOT_CLIENT_ID/SECRET, PIPEDRIVE_CLIENT_ID/
@@ -2589,12 +2589,12 @@ router.get('/reactivation-stats', async (req, res, next) => {
 const _crmOauthStates = require('../lib/oauth-states');
 const LANDING_URL = process.env.LANDING_URL || 'https://baakal.ai';
 
-// GET /api/crm/:provider/connect — démarre le flow OAuth (hubspot|pipedrive)
+// GET /api/crm/:provider/connect · démarre le flow OAuth (hubspot|pipedrive)
 router.get('/:provider(hubspot|pipedrive)/connect', async (req, res, next) => {
   try {
     const { provider } = req.params;
     if (!crmOauth.isConfigured(provider)) {
-      return res.status(501).json({ error: `${provider} OAuth is not configured yet — paste an API key instead` });
+      return res.status(501).json({ error: `${provider} OAuth is not configured yet, paste an API key instead` });
     }
     if (_crmOauthStates.size >= 1000) return res.status(429).json({ error: 'Too many pending OAuth requests' });
 
@@ -2611,7 +2611,7 @@ router.get('/:provider(hubspot|pipedrive)/connect', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/crm/:provider/callback — retour OAuth (public, pas de JWT :
+// GET /api/crm/:provider/callback · retour OAuth (public, pas de JWT :
 // bypass explicite dans middleware/auth.js, comme salesforce/callback)
 router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
   const { provider } = req.params;
@@ -2625,7 +2625,7 @@ router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
     : `${APP_URL}${from === 'wizard' ? '/' : '/settings'}?crm_error=${encodeURIComponent(reason)}`);
 
   if (req.query.error) {
-    logger.warn('crm-oauth', `${provider} OAuth error: ${req.query.error} — ${req.query.error_description || ''}`);
+    logger.warn('crm-oauth', `${provider} OAuth error: ${req.query.error}, ${req.query.error_description || ''}`);
     return fail(req.query.error);
   }
   if (!code) return fail('missing_code');
@@ -2640,7 +2640,7 @@ router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
       redirectUri: `${APP_URL}/api/crm/${provider}/callback`,
     });
 
-    // Diagnostic public : le token sert à UNE lecture puis est jeté — rien
+    // Diagnostic public : le token sert à UNE lecture puis est jeté · rien
     // n'est stocké hors le rapport agrégé. Require paresseux (cycle sinon).
     if (oauthData.diagnostic) {
       const { runOauthDiagnostic } = require('./public-diagnostic');
@@ -2681,10 +2681,10 @@ router.get('/:provider(hubspot|pipedrive)/callback', async (req, res) => {
   }
 });
 
-// GET /api/crm/reading-summary — Compte-rendu de lecture du CRM.
+// GET /api/crm/reading-summary · Compte-rendu de lecture du CRM.
 // Affiché juste après le premier import (wizard) et comme premier message
 // du chat : « voilà ce que j'ai lu, voilà ce qui dort, voilà ce qui manque ».
-// Pur SQL sur opportunities — aucune dépendance à l'analyse IA, donc
+// Pur SQL sur opportunities · aucune dépendance à l'analyse IA, donc
 // disponible dans la seconde qui suit l'import.
 // Seuil de dormance : celui de l'utilisateur (lib/stagnation.js), pas un nombre
 // décidé ici. Un 30 en dur cohabitait avec le seuil réglable de la file de
@@ -2697,7 +2697,7 @@ router.get('/reading-summary', async (req, res, next) => {
     const stagnantDays = await getStagnantDays(userId);
 
     const [totals, topDormant] = await Promise.all([
-      // Stagnance sur COALESCE(last_activity_at, created_at) — jamais
+      // Stagnance sur COALESCE(last_activity_at, created_at) · jamais
       // updated_at, réécrit en masse par chaque import (cf. reactivation-stats).
       db.query(`
         SELECT
@@ -2762,7 +2762,7 @@ router.get('/reading-summary', async (req, res, next) => {
       dormant: {
         count: parseInt(row.dormant_count),
         value: dormantValue,
-        // Les deals dormants SANS montant : invisibles avant — or c'est le cas
+        // Les deals dormants SANS montant : invisibles avant · or c'est le cas
         // type du CRM de PME mal renseigné, le manque devient l'accroche.
         noValueCount: parseInt(row.dormant_no_value),
         sharePct: openValue > 0 ? Math.round((dormantValue / openValue) * 100) : null,

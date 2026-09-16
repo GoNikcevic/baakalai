@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Copy Editor Page (React)
+   BAKAL · Copy Editor Page (React)
    Split-panel editor with inline editing + AI features.
-   Ported from /app/copy-editor.js — full React hooks implementation.
+   Ported from /app/copy-editor.js · full React hooks implementation.
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -962,7 +962,7 @@ export default function CopyEditorPage() {
           />
         )}
 
-        {/* AI bar — show AiBar component for both campaign suggestions and regen status */}
+        {/* AI bar · show AiBar component for both campaign suggestions and regen status */}
         {(currentCampaign.aiBar || regenAllStatus) && (
           <AiBar
             aiBar={regenAllStatus
@@ -987,14 +987,14 @@ export default function CopyEditorPage() {
           />
         ))}
 
-        {/* VarGenerator — collapsible refinement tool */}
+        {/* VarGenerator · collapsible refinement tool */}
         <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
           <button
             className="btn btn-ghost"
             style={{ fontSize: '13px', padding: '8px 14px', width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             onClick={() => setShowVarGenerator(!showVarGenerator)}
           >
-            <span><Icon name="flask" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Refinement A/B — Générateur de variables</span>
+            <span><Icon name="flask" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Refinement A/B, Générateur de variables</span>
             <span style={{ fontSize: '11px' }}>{showVarGenerator ? '\u25B2' : '\u25BC'}</span>
           </button>
           {showVarGenerator && (

@@ -44,7 +44,7 @@ const PROVIDER_MAP = {
   warmboxKey: 'warmbox',
 };
 
-// GET /api/settings/keys — Return masked key status (never plaintext)
+// GET /api/settings/keys · Return masked key status (never plaintext)
 router.get('/keys', async (req, res, next) => {
   try {
     const result = {};
@@ -70,7 +70,7 @@ router.get('/keys', async (req, res, next) => {
   }
 });
 
-// POST /api/settings/keys — Save one or more API keys (encrypted)
+// POST /api/settings/keys · Save one or more API keys (encrypted)
 router.post('/keys', async (req, res, next) => {
   try {
     const { keys } = req.body;
@@ -138,7 +138,7 @@ router.post('/keys', async (req, res, next) => {
   }
 });
 
-// POST /api/settings/keys/test — Test connectivity for each configured key
+// POST /api/settings/keys/test · Test connectivity for each configured key
 router.post('/keys/test', async (req, res, next) => {
   try {
     const results = {};
@@ -164,7 +164,7 @@ router.post('/keys/test', async (req, res, next) => {
   }
 });
 
-// POST /api/settings/keys/test-one — teste une clé AVANT de la sauvegarder.
+// POST /api/settings/keys/test-one · teste une clé AVANT de la sauvegarder.
 // Utilisé par le wizard : refuser une clé invalide au moment où l'utilisateur
 // la colle, au lieu de la laisser découvrir un import raté avec une coche
 // verte mensongère. Ne persiste rien.
@@ -182,13 +182,13 @@ router.post('/keys/test-one', async (req, res, next) => {
   }
 });
 
-// POST /api/settings/keys/sync-lemlist — trigger background Lemlist analysis
+// POST /api/settings/keys/sync-lemlist · trigger background Lemlist analysis
 router.post('/keys/sync-lemlist', async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { syncAndAnalyze } = require('../lib/lemlist-sync');
 
-    // Run in background — don't await
+    // Run in background · don't await
     syncAndAnalyze(userId).catch(err => {
       console.error('[sync-lemlist] Background error:', err.message);
     });
@@ -199,7 +199,7 @@ router.post('/keys/sync-lemlist', async (req, res, next) => {
   }
 });
 
-// POST /api/settings/keys/sync-outreach — trigger background outreach analysis (Apollo/Instantly/Smartlead)
+// POST /api/settings/keys/sync-outreach · trigger background outreach analysis (Apollo/Instantly/Smartlead)
 router.post('/keys/sync-outreach', async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -217,13 +217,13 @@ router.post('/keys/sync-outreach', async (req, res, next) => {
   }
 });
 
-// POST /api/settings/keys/sync-crm — trigger background CRM analysis
+// POST /api/settings/keys/sync-crm · trigger background CRM analysis
 router.post('/keys/sync-crm', async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { syncCRM } = require('../lib/crm-sync');
 
-    // Run in background — don't await
+    // Run in background · don't await
     syncCRM(userId).catch(err => {
       console.error('[sync-crm] Background error:', err.message);
     });
@@ -234,9 +234,9 @@ router.post('/keys/sync-crm', async (req, res, next) => {
   }
 });
 
-// ── Préférences d'emails système (RGPD — voir lib/email-prefs.js) ──
+// ── Préférences d'emails système (RGPD · voir lib/email-prefs.js) ──
 
-// GET /api/settings/email-prefs — { crm_digest, weekly_report, tips }
+// GET /api/settings/email-prefs · { crm_digest, weekly_report, tips }
 router.get('/email-prefs', async (req, res, next) => {
   try {
     const { getEmailPrefs } = require('../lib/email-prefs');
@@ -246,7 +246,7 @@ router.get('/email-prefs', async (req, res, next) => {
   }
 });
 
-// PATCH /api/settings/email-prefs — body: { crm_digest?: bool, weekly_report?: bool, tips?: bool }
+// PATCH /api/settings/email-prefs · body: { crm_digest?: bool, weekly_report?: bool, tips?: bool }
 router.patch('/email-prefs', async (req, res, next) => {
   try {
     const { getEmailPrefs, setEmailPref, isValidCategory } = require('../lib/email-prefs');
@@ -348,11 +348,11 @@ async function testKey(field, key) {
       try {
         const creds = JSON.parse(key);
         if (!creds.url || !creds.db || !creds.username || !creds.password) {
-          return { status: 'invalid', message: 'JSON incomplet — url, db, username, password requis' };
+          return { status: 'invalid', message: 'JSON incomplet, url, db, username, password requis' };
         }
         const odoo = require('../api/odoo');
         if (!odoo.isValidOdooUrl(creds.url)) {
-          return { status: 'invalid', message: 'URL invalide — doit être HTTPS avec un domaine valide (ex: https://mycompany.odoo.com)' };
+          return { status: 'invalid', message: 'URL invalide, doit être HTTPS avec un domaine valide (ex: https://mycompany.odoo.com)' };
         }
         return await odoo.testConnection(creds);
       } catch (err) {
@@ -419,7 +419,7 @@ async function testKey(field, key) {
   }
 }
 
-// PATCH /api/settings/keys/metadata — update metadata for an integration (e.g., Notion database_id, Airtable base_id)
+// PATCH /api/settings/keys/metadata · update metadata for an integration (e.g., Notion database_id, Airtable base_id)
 router.patch('/keys/metadata', async (req, res, next) => {
   try {
     const { provider, metadata } = req.body;
@@ -442,10 +442,10 @@ router.patch('/keys/metadata', async (req, res, next) => {
   }
 });
 
-// GET/PATCH /api/settings/crm-writeback — opt-in d'écriture Baakalai → CRM.
+// GET/PATCH /api/settings/crm-writeback · opt-in d'écriture Baakalai → CRM.
 //
 // Off par défaut : écrire dans le CRM du client (notes d'analyse churn,
-// stagnation) est un acte sortant sur sa base de production — il doit le
+// stagnation) est un acte sortant sur sa base de production · il doit le
 // vouloir explicitement. Le dry-run de /api/ai/export-scores-crm reste
 // accessible sans opt-in : c'est la preview qui sert à décider.
 router.get('/crm-writeback', async (req, res, next) => {
@@ -473,7 +473,7 @@ router.patch('/crm-writeback', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET/PATCH /api/settings/sla — seuils de réactivité (SLA), évalués dans
+// GET/PATCH /api/settings/sla · seuils de réactivité (SLA), évalués dans
 // « À traiter aujourd'hui » et le digest du lundi. Off par défaut : un SLA est
 // une promesse que l'admin déclare, pas une heuristique imposée (lib/sla.js).
 router.get('/sla', async (req, res, next) => {
@@ -513,7 +513,7 @@ router.patch('/sla', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PATCH /api/settings/language — update user's UI language preference
+// PATCH /api/settings/language · update user's UI language preference
 router.patch('/language', async (req, res, next) => {
   try {
     const { language } = req.body;

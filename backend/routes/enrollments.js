@@ -1,14 +1,14 @@
 /**
- * Enrollments — workflows de relance CRM (migration 103).
+ * Enrollments · workflows de relance CRM (migration 103).
  *
- * Un enrollment inscrit UN contact CRM (campaign_id IS NULL — frontière
+ * Un enrollment inscrit UN contact CRM (campaign_id IS NULL · frontière
  * lib/crm-scope) dans UN workflow multicanal sur mesure : brouillon proposé
  * (par l'agent en phase 2, par l'API ici), approuvé explicitement par
  * l'utilisateur, puis exécuté par lib/native-sequence-engine avec les mêmes
  * caps que les campagnes natives. Rien ne part sans approbation.
  *
  * Cycle de vie : draft → active → completed | stopped (paused réversible).
- * L'édition de séquence n'est permise qu'en draft — après approbation, le
+ * L'édition de séquence n'est permise qu'en draft · après approbation, le
  * journal d'envoi fait foi et on ne réécrit pas un workflow en vol (phase 2 :
  * réconciliation comme PUT /campaigns/:id/sequence).
  */
@@ -64,7 +64,7 @@ async function createSteps(enrollmentId, steps) {
   }
 }
 
-// GET /api/enrollments?status=&opportunityId= — avec progression (étape x/n)
+// GET /api/enrollments?status=&opportunityId= · avec progression (étape x/n)
 // pour les badges de la file de relance.
 router.get('/', async (req, res, next) => {
   try {
@@ -101,7 +101,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// POST /api/enrollments/propose — le Deal Coach conçoit un workflow de
+// POST /api/enrollments/propose · le Deal Coach conçoit un workflow de
 // relance pour un deal et le dépose en BROUILLON (aucun envoi sans
 // approbation). 409 avec l'enrollment existant si un workflow est déjà vivant.
 router.post('/propose', async (req, res, next) => {
@@ -116,7 +116,7 @@ router.post('/propose', async (req, res, next) => {
       return res.status(404).json({ error: 'Contact not found' });
     }
     if (!isCrmContact(opportunity)) {
-      return res.status(400).json({ code: 'not_crm_contact', error: 'Ce contact appartient à une campagne de prospection — sa séquence de campagne est son seul canal.' });
+      return res.status(400).json({ code: 'not_crm_contact', error: 'Ce contact appartient à une campagne de prospection, sa séquence de campagne est son seul canal.' });
     }
 
     const existing = await db.sequenceEnrollments.listByUser(req.user.id, { opportunityId });
@@ -151,14 +151,14 @@ router.post('/propose', async (req, res, next) => {
     await createSteps(enrollment.id, plan.steps);
     const created = await db.touchpoints.listByEnrollment(enrollment.id);
 
-    logger.info('enrollments', `Proposed ${enrollment.id} (${goal}, ${plan.urgency}) — ${created.length} steps for ${opportunity.name || opportunityId}`);
+    logger.info('enrollments', `Proposed ${enrollment.id} (${goal}, ${plan.urgency}), ${created.length} steps for ${opportunity.name || opportunityId}`);
     res.status(201).json({ enrollment, sequence: buildTree(created), contact: opportunity, urgency: plan.urgency });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/enrollments/:id — enrollment + séquence (arbre) + journal d'envoi.
+// GET /api/enrollments/:id · enrollment + séquence (arbre) + journal d'envoi.
 router.get('/:id', async (req, res, next) => {
   try {
     const enrollment = await getOwned(req, res);
@@ -180,7 +180,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/enrollments — crée un brouillon de workflow pour un contact CRM.
+// POST /api/enrollments · crée un brouillon de workflow pour un contact CRM.
 // Body : { opportunityId, goal, rationale?, steps: [{ step, type, timing,
 // subject?, body?, conditionType?, branchLabel?, children? }] }
 router.post('/', async (req, res, next) => {
@@ -197,10 +197,10 @@ router.post('/', async (req, res, next) => {
     if (!opportunity || opportunity.user_id !== req.user.id) {
       return res.status(404).json({ error: 'Contact not found' });
     }
-    // Frontière crm-scope : un prospect froid de campagne a déjà sa séquence —
+    // Frontière crm-scope : un prospect froid de campagne a déjà sa séquence · 
     // les workflows de relance sont réservés aux contacts CRM.
     if (!isCrmContact(opportunity)) {
-      return res.status(400).json({ code: 'not_crm_contact', error: 'Ce contact appartient à une campagne de prospection — sa séquence de campagne est son seul canal.' });
+      return res.status(400).json({ code: 'not_crm_contact', error: 'Ce contact appartient à une campagne de prospection, sa séquence de campagne est son seul canal.' });
     }
 
     let enrollment;
@@ -222,16 +222,16 @@ router.post('/', async (req, res, next) => {
     await createSteps(enrollment.id, steps);
     const created = await db.touchpoints.listByEnrollment(enrollment.id);
 
-    logger.info('enrollments', `Draft ${enrollment.id} (${goal}) — ${created.length} steps for opportunity ${opportunityId}`);
+    logger.info('enrollments', `Draft ${enrollment.id} (${goal}), ${created.length} steps for opportunity ${opportunityId}`);
     res.status(201).json({ enrollment, sequence: buildTree(created) });
   } catch (err) {
     next(err);
   }
 });
 
-// PUT /api/enrollments/:id/sequence — édite la séquence d'un workflow.
+// PUT /api/enrollments/:id/sequence · édite la séquence d'un workflow.
 // Brouillon comme workflow actif/en pause : réconciliation partagée
-// (lib/sequence-reconcile) — les steps existants (id présent) sont mis à
+// (lib/sequence-reconcile) · les steps existants (id présent) sont mis à
 // jour en place, le journal d'envoi survit, les prospects gardent leur
 // position. Un workflow terminé/arrêté ne s'édite plus.
 router.put('/:id/sequence', async (req, res, next) => {
@@ -256,7 +256,7 @@ router.put('/:id/sequence', async (req, res, next) => {
   }
 });
 
-// POST /api/enrollments/:id/approve — l'utilisateur valide le workflow.
+// POST /api/enrollments/:id/approve · l'utilisateur valide le workflow.
 router.post('/:id/approve', async (req, res, next) => {
   try {
     const enrollment = await getOwned(req, res);
@@ -298,7 +298,7 @@ router.post('/:id/pause', async (req, res, next) => {
   }
 });
 
-// POST /api/enrollments/:id/stop — arrêt manuel définitif.
+// POST /api/enrollments/:id/stop · arrêt manuel définitif.
 router.post('/:id/stop', async (req, res, next) => {
   try {
     const enrollment = await getOwned(req, res);
@@ -313,7 +313,7 @@ router.post('/:id/stop', async (req, res, next) => {
   }
 });
 
-// POST /api/enrollments/:id/run — « Traiter maintenant ».
+// POST /api/enrollments/:id/run · « Traiter maintenant ».
 router.post('/:id/run', async (req, res, next) => {
   try {
     const enrollment = await getOwned(req, res);

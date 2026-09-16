@@ -61,7 +61,7 @@ function computeFit(opportunity, campaign, profile, sectorCtx = null) {
   const factors = [];
 
   // Le secteur comparé à l'ICP est celui du COMPTE (data->>'sector', posé par
-  // l'enrichissement Apollo / Data Quality) — la campagne n'est qu'un fallback,
+  // l'enrichissement Apollo / Data Quality) · la campagne n'est qu'un fallback,
   // un client 100 % CRM n'ayant souvent aucune campagne d'outreach.
   const accountSectorRaw = opportunity.data?.sector || campaign?.sector || '';
   let sectorDetail = null;
@@ -100,7 +100,7 @@ function computeFit(opportunity, campaign, profile, sectorCtx = null) {
 
 function computeActivity(activities, opportunity = null) {
   // Sans campagne d'outreach, prospect_activities est vide pour un compte
-  // 100 % CRM — l'activité côté CRM (last_activity_at, posée par
+  // 100 % CRM · l'activité côté CRM (last_activity_at, posée par
   // lib/crm-activity-date.js) reste le seul signal de chaleur disponible.
   if ((!activities || activities.length === 0) && opportunity) {
     const last = opportunity.last_activity_at || null;
@@ -145,7 +145,7 @@ function computeActivity(activities, opportunity = null) {
   if (clickPts > 0) factors.push({ signal: 'email_clicks', weight: clickPts, detail: `${clickCount} click(s)` });
   score += clickPts;
 
-  // Replies (max 12 — strongest signal)
+  // Replies (max 12 · strongest signal)
   const replyCount = recent.filter(a => a.type === 'emailsReplied').length;
   let replyPts = 0;
   if (replyCount >= 3) replyPts = 12;
@@ -208,7 +208,7 @@ async function buildSectorContext(profile, opportunities) {
     try {
       const norm = await classifySector(raw, 'client_industry');
       if (norm !== NON_DETERMINE) targetSet.add(norm);
-    } catch { /* skip — un target non classifiable ne bloque pas les autres */ }
+    } catch { /* skip, un target non classifiable ne bloque pas les autres */ }
   }
   if (targetSet.size === 0) return null;
 
@@ -261,7 +261,7 @@ async function scoreAllContacts(userId) {
   const campaignMap = {};
   for (const c of allCampaigns) campaignMap[c.id] = c;
 
-  // Résolution sectorielle ICP (profil ↔ comptes) — neutre si elle échoue
+  // Résolution sectorielle ICP (profil ↔ comptes) · neutre si elle échoue
   let sectorCtx = null;
   try {
     sectorCtx = await buildSectorContext(profile, opportunities);

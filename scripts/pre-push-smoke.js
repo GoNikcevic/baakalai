@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pre-push smoke test — local mirror of .github/workflows/smoke-test.yml.
+ * Pre-push smoke test : local mirror of .github/workflows/smoke-test.yml.
  *
  * Catches the "parse-OK but crashes at require() time" bug class that took
  * down production on 2026-04-09 (unescaped backticks in CHAT_SYSTEM_RULES).
@@ -43,7 +43,7 @@ try {
     .filter(f => !f.endsWith('.test.js'))
     .filter(f => fs.existsSync(path.join(repoRoot, f)));
 } catch {
-  // No upstream / new branch — fall back to last commit only.
+  // No upstream / new branch : fall back to last commit only.
   changed = sh("git diff --name-only HEAD~1 -- 'backend/**/*.js'")
     .split('\n')
     .map(f => f.trim())
@@ -74,7 +74,7 @@ let failed = 0;
 
 for (const file of changed) {
   const rel = file.replace(/^backend\//, '');
-  // Side-effectful at load (start servers / open DB connections) — skip.
+  // Side-effectful at load (start servers / open DB connections) : skip.
   if (rel === 'server.js' || rel.startsWith('routes/') || rel.startsWith('orchestrator/')) {
     console.log(`⊘ skip (side-effectful at load): ${rel}`);
     continue;

@@ -10,8 +10,8 @@
  * entre tenants, cela signifiait exposer les prospects d'un client aux prompts
  * d'un autre.
  *
- * La rédaction est donc appliquée au point de passage obligé — db.memoryPatterns
- * create/update — et non laissée à la discipline des appelants.
+ * La rédaction est donc appliquée au point de passage obligé · db.memoryPatterns
+ * create/update · et non laissée à la discipline des appelants.
  *
  * DEUX PASSES COMPLÉMENTAIRES
  * ---------------------------
@@ -19,21 +19,21 @@
  *    aucune connaissance du métier, donc toujours disponible.
  * 2. Lexique ancré : les entités réellement présentes en base (entreprises,
  *    contacts, campagnes). C'est la passe qui attrape « LVMH », qu'aucune regex
- *    ne peut deviner. Le lexique est global — le pool l'est aussi, et rédiger
+ *    ne peut deviner. Le lexique est global · le pool l'est aussi, et rédiger
  *    l'entité d'un tenant dans le pattern d'un autre est exactement le but.
  *
  * PUIS UNE GARDE
  * --------------
  * `detectResidual` cherche ce qui ressemble encore à un nom propre après
  * rédaction. Il ne bloque pas l'écriture : il interdit le partage global
- * (`shared`). Un faux positif coûte donc un pattern non partagé — jamais une
+ * (`shared`). Un faux positif coûte donc un pattern non partagé · jamais une
  * fuite. C'est le sens dans lequel on veut se tromper.
  */
 
 const logger = require('./logger');
 
 // ─────────────────────────────────────────────────────────────
-// Passe 1 — motifs structurels
+// Passe 1 · motifs structurels
 // ─────────────────────────────────────────────────────────────
 
 // Ordre significatif : les emails avant les domaines, sinon le domaine d'un
@@ -71,7 +71,7 @@ function escapeRegex(s) {
 // Variantes accentuées par lettre de base. Les patterns sont majoritairement
 // rédigés par un LLM, qui laisse tomber ou déforme les accents : sans cela,
 // « Dassault Systèmes » stocké en base ne reconnaît pas « Dassault Systemes »
-// dans le texte — vérifié sur les données de production.
+// dans le texte · vérifié sur les données de production.
 const ACCENT_CLASSES = {
   a: 'aàáâãäåāă', c: 'cçćč', e: 'eèéêëēĕėęě', i: 'iìíîïĩīĭ',
   n: 'nñńň', o: 'oòóôõöøōŏ', u: 'uùúûüũūŭ', y: 'yýÿ', s: 'sśš', z: 'zźżž',
@@ -100,7 +100,7 @@ function accentInsensitivePattern(term) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Passe 2 — lexique ancré
+// Passe 2 · lexique ancré
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -221,7 +221,7 @@ function redactJson(value, lexicon = EMPTY_LEXICON, depth = 0) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Garde — détection de résidu
+// Garde · détection de résidu
 // ─────────────────────────────────────────────────────────────
 
 // Vocabulaire métier et français courant qui commence légitimement par une
@@ -270,7 +270,7 @@ function detectResidual(text, allow = null) {
 
   // Un mot capitalisé n'est suspect qu'en MILIEU de phrase : en début de phrase
   // la majuscule est grammaticale, pas onomastique. La version précédente
-  // signalait « Les », « Presence », « Contacter » — au point de bloquer le
+  // signalait « Les », « Presence », « Contacter » · au point de bloquer le
   // partage de tout pattern, ce qui aurait vidé le pool de son intérêt.
   const tokenRe = /(\p{Lu}[\p{L}\p{N}&'’-]*)/gu;
   let m;
@@ -283,7 +283,7 @@ function detectResidual(text, allow = null) {
 
     // Contexte gauche : ce qui précède, espaces ignorés.
     const before = stripped.slice(0, start).replace(/\s+$/, '');
-    const isSentenceStart = before === '' || /[.!?:;•\-—(«"' ]$/.test(before);
+    const isSentenceStart = before === '' || /[.!?:;•\- («"' ]$/.test(before);
     if (isSentenceStart) continue;
 
     suspects.add(token);
@@ -355,7 +355,7 @@ let _inflight = null;
  * ce qui laisse tourner la passe structurelle et force `safeToShare` à false.
  * Une base indisponible ne doit ni bloquer une écriture, ni ouvrir le partage.
  *
- * @param {{query: Function}} db — injecté pour éviter un cycle de require
+ * @param {{query: Function}} db · injecté pour éviter un cycle de require
  */
 async function loadLexicon(db, { force = false } = {}) {
   const now = Date.now();
@@ -392,7 +392,7 @@ async function loadLexicon(db, { force = false } = {}) {
   return _inflight;
 }
 
-/** Vide le cache — utilisé par les tests et les scripts de migration. */
+/** Vide le cache · utilisé par les tests et les scripts de migration. */
 function resetLexiconCache() {
   _cache = { lexicon: EMPTY_LEXICON, at: 0 };
   _inflight = null;

@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Automation Stats
+   BAKAL · Automation Stats
    Historique consolidé de l'Automatisation : emails de relance déclenchés,
-   actions de workflows, réponses obtenues — l'équivalent des KPIs de
+   actions de workflows, réponses obtenues · l'équivalent des KPIs de
    l'Historique de prospection. Source : GET /api/nurture/stats.
    =============================================================================== */
 

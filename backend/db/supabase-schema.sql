@@ -1,5 +1,5 @@
 -- =============================================
--- Bakal — Supabase PostgreSQL Schema
+-- Bakal, Supabase PostgreSQL Schema
 -- Run this in Supabase SQL Editor
 -- =============================================
 
@@ -337,7 +337,7 @@ DROP TRIGGER IF EXISTS trg_user_profiles_updated_at ON user_profiles;
 CREATE TRIGGER trg_user_profiles_updated_at BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- =============================================
--- Row Level Security (RLS) — basic setup
+-- Row Level Security (RLS), basic setup
 -- Enable RLS on tables, policies to be refined later
 -- =============================================
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;

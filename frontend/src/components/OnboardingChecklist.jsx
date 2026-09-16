@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Onboarding Checklist Component
+   BAKAL · Onboarding Checklist Component
    Shows a progress card on the dashboard for new users (beta testers).
-   4-step guided tour covering CRM connection + import + email — the two
+   4-step guided tour covering CRM connection + import + email · the two
    mandatory prerequisites, nothing about campaigns (that's a downstream step,
    not a first-run blocker).
    Complements the OnboardingWizard (wizard = initial setup, checklist = ongoing guide).
@@ -13,7 +13,7 @@ import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
 
-// Ordre CRM-first : l'import des deals suit immédiatement la connexion CRM —
+// Ordre CRM-first : l'import des deals suit immédiatement la connexion CRM · 
 // c'est lui qui produit le « wow » (deals dormants). L'email n'est nécessaire
 // que pour agir ensuite.
 const STEP_CONFIG = [
@@ -74,10 +74,10 @@ export default function OnboardingChecklist() {
   const steps = useMemo(() => {
     if (loading) return null;
 
-    // 1. Account created — always true if they see this
+    // 1. Account created · always true if they see this
     const accountCreated = true;
 
-    // 2. CRM connected — any of Pipedrive/HubSpot/Salesforce/Odoo configured
+    // 2. CRM connected · any of Pipedrive/HubSpot/Salesforce/Odoo configured
     const crmConnected = !!(keys && (
       (keys.pipedriveKey && keys.pipedriveKey.configured) ||
       (keys.hubspotKey && keys.hubspotKey.configured) ||
@@ -88,10 +88,10 @@ export default function OnboardingChecklist() {
       (keys.folkKey && keys.folkKey.configured)
     ));
 
-    // 3. Email connected — any email account (SMTP/OAuth)
+    // 3. Email connected · any email account (SMTP/OAuth)
     const emailConnected = !!(emailAccounts && emailAccounts.length > 0);
 
-    // 4. Contacts imported — at least one contact/opportunity exists
+    // 4. Contacts imported · at least one contact/opportunity exists
     const contactsImported = contactsList.length > 0;
 
     return STEP_CONFIG.map((cfg, i) => ({

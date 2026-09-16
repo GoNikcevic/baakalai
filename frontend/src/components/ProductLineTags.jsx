@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Product Line Tags (shared)
+   BAKAL · Product Line Tags (shared)
    Assign/remove product lines on a client. Extracted from ClientsPage.jsx so the
    Data Quality page's "Clients à upseller" strate can reuse it inline for the
    missing_product_lines remediation action.

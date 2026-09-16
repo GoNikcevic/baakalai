@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════
-   Billing Settings — plan display + Stripe checkout/portal
+   Billing Settings · plan display + Stripe checkout/portal
    Tant que Stripe n'est pas branché côté backend (STRIPE_SECRET_KEY absente),
    GET /billing renvoie billingEnabled:false : les cartes s'affichent avec les
-   prix mais les boutons sont neutralisés — aucun flux de paiement fantôme.
+   prix mais les boutons sont neutralisés · aucun flux de paiement fantôme.
    ═══════════════════════════════════════════════════ */
 
 import { useState, useEffect, useCallback } from 'react';

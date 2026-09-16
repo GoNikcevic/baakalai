@@ -1,5 +1,5 @@
 :root {
-  /* === Brand v6 — Light theme (default) === */
+  /* === Brand v6 : Light theme (default) === */
 
   /* Base: paper & ink */
   --paper:          #FAFAF9;
@@ -39,7 +39,7 @@
   --info:           var(--primary);
   --info-soft:      var(--primary-soft);
 
-  /* Legacy aliases — keep these so existing components don't break */
+  /* Legacy aliases : keep these so existing components don't break */
   --bg-primary:     var(--paper);
   --bg-secondary:   var(--paper);
   --bg-card:        var(--paper);
@@ -75,7 +75,7 @@
   --radius-sm:      var(--r-md);
   --radius-lg:      var(--r-xl);
 
-  /* Shadows — sparingly, rely on borders */
+  /* Shadows : sparingly, rely on borders */
   --shadow-sm:      0 1px 2px rgba(10,10,10,0.04);
   --shadow:         0 4px 12px -2px rgba(10,10,10,0.08);
   --shadow-md:      var(--shadow);
@@ -99,13 +99,13 @@
   --global-zoom: 1.1;
 }
 
-/* === Brand v6 — Dark theme ===
+/* === Brand v6 : Dark theme ===
    Activé par le bouton Réglages → Thème (Layout pose [data-theme] sur <html>,
    main.jsx le restaure depuis localStorage au chargement). On ne redéfinit que
    les tokens de base : tout ce qui les référence via var() (--bg-primary,
    --text-muted, --accent, etc.) suit automatiquement. */
 :root[data-theme="dark"] {
-  /* Base: paper & ink — inversés */
+  /* Base: paper & ink : inversés */
   --paper:          #18181B;
   --paper-2:        #212124;
   --paper-3:        #2A2A2E;
@@ -121,7 +121,7 @@
   --border:         #333338;
   --border-strong:  #454549;
 
-  /* Primary accent — variante plus claire pour rester lisible sur fond sombre
+  /* Primary accent : variante plus claire pour rester lisible sur fond sombre
      (--primary-on-dark existait déjà mais n'était branché nulle part) */
   --primary:        var(--primary-on-dark);
   --primary-deep:   #6E57FA;
@@ -134,7 +134,7 @@
   --lavender-softer:#241F3D;
   --lavender-deep:  #9A84EB;
 
-  /* Semantic (functional states) — légèrement éclaircies pour le contraste */
+  /* Semantic (functional states) : légèrement éclaircies pour le contraste */
   --success:        #22C55E;
   --success-soft:   #14291D;
   --warning:        #F59E0B;
@@ -142,14 +142,14 @@
   --danger:         #F87171;
   --danger-soft:    #3A1B1B;
 
-  /* Legacy aliases à valeur figée (pas de var()) — à redéfinir explicitement */
+  /* Legacy aliases à valeur figée (pas de var()) : à redéfinir explicitement */
   --blue:           #60A5FA;
   --blue-bg:        rgba(96, 165, 250, 0.12);
   --purple-bg:      rgba(169, 152, 255, 0.12);
   --orange:         #FB923C;
   --accent-glow:    rgba(169, 152, 255, 0.10);
 
-  /* Shadows — plus marquées, un fond sombre a besoin de plus de contraste */
+  /* Shadows : plus marquées, un fond sombre a besoin de plus de contraste */
   --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow:         0 4px 12px -2px rgba(0, 0, 0, 0.4);
   --shadow-md:      var(--shadow);
@@ -159,18 +159,18 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html {
-  /* Toute l'app est en px fixe (665+ fontSize inline, aucun rem) — un zoom
+  /* Toute l'app est en px fixe (665+ fontSize inline, aucun rem) : un zoom
      global est le seul moyen de tout agrandir proportionnellement sans
      réécrire chaque composant. Équivaut à un zoom navigateur ~110%. */
   zoom: var(--global-zoom);
 }
 
 /* Recharts calcule la position de la souris (survol/tooltip) d'une façon qui
-   ne suit pas correctement un zoom CSS ancêtre — décalage entre la barre
+   ne suit pas correctement un zoom CSS ancêtre, décalage entre la barre
    survolée et celle mise en valeur. On neutralise le zoom localement autour
    de chaque graphique (1 / --global-zoom compense exactement le zoom de
    html), pour que Recharts retrouve un espace de coordonnées cohérent.
-   Le graphique lui-même retrouve sa taille "native" (avant zoom) — léger
+   Le graphique lui-même retrouve sa taille "native" (avant zoom), léger
    décalage visuel accepté en échange d'un survol fiable. */
 .chart-zoom-reset {
   zoom: calc(1 / var(--global-zoom));
@@ -214,7 +214,7 @@ body {
   padding: 0 8px 20px; margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
-/* v6 Mark (logo symbol) — rounded square with purple + lavender bars */
+/* v6 Mark (logo symbol) : rounded square with purple + lavender bars */
 .mark {
   display: inline-block;
   width: 18px; height: 18px;
@@ -2911,9 +2911,9 @@ body {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Toast slide in — uses existing toastIn animation */
-/* Modal backdrop — wizard-overlay uses wizardFadeIn, creator-overlay uses fadeIn */
-/* Modal content — wizard-modal uses wizardSlideUp, creator-modal uses slideUp */
+/* Toast slide in : uses existing toastIn animation */
+/* Modal backdrop : wizard-overlay uses wizardFadeIn, creator-overlay uses fadeIn */
+/* Modal content : wizard-modal uses wizardSlideUp, creator-modal uses slideUp */
 
 /* ═══════════ GLOW & ENHANCED ANIMATIONS (v6.1) ═══════════ */
 

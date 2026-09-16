@@ -1,14 +1,14 @@
 /**
- * Stage Tracking — rapatriement des étapes de pipeline CRM (migration 092).
+ * Stage Tracking · rapatriement des étapes de pipeline CRM (migration 092).
  *
  * Chaque provider expose l'étape sur ses deals mais sous une forme différente :
  *   - Pipedrive : stage_id numérique (libellé via GET /stages)
  *   - HubSpot   : id interne dealstage (libellé via /crm/v3/pipelines/deals)
  *   - Salesforce: StageName = déjà le libellé
- *   - Odoo      : stage_id [id, libellé] — les deux sont déjà là
+ *   - Odoo      : stage_id [id, libellé] · les deux sont déjà là
  *
  * On mappe par ID natif quand il existe (stable au renommage d'étape) et on
- * n'enregistre une transition que quand l'ID change — un simple renommage met
+ * n'enregistre une transition que quand l'ID change · un simple renommage met
  * à jour le libellé sans polluer l'historique.
  */
 
@@ -67,7 +67,7 @@ function extractStage(provider, deal, labelMap) {
  * Compare l'étape observée avec celle stockée sur l'opportunité et, si elle a
  * changé, insère la transition dans opportunity_stage_history.
  *
- * @param {object} opp — ligne opportunities avec au moins { id, crm_stage, crm_stage_id }
+ * @param {object} opp · ligne opportunities avec au moins { id, crm_stage, crm_stage_id }
  * @returns {object} updates à fusionner dans db.opportunities.update (vide si rien)
  */
 async function trackStage(userId, opp, { stageId, stageLabel }, { status = null, source = 'delta_sync' } = {}) {

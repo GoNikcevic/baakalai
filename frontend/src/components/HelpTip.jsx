@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   HelpTip — small "?" badge with a hover tooltip, for clarifying
+   HelpTip · small "?" badge with a hover tooltip, for clarifying
    a metric's exact definition inline without cluttering the label.
    ═══════════════════════════════════════════════════ */
 

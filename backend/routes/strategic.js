@@ -1,9 +1,9 @@
 /**
  * Strategic Agents Routes
  *
- * POST /api/strategic/run-all    — Run all strategic agents
- * POST /api/strategic/run/:agent — Run a specific agent
- * GET  /api/strategic/agents     — List available agents
+ * POST /api/strategic/run-all · Run all strategic agents
+ * POST /api/strategic/run/:agent · Run a specific agent
+ * GET  /api/strategic/agents · List available agents
  */
 
 const { Router } = require('express');
@@ -12,12 +12,12 @@ const db = require('../db');
 
 const router = Router();
 
-// GET /api/strategic/agents — List available agents
+// GET /api/strategic/agents · List available agents
 router.get('/agents', (_req, res) => {
   res.json({ agents: listAgents() });
 });
 
-// POST /api/strategic/run-all — Run all agents
+// POST /api/strategic/run-all · Run all agents
 router.post('/run-all', async (req, res, next) => {
   try {
     const results = await runAll(req.user.id);
@@ -25,7 +25,7 @@ router.post('/run-all', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/strategic/results/:agent — Latest persisted result (no LLM call)
+// GET /api/strategic/results/:agent · Latest persisted result (no LLM call)
 router.get('/results/:agent', async (req, res, next) => {
   const { agent } = req.params;
   if (!AGENTS[agent]) {
@@ -43,7 +43,7 @@ router.get('/results/:agent', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/strategic/run/:agent — Run a specific agent
+// POST /api/strategic/run/:agent · Run a specific agent
 router.post('/run/:agent', async (req, res, next) => {
   const { agent } = req.params;
   if (!AGENTS[agent]) {

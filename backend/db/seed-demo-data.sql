@@ -1,10 +1,10 @@
 -- =============================================
--- Bakal — Seed Demo Data
+-- Bakal, Seed Demo Data
 -- Inserts realistic demo data for dashboard testing.
 -- Run AFTER supabase-schema.sql and supabase-rls-and-extras.sql
 --
 -- Uses fixed UUIDs so references are predictable and re-runnable.
--- Wrap in a transaction — all or nothing.
+-- Wrap in a transaction, all or nothing.
 -- =============================================
 
 BEGIN;
@@ -12,7 +12,7 @@ BEGIN;
 -- =============================================
 -- 1. Demo User
 -- =============================================
--- Password hash = bcrypt('demo1234') — replace in production
+-- Password hash = bcrypt('demo1234'), replace in production
 INSERT INTO users (id, email, password_hash, name, company, role)
 VALUES (
   'a0000000-0000-0000-0000-000000000001',
@@ -75,7 +75,7 @@ VALUES
     'a0000000-0000-0000-0000-000000000001',
     'TechVision SaaS',
     'TechVision',
-    'Lancement produit SaaS — acquisition early adopters B2B',
+    'Lancement produit SaaS, acquisition early adopters B2B',
     'var(--purple)',
     '2026-02-05T09:00:00Z'
   )
@@ -223,7 +223,7 @@ VALUES
     'd0000000-0000-0000-0000-000000000002',
     'c0000000-0000-0000-0000-000000000001',
     'E2', 'email', 'Email valeur', 'Case study', 'J+3',
-    'Re: gestion financière — un cas concret',
+    'Re: gestion financière, un cas concret',
     E'{{firstName}}, je me permets de revenir avec un exemple concret. Le cabinet Nexia Conseil (35 personnes, secteur similaire) a réduit de 40% le temps de reporting...',
     72.0, 3.1, 0.8, 2
   ),
@@ -240,7 +240,7 @@ VALUES
     'c0000000-0000-0000-0000-000000000001',
     'E4', 'email', 'Email break-up', 'Soft close', 'J+12',
     'Dernière tentative, {{firstName}}',
-    E'{{firstName}}, je ne veux pas encombrer votre boîte. Si ce n''est pas le bon moment, pas de souci — je ne reviendrai pas. Juste un dernier mot : si un jour 12h/semaine récupérées...',
+    E'{{firstName}}, je ne veux pas encombrer votre boîte. Si ce n''est pas le bon moment, pas de souci, je ne reviendrai pas. Juste un dernier mot : si un jour 12h/semaine récupérées...',
     48.0, 0.5, 0.0, 4
   )
 ON CONFLICT (id) DO NOTHING;
@@ -253,7 +253,7 @@ VALUES
     'c0000000-0000-0000-0000-000000000002',
     'L1', 'linkedin', 'Note de connexion', 'Max 300 caractères', 'J+0',
     NULL,
-    '{{firstName}}, votre parcours dans la formation m''a interpellé. J''accompagne des dirigeants du secteur sur la croissance commerciale — je serais ravi d''échanger avec vous.',
+    '{{firstName}}, votre parcours dans la formation m''a interpellé. J''accompagne des dirigeants du secteur sur la croissance commerciale, je serais ravi d''échanger avec vous.',
     300, 38.0, NULL, NULL, NULL, 1
   ),
   (
@@ -282,14 +282,14 @@ VALUES
     'c0000000-0000-0000-0000-000000000003',
     'L1', 'linkedin', 'Note de connexion LinkedIn', 'Max 300 chars', 'J+1',
     NULL,
-    '{{firstName}}, votre expertise RH chez {{companyName}} m''a interpellé. J''échange régulièrement avec des DRH de PME lyonnaises — je serais ravi de vous compter dans mon réseau.',
+    '{{firstName}}, votre expertise RH chez {{companyName}} m''a interpellé. J''échange régulièrement avec des DRH de PME lyonnaises, je serais ravi de vous compter dans mon réseau.',
     300, 2
   ),
   (
     'd0000000-0000-0000-0000-000000000009',
     'c0000000-0000-0000-0000-000000000003',
     'E2', 'email', 'Email valeur', 'Case study', 'J+4',
-    'Re: recrutements — un résultat qui parle',
+    'Re: recrutements, un résultat qui parle',
     '{{firstName}}, un exemple concret : une PME de conseil RH (180 personnes, Lyon) a divisé par 2 ses délais de recrutement en 3 mois...',
     NULL, 3
   ),
@@ -330,7 +330,7 @@ VALUES
     'e0000000-0000-0000-0000-000000000001',
     'c0000000-0000-0000-0000-000000000001',
     '2026-02-22',
-    E'E1 — Performant : L''objet personnalisé avec {{firstName}} et la question directe fonctionnent très bien. Taux d''ouverture de 68% au-dessus du benchmark (50%). Le CTA question ouverte génère un bon taux de réponse (4.2%).\n\nE2 — Fort potentiel : Le "Re:" dans l''objet booste l''ouverture à 72% (effet thread). Le case study concret avec des chiffres (40% de réduction) crédibilise le message.\n\nE3 — À optimiser : Baisse significative d''ouverture (55%) et de réponse (1.4%). L''angle "coût de l''erreur" peut être perçu comme anxiogène. Recommandation : tester un angle "gain de temps" plus positif, raccourcir à 2 phrases max.\n\nE4 — Normal pour un break-up : Taux d''ouverture de 48% correct pour un dernier email. Le ton respectueux évite la pression. Aucune modification nécessaire.',
+    E'E1, Performant : L''objet personnalisé avec {{firstName}} et la question directe fonctionnent très bien. Taux d''ouverture de 68% au-dessus du benchmark (50%). Le CTA question ouverte génère un bon taux de réponse (4.2%).\n\nE2, Fort potentiel : Le "Re:" dans l''objet booste l''ouverture à 72% (effet thread). Le case study concret avec des chiffres (40% de réduction) crédibilise le message.\n\nE3, À optimiser : Baisse significative d''ouverture (55%) et de réponse (1.4%). L''angle "coût de l''erreur" peut être perçu comme anxiogène. Recommandation : tester un angle "gain de temps" plus positif, raccourcir à 2 phrases max.\n\nE4, Normal pour un break-up : Taux d''ouverture de 48% correct pour un dernier email. Le ton respectueux évite la pression. Aucune modification nécessaire.',
     ARRAY['Optimiser E3 : changer angle anxiogène → gain de temps', 'Raccourcir E3 à 2 phrases max', 'Maintenir E1 et E2 sans modification'],
     1
   )
@@ -343,7 +343,7 @@ VALUES
     'e0000000-0000-0000-0000-000000000002',
     'c0000000-0000-0000-0000-000000000002',
     '2026-02-21',
-    E'L1 — Bon taux d''acceptation : 38% d''acceptation au-dessus du benchmark LinkedIn (30%). Le compliment sur le parcours + positionnement sectoriel fonctionne bien. Pas de pitch dans l''invite = bonne pratique.\n\nL2 — Réponse sous l''objectif : 6.8% de réponse vs objectif de 8%. Le "3 organismes de formation" manque de spécificité. Recommandation : remplacer l''angle preuve sociale par douleur client. Tester : "Quel est votre plus gros frein à trouver de nouveaux clients en ce moment ?"',
+    E'L1, Bon taux d''acceptation : 38% d''acceptation au-dessus du benchmark LinkedIn (30%). Le compliment sur le parcours + positionnement sectoriel fonctionne bien. Pas de pitch dans l''invite = bonne pratique.\n\nL2, Réponse sous l''objectif : 6.8% de réponse vs objectif de 8%. Le "3 organismes de formation" manque de spécificité. Recommandation : remplacer l''angle preuve sociale par douleur client. Tester : "Quel est votre plus gros frein à trouver de nouveaux clients en ce moment ?"',
     ARRAY['Changer L2 : angle preuve sociale → douleur client', 'Ajouter spécificité au social proof de L2', 'Maintenir L1 sans modification'],
     1
   )
@@ -353,7 +353,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 8. Versions (campaign iteration history)
 -- =============================================
 
--- Campaign 1: DAF Île-de-France — 4 versions
+-- Campaign 1: DAF Île-de-France, 4 versions
 INSERT INTO versions (id, campaign_id, version, date, messages_modified, hypotheses, result)
 VALUES
   (
@@ -390,7 +390,7 @@ VALUES
   )
 ON CONFLICT (id) DO NOTHING;
 
--- Campaign 2: Dirigeants Formation — 2 versions
+-- Campaign 2: Dirigeants Formation, 2 versions
 INSERT INTO versions (id, campaign_id, version, date, messages_modified, hypotheses, result)
 VALUES
   (
@@ -468,7 +468,7 @@ VALUES
   ),
   (
     'e2000000-0000-0000-0000-000000000006',
-    'Le segment "Dirigeant / 1-10 sal." en formation a un taux de réponse de 11.3% — segment à fort potentiel',
+    'Le segment "Dirigeant / 1-10 sal." en formation a un taux de réponse de 11.3%, segment à fort potentiel',
     'Cible',
     '{"reply_rate": 11.3, "accept_rate": 38, "sample_size": 80, "recommendation": "Lancer campagne dédiée sur cette cible"}'::jsonb,
     'Moyenne',
@@ -524,8 +524,8 @@ VALUES
   (
     'e4000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
-    'Semaine 4 — Rapport consolidé',
-    '10 — 16 février 2026',
+    'Semaine 4, Rapport consolidé',
+    '10, 16 février 2026',
     'excellent',
     'Excellent',
     247, 62.0, 8.1, 5, 3,
@@ -535,7 +535,7 @@ VALUES
     'e4000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000001',
     'Semaine 3',
-    '3 — 9 février 2026',
+    '3, 9 février 2026',
     'good',
     'Performant',
     220, 58.0, 6.8, 3, 2,
@@ -545,7 +545,7 @@ VALUES
     'e4000000-0000-0000-0000-000000000003',
     'a0000000-0000-0000-0000-000000000001',
     'Semaine 2',
-    '27 jan. — 2 fév. 2026',
+    '27 jan., 2 fév. 2026',
     'ok',
     'Correct',
     185, 51.0, 5.2, 2, 1,
@@ -597,7 +597,7 @@ ON CONFLICT (id) DO NOTHING;
 COMMIT;
 
 -- =============================================
--- Verification queries (optional — run to check)
+-- Verification queries (optional, run to check)
 -- =============================================
 -- SELECT 'users' AS t, count(*) FROM users
 -- UNION ALL SELECT 'projects', count(*) FROM projects

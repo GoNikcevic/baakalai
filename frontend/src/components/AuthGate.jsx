@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — AuthGate Component (Login / Register)
+   BAKAL · AuthGate Component (Login / Register)
    React equivalent of BakalAuth.showLoginScreen() from the vanilla app.
    Renders a full-screen auth overlay with login/register toggle.
    =============================================================================== */
@@ -189,7 +189,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
     setResendMessage('');
     try {
       await resendVerification(registeredEmail);
-      setResendMessage(en ? 'Email sent — check your inbox (and spam folder).' : 'Email renvoyé — vérifie ta boîte de réception (et les spams).');
+      setResendMessage(en ? 'Email sent, check your inbox (and spam folder).' : 'Email renvoyé, vérifie ta boîte de réception (et les spams).');
       setResendCooldown(30);
     } catch (err) {
       setResendMessage(err.message || (en ? 'Error sending email' : 'Erreur lors de l\'envoi'));

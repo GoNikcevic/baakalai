@@ -72,7 +72,7 @@ async function searchProspectsWeb(companies, titles, options = {}) {
                 }
               }
             } catch (err) {
-              // Individual query failure is non-fatal — continue with others
+              // Individual query failure is non-fatal · continue with others
               logger.warn('web-prospect-agent', `Query failed for "${company}": ${err.message}`);
             }
           }
@@ -161,7 +161,7 @@ async function parseSearchResults(searchResults, company, titles) {
 
     const parsed = safeParseClaudeArray(result);
     if (!Array.isArray(parsed)) {
-      logger.warn('web-prospect', `Reponse non parsable pour "${company}" — 0 contact extrait`);
+      logger.warn('web-prospect', `Reponse non parsable pour "${company}", 0 contact extrait`);
       return [];
     }
 

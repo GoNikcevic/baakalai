@@ -43,10 +43,10 @@ async function airtableFetch(apiKey, url, options = {}) {
 
 /**
  * Push a prospect to an Airtable table as a record.
- * @param {string} apiKey — user's Airtable API key or personal access token
- * @param {string} baseId — Airtable base ID (e.g., appXXXXXX)
- * @param {string} tableName — table name or ID
- * @param {object} prospect — { name, email, title, company, company_size, linkedin_url }
+ * @param {string} apiKey · user's Airtable API key or personal access token
+ * @param {string} baseId · Airtable base ID (e.g., appXXXXXX)
+ * @param {string} tableName · table name or ID
+ * @param {object} prospect · { name, email, title, company, company_size, linkedin_url }
  * @returns {{ recordId: string }}
  */
 async function pushProspectToAirtable(apiKey, baseId, tableName, prospect) {
@@ -72,7 +72,7 @@ async function pushProspectToAirtable(apiKey, baseId, tableName, prospect) {
 // ── Push Multiple Prospects (batched) ──
 
 /**
- * Push multiple prospects to Airtable (batch of 10 — Airtable limit per request).
+ * Push multiple prospects to Airtable (batch of 10 · Airtable limit per request).
  * @param {string} apiKey
  * @param {string} baseId
  * @param {string} tableName
@@ -115,7 +115,7 @@ async function pushProspectsToAirtable(apiKey, baseId, tableName, prospects) {
 // ── Record existence ──
 
 // 404/403 = record ou table disparus côté Airtable ; toute autre erreur
-// remonte — un token invalide (401) ne doit pas passer pour « le record
+// remonte · un token invalide (401) ne doit pas passer pour « le record
 // n'existe plus » et déclencher une recréation.
 async function recordExists(apiKey, baseId, tableName, recordId) {
   const url = `${AIRTABLE_BASE_URL}/${encodeURIComponent(baseId)}/${encodeURIComponent(tableName)}/${encodeURIComponent(recordId)}`;

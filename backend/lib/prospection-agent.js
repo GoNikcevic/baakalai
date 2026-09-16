@@ -36,7 +36,7 @@ async function runProspectionAgent() {
   };
 
   // ── Step 1: Collect Stats ──
-  // Always run — this is the foundation for everything else.
+  // Always run · this is the foundation for everything else.
   // The job itself already has smart gating (>50 prospects, >7 days).
   try {
     report.stats = await collectStats.run();
@@ -82,7 +82,7 @@ async function runProspectionAgent() {
 
   // ── Step 4 (retiré le 02/09) : la veille des comptes CRM est passée du
   // batch unique de 8 h au scheduler continu (lib/signal-scheduler.js, cron
-  // toutes les 30 min, budget Brave quotidien) — configs actives incluses,
+  // toutes les 30 min, budget Brave quotidien) · configs actives incluses,
   // qu'aucun cron ne scannait. La garder ici aurait doublé la consommation
   // de quota pour les mêmes sociétés. runCrmWatch reste exporté pour le
   // scan manuel (POST /api/signals/scan).
@@ -109,7 +109,7 @@ async function runProspectionAgent() {
   }
 
   report.duration = Date.now() - startTime;
-  logger.info('prospection-agent', `Complete in ${report.duration}ms — stats: ${report.stats?.collected || 0}, batch: ${report.batch ? 'yes' : 'skipped'}, deliv: ${report.deliverability ? 'yes' : 'skipped'}, signals: ${report.signals || 0}, linkedin: ${report.linkedinOutreach || 0}, errors: ${report.errors.length}`);
+  logger.info('prospection-agent', `Complete in ${report.duration}ms, stats: ${report.stats?.collected || 0}, batch: ${report.batch ? 'yes' : 'skipped'}, deliv: ${report.deliverability ? 'yes' : 'skipped'}, signals: ${report.signals || 0}, linkedin: ${report.linkedinOutreach || 0}, errors: ${report.errors.length}`);
 
   return report;
 }

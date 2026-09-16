@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Clients Page
+   BAKAL · Clients Page
    Import contacts from CRM, view pipeline stages, manage client relationships.
    Click a client to open detail panel with timeline + emails + actions.
    =============================================================================== */
@@ -24,7 +24,7 @@ const STATUS_COLORS = {
   meeting: 'var(--warning)', negotiation: 'var(--purple)', won: 'var(--success)', lost: 'var(--danger)',
 };
 
-// Only ever rendered when 2+ CRMs are actually connected — see crmProviderCounts.
+// Only ever rendered when 2+ CRMs are actually connected · see crmProviderCounts.
 const CRM_DOT_COLORS = {
   pipedrive: '#2A2AA0', hubspot: '#FF7A59', salesforce: '#00A1E0',
   odoo: '#714B67', notion: '#37352F', airtable: '#F82B60',
@@ -45,7 +45,7 @@ function getStatusLabels(lang) {
  *
  * La partition est exhaustive : aucun contact ne devient inatteignable. Même
  * composant pour les deux entrées de nav, sur le modèle de ReactivationQueuePage
- * — une seule page, deux cadrages, plutôt que deux pages à maintenir.
+ * · une seule page, deux cadrages, plutôt que deux pages à maintenir.
  *
  * Un lien profond porteur de `highlight` court-circuite la portée : il désigne
  * des contacts précis, et les masquer parce qu'ils sont dans l'autre population
@@ -76,11 +76,11 @@ export default function ClientsPage({ scope }) {
     const h = searchParams.get('highlight');
     return h ? new Set(h.split(',')) : null;
   }, [searchParams]);
-  // Set only when arriving from Data Quality's "Qualité des deals" strate — a deal (not yet a
+  // Set only when arriving from Data Quality's "Qualité des deals" strate · a deal (not yet a
   // client) is never eligible for churn/upsell, so this drives a stripped-down, deal-only view
   // instead of reusing every client-oriented option this page otherwise exposes.
   const isDealQualityContext = searchParams.get('context') === 'deal_quality';
-  // Which specific issue the user clicked "Voir" on (e.g. missing_sector, missing_deal_value) —
+  // Which specific issue the user clicked "Voir" on (e.g. missing_sector, missing_deal_value) · 
   // the fix UI must match that one issue only, never a different field than what was flagged.
   const dealQualityIssue = searchParams.get('issue');
   const STATUS_LABELS = getStatusLabels(lang);
@@ -109,7 +109,7 @@ export default function ClientsPage({ scope }) {
 
       // Étapes du pipeline : une seule route pour tous les CRM. Le branchement
       // par provider qui existait ici n'avait jamais été écrit pour HubSpot ni
-      // Salesforce — leurs étapes étaient collectées mais jamais affichées —
+      // Salesforce · leurs étapes étaient collectées mais jamais affichées · 
       // et il ne prenait que le premier pipeline de Pipedrive.
       const stagesData = await request('/crm/stages').catch(() => ({ stages: [] }));
       setStages(stagesData.stages || []);
@@ -125,7 +125,7 @@ export default function ClientsPage({ scope }) {
     setImporting(true);
     setImportResult(null);
     try {
-      // Refresh every connected CRM, not just the active one — a user with
+      // Refresh every connected CRM, not just the active one · a user with
       // both Pipedrive and Salesforce connected expects "Actualiser" to sync
       // both, not silently skip whichever isn't marked active.
       const providers = connectedProviders.length > 0 ? connectedProviders.map(p => p.provider) : [connectedCrm];
@@ -153,7 +153,7 @@ export default function ClientsPage({ scope }) {
   }, [loadData, connectedCrm, connectedProviders, clients.length, t]);
 
   const filtered = useMemo(() => clients.filter(c => {
-    // If highlight param is set, only show those contacts — et, en contexte deal quality,
+    // If highlight param is set, only show those contacts · et, en contexte deal quality,
     // seulement tant que le problème est ENCORE présent : un contact corrigé (secteur
     // renseigné, valeur saisie…) sort de la liste immédiatement, sans attendre un re-scan.
     // owner_not_mapped / zero_activity n'ont pas de re-test local fiable → URL seule.
@@ -394,7 +394,7 @@ export default function ClientsPage({ scope }) {
                           compteur figé à 0. La comparaison se fait sur crm_stage_id,
                           que lib/stage-tracking.js renseigne (migration 092).
                           L'ancienne heuristique par nom ne sert plus que de repli pour
-                          les contacts sans étape connue — la garder inconditionnelle
+                          les contacts sans étape connue · la garder inconditionnelle
                           ferait compter deux fois un même contact. */}
                       {clients.filter(c => (
                         c.crm_stage_id != null
@@ -410,7 +410,7 @@ export default function ClientsPage({ scope }) {
         </div>
       )}
 
-      {/* Search + filter — no effect while a highlight filter is active, so hidden in that case */}
+      {/* Search + filter · no effect while a highlight filter is active, so hidden in that case */}
       {!isDealQualityContext && (
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
         <input
@@ -522,7 +522,7 @@ export default function ClientsPage({ scope }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {/* Select all header — bulk actions don't apply to a focused deal-quality drill-down */}
+              {/* Select all header · bulk actions don't apply to a focused deal-quality drill-down */}
               {!isDealQualityContext && !selectedClient && filtered.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', fontSize: 11, color: 'var(--text-muted)' }}>
                   <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
@@ -658,9 +658,9 @@ export default function ClientsPage({ scope }) {
 }
 
 /* ═══ Deal Detail Panel (Data Quality → Qualité des deals context) ═══
-   A deal isn't a client yet — no churn, no product lines, no "send email" quick action.
+   A deal isn't a client yet · no churn, no product lines, no "send email" quick action.
    Just the deal's own info plus a fix box for the ONE issue the user actually clicked into
-   (issueType) — never a different field than what was flagged (e.g. clicking "Valeur du deal
+   (issueType) · never a different field than what was flagged (e.g. clicking "Valeur du deal
    non renseignée" must never surface the sector field, and vice versa). */
 
 function SectorFixBox({ client, t, onSaved }) {
@@ -779,7 +779,7 @@ function DealValueFixBox({ client, t, onSaved }) {
   );
 }
 
-/* Détail du lead score — même présentation que les facteurs churn (liste
+/* Détail du lead score · même présentation que les facteurs churn (liste
    facteur + poids). Les factors fins (persistés dans score_breakdown.factors
    par le scoring quotidien) priment ; ils ne couvrent que Activité + Fit, la
    composante Statut est donc ajoutée en ligne synthétique. Les enregistrements
@@ -792,7 +792,7 @@ function LeadScoreBreakdown({ client }) {
 
   const rows = [];
   if (Array.isArray(bd.factors) && bd.factors.length > 0) {
-    // weight 0 possible (ex. recency posé même hors fenêtre) — ligne sans information
+    // weight 0 possible (ex. recency posé même hors fenêtre) · ligne sans information
     for (const f of bd.factors) {
       if (f.weight > 0) rows.push({ label: f.detail || t(`clients.scoreSignal.${f.signal}`), weight: f.weight });
     }
@@ -894,9 +894,9 @@ function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
 
       <LeadScoreBreakdown client={client} />
 
-      {/* Fix box — only the field matching the issue actually clicked into, never another one.
+      {/* Fix box, only the field matching the issue actually clicked into, never another one.
           key={client.id} : sans elle React réutilise l'instance en changeant de client et le
-          useState initial ne se rejoue pas — l'input affichait le secteur du client précédent. */}
+          useState initial ne se rejoue pas · l'input affichait le secteur du client précédent. */}
       {issueType === 'missing_sector' && <SectorFixBox key={client.id} client={client} t={t} onSaved={onFieldSaved} />}
       {issueType === 'missing_deal_value' && <DealValueFixBox key={client.id} client={client} t={t} onSaved={onFieldSaved} />}
 
@@ -1046,7 +1046,7 @@ function ClientDetailPanel({ client, onClose }) {
 
       <LeadScoreBreakdown client={client} />
 
-      {/* Churn factors — retention concept, won clients only */}
+      {/* Churn factors · retention concept, won clients only */}
       {client.status === 'won' && client.churn_factors && client.churn_factors.length > 0 && (
         <div style={{
           background: client.churn_score >= 50 ? 'rgba(220,38,38,0.04)' : 'var(--bg-elevated)',
@@ -1142,7 +1142,7 @@ function formatRelativeDate(dateStr, lang) {
 
 const TIMELINE_CONFIG = {
   email_sent: { icon: 'mail', color: 'var(--success)', label: (e, lang) => e.subject || (lang === 'en' ? 'Email' : 'Email') },
-  campaign_activity: { icon: 'chart', color: 'var(--accent)', label: (e, lang) => `${e.event || ''} — ${e.campaign_name || ''}` },
+  campaign_activity: { icon: 'chart', color: 'var(--accent)', label: (e, lang) => `${e.event || ''}, ${e.campaign_name || ''}` },
   crm_activity: { icon: 'clipboard', color: 'var(--blue)', label: (e) => e.subject || e.activity_type || 'Activity' },
   follow_up_planned: {
     icon: 'calendar', color: 'var(--warning)',

@@ -40,7 +40,7 @@ function renderPage() {
  * de jours ni le mode d'envoi n'étaient explicables sans lire le moteur de
  * nurture. Ces tests verrouillent l'explication affichée sous le formulaire.
  */
-describe('NurturePage — formulaire de création de trigger', () => {
+describe('NurturePage, formulaire de création de trigger', () => {
   it('explique le délai en jours selon le type de trigger choisi', async () => {
     renderPage();
     fireEvent.click(await screen.findByText('+ Nouveau trigger'));

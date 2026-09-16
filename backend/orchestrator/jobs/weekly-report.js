@@ -76,8 +76,8 @@ async function buildUserReport(user) {
 
   // Build HTML
   const subject = lang === 'en'
-    ? `Your weekly Baakalai report — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : `Votre rapport hebdomadaire Baakalai — ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+    ? `Your weekly Baakalai report, ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    : `Votre rapport hebdomadaire Baakalai, ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
 
   const html = buildEmailHTML(user, active, { totalContacts, avgOpen, avgReply, totalMeetings }, recs, lang);
 
@@ -205,7 +205,7 @@ function buildEmailHTML(user, campaigns, stats, recommendations, lang) {
   <!-- Footer -->
   <tr><td style="background:#fafafa;padding:16px 32px;border-top:1px solid #f0f0f0;">
     <div style="font-size:11px;color:#a1a1aa;text-align:center;">
-      Powered by <a href="${APP_URL}" style="color:#71717a;">Baakalai</a> — baakal.ai
+      Powered by <a href="${APP_URL}" style="color:#71717a;">Baakalai</a>, baakal.ai
     </div>
   </td></tr>
 

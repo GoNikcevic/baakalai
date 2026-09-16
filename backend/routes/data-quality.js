@@ -1,17 +1,17 @@
 /**
- * Data Quality Routes — the redesigned "Data / Doublons" page, organized in 3 strates:
+ * Data Quality Routes · the redesigned "Data / Doublons" page, organized in 3 strates:
  *
- * GET   /duplicates                              — per-connected-CRM duplicate scan (Strate 1)
- * POST  /duplicates/:provider/preview-merge       — full field diff for a duplicate group
- * POST  /duplicates/:provider/confirm-merge       — apply a reviewed merge, with full audit trail
- * GET   /deal-quality                             — deal-data quality issues (Strate 2)
- * GET   /client-quality                           — client/upsell-data quality issues (Strate 3)
- * POST  /enrich-field                             — fill a missing field; pushes to the live CRM
+ * GET   /duplicates · per-connected-CRM duplicate scan (Strate 1)
+ * POST  /duplicates/:provider/preview-merge · full field diff for a duplicate group
+ * POST  /duplicates/:provider/confirm-merge · apply a reviewed merge, with full audit trail
+ * GET   /deal-quality · deal-data quality issues (Strate 2)
+ * GET   /client-quality · client/upsell-data quality issues (Strate 3)
+ * POST  /enrich-field · fill a missing field; pushes to the live CRM
  *                                                    too when that provider supports real writes
- * GET   /history?strate=                          — change history, grouped by user action
- * POST  /history/:groupId/undo                    — full undo of one change group
+ * GET   /history?strate= · change history, grouped by user action
+ * POST  /history/:groupId/undo · full undo of one change group
  *
- * Every strate adapts to what each connected CRM actually supports — see
+ * Every strate adapts to what each connected CRM actually supports · see
  * lib/crm-cleaning-agent.js's getAdapter() for the per-provider capability table.
  */
 
@@ -29,11 +29,11 @@ const router = Router();
 const CONNECTABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 const REAL_WRITE_PROVIDERS = ['pipedrive', 'hubspot', 'odoo', 'salesforce'];
 // Notion/Airtable/__no_crm__ scan Baakalai's own imported opportunities rows (crm-cleaning-agent.js's
-// getAdapter()) — normalizePerson emits the opportunity's own UUID `id` directly there, not a
+// getAdapter()) · normalizePerson emits the opportunity's own UUID `id` directly there, not a
 // native CRM contact id. Every other provider's `id` is a real, native provider-side contact id,
 // looked up locally via crm_provider+crm_contact_id.
 const LOCAL_SCAN_PROVIDERS = ['notion', 'airtable', '__no_crm__'];
-// Pseudo-provider for contacts with no known CRM origin at all (crm_provider IS NULL) — not a
+// Pseudo-provider for contacts with no known CRM origin at all (crm_provider IS NULL) · not a
 // real integration, never in CONNECTABLE_PROVIDERS/user_integrations, but always scanned so
 // these contacts get their own "Pas de CRM associé" section instead of being hidden or folded
 // into whichever real CRM happens to be connected.
@@ -81,14 +81,14 @@ async function getOrRunScan(userId, provider) {
 // GET /api/data-quality/duplicates
 router.get('/duplicates', async (req, res, next) => {
   try {
-    // A row existing in user_integrations isn't enough — a stale/placeholder access_token that
+    // A row existing in user_integrations isn't enough · a stale/placeholder access_token that
     // doesn't actually decrypt (e.g. test data seeded directly in the DB) must not count as a
     // real, established connection (see getValidatedIntegrations for why getUserKey's .env
     // fallback can't be reused for this check).
     const connectedProviders = await getValidatedIntegrations(req.user.id, CONNECTABLE_PROVIDERS);
 
     // Contacts with no known CRM origin need somewhere to be scanned/fixed regardless of which
-    // (if any) real CRMs are connected — only worth the scan if any such contact actually exists.
+    // (if any) real CRMs are connected · only worth the scan if any such contact actually exists.
     const noCrmCount = await db.query(
       `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_provider IS NULL LIMIT 1`,
       [req.user.id]
@@ -130,7 +130,7 @@ router.post('/duplicates/:provider/preview-merge', async (req, res, next) => {
     }
 
     const cached = await db.crmCleaningReports.getLatestByProvider(req.user.id, provider);
-    if (!cached) return res.status(400).json({ error: 'No recent scan found for this provider — run a scan first' });
+    if (!cached) return res.status(400).json({ error: 'No recent scan found for this provider, run a scan first' });
 
     const group = findGroup(cached, contactIds);
     if (!group) return res.status(400).json({ error: 'contactIds do not match a known duplicate group from the latest scan' });
@@ -139,7 +139,7 @@ router.post('/duplicates/:provider/preview-merge', async (req, res, next) => {
     const contacts = group.contacts.filter(c => wanted.includes(String(c.id)));
     const diff = crmCleaning.computeMergeDiff(contacts);
 
-    // Per-contact activity counts — so a contact with real history never looks identical to an
+    // Per-contact activity counts · so a contact with real history never looks identical to an
     // empty one before the user picks which one to keep.
     const activityCounts = {};
     for (const c of contacts) {
@@ -166,11 +166,11 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
       return res.status(400).json({ error: 'keepId must be one of contactIds' });
     }
 
-    // Re-validate against the user's own latest cached scan — never trust client-supplied ids
+    // Re-validate against the user's own latest cached scan · never trust client-supplied ids
     // blindly (see lib/crm-cleaning-agent.js's getProviderCredentials note on the old, broken
     // UUID-vs-native-id ownership check this replaces).
     const cached = await db.crmCleaningReports.getLatestByProvider(req.user.id, provider);
-    if (!cached) return res.status(400).json({ error: 'No recent scan found for this provider — run a scan first' });
+    if (!cached) return res.status(400).json({ error: 'No recent scan found for this provider, run a scan first' });
     const group = findGroup(cached, contactIds);
     if (!group) return res.status(400).json({ error: 'contactIds do not match a known duplicate group from the latest scan' });
 
@@ -187,7 +187,7 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
     const keepContact = contactsById.get(String(keepId));
     const keepOppBefore = await findLocalOpportunity(req.user.id, provider, keepId);
 
-    // Real pre-merge product-line set — NOT null. Undo restores exactly this array, so if it
+    // Real pre-merge product-line set · NOT null. Undo restores exactly this array, so if it
     // were left null (defaulting to []), undoing a merge would wipe out product lines the kept
     // contact already had before the merge, unrelated to it.
     let keepPlIdsBefore = [];
@@ -241,7 +241,7 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
         );
         productLineIds = plResult.rows.map(r => r.product_line_id);
 
-        // Union the deleted duplicate's product lines onto the kept contact — nothing lost,
+        // Union the deleted duplicate's product lines onto the kept contact · nothing lost,
         // and no duplicate rows thanks to the composite PK.
         if (keepOppBefore) {
           for (const plId of productLineIds) {
@@ -253,7 +253,7 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
         }
       }
 
-      // __no_crm__ contacts were never in an external CRM to begin with — deleting the local
+      // __no_crm__ contacts were never in an external CRM to begin with · deleting the local
       // row (below) is the complete action, unlike Notion/Airtable where a manual checklist is
       // needed because a real CRM record is left behind (no delete API for those providers).
       let remoteAction = provider === NO_CRM_PROVIDER ? 'none' : 'manual_required';
@@ -265,7 +265,7 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
       }
 
       // Re-link real activity/history (sent emails, replies, churn outcomes, etc.) onto the
-      // kept contact BEFORE deleting — otherwise it's orphaned (SET NULL) or destroyed (CASCADE
+      // kept contact BEFORE deleting · otherwise it's orphaned (SET NULL) or destroyed (CASCADE
       // for churn_external_signals) and invisible on the surviving contact forever. Captured by
       // record id so undo can move exactly these records back, not "whatever the kept contact
       // has now" (which may include its own unrelated history, or relinks from other merges).
@@ -273,7 +273,7 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
         ? await audit.captureAndRelinkChildren(delOppBefore.id, keepOppBefore.id)
         : {};
 
-      // Record BEFORE deleting the local row — opportunity_id's FK must reference a row that
+      // Record BEFORE deleting the local row · opportunity_id's FK must reference a row that
       // still exists at insert time (ON DELETE SET NULL only applies to existing references,
       // not new inserts against an already-gone row).
       await audit.recordChange(req.user.id, groupId, {
@@ -292,7 +292,7 @@ router.post('/duplicates/:provider/confirm-merge', async (req, res, next) => {
       }
     }
 
-    // Invalidate the cached scan for this provider — a merge just changed contact data, so the
+    // Invalidate the cached scan for this provider · a merge just changed contact data, so the
     // next GET /duplicates (or a manual rescan) must reflect it instead of serving the stale
     // pre-merge snapshot (getOrRunScan only re-scans when no cached report exists).
     await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [req.user.id, provider]);
@@ -313,7 +313,7 @@ router.get('/deal-quality', async (req, res, next) => {
     } else {
       issues = await dataQualityChecks.computeDealQualityIssues(req.user.id);
       // score isn't a meaningful concept for this sentinel cache row (never read back by the
-      // frontend, which only consumes `issues`) — 0 is a placeholder to satisfy the NOT NULL
+      // frontend, which only consumes `issues`) · 0 is a placeholder to satisfy the NOT NULL
       // constraint shared with the real per-CRM scan reports.
       await db.crmCleaningReports.create({ userId: req.user.id, provider: '__deal_quality__', score: 0, totalContacts: 0, summary: {}, issues });
     }
@@ -341,8 +341,8 @@ router.get('/client-quality', async (req, res, next) => {
 });
 
 // POST /api/data-quality/enrich-field
-// Accepts either { opportunityId } (Deal/Client Quality — id is already a Baakalai
-// opportunities.id) or { provider, crmContactId } (General tab's "other issues" — id there is
+// Accepts either { opportunityId } (Deal/Client Quality · id is already a Baakalai
+// opportunities.id) or { provider, crmContactId } (General tab's "other issues" · id there is
 // the native CRM contact id for real-API providers, resolved via findLocalOpportunity like
 // preview-merge/confirm-merge already do).
 router.post('/enrich-field', async (req, res, next) => {
@@ -374,7 +374,7 @@ router.post('/enrich-field', async (req, res, next) => {
       afterLocal = { ...opp, [column]: value };
     }
 
-    // Push to the live CRM too — only for providers with real write support, and only for
+    // Push to the live CRM too · only for providers with real write support, and only for
     // fields the generic adapter interface actually recognizes (sector/dealValue are
     // Baakalai-only concepts with no CRM-side field mapping in updatePerson).
     const CRM_RECOGNIZED_FIELDS = { email: 'email', company: 'company', name: 'name' };
@@ -391,20 +391,20 @@ router.post('/enrich-field', async (req, res, next) => {
           remoteAction = 'updated';
         }
       } catch {
-        // Local save already succeeded — don't fail the whole request over the CRM push.
+        // Local save already succeeded · don't fail the whole request over the CRM push.
         remoteAction = 'none';
         beforeCrm = null;
       }
     }
 
     // sector/dealValue are Deal/Client Quality concepts; name/email/company corrections come
-    // from the General tab's "other issues" — general CRM hygiene, same strate as duplicates.
+    // from the General tab's "other issues" · general CRM hygiene, same strate as duplicates.
     const strate = (field === 'sector' || field === 'dealValue')
       ? (opp.status === 'won' ? 'client_quality' : 'deal_quality')
       : 'duplicates';
     // opp.crm_provider can be null for locally-created/seeded contacts that still surfaced via a
     // provider's General-tab scan (the Notion/Airtable local-scan adapter isn't itself filtered
-    // by provider — it lists every local opportunity). The request's own `provider` param
+    // by provider · it lists every local opportunity). The request's own `provider` param
     // unambiguously identifies which scan needs to be invalidated; when it's absent
     // (opportunityId-based Deal/Client Quality calls) opp.crm_provider is used as before.
     const scanProvider = provider || opp.crm_provider;
@@ -457,7 +457,7 @@ router.post('/history/:groupId/undo', async (req, res, next) => {
   }
 });
 
-// GET /api/data-quality/score-history — historique du score pour la sparkline.
+// GET /api/data-quality/score-history · historique du score pour la sparkline.
 // Sentinelles `__*__` exclues (score 0 par construction, ce ne sont que des caches).
 router.get('/score-history', async (req, res, next) => {
   try {
@@ -475,7 +475,7 @@ router.get('/score-history', async (req, res, next) => {
       byProvider.get(row.provider).push({ date: row.created_at, score: row.score });
     }
 
-    // Déductions du dernier rapport par provider — recalculées depuis summary +
+    // Déductions du dernier rapport par provider · recalculées depuis summary +
     // total_contacts stockés (même formule que le score), rien n'est migré.
     const latest = await db.query(
       `SELECT DISTINCT ON (provider) provider, score, total_contacts, summary
@@ -519,9 +519,9 @@ router.get('/score-history', async (req, res, next) => {
   }
 });
 
-// GET /api/data-quality/dashboard-summary — bandeau compact pour la section
+// GET /api/data-quality/dashboard-summary · bandeau compact pour la section
 // CRM du Dashboard : doublons + problèmes par strate (Général/Deals/Clients).
-// Lit uniquement le cache 24h de crm_cleaning_reports (comme /nav/counts) —
+// Lit uniquement le cache 24h de crm_cleaning_reports (comme /nav/counts) · 
 // pas de scan CRM live, contrairement à /duplicates, /deal-quality, etc.
 router.get('/dashboard-summary', async (req, res, next) => {
   try {
@@ -555,7 +555,7 @@ router.get('/dashboard-summary', async (req, res, next) => {
   }
 });
 
-// GET /api/data-quality/gdpr — contacts candidats à la purge RGPD : aucune
+// GET /api/data-quality/gdpr · contacts candidats à la purge RGPD : aucune
 // activité réelle depuis 24 mois et pas client actif (won = relation en cours).
 const GDPR_THRESHOLD_MONTHS = 24;
 router.get('/gdpr', async (req, res, next) => {
@@ -583,7 +583,7 @@ router.get('/gdpr', async (req, res, next) => {
   }
 });
 
-// POST /api/data-quality/gdpr/purge — suppression locale (la copie baakalai ;
+// POST /api/data-quality/gdpr/purge · suppression locale (la copie baakalai ;
 // le CRM du client reste sous SA responsabilité), en un seul groupe d'historique
 // donc annulable d'un clic dans l'onglet Historique.
 router.post('/gdpr/purge', async (req, res, next) => {

@@ -1,5 +1,5 @@
 /**
- * Forecast Engine — probabilités par deal calibrées sur l'historique réel.
+ * Forecast Engine · probabilités par deal calibrées sur l'historique réel.
  *
  * Remplace la projection « probabilité par stage » par une probabilité PAR
  * DEAL dérivée de ce que le système sait déjà du tenant :
@@ -25,9 +25,9 @@ const PROBABLE_THRESHOLD = 0.4;
 const CALIBRATION_SOURCE = 'forecast_calibration';
 
 /**
- * Probabilité d'un deal ouvert — fonction pure, testée unitairement.
+ * Probabilité d'un deal ouvert · fonction pure, testée unitairement.
  * ctx : { winRate, avgCycleDays, calibration } (calibration appliquée par
- * l'appelant sur le scénario pondéré, pas ici — les catégories restent brutes).
+ * l'appelant sur le scénario pondéré, pas ici · les catégories restent brutes).
  */
 function computeDealProbability(deal, ctx = {}) {
   const now = Date.now();
@@ -74,7 +74,7 @@ function categorize(probability) {
 /**
  * Contexte appris du tenant : cycle réel, taux de conversion réel,
  * calibration mémorisée. Calculé depuis la base (pas depuis le texte des
- * patterns — plus robuste), fallbacks neutres si l'historique manque.
+ * patterns · plus robuste), fallbacks neutres si l'historique manque.
  */
 async function getLearnedContext(userId) {
   const ctx = { winRate: null, avgCycleDays: null, calibration: 1.0, wonSample: 0 };
@@ -107,7 +107,7 @@ async function getLearnedContext(userId) {
     );
     const factor = cal.rows[0]?.data?.factor;
     // Garde-fou : une calibration hors [0.4, 1.5] signale un échantillon
-    // dégénéré, pas un biais réel — on ne l'applique pas.
+    // dégénéré, pas un biais réel · on ne l'applique pas.
     if (factor != null && factor >= 0.4 && factor <= 1.5) ctx.calibration = factor;
   } catch { /* neutre */ }
 
@@ -160,7 +160,7 @@ async function computeForecast(userId) {
 }
 
 /**
- * Photo hebdomadaire (lundi, job digest) — matière première de la calibration.
+ * Photo hebdomadaire (lundi, job digest) · matière première de la calibration.
  */
 async function takeSnapshot(userId) {
   const f = await computeForecast(userId);
@@ -177,7 +177,7 @@ async function takeSnapshot(userId) {
 /**
  * Calibration (dimanche, Memory Agent) : photos de 30 à 180 jours comparées
  * aux résultats réels. factor = réalisé / prédit sur les deals RÉSOLUS
- * (won ou lost) — les deals encore ouverts ne comptent ni au numérateur ni
+ * (won ou lost) · les deals encore ouverts ne comptent ni au numérateur ni
  * au dénominateur, sinon un cycle long lirait comme une surestimation.
  */
 async function calibrate(userId, tenant = {}) {
@@ -202,7 +202,7 @@ async function calibrate(userId, tenant = {}) {
     const byId = new Map(outcomes.rows.map(o => [o.id, o]));
     for (const d of snap.deals) {
       const o = byId.get(d.id);
-      if (!o) continue; // toujours ouvert — hors du calcul
+      if (!o) continue; // toujours ouvert, hors du calcul
       resolved++;
       predicted += d.value * d.probability;
       if (o.status === 'won') realized += Number(o.deal_value || d.value);
@@ -223,7 +223,7 @@ async function calibrate(userId, tenant = {}) {
     : 'sont bien calibrés';
   await db.memoryPatterns.replaceOrCreate({
     ...tenant,
-    pattern: `Forecast : vos prévisions pondérées ${direction} (mesuré sur ${resolved} deals résolus) — facteur de correction x${factor} appliqué automatiquement.`,
+    pattern: `Forecast : vos prévisions pondérées ${direction} (mesuré sur ${resolved} deals résolus), facteur de correction x${factor} appliqué automatiquement.`,
     category: 'Pipeline',
     confidence: resolved >= 15 ? 'Haute' : 'Moyenne',
     source: CALIBRATION_SOURCE,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ═══════════════════════════════════════════════════════════════════════════
-   BAKAL / STANKO — Weekly Update → Notion
+   BAKAL / STANKO · Weekly Update → Notion
 
    Usage:  cd backend && node scripts/notion-weekly-update.js
 
@@ -11,7 +11,7 @@
 
    This script will:
    1. Find your "Stanko" workspace pages
-   2. Create a "Résumé Semaine — 24-28 Fév. 2026" page with the weekly summary
+   2. Create a "Résumé Semaine · 24-28 Fév. 2026" page with the weekly summary
    3. Create tasks in the Project Management database (if found)
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -22,7 +22,7 @@ const notion = new Client({ auth: process.env.NOTION_TOKEN });
 
 // ═══ The weekly summary content ═══
 const WEEKLY_SUMMARY = {
-  title: 'Résumé Semaine — 24-28 Février 2026',
+  title: 'Résumé Semaine, 24-28 Février 2026',
   icon: '🚀',
   content: [
     {
@@ -39,7 +39,7 @@ const WEEKLY_SUMMARY = {
     },
     {
       type: 'bulleted_list_item',
-      text: "Refonte complète de la page d'accueil du chat inspirée du design Stanko — sidebar avec historique des conversations, page d'accueil avec actions rapides"
+      text: "Refonte complète de la page d'accueil du chat inspirée du design Stanko, sidebar avec historique des conversations, page d'accueil avec actions rapides"
     },
     {
       type: 'bulleted_list_item',
@@ -71,7 +71,7 @@ const WEEKLY_SUMMARY = {
     },
     {
       type: 'bulleted_list_item',
-      text: 'Stockage chiffré des clés API (Lemlist, Notion, Claude) côté serveur — les clés ne sont jamais visibles en clair'
+      text: 'Stockage chiffré des clés API (Lemlist, Notion, Claude) côté serveur, les clés ne sont jamais visibles en clair'
     },
     {
       type: 'heading_3',
@@ -91,7 +91,7 @@ const WEEKLY_SUMMARY = {
     },
     {
       type: 'bulleted_list_item',
-      text: 'Notifications toast (pop-ups en haut à droite) avec 4 types : succès, alerte, erreur, info — auto-dismiss avec barre de progression'
+      text: 'Notifications toast (pop-ups en haut à droite) avec 4 types : succès, alerte, erreur, info, auto-dismiss avec barre de progression'
     },
     {
       type: 'bulleted_list_item',
@@ -317,7 +317,7 @@ async function main() {
       }
     }
   } else {
-    // No PM database found — create a tasks page instead
+    // No PM database found · create a tasks page instead
     console.log('No PM database found. Creating a task list page...');
 
     const taskBlocks = [
@@ -344,7 +344,7 @@ async function main() {
           to_do: {
             rich_text: [
               { type: 'text', text: { content: `[${task.priority}] ${task.title}` }, annotations: { bold: true } },
-              { type: 'text', text: { content: ` — ${task.desc}` } }
+              { type: 'text', text: { content: `, ${task.desc}` } }
             ],
             checked: task.status === 'Fait'
           }
@@ -356,7 +356,7 @@ async function main() {
       parent: { page_id: parentPageId },
       icon: { type: 'emoji', emoji: '📋' },
       properties: {
-        title: { title: [{ text: { content: 'Tâches — Lancement Stanko' } }] }
+        title: { title: [{ text: { content: 'Tâches, Lancement Stanko' } }] }
       },
       children: taskBlocks
     });

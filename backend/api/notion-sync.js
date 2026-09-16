@@ -1,5 +1,5 @@
 /**
- * Notion Sync — Background mirror of SQLite data → Notion
+ * Notion Sync · Background mirror of SQLite data → Notion
  *
  * Notion is NOT the source of truth. This module pushes data
  * to Notion so the team can view campaign progress without
@@ -152,7 +152,7 @@ async function syncMemoryPattern(patternId) {
 
 async function syncAll() {
   if (!isConfigured()) {
-    console.warn('[Notion sync] Not configured — skipping full sync');
+    console.warn('[Notion sync] Not configured, skipping full sync');
     return;
   }
 

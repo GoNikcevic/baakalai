@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Deal Coach Card
+   BAKAL · Deal Coach Card
    Shows AI-suggested next actions for stagnant deals on the Dashboard.
    Each suggestion has an action button (Send email, Open LinkedIn, etc.).
    =============================================================================== */

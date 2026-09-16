@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pre-commit hook — checks ONLY staged files for anti-patterns.
+ * Pre-commit hook : checks ONLY staged files for anti-patterns.
  * Fast: only scans files being committed, not the whole codebase.
  *
  * Install: ln -sf ../../scripts/pre-commit-audit.js .git/hooks/pre-commit
@@ -33,7 +33,7 @@ try {
 if (stagedFiles.length === 0) process.exit(0);
 
 // ═══════════════════════════════════════════════════
-// All patterns — each returns array of line numbers
+// All patterns : each returns array of line numbers
 // ═══════════════════════════════════════════════════
 
 const PATTERNS = [
@@ -310,7 +310,7 @@ const PATTERNS = [
   // ─── 6. CURRENCY & LOCALE ───────────────────────
 
   {
-    name: 'Hardcoded currency symbol ($ or EUR) — should be configurable',
+    name: 'Hardcoded currency symbol ($ or EUR), should be configurable',
     test(lines, filePath) {
       if (!filePath.includes('frontend/src/pages/CRM') && !filePath.includes('frontend/src/pages/Analytics')) return [];
       const issues = [];

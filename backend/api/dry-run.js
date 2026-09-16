@@ -25,9 +25,9 @@ function generateSequence(params) {
       timing: 'J+0',
       subType: angle || 'Douleur client',
       subject: `{{firstName}}, une question sur ${sector || 'votre activité'}`,
-      subjectB: `{{companyName}} — ${position || 'dirigeant'} ?`,
+      subjectB: `{{companyName}}, ${position || 'dirigeant'} ?`,
       body: `${greeting} {{firstName}},\n\nJe me permets de vous contacter car je travaille avec des ${position || 'décideurs'} dans le secteur ${sector || 'de votre industrie'}.\n\nQuestion directe : quel est votre plus gros défi opérationnel en ce moment chez {{companyName}} ?\n\nNos clients dans votre secteur gagnent en moyenne 15h/semaine en optimisant trois processus clés.\n\nCurieux de savoir si c'est un sujet pour vous ?`,
-      hypothesis: 'Hook sectoriel + question ouverte — teste si le ciblage précis augmente le taux de réponse',
+      hypothesis: 'Hook sectoriel + question ouverte, teste si le ciblage précis augmente le taux de réponse',
     },
     {
       step: 'E2',
@@ -35,10 +35,10 @@ function generateSequence(params) {
       label: 'Email valeur',
       timing: 'J+3',
       subType: 'Preuve par l\'exemple',
-      subject: `Re: ${sector || 'votre activité'} — un cas concret`,
+      subject: `Re: ${sector || 'votre activité'}, un cas concret`,
       subjectB: `{{firstName}}, un résultat qui parle`,
       body: `${greeting} {{firstName}},\n\nJe me permets de revenir avec un exemple concret.\n\nUne entreprise de ${sector || 'votre secteur'} (${params.size || '30 personnes'}, profil similaire à {{companyName}}) a réduit de 40% son temps de traitement en 3 mois.\n\nRésultat : 2 jours récupérés chaque mois pour du travail à valeur ajoutée.\n\nEst-ce que c'est un sujet chez {{companyName}} ?`,
-      hypothesis: 'Case study sectoriel + résultat chiffré — teste la crédibilité par la preuve',
+      hypothesis: 'Case study sectoriel + résultat chiffré, teste la crédibilité par la preuve',
     },
     {
       step: 'E3',
@@ -49,7 +49,7 @@ function generateSequence(params) {
       subject: `Autre approche, {{firstName}}`,
       subjectB: `{{firstName}}, une tendance dans ${sector || 'votre secteur'}`,
       body: `${greeting} {{firstName}},\n\nJe change d'approche. Plutôt que de parler d'optimisation, une question simple : qu'est-ce qui freine le plus la croissance de {{companyName}} en ce moment ?\n\nLes ${position || 'dirigeants'} que j'accompagne dans ${sector || 'votre secteur'} citent en général 3 freins récurrents.\n\nSi le sujet vous parle, je peux vous partager ce qu'ils ont fait pour les lever.`,
-      hypothesis: 'Angle croissance au lieu d\'optimisation — teste si la projection positive performe mieux',
+      hypothesis: 'Angle croissance au lieu d\'optimisation, teste si la projection positive performe mieux',
     },
     {
       step: 'E4',
@@ -60,7 +60,7 @@ function generateSequence(params) {
       subject: `{{firstName}}, dernier message`,
       subjectB: `Pas le bon moment ?`,
       body: `${greeting} {{firstName}},\n\nJe ne veux pas encombrer votre boîte.\n\nSi un jour le sujet devient prioritaire, mon agenda est ouvert.\n\nBonne continuation !`,
-      hypothesis: 'Break-up court et respectueux — teste le soft close',
+      hypothesis: 'Break-up court et respectueux, teste le soft close',
     },
   ];
 
@@ -72,8 +72,8 @@ function generateSequence(params) {
       timing: 'J+0',
       subType: 'Première prise de contact',
       subject: null,
-      body: `{{firstName}}, votre parcours dans ${sector || 'votre secteur'} m'a interpellé. J'accompagne des ${position || 'professionnels'} sur la croissance commerciale — ravi d'échanger.`,
-      bodyB: `{{firstName}}, votre expertise chez {{companyName}} m'intéresse. Je travaille avec des ${position || 'décideurs'} du secteur — connectons-nous !`,
+      body: `{{firstName}}, votre parcours dans ${sector || 'votre secteur'} m'a interpellé. J'accompagne des ${position || 'professionnels'} sur la croissance commerciale, ravi d'échanger.`,
+      bodyB: `{{firstName}}, votre expertise chez {{companyName}} m'intéresse. Je travaille avec des ${position || 'décideurs'} du secteur, connectons-nous !`,
       maxChars: 300,
       hypothesis: 'Compliment pro + intérêt commun vs mention entreprise directe',
     },
@@ -86,7 +86,7 @@ function generateSequence(params) {
       subject: null,
       body: `Merci d'avoir accepté, {{firstName}} !\n\nComment gérez-vous votre développement commercial chez {{companyName}} actuellement ?\n\nJ'échange régulièrement avec des ${position || 'professionnels'} de ${sector || 'votre secteur'} sur le sujet.`,
       bodyB: `Ravi d'être connecté, {{firstName}} !\n\nQuel est le plus gros défi pour {{companyName}} en ce moment côté croissance ?\n\nJ'accompagne des entreprises de ${sector || 'votre secteur'} sur ces sujets.`,
-      hypothesis: 'Question ouverte métier vs question sur les défis — teste l\'approche conversationnelle',
+      hypothesis: 'Question ouverte métier vs question sur les défis, teste l\'approche conversationnelle',
     },
   ];
 
@@ -124,12 +124,12 @@ function generateTouchpoint(type, params) {
   const defaults = {
     emailInitial: {
       subject: `{{firstName}}, une question sur ${params.sector || 'votre activité'}`,
-      subjectB: `{{companyName}} — on peut en parler ?`,
+      subjectB: `{{companyName}}, on peut en parler ?`,
       body: `Bonjour {{firstName}},\n\nQuestion rapide : quel est votre plus gros défi chez {{companyName}} en ce moment ?\n\nJe travaille avec des ${params.position || 'professionnels'} de ${params.sector || 'votre secteur'} et un pattern revient souvent.\n\nCurieux de savoir si ça vous parle ?`,
       hypothesis: '[DRY-RUN] Hook sectoriel + question ouverte',
     },
     emailValue: {
-      subject: `Re: ${params.sector || 'votre secteur'} — un résultat concret`,
+      subject: `Re: ${params.sector || 'votre secteur'}, un résultat concret`,
       subjectB: `{{firstName}}, -40% en 3 mois`,
       body: `Bonjour {{firstName}},\n\nUn exemple concret : une entreprise similaire à {{companyName}} a réduit de 40% son temps de traitement.\n\nRésultat : 2 jours récupérés par mois.\n\nEst-ce un sujet pour vous ?`,
       hypothesis: '[DRY-RUN] Case study chiffré',
@@ -148,7 +148,7 @@ function generateTouchpoint(type, params) {
     },
     linkedinConnection: {
       body: `{{firstName}}, votre parcours dans ${params.sector || 'votre secteur'} m'a interpellé. Ravi d'échanger !`,
-      bodyB: `{{firstName}}, votre expertise chez {{companyName}} m'intéresse — connectons-nous !`,
+      bodyB: `{{firstName}}, votre expertise chez {{companyName}} m'intéresse, connectons-nous !`,
       charCount: 95,
       hypothesis: '[DRY-RUN] Compliment pro court',
     },
@@ -159,7 +159,7 @@ function generateTouchpoint(type, params) {
     },
     subjectLines: {
       subjects: [
-        { step: 'E1', variantA: `{{firstName}}, une question`, variantB: `{{companyName}} — on en parle ?`, hypothesisA: 'Direct', hypothesisB: 'Curiosité' },
+        { step: 'E1', variantA: `{{firstName}}, une question`, variantB: `{{companyName}}, on en parle ?`, hypothesisA: 'Direct', hypothesisB: 'Curiosité' },
         { step: 'E2', variantA: `Re: un cas concret`, variantB: `{{firstName}}, -40% en 3 mois`, hypothesisA: 'Continuité', hypothesisB: 'Chiffre' },
       ],
     },
@@ -218,7 +218,7 @@ function analyzeCampaign(campaignData) {
   };
 
   return {
-    diagnostic: `## Résumé\n${parsed.summary}\n\n## Priorités\n${parsed.priorities.map(p => `${p.priority}. ${p.step} — ${p.issue} → ${p.recommendation} (${p.expectedImpact})`).join('\n')}`,
+    diagnostic: `## Résumé\n${parsed.summary}\n\n## Priorités\n${parsed.priorities.map(p => `${p.priority}. ${p.step}, ${p.issue} → ${p.recommendation} (${p.expectedImpact})`).join('\n')}`,
     parsed,
     usage: MOCK_USAGE,
   };
@@ -240,12 +240,12 @@ function regenerateSequence(params) {
       variantA: {
         subject: '{{firstName}}, une idée pour gagner du temps',
         body: `${greeting} {{firstName}},\n\nQuestion rapide : combien de temps {{companyName}} passe sur le reporting chaque semaine ?\n\nNos clients en récupèrent 12h en moyenne. Curieux de savoir si c'est un sujet chez vous ?`,
-        hypothesis: 'Angle positif "gain de temps" au lieu de "coût de l\'erreur" — moins anxiogène, plus actionnable',
+        hypothesis: 'Angle positif "gain de temps" au lieu de "coût de l\'erreur", moins anxiogène, plus actionnable',
       },
       variantB: {
         subject: '{{firstName}}, 12h/semaine récupérées',
         body: `${greeting} {{firstName}},\n\nUne question : si votre équipe récupérait 12h/semaine, qu'est-ce que {{companyName}} en ferait ?\n\nC'est ce que font nos clients dans le secteur ${clientParams?.sector || 'de votre industrie'}. Ça vous parle ?`,
-        hypothesis: 'Chiffre concret dans l\'objet + question projection — teste si le bénéfice chiffré attire plus',
+        hypothesis: 'Chiffre concret dans l\'objet + question projection, teste si le bénéfice chiffré attire plus',
       },
       changes: 'Angle changé de "coût erreur" à "gain de temps". Message raccourci.',
       memoryUsed: [],
@@ -301,7 +301,7 @@ function consolidateMemory(diagnostics, existingMemory) {
     patterns,
     updatedPatterns: [],
     contradictions: [],
-    summary: `[DRY-RUN] ${patterns.length} nouveaux patterns identifiés à partir de ${diagnostics.length} diagnostic(s). Confiance faible — nécessite plus de données.`,
+    summary: `[DRY-RUN] ${patterns.length} nouveaux patterns identifiés à partir de ${diagnostics.length} diagnostic(s). Confiance faible, nécessite plus de données.`,
   };
 
   return {
@@ -341,7 +341,7 @@ function generateVariables(params) {
         label: 'Estimation de la douleur',
         type: 'enrichment',
         desc: 'Douleur probable déduite de la taille et du secteur',
-        source: { icon: 'robot', label: 'IA — basé sur industryMetric + taille' },
+        source: { icon: 'robot', label: 'IA, basé sur industryMetric + taille' },
         dependsOn: ['industryMetric'],
         derivationHint: `La taille de l'entreprise dans ${sector || 'ce secteur'} corrèle avec des problèmes spécifiques de scaling`,
         formula: null,
@@ -356,7 +356,7 @@ function generateVariables(params) {
         label: 'Icebreaker sectoriel',
         type: 'derived',
         desc: 'Accroche finale combinant la métrique et la douleur estimée',
-        source: { icon: 'brain', label: 'IA — combine industryMetric + painEstimate' },
+        source: { icon: 'brain', label: 'IA, combine industryMetric + painEstimate' },
         dependsOn: ['industryMetric', 'painEstimate'],
         derivationHint: null,
         formula: {

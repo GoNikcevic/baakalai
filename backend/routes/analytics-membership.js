@@ -1,9 +1,9 @@
 /**
  * Membership Analytics Routes
  *
- * GET /api/analytics/membership — Full membership analytics dashboard data
- * GET /api/analytics/membership/cohorts — Cohort retention analysis
- * GET /api/analytics/membership/ltv — LTV by segment
+ * GET /api/analytics/membership · Full membership analytics dashboard data
+ * GET /api/analytics/membership/cohorts · Cohort retention analysis
+ * GET /api/analytics/membership/ltv · LTV by segment
  */
 
 const { Router } = require('express');
@@ -11,7 +11,7 @@ const db = require('../db');
 
 const router = Router();
 
-// GET /api/analytics/membership — Full dashboard
+// GET /api/analytics/membership · Full dashboard
 router.get('/', async (req, res, next) => {
   try {
     // 1. Overview KPIs
@@ -122,7 +122,7 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/analytics/membership/cohorts — Monthly cohort retention
+// GET /api/analytics/membership/cohorts · Monthly cohort retention
 router.get('/cohorts', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -142,7 +142,7 @@ router.get('/cohorts', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/analytics/membership/ltv — LTV by segment
+// GET /api/analytics/membership/ltv · LTV by segment
 router.get('/ltv', async (req, res, next) => {
   try {
     const result = await db.query(`

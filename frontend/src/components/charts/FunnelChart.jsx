@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Conversion Funnel (Recharts)
+   BAKAL · Conversion Funnel (Recharts)
    Horizontal funnel showing: Contacted → Opened → Replied → Interested → RDV
    =============================================================================== */
 

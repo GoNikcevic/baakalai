@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Email Account Settings — Connect SMTP for nurture emails
+   Email Account Settings · Connect SMTP for nurture emails
    ═══════════════════════════════════════════════════ */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -451,8 +451,8 @@ export default function EmailAccountSettings() {
                   <span>
                     <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
                     {lang === 'en'
-                      ? `For ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, use the one-click connection — no password needed.`
-                      : `Pour ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, utilisez la connexion en un clic — aucun mot de passe nécessaire.`}
+                      ? `For ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, use the one-click connection, no password needed.`
+                      : `Pour ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, utilisez la connexion en un clic, aucun mot de passe nécessaire.`}
                   </span>
                   <button
                     className="btn btn-primary"

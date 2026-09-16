@@ -30,7 +30,7 @@ const pool = new Pool({
 });
 
 async function main() {
-  console.log('\n  Bakal — Supabase Seed\n  =====================\n');
+  console.log('\n  Bakal, Supabase Seed\n  =====================\n');
 
   // Check existing data
   try {
@@ -50,7 +50,7 @@ async function main() {
       process.exit(0);
     }
   } catch (err) {
-    // Table might not exist — that's fine, SQL file should create it
+    // Table might not exist · that's fine, SQL file should create it
     console.log('  Warning: Could not check existing data:', err.message);
   }
 

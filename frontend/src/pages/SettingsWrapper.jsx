@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Settings Wrapper
+   BAKAL · Settings Wrapper
    Merges Settings + Profile + Integrations + Memory into one nav entry with tabs.
    =============================================================================== */
 

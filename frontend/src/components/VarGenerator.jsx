@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Variable Generator (React)
+   BAKAL · Variable Generator (React)
    AI-driven variable suggestions: base -> derived chains with scenario switching.
-   Ported from /app/vargen.js — full React hooks implementation.
+   Ported from /app/vargen.js · full React hooks implementation.
    =============================================================================== */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -376,7 +376,7 @@ function ChainConnector() {
 /* ═══ Main Component ═══ */
 
 /**
- * VarGenerator — AI-driven variable suggestion panel with scenario switching.
+ * VarGenerator · AI-driven variable suggestion panel with scenario switching.
  *
  * Props:
  * - onAcceptVariable?(key, varData): called when user accepts a variable

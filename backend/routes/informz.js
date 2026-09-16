@@ -1,12 +1,12 @@
 /**
- * Informz Routes — Newsletter integration for associations
+ * Informz Routes · Newsletter integration for associations
  *
- * POST /api/informz/send-newsletter  — Create and send a mailing
- * POST /api/informz/sync-subscribers — Upload CRM contacts to Informz
- * GET  /api/informz/mailings         — List mailings
- * GET  /api/informz/analytics/:id    — Get mailing analytics
- * GET  /api/informz/engagement       — Get engagement scores
- * POST /api/informz/test             — Test connection
+ * POST /api/informz/send-newsletter · Create and send a mailing
+ * POST /api/informz/sync-subscribers · Upload CRM contacts to Informz
+ * GET  /api/informz/mailings · List mailings
+ * GET  /api/informz/analytics/:id · Get mailing analytics
+ * GET  /api/informz/engagement · Get engagement scores
+ * POST /api/informz/test · Test connection
  */
 
 const { Router } = require('express');
@@ -37,7 +37,7 @@ async function getInformzCreds(userId) {
   };
 }
 
-// POST /api/informz/send-newsletter — Create and schedule a mailing
+// POST /api/informz/send-newsletter · Create and schedule a mailing
 router.post('/send-newsletter', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -88,7 +88,7 @@ Return JSON: { "subject": "...", "body": "<html>...</html>" }`;
   } catch (err) { next(err); }
 });
 
-// POST /api/informz/sync-subscribers — Upload CRM contacts to Informz
+// POST /api/informz/sync-subscribers · Upload CRM contacts to Informz
 router.post('/sync-subscribers', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -122,7 +122,7 @@ router.post('/sync-subscribers', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/informz/mailings — List mailings
+// GET /api/informz/mailings · List mailings
 router.get('/mailings', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -133,7 +133,7 @@ router.get('/mailings', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/informz/analytics/:id — Get mailing analytics
+// GET /api/informz/analytics/:id · Get mailing analytics
 router.get('/analytics/:id', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -149,7 +149,7 @@ router.get('/analytics/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/informz/templates — List available newsletter templates from Informz
+// GET /api/informz/templates · List available newsletter templates from Informz
 router.get('/templates', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -160,7 +160,7 @@ router.get('/templates', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/informz/target-groups — List subscriber segments/lists
+// GET /api/informz/target-groups · List subscriber segments/lists
 router.get('/target-groups', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -171,7 +171,7 @@ router.get('/target-groups', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/informz/send-from-template — Send newsletter using Informz template + AI content
+// POST /api/informz/send-from-template · Send newsletter using Informz template + AI content
 router.post('/send-from-template', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -234,7 +234,7 @@ Generate engaging content sections. Return JSON:
   } catch (err) { next(err); }
 });
 
-// GET /api/informz/engagement — Get engagement scores
+// GET /api/informz/engagement · Get engagement scores
 router.get('/engagement', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);
@@ -245,7 +245,7 @@ router.get('/engagement', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/informz/test — Test connection
+// POST /api/informz/test · Test connection
 router.post('/test', async (req, res, next) => {
   try {
     const creds = await getInformzCreds(req.user.id);

@@ -1,8 +1,8 @@
 /**
- * Learning Signal — Real-time pattern & trigger feedback
+ * Learning Signal · Real-time pattern & trigger feedback
  *
  * Called immediately when a signal is detected (reply, bounce, deal won/lost).
- * No Claude API calls — pure DB updates for instant feedback.
+ * No Claude API calls · pure DB updates for instant feedback.
  *
  * Signals:
  * - positive_reply: prospect replied positively (from activity sync or webhook)

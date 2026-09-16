@@ -19,7 +19,7 @@ function lazyRetry(importFn) {
       // while the page reloads
       return new Promise(() => {})
     }
-    // Already reloaded once — clear the flag for next deploy and throw
+    // Already reloaded once · clear the flag for next deploy and throw
     sessionStorage.removeItem('chunk_reload')
     throw err
   }))
@@ -48,7 +48,7 @@ const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
 // Public routes accessible without authentication
 const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy', '/diagnostic']
 
-// Le diagnostic public vit sur la landing (baakal.ai/diagnostic) — l'app ne
+// Le diagnostic public vit sur la landing (baakal.ai/diagnostic) · l'app ne
 // garde que l'API ; on redirige les anciens liens (dont les partages /r/:id).
 function DiagnosticRedirect() {
   const { id } = useParams()
@@ -66,7 +66,7 @@ export default function App() {
   const [onboarded, setOnboarded] = useState(null) // null = checking, true/false
   const [authError, setAuthError] = useState(null)
 
-  // Re-initialize data after onboarding completes — send to dashboard for guided checklist
+  // Re-initialize data after onboarding completes · send to dashboard for guided checklist
   function handleOnboardingComplete() {
     setOnboarded(true)
     localStorage.setItem('bakal_onboarding_complete', 'true')
@@ -74,7 +74,7 @@ export default function App() {
     navigate('/dashboard', { replace: true })
   }
 
-  // Handle Google OAuth callback — exchange one-time code for tokens
+  // Handle Google OAuth callback · exchange one-time code for tokens
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('auth') === 'google') {

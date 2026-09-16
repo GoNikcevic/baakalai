@@ -109,7 +109,7 @@ describe('CopyEditorPage', () => {
   it('renders campaign sidebar with fallback campaigns', () => {
     renderEditor();
 
-    // Fallback data has these campaigns — use getAllByText since names appear in sidebar + header
+    // Fallback data has these campaigns · use getAllByText since names appear in sidebar + header
     expect(screen.getAllByText('DAF Ile-de-France').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Dirigeants Formation')).toBeInTheDocument();
     expect(screen.getByText('DRH PME Lyon')).toBeInTheDocument();
@@ -124,8 +124,8 @@ describe('CopyEditorPage', () => {
   it('shows first campaign as active by default', () => {
     renderEditor();
 
-    // First campaign is DAF Ile-de-France — its header should be in the main area
-    // Le composant compose « 4 touchpoints · Itération 4 » — accentué.
+    // First campaign is DAF Ile-de-France · its header should be in the main area
+    // Le composant compose « 4 touchpoints · Itération 4 » · accentué.
     expect(screen.getByText(/Itération 4/)).toBeInTheDocument();
   });
 
@@ -193,7 +193,7 @@ describe('CopyEditorPage', () => {
 
   // Supprimés : « renders AI suggestion bar » et « renders touchpoint AI
   // suggestions inline ». syncCampaignsFromContext force `aiBar: null` et
-  // `suggestion: null` — aucune donnée réelle ne peut plus les renseigner.
+  // `suggestion: null` · aucune donnée réelle ne peut plus les renseigner.
   // Ces deux tests ne passaient qu'avec l'ancien jeu de démo codé en dur ; les
   // rétablir demanderait d'abord de rebrancher la fonctionnalité côté produit.
 

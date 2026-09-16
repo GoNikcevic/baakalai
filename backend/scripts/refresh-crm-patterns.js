@@ -7,7 +7,7 @@
  *
  * À utiliser après une réparation de dataset (import, normalisation des
  * statuts, montants) : les patterns crm_sync sont des artefacts dérivés des
- * opportunités — quand les données changent, les conclusions doivent être
+ * opportunités · quand les données changent, les conclusions doivent être
  * régénérées, sinon les agents lisent des constats périmés.
  */
 
@@ -30,7 +30,7 @@ async function main() {
     process.exit(1);
   }
   const user = result.rows[0];
-  console.log(`Utilisateur: ${user.email} (${user.id}) — CRM actif: ${user.active_crm_provider || 'auto'}`);
+  console.log(`Utilisateur: ${user.email} (${user.id}), CRM actif: ${user.active_crm_provider || 'auto'}`);
 
   const before = await db.query(
     "SELECT count(*) AS n FROM memory_patterns WHERE source = 'crm_sync'"

@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════
-   Dashboard — CRM tab
+   Dashboard · CRM tab
    Strictly data-quality indicators: overall score/trend, duplicates,
    and issue counts per strate (Général/Deal quality/Client quality).
-   No lead-scoring/CRM-export card here — that mixed a different concern
+   No lead-scoring/CRM-export card here · that mixed a different concern
    (opportunity scoring) into a section meant to read as "is my CRM data
    healthy", so it was dropped in favor of a single, focused teaser that
    deep-links to the full /data-quality page.

@@ -260,7 +260,7 @@ const touchpoints = {
   },
 
   async create(campaignId, data) {
-    // Normalize type — Claude or upstream callers may emit camelCase, shorthand,
+    // Normalize type · Claude or upstream callers may emit camelCase, shorthand,
     // or legacy generic "linkedin". Coerce everything to one of the 5 valid CHECK values.
     const ALLOWED_TYPES = ['email', 'linkedin', 'linkedin_visit', 'linkedin_invite', 'linkedin_message'];
     const rawType = String(data.type || '').trim();
@@ -288,13 +288,13 @@ const touchpoints = {
     } else if (ALLOWED_TYPES.includes(normalized)) {
       type = normalized;
     } else {
-      console.warn(`[touchpoints] Unknown type "${rawType}" for step "${data.step}" — defaulting to email`);
+      console.warn(`[touchpoints] Unknown type "${rawType}" for step "${data.step}", defaulting to email`);
       type = 'email';
     }
 
     // Enforce 300-char limit on connection invites + null subject
     // Règle produit : la copy de séquence ne contient jamais de tiret
-    // cadratin (marqueur IA) — filet appliqué à l'écriture (lib/human-style).
+    // cadratin (marqueur IA) · filet appliqué à l'écriture (lib/human-style).
     const { humanize } = require('../lib/human-style');
     let body = humanize(data.body) || '';
     let subject = humanize(data.subject) || null;
@@ -334,7 +334,7 @@ const touchpoints = {
     `, [
       campaignId || null,
       // Conteneur alternatif : workflow de relance d'un contact CRM
-      // (migration 103) — exactement un des deux doit être posé.
+      // (migration 103) · exactement un des deux doit être posé.
       data.enrollmentId || null,
       data.step,
       type,
@@ -435,7 +435,7 @@ const touchpoints = {
     return { changes: result.rowCount };
   },
 
-  // Suppression unitaire — la réconciliation de séquence (PUT /:id/sequence)
+  // Suppression unitaire · la réconciliation de séquence (PUT /:id/sequence)
   // ne retire que les steps réellement supprimés par l'utilisateur ; le
   // journal campaign_sends survit en ON DELETE SET NULL (migration 103).
   async remove(id) {
@@ -445,7 +445,7 @@ const touchpoints = {
 };
 
 // =============================================
-// Sequence enrollments — workflows de relance CRM (migration 103)
+// Sequence enrollments · workflows de relance CRM (migration 103)
 // =============================================
 
 const sequenceEnrollments = {
@@ -667,7 +667,7 @@ const versions = {
  *
  * Placé ici, dans le DAO, et non chez les appelants : la migration 013
  * déclarait déjà l'anonymisation « by convention », et la convention n'a pas
- * tenu — des noms de clients (LVMH, Qonto, Sanofi…) se sont retrouvés en base.
+ * tenu · des noms de clients (LVMH, Qonto, Sanofi…) se sont retrouvés en base.
  * Un point de passage obligé est la seule forme d'anonymisation qui survive à
  * l'ajout d'un nouvel agent.
  *
@@ -675,9 +675,9 @@ const versions = {
  * - la rédaction ne peut jamais faire échouer une écriture (un pattern rédigé
  *   partiellement vaut mieux qu'un agent qui plante) ;
  * - politique de partage (décision produit 2026-08-04, révisée 2026-09-14) :
- *   `shared` est accordé automatiquement dès que la rédaction est complète —
+ *   `shared` est accordé automatiquement dès que la rédaction est complète · 
  *   lexique réellement chargé ET aucun résidu détecté sur le texte du pattern
- *   — SAUF pour les sources d'agrégats business (NEVER_AUTO_SHARE_SOURCES
+ * · SAUF pour les sources d'agrégats business (NEVER_AUTO_SHARE_SOURCES
  *   ci-dessous). Le mérite (confiance Haute) n'entre pas ici : il est filtré
  *   à la lecture par `listForPrompt`, ce qui laisse un pattern monter en
  *   confiance après coup sans réécriture. L'accord n'a lieu que si l'appel
@@ -689,7 +689,7 @@ const versions = {
 
 /**
  * Sources jamais partagées automatiquement (révision du 2026-09-14, migration
- * 100 pour le stock) : ces patterns sont des agrégats business d'UN tenant —
+ * 100 pour le stock) : ces patterns sont des agrégats business d'UN tenant · 
  * « taux de conversion CRM : 34 % », taux de réponse, calibration de forecast.
  * Anonymes au sens entités, mais ce sont les chiffres d'un client : ils
  * restent scopés tenant. Le pool global reste ouvert aux apprentissages
@@ -789,7 +789,7 @@ const memoryPatterns = {
   },
 
   async count(filter = {}) {
-    // Mêmes conditions que list() (dismissed + tenant) — l'ancienne version comptait
+    // Mêmes conditions que list() (dismissed + tenant) · l'ancienne version comptait
     // tout, dismissés et autres tenants inclus, et divergeait du tableau affiché.
     let sql = 'SELECT COUNT(*) as total FROM memory_patterns';
     const conditions = ['dismissed_at IS NULL'];
@@ -860,7 +860,7 @@ const memoryPatterns = {
       // structurellement jamais se remplir. La valeur transmise est deja
       // passee par anonymizeBeforeWrite, qui ne sait que la retirer.
       data.shared === true,
-      // Tenant solo (migration 089) — un pattern naît scopé à son propriétaire.
+      // Tenant solo (migration 089) · un pattern naît scopé à son propriétaire.
       data.userId || data.user_id || null,
     ]);
     return result.rows[0];
@@ -959,7 +959,7 @@ const memoryPatterns = {
       : tenantUser ? { sql: `AND user_id = $${offset}`, params: [tenantUser] }
       : { sql: 'AND team_id IS NULL AND user_id IS NULL', params: [] };
 
-    // Check if a similar pattern was dismissed within the last 7 days — respect user's choice
+    // Check if a similar pattern was dismissed within the last 7 days · respect user's choice
     const prefix = (data.pattern || '').slice(0, 30);
     if (prefix.length >= 10) {
       const tc = tenantClause(3);
@@ -972,7 +972,7 @@ const memoryPatterns = {
 
     // Une ré-observation par un agent EST une confirmation : sans ce bump, un
     // pattern reconfirmé chaque semaine restait à confirmations=1 avec
-    // last_confirmed_at NULL — décoté à 60 j et jamais promouvable (audit 02/09).
+    // last_confirmed_at NULL · décoté à 60 j et jamais promouvable (audit 02/09).
     const confirmAndUpdate = async (id) => {
       await query(
         `UPDATE memory_patterns SET confirmations = COALESCE(confirmations, 0) + 1, last_confirmed_at = now() WHERE id = $1`,
@@ -988,7 +988,7 @@ const memoryPatterns = {
     // en mode transaction : les advisory locks appartiennent à la session
     // serveur, que le pooler ne garantit pas stable d'une requête à l'autre.
     // Le lock se pose sur une connexion, l'unlock part sur une autre et
-    // échoue — le verrou reste alors détenu par une connexion `idle` du
+    // échoue · le verrou reste alors détenu par une connexion `idle` du
     // pooler. Comme pg_advisory_lock est BLOQUANT, l'appel suivant attend
     // indéfiniment : mesuré ici même, une écriture de pattern a bloqué plus de
     // deux minutes avant d'être tuée. Sur un cron, cela fige la tâche.
@@ -1032,7 +1032,7 @@ const memoryPatterns = {
           const similar = await findSimilarPattern(data.pattern, 0.85);
           precomputedEmbedding = similar?.embedding || null;
           if (similar?.sourceId) {
-            // Le match vectoriel est global — on ne fusionne que si la ligne
+            // Le match vectoriel est global · on ne fusionne que si la ligne
             // appartient au MÊME tenant, sinon on crée (pas d'écrasement croisé).
             const tcVec = tenantClause(2);
             const active = await query(
@@ -1059,7 +1059,7 @@ const memoryPatterns = {
 
       return created;
     } finally {
-      // Libération unique, quel que soit le chemin de sortie — la version
+      // Libération unique, quel que soit le chemin de sortie · la version
       // précédente répétait l'unlock devant chaque `return`, et en avait
       // forcément oublié un le jour où l'on ajouterait une branche.
       await releaseLock();
@@ -1090,7 +1090,7 @@ const memoryPatterns = {
     // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days.
     // COALESCE sur date_discovered : sans lui, tout pattern jamais « confirmé par
     // réponse » (last_confirmed_at NULL, cas de 100 % des créations d'agents)
-    // était à jamais impromouvable — la promotion était un chemin mort (audit 02/09).
+    // était à jamais impromouvable · la promotion était un chemin mort (audit 02/09).
     const promoteToMoyenne = await query(
       `UPDATE memory_patterns SET confidence = 'Moyenne', confidence_score = 0.60
        WHERE confidence = 'Faible' AND dismissed_at IS NULL
@@ -1192,7 +1192,7 @@ async function dashboardKpis(userId) {
 
 const chatThreads = {
   // assistantType filters to one of the two independent assistants ('general' | 'campaign')
-  // sharing this table — omit it to list across both (used nowhere today, kept for flexibility
+  // sharing this table · omit it to list across both (used nowhere today, kept for flexibility
   // matching the unfiltered no-userId branch below).
   async list(userId, { assistantType, limit = 50 } = {}) {
     if (userId) {
@@ -1766,7 +1766,7 @@ const opportunities = {
     return result.rows[0] || null;
   },
 
-  // Fuzzy name/email/company search for the general assistant's lookup_client action — prefix
+  // Fuzzy name/email/company search for the general assistant's lookup_client action · prefix
   // matches on name ranked first (most likely intent when a user just types a name), everything
   // else after. escapeLike prevents a literal % or _ in the query from acting as a wildcard.
   async search(userId, q, limit = 8) {
@@ -1969,7 +1969,7 @@ async function rawQuery(text, params) {
 /**
  * Acquire a dedicated client from the pool.
  *
- * Required for anything session-scoped — advisory locks in particular.
+ * Required for anything session-scoped · advisory locks in particular.
  * `rawQuery` goes through `pool.query()`, which may hand out a different
  * connection on every call: locking on one and unlocking on another leaks the
  * lock until that connection is recycled. Callers MUST release the client.

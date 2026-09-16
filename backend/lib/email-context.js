@@ -40,7 +40,7 @@ async function getCopyContext(userId) {
 
 // ─── Memory patterns context ───
 
-// userId : repli pour les utilisateurs SOLO (sans équipe) — sans lui, teamId
+// userId : repli pour les utilisateurs SOLO (sans équipe) · sans lui, teamId
 // null retombait sur le pool global partagé uniquement et l'utilisateur ne
 // recevait jamais ses propres patterns (audit mémoire 02/09).
 async function getPatternContext(teamId, userId = null) {

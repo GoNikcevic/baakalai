@@ -36,7 +36,7 @@ async function evaluateTriggers(userId) {
 
   if (triggers.rows.length === 0) return [];
 
-  // Get CRM token — always use user's active_crm_provider
+  // Get CRM token · always use user's active_crm_provider
   const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
   const crmProvider = userRow.rows[0]?.active_crm_provider || 'pipedrive';
   const crmToken = await getUserCrmToken(userId, crmProvider);
@@ -114,7 +114,7 @@ async function evaluateTriggers(userId) {
       }
 
       // 'renewal_reminder' est le nom écrit par l'UI et le cron (crm-agent) ;
-      // 'renewal' est l'ancien nom — les deux doivent matcher ici, sinon le
+      // 'renewal' est l'ancien nom · les deux doivent matcher ici, sinon le
       // run manuel ignore silencieusement les triggers créés depuis l'UI.
       case 'renewal':
       case 'renewal_reminder': {
@@ -155,7 +155,7 @@ async function evaluateTriggers(userId) {
         const since = `LAST_N_DAYS:${days}`;
         try {
           const emails = await sf.getEmailMessages(instanceUrl, crmToken, { since, limit: 500 });
-          // Group by recipient — find those with only status 0 (New) or 3 (Sent), never 1 (Read) or 2 (Replied)
+          // Group by recipient · find those with only status 0 (New) or 3 (Sent), never 1 (Read) or 2 (Replied)
           const byRecipient = {};
           for (const e of emails) {
             const to = e.to?.toLowerCase();
@@ -177,7 +177,7 @@ async function evaluateTriggers(userId) {
       }
 
       case 'newsletter_engaged': {
-        // Contacts who actively engaged with newsletters (replied/forwarded) — notify sales or start sequence
+        // Contacts who actively engaged with newsletters (replied/forwarded) · notify sales or start sequence
         if (crmProvider !== 'salesforce') break;
         const sfE = require('../api/salesforce');
         const integE = await db.query(
@@ -261,7 +261,7 @@ function buildPatternsBlock(patternCtx) {
 
 /**
  * Generate a personalized email for a contact using Claude.
- * `patternCtx` ({ text, ids } de getPatternContext) est optionnel — sans lui,
+ * `patternCtx` ({ text, ids } de getPatternContext) est optionnel · sans lui,
  * la génération reste possible mais n'exploite pas la mémoire.
  */
 async function generateEmail(trigger, contact, patternCtx = null) {
@@ -271,7 +271,7 @@ async function generateEmail(trigger, contact, patternCtx = null) {
 Contexte :
 - Destinataire : ${contact.name} (${contact.title}) chez ${contact.company}
 - Email : ${contact.email}
-- Trigger : ${trigger.trigger_type} — ${trigger.name}
+- Trigger : ${trigger.trigger_type}, ${trigger.name}
 ${contact.dealName ? `- Deal : ${contact.dealName} (${contact.dealStatus})` : ''}
 ${template.context ? `- Contexte additionnel : ${template.context}` : ''}
 
@@ -320,7 +320,7 @@ async function generateLinkedInContent(trigger, contact, actionType, patternCtx 
 
 Contexte :
 - Destinataire : ${contact.name} (${contact.title}) chez ${contact.company}
-- Trigger : ${trigger.trigger_type} — ${trigger.name}
+- Trigger : ${trigger.trigger_type}, ${trigger.name}
 ${contact.dealName ? `- Deal : ${contact.dealName} (${contact.dealStatus})` : ''}
 ${template.context ? `- Contexte : ${template.context}` : ''}
 
@@ -336,7 +336,7 @@ Retourne un JSON : { "note": "..." }`
 
 Contexte :
 - Destinataire : ${contact.name} (${contact.title}) chez ${contact.company}
-- Trigger : ${trigger.trigger_type} — ${trigger.name}
+- Trigger : ${trigger.trigger_type}, ${trigger.name}
 ${contact.dealName ? `- Deal : ${contact.dealName} (${contact.dealStatus})` : ''}
 ${template.context ? `- Contexte : ${template.context}` : ''}
 
@@ -406,7 +406,7 @@ async function executeLinkedInAction(userId, trigger, contact, actionType, patte
 
   // Log in nurture_emails for tracking/UI consistency.
   // pattern_ids (migration 048) : seuls connect/message génèrent du copy à
-  // partir de la mémoire — une simple visite n'utilise aucun pattern.
+  // partir de la mémoire · une simple visite n'utilise aucun pattern.
   const usedPatternIds = actionType === 'linkedin_visit' ? [] : (patternCtx?.ids || []);
   await db.query(`
     INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, action_type, pattern_ids)
@@ -443,7 +443,7 @@ async function runNurtureEngine(userId) {
   // Mémoire cross-campagne : résolue UNE fois par run (les patterns ne varient
   // pas d'un contact à l'autre). Le teamId est résolu comme dans crm-agent
   // (db.teams.getByUser, via le helper email-context). Best-effort : sans
-  // mémoire, la génération continue — elle n'apprend juste rien.
+  // mémoire, la génération continue · elle n'apprend juste rien.
   let patternCtx = { text: '', ids: [] };
   try {
     const teamId = await getTeamId(userId);
@@ -489,7 +489,7 @@ async function runNurtureEngine(userId) {
               results.errors.push({ contact: contact.name, error: sendResult.error });
             }
           } else {
-            // Queue for approval — pattern_ids = patterns réellement injectés
+            // Queue for approval · pattern_ids = patterns réellement injectés
             // dans le prompt (avant : [] en dur, la boucle d'apprentissage ne
             // pouvait jamais attribuer un succès à un pattern).
             await db.query(`

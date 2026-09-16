@@ -52,7 +52,7 @@ test('sans seuil explicite, le trigger deal_stagnant suit le reglage utilisateur
     { trigger_type: 'deal_stagnant', conditions: {} },
     deals, NOW, { stagnantDays: 14 }
   );
-  // A 14 jours le deal muet depuis 20 jours ressort — comme dans la file.
+  // A 14 jours le deal muet depuis 20 jours ressort · comme dans la file.
   assert.deepStrictEqual(matched.map(o => o.id), ['muet-20j']);
 });
 

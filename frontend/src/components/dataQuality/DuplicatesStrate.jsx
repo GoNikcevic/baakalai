@@ -1,8 +1,8 @@
 /* ===============================================================================
-   BAKAL — General Strate (Data Quality's "Général" tab)
-   CRM hygiene issues that aren't specific to a deal or a client — duplicates, missing
+   BAKAL · General Strate (Data Quality's "Général" tab)
+   CRM hygiene issues that aren't specific to a deal or a client · duplicates, missing
    fields, invalid formats, inactivity. Scans every connected CRM independently
-   (duplicates are a same-CRM concept only — the same person legitimately existing in
+   (duplicates are a same-CRM concept only · the same person legitimately existing in
    two different CRMs is normal, never flagged). Each provider's duplicate groups get
    the merge-review UX; other general issues from the same scan are shown underneath.
    =============================================================================== */
@@ -32,7 +32,7 @@ function getOtherIssueConfig(en) { return {
   email_typo: { icon: 'edit', label: en ? 'Probable email typo' : 'Faute de frappe probable dans l\'email', color: 'var(--blue)' },
 }; }
 
-// Issue types correctable by typing in the right value for one field — same mechanism as the
+// Issue types correctable by typing in the right value for one field · same mechanism as the
 // Deal Quality sector/deal value fix (a text field + "Enregistrer", calling POST /enrich-field,
 // with full audit + undo). No AI guessing: predictable, and works even for data an enrichment
 // agent could never find (test contacts, unlisted companies, etc).
@@ -73,7 +73,7 @@ function FieldFixRow({ provider, contact, field, en, t, onSaved, suggestedValue 
     return (
       <div style={{ fontSize: 12, color: 'var(--success)', padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Icon name="checkCircle" size={13} />
-        <span>{contact.name || contact.email || '?'} — {value}</span>
+        <span>{contact.name || contact.email || '?'}, {value}</span>
       </div>
     );
   }

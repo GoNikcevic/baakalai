@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Optimize Campaign Modal — 2-step flow
+   Optimize Campaign Modal · 2-step flow
    Step 1: Diagnostic + touchpoint selection
    Step 2: Variant validation + deploy to Lemlist
    ═══════════════════════════════════════════════════ */
@@ -138,7 +138,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
   /* ── Step 2: Variant validation ── */
   if (step === 2 && result) {
     return (
-      <ModalShell onClose={onClose} title={en ? 'Step 2/2 — Validate generated variant' : 'Étape 2/2 — Valider la variante générée'} wide>
+      <ModalShell onClose={onClose} title={en ? 'Step 2/2, Validate generated variant' : 'Étape 2/2, Valider la variante générée'} wide>
         <div style={{ padding: 24 }}>
           {result.abResolved && (
             <div
@@ -186,7 +186,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
               disabled={deploying}
             >
               <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-              {en ? 'Variant deployed — Close' : 'Variante déployée — Fermer'}
+              {en ? 'Variant deployed, Close' : 'Variante déployée, Fermer'}
             </button>
           </div>
         </div>
@@ -207,7 +207,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
   const canGenerate = selectedSteps.size > 0 && !selectedOverBudget && !blockedByCooldown && !blockedByActiveTest;
 
   return (
-    <ModalShell onClose={onClose} title={en ? 'Step 1/2 — Diagnostic and selection' : 'Étape 1/2 — Diagnostic et sélection'} wide>
+    <ModalShell onClose={onClose} title={en ? 'Step 1/2, Diagnostic and selection' : 'Étape 1/2, Diagnostic et sélection'} wide>
       <div style={{ padding: 24 }}>
         {/* Warnings */}
         {guards.warningReason && (
@@ -305,7 +305,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
             <strong>{en ? 'Baakalai recommendation:' : 'Recommandation Baakalai :'}</strong>
             {diagnostic.recommendations.map(r => (
               <div key={r.step} style={{ marginTop: 4 }}>
-                {en ? 'Regenerate' : 'Régénérer'} <strong>{r.step}</strong> — {r.reason}
+                {en ? 'Regenerate' : 'Régénérer'} <strong>{r.step}</strong>, {r.reason}
               </div>
             ))}
           </div>
@@ -341,7 +341,7 @@ export default function OptimizeCampaignModal({ campaign, onClose, onSuccess }) 
                 />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {tp.step} — {tp.label || tp.type}
+                    {tp.step}, {tp.label || tp.type}
                     {isRecommended && (
                       <span
                         style={{

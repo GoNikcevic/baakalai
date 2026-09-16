@@ -78,7 +78,7 @@ Campagnes analysees :
 ${campaigns.map(c => `- ${c.name}: secteur=${c.sector || 'N/A'}, position=${c.position || 'N/A'}, taille=${c.size || 'N/A'}, zone=${c.zone || 'N/A'}, reply_rate=${c.reply_rate || 0}%, meetings=${c.meetings || 0}, prospects=${c.nb_prospects || 0}`).join('\n')}
 
 Opportunites (${opportunities.length} total) :
-${opportunities.slice(0, 50).map(o => `- ${o.title || 'N/A'} @ ${o.company || 'N/A'} (${o.company_size || 'N/A'}) — status: ${o.status || 'new'}`).join('\n')}
+${opportunities.slice(0, 50).map(o => `- ${o.title || 'N/A'} @ ${o.company || 'N/A'} (${o.company_size || 'N/A'}), status: ${o.status || 'new'}`).join('\n')}
 
 Analyse ces donnees et identifie le profil client ideal (ICP).`;
 
@@ -94,7 +94,7 @@ Analyse ces donnees et identifie le profil client ideal (ICP).`;
   // donnees" : l'analyse etait ensuite persistee telle quelle en memoire et
   // affichee a l'utilisateur comme un resultat legitime.
   if (!result.parsed) {
-    logger.warn('icp-agent', 'Reponse Claude non parsable — analyse ICP abandonnee', {
+    logger.warn('icp-agent', 'Reponse Claude non parsable, analyse ICP abandonnee', {
       userId, rawLength: (result.raw || '').length,
     });
     const err = new Error('ICP analysis unavailable: unparsable model response');
@@ -196,7 +196,7 @@ async function getICPAnalysis(userId) {
     logger.error('icp-agent', 'Failed to read cached ICP', { userId, error: err.message });
   }
 
-  // No valid cache — run fresh analysis
+  // No valid cache · run fresh analysis
   const result = await analyzeICP(userId);
   return { ...result, cached: false, analyzedAt: new Date().toISOString() };
 }

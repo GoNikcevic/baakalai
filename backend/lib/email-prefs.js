@@ -1,5 +1,5 @@
 /**
- * Email Preferences — opt-out par catégorie pour les emails système (Resend).
+ * Email Preferences · opt-out par catégorie pour les emails système (Resend).
  *
  * RGPD art. 21 / ePrivacy : tout email non strictement nécessaire au service
  * doit être désinscriptible simplement. Trois catégories (migration 101) :
@@ -10,7 +10,7 @@
  * Deux chemins de désinscription :
  *   - Paramètres > Notifications (toggles, routes/settings.js)
  *   - lien one-click dans chaque email + header List-Unsubscribe (RFC 8058),
- *     via un token HMAC sans état — aucun stockage, vérifiable offline.
+ *     via un token HMAC sans état · aucun stockage, vérifiable offline.
  */
 
 const crypto = require('crypto');

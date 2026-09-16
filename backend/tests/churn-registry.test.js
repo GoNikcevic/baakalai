@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { scoreOpportunity, AT_RISK_THRESHOLD } = require('../lib/churn-scoring');
 
-// Client sain : won, actif récemment, profil complet — score de base ~0.
+// Client sain : won, actif récemment, profil complet · score de base ~0.
 const healthyClient = {
   status: 'won',
   last_activity_at: new Date(Date.now() - 5 * 86400000).toISOString(),
@@ -12,7 +12,7 @@ const healthyClient = {
 
 test('une procédure collective force la bande critique même sur un client sain', () => {
   const { score, factors } = scoreOpportunity(healthyClient, {
-    registrySignals: [{ signal_type: 'insolvency_proceeding', detail: 'Redressement judiciaire — BODACC 12/07/2026' }],
+    registrySignals: [{ signal_type: 'insolvency_proceeding', detail: 'Redressement judiciaire, BODACC 12/07/2026' }],
   });
   assert.ok(score >= 76, `score ${score} devrait être >= 76 (critique)`);
   assert.ok(factors.some(f => f.signal === 'insolvency_proceeding'));

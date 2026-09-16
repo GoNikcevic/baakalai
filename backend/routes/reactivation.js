@@ -1,11 +1,11 @@
 /**
- * Reactivation Routes — on-demand queue + draft generation for
+ * Reactivation Routes · on-demand queue + draft generation for
  * "Deals à relancer" (kind=deal_reactivation) and "Clients à upseller" (kind=auto_upsell).
  *
- * GET   /api/reactivation/queue?kind=&sort=        — list candidates (no AI call)
- * GET   /api/reactivation/:opportunityId/draft?kind=&force=  — generate/fetch a draft on demand
- * PATCH /api/reactivation/emails/:nurtureEmailId    — save edits to a pending draft
- * POST  /api/reactivation/:opportunityId/postpone   — set the planned follow-up date ("Reporter")
+ * GET   /api/reactivation/queue?kind=&sort= · list candidates (no AI call)
+ * GET   /api/reactivation/:opportunityId/draft?kind=&force= · generate/fetch a draft on demand
+ * PATCH /api/reactivation/emails/:nurtureEmailId · save edits to a pending draft
+ * POST  /api/reactivation/:opportunityId/postpone · set the planned follow-up date ("Reporter")
  *
  * Sending/cancelling a draft reuses the existing /api/nurture/emails/:id/approve and /cancel
  * routes unchanged.
@@ -29,7 +29,7 @@ function validateKind(kind) {
  * Facts shown next to a draft so the user understands WHY this email exists:
  * where the relationship stands (stage, value, inactivity, churn) plus the
  * AI's own justification stored in the draft's metadata (reason/urgency for
- * deal reactivation, cross-sell products for upsell). Raw data only — labels
+ * deal reactivation, cross-sell products for upsell). Raw data only · labels
  * are built frontend-side for i18n.
  */
 async function buildDraftContext(userId, opportunityId, metadata) {
@@ -61,7 +61,7 @@ async function buildDraftContext(userId, opportunityId, metadata) {
   };
 }
 
-// GET /api/reactivation/settings — seuil de dormance de l'utilisateur
+// GET /api/reactivation/settings · seuil de dormance de l'utilisateur
 router.get('/settings', async (req, res, next) => {
   try {
     const { getStagnantDays, DEFAULT_STAGNANT_DAYS, MIN_DAYS, MAX_DAYS } = require('../lib/stagnation');
@@ -74,7 +74,7 @@ router.get('/settings', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// PATCH /api/reactivation/settings — « un deal est dormant après X jours »
+// PATCH /api/reactivation/settings · « un deal est dormant après X jours »
 router.patch('/settings', async (req, res, next) => {
   try {
     const { clampDays } = require('../lib/stagnation');
@@ -149,7 +149,7 @@ router.get('/:opportunityId/draft', async (req, res, next) => {
 
     let email;
     if (existing.rows[0]) {
-      // Regenerating (force=true) — overwrite the existing pending row rather than
+      // Regenerating (force=true) · overwrite the existing pending row rather than
       // accumulating a duplicate, keeping the same id (and any existing chain-execution link).
       const updated = await db.query(
         `UPDATE nurture_emails SET subject = $1, body = $2, pattern_ids = $3, metadata = $4

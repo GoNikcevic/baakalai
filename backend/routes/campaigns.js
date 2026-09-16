@@ -24,7 +24,7 @@ router.get('/lemlist/list', async (_req, res, next) => {
   }
 });
 
-// GET /api/campaigns — with batch touchpoint loading (no N+1)
+// GET /api/campaigns · with batch touchpoint loading (no N+1)
 router.get('/', async (req, res, next) => {
   try {
     const { status, channel, limit, offset, includeArchived } = req.query;
@@ -43,7 +43,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET /api/campaigns/:id — batch load all relations (no N+1)
+// GET /api/campaigns/:id · batch load all relations (no N+1)
 router.get('/:id', async (req, res, next) => {
   try {
     const data = await db.campaigns.getWithRelations(req.params.id);
@@ -209,7 +209,7 @@ function scoreTouchpoint(tp) {
   return { weakness, signals };
 }
 
-// POST /api/campaigns/:id/diagnose — analyze stats and propose optimization
+// POST /api/campaigns/:id/diagnose · analyze stats and propose optimization
 router.post('/:id/diagnose', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
@@ -311,7 +311,7 @@ router.post('/:id/diagnose', async (req, res, next) => {
   }
 });
 
-// POST /api/campaigns/:id/optimize — run the optimization
+// POST /api/campaigns/:id/optimize · run the optimization
 // Body: { touchpointSteps: ['E2'], hypothesis: '...', forceResolveExisting: bool }
 router.post('/:id/optimize', async (req, res, next) => {
   try {
@@ -375,7 +375,7 @@ router.post('/:id/optimize', async (req, res, next) => {
       painPoints: '',
       originalMessages,
       diagnostic: hypothesis || 'Optimisation manuelle déclenchée par l\'utilisateur',
-      // Mémoire réelle du tenant — était [] en dur alors que regenerationPrompt
+      // Mémoire réelle du tenant · était [] en dur alors que regenerationPrompt
       // sait la consommer (audit mémoire 02/09).
       memory: await db.memoryPatterns.listForPrompt(8, null, req.user.id).catch(() => []),
       touchpointsToRegenerate: touchpointSteps,
@@ -486,7 +486,7 @@ router.post('/:id/versions', async (req, res, next) => {
   }
 });
 
-// GET /api/campaigns/:id/prospects — list opportunities linked to a campaign
+// GET /api/campaigns/:id/prospects · list opportunities linked to a campaign
 router.get('/:id/prospects', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
@@ -501,7 +501,7 @@ router.get('/:id/prospects', async (req, res, next) => {
   }
 });
 
-// POST /api/campaigns/:id/prospects — bulk add prospects to a campaign
+// POST /api/campaigns/:id/prospects · bulk add prospects to a campaign
 // body: { contacts: [{ name, firstName, lastName, email, title, company, ... }] }
 router.post('/:id/prospects', async (req, res, next) => {
   try {
@@ -543,7 +543,7 @@ router.post('/:id/prospects', async (req, res, next) => {
   }
 });
 
-// DELETE /api/campaigns/:id/prospects/:prospectId — remove a single prospect from a campaign
+// DELETE /api/campaigns/:id/prospects/:prospectId · remove a single prospect from a campaign
 router.delete('/:id/prospects/:prospectId', async (req, res, next) => {
   try {
     const opp = await db.opportunities.get(req.params.prospectId);
@@ -566,7 +566,7 @@ router.delete('/:id/prospects/:prospectId', async (req, res, next) => {
   }
 });
 
-// DELETE /api/campaigns/:id/prospects — remove ALL prospects from a campaign (bulk clear)
+// DELETE /api/campaigns/:id/prospects · remove ALL prospects from a campaign (bulk clear)
 router.delete('/:id/prospects', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
@@ -667,7 +667,7 @@ router.post('/:id/launch-lemlist', async (req, res, next) => {
       await db.campaigns.update(campaign.id, { lemlist_id: lemlistCampaignId });
     }
 
-    // 2) Push sequence steps — tree-aware (supports conditional branches)
+    // 2) Push sequence steps · tree-aware (supports conditional branches)
     //    If the sequence has parent/child relationships (conditional branches),
     //    use pushSequenceTree which creates Lemlist conditional steps with
     //    sub-sequences. Otherwise, fall back to flat push for simple sequences.
@@ -735,7 +735,7 @@ router.post('/:id/launch-lemlist', async (req, res, next) => {
       }
     }
 
-    // 5) Start the Lemlist campaign (idempotent — no-op if already running)
+    // 5) Start the Lemlist campaign (idempotent · no-op if already running)
     //    We only start if at least one sequence step and one lead were pushed,
     //    otherwise Lemlist would start an empty campaign with nothing to send.
     let started = false;
@@ -746,11 +746,11 @@ router.post('/:id/launch-lemlist', async (req, res, next) => {
         await lemlist.startCampaign(lemlistCampaignId, apiKey);
         started = true;
       } catch (err) {
-        // "already running" is not a real error — the campaign was started
+        // "already running" is not a real error · the campaign was started
         // by a previous attempt or manually in Lemlist. Treat as success.
         if (err.message && err.message.includes('already running')) {
           started = true;
-          logger.info('launch-lemlist', 'Campaign already running — treating as success');
+          logger.info('launch-lemlist', 'Campaign already running, treating as success');
         } else {
           startError = err.message;
           logger.warn('launch-lemlist', `Auto-start failed: ${err.message}`);
@@ -822,7 +822,7 @@ router.post('/:id/launch-salesforce', async (req, res, next) => {
         name: campaign.name || 'Baakalai Campaign',
         type: 'Email',
         status: 'In Progress',
-        description: `Deployed from Baakalai — ${eligible.length} contacts`,
+        description: `Deployed from Baakalai, ${eligible.length} contacts`,
       });
       sfCampaignId = created.id || created.Id;
       if (!sfCampaignId) throw new Error('No campaign ID returned');
@@ -864,7 +864,7 @@ router.post('/:id/launch-salesforce', async (req, res, next) => {
 
     const updated = await db.campaigns.get(campaign.id);
     notifyCampaignUpdate(req.user.id, updated);
-    logger.info('launch-salesforce', `Campaign ${campaign.id} launched — SF Campaign ${sfCampaignId}, ${results.pushed} contacts pushed`);
+    logger.info('launch-salesforce', `Campaign ${campaign.id} launched, SF Campaign ${sfCampaignId}, ${results.pushed} contacts pushed`);
 
     res.json({
       success: true,
@@ -883,7 +883,7 @@ router.post('/:id/launch-salesforce', async (req, res, next) => {
 // POST /api/campaigns/:id/launch-native
 // Lance la campagne sur le canal natif : emails depuis la boîte connectée de
 // l'utilisateur, LinkedIn via le cookie li_at. Volumes bornés par le moteur
-// (lib/native-sequence-engine) — d'où le plafond de prospects à l'entrée.
+// (lib/native-sequence-engine) · d'où le plafond de prospects à l'entrée.
 const NATIVE_MAX_PROSPECTS = 200;
 
 router.post('/:id/launch-native', async (req, res, next) => {
@@ -953,7 +953,7 @@ router.post('/:id/launch-native', async (req, res, next) => {
 
     const updated = await db.campaigns.get(campaign.id);
     notifyCampaignUpdate(req.user.id, updated);
-    logger.info('launch-native', `Campaign ${campaign.id} launched natively — ${report.emailsSent} emails, ${report.linkedinActions} linkedin on first run`);
+    logger.info('launch-native', `Campaign ${campaign.id} launched natively, ${report.emailsSent} emails, ${report.linkedinActions} linkedin on first run`);
 
     res.json({ success: true, campaign: updated, firstRun: report });
   } catch (err) {
@@ -962,7 +962,7 @@ router.post('/:id/launch-native', async (req, res, next) => {
   }
 });
 
-// POST /api/campaigns/:id/native-run — « Traiter maintenant » : détecte les
+// POST /api/campaigns/:id/native-run · « Traiter maintenant » : détecte les
 // réponses et envoie les steps dus, sans attendre le cron.
 router.post('/:id/native-run', async (req, res, next) => {
   try {
@@ -985,7 +985,7 @@ router.post('/:id/native-run', async (req, res, next) => {
   }
 });
 
-// GET /api/campaigns/:id/native-status — avancement de l'envoi natif.
+// GET /api/campaigns/:id/native-status · avancement de l'envoi natif.
 router.get('/:id/native-status', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
@@ -1032,7 +1032,7 @@ router.get('/:id/native-status', async (req, res, next) => {
   }
 });
 
-// POST /api/campaigns/:id/prospects/:prospectId/stop-sequence — stop manuel
+// POST /api/campaigns/:id/prospects/:prospectId/stop-sequence · stop manuel
 // (le prospect a répondu ailleurs, ou on veut le sortir de la séquence).
 router.post('/:id/prospects/:prospectId/stop-sequence', async (req, res, next) => {
   try {
@@ -1057,7 +1057,7 @@ router.post('/:id/prospects/:prospectId/stop-sequence', async (req, res, next) =
   }
 });
 
-// DELETE /api/campaigns/:id — batch delete related data (no N+1)
+// DELETE /api/campaigns/:id · batch delete related data (no N+1)
 router.delete('/:id', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);

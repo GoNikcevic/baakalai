@@ -33,7 +33,7 @@ const { outcomeOf, instructionFor } = require('./reply-intents');
 // Garde-fou des conversations qui ne concluent pas. Les deux issues nettes ont
 // leur propre sortie, sur l'intention détectée et non sur un compteur : une
 // demande de RDV déclenche une proposition de créneaux puis l'arrêt, un refus
-// coupe l'autopilot sur le contact. MAX_TURNS ne sert qu'au troisième cas —
+// coupe l'autopilot sur le contact. MAX_TURNS ne sert qu'au troisième cas · 
 // l'interlocuteur enchaîne les questions sans jamais dire oui ni non. Sans
 // cette borne, l'IA discuterait indéfiniment ; au-delà, elle rend la main.
 const MAX_TURNS = 5;
@@ -43,7 +43,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const NOT_NOW_FOLLOWUP_DAYS = 21; // matches the "in a few weeks" wording used in the auto-reply
 
 // Les issues de chaque intention sont déclarées une seule fois, dans
-// lib/reply-intents.js — la même source que l'énumération du prompt d'analyse.
+// lib/reply-intents.js · la même source que l'énumération du prompt d'analyse.
 
 /**
  * Process a new reply and decide whether to auto-respond.
@@ -82,7 +82,7 @@ async function processReply(userId, opts) {
   // Stop conditions
   if (outcomeOf(intent) === 'stop') {
     // A negative reply is a reasonable signal to mark a not-yet-won deal as lost, but it's an
-    // inferred signal (sentiment on one email), not authoritative — it must never downgrade an
+    // inferred signal (sentiment on one email), not authoritative · it must never downgrade an
     // already-won client's status. Only the CRM's own native status is authoritative for that
     // (see crm-agent.js's deal sync). Stopping autopilot is always correct either way.
     const updates = { autopilot_enabled: false };
@@ -92,7 +92,7 @@ async function processReply(userId, opts) {
     return { action: 'stopped', reason: `Intent: ${intent}` };
   }
 
-  // Success — meeting request detected
+  // Success · meeting request detected
   if (outcomeOf(intent) === 'success') {
     // Generate meeting proposal reply
     const reply = await generateReply(userId, {
@@ -119,7 +119,7 @@ async function processReply(userId, opts) {
   let instruction = instructionFor(intent);
 
   if (intent === 'not_now') {
-    // La réponse promet « dans quelques semaines » — on le planifie vraiment,
+    // La réponse promet « dans quelques semaines » · on le planifie vraiment,
     // au lieu d'envoyer une politesse sans effet sur la file de réactivation.
     await db.opportunities.update(opportunityId, {
       planned_followup_date: new Date(Date.now() + NOT_NOW_FOLLOWUP_DAYS * DAY_MS).toISOString(),
@@ -129,7 +129,7 @@ async function processReply(userId, opts) {
 
   // If we're at turn 3+, push toward meeting
   if (turnCount >= 3 && intent !== 'not_now') {
-    instruction += ' We have been exchanging for a while — propose a quick 15-minute call to discuss further.';
+    instruction += ' We have been exchanging for a while, propose a quick 15-minute call to discuss further.';
   }
 
   const reply = await generateReply(userId, {
@@ -272,7 +272,7 @@ async function sendScheduledReplies() {
     try {
       if (!await scopeAllows(item)) {
         await db.query(`UPDATE autopilot_queue SET status = 'cancelled' WHERE id = $1`, [item.id]);
-        logger.info('autopilot', `reply ${item.id} annulée — portée ${populationOf(item)} désactivée entre-temps`);
+        logger.info('autopilot', `reply ${item.id} annulée, portée ${populationOf(item)} désactivée entre-temps`);
         continue;
       }
 
@@ -389,7 +389,7 @@ async function getAutopilotSettings(userId) {
 
   // Bascule depuis l'ancien interrupteur unique `autopilot_enabled`, qui
   // commandait les deux populations à la fois. Un « oui » historique portait
-  // sur la prospection — c'est le seul cas que l'UI décrivait — et ne doit
+  // sur la prospection · c'est le seul cas que l'UI décrivait · et ne doit
   // surtout pas se transformer en autorisation de répondre tout seul dans une
   // conversation client en cours. En cas de doute, la portée CRM reste fermée.
   const legacy = settings.autopilot_enabled ?? false;

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Autopilot de réponse (réglage cadré sur une population)
+   BAKAL · Autopilot de réponse (réglage cadré sur une population)
 
    Un seul moteur, deux portées. Répondre tout seul à un inconnu qui répond à
    une séquence froide et répondre tout seul dans une conversation avec un
@@ -8,7 +8,7 @@
 
    Ce composant remplace deux copies quasi identiques (page Prospection et page
    Activation) qui commandaient le même interrupteur global sous deux noms
-   contradictoires — l'activer d'un côté le montrait actif de l'autre.
+   contradictoires · l'activer d'un côté le montrait actif de l'autre.
 
    `scope` vaut 'prospection' (prospects froids issus d'une campagne) ou 'crm'
    (contacts et clients synchronisés depuis le CRM). Voir backend/lib/crm-scope.js.
@@ -30,7 +30,7 @@ export default function AutopilotSettings({ scope }) {
 
   // `scope` est fixe pour un point de montage donné (Prospection monte la portée
   // prospection, Activation la portée CRM) : l'état initial `loading` suffit,
-  // inutile de le remettre à true dans l'effet — ce que React déconseille.
+  // inutile de le remettre à true dans l'effet · ce que React déconseille.
   useEffect(() => {
     let cancelled = false;
     Promise.all([

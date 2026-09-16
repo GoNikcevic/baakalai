@@ -1,5 +1,5 @@
 /**
- * Santé financière — reste de l'Europe. Clé requise (OPENCORPORATES_API_KEY).
+ * Santé financière · reste de l'Europe. Clé requise (OPENCORPORATES_API_KEY).
  *
  * OpenCorporates API v0.4 :
  * https://api.opencorporates.com/documentation/API-Reference
@@ -8,11 +8,11 @@
  *   current_status, inactive, dissolution_date, ... }
  *
  * Sans clé le quota anonyme est trop fragile pour un cron : available() = false.
- * Clé gratuite : 50 req/jour, 200/mois — c'est l'orchestrateur qui limite le
+ * Clé gratuite : 50 req/jour, 200/mois · c'est l'orchestrateur qui limite le
  * volume, mais on throw QUOTA_EXCEEDED sur 403/429 en garde-fou.
  *
  * Les statuts sont libres et localisés selon le registre (« In liquidation »,
- * « Insolvenzverfahren », « Konkurs »…) — on classe par mots-clés.
+ * « Insolvenzverfahren », « Konkurs »…) · on classe par mots-clés.
  */
 
 const { nameMatches } = require('./name-match');
@@ -41,7 +41,7 @@ function frDate(iso) {
 /**
  * Recherche une société européenne dans le registre de sa juridiction.
  * @param {string} companyName
- * @param {{ jurisdiction?: string }} opts — code juridiction minuscule
+ * @param {{ jurisdiction?: string }} opts · code juridiction minuscule
  *   ('be', 'de', 'nl', …) fourni par l'orchestrateur.
  * @returns {Promise<{matched, registryId, status, signals, raw}>}
  */
@@ -104,7 +104,7 @@ async function lookup(companyName, opts = {}) {
     const quand = frDate(company.dissolution_date);
     signals.push({
       signal_type: 'company_dissolved',
-      detail: `Société radiée du registre${quand ? ` — ${quand}` : ''} (OpenCorporates)`,
+      detail: `Société radiée du registre${quand ? `, ${quand}` : ''} (OpenCorporates)`,
     });
   } else if (company.inactive === false || ACTIVE_RE.test(currentStatus)) {
     status = 'active';

@@ -1,5 +1,5 @@
 /**
- * Dormance — définition unique de « ce deal est resté sans activité trop longtemps ».
+ * Dormance · définition unique de « ce deal est resté sans activité trop longtemps ».
  *
  * Deux autorités concurrentes coexistaient : un seuil réglable par trigger côté
  * Activation (30 jours par défaut dans le formulaire) et un 14 écrit en dur,
@@ -24,7 +24,7 @@ const db = require('../db');
  *
  *  Le module était parti sur 14, la valeur que la file de réactivation et le
  *  Deal Coach portaient en dur. Mais l'unification a mis ce chiffre devant tout
- *  le monde — compte-rendu de lecture, wizard d'onboarding, assistant général —
+ *  le monde · compte-rendu de lecture, wizard d'onboarding, assistant général · 
  *  et à 14 jours presque tout CRM à cycle long ressort « dormant », ce qui vide
  *  le mot de son sens. 30 est le seuil retenu par défaut ; chaque utilisateur
  *  peut le régler depuis la file de réactivation selon son cycle de vente. */

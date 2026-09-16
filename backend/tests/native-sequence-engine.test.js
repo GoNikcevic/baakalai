@@ -1,5 +1,5 @@
 /**
- * Tests du moteur d'envoi natif — fonctions pures uniquement.
+ * Tests du moteur d'envoi natif · fonctions pures uniquement.
  *
  * Le chemin principal d'une séquence conditionnelle et la substitution des
  * variables déterminent CE QUI part et À QUI : une régression ici envoie de
@@ -46,7 +46,7 @@ test('séquence plate : racines ordonnées par sort_order avec délais', () => {
 test('arbre conditionnel : suit les branches négatives/default, ignore les positives', () => {
   const path = buildMainPath([
     tp('root', { sort_order: 1 }),
-    // Branche positive (ouverture trackée) — réservée à Lemlist, exclue du natif
+    // Branche positive (ouverture trackée) · réservée à Lemlist, exclue du natif
     tp('opened-child', { parent_step_id: 'root', condition_type: 'opened', sort_order: 1 }),
     tp('followup', { parent_step_id: 'root', condition_type: 'not_replied', sort_order: 2, timing: 'J+3' }),
     tp('followup-2', { parent_step_id: 'followup', condition_type: 'not_replied', sort_order: 1, timing: 'J+4' }),
@@ -99,10 +99,10 @@ const prospect = {
 
 test('renderTemplate substitue toutes les variables connues', () => {
   const out = renderTemplate(
-    'Bonjour {{firstName}} {{lastName}}, chez {{companyName}} en tant que {{jobTitle}} — {{icebreaker}}',
+    'Bonjour {{firstName}} {{lastName}}, chez {{companyName}} en tant que {{jobTitle}}, {{icebreaker}}',
     prospect
   );
-  assert.strictEqual(out, 'Bonjour Marie Dupont, chez Acme SAS en tant que DAF — Bravo pour votre levée.');
+  assert.strictEqual(out, 'Bonjour Marie Dupont, chez Acme SAS en tant que DAF, Bravo pour votre levée.');
 });
 
 test('renderTemplate efface les variables inconnues ou sans valeur sans laisser de trous', () => {

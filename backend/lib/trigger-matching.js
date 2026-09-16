@@ -1,12 +1,12 @@
 /**
- * Trigger Matching — logique unique de sélection des contacts pour les
+ * Trigger Matching · logique unique de sélection des contacts pour les
  * nurture_triggers, partagée entre le cron (crm-agent stepNurture) et la
  * preview (routes/nurture.js). Les deux chemins divergeaient (preview sur
  * updated_at, cron sur last_activity_at) : la preview pouvait afficher 0 ou
  * tous les contacts par rapport à ce que le cron déclenchait réellement.
  *
  * Ancrages temporels :
- * - stagnation / inactivité : last_activity_at — jamais updated_at, que la
+ * - stagnation / inactivité : last_activity_at · jamais updated_at, que la
  *   synchro CRM réécrit à chaque passage (cf. churn-scoring.js)
  * - événements liés à la clôture (won/lost) : won_date / lost_date
  *   (migration 043), fallback updated_at pour les lignes historiques
@@ -27,13 +27,13 @@ const MANUAL_ONLY_TYPES = ['newsletter_inactive', 'newsletter_engaged'];
  * porte pas de seuil explicite (cf. lib/stagnation.js).
  * `opps` = lignes de la table opportunities (SELECT *).
  * Retourne null si le type n'est pas évaluable depuis la base locale
- * (types MANUAL_ONLY_TYPES) — à distinguer de [] (évalué, aucun match).
+ * (types MANUAL_ONLY_TYPES) · à distinguer de [] (évalué, aucun match).
  *
  * Les prospects froids d'une campagne de prospection sont écartés en entrée
  * (cf. crm-scope.js) : les triggers d'Activation ne parlent qu'aux contacts
  * venus du CRM. Le filtre est ici et non dans les requêtes appelantes parce
  * que cette fonction est le point de passage unique du cron (crm-agent) et
- * de la preview (routes/nurture.js) — les deux héritent donc de la règle.
+ * de la preview (routes/nurture.js) · les deux héritent donc de la règle.
  */
 function matchContacts(trigger, allOpps, now = Date.now(), defaults = {}) {
   const opps = onlyCrmContacts(allOpps);
@@ -49,7 +49,7 @@ function matchContacts(trigger, allOpps, now = Date.now(), defaults = {}) {
   switch (trigger.trigger_type) {
     case 'deal_won':
       // Fenêtre de 7 jours après [days] : sans fenêtre, chaque run rematchait
-      // l'intégralité des contacts gagnés — seuls la dédup 7 jours et le
+      // l'intégralité des contacts gagnés · seuls la dédup 7 jours et le
       // plafond par run masquaient le problème.
       return opps.filter(o =>
         o.status === 'won' &&

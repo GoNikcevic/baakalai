@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Campaigns List Page (React)
+   BAKAL · Campaigns List Page (React)
    Lists all campaigns with filter, sort, project grouping, and row navigation.
    Migrated from renderCampaignsList / renderCampaignRow in campaigns-data.js
    and filterCampaignsList / sortCampaignsList in pages.js.
@@ -26,13 +26,13 @@ export default function CampaignsList({ onNavigateCampaign }) {
   const confirm = useConfirm();
   const en = lang === 'en';
   const user = getUser();
-  // Non-admins get the campaign assistant only — no tab switcher, no campaign-list/autopilot
+  // Non-admins get the campaign assistant only · no tab switcher, no campaign-list/autopilot
   // management views (matches this app's existing "simplified UI for non-admins" principle
   // elsewhere, e.g. Layout.jsx's simplified sidebar).
   const isAdmin = !user?.teamRole || user.teamRole === 'admin';
   // L'écran principal de Prospection est la création de campagne (assistant) ;
   // la liste n'est qu'un historique accessible en second onglet. Les CTAs externes
-  // (Dashboard, onboarding, Deal Coach) passent state.openAssistant — redondant
+  // (Dashboard, onboarding, Deal Coach) passent state.openAssistant · redondant
   // désormais mais conservé ; state.openHistory permet de cibler l'historique.
   const [view, setView] = useState(location.state?.openHistory ? 'campaigns' : 'assistant');
   const [actionLoading, setActionLoading] = useState({});
@@ -42,7 +42,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
 
   // Default "Tous" (hors archivées) : les campagnes créées par l'assistant naissent
-  // en status 'prep' — un défaut 'active' les rendait invisibles juste après création.
+  // en status 'prep' · un défaut 'active' les rendait invisibles juste après création.
   const [filter, setFilter] = useState('');
   const [sortByReply, setSortByReply] = useState(false);
   const [sortAsc, setSortAsc] = useState(false);
@@ -454,12 +454,12 @@ function CampaignRow({ campaign: c, onClick, onArchive, onDelete, loading, t }) 
 
   let stat1Value, stat1Label, stat2Value, stat2Label;
   if (isPrep) {
-    stat1Value = '—';
-    stat1Label = '—';
-    stat2Value = '—';
-    stat2Label = '—';
+    stat1Value = ' ';
+    stat1Label = ' ';
+    stat2Value = ' ';
+    stat2Label = ' ';
   } else if (isLinkedin) {
-    stat1Value = '—';
+    stat1Value = ' ';
     stat1Label = t('campaigns.naLinkedin');
     stat2Value = (c.kpis?.replyRate ?? 0) + '%';
     stat2Label = t('campaigns.replyRate');
@@ -471,16 +471,16 @@ function CampaignRow({ campaign: c, onClick, onArchive, onDelete, loading, t }) 
   }
 
   const stat1Color =
-    stat1Value !== '—' && parseFloat(stat1Value) >= 50
+    stat1Value !== ' ' && parseFloat(stat1Value) >= 50
       ? 'var(--success)'
-      : stat1Value === '—'
+      : stat1Value === ' '
         ? 'var(--text-muted)'
         : 'var(--warning)';
 
   const stat2Color =
-    stat2Value !== '—' && parseFloat(stat2Value) >= 8
+    stat2Value !== ' ' && parseFloat(stat2Value) >= 8
       ? 'var(--blue)'
-      : stat2Value === '—'
+      : stat2Value === ' '
         ? 'var(--text-muted)'
         : 'var(--warning)';
 

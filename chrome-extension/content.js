@@ -1,5 +1,5 @@
 /**
- * Baakalai Content Script — Injected on LinkedIn pages
+ * Baakalai Content Script : Injected on LinkedIn pages
  *
  * Features:
  * 1. "Add to Baakalai" button on profile pages (with enrichment)
@@ -403,7 +403,7 @@ async function showContactPanel(slug) {
         </div>
         <div id="baakalai-email-msg" style="margin-top:4px;font-size:11px;"></div>
       </div>
-    </div>` : '<div style="margin-bottom:14px;padding:8px;border-radius:8px;background:#FEF3C7;color:#D97706;font-size:11px;">No email address — add one in Baakalai to send emails.</div>'}
+    </div>` : '<div style="margin-bottom:14px;padding:8px;border-radius:8px;background:#FEF3C7;color:#D97706;font-size:11px;">No email address, add one in Baakalai to send emails.</div>'}
 
     <!-- 3. Patterns -->
     ${data.patterns?.length > 0 ? `

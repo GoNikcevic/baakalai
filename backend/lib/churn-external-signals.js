@@ -2,7 +2,7 @@
  * Churn External Signals Scanner
  *
  * Weekly, cost-controlled web search (via Brave Search) for churn-risk signals about
- * existing clients — scoped to opportunities ALREADY at medium+ risk from free CRM-only
+ * existing clients · scoped to opportunities ALREADY at medium+ risk from free CRM-only
  * signals (churn_score >= 50), never the whole client base, to keep API cost bounded.
  *
  * Deliberately separate from the prospecting `signals`/`signal_configs` tables (migration

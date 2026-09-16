@@ -1,22 +1,22 @@
 /**
- * Deal lifecycle sync — maps each CRM's native won/lost signal onto opportunities:
+ * Deal lifecycle sync · maps each CRM's native won/lost signal onto opportunities:
  * status, won_date/lost_date, deal_value, lost_reason, next activity, pipeline stage.
  *
  * Extracted from crm-agent's stepSync so the manual Settings sync (lib/crm-sync.js)
  * runs it too: before this, a fresh « Analyser le CRM » imported contacts but left
- * every status on 'imported' until the next 9AM cron — so a new user saw no clients
+ * every status on 'imported' until the next 9AM cron · so a new user saw no clients
  * (won) anywhere, and staging (orchestrator off) never mapped them at all.
  *
  * Every provider's getDeals() is normalized to the same shape ({ personId,
  * status: 'won'|'lost'|'open', value, updatedAt }), so this loop treats them
- * identically — status is always taken from the CRM's own native won/lost signal
+ * identically · status is always taken from the CRM's own native won/lost signal
  * (Pipedrive/Odoo: deal/stage flag; Salesforce: IsWon/IsClosed; HubSpot:
  * hs_is_closed_won/hs_is_closed), authoritative regardless of the opportunity's
- * current status — a deal the CRM now shows as lost must stop being treated as a
+ * current status · a deal the CRM now shows as lost must stop being treated as a
  * client even if it was won before (manual correction in the CRM is the source of
  * truth).
  *
- * Best-effort: never throws — deal sync is optional on top of the contact sync.
+ * Best-effort: never throws · deal sync is optional on top of the contact sync.
  */
 
 const db = require('../db');
@@ -36,7 +36,7 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
     const { getStageLabelMap, extractStage, trackStage } = require('./stage-tracking');
     const stageLabelMap = await getStageLabelMap(crmProvider, token);
 
-    // Prefer the CRM's own close date over "now" — "now" is only a fair proxy for a
+    // Prefer the CRM's own close date over "now" · "now" is only a fair proxy for a
     // transition happening in this very sync, never for backfilling an older won/lost deal.
     const safeDateISO = (value) => {
       if (!value) return null;
@@ -73,20 +73,20 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       } else if (deal.status === 'lost' && o.status === 'lost' && !o.lost_date && closeDate) {
         updates.lost_date = closeDate;
       }
-      // Rapatrie la raison de perte native (Pipedrive) — jamais si une valeur
+      // Rapatrie la raison de perte native (Pipedrive) · jamais si une valeur
       // existe déjà (CRM ou saisie manuelle), pour ne jamais écraser une
       // correction humaine par une resynchro.
       if (deal.lostReason && !o.lost_reason) {
         updates.lost_reason = deal.lostReason;
         updates.lost_reason_source = 'crm';
       }
-      // Pipedrive's native "next activity" date feeds planned_followup_date — never overwrite
+      // Pipedrive's native "next activity" date feeds planned_followup_date · never overwrite
       // a manually-set date with null (Pipedrive is the only provider that returns this today).
       if (deal.nextActivityDate && deal.nextActivityDate !== o.planned_followup_date) {
         updates.planned_followup_date = deal.nextActivityDate;
         updates.planned_followup_reason = 'crm_sync';
       }
-      // The CRM's own "last modified" timestamp is the real activity signal — `updated_at`
+      // The CRM's own "last modified" timestamp is the real activity signal · `updated_at`
       // gets reset to now() by a DB trigger on every internal write (e.g. churn scoring),
       // so it can't be trusted for staleness. Only advance last_activity_at forward, never back.
       if (deal.updatedAt) {
@@ -150,7 +150,7 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       }
     }
   } catch (err) {
-    // Avant l'extraction ce catch était muet — c'est précisément ce qui rendait
+    // Avant l'extraction ce catch était muet · c'est précisément ce qui rendait
     // les échecs de mapping won/lost invisibles. On trace, sans faire échouer.
     logger.warn('deal-lifecycle-sync', `${crmProvider} deal sync failed for user ${userId}: ${err.message}`);
   }

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Performance Bar Chart (Recharts)
+   BAKAL · Performance Bar Chart (Recharts)
    Weekly email/linkedin volume bars for the dashboard overview.
    =============================================================================== */
 

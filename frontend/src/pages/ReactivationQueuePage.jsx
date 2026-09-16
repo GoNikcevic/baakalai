@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Reactivation Queue (generic)
+   BAKAL · Reactivation Queue (generic)
    Shared list page for "Deals à relancer" (kind=deal_reactivation) and
-   "Clients à upseller" (kind=auto_upsell). Rule-based candidate detection only —
+   "Clients à upseller" (kind=auto_upsell). Rule-based candidate detection only · 
    no AI call happens until the user opens a single candidate ("Voir le mail").
    =============================================================================== */
 
@@ -44,7 +44,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   const [bulk, setBulk] = useState(null);
   // null = pas encore su ; l'état vide ne s'affiche qu'une fois la réponse connue
   const [hasCrm, setHasCrm] = useState(null);
-  // Workflows de relance vivants (draft/active/paused), indexés par contact —
+  // Workflows de relance vivants (draft/active/paused), indexés par contact · 
   // pour remplacer les boutons d'action par l'état du workflow en cours.
   const [workflows, setWorkflows] = useState(() => new Map());
   const [showCrmBanner, setShowCrmBanner] = useState(() => {
@@ -139,7 +139,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
     setSelected(allSelected ? new Set() : new Set(candidates.map(c => c.id)));
   };
 
-  // Plafond de POST /nurture/emails/approve-batch — au-delà on ré-appelle par tranches.
+  // Plafond de POST /nurture/emails/approve-batch · au-delà on ré-appelle par tranches.
   const APPROVE_BATCH_MAX = 20;
 
   const handleBulkSend = async () => {
@@ -147,7 +147,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
     if (!targets.length || bulk) return;
     if (!await confirm(t('reactivation.bulkConfirm', { count: targets.length }))) return;
 
-    // Phase 1 — brouillons séquentiels : un appel IA par deal, et un compte SMTP
+    // Phase 1 · brouillons séquentiels : un appel IA par deal, et un compte SMTP
     // perso n'aime pas les rafales de toute façon. Le endpoint réutilise un
     // brouillon pending existant sans le régénérer.
     setBulk({ phase: 'drafting', done: 0, total: targets.length });
@@ -161,12 +161,12 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
         emailIds.push(data.email.id);
         nameByEmailId[data.email.id] = label;
       } catch (err) {
-        failures.push(`${label} — ${err.message}`);
+        failures.push(`${label}, ${err.message}`);
       }
       setBulk(prev => (prev ? { ...prev, done: prev.done + 1 } : prev));
     }
 
-    // Phase 2 — envoi en lot par tranches de 20.
+    // Phase 2 · envoi en lot par tranches de 20.
     let sent = 0;
     if (emailIds.length) {
       setBulk({ phase: 'sending', done: 0, total: emailIds.length });
@@ -179,10 +179,10 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
           });
           sent += result.sent || 0;
           for (const r of result.results || []) {
-            if (!r.success) failures.push(`${nameByEmailId[r.id] || r.id} — ${r.error || ''}`);
+            if (!r.success) failures.push(`${nameByEmailId[r.id] || r.id}, ${r.error || ''}`);
           }
         } catch (err) {
-          chunk.forEach(id => failures.push(`${nameByEmailId[id]} — ${err.message}`));
+          chunk.forEach(id => failures.push(`${nameByEmailId[id]}, ${err.message}`));
         }
         setBulk(prev => (prev ? { ...prev, done: i + chunk.length } : prev));
       }
@@ -441,7 +441,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                     </div>
                   </div>
 
-                  {/* Score breakdown — même présentation que la section "À risque"
+                  {/* Score breakdown, même présentation que la section "À risque"
                       (liste de facteurs + poids coloré), seulement pour les
                       candidats upsell (deal_reactivation garde la ligne "reason"
                       simple ci-dessus, sans factors). */}
@@ -461,7 +461,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                     </div>
                   )}
 
-                  {/* Produits déjà souscrits vs additionnels possibles — seulement
+                  {/* Produits déjà souscrits vs additionnels possibles, seulement
                       si des lignes de produit existent pour cette équipe. */}
                   {(c.ownedProducts?.length > 0 || c.crossSellProducts?.length > 0) && (
                     <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>

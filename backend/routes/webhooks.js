@@ -1,7 +1,7 @@
 /**
- * Webhook Routes — Receive real-time events from CRM providers
+ * Webhook Routes · Receive real-time events from CRM providers
  *
- * POST /api/webhooks/pipedrive — Pipedrive webhook (person/deal events)
+ * POST /api/webhooks/pipedrive · Pipedrive webhook (person/deal events)
  *
  * These routes are PUBLIC (no JWT auth) but validated via shared secret.
  */
@@ -17,7 +17,7 @@ const router = Router();
 const PIPEDRIVE_WEBHOOK_SECRET = process.env.PIPEDRIVE_WEBHOOK_SECRET || null;
 
 if (!PIPEDRIVE_WEBHOOK_SECRET && process.env.NODE_ENV === 'production') {
-  logger.warn('webhooks', 'PIPEDRIVE_WEBHOOK_SECRET not set — webhook validation disabled in production. Set it to secure webhook endpoint.');
+  logger.warn('webhooks', 'PIPEDRIVE_WEBHOOK_SECRET not set, webhook validation disabled in production. Set it to secure webhook endpoint.');
 }
 
 /**
@@ -31,14 +31,14 @@ if (!PIPEDRIVE_WEBHOOK_SECRET && process.env.NODE_ENV === 'production') {
  * Payload: { current: {...}, previous: {...}, event: "updated.person", meta: { action, object, id, company_id, user_id } }
  */
 router.post('/pipedrive', async (req, res) => {
-  // Validate webhook secret — reject unsigned webhooks in production
+  // Validate webhook secret · reject unsigned webhooks in production
   const authHeader = req.headers['authorization'];
   if (PIPEDRIVE_WEBHOOK_SECRET) {
     if (!authHeader || authHeader !== `Bearer ${PIPEDRIVE_WEBHOOK_SECRET}`) {
       return res.status(401).json({ error: 'Invalid webhook secret' });
     }
   } else if (process.env.NODE_ENV === 'production') {
-    logger.error('webhooks', 'Rejecting unsigned webhook — PIPEDRIVE_WEBHOOK_SECRET not set');
+    logger.error('webhooks', 'Rejecting unsigned webhook, PIPEDRIVE_WEBHOOK_SECRET not set');
     return res.status(401).json({ error: 'Webhook secret not configured' });
   }
 
@@ -50,7 +50,7 @@ router.post('/pipedrive', async (req, res) => {
   const action = meta.action; // updated, added, deleted
   const object = meta.object; // person, deal, activity
 
-  logger.info('webhook-pipedrive', `${event} — ${object} #${meta.id}`);
+  logger.info('webhook-pipedrive', `${event}, ${object} #${meta.id}`);
 
   // Always respond quickly to Pipedrive
   res.status(200).json({ ok: true });
@@ -134,7 +134,7 @@ async function handleDealEvent(userId, action, current, previous) {
     const dealStatus = current.status; // open, won, lost
     const newStatus = dealStatus === 'won' ? 'won' : dealStatus === 'lost' ? 'lost' : null;
 
-    // Étape de pipeline temps réel (migration 092) — le libellé n'est résolu
+    // Étape de pipeline temps réel (migration 092) · le libellé n'est résolu
     // (1 appel /stages) que si l'id stocké diffère vraiment.
     if (current.stage_id != null && String(current.stage_id) !== String(opp.crm_stage_id || '')) {
       try {
@@ -157,7 +157,7 @@ async function handleDealEvent(userId, action, current, previous) {
 
     // Un deal qui bouge = bonne raison de re-vérifier l'actu de la société :
     // boost dans la file du signal-scheduler (scan au prochain tick <= 30 min,
-    // pas d'appel Brave immédiat — le budget quotidien reste maître).
+    // pas d'appel Brave immédiat · le budget quotidien reste maître).
     try {
       const oppCompany = await db.query('SELECT company FROM opportunities WHERE id = $1', [opp.id]);
       if (oppCompany.rows[0]?.company) {

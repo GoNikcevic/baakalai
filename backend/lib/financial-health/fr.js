@@ -1,5 +1,5 @@
 /**
- * Santé financière — France. Gratuit, sans clé.
+ * Santé financière · France. Gratuit, sans clé.
  *
  * 1. Nom → SIREN via l'API Recherche d'entreprises (data.gouv) :
  *    https://recherche-entreprises.api.gouv.fr/docs
@@ -11,7 +11,7 @@
  *    le SIREN est dans le champ multivalué `registre`.
  *
  * NB : contrairement à ce que laisse entendre la doc, la réponse search de
- * l'annuaire n'expose aucun indicateur de procédure collective — BODACC est
+ * l'annuaire n'expose aucun indicateur de procédure collective · BODACC est
  * donc la seule source, et la source de vérité datée.
  */
 
@@ -41,7 +41,7 @@ function classifyJugement(record) {
   let jugement = {};
   try {
     jugement = JSON.parse(record.jugement || '{}');
-  } catch { /* champ parfois absent ou mal formé — on retombe sur les libellés */ }
+  } catch { /* champ parfois absent ou mal formé, on retombe sur les libellés */ }
 
   const texte = `${jugement.famille || ''} ${jugement.nature || ''}`.toLowerCase();
   const date = frDate(jugement.date || record.dateparution);
@@ -49,7 +49,7 @@ function classifyJugement(record) {
   if (/liquidation|redressement/.test(texte)) {
     return {
       signal_type: 'insolvency_proceeding',
-      detail: `${jugement.nature || 'Procédure collective'} — BODACC ${frDate(record.dateparution)}`,
+      detail: `${jugement.nature || 'Procédure collective'}, BODACC ${frDate(record.dateparution)}`,
       status: 'insolvency',
       nature: jugement.nature || null,
       date,
@@ -58,7 +58,7 @@ function classifyJugement(record) {
   if (/sauvegarde/.test(texte)) {
     return {
       signal_type: 'insolvency_safeguard',
-      detail: `${jugement.nature || 'Procédure de sauvegarde'} — BODACC ${frDate(record.dateparution)}`,
+      detail: `${jugement.nature || 'Procédure de sauvegarde'}, BODACC ${frDate(record.dateparution)}`,
       status: 'safeguard',
       nature: jugement.nature || null,
       date,
@@ -106,7 +106,7 @@ async function lookup(companyName, opts = {}) {
     const quand = frDate(company.date_fermeture);
     signals.push({
       signal_type: 'company_dissolved',
-      detail: `Entreprise cessée (radiée du registre)${quand ? ` — ${quand}` : ''}`,
+      detail: `Entreprise cessée (radiée du registre)${quand ? `, ${quand}` : ''}`,
     });
   }
 

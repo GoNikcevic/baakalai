@@ -1,8 +1,8 @@
 /**
- * Réconciliation de séquence — partagée campagnes / enrollments.
+ * Réconciliation de séquence · partagée campagnes / enrollments.
  *
  * Réconciliation, PAS delete/recreate : campaign_sends référence les
- * touchpoints (SET NULL depuis la migration 103, CASCADE avant) — supprimer
+ * touchpoints (SET NULL depuis la migration 103, CASCADE avant) · supprimer
  * puis recréer la séquence d'un conteneur avec des envois en cours effaçait
  * la position de chaque prospect et faisait tout repartir à E1. Ici les steps
  * existants (id backend présent) sont mis à jour EN PLACE, les nouveaux créés,
@@ -12,7 +12,7 @@
  * parent (CopyTab/CopyEditorPage via sequenceToBackend), ou imbriqué via
  * children (WorkflowPage, génération). Les deux peuvent se mélanger.
  *
- * `container` : { campaignId } OU { enrollmentId } — passé tel quel à la DAO.
+ * `container` : { campaignId } OU { enrollmentId } · passé tel quel à la DAO.
  */
 
 const db = require('../db');

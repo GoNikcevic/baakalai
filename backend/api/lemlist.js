@@ -40,7 +40,7 @@ async function lemlistFetch(endpoint, options = {}, apiKey = null) {
         { status: res.status, endpoint }
       );
     }
-    // Handle empty 2xx responses (e.g. 204 No Content) gracefully —
+    // Handle empty 2xx responses (e.g. 204 No Content) gracefully · 
     // some endpoints return an empty body on success.
     if (res.status === 204) return {};
     const text = await res.text();
@@ -48,7 +48,7 @@ async function lemlistFetch(endpoint, options = {}, apiKey = null) {
     try {
       return JSON.parse(text);
     } catch {
-      // Body is non-empty but not JSON (rare) — return raw text under `_raw`
+      // Body is non-empty but not JSON (rare) · return raw text under `_raw`
       return { _raw: text };
     }
   }, { maxRetries: 2, baseDelay: 1000 });
@@ -67,7 +67,7 @@ async function createCampaign(name, apiKey, senderId) {
 }
 
 /**
- * Start (or resume) a Lemlist campaign. Idempotent — if the campaign is
+ * Start (or resume) a Lemlist campaign. Idempotent · if the campaign is
  * already running, Lemlist's API simply does nothing.
  * POST /api/campaigns/:id/start
  *
@@ -154,7 +154,7 @@ async function addSequenceStep(campaignId, step, apiKey) {
   }
 
   // Convert line breaks to HTML for email steps so Lemlist renders paragraphs.
-  // Claude generates copy with \n\n between paragraphs — without this conversion,
+  // Claude generates copy with \n\n between paragraphs · without this conversion,
   // emails appear as one continuous block in Lemlist.
   if (lemlistType === 'email' && messageText.includes('\n')) {
     messageText = messageText
@@ -199,7 +199,7 @@ function parseDelayFromTiming(timing) {
 const LEMLIST_CONDITION_MAP = {
   opened: 'emailsOpened',
   not_opened: 'emailsOpened',    // same key, "not" is the fallback branch
-  replied: 'emailsClicked',      // closest match — Lemlist doesn't have emailsReplied as conditionKey
+  replied: 'emailsClicked',      // closest match, Lemlist doesn't have emailsReplied as conditionKey
   not_replied: 'emailsClicked',
   clicked: 'emailsClicked',
   not_clicked: 'emailsClicked',
@@ -428,7 +428,7 @@ function mapCompanySizes(values) {
       continue;
     }
     if (key === '1-10 employees' || key === '1-10 salariés') { add('1-10'); continue; }
-    // Unknown format — pass through so Lemlist can error (or match if the
+    // Unknown format · pass through so Lemlist can error (or match if the
     // string happens to be valid). Better than silently dropping.
     add(key);
   }
@@ -528,7 +528,7 @@ function buildLemlistFilters(criteria, availableFilters) {
   // Used when the user provides a specific list of target companies
   // (e.g. from an Excel file) rather than a sector-wide search.
   // skipNormalize: company names can contain "/" as part of the name
-  // (e.g. "TAO / FULL GRIP / CMB") — we must NOT split on slash.
+  // (e.g. "TAO / FULL GRIP / CMB") · we must NOT split on slash.
   tryAdd('companies', criteria.companies,
     ['currentCompany', 'currentCompanyByIds'], { skipNormalize: true });
 
@@ -537,7 +537,7 @@ function buildLemlistFilters(criteria, availableFilters) {
   // "Medical Devices", etc.) and silently returns 0 results when given
   // French values like "Hôpitaux" / "Santé". keywordInCompany is a
   // free-text match on company name + description and works in any
-  // language — much more forgiving for our use case where Claude
+  // language · much more forgiving for our use case where Claude
   // generates sector criteria from French campaign context.
   tryAdd('sectors', criteria.sectors,
     ['keywordInCompany', 'currentCompanySubIndustry', 'currentCompanyMarket', 'department']);
@@ -550,7 +550,7 @@ function buildLemlistFilters(criteria, availableFilters) {
   tryAdd('locations', criteria.locations,
     ['location', 'country', 'region']);
 
-  // Min LinkedIn connections — numberOfConnections filter.
+  // Min LinkedIn connections · numberOfConnections filter.
   // Instead of guessing the format (lesson from companySizes!), we read
   // the filter's accepted values from the schema and pick dynamically.
   if (criteria.minConnections) {
@@ -562,17 +562,17 @@ function buildLemlistFilters(criteria, availableFilters) {
 
       let connectionRanges;
       if (acceptedValues.length > 0) {
-        // Use REAL schema values — pick all ranges whose lower bound >= threshold
+        // Use REAL schema values · pick all ranges whose lower bound >= threshold
         connectionRanges = acceptedValues.filter(v => {
           const match = String(v).match(/^(\d+)/);
           return match && parseInt(match[1], 10) >= threshold;
         });
         if (connectionRanges.length === 0) {
-          // All values are below threshold — take the top half as best effort
+          // All values are below threshold · take the top half as best effort
           connectionRanges = acceptedValues.slice(Math.floor(acceptedValues.length / 2));
         }
       } else {
-        // No schema values available — blind fallback (will be visible in logs)
+        // No schema values available · blind fallback (will be visible in logs)
         connectionRanges = ['501+'];
       }
 
@@ -733,7 +733,7 @@ async function getTeamSenders(apiKey) {
 }
 
 /**
- * Bulk enrichment — POST /api/v2/enrichments/bulk
+ * Bulk enrichment · POST /api/v2/enrichments/bulk
  * items: array of { input: {firstName, lastName, companyName, linkedinUrl, ...}, metadata: anything }
  * Returns: array of { id, metadata } (success) or { error, metadata } (failure)
  */
@@ -763,7 +763,7 @@ async function bulkEnrichLeads(apiKey, items) {
 }
 
 /**
- * Get enrichment result — GET /api/enrich/{id}
+ * Get enrichment result · GET /api/enrich/{id}
  * Returns: 202 if still pending, 200 with data.email.email if done
  */
 async function getEnrichmentResult(apiKey, enrichId) {
@@ -899,7 +899,7 @@ async function getAllActivities(campaignId, apiKey, type) {
     all.push(...page);
     if (page.length < PAGE) break;
     offset += PAGE;
-    // Safety cap — don't fetch more than 1000 activities per type
+    // Safety cap · don't fetch more than 1000 activities per type
     if (all.length >= 1000) break;
   }
   return all;

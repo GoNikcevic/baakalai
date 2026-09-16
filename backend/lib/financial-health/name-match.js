@@ -8,7 +8,7 @@
  * avec un repli sur l'inclusion des chaînes compactées (« RiteAid » ~ « Rite Aid »).
  */
 
-// Suffixes juridiques et mots creux — ignorés pour la comparaison.
+// Suffixes juridiques et mots creux · ignorés pour la comparaison.
 const STOPWORDS = new Set([
   'sa', 'sas', 'sasu', 'sarl', 'eurl', 'sci', 'snc', 'scop', 'scm', 'selarl',
   'ltd', 'limited', 'plc', 'llp', 'llc', 'inc', 'corp', 'corporation',

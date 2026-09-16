@@ -1,5 +1,5 @@
 /**
- * CRM Agent — Unified intelligent agent for CRM management
+ * CRM Agent · Unified intelligent agent for CRM management
  *
  * Replaces separate cron jobs (sync, cleaning, nurture) with a single
  * intelligent agent that evaluates context and takes the right actions.
@@ -36,12 +36,12 @@ const DAY_MS = 86400000;
  * Run the CRM agent for a user.
  * Returns a structured report of everything that was done.
  */
-// Concurrency lock — prevent duplicate runs for the same user
+// Concurrency lock · prevent duplicate runs for the same user
 const _running = new Set();
 
 async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
   if (_running.has(userId)) {
-    logger.warn('crm-agent', `Skipping — already running for user ${userId}`);
+    logger.warn('crm-agent', `Skipping, already running for user ${userId}`);
     return { skipped: true, reason: 'already running' };
   }
   _running.add(userId);
@@ -64,7 +64,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     if (team) teamId = team.id;
   } catch { /* solo user, no team */ }
 
-  // Detect connected CRM provider — use user's active CRM preference, fallback to first connected
+  // Detect connected CRM provider · use user's active CRM preference, fallback to first connected
   const { provider: crmProvider, creds: crmCreds } = await resolveCrmForUser(userId);
   if (!crmProvider) {
     _running.delete(userId);
@@ -181,7 +181,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
           await createNotification(userId, {
             type: 'churn_alert',
             title: `${highChurnResult.rows.length} contact(s) at high churn risk`,
-            body: `${names}${extra} — churn score 70+. Review in Clients page.`,
+            body: `${names}${extra}, churn score 70+. Review in Clients page.`,
             metadata: {
               contactIds: highChurnResult.rows.map(c => c.id),
               count: highChurnResult.rows.length,
@@ -275,7 +275,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
   try {
     // If triggered by a webhook event, skip full sync (already handled by webhook route)
     if (event?.type && (event.type.startsWith('deal_') || event.type === 'person_updated')) {
-      logger.info('crm-agent', `Skipping full sync — webhook event: ${event.type}`);
+      logger.info('crm-agent', `Skipping full sync, webhook event: ${event.type}`);
       return;
     }
 
@@ -327,7 +327,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
       const country = raw.country || (Array.isArray(raw.country_id) ? raw.country_id[1] : null) || null;
       const city = raw.city || null;
 
-      // Field mappings CRM (lignes produit, statut, renouvellement) — factorisé pour
+      // Field mappings CRM (lignes produit, statut, renouvellement) · factorisé pour
       // s'appliquer aussi aux NOUVEAUX contacts : avant, seule la branche update les
       // appliquait, donc un import frais n'avait jamais de ligne produit.
       const applyFieldMappings = async (oppId, currentStatus) => {
@@ -401,7 +401,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         await applyFieldMappings(existing.id, existing.status);
       }
     }
-    // Sync deal values + lifecycle dates (won/lost, montants, stages) — factorisé
+    // Sync deal values + lifecycle dates (won/lost, montants, stages) · factorisé
     // dans lib/deal-lifecycle-sync.js pour être partagé avec le sync manuel des
     // Settings (lib/crm-sync.js). Best-effort : ne throw jamais.
     const { syncDealLifecycle } = require('./deal-lifecycle-sync');
@@ -457,19 +457,19 @@ function findDuplicates(opps) {
 
 // teamId et crmProvider doivent être passés explicitement : ils n'existent que
 // dans le scope de runAgent. Avant ce paramètre, chaque contact matché levait
-// « teamId is not defined », avalé par le catch par-contact — le cron
+// « teamId is not defined », avalé par le catch par-contact · le cron
 // n'a jamais pu générer un seul email de nurture.
 async function stepNurture(userId, token, report, { teamId = null, crmProvider = null } = {}) {
   try {
     // Expiration : un brouillon pending de plus de 14 jours est périmé.
     // L'annuler libère le contact (contrainte unique 067 : un seul pending
-    // par contact) — sans quoi la file saturée bloque toute génération.
+    // par contact) · sans quoi la file saturée bloque toute génération.
     //
     // Sauf si l'utilisateur n'a aucune boîte mail connectée : le brouillon
     // n'est alors pas « périmé », il est *inenvoyable*, et l'expirer punit
     // l'utilisateur pour une étape de configuration manquante. Constaté en
     // prod : 80 brouillons annulés en août, 80 régénérés derrière, aucun
-    // envoyé — une boucle qui consommait des tokens tous les 14 jours sans
+    // envoyé · une boucle qui consommait des tokens tous les 14 jours sans
     // qu'aucun email ne puisse partir. On gèle donc l'horloge tant que la
     // boîte manque ; la file repart intacte dès la connexion.
     const mailbox = await db.query(
@@ -485,7 +485,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
       );
       if (stuck.rows[0].n > 0) {
         report.nurture.blockedNoMailbox = stuck.rows[0].n;
-        logger.warn('crm-agent', `Nurture: ${stuck.rows[0].n} brouillons en attente mais aucune boîte mail connectée (user ${userId}) — expiration gelée`);
+        logger.warn('crm-agent', `Nurture: ${stuck.rows[0].n} brouillons en attente mais aucune boîte mail connectée (user ${userId}), expiration gelée`);
       }
     } else {
       const expired = await db.query(
@@ -511,7 +511,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
 
     // Get recently emailed contacts to avoid duplication. Inclut tout pending
     // restant quel que soit son âge : la contrainte unique 067 rejette l'INSERT
-    // pour ces contacts — sans ce filtre, chaque run brûlait ~10 générations
+    // pour ces contacts · sans ce filtre, chaque run brûlait ~10 générations
     // Claude puis échouait en silence (queued 0) dès que les brouillons
     // sortaient de la fenêtre de 7 jours en restant pending.
     const recentEmails = await db.query(
@@ -526,7 +526,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
     const stagnantDays = await getStagnantDays(userId);
 
     for (const trigger of triggersResult.rows) {
-      // Logique de matching partagée avec la preview (routes/nurture.js) —
+      // Logique de matching partagée avec la preview (routes/nurture.js) · 
       // toute divergence faisait mentir la preview. null = type évaluable
       // uniquement en run manuel (newsletter_* via nurture-engine).
       let matched = matchContacts(trigger, opps, now, { stagnantDays });
@@ -570,7 +570,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
       for (let idx = 0; idx < Math.min(matched.length, 10); idx++) {
         const opp = matched[idx];
         try {
-          // Generate email(s) — A/B or single
+          // Generate email(s) · A/B or single
           const emailContent = await generateNurtureEmail(trigger, opp, { abTest: abEnabled && idx < 2, teamId });
 
           // Determine which variant to use (bandit allocation)
@@ -632,7 +632,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
 async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = null } = {}) {
   const template = trigger.email_template || {};
 
-  // Load relevant memory patterns — contextual (pgvector) or fallback (recency-based)
+  // Load relevant memory patterns · contextual (pgvector) or fallback (recency-based)
   let patternsContext = '';
   let patternIds = [];
   try {
@@ -643,10 +643,10 @@ async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = nul
       const context = `${trigger.trigger_type} ${opp.company || ''} ${opp.title || ''} ${(trigger.conditions?.sectors || []).join(' ')}`;
       // Tenant obligatoire : sans lui, la recherche pgvector piochait dans la
       // mémoire de TOUS les clients (audit du 02/09). trigger.user_id est le
-      // propriétaire du trigger — même utilisateur que celui du run.
+      // propriétaire du trigger · même utilisateur que celui du run.
       allPatterns = await findRelevantPatterns(context, 10, { teamId, userId: trigger.user_id });
     }
-    // Fallback to recency-based — même scoping tenant que la recherche pgvector
+    // Fallback to recency-based · même scoping tenant que la recherche pgvector
     if (!allPatterns || allPatterns.length === 0) {
       allPatterns = await db.memoryPatterns.listForPrompt(10, teamId, trigger.user_id);
     }
@@ -765,14 +765,14 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // n'a pas d'équipe : sans lui, le pattern naissait orphelin (ni team_id ni
   // user_id) et devenait invisible pour son propre créateur avec le DAO scopé.
   // source au niveau colonne : c'est elle que lit la politique de partage du
-  // DAO (agrégats business jamais auto-partagés) — le data JSON garde le
+  // DAO (agrégats business jamais auto-partagés) · le data JSON garde le
   // détail (crm_analysis / title_analysis / multitouch_analysis).
   const createPattern = (data) => db.memoryPatterns.create({ source: 'crm_analysis', ...data, teamId, userId: teamId ? null : userId });
   // Les gardes anti-doublon doivent chercher dans la mémoire DU tenant.
   // Historiquement list() sans tenant renvoyait les patterns de TOUS les
   // clients : dès qu'un client avait son « taux de conversion CRM », plus
   // aucun autre ne l'obtenait jamais. Avec le DAO scopé (audit 02/09), sans
-  // tenant on ne verrait plus que le pool global partagé — garde cassée dans
+  // tenant on ne verrait plus que le pool global partagé · garde cassée dans
   // l'autre sens (doublons quotidiens). D'où le tenant explicite ici.
   const listExisting = (category) => db.memoryPatterns.list({ category, limit: 50, teamId, userId: teamId ? null : userId });
   const now = Date.now();
@@ -821,7 +821,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
   }
 
-  // Pattern 3: Stagnation threshold — at what point do deals die?
+  // Pattern 3: Stagnation threshold · at what point do deals die?
   if (lost.length >= 3) {
     const stagnation = lost
       .filter(o => o.created_at && o.updated_at)
@@ -868,7 +868,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
   }
 
-  // Patterns 5-7 (timing, subject lines, email length) removed — now handled by
+  // Patterns 5-7 (timing, subject lines, email length) removed · now handled by
   // strategic agents: Timing Agent, Copy Optimizer (more thorough analysis + dedup)
 
   // Pattern 8: Best responding job title/function

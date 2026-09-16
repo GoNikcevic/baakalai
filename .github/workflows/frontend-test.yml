@@ -1,7 +1,7 @@
 name: Frontend tests
 
 # Pourquoi ce workflow : la suite frontend est restée rouge sans que personne
-# le voie — 59 échecs sur 137 — parce qu'elle ne tournait nulle part. La CI
+# le voie : 59 échecs sur 137 : parce qu'elle ne tournait nulle part. La CI
 # existante (smoke-test.yml) ne couvre que le backend. Une suite que rien
 # n'exécute cesse d'être un filet : elle dérive au premier renommage de libellé,
 # puis on cesse de la lire.
@@ -38,7 +38,7 @@ jobs:
       # Node 22 (pas 20) : jsdom → html-encoding-sniffer@6 fait un require()
       # CJS synchrone de @exodus/bytes, un paquet ESM-only (son propre
       # package.json exige justement ^20.19.0 || ^22.12.0 || >=24.0.0). Le
-      # support stable de require(esm) n'existe qu'à partir de Node 22.12 —
+      # support stable de require(esm) n'existe qu'à partir de Node 22.12 
       # sous Node 20 générique, tous les fichiers de test crashaient au
       # démarrage du worker avant même de s'exécuter (confirmé en local).
       - name: Setup Node

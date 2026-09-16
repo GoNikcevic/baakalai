@@ -318,7 +318,7 @@ function escapeXml(str) {
 }
 
 function parseResponse(xml) {
-  // Basic XML response parsing — extract result from SOAP envelope
+  // Basic XML response parsing · extract result from SOAP envelope
   // For production, use a proper XML parser (xml2js)
   const resultMatch = xml.match(/<PostInformzMessageResult>([\s\S]*?)<\/PostInformzMessageResult>/);
   if (!resultMatch) {

@@ -5,13 +5,13 @@
  * C'est le réflexe naturel, et c'est un piège ici. `DATABASE_URL` pointe sur
  * Supavisor (port 6543) en **mode transaction** : le pooler multiplexe les
  * clients sur un petit nombre de connexions serveur, et rien ne garantit que
- * deux requêtes successives — même via `pool.connect()` — atterrissent sur la
+ * deux requêtes successives · même via `pool.connect()` · atterrissent sur la
  * même session serveur.
  *
  * Or un advisory lock appartient à la SESSION. Concrètement, mesuré sur cette
  * base : `pg_try_advisory_lock` se pose sur la connexion serveur X,
  * `pg_advisory_unlock` part sur la connexion Y, renvoie `false`, et le verrou
- * reste détenu par X — une connexion `idle` du pooler que plus personne ne
+ * reste détenu par X · une connexion `idle` du pooler que plus personne ne
  * pilote.
  *
  * Conséquence : le verrou fuit définitivement, `pg_try_advisory_lock` renvoie
@@ -31,7 +31,7 @@ const logger = require('./logger');
 /** Marge de sécurité par défaut : au-delà, on considère le détenteur mort. */
 const DEFAULT_TTL_SECONDS = 30 * 60;
 
-/** Identifiant de l'instance — sert à ne libérer que son propre bail. */
+/** Identifiant de l'instance · sert à ne libérer que son propre bail. */
 const INSTANCE_ID =
   process.env.RAILWAY_DEPLOYMENT_ID ||
   `${process.env.HOSTNAME || 'local'}:${process.pid}`;
@@ -91,7 +91,7 @@ async function withLock(name, fn, opts = {}) {
 /** Compteur local : distingue deux acquisitions concurrentes du même process. */
 let _seq = 0;
 
-/** Libération inerte — sert quand le bail n'a pas été obtenu. */
+/** Libération inerte · sert quand le bail n'a pas été obtenu. */
 const NOOP_RELEASE = async () => {};
 
 /**
@@ -103,7 +103,7 @@ const NOOP_RELEASE = async () => {};
  * et laisse l'appelant continuer sans garde.
  *
  * Ce choix vient d'une mesure : sans attente du tout, trois écritures
- * concurrentes du même pattern produisaient trois lignes — exactement
+ * concurrentes du même pattern produisaient trois lignes · exactement
  * l'explosion que la déduplication doit empêcher. Avec une attente non bornée
  * (le `pg_advisory_lock` d'origine), un bail bloqué figeait l'écriture plus de
  * deux minutes. L'attente bornée sérialise le cas courant sans jamais pouvoir

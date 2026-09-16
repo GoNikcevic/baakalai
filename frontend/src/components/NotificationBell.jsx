@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — NotificationBell Component
+   BAKAL · NotificationBell Component
    Bell icon with unread badge + dropdown of recent notifications.
    Listens to real-time socket events and polls on mount.
    =============================================================================== */
@@ -62,7 +62,7 @@ export default function NotificationBell() {
       const data = await request('/notifications/unread-count');
       setUnreadCount(data.count);
     } catch {
-      // silent — non-critical
+      // silent · non-critical
     }
   }, []);
 

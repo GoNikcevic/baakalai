@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Toast Container (React)
+   BAKAL · Toast Container (React)
    Renders toast notifications from NotificationContext.
    Uses existing CSS classes from index.css (.toast-container, .toast, etc.)
    =============================================================================== */

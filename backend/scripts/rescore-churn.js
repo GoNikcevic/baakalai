@@ -25,9 +25,9 @@ async function main() {
          FROM opportunities WHERE user_id = $1`, [u.id]
       );
       const s = stats.rows[0];
-      console.log(`  ${u.email}: ${report.scored} scorés, ${report.atRisk} à risque — avg=${s.avg} max=${s.max} high=${s.high} critical=${s.critical}`);
+      console.log(`  ${u.email}: ${report.scored} scorés, ${report.atRisk} à risque, avg=${s.avg} max=${s.max} high=${s.high} critical=${s.critical}`);
     } catch (err) {
-      console.error(`  ${u.email}: ÉCHEC — ${err.message}`);
+      console.error(`  ${u.email}: ÉCHEC, ${err.message}`);
     }
   }
   process.exit(0);

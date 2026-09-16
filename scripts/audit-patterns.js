@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Baakalai — Automated Pattern Audit
+ * Baakalai : Automated Pattern Audit
  *
  * Scans the codebase for known anti-patterns from ERRORS.md.
  * Run daily via cron, or manually: node scripts/audit-patterns.js
@@ -65,7 +65,7 @@ const PATTERNS = [
       if (/\/\*\s*skip\s*\*\//.test(line)) return false;
       return true;
     },
-    lesson: 'Never silently swallow errors — log or show feedback (ERRORS.md #15)',
+    lesson: 'Never silently swallow errors, log or show feedback (ERRORS.md #15)',
   },
   {
     id: 'fetch-no-ok-check',
@@ -108,7 +108,7 @@ const PATTERNS = [
       if (/isNaN/.test(prev)) return false;
       return true;
     },
-    lesson: 'Always validate dates before arithmetic — NaN comparisons silently fail (ERRORS.md #5)',
+    lesson: 'Always validate dates before arithmetic, NaN comparisons silently fail (ERRORS.md #5)',
   },
 ];
 
@@ -170,7 +170,7 @@ function main() {
   const date = new Date().toISOString().split('T')[0];
 
   if (allFindings.length === 0) {
-    console.log(`✅ [${date}] Audit clean — no anti-patterns detected.`);
+    console.log(`✅ [${date}] Audit clean, no anti-patterns detected.`);
     process.exit(0);
   }
 
@@ -186,7 +186,7 @@ function main() {
     if (items.length === 0) continue;
     console.log(`  ${sev} (${items.length}):`);
     for (const f of items) {
-      console.log(`    ${f.file}:${f.line} — ${f.name}`);
+      console.log(`    ${f.file}:${f.line}, ${f.name}`);
       console.log(`      ${f.code}`);
       console.log(`      → ${f.lesson}`);
     }
@@ -198,12 +198,12 @@ function main() {
     const existing = fs.readFileSync(ERRORS_MD, 'utf8');
 
     // Check if today's audit already exists
-    if (existing.includes(`### Automated Audit — ${date}`)) {
+    if (existing.includes(`### Automated Audit, ${date}`)) {
       console.log('ℹ️  ERRORS.md already has today\'s audit.');
     } else {
       const section = [
         '',
-        `### Automated Audit — ${date}`,
+        `### Automated Audit, ${date}`,
         '',
         `Found ${allFindings.length} potential issue(s):`,
         '',

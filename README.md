@@ -1,14 +1,14 @@
 # baakalai
 
-B2B platform that orchestrates **prospecting + client activation** with AI. Not just outbound — Baakalai handles the full cycle from cold outreach to client retention.
+B2B platform that orchestrates **prospecting + client activation** with AI. Not just outbound : Baakalai handles the full cycle from cold outreach to client retention.
 
 ## What it does
 
-**Prospection** — Create campaigns via AI chat, generate personalized sequences (email + LinkedIn), deploy to Lemlist/Apollo, A/B test and refine automatically.
+**Prospection** : Create campaigns via AI chat, generate personalized sequences (email + LinkedIn), deploy to Lemlist/Apollo, A/B test and refine automatically.
 
-**Activation** — Import contacts from Pipedrive/HubSpot/Odoo, detect stagnant deals and churn risk, send personalized follow-up emails, analyze responses with AI.
+**Activation** : Import contacts from Pipedrive/HubSpot/Odoo, detect stagnant deals and churn risk, send personalized follow-up emails, analyze responses with AI.
 
-**Intelligence** — 4 autonomous agents (Prospection, CRM, Memory, Reporting) that learn from every campaign and improve over time.
+**Intelligence** : 4 autonomous agents (Prospection, CRM, Memory, Reporting) that learn from every campaign and improve over time.
 
 ## Stack
 

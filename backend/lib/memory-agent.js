@@ -36,7 +36,7 @@ async function runMemoryAgent() {
   // ── Step 1: Check if consolidation is needed ──
   try {
     // Critère NON auto-référentiel (audit 02/09). L'ancien déclencheur comptait
-    // les diagnostics postérieurs à MAX(memory_patterns.date_discovered) — or
+    // les diagnostics postérieurs à MAX(memory_patterns.date_discovered) · or
     // les agents du matin écrivent des patterns le jour même, donc lastDate
     // valait toujours « aujourd'hui » et le count retombait systématiquement à
     // 0 : la consolidation ne tournait jamais. Le job étant hebdomadaire, le
@@ -122,7 +122,7 @@ async function runMemoryAgent() {
     report.feedback.registryPattern = !!(await learnFromRegistrySignals());
 
     // Calibration des forecasts : photos hebdo de 30+ jours comparées aux
-    // résultats réels — l'écart devient un facteur appliqué aux suivants.
+    // résultats réels · l'écart devient un facteur appliqué aux suivants.
     report.feedback.forecastCalibrations = 0;
     const { calibrate } = require('./forecast-engine');
     const forecastUsers = await db.query(
@@ -199,7 +199,7 @@ async function runMemoryAgent() {
   }
 
   report.duration = Date.now() - startTime;
-  logger.info('memory-agent', `Complete in ${report.duration}ms — skipped: ${report.skipped.length}, errors: ${report.errors.length}`);
+  logger.info('memory-agent', `Complete in ${report.duration}ms, skipped: ${report.skipped.length}, errors: ${report.errors.length}`);
 
   return report;
 }

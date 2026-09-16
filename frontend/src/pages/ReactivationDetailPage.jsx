@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Reactivation Detail (generic)
+   BAKAL · Reactivation Detail (generic)
    Single-candidate view reached from ReactivationQueuePage's "Voir le mail". Generates
    the AI draft on demand (fresh CRM data), lets the user edit it, then send or regenerate.
    =============================================================================== */
@@ -64,7 +64,7 @@ function DraftContextCard({ context, kind }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {context.contactName && (
           <ContextFact label={t('reactivation.ctxContact')}>
-            {context.contactName}{context.contactTitle ? ` — ${context.contactTitle}` : ''}
+            {context.contactName}{context.contactTitle ? `, ${context.contactTitle}` : ''}
           </ContextFact>
         )}
         {isDeal ? (
@@ -121,7 +121,7 @@ export default function ReactivationDetailPage({ kind, detailRouteBase }) {
       const data = await request(`/reactivation/${opportunityId}/draft?kind=${kind}${force ? '&force=true' : ''}`);
       setEmail(data.email);
       setContext(data.context || null);
-      // Same row can be reused (id unchanged) on regenerate — bump a version so the
+      // Same row can be reused (id unchanged) on regenerate · bump a version so the
       // uncontrolled subject/body fields below remount with the fresh content.
       setDraftVersion(v => v + 1);
     } catch (err) {

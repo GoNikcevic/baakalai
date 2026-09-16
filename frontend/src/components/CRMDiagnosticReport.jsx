@@ -1,8 +1,8 @@
 /* ===============================================================================
-   BAKAL — CRM Diagnostic Report
+   BAKAL · CRM Diagnostic Report
    Full-screen modal shown after first CRM import.
    Displays: contact stats, health score, churn risk, deal coach suggestions,
-   top companies — all from POST /api/crm/first-diagnostic.
+   top companies · all from POST /api/crm/first-diagnostic.
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -323,7 +323,7 @@ export default function CRMDiagnosticReport({ onClose }) {
                         {issueLabel}
                         {issue.key && (
                           <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 6 }}>
-                            — {issue.key}
+, {issue.key}
                           </span>
                         )}
                       </span>

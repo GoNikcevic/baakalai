@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Client Quality Strate
+   BAKAL · Client Quality Strate
    Surfaces missing client fields that block lib/agents/upsell-detector.js from ever
-   considering a won client — chiefly zero product-line assignments. Reuses the
+   considering a won client · chiefly zero product-line assignments. Reuses the
    existing ProductLineTags component inline so assignment happens without leaving
    the page.
    =============================================================================== */
@@ -57,13 +57,13 @@ export default function ClientQualityStrate() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        {t('dataQuality.clientQuality.missingProductLines')} — {t('dataQuality.common.affectedCount', { count: missingPl.count })}
+        {t('dataQuality.clientQuality.missingProductLines')}, {t('dataQuality.common.affectedCount', { count: missingPl.count })}
       </div>
       {missingPl.contacts.map(c => (
         <div key={c.id} className="card">
           <div className="card-body" style={{ padding: '14px 18px' }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-              {c.name}{c.company && <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}> — {c.company}</span>}
+              {c.name}{c.company && <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>, {c.company}</span>}
             </div>
             <ProductLineTags clientId={c.id} lang={lang} />
           </div>

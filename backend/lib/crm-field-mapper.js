@@ -1,5 +1,5 @@
 /**
- * CRM Field Mapper — Fetch and map custom fields across CRM providers
+ * CRM Field Mapper · Fetch and map custom fields across CRM providers
  *
  * Supports: Pipedrive, HubSpot, Salesforce
  * Fetches available fields from each CRM and applies user-defined mappings
@@ -138,7 +138,7 @@ async function applyMappings(userId, crmProvider, rawContact) {
       const mappedStatus = values[String(fieldValue)];
       if (mappedStatus) result.customFields.status = mappedStatus;
     } else if (mapping.baakalai_field === 'renewal_date') {
-      // Date field — parse and store as ISO date
+      // Date field · parse and store as ISO date
       const date = new Date(fieldValue);
       if (!isNaN(date.getTime())) result.customFields.renewal_date = date.toISOString();
     } else {

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Global App Context (React)
+   BAKAL · Global App Context (React)
    Replaces the vanilla BAKAL global object with React state management.
    Provides campaigns, projects, KPIs, backend status, and user state.
    =============================================================================== */
@@ -60,7 +60,7 @@ export function AppProvider({ children }) {
         throw new Error('Backend unreachable');
       }
     } catch {
-      // Backend not available — leave everything empty
+      // Backend not available · leave everything empty
       setBackendAvailable(false);
       setCampaigns({});
       setProjects({});

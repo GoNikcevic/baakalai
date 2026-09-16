@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Profile Page (React)
+   BAKAL · Profile Page (React)
    Ported from app/pages.js (saveProfile, loadProfile, populateProfileForm).
    Company info, value prop, personas, targets, communication style.
    =============================================================================== */
@@ -59,7 +59,7 @@ export default function ProfilePage() {
   /* ─── Load uploaded documents ─── */
   useEffect(() => {
     request('/documents').then(data => {
-      // Filter out chat_attachment docs — they belong to chat context, not profile
+      // Filter out chat_attachment docs · they belong to chat context, not profile
       if (data && data.documents) setUploadedDocs(data.documents.filter(d => d.doc_type !== 'chat_attachment'));
     }).catch(() => {});
   }, []);
@@ -244,7 +244,7 @@ export default function ProfilePage() {
             }
           } else {
             const details = (reparseData.results || [])
-              .map(r => `• ${r.name}: ${r.status}${r.message ? ' (' + r.message + ')' : ''}${r.chars ? ' — ' + r.chars + ' chars' : ''}`)
+.map(r => `• ${r.name}: ${r.status}${r.message ? ' (' + r.message + ')' : ''}${r.chars ? ', ' + r.chars + ' chars' : ''}`)
               .join('\n');
             showToast({ type: 'error', title: en ? 'Reparse failed' : 'Reparse échoué', message: details.slice(0, 200) });
           }
@@ -308,7 +308,7 @@ export default function ProfilePage() {
           value={profile[field] || ''}
           onChange={(e) => handleChange(field, e.target.value)}
         >
-          <option value="">{en ? '-- Select --' : '-- Sélectionner --'}</option>
+          <option value="">{en ? '-- Select --' : 'Sélectionner…'}</option>
           {options.map(opt => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
@@ -338,7 +338,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Product Lines — wraps all profile sections */}
+      {/* Product Lines · wraps all profile sections */}
       <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect}
         docProps={{ files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize }} />
 

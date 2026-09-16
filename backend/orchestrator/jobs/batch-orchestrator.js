@@ -22,7 +22,7 @@ const { notifyUser } = require('../../socket');
 const logger = require('../../lib/logger');
 
 /**
- * Main entry point — iterate all campaigns in batch_mode that still have
+ * Main entry point · iterate all campaigns in batch_mode that still have
  * batches remaining and decide what to do for each one.
  */
 async function runBatchOrchestrator() {
@@ -75,12 +75,12 @@ async function processCampaignBatch(campaign, results) {
   const userId = campaign.user_id;
   const currentBatch = campaign.current_batch || 0;
 
-  logger.info('batch-orchestrator', `Processing campaign "${campaign.name}" — batch ${currentBatch}/${campaign.total_batches}`);
+  logger.info('batch-orchestrator', `Processing campaign "${campaign.name}", batch ${currentBatch}/${campaign.total_batches}`);
 
   // 1. Gather stats for the current batch
   const batchStats = await gatherBatchStats(campaignId, currentBatch);
 
-  // 2. Check for anomalies first — if something is very wrong, pause immediately
+  // 2. Check for anomalies first · if something is very wrong, pause immediately
   const anomaly = detectAnomalies(batchStats, campaign);
   if (anomaly) {
     logger.warn('batch-orchestrator', `Anomaly detected for "${campaign.name}": ${anomaly.reason}`);
@@ -126,7 +126,7 @@ async function processCampaignBatch(campaign, results) {
     };
     regenResult = await regenerateJob.run({ campaignId, metrics });
     if (regenResult.success) {
-      logger.info('batch-orchestrator', `New variant generated for "${campaign.name}" — version ${regenResult.version}`);
+      logger.info('batch-orchestrator', `New variant generated for "${campaign.name}", version ${regenResult.version}`);
     }
   } catch (err) {
     logger.warn('batch-orchestrator', `Regeneration failed for "${campaign.name}": ${err.message}`);
@@ -139,7 +139,7 @@ async function processCampaignBatch(campaign, results) {
   const assignResult = await assignNextBatch(campaignId, nextBatch, batchSize);
 
   if (assignResult.assigned === 0) {
-    logger.info('batch-orchestrator', `No more unassigned prospects for "${campaign.name}" — completing.`);
+    logger.info('batch-orchestrator', `No more unassigned prospects for "${campaign.name}", completing.`);
     await db.campaigns.update(campaignId, { current_batch: nextBatch });
     await notifyUserMessage(userId, campaign,
       `Campagne "${campaign.name}" : tous les prospects ont été envoyés.\n` +
@@ -172,10 +172,10 @@ async function processCampaignBatch(campaign, results) {
     : '';
 
   await notifyUserMessage(userId, campaign,
-    `Campagne "${campaign.name}" — Batch ${nextBatch}/${campaign.total_batches} lancé.\n` +
+    `Campagne "${campaign.name}", Batch ${nextBatch}/${campaign.total_batches} lancé.\n` +
     `${assignResult.assigned} prospects ajoutés.` +
     winnerInfo + regenInfo +
-    (launchSuccess ? '\nEnvoi Lemlist : OK.' : '\nEnvoi Lemlist : échec — vérifiez la configuration.')
+    (launchSuccess ? '\nEnvoi Lemlist : OK.' : '\nEnvoi Lemlist : échec, vérifiez la configuration.')
   );
 }
 
@@ -301,7 +301,7 @@ function evaluateBatchFallback(batchStats) {
   if (batchStats.daysSinceBatchStart < 5) {
     return { ready: false, reason: `Only ${batchStats.daysSinceBatchStart.toFixed(1)} days, need at least 5`, winner: null };
   }
-  // Enough data — determine winner from touchpoint A vs B performance
+  // Enough data · determine winner from touchpoint A vs B performance
   let aScore = 0;
   let bScore = 0;
   for (const tp of batchStats.touchpoints) {
@@ -365,7 +365,7 @@ async function assignNextBatch(campaignId, nextBatch, batchSize) {
 
 async function launchBatchToLemlist(campaign, prospects, userId) {
   if (!campaign.lemlist_id) {
-    logger.warn('batch-orchestrator', `Campaign "${campaign.name}" has no lemlist_id — skipping Lemlist launch`);
+    logger.warn('batch-orchestrator', `Campaign "${campaign.name}" has no lemlist_id, skipping Lemlist launch`);
     return false;
   }
 

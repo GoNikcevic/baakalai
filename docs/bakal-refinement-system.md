@@ -1,4 +1,4 @@
-# Bakal — Systeme de Refinement (Boucle d'Auto-Optimisation)
+# Bakal : Systeme de Refinement (Boucle d'Auto-Optimisation)
 
 > **Version :** 1.0
 > **Sources :** `backend/api/prompts.js`, `backend/routes/ai.js`, `backend/api/dry-run.js`
@@ -370,7 +370,7 @@ Lemlist API : GET /campaigns
 Pour chaque campagne active :
   ├── GET /campaigns/{id}/export (stats)
   ├── Calcul metriques par touchpoint
-  ├── Sauvegarde dans Notion "Campagnes — Resultats"
+  ├── Sauvegarde dans Notion "Campagnes : Resultats"
   └── Si nb_prospects > 50 ET age > 7 jours :
         └── Declenchement Workflow 2
 ```
@@ -669,7 +669,7 @@ curl -X POST http://localhost:3000/api/ai/run-refinement?dry_run=true \
 
 Les donnees du systeme de refinement sont synchronisees avec 4 bases Notion.
 
-### Base 1 : Campagnes — Resultats
+### Base 1 : Campagnes : Resultats
 
 Stocke les metriques collectees par le Workflow 1.
 
@@ -685,7 +685,7 @@ Stocke les metriques collectees par le Workflow 1.
 | Accept rate LK | Number |
 | Reply rate LK | Number |
 
-### Base 2 : Campagnes — Diagnostics
+### Base 2 : Campagnes : Diagnostics
 
 Stocke les diagnostics generes par le prompt d'analyse.
 
@@ -697,7 +697,7 @@ Stocke les diagnostics generes par le prompt d'analyse.
 | Priorites | Multi-select |
 | Nb messages a optimiser | Number |
 
-### Base 3 : Campagnes — Historique Versions
+### Base 3 : Campagnes : Historique Versions
 
 Trace chaque iteration de regeneration.
 
@@ -730,8 +730,8 @@ Stocke les patterns identifies par la consolidation mensuelle.
 
 | Phase | Periode | Refinement |
 |-------|---------|------------|
-| **Phase 1 — Manuel** | Actuelle | Prompts executes manuellement, stats copiees depuis Lemlist, recommandations appliquees a la main |
-| **Phase 2 — Semi-auto** | Mois 2-3 | N8N automatise la collecte stats + analyse, un humain valide avant deploiement |
-| **Phase 3 — Full auto** | Mois 4-5 | Boucle complete automatisee, supervision humaine pour les cas limites |
+| **Phase 1 : Manuel** | Actuelle | Prompts executes manuellement, stats copiees depuis Lemlist, recommandations appliquees a la main |
+| **Phase 2 : Semi-auto** | Mois 2-3 | N8N automatise la collecte stats + analyse, un humain valide avant deploiement |
+| **Phase 3 : Full auto** | Mois 4-5 | Boucle complete automatisee, supervision humaine pour les cas limites |
 
-**Statut actuel :** Phase 1 — documentation et code en place, pret pour l'implementation des workflows N8N.
+**Statut actuel :** Phase 1 : documentation et code en place, pret pour l'implementation des workflows N8N.

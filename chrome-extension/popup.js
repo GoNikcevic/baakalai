@@ -1,6 +1,6 @@
-// baakalai — LinkedIn Connect.
+// baakalai : LinkedIn Connect.
 // Une seule mission : relier la session LinkedIn de l'utilisateur à son compte
-// baakalai en un clic (le cookie li_at n'est lisible que par une extension —
+// baakalai en un clic (le cookie li_at n'est lisible que par une extension 
 // il est httpOnly, aucun bookmarklet ne peut le faire). L'envoi initial est
 // TOUJOURS un geste explicite de l'utilisateur ; ensuite background.js
 // maintient la connexion à jour automatiquement.
@@ -43,7 +43,7 @@ async function init() {
         return;
       }
     }
-  } catch { /* offline — assume valid */ }
+  } catch { /* offline, assume valid */ }
 
   // LinkedIn check
   const cookie = await getLinkedInCookie();
@@ -64,7 +64,7 @@ async function init() {
 // ── Auto-detect token from any open baakalai tab (prod ou staging) ──
 // C'est LE chemin de connexion pour les comptes Google OAuth : pas de mot de
 // passe à taper, l'extension emprunte la session de l'app ouverte. La base
-// API suit l'origine de l'onglet détecté — détecter depuis staging branche
+// API suit l'origine de l'onglet détecté : détecter depuis staging branche
 // automatiquement l'extension sur staging.
 
 const APP_URLS = ['https://app.baakal.ai/*', 'https://baakal-staging.up.railway.app/*'];
@@ -288,7 +288,7 @@ async function sendCookie(cookie) {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     // Le resync automatique (background.js) ne démarre qu'après ce premier
-    // partage explicite — c'est lui qu'on enregistre ici comme référence.
+    // partage explicite : c'est lui qu'on enregistre ici comme référence.
     chrome.runtime.sendMessage({ type: 'liat-synced', cookie });
     showMsg('success', 'LinkedIn connecté !');
     setTimeout(init, 1500);

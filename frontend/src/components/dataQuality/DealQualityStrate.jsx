@@ -1,10 +1,10 @@
 /* ===============================================================================
-   BAKAL — Deal Quality Strate
+   BAKAL · Deal Quality Strate
    Surfaces missing/problematic deal fields that degrade "Deals à relancer" and churn
-   scoring. Every issue resolves to "review" (go fix it on the client record) — nothing
+   scoring. Every issue resolves to "review" (go fix it on the client record) · nothing
    here is auto-fixable, since Baakalai has no reliable way to infer a sector, deal
    value, or true close date on its own (see backend/lib/data-quality-checks.js for why).
-   stage_mapping_issue is a setup/config problem, not a per-deal issue — it's filtered
+   stage_mapping_issue is a setup/config problem, not a per-deal issue · it's filtered
    out here and surfaced as a general banner instead (DataQualityBanners.jsx).
    =============================================================================== */
 
@@ -32,7 +32,7 @@ export default function DealQualityStrate() {
     setLoading(true);
     try {
       const data = await request('/data-quality/deal-quality');
-      // stage_mapping_issue is a setup/config problem, not a per-deal data quality issue — it's
+      // stage_mapping_issue is a setup/config problem, not a per-deal data quality issue · it's
       // surfaced as a general banner at the top of the page instead (DataQualityBanners.jsx).
       setIssues((data.issues || []).filter(i => i.type !== 'stage_mapping_issue'));
     } catch {

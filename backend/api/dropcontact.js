@@ -1,5 +1,5 @@
 /**
- * DropContact API Client — vérification ET recherche d'emails.
+ * DropContact API Client · vérification ET recherche d'emails.
  *
  * Deux usages sur le même endpoint /batch :
  * - vérification : on soumet des contacts AVEC email (crm-cleaning-agent) ;
@@ -76,7 +76,7 @@ async function fetchBatch(apiKey, requestId) {
 
 /**
  * Extract the best email from a DropContact result entry.
- * DropContact returns email as an array of { email, qualification } —
+ * DropContact returns email as an array of { email, qualification } · 
  * is_verified n'existe que sur certaines réponses, la qualification
  * "nominative@pro" est le signal fiable de délivrabilité.
  * @returns {{ email: string, verified: boolean }}
@@ -98,7 +98,7 @@ function parseBatchEntry(entry) {
 
 /**
  * Map one of our leads (search result / CSV row shape) to a DropContact
- * enrichment payload — WITHOUT email, so DropContact computes it.
+ * enrichment payload · WITHOUT email, so DropContact computes it.
  * Returns null if the lead lacks the minimum inputs (first+last+company).
  */
 function buildEnrichInput(lead) {

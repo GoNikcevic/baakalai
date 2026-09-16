@@ -79,7 +79,7 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     // Le sous-titre d'accueil décrit le produit dans son ensemble (deals,
-    // clients, données) plutôt qu'une seule offre — voir dashboard.welcomeSubtitle.
+    // clients, données) plutôt qu'une seule offre · voir dashboard.welcomeSubtitle.
     expect(screen.getByText(/analyse votre CRM en continu/)).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Signals Page
+   BAKAL · Signals Page
    Signal-based prospecting: configure monitoring + view/action detected signals
    =============================================================================== */
 
@@ -359,7 +359,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{s.title}</div>
                     {s.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{s.description}</div>}
-                    {/* Détail du relevance_score — même présentation que les facteurs
+                    {/* Détail du relevance_score, même présentation que les facteurs
                         churn (liste facteur + poids), en lecture positive comme l'upsell.
                         Absent sur les signaux antérieurs à la migration 096. */}
                     {Array.isArray(s.relevance_factors) && s.relevance_factors.length > 0 && (
@@ -435,7 +435,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     )}
                     {sequenceResult.sequence.steps.map((step, i) => (
                       <div key={i} style={{ fontSize: 11, marginBottom: 6, paddingLeft: 8, borderLeft: '2px solid var(--border)' }}>
-                        <div style={{ fontWeight: 600 }}>{step.step} ({step.timing}) — {step.subject}</div>
+                        <div style={{ fontWeight: 600 }}>{step.step} ({step.timing}), {step.subject}</div>
                         <div style={{ color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>{step.body}</div>
                       </div>
                     ))}

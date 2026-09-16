@@ -1,13 +1,13 @@
 /**
- * Santé financière — USA. Gratuit, token optionnel (COURTLISTENER_API_TOKEN).
+ * Santé financière · USA. Gratuit, token optionnel (COURTLISTENER_API_TOKEN).
  *
  * CourtListener Search API v4 (dockets RECAP, type=r) :
  * https://www.courtlistener.com/help/api/rest/search/
  * Requête fielded vérifiée en réel : caseName:"..." AND chapter:(7 OR 11)
- * AND dateFiled:[YYYY-MM-DD TO *] — le paramètre `court` n'accepte pas de
+ * AND dateFiled:[YYYY-MM-DD TO *] · le paramètre `court` n'accepte pas de
  * wildcard, on filtre donc côté client sur les cours de faillite (id en *b).
  *
- * Sans token le rate limit est plus bas — acceptable pour un cron hebdo.
+ * Sans token le rate limit est plus bas · acceptable pour un cron hebdo.
  * Pas de notion de « dissolved » ici : on ne détecte que les faillites
  * Chapter 7/11 des 12 derniers mois.
  */
@@ -52,7 +52,7 @@ async function lookup(companyName, opts = {}) {
   const since = new Date();
   since.setMonth(since.getMonth() - LOOKBACK_MONTHS);
 
-  // Les guillemets casseraient la requête fielded — on les retire du nom.
+  // Les guillemets casseraient la requête fielded · on les retire du nom.
   const safeName = String(companyName || '').replace(/"/g, ' ').trim();
   const q = `caseName:"${safeName}" AND chapter:(7 OR 11) AND dateFiled:[${since.toISOString().slice(0, 10)} TO *]`;
   const params = new URLSearchParams({ type: 'r', q, order_by: 'dateFiled desc' });
@@ -100,7 +100,7 @@ async function lookup(companyName, opts = {}) {
     status: 'insolvency',
     signals: [{
       signal_type: 'insolvency_proceeding',
-      detail: `Faillite Chapter ${docket.chapter}${quand ? ` — déposée le ${quand}` : ''} (${docket.court_citation_string || docket.court})`,
+      detail: `Faillite Chapter ${docket.chapter}${quand ? `, déposée le ${quand}` : ''} (${docket.court_citation_string || docket.court})`,
     }],
     raw: {
       caseName: docket.caseName,

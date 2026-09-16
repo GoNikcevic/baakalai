@@ -1,5 +1,5 @@
 /**
- * Signal Agent — Detect buying signals and build prospect lists
+ * Signal Agent · Detect buying signals and build prospect lists
  *
  * Monitors multiple sources for signals that indicate a prospect is ready to buy:
  * - Funding / investment rounds
@@ -22,7 +22,7 @@ const logger = require('../logger');
 const { safeParseClaudeArray } = require('../utils/safe-json-parse');
 
 // Notification persistée (cloche + socket) : le cron tourne à 8h, l'utilisateur
-// n'est en général pas connecté — un événement socket seul serait perdu.
+// n'est en général pas connecté · un événement socket seul serait perdu.
 async function notifyNewSignals(userId, count) {
   try {
     const { createNotification } = require('../notify');
@@ -91,7 +91,7 @@ const SIGNAL_QUERIES = {
 };
 
 /**
- * Détail du relevance_score tel que généré par l'extraction LLM — nettoyé
+ * Détail du relevance_score tel que généré par l'extraction LLM · nettoyé
  * avant insertion (le modèle peut renvoyer n'importe quoi). Retourne une
  * chaîne JSON prête pour la colonne JSONB, ou null si rien d'exploitable :
  * node-pg sérialise les tableaux JS en littéral Postgres, pas en JSON.
@@ -109,7 +109,7 @@ function serializeRelevanceFactors(raw) {
  * Scanne UNE configuration : l'unité de travail que le scheduler continu
  * (lib/signal-scheduler.js) pilote individuellement. `recentSet` (dédup titre
  * 7 jours) est fourni par l'appelant pour être partagé entre configs.
- * Retourne { detected, queriesUsed } — queriesUsed = requêtes Brave réelles,
+ * Retourne { detected, queriesUsed } · queriesUsed = requêtes Brave réelles,
  * comptées pour le budget quotidien du scheduler.
  */
 async function scanConfig(userId, config, recentSet) {
@@ -242,7 +242,7 @@ async function run(userId) {
         [userId]
       );
       if (hasOutreach.rows.length === 0) {
-        // No outreach tool — auto-add top signals to CRM
+        // No outreach tool · auto-add top signals to CRM
         const topSignals = await db.query(
           `SELECT id, contact_name, contact_email, contact_title, company_name, contact_linkedin
            FROM signals WHERE user_id = $1 AND status = 'new' AND relevance_score >= 75 AND contact_email IS NOT NULL
@@ -271,7 +271,7 @@ async function run(userId) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CRM Watch — signaux recentrés sur les comptes du CRM (P4, 23/08)
+// CRM Watch · signaux recentrés sur les comptes du CRM (P4, 23/08)
 // ═══════════════════════════════════════════════════════════════
 //
 // Au lieu de prospecter de nouvelles sociétés par secteur/mots-clés, on
@@ -340,7 +340,7 @@ async function loadCrmWatchRecentSet(userId) {
 
 /**
  * Meilleure opportunité par société (celle qui portera le rattachement du
- * signal) — extrait de runCrmWatch pour que le scheduler cible UNE société.
+ * signal) · extrait de runCrmWatch pour que le scheduler cible UNE société.
  */
 async function loadCompanyAccount(userId, companyName) {
   const r = await db.query(
@@ -361,7 +361,7 @@ async function runCrmWatch(userId) {
   const report = { detected: 0, companiesScanned: 0, errors: [] };
 
   try {
-    // Meilleure opportunité par société (ouverte avant won, puis valeur) —
+    // Meilleure opportunité par société (ouverte avant won, puis valeur) · 
     // c'est elle qui porte le contact et recevra le rattachement du signal.
     const companies = await db.query(
       `SELECT DISTINCT ON (company)
@@ -382,7 +382,7 @@ async function runCrmWatch(userId) {
       .slice(0, CRM_WATCH_MAX_PER_DAY);
     if (toScan.length === 0) return report;
 
-    // Dédup par (société, type) sur 14 jours — la dédup par titre laissait
+    // Dédup par (société, type) sur 14 jours · la dédup par titre laissait
     // passer la même actu reformulée (Vivodyne 2×, Absolute 2×).
     const recent = await db.query(
       `SELECT DISTINCT company_name, signal_type FROM signals
@@ -415,7 +415,7 @@ async function runCrmWatch(userId) {
 
 /**
  * Extraction Claude pour le CRM watch : les résultats concernent une société
- * précise du CRM — la pertinence mesure « à quel point c'est une bonne raison
+ * précise du CRM · la pertinence mesure « à quel point c'est une bonne raison
  * de relancer ce compte maintenant », pas un score de prospection.
  */
 async function extractCrmSignals(results, acct) {
@@ -436,8 +436,8 @@ For each RELEVANT result about "${acct.company}", extract:
 - description: 1-2 sentences on why this is a good reason to re-engage, given the CRM context
 - signalType: one of ${VALID_SIGNAL_TYPES.join('|')}
 - sourceUrl: the URL
-- relevance: 0-100 — how strong a reason to re-engage this account now
-- relevanceFactors: 2-4 items breaking the relevance score down — [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
+- relevance: 0-100, how strong a reason to re-engage this account now
+- relevanceFactors: 2-4 items breaking the relevance score down, [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
 
 Return JSON array: [{ title, description, signalType, sourceUrl, relevance, relevanceFactors }]
 Return [] if nothing is clearly about this company.`;
@@ -465,7 +465,7 @@ async function searchBrave(query) {
   // sans aucune erreur.
   const apiKey = process.env.BRAVE_API_KEY || process.env.BRAVE_SEARCH_API_KEY;
   if (!apiKey) {
-    logger.warn('signal-agent', 'BRAVE_API_KEY/BRAVE_SEARCH_API_KEY absente — scan de signaux impossible');
+    logger.warn('signal-agent', 'BRAVE_API_KEY/BRAVE_SEARCH_API_KEY absente, scan de signaux impossible');
     return [];
   }
 
@@ -509,7 +509,7 @@ For each RELEVANT result (skip irrelevant ones), extract:
 - contactTitle: their role (if any)
 - sourceUrl: the URL
 - relevance: 0-100 score based on how strong this buying signal is
-- relevanceFactors: 2-4 items breaking the relevance score down — [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
+- relevanceFactors: 2-4 items breaking the relevance score down, [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
 
 Return JSON array: [{ title, description, companyName, companyDomain, contactName, contactTitle, sourceUrl, relevance, relevanceFactors }]
 Return empty array [] if nothing is relevant.`;
@@ -539,7 +539,7 @@ async function enrichContact(signal, userId) {
     // Use user's Apollo key (not a shared key)
     const { getUserKey } = require('../../config');
     const apiKey = userId ? await getUserKey(userId, 'apollo') : null;
-    if (!apiKey) return {}; // No Apollo connected — skip enrichment
+    if (!apiKey) return {}; // No Apollo connected, skip enrichment
 
     const res = await fetch('https://api.apollo.io/v1/mixed_people/search', {
       method: 'POST',

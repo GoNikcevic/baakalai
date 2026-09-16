@@ -1,5 +1,5 @@
 /**
- * Signal Scheduler — file tournante continue, sous quota.
+ * Signal Scheduler · file tournante continue, sous quota.
  *
  * Remplace le batch unique du matin : un tick toutes les 30 minutes prend les
  * cibles les plus « dues » (priorité × ancienneté) dans une file unifiée
@@ -7,11 +7,11 @@
  * jour est consommé. Plus d'utilisateurs = la file tourne moins vite au lieu
  * d'exploser le quota au pic de 8 h.
  *
- * Cadences cibles (l'ancienneté fait monter tout le monde — pas de famine),
+ * Cadences cibles (l'ancienneté fait monter tout le monde · pas de famine),
  * dérivées de users.signal_scan_frequency ('off' = jamais scanné auto) :
- *   - société chaude : 24 h (hebdo) / 12 h (quotidien) — l'urgence temps réel
+ *   - société chaude : 24 h (hebdo) / 12 h (quotidien) · l'urgence temps réel
  *     reste couverte par le boost webhook, Brave cherche sur la semaine écoulée
- *   - config active : ~12 h (2×/jour — avant : jamais scannée automatiquement)
+ *   - config active : ~12 h (2×/jour · avant : jamais scannée automatiquement)
  *   - société standard : 7 j (hebdo) / 3 j (quotidien)
  *
  * Compte « chaud » : boost webhook, churn >= seuil à risque, lead score >= 70,
@@ -25,7 +25,7 @@ const logger = require('./logger');
 const { AT_RISK_THRESHOLD } = require('./churn-scoring');
 
 const MONTHLY_QUOTA = parseInt(process.env.BRAVE_MONTHLY_QUOTA || '2000', 10);
-// 80 % du quota pour le scheduler — la réserve couvre les scans manuels
+// 80 % du quota pour le scheduler · la réserve couvre les scans manuels
 // (bouton « Lancer le scan ») et le scan hebdo churn du dimanche.
 const DAILY_BUDGET = Math.max(5, Math.floor((MONTHLY_QUOTA / 31) * 0.8));
 
@@ -79,7 +79,7 @@ async function markScanned(userId, targetType, targetKey) {
 
 /**
  * Pose un boost sur une société : elle passera en tête de file au prochain
- * tick. Appelé par les webhooks CRM quand un deal bouge — fraîcheur <= 30 min
+ * tick. Appelé par les webhooks CRM quand un deal bouge · fraîcheur <= 30 min
  * sans appel immédiat (le budget reste maître).
  */
 async function boostCompany(userId, companyName, hours = 2) {
@@ -126,7 +126,7 @@ async function collectDueTargets() {
 
   // Sociétés du CRM (une cible par société et par utilisateur).
   // value_rank : position de la société dans les valeurs de deals de SON user
-  // (percent_rank sur l'agrégat — fenêtre évaluée après le GROUP BY).
+  // (percent_rank sur l'agrégat · fenêtre évaluée après le GROUP BY).
   const companies = await db.query(
     `SELECT o.user_id, lower(trim(o.company)) AS company_key,
             u.signal_scan_frequency AS frequency,

@@ -1,6 +1,6 @@
 /* ===============================================================================
-   BAKAL — Assistant Nudge
-   Compact topbar CTA pointing to the Assistant (/chat) for general questions —
+   BAKAL · Assistant Nudge
+   Compact topbar CTA pointing to the Assistant (/chat) for general questions · 
    replaces the per-page "Interroger vos données" block once removed from Analytics.
    =============================================================================== */
 

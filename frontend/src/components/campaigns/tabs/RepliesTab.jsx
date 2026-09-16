@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Replies Tab — Shows prospect replies synced from Lemlist
+   Replies Tab · Shows prospect replies synced from Lemlist
    Auto-syncs on mount, no manual button needed.
    ═══════════════════════════════════════════════════ */
 

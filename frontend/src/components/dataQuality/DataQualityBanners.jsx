@@ -1,6 +1,6 @@
 /* ===============================================================================
-   BAKAL — Data Quality prerequisite banners
-   Alerts for missing prerequisites that make the rest of Baakalai unusable — no CRM
+   BAKAL · Data Quality prerequisite banners
+   Alerts for missing prerequisites that make the rest of Baakalai unusable · no CRM
    connected, or no email account connected (relance/upsell emails can't be sent at
    all without one). Same dismiss-with-TTL-in-localStorage pattern as
    ReactivationQueuePage.jsx's CRM hygiene banner.
@@ -65,7 +65,7 @@ export default function DataQualityBanners() {
     request('/nurture/email-accounts').then(d => {
       setHasEmail((d.accounts || []).length > 0);
     }).catch(() => {});
-    // One general banner regardless of how many connected CRMs lack a status mapping — never
+    // One general banner regardless of how many connected CRMs lack a status mapping · never
     // named per-provider (a config issue, not a per-deal data quality problem).
     request('/data-quality/deal-quality').then(d => {
       setHasStageMappingIssue((d.issues || []).some(i => i.type === 'stage_mapping_issue'));

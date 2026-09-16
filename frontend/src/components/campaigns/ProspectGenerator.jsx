@@ -5,8 +5,8 @@ import Icon from '../Icon';
 
 /**
  * 3-step prospect generator for a campaign in prep:
- * 1. Search (Lemlist Leads / Apollo / ...) — returns profiles without emails
- * 2. Reveal emails — async enrichment via Lemlist (consumes credits)
+ * 1. Search (Lemlist Leads / Apollo / ...) · returns profiles without emails
+ * 2. Reveal emails · async enrichment via Lemlist (consumes credits)
  * 3. Add selected prospects to the campaign
  */
 export default function ProspectGenerator({ campaign, onProspectsAdded }) {
@@ -1018,7 +1018,7 @@ function ConfirmRevealModal({ count, credits, revealSource, onSourceChange, leml
           />
         )}
 
-        {/* Avertissement coût — option payante via la clé centrale baakalai */}
+        {/* Avertissement coût · option payante via la clé centrale baakalai */}
         {isPaid && baakalOption && (
           <div style={{ marginBottom: 16 }}>
             <div

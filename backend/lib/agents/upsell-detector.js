@@ -73,7 +73,7 @@ async function run(userId) {
 
       // Score upsell potential. `factors` mirrors churn-scoring.js's
       // {signal, weight, detail} shape so the frontend can render the same
-      // score-breakdown UI as the churn-risk section — `reasons` (flat
+      // score-breakdown UI as the churn-risk section · `reasons` (flat
       // strings) stays untouched alongside it for existing consumers.
       let score = 0;
       const reasons = [];
@@ -152,7 +152,7 @@ async function run(userId) {
 
 /**
  * On-demand upsell email draft for a SINGLE client (used by the "Voir le mail" on-demand
- * flow — no daily batch). Recomputes cross-sell context for just this client, then drafts
+ * flow · no daily batch). Recomputes cross-sell context for just this client, then drafts
  * with one Claude call. Returns { opportunity, subject, body } or { error }.
  */
 async function draftOne(userId, opportunityId) {
@@ -210,7 +210,7 @@ RULES:
 - Max 6 lines, must sound human and personal
 - Start by acknowledging the existing relationship (they are a client)
 - Naturally introduce the upsell/cross-sell value proposition
-- Tone: appreciative, not pushy — this is a valued client
+- Tone: appreciative, not pushy, this is a valued client
 - Do NOT mention scores or automated systems
 ${require('../human-style').HUMAN_STYLE_RULES}
 

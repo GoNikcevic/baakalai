@@ -15,7 +15,7 @@ vi.mock('../../services/auth', () => ({
 // Les recommandations ne sont plus des données de démo codées en dur : la page
 // les construit à partir des diagnostics de chaque campagne et des patterns de
 // mémoire, récupérés côté backend. On injecte donc les trois entrées dont la
-// page dépend — campagnes, diagnostics, mémoire — et on couvre au passage la
+// page dépend · campagnes, diagnostics, mémoire · et on couvre au passage la
 // transformation diagnostic → recommandation, qui est la vraie logique ici.
 const CAMPAIGNS = {
   'drh-lyon': { id: 'drh-lyon', _backendId: 'drh-lyon', name: 'DRH PME Lyon' },
@@ -46,7 +46,7 @@ vi.mock('../../services/api-client', () => ({
     checkHealth: vi.fn().mockResolvedValue(null),
     // Lazy : vi.mock est hissé en tête de fichier, donc la factory s'exécute
     // avant l'initialisation des constantes. mockResolvedValue(PATTERNS)
-    // lirait la variable trop tôt — l'appeler dans le corps la diffère.
+    // lirait la variable trop tôt · l'appeler dans le corps la diffère.
     getMemory: vi.fn(() => Promise.resolve({ patterns: PATTERNS })),
     getDiagnostics: vi.fn((id) => Promise.resolve({ diagnostics: DIAGNOSTICS[id] || [] })),
   },

@@ -1,5 +1,5 @@
 /**
- * Santé financière — Royaume-Uni. Gratuit, clé requise (COMPANIES_HOUSE_API_KEY).
+ * Santé financière · Royaume-Uni. Gratuit, clé requise (COMPANIES_HOUSE_API_KEY).
  *
  * Companies House Public Data API :
  * https://developer-specs.company-information.service.gov.uk/
@@ -116,13 +116,13 @@ async function lookup(companyName, opts = {}) {
     const quand = frDate(profile.date_of_cessation);
     signals.push({
       signal_type: 'company_dissolved',
-      detail: `Société dissoute (Companies House)${quand ? ` — ${quand}` : ''}`,
+      detail: `Société dissoute (Companies House)${quand ? `, ${quand}` : ''}`,
     });
   } else if (ACTIVE_STATUSES.has(companyStatus)) {
     status = 'active';
   }
   // converted-closed / removed / closed : radiations administratives ambiguës
-  // (fusion, conversion…) — on reste sur 'unknown' plutôt qu'une fausse alerte.
+  // (fusion, conversion…) · on reste sur 'unknown' plutôt qu'une fausse alerte.
 
   return {
     matched: true,

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Notifications API
+   BAKAL · Notifications API
    CRUD endpoints for the in-app notification system.
    =============================================================================== */
 
@@ -8,7 +8,7 @@ const db = require('../db');
 
 const router = Router();
 
-// GET /api/notifications — list recent notifications (paginated)
+// GET /api/notifications · list recent notifications (paginated)
 router.get('/', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
@@ -20,7 +20,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET /api/notifications/unread-count — count of unread notifications
+// GET /api/notifications/unread-count · count of unread notifications
 router.get('/unread-count', async (req, res, next) => {
   try {
     const count = await db.notifications.countUnread(req.user.id);
@@ -30,7 +30,7 @@ router.get('/unread-count', async (req, res, next) => {
   }
 });
 
-// PATCH /api/notifications/read-all — mark all as read
+// PATCH /api/notifications/read-all · mark all as read
 router.patch('/read-all', async (req, res, next) => {
   try {
     await db.notifications.markAllRead(req.user.id);
@@ -40,7 +40,7 @@ router.patch('/read-all', async (req, res, next) => {
   }
 });
 
-// PATCH /api/notifications/:id/read — mark one as read
+// PATCH /api/notifications/:id/read · mark one as read
 router.patch('/:id/read', async (req, res, next) => {
   try {
     const notif = await db.notifications.markRead(req.params.id, req.user.id);

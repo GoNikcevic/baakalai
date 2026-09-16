@@ -16,7 +16,7 @@ import { useI18n } from '../../i18n';
 function buildTree(steps) {
   if (!steps || steps.length === 0) return [];
 
-  // Check if any step carries parent info — if not, keep linear
+  // Check if any step carries parent info · if not, keep linear
   const hasTree = steps.some(
     (s) =>
       s.parentStepId ||

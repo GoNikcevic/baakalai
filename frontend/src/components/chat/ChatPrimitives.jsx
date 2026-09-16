@@ -1,9 +1,9 @@
 /* ===============================================================================
-   BAKAL — Chat Primitives
+   BAKAL · Chat Primitives
    Shared rendering/streaming building blocks for both chat assistants: the prospecting
    assistant (components/campaigns/CampaignAssistant.jsx, under the Prospection tab) and
    the general assistant (pages/ChatPage.jsx, the first sidebar tab). Each assistant
-   keeps its own ActionCard dispatcher and its own action set — only the message/thread-list
+   keeps its own ActionCard dispatcher and its own action set · only the message/thread-list
    chrome is shared here, and the CRM/activation cards in components/chat/CrmActionCards.jsx.
    =============================================================================== */
 
@@ -157,9 +157,9 @@ export function InlineSuggestions({ suggestions, onSend }) {
 }
 
 /**
- * ActionCardComponent is supplied by the caller — each assistant has its own dispatcher over
+ * ActionCardComponent is supplied by the caller · each assistant has its own dispatcher over
  * its own action set (CampaignAssistant: campaign building and prospect sourcing; ChatPage:
- * CRM lookups and the activation cards) — this component only owns the message bubble chrome.
+ * CRM lookups and the activation cards) · this component only owns the message bubble chrome.
  */
 export function ChatMessage({ role, content, metadata, animate, isLast, onCreateCampaign, onSendMessage, onActionExecute, onPreview, ActionCardComponent }) {
   const { lang } = useI18n();

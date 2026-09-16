@@ -1,10 +1,10 @@
 /**
- * SLA — seuils de réactivité définis par l'admin, évalués en SQL pur.
+ * SLA · seuils de réactivité définis par l'admin, évalués en SQL pur.
  *
  * Trois SLA, choisis pour ne dépendre que de colonnes fiables du sync CRM :
  * - new_lead          : lead status 'new' créé depuis > newLeadDays sans aucune
  *                       activité enregistrée depuis sa création
- * - followup_overdue  : relance planifiée (planned_followup_date — « Reporter »
+ * - followup_overdue  : relance planifiée (planned_followup_date · « Reporter »
  *                       ou next_activity_date Pipedrive) dépassée de plus de
  *                       followupGraceDays
  * - inactive          : deal ouvert (ni won ni lost) sans activité depuis
@@ -12,7 +12,7 @@
  *
  * Config dans users.settings.sla, OFF par défaut : un SLA est une promesse que
  * l'admin déclare, pas une heuristique qu'on lui impose. Pas de cron ni d'appel
- * IA — évalué à la lecture (« À traiter aujourd'hui », digest du lundi), donc
+ * IA · évalué à la lecture (« À traiter aujourd'hui », digest du lundi), donc
  * déterministe et gratuit.
  *
  * Un même deal peut violer plusieurs SLA (un lead 'new' jamais touché finit
@@ -46,7 +46,7 @@ async function getSlaConfig(userId) {
 
 /**
  * Liste les violations SLA d'un utilisateur.
- * Retourne [{ kind, days, id, name, email, company, dealValue }] — `days` est
+ * Retourne [{ kind, days, id, name, email, company, dealValue }] · `days` est
  * l'âge du manquement dans l'unité du SLA (attente du lead, retard de relance,
  * jours d'inactivité).
  */

@@ -1,6 +1,6 @@
 /* ===============================================================================
-   BAKAL — Merge Review Panel
-   Inline expand-to-confirm (not a modal — matches SettingsPage's DeleteAccountSection
+   BAKAL · Merge Review Panel
+   Inline expand-to-confirm (not a modal · matches SettingsPage's DeleteAccountSection
    and ReactivationQueuePage's postpone flow). Shows a full field-by-field diff across
    every contact in a duplicate group before any merge is committed, lets the user pick
    which contact survives and resolve conflicting field values, then shows the EXACT
@@ -17,7 +17,7 @@ const FIELD_LABELS = { name: 'Nom', email: 'Email', phone: 'Téléphone', title:
 /**
  * Valeurs par défaut du contact conservé : les SIENNES d'abord, celles des doublons
  * seulement pour les champs qu'il n'a pas (le cas « à importer de l'autre contact »).
- * Choisir une colonne, c'est dire « je garde ce contact » — ses valeurs doivent suivre,
+ * Choisir une colonne, c'est dire « je garde ce contact » · ses valeurs doivent suivre,
  * sinon l'heuristique serveur (`diff.suggested` = contact modifié le plus récemment)
  * réécrit silencieusement le contact conservé avec les valeurs du doublon : un doublon
  * sale créé après l'original est toujours le plus récent, donc c'est lui qui gagnait
@@ -40,7 +40,7 @@ function fieldsFromKept(diff, keepId) {
 /**
  * Contact conservé par défaut. L'ordre du scan est arbitraire (`group.contacts[0]` tombait
  * régulièrement sur le doublon sale), donc on classe : plus d'historique réel d'abord
- * (emails/activités/lignes de produit — ce qui se perd le plus mal), puis fiche la plus
+ * (emails/activités/lignes de produit · ce qui se perd le plus mal), puis fiche la plus
  * remplie, puis la plus ancienne (le doublon est créé après l'original). Reste un défaut :
  * le choix de l'utilisateur prime toujours.
  */
@@ -61,7 +61,7 @@ function defaultKeepId(diff, activityCounts) {
 }
 
 function formatActivity(counts, t) {
-  if (!counts) return '—';
+  if (!counts) return ' ';
   return t('dataQuality.duplicates.activityCounts', {
     emails: counts.emails,
     activities: counts.activities,
@@ -233,7 +233,7 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
                     const isKept = String(c.id) === String(keepId);
                     return (
                       <td key={c.id} style={{ padding: '4px 8px', background: isKept ? 'var(--accent-glow)' : 'transparent', color: diff.diffs[field].conflict ? 'var(--warning)' : 'inherit' }}>
-                        {c[field] || '—'}
+                        {c[field] || ' '}
                       </td>
                     );
                   })}

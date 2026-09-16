@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════
-   Dashboard — Activation tab
+   Dashboard · Activation tab
    Emailing/campaigns engine: KPIs, campaigns table, performance
    chart, AI recommendations, deliverability, ICP insights.
    What the old OverviewSection was, minus the Opportunities card
-   (moved to CrmTab — scoring/CRM-export is a CRM-data operation,
+   (moved to CrmTab · scoring/CRM-export is a CRM-data operation,
    not an emailing metric).
    ═══════════════════════════════════════════════════ */
 
@@ -19,7 +19,7 @@ import DeliverabilityCard from '../DeliverabilityCard';
 import { sendRecoFeedback } from '../../services/api-client';
 import Icon from '../Icon';
 
-// Une icône par KPI — partagée entre la grille remplie et l'état vide.
+// Une icône par KPI · partagée entre la grille remplie et l'état vide.
 const KPI_ICONS = {
   contacts: 'send',
   openRate: 'inbox',
@@ -129,7 +129,7 @@ function NonEmptyActivation({ globalKpis, campaigns, recommendations, chartData 
           </div>
         </div>
 
-        {/* Performance chart — recharts */}
+        {/* Performance chart · recharts */}
         <div className="card">
           <div className="card-header">
             <div className="card-title">{t('dashboard.performance4w')}</div>

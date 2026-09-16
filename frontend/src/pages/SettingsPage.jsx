@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Settings Page (React)
+   BAKAL · Settings Page (React)
    API key management with encrypted storage, test connectivity, masked display.
    Includes preferences, theme toggle, notification settings, and integrations library.
    Backend: routes/settings.js (GET/POST /api/settings/keys, POST /keys/test)
@@ -43,9 +43,9 @@ function getMainTools(lang) {
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
       guide: en ? ['URL + database name + login + password'] : ['URL + nom de base + login + mot de passe'] },
-    { field: 'notionToken', label: 'Notion', desc: en ? 'CRM + Docs — import & sync contacts' : 'CRM + Docs — import et sync contacts', placeholder: en ? 'ntn_ or secret_ token' : 'Token ntn_ ou secret_', color: '#000000', icon: 'N', category: 'CRM', hasMetadata: 'notion',
+    { field: 'notionToken', label: 'Notion', desc: en ? 'CRM + Docs, import & sync contacts' : 'CRM + Docs, import et sync contacts', placeholder: en ? 'ntn_ or secret_ token' : 'Token ntn_ ou secret_', color: '#000000', icon: 'N', category: 'CRM', hasMetadata: 'notion',
       guide: en ? ['Go to notion.so/my-integrations', 'Create an internal integration', 'Copy the token (starts with ntn_ or secret_)', 'Share your CRM database with the integration'] : ['Allez dans notion.so/my-integrations', 'Cr\u00e9ez une int\u00e9gration interne', 'Copiez le token (commence par ntn_ ou secret_)', 'Partagez votre base CRM avec l\'int\u00e9gration'], link: 'https://www.notion.so/my-integrations' },
-    { field: 'airtableKey', label: 'Airtable', desc: en ? 'CRM + spreadsheet — import & sync contacts' : 'CRM + tableur — import et sync contacts', placeholder: en ? 'Your Airtable personal access token' : 'Votre personal access token Airtable', color: '#18BFFF', icon: 'At', category: 'CRM', hasMetadata: 'airtable',
+    { field: 'airtableKey', label: 'Airtable', desc: en ? 'CRM + spreadsheet, import & sync contacts' : 'CRM + tableur, import et sync contacts', placeholder: en ? 'Your Airtable personal access token' : 'Votre personal access token Airtable', color: '#18BFFF', icon: 'At', category: 'CRM', hasMetadata: 'airtable',
       guide: en ? ['Go to airtable.com/create/tokens', 'Create a personal access token', 'Grant read/write scopes on your base', 'Copy and paste here'] : ['Allez dans airtable.com/create/tokens', 'Cr\u00e9ez un personal access token', 'Accordez les scopes lecture/\u00e9criture sur votre base', 'Copiez et collez ici'], link: 'https://airtable.com/create/tokens' },
   ];
 }
@@ -53,7 +53,7 @@ function getMainTools(lang) {
 /* Extended tools in dropdown.
    Seuls les outils réellement branchés (client dans backend/api/ + usage) sont
    affichés. Retirés le 2026-08-18 car la clé était stockée mais jamais utilisée
-   (aucun client API) — à réintroduire ici le jour où le backend les branche :
+   (aucun client API) · à réintroduire ici le jour où le backend les branche :
    Kaspr, Lusha, Snov.io (enrichissement), PhantomBuster, Captain Data
    (scraping), Calendly, Cal.com (calendrier), MailReach, Warmbox
    (délivrabilité). */
@@ -69,12 +69,12 @@ function getExtendedTools(lang) {
         helpSteps: ['Get your API credentials from your Informz admin', 'Format: username:password:brandId', 'Your server IP must be whitelisted by Informz'] },
     ]},
     { label: 'LinkedIn', keys: [
-      { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'Your LinkedIn session — powers LinkedIn steps in your follow-up workflows' : 'Votre session LinkedIn — alimente les étapes LinkedIn de vos workflows de relance', placeholder: en ? 'Your li_at cookie (or use the extension)' : 'Votre cookie li_at (ou passez par l\'extension)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
+      { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'Your LinkedIn session, powers LinkedIn steps in your follow-up workflows' : 'Votre session LinkedIn, alimente les étapes LinkedIn de vos workflows de relance', placeholder: en ? 'Your li_at cookie (or use the extension)' : 'Votre cookie li_at (ou passez par l\'extension)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
         helpSteps: en ? [
-          'Easiest: install the "baakalai — LinkedIn Connect" Chrome extension, log in to linkedin.com, click "Connect". The connection then stays up to date on its own.',
+          'Easiest: install the "baakalai, LinkedIn Connect" Chrome extension, log in to linkedin.com, click "Connect". The connection then stays up to date on its own.',
           'Manual fallback: log in to linkedin.com, open DevTools (F12) → Application → Cookies, copy the "li_at" value and paste it here.',
         ] : [
-          'Le plus simple : installez l\'extension Chrome « baakalai — LinkedIn Connect », connectez-vous à linkedin.com, cliquez sur « Connecter ». La connexion se maintient ensuite toute seule.',
+          'Le plus simple : installez l\'extension Chrome « baakalai, LinkedIn Connect », connectez-vous à linkedin.com, cliquez sur « Connecter ». La connexion se maintient ensuite toute seule.',
           'Méthode manuelle : connectez-vous à linkedin.com, ouvrez les DevTools (F12) → Application → Cookies, copiez la valeur de « li_at » et collez-la ici.',
         ] },
     ]},
@@ -107,7 +107,7 @@ function StatusBadge({ status, lang }) {
     <span className={`settings-status-badge ${info.cls}`}>
       {info.text}
       {status.message && status.status !== 'connected' && status.status !== 'not_configured'
-        ? ` — ${status.message}` : ''}
+        ? `, ${status.message}` : ''}
     </span>
   );
 }
@@ -590,7 +590,7 @@ export default function SettingsPage() {
         <div>
           <div className="page-title">{t('settings.title')}</div>
           <div className="page-subtitle">
-            {t('settings.subtitle')} — {configuredCount}/{totalCount} {t('settings.configured')}
+            {t('settings.subtitle')}, {configuredCount}/{totalCount} {t('settings.configured')}
           </div>
         </div>
         <div className="header-actions">
@@ -613,7 +613,7 @@ export default function SettingsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20, alignItems: 'start' }}>
       {/* Left column */}
       <div>
-      {/* Integrations — 2-column grid */}
+      {/* Integrations · 2-column grid */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -752,7 +752,7 @@ export default function SettingsPage() {
             })}
           </div>
 
-          {/* Voir plus — inside the same card */}
+          {/* Voir plus · inside the same card */}
           <div
             style={{
               padding: '12px 20px', cursor: 'pointer',
@@ -997,7 +997,7 @@ export default function SettingsPage() {
                       );
                     })()
                   ) : (
-                    /* Résumé pas (encore) chargé — CTA génériques en secours */
+                    /* Résumé pas (encore) chargé · CTA génériques en secours */
                     <>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
                         {en
@@ -1037,7 +1037,7 @@ export default function SettingsPage() {
       {/* Email sortant */}
       <EmailAccountSettings />
 
-      {/* Envoi — cadence et fenêtres des emails sortants */}
+      {/* Envoi · cadence et fenêtres des emails sortants */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title">{t('settings.sendingTitle')}</div>
@@ -1085,7 +1085,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Emails de baakalai — adresse de notification + opt-out RGPD */}
+      {/* Emails de baakalai · adresse de notification + opt-out RGPD */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title">{t('settings.baakalaiEmailsTitle')}</div>
@@ -1141,7 +1141,7 @@ export default function SettingsPage() {
 
       <div className="settings-group-title">{t('settings.groupAccount')}</div>
 
-      {/* Preferences — modèle IA (les réglages d'envoi ont rejoint le groupe Emails) */}
+      {/* Preferences · modèle IA (les réglages d'envoi ont rejoint le groupe Emails) */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title">{t('settings.preferences')}</div>
@@ -1592,7 +1592,7 @@ function MetadataConfig({ provider, en }) {
         {options && options.length > 0 && (
           <select className="form-input" style={{ fontSize: 12, padding: '6px 8px', width: '100%', marginBottom: 6 }}
             value={selected} onChange={e => setSelected(e.target.value)}>
-            <option value="">{en ? '— Select a database —' : '— Choisir une base —'}</option>
+            <option value="">{en ? ' Select a database ' : ' Choisir une base '}</option>
             {options.map(db => <option key={db.id} value={db.id}>{db.title}</option>)}
           </select>
         )}
@@ -1640,7 +1640,7 @@ function MetadataConfig({ provider, en }) {
         {options && options.length > 0 && (
           <select className="form-input" style={{ fontSize: 12, padding: '6px 8px', width: '100%', marginBottom: 6 }}
             value={selected} onChange={e => setSelected(e.target.value)}>
-            <option value="">{en ? '— Select a table —' : '— Choisir une table —'}</option>
+            <option value="">{en ? ' Select a table ' : ' Choisir une table '}</option>
             {options.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
         )}
@@ -1785,7 +1785,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
         </button>
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 2, width: '100%', color: 'var(--text-muted)' }}
           onClick={() => setShowAdminHelp(v => !v)}>
-          {en ? '? OAuth error / restricted org — admin approval guide' : '? Erreur OAuth / org restreinte — guide pour votre admin'}
+          {en ? '? OAuth error / restricted org, admin approval guide' : '? Erreur OAuth / org restreinte, guide pour votre admin'}
         </button>
         {showAdminHelp && (
           <div style={{
@@ -1795,18 +1795,18 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
             {en
               ? <>
                   <strong>Seeing an "OAuth Error" (OAUTH_APPROVAL_ERROR_GENERIC)?</strong><br/>
-                  Your Salesforce org restricts third-party apps — your admin needs to approve Baakal.ai first:<br/>
+                  Your Salesforce org restricts third-party apps, your admin needs to approve Baakal.ai first:<br/>
                   1. In Salesforce Setup, search for <strong>"Connected Apps OAuth Usage"</strong><br/>
-                  2. Find <strong>Baakal.ai</strong> in the list and click <strong>Install</strong> (the app appears after a connection attempt — if missing, retry connecting, then refresh the page)<br/>
+                  2. Find <strong>Baakal.ai</strong> in the list and click <strong>Install</strong> (the app appears after a connection attempt, if missing, retry connecting, then refresh the page)<br/>
                   3. <strong>Manage Policies</strong> &gt; allow your profile (or set "All users may self-authorize")<br/>
                   4. Check your user profile has the <strong>API Enabled</strong> permission<br/>
                   Then retry "Connect with Salesforce". If your admin prefers not to approve external apps, use your own Connected App above instead.
                 </>
               : <>
                   <strong>Vous voyez une {'«'} OAuth Error {'»'} (OAUTH_APPROVAL_ERROR_GENERIC) ?</strong><br/>
-                  Votre org Salesforce restreint les apps tierces {'—'} votre admin doit d'abord approuver Baakal.ai :<br/>
+                  Votre org Salesforce restreint les apps tierces {' '} votre admin doit d'abord approuver Baakal.ai :<br/>
                   1. Dans la Configuration Salesforce, recherchez <strong>{'«'} Utilisation OAuth des applications connect{'é'}es {'»'}</strong> (Connected Apps OAuth Usage)<br/>
-                  2. Rep{'é'}rez <strong>Baakal.ai</strong> dans la liste et cliquez <strong>Installer</strong> (l'app appara{'î'}t apr{'è'}s une tentative de connexion {'—'} si absente, retentez une connexion puis actualisez la page)<br/>
+                  2. Rep{'é'}rez <strong>Baakal.ai</strong> dans la liste et cliquez <strong>Installer</strong> (l'app appara{'î'}t apr{'è'}s une tentative de connexion {' '} si absente, retentez une connexion puis actualisez la page)<br/>
                   3. <strong>G{'é'}rer les strat{'é'}gies</strong> &gt; autorisez votre profil (ou {'«'} Tous les utilisateurs peuvent s'auto-autoriser {'»'})<br/>
                   4. V{'é'}rifiez que votre profil utilisateur a la permission <strong>API activ{'é'}e</strong> (API Enabled)<br/>
                   Puis retentez {'«'} Connecter via Salesforce {'»'}. Si votre admin ne souhaite pas approuver d'app externe, utilisez votre propre Connected App ci-dessus.

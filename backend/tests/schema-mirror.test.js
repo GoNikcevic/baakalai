@@ -5,14 +5,14 @@
  * jetable dont le schéma est écrit à la main dans db/sqlite-adapter.js. Ce
  * schéma est un miroir : quand une migration ajoute une colonne à la vraie
  * base, il faut la recopier là-bas. Personne ne le faisait, et le miroir avait
- * fini avec 53 colonnes de retard sur 9 tables — dont 34 sur opportunities.
+ * fini avec 53 colonnes de retard sur 9 tables · dont 34 sur opportunities.
  * Les tests interrogeaient alors une maquette qui ne ressemblait plus à
  * l'original : ils échouaient sur « no such column », loin de toute vraie
  * régression.
  *
  * Ce test compare les deux et échoue dès qu'une colonne manque. Il ne réclame
- * pas que le miroir contienne TOUTES les tables — il ne réplique que celles que
- * les tests utilisent — mais toute table qu'il réplique doit être complète.
+ * pas que le miroir contienne TOUTES les tables · il ne réplique que celles que
+ * les tests utilisent · mais toute table qu'il réplique doit être complète.
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
@@ -52,7 +52,7 @@ function readMirror() {
 
 /**
  * Le schéma réel : les deux fichiers de schéma (les tables ne sont pas toutes
- * dans supabase-schema.sql — reports et chart_data vivent dans
+ * dans supabase-schema.sql · reports et chart_data vivent dans
  * supabase-rls-and-extras.sql), puis chaque migration dans l'ordre.
  */
 function readRealSchema() {

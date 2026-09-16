@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════
-   Dashboard — Clients tab
+   Dashboard · Clients tab
    Strictly client-scoped data: churn risk (real churn_score model,
-   same one backing /churn-risk — not the age-only heuristic the old
+   same one backing /churn-risk · not the age-only heuristic the old
    QuickWinCard used) and upsell opportunities. Both are teasers that
    deep-link to their full dedicated pages.
    ═══════════════════════════════════════════════════ */
@@ -31,7 +31,7 @@ export default function ClientsTab() {
     return () => { cancelled = true; };
   }, []);
 
-  // Top 3 par score, sans seuil "à risque" — sinon la liste reste vide dès
+  // Top 3 par score, sans seuil "à risque" · sinon la liste reste vide dès
   // que personne ne dépasse un cutoff arbitraire, alors que la bande
   // critique/élevé/modéré/faible au-dessus donne déjà cette lecture globale.
   const atRisk = useMemo(() => {

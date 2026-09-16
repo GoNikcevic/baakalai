@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — CRM Analytics Page
+   BAKAL · CRM Analytics Page
    Pipeline, Revenue Attribution, Lead Scoring, Trends, Channels, Health Score.
    =============================================================================== */
 
@@ -19,7 +19,7 @@ import DealPipelineKpis from '../components/DealPipelineKpis';
 /* ─── Helpers ─── */
 
 // Valeur des filtres produit/secteur pour les deals sans ligne produit ou sans
-// secteur déterminé — doit rester identique à backend/routes/analytics.js.
+// secteur déterminé · doit rester identique à backend/routes/analytics.js.
 const UNASSIGNED = '__unassigned__';
 
 const STAGE_COLORS = {
@@ -59,7 +59,7 @@ function getVocabulary(mode, en) {
 }
 
 // Pluriel français pour les légendes de compte (« combien de deals sont... »,
-// cf. DealsGroupSummary) — distinct du vocab singulier utilisé ailleurs
+// cf. DealsGroupSummary) · distinct du vocab singulier utilisé ailleurs
 // (badge d'un seul deal, en-têtes de colonne). L'anglais n'accorde pas les
 // adjectifs : on y réutilise tel quel le vocabulaire singulier.
 function getVocabularyPlural(mode, en) {
@@ -109,9 +109,9 @@ function getTabs(t, vocab) { return [
   { key: 'channels', label: t('analytics.channels'), desc: t('analytics.tabDescChannels') },
 ]; }
 
-// Groups (top-level nav) — each maps to the sub-tabs it contains
+// Groups (top-level nav) · each maps to the sub-tabs it contains
 // 'attribution' apparaît dans deux groupes : même clé, même fetch
-// (/analytics/attribution), mais contenu différent selon le groupe actif —
+// (/analytics/attribution), mais contenu différent selon le groupe actif · 
 // DealTouchBlock (deals touchés par baakalai) sous Deals, ROI campagnes sous
 // Prospection. Voir le rendu conditionnel sur activeGroup plus bas.
 const GROUPS = [
@@ -155,7 +155,7 @@ export default function CRMAnalyticsPage() {
     setActiveTab(prev => (groupTabKeys.includes(prev) ? prev : groupTabKeys[0]));
   }, [activeGroup]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filtres transverses produit / secteur / période — propagés en query string
+  // Filtres transverses produit / secteur / période · propagés en query string
   // aux routes analytics de Deals/Clients (le backend filtre les opportunités
   // avant agrégation). period et dateFrom/dateTo sont mutuellement exclusifs :
   // choisir l'un efface l'autre, la query string calcule from/to dans les deux cas.
@@ -222,12 +222,12 @@ export default function CRMAnalyticsPage() {
     fetchData(activeTab);
   }, [activeTab, fetchData]);
 
-  // Résumé "Deals en cours" affiché entre les groupes et les sous-onglets —
+  // Résumé "Deals en cours" affiché entre les groupes et les sous-onglets · 
   // fetch indépendant du cache activeTab/loading, pour rester visible quel
   // que soit le sous-onglet consulté (Attribution, Forecast, Raisons de perte…).
   // Volontairement SANS filterQs : ce résumé doit toujours représenter la base
   // entière, jamais le périmètre filtré (produit/secteur/période) appliqué
-  // au contenu en dessous — seuls Gagné/Perdu ont leur propre fenêtre fixe
+  // au contenu en dessous · seuls Gagné/Perdu ont leur propre fenêtre fixe
   // de 30 jours, indépendante des filtres.
   const [dealsSummary, setDealsSummary] = useState(null);
   useEffect(() => {
@@ -289,12 +289,12 @@ export default function CRMAnalyticsPage() {
         ))}
       </div>
 
-      {/* Résumé Deals — visible quel que soit le sous-onglet actif */}
+      {/* Résumé Deals · visible quel que soit le sous-onglet actif */}
       {activeGroup === 'deals' && dealsSummary && (
         <DealsGroupSummary data={dealsSummary} statusLabels={STATUS_LABELS} statusLabelsPlural={STATUS_LABELS_PLURAL} />
       )}
 
-      {/* Tab bar — sous-onglets du groupe actif */}
+      {/* Tab bar · sous-onglets du groupe actif */}
       {groupTabKeys.length > 1 && (
         <div className="crm-tabs">
           {TABS.filter(tab => groupTabKeys.includes(tab.key)).map(tab => (
@@ -309,7 +309,7 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* Active tab description — 'attribution' a un sens différent par groupe */}
+      {/* Active tab description · 'attribution' a un sens différent par groupe */}
       {(() => {
         if (activeTab === 'attribution' && activeGroup === 'deals') {
           return (
@@ -329,7 +329,7 @@ export default function CRMAnalyticsPage() {
         ) : null;
       })()}
 
-      {/* Filtres produit / secteur — Deals / Clients / Prospection (Attribution y respecte
+      {/* Filtres produit / secteur, Deals / Clients / Prospection (Attribution y respecte
           ces filtres, contrairement à Canaux qui reste campagne-only, cf. avertissement plus bas) */}
       {(activeGroup === 'deals' || activeGroup === 'clients' || activeGroup === 'prospection') && backendAvailable && hasData && (productLines.length > 1 || sectors.length > 1) && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
@@ -384,7 +384,7 @@ export default function CRMAnalyticsPage() {
         </div>
       )}
 
-      {/* Filtres période — sous les filtres produit/secteur, période prédéfinie
+      {/* Filtres période, sous les filtres produit/secteur, période prédéfinie
           ou intervalle exact, mutuellement exclusifs */}
       {(activeGroup === 'deals' || activeGroup === 'clients' || activeGroup === 'prospection') && backendAvailable && hasData && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '0 0 12px' }}>
@@ -429,13 +429,13 @@ export default function CRMAnalyticsPage() {
       {/* Content */}
       {loading && <LoadingTips />}
 
-      {/* Empty state — no data */}
+      {/* Empty state · no data */}
       {!loading && !tabData && (
         <div style={{
           textAlign: 'center', padding: '60px 20px',
           color: 'var(--text-muted)',
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>{hasData ? '—' : '—'}</div>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>{hasData ? ' ' : ' '}</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
             {hasData
               ? (en ? 'No data for this view yet' : 'Pas encore de données pour cette vue')
@@ -459,7 +459,7 @@ export default function CRMAnalyticsPage() {
       )}
 
       {/* Les tendances, canaux et la vue d'ensemble clients viennent des campagnes /
-          de toutes les opportunités, pas du périmètre filtré — les filtres produit/secteur/
+          de toutes les opportunités, pas du périmètre filtré · les filtres produit/secteur/
           période ne s'y appliquent pas : on le dit plutôt que de laisser croire que les
           chiffres sont filtrés. */}
       {!loading && tabData && (filters.productLine || filters.sector || filters.period || filters.dateFrom || filters.dateTo) && (activeTab === 'trends' || activeTab === 'channels' || activeTab === 'membership' || activeTab === 'upsell-performance' || activeTab === 'churn-risk-performance') && (
@@ -560,7 +560,7 @@ function CohortTable({ cohorts, en }) {
               <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--success)' }}>{c.won}</td>
               <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--danger)' }}>{c.lost}</td>
               <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{c.open}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{c.winRate != null ? `${c.winRate}%` : '—'}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{c.winRate != null ? `${c.winRate}%` : ' '}</td>
             </tr>
           ))}
         </tbody>
@@ -585,7 +585,7 @@ function DealSizeBlock({ dealSize, en }) {
   );
 }
 
-// Résumé persistant du groupe Deals — entre la barre de groupes et les
+// Résumé persistant du groupe Deals · entre la barre de groupes et les
 // sous-onglets, visible quel que soit le sous-onglet actif (pas seulement Pipeline).
 function DealsGroupSummary({ data, statusLabels, statusLabelsPlural }) {
   const t = useT();
@@ -594,7 +594,7 @@ function DealsGroupSummary({ data, statusLabels, statusLabelsPlural }) {
   const pipelineStages = (data.stages || []).filter(s => ['new', 'interested', 'meeting', 'negotiation'].includes(s.stage));
   const outcomes30d = data.outcomes30d || { won: 0, lost: 0 };
 
-  // Mêmes 3 cartes que le Dashboard (onglet Deals) — fetch indépendant du
+  // Mêmes 3 cartes que le Dashboard (onglet Deals) · fetch indépendant du
   // filterQs de la page, comme StagesBlock/GeographyBlock, pour toujours
   // refléter le portefeuille entier ici.
   const [reactivationStats, setReactivationStats] = useState(null);
@@ -619,7 +619,7 @@ function DealsGroupSummary({ data, statusLabels, statusLabelsPlural }) {
         </div>
       </div>
 
-      {/* Zone 2 : issues sur les 30 derniers jours — boîte resserrée autour
+      {/* Zone 2 : issues sur les 30 derniers jours, boîte resserrée autour
           des 2 cartes, centrée sur la page */}
       <div style={{ background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 14, padding: 20, width: 'fit-content', margin: '0 auto' }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 16px', textAlign: 'center' }}>
@@ -804,7 +804,7 @@ function DealTouchBlock({ dt }) {
                   <span style={{ flex: 2, fontWeight: 600 }}>
                     {d.name}{d.company ? ` · ${d.company}` : ''}
                     {d.dealValue > 0 && (
-                      <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> — ${d.dealValue.toLocaleString()}</span>
+                      <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>, ${d.dealValue.toLocaleString()}</span>
                     )}
                   </span>
                   <span>
@@ -818,7 +818,7 @@ function DealTouchBlock({ dt }) {
                       </span>
                     )}
                   </span>
-                  <span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span>
+                  <span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span>
                   <span style={{ fontWeight: 600, color: d.reactivatedAt ? 'var(--success)' : d.replied ? 'var(--blue)' : 'var(--text-muted)' }}>
                     {d.reactivatedAt ? t('analytics.dealTouchOutcomeReactivated')
                       : d.replied ? t('analytics.dealTouchOutcomeReplied')
@@ -834,7 +834,7 @@ function DealTouchBlock({ dt }) {
   );
 }
 
-// Deals group — deals touchés par baakalai (relances/réactivations), reste
+// Deals group · deals touchés par baakalai (relances/réactivations), reste
 // distinct du ROI campagnes ci-dessous qui vit désormais sous Prospection.
 function DealTouchSection({ data }) {
   return (
@@ -1113,7 +1113,7 @@ function MemoryForecastBlock({ mf }) {
       <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
         {ctx.reliable ? (
           <span>
-            {t('analytics.mfContextReliable', { days: ctx.avgCycleDays != null ? ctx.avgCycleDays : '—', winRate: Math.round((ctx.winRate || 0) * 100) })}
+            {t('analytics.mfContextReliable', { days: ctx.avgCycleDays != null ? ctx.avgCycleDays : ' ', winRate: Math.round((ctx.winRate || 0) * 100) })}
             {calibrationPct > 0 && (
               <> {calibration < 1 ? t('analytics.mfCalibrationOver', { pct: calibrationPct }) : t('analytics.mfCalibrationUnder', { pct: calibrationPct })}</>
             )}
@@ -1147,7 +1147,7 @@ function MemoryForecastBlock({ mf }) {
                   <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <span style={{ fontWeight: 600 }}>{d.name}</span>
-                      {d.company ? <span style={{ color: 'var(--text-muted)' }}>{' — '}{d.company}</span> : null}
+                      {d.company ? <span style={{ color: 'var(--text-muted)' }}>{', '}{d.company}</span> : null}
                     </span>
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0 }}>{fmtEur.format(d.value || 0)}</span>
                     <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 10, color: 'var(--text-on-color)', background: g.color, flexShrink: 0 }}>
@@ -1179,7 +1179,7 @@ function ForecastSection({ data, statusLabels, vocab }) {
 
   return (
     <div className="crm-section">
-      {/* Intelligent forecast (memory-calibrated) — renders nothing when memoryForecast is null/empty */}
+      {/* Intelligent forecast (memory-calibrated) · renders nothing when memoryForecast is null/empty */}
       <MemoryForecastBlock mf={data.memoryForecast} />
 
       {/* KPI row */}
@@ -1193,7 +1193,7 @@ function ForecastSection({ data, statusLabels, vocab }) {
           <div className="crm-kpi-label">{t('analytics.weightedForecast')}<HelpTip text={t('analytics.helpForecast')} /></div>
         </div>
         <div className="crm-kpi-card">
-          <div className="crm-kpi-value">{cycle.avgDays || '—'}</div>
+          <div className="crm-kpi-value">{cycle.avgDays || ' '}</div>
           <div className="crm-kpi-label">{t('analytics.avgSalesCycle')}<HelpTip text={t('analytics.helpSalesCycle')} /></div>
         </div>
         <div className="crm-kpi-card">
@@ -1508,10 +1508,10 @@ function GeographySection({ data }) {
                     <td style={{ padding: '7px 8px', textAlign: 'right' }}>{c.contacts}</td>
                     <td style={{ padding: '7px 8px', textAlign: 'right' }}>{c.clients}</td>
                     <td style={{ padding: '7px 8px', textAlign: 'right' }}>
-                      {c.openValue > 0 ? c.openValue.toLocaleString() + ' €' : '—'}
+                      {c.openValue > 0 ? c.openValue.toLocaleString() + ' €' : ' '}
                     </td>
                     <td style={{ padding: '7px 8px', textAlign: 'right' }}>
-                      {c.wonValue > 0 ? c.wonValue.toLocaleString() + ' €' : '—'}
+                      {c.wonValue > 0 ? c.wonValue.toLocaleString() + ' €' : ' '}
                     </td>
                   </tr>
                 ))}
@@ -1532,7 +1532,7 @@ function GeographySection({ data }) {
 
 // Auto-fetch : la géographie vit maintenant au bas de l'onglet Vue d'ensemble
 // (plus un onglet séparé), mais /analytics/geography reste filtré par
-// produit/secteur/période — contrairement au reste de cet onglet — d'où le
+// produit/secteur/période · contrairement au reste de cet onglet · d'où le
 // petit texte le précisant plutôt que de le mélanger silencieusement.
 function GeographyBlock({ filterQs = '' }) {
   const t = useT();
@@ -1557,7 +1557,7 @@ function GeographyBlock({ filterQs = '' }) {
   );
 }
 
-/* ═══ Membership Section (Clients — vue d'ensemble) ═══ */
+/* ═══ Membership Section (Clients · vue d'ensemble) ═══ */
 
 const CHURN_BAND_COLORS = { critical: '#DC2626', high: '#F59E0B', medium: '#6E57FA', low: '#16A34A' };
 
@@ -1571,10 +1571,10 @@ function MembershipSection({ data, en, filterQs }) {
         {[
           { label: en ? 'Total clients' : 'Clients total', value: k.total_won || 0, color: '#6E57FA' },
           { label: en ? 'At risk' : 'À risque', value: k.at_risk || 0, color: '#DC2626' },
-          { label: en ? 'Avg lead value' : 'Valeur moyenne', value: k.avg_deal_value ? `${k.avg_deal_value}€` : '—', color: '#16A34A' },
-          { label: en ? 'Total revenue' : 'Revenu total', value: k.total_revenue ? `${Number(k.total_revenue).toLocaleString()}€` : '—', color: '#16A34A' },
-          { label: en ? 'Avg cycle' : 'Cycle moyen', value: k.avg_cycle_days ? `${k.avg_cycle_days}j` : '—' },
-          { label: en ? 'Avg churn score' : 'Score churn moyen', value: k.avg_churn_score || '—', color: k.avg_churn_score >= 50 ? '#DC2626' : '#F59E0B' },
+          { label: en ? 'Avg lead value' : 'Valeur moyenne', value: k.avg_deal_value ? `${k.avg_deal_value}€` : ' ', color: '#16A34A' },
+          { label: en ? 'Total revenue' : 'Revenu total', value: k.total_revenue ? `${Number(k.total_revenue).toLocaleString()}€` : ' ', color: '#16A34A' },
+          { label: en ? 'Avg cycle' : 'Cycle moyen', value: k.avg_cycle_days ? `${k.avg_cycle_days}j` : ' ' },
+          { label: en ? 'Avg churn score' : 'Score churn moyen', value: k.avg_churn_score || ' ', color: k.avg_churn_score >= 50 ? '#DC2626' : '#F59E0B' },
         ].map((kpi, i) => (
           <div key={i} className="card" style={{ padding: '16px 20px' }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: kpi.color || 'var(--text-primary)' }}>{kpi.value}</div>
@@ -1618,7 +1618,7 @@ function MembershipSection({ data, en, filterQs }) {
           {(data.bySize || []).map(s => (
             <div key={s.segment} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
               <span>{s.segment}</span>
-              <span><strong>{s.won}</strong> {en ? 'won' : 'gagnés'} · {s.revenue ? `${Number(s.revenue).toLocaleString()}€` : '—'}</span>
+              <span><strong>{s.won}</strong> {en ? 'won' : 'gagnés'} · {s.revenue ? `${Number(s.revenue).toLocaleString()}€` : ' '}</span>
             </div>
           ))}
         </div>
@@ -1631,7 +1631,7 @@ function MembershipSection({ data, en, filterQs }) {
             return (
               <div key={o.rep} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150 }}>{o.rep}</span>
-                <span><strong>{winRate}%</strong> win · {o.revenue ? `${Number(o.revenue).toLocaleString()}€` : '—'}</span>
+                <span><strong>{winRate}%</strong> win · {o.revenue ? `${Number(o.revenue).toLocaleString()}€` : ' '}</span>
               </div>
             );
           })}
@@ -1699,7 +1699,7 @@ function UpsellPerformanceSection({ data }) {
           <div className="crm-kpi-label">{t('analytics.upsellCandidates')}<HelpTip text={t('analytics.upsellHelp')} /></div>
         </div>
         <div className="crm-kpi-card">
-          <div className="crm-kpi-value">{hasCandidates ? data.avgScore : '—'}</div>
+          <div className="crm-kpi-value">{hasCandidates ? data.avgScore : ' '}</div>
           <div className="crm-kpi-label">{t('analytics.upsellAvgScore')}</div>
         </div>
         <div className="crm-kpi-card">
@@ -1707,7 +1707,7 @@ function UpsellPerformanceSection({ data }) {
           <div className="crm-kpi-label">{t('analytics.upsellEmailsSent')}</div>
         </div>
         <div className="crm-kpi-card">
-          <div className="crm-kpi-value">{hasEmails ? `${data.replyRate}%` : '—'}</div>
+          <div className="crm-kpi-value">{hasEmails ? `${data.replyRate}%` : ' '}</div>
           <div className="crm-kpi-label">{t('analytics.upsellReplyRate')}</div>
         </div>
       </div>
@@ -1826,7 +1826,7 @@ function AtRiskPerformanceSection({ data }) {
 
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{t('analytics.riskTopFactorsTitle')}</div>
-            {(data.topFactors || []).length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</div>}
+            {(data.topFactors || []).length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}> </div>}
             {(data.topFactors || []).map(f => (
               <div key={f.signal} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                 <span style={{ width: 140, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

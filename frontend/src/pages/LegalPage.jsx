@@ -210,17 +210,17 @@ function PrivacyFR() {
     <SectionTitle>2. Traitement des données</SectionTitle>
     <p>Les données sont traitées pour fournir le service :</p>
     <ul>
-      <li><strong>Claude API (Anthropic)</strong> — Génération de contenu IA, analyse de performance</li>
-      <li><strong>Lemlist</strong> — Exécution des campagnes email/LinkedIn</li>
-      <li><strong>Brave Search</strong> — Recherche web de prospects</li>
-      <li><strong>Resend</strong> — Emails transactionnels (vérification, reset password)</li>
+      <li><strong>Claude API (Anthropic)</strong>, Génération de contenu IA, analyse de performance</li>
+      <li><strong>Lemlist</strong>, Exécution des campagnes email/LinkedIn</li>
+      <li><strong>Brave Search</strong>, Recherche web de prospects</li>
+      <li><strong>Resend</strong>, Emails transactionnels (vérification, reset password)</li>
     </ul>
 
     <SectionTitle>3. Hébergement</SectionTitle>
     <p>Les données sont stockées sur des serveurs européens :</p>
     <ul>
-      <li><strong>Supabase</strong> — Base de données PostgreSQL (EU-West)</li>
-      <li><strong>Railway</strong> — Hébergement backend (EU-West)</li>
+      <li><strong>Supabase</strong>, Base de données PostgreSQL (EU-West)</li>
+      <li><strong>Railway</strong>, Hébergement backend (EU-West)</li>
     </ul>
 
     <SectionTitle>4. Sous-traitants</SectionTitle>
@@ -229,21 +229,21 @@ function PrivacyFR() {
     <SectionTitle>5. Vos droits (RGPD)</SectionTitle>
     <p>Conformément au RGPD, vous disposez des droits suivants :</p>
     <ul>
-      <li><strong>Accès</strong> — Obtenir une copie de vos données</li>
-      <li><strong>Rectification</strong> — Corriger vos données</li>
-      <li><strong>Suppression</strong> — Demander l'effacement de vos données</li>
-      <li><strong>Portabilité</strong> — Exporter vos données</li>
-      <li><strong>Opposition</strong> — Vous opposer au traitement</li>
+      <li><strong>Accès</strong>, Obtenir une copie de vos données</li>
+      <li><strong>Rectification</strong>, Corriger vos données</li>
+      <li><strong>Suppression</strong>, Demander l'effacement de vos données</li>
+      <li><strong>Portabilité</strong>, Exporter vos données</li>
+      <li><strong>Opposition</strong>, Vous opposer au traitement</li>
     </ul>
     <p>Contact : contact@baakal.ai</p>
 
-    <SectionTitle>6. Vos droits (CCPA — Résidents US/Californie)</SectionTitle>
+    <SectionTitle>6. Vos droits (CCPA, Résidents US/Californie)</SectionTitle>
     <p>Si vous résidez aux États-Unis ou en Californie, vous disposez des droits suivants :</p>
     <ul>
-      <li><strong>Droit de savoir</strong> — Demander quelles données personnelles nous collectons et utilisons.</li>
-      <li><strong>Droit de suppression</strong> — Demander la suppression de vos données. Utilisez l'option "Supprimer le compte" dans vos paramètres pour une suppression immédiate et définitive.</li>
-      <li><strong>Droit de refus de vente</strong> — Baakalai ne vend pas de données personnelles à des tiers.</li>
-      <li><strong>Non-discrimination</strong> — L'exercice de vos droits n'affecte pas la qualité du service.</li>
+      <li><strong>Droit de savoir</strong>, Demander quelles données personnelles nous collectons et utilisons.</li>
+      <li><strong>Droit de suppression</strong>, Demander la suppression de vos données. Utilisez l'option "Supprimer le compte" dans vos paramètres pour une suppression immédiate et définitive.</li>
+      <li><strong>Droit de refus de vente</strong>, Baakalai ne vend pas de données personnelles à des tiers.</li>
+      <li><strong>Non-discrimination</strong>, L'exercice de vos droits n'affecte pas la qualité du service.</li>
     </ul>
     <p>Pour exercer vos droits : paramètres du compte ou contact@baakal.ai</p>
 
@@ -256,22 +256,22 @@ function PrivacyFR() {
     <SectionTitle>9. Partage de données avec des tiers</SectionTitle>
     <p>Baakalai partage des données avec des tiers uniquement pour fournir le service. Nous ne vendons pas de données.</p>
     <ul>
-      <li><strong>Anthropic (Claude API)</strong> — Paramètres de campagne pour la génération IA. Aucun email individuel de contact n'est envoyé.</li>
-      <li><strong>CRM</strong> — Données contacts et deals synchronisées selon votre configuration.</li>
-      <li><strong>Outils d'outreach</strong> — Séquences de campagne et données prospects pour la livraison email/LinkedIn.</li>
-      <li><strong>Brave Search</strong> — Noms d'entreprises pour la recherche de prospects.</li>
+      <li><strong>Anthropic (Claude API)</strong>, Paramètres de campagne pour la génération IA. Aucun email individuel de contact n'est envoyé.</li>
+      <li><strong>CRM</strong>, Données contacts et deals synchronisées selon votre configuration.</li>
+      <li><strong>Outils d'outreach</strong>, Séquences de campagne et données prospects pour la livraison email/LinkedIn.</li>
+      <li><strong>Brave Search</strong>, Noms d'entreprises pour la recherche de prospects.</li>
     </ul>
 
     <SectionTitle>10. Cookies</SectionTitle>
     <p>Baakalai n'utilise pas de cookies tiers ni de tracking. Seuls des tokens d'authentification sont stockés dans le localStorage du navigateur.</p>
 
-    <SectionTitle>11. Extension Chrome « baakalai — LinkedIn Connect »</SectionTitle>
+    <SectionTitle>11. Extension Chrome « baakalai, LinkedIn Connect »</SectionTitle>
     <p>L'extension Chrome optionnelle a une finalité unique : relier votre session LinkedIn à votre compte Baakalai, à votre demande explicite.</p>
     <ul>
-      <li><strong>Données traitées</strong> — Votre cookie de session LinkedIn (li_at), lu uniquement après un clic explicite de votre part dans l'extension, puis transmis chiffré (TLS) à votre compte et stocké chiffré (AES-256-GCM). Votre token de session Baakalai est conservé localement par l'extension pour vous authentifier.</li>
-      <li><strong>Ce que l'extension ne fait pas</strong> — Aucune lecture du contenu des pages, aucune collecte de navigation, aucune action sans votre premier clic, aucun partage ni revente.</li>
-      <li><strong>Maintien de la connexion</strong> — Après votre première connexion, l'extension met à jour le cookie auprès de votre compte quand LinkedIn le renouvelle, jusqu'à ce que vous déconnectiez LinkedIn.</li>
-      <li><strong>Déconnexion</strong> — À tout moment depuis l'extension ou depuis Réglages → LinkedIn ; le cookie est alors supprimé de nos serveurs.</li>
+      <li><strong>Données traitées</strong>, Votre cookie de session LinkedIn (li_at), lu uniquement après un clic explicite de votre part dans l'extension, puis transmis chiffré (TLS) à votre compte et stocké chiffré (AES-256-GCM). Votre token de session Baakalai est conservé localement par l'extension pour vous authentifier.</li>
+      <li><strong>Ce que l'extension ne fait pas</strong>, Aucune lecture du contenu des pages, aucune collecte de navigation, aucune action sans votre premier clic, aucun partage ni revente.</li>
+      <li><strong>Maintien de la connexion</strong>, Après votre première connexion, l'extension met à jour le cookie auprès de votre compte quand LinkedIn le renouvelle, jusqu'à ce que vous déconnectiez LinkedIn.</li>
+      <li><strong>Déconnexion</strong>, À tout moment depuis l'extension ou depuis Réglages → LinkedIn ; le cookie est alors supprimé de nos serveurs.</li>
     </ul>
   </>);
 }
@@ -292,17 +292,17 @@ function PrivacyEN() {
     <SectionTitle>2. Data Processing</SectionTitle>
     <p>Data is processed to provide the service:</p>
     <ul>
-      <li><strong>Claude API (Anthropic)</strong> — AI content generation, performance analysis</li>
-      <li><strong>Lemlist</strong> — Email/LinkedIn campaign execution</li>
-      <li><strong>Brave Search</strong> — Web-based prospect research</li>
-      <li><strong>Resend</strong> — Transactional emails (verification, password reset)</li>
+      <li><strong>Claude API (Anthropic)</strong>, AI content generation, performance analysis</li>
+      <li><strong>Lemlist</strong>, Email/LinkedIn campaign execution</li>
+      <li><strong>Brave Search</strong>, Web-based prospect research</li>
+      <li><strong>Resend</strong>, Transactional emails (verification, password reset)</li>
     </ul>
 
     <SectionTitle>3. Data Storage</SectionTitle>
     <p>Data is stored on European servers:</p>
     <ul>
-      <li><strong>Supabase</strong> — PostgreSQL database (EU-West)</li>
-      <li><strong>Railway</strong> — Backend hosting (EU-West)</li>
+      <li><strong>Supabase</strong>, PostgreSQL database (EU-West)</li>
+      <li><strong>Railway</strong>, Backend hosting (EU-West)</li>
     </ul>
 
     <SectionTitle>4. Sub-processors</SectionTitle>
@@ -311,21 +311,21 @@ function PrivacyEN() {
     <SectionTitle>5. Your Rights (GDPR)</SectionTitle>
     <p>Under GDPR, you have the following rights:</p>
     <ul>
-      <li><strong>Access</strong> — Obtain a copy of your data</li>
-      <li><strong>Rectification</strong> — Correct your data</li>
-      <li><strong>Erasure</strong> — Request deletion of your data</li>
-      <li><strong>Portability</strong> — Export your data</li>
-      <li><strong>Objection</strong> — Object to data processing</li>
+      <li><strong>Access</strong>, Obtain a copy of your data</li>
+      <li><strong>Rectification</strong>, Correct your data</li>
+      <li><strong>Erasure</strong>, Request deletion of your data</li>
+      <li><strong>Portability</strong>, Export your data</li>
+      <li><strong>Objection</strong>, Object to data processing</li>
     </ul>
     <p>Contact: contact@baakal.ai</p>
 
-    <SectionTitle>6. Your Rights (CCPA — California/US Residents)</SectionTitle>
+    <SectionTitle>6. Your Rights (CCPA, California/US Residents)</SectionTitle>
     <p>If you are a California resident or US-based user, you have the following rights under the CCPA:</p>
     <ul>
-      <li><strong>Right to Know</strong> — You may request what personal information we collect, use, and share.</li>
-      <li><strong>Right to Delete</strong> — You may request deletion of your personal information. Use the "Delete Account" option in your account settings for immediate, permanent deletion.</li>
-      <li><strong>Right to Opt-Out of Sale</strong> — Baakalai does not sell personal information to third parties.</li>
-      <li><strong>Non-Discrimination</strong> — You will not receive different service quality for exercising your rights.</li>
+      <li><strong>Right to Know</strong>, You may request what personal information we collect, use, and share.</li>
+      <li><strong>Right to Delete</strong>, You may request deletion of your personal information. Use the "Delete Account" option in your account settings for immediate, permanent deletion.</li>
+      <li><strong>Right to Opt-Out of Sale</strong>, Baakalai does not sell personal information to third parties.</li>
+      <li><strong>Non-Discrimination</strong>, You will not receive different service quality for exercising your rights.</li>
     </ul>
     <p>To exercise these rights, use your account settings or contact: contact@baakal.ai</p>
 
@@ -338,22 +338,22 @@ function PrivacyEN() {
     <SectionTitle>9. Third-Party Data Sharing</SectionTitle>
     <p>Baakalai shares data with third parties only to provide the service. We do not sell data. Shared data includes:</p>
     <ul>
-      <li><strong>Anthropic (Claude API)</strong> — Campaign parameters and content for AI generation. No individual contact emails are sent.</li>
-      <li><strong>CRM providers</strong> — Contact and deal data synced bidirectionally per your configuration.</li>
-      <li><strong>Outreach tools</strong> — Campaign sequences and prospect data for email/LinkedIn delivery.</li>
-      <li><strong>Brave Search</strong> — Company names for prospect research queries.</li>
+      <li><strong>Anthropic (Claude API)</strong>, Campaign parameters and content for AI generation. No individual contact emails are sent.</li>
+      <li><strong>CRM providers</strong>, Contact and deal data synced bidirectionally per your configuration.</li>
+      <li><strong>Outreach tools</strong>, Campaign sequences and prospect data for email/LinkedIn delivery.</li>
+      <li><strong>Brave Search</strong>, Company names for prospect research queries.</li>
     </ul>
 
     <SectionTitle>10. Cookies</SectionTitle>
     <p>Baakalai does not use third-party cookies or tracking. Only authentication tokens are stored in the browser's localStorage.</p>
 
-    <SectionTitle>11. Chrome Extension "baakalai — LinkedIn Connect"</SectionTitle>
+    <SectionTitle>11. Chrome Extension "baakalai, LinkedIn Connect"</SectionTitle>
     <p>The optional Chrome extension has a single purpose: linking your LinkedIn session to your Baakalai account, at your explicit request.</p>
     <ul>
-      <li><strong>Data processed</strong> — Your LinkedIn session cookie (li_at), read only after an explicit click in the extension, then transmitted encrypted (TLS) to your account and stored encrypted (AES-256-GCM). Your Baakalai session token is kept locally by the extension to authenticate you.</li>
-      <li><strong>What the extension does not do</strong> — No page content reading, no browsing data collection, no action without your initial click, no sharing or selling.</li>
-      <li><strong>Keeping the connection alive</strong> — After your first connection, the extension updates the cookie on your account whenever LinkedIn rotates it, until you disconnect LinkedIn.</li>
-      <li><strong>Disconnecting</strong> — At any time from the extension or from Settings → LinkedIn; the cookie is then deleted from our servers.</li>
+      <li><strong>Data processed</strong>, Your LinkedIn session cookie (li_at), read only after an explicit click in the extension, then transmitted encrypted (TLS) to your account and stored encrypted (AES-256-GCM). Your Baakalai session token is kept locally by the extension to authenticate you.</li>
+      <li><strong>What the extension does not do</strong>, No page content reading, no browsing data collection, no action without your initial click, no sharing or selling.</li>
+      <li><strong>Keeping the connection alive</strong>, After your first connection, the extension updates the cookie on your account whenever LinkedIn rotates it, until you disconnect LinkedIn.</li>
+      <li><strong>Disconnecting</strong>, At any time from the extension or from Settings → LinkedIn; the cookie is then deleted from our servers.</li>
     </ul>
   </>);
 }

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Dashboard — Deals tab
+   Dashboard · Deals tab
    Strictly deal/pipeline data: open pipeline, deals to follow up,
    top-3 deals to relaunch (deep-links to /deals-to-reactivate).
    No churn/upsell/emailing content here.
@@ -20,7 +20,7 @@ export default function DealsTab({ crmStats }) {
   );
 }
 
-/* ── Top 3 deals à relancer — mêmes fetch/style que le TOP 3 upsell du
+/* ── Top 3 deals à relancer · mêmes fetch/style que le TOP 3 upsell du
    Clients tab (dashboardTabs/ClientsTab.jsx), avec un CTA vers la file
    complète pour que l'utilisateur aille approuver/envoyer les emails. */
 function TopDealsToFollowUp() {

@@ -1,4 +1,4 @@
-# Baakalai — Bug Tracker & Lessons Learned
+# Baakalai : Bug Tracker & Lessons Learned
 
 Registry of bugs found, fixed, and patterns to avoid.
 
@@ -6,35 +6,35 @@ Registry of bugs found, fixed, and patterns to avoid.
 
 ## Session 2026-05-28
 
-### CRITICAL — Fixed
+### CRITICAL : Fixed
 
 | # | Bug | File | Root Cause | Fix | Lesson |
 |---|-----|------|-----------|-----|--------|
-| 1 | `handleFixAll` crash — `health` undefined in callback scope | `CRMDiagnosticReport.jsx:84` | `health` was destructured from `data` at line 168, but the `useCallback` at line 83 referenced it before that line executed | Extract `health` from `data` inside the callback body | Never reference destructured variables from render scope inside `useCallback` — they may not be in scope when the callback is defined |
-| 2 | Deal Coach crashes on invalid `churn_factors` JSON | `deal-coach.js:67` | `JSON.parse(deal.churn_factors)` inline in a template string without try/catch | Wrapped in IIFE with try/catch fallback to 'N/A' | Never put `JSON.parse()` inside template literals — always wrap in try/catch |
+| 1 | `handleFixAll` crash : `health` undefined in callback scope | `CRMDiagnosticReport.jsx:84` | `health` was destructured from `data` at line 168, but the `useCallback` at line 83 referenced it before that line executed | Extract `health` from `data` inside the callback body | Never reference destructured variables from render scope inside `useCallback` : they may not be in scope when the callback is defined |
+| 2 | Deal Coach crashes on invalid `churn_factors` JSON | `deal-coach.js:67` | `JSON.parse(deal.churn_factors)` inline in a template string without try/catch | Wrapped in IIFE with try/catch fallback to 'N/A' | Never put `JSON.parse()` inside template literals : always wrap in try/catch |
 | 3 | Odoo adapter crashes on malformed token | `crm-cleaning-agent.js:62,78` | `JSON.parse(token)` called directly in `listPersons()` and `updatePerson()` without error handling | Added try/catch with descriptive error message | All `JSON.parse()` on external data must be wrapped in try/catch |
-| 4 | Churn scoring UPDATE fails silently | `churn-scoring.js:167` | DB UPDATE not in try/catch — if one contact fails, entire scoring loop throws | Wrapped in try/catch, log error, continue loop | DB writes in loops must always be individually try/caught |
-| 5 | Churn scoring NaN on null dates | `churn-scoring.js:54` | `new Date(null).getTime()` returns NaN, comparison `NaN >= 60` is always false | Added null check + `isNaN()` guard | Always validate date inputs before arithmetic — NaN comparisons silently fail |
+| 4 | Churn scoring UPDATE fails silently | `churn-scoring.js:167` | DB UPDATE not in try/catch : if one contact fails, entire scoring loop throws | Wrapped in try/catch, log error, continue loop | DB writes in loops must always be individually try/caught |
+| 5 | Churn scoring NaN on null dates | `churn-scoring.js:54` | `new Date(null).getTime()` returns NaN, comparison `NaN >= 60` is always false | Added null check + `isNaN()` guard | Always validate date inputs before arithmetic : NaN comparisons silently fail |
 
-### HIGH — Fixed
+### HIGH : Fixed
 
 | # | Bug | File | Root Cause | Fix | Lesson |
 |---|-----|------|-----------|-----|--------|
-| 6 | CRM Health scan fails for Notion/Airtable/Folk users | `CRMAnalyticsPage.jsx:649` | Provider detection list hardcoded to `['pipedrive', 'hubspot', 'salesforce', 'odoo']` — missing 3 providers | Added `'notion', 'airtable', 'folk'` to the list | When adding a new CRM provider, grep for ALL provider lists and update them all |
-| 7 | CRM Health scan race condition | `CRMAnalyticsPage.jsx:668` | `useEffect` launched scan immediately with default `provider='pipedrive'` before `/crm/providers` API responded | Changed `provider` default to `null`, scan only fires when provider is detected | Never set a default value for async-detected state — use `null` and guard |
+| 6 | CRM Health scan fails for Notion/Airtable/Folk users | `CRMAnalyticsPage.jsx:649` | Provider detection list hardcoded to `['pipedrive', 'hubspot', 'salesforce', 'odoo']` : missing 3 providers | Added `'notion', 'airtable', 'folk'` to the list | When adding a new CRM provider, grep for ALL provider lists and update them all |
+| 7 | CRM Health scan race condition | `CRMAnalyticsPage.jsx:668` | `useEffect` launched scan immediately with default `provider='pipedrive'` before `/crm/providers` API responded | Changed `provider` default to `null`, scan only fires when provider is detected | Never set a default value for async-detected state : use `null` and guard |
 | 8 | HubSpot import silently fails on 401/403 | `crm.js:668-692` | `fetch()` response not checked with `!res.ok` before `res.json()` | Added early return with 502 + error body on non-OK response | Always check `res.ok` before parsing response body |
-| 9 | `fetchData` infinite loop risk | `CRMAnalyticsPage.jsx:87-102` | `data` object in `useCallback` deps caused re-render loop since `setData` creates new object each time | Replaced with `useRef` for cache tracking, removed `data` from deps | Never put mutable state objects in `useCallback` deps — use refs for cache flags |
-| 10 | Deal Coach regex JSON fallback crashes | `deal-coach.js:85` | `JSON.parse(m[0])` on regex-matched string without try/catch | Added try/catch around fallback parse | All JSON.parse from regex matches need try/catch — regex may match invalid JSON |
+| 9 | `fetchData` infinite loop risk | `CRMAnalyticsPage.jsx:87-102` | `data` object in `useCallback` deps caused re-render loop since `setData` creates new object each time | Replaced with `useRef` for cache tracking, removed `data` from deps | Never put mutable state objects in `useCallback` deps : use refs for cache flags |
+| 10 | Deal Coach regex JSON fallback crashes | `deal-coach.js:85` | `JSON.parse(m[0])` on regex-matched string without try/catch | Added try/catch around fallback parse | All JSON.parse from regex matches need try/catch : regex may match invalid JSON |
 
-### MEDIUM — Fixed
+### MEDIUM : Fixed
 
 | # | Bug | File | Root Cause | Fix | Lesson |
 |---|-----|------|-----------|-----|--------|
-| 11 | Duplicate status badge in client list | `ClientsPage.jsx:366+395` | Status badge rendered twice — once in grid columns, once always-visible at end of row | Removed duplicate, added conditional badge for panel-open mode | Review grid layouts for duplicate columns after refactoring |
-| 12 | `alert()` / `prompt()` for email feedback | `ClientsPage.jsx:443,448` | Native browser dialogs for success/error feedback | Replaced with `showToast()` | Never use `alert()` or `prompt()` in a modern SPA — use toast/modal components |
-| 13 | DealCoach dismiss is permanent | `DealCoachCard.jsx:36` | `localStorage.setItem('dismissed', 'true')` — no expiry | Changed to store timestamp, expires after 24h | Dismissals should have TTL, not be permanent |
-| 14 | i18n: 35+ French strings hardcoded in CRM Analytics | `CRMAnalyticsPage.jsx` | Labels like "Entonnoir du pipeline", "Score moyen" directly in JSX | Replaced with `t()` calls, added analytics i18n section | All user-facing text must go through `t()` — no inline strings |
-| 15 | CRM errors silently swallowed | `CRMDiagnosticReport.jsx:79,106` | `catch { /* ignore */ }` on fix/merge operations | Added `showToast({ type: 'error' })` on catch | Never silently catch user-facing errors — always show feedback |
+| 11 | Duplicate status badge in client list | `ClientsPage.jsx:366+395` | Status badge rendered twice : once in grid columns, once always-visible at end of row | Removed duplicate, added conditional badge for panel-open mode | Review grid layouts for duplicate columns after refactoring |
+| 12 | `alert()` / `prompt()` for email feedback | `ClientsPage.jsx:443,448` | Native browser dialogs for success/error feedback | Replaced with `showToast()` | Never use `alert()` or `prompt()` in a modern SPA : use toast/modal components |
+| 13 | DealCoach dismiss is permanent | `DealCoachCard.jsx:36` | `localStorage.setItem('dismissed', 'true')` : no expiry | Changed to store timestamp, expires after 24h | Dismissals should have TTL, not be permanent |
+| 14 | i18n: 35+ French strings hardcoded in CRM Analytics | `CRMAnalyticsPage.jsx` | Labels like "Entonnoir du pipeline", "Score moyen" directly in JSX | Replaced with `t()` calls, added analytics i18n section | All user-facing text must go through `t()` : no inline strings |
+| 15 | CRM errors silently swallowed | `CRMDiagnosticReport.jsx:79,106` | `catch { /* ignore */ }` on fix/merge operations | Added `showToast({ type: 'error' })` on catch | Never silently catch user-facing errors : always show feedback |
 
 ---
 
@@ -46,7 +46,7 @@ Registry of bugs found, fixed, and patterns to avoid.
 
 ### Provider Lists
 **Rule**: When adding a CRM provider, update ALL provider lists across the codebase.
-**Grep**: `['pipedrive'` or `'hubspot', 'salesforce'` — there are 6+ locations.
+**Grep**: `['pipedrive'` or `'hubspot', 'salesforce'` : there are 6+ locations.
 **Files**: `crm-cleaning-agent.js`, `CRMAnalyticsPage.jsx`, `ClientsPage.jsx`, `crm.js (routes)`, `nurture-engine.js`
 
 ### useCallback Dependencies
@@ -65,7 +65,7 @@ Registry of bugs found, fixed, and patterns to avoid.
 **Rule**: Always validate dates before arithmetic. `new Date(null).getTime()` → NaN, and NaN comparisons are always false.
 **Pattern**: `const dateStr = raw.date; const time = dateStr ? new Date(dateStr).getTime() : 0; if (isNaN(time)) ...`
 
-### Automated Audit — 2026-06-15
+### Automated Audit : 2026-06-15
 
 Found 184 potential issue(s):
 
@@ -82,7 +82,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -256,7 +256,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-16
+### Automated Audit : 2026-06-16
 
 Found 184 potential issue(s):
 
@@ -273,7 +273,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -447,7 +447,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-17
+### Automated Audit : 2026-06-17
 
 Found 184 potential issue(s):
 
@@ -464,7 +464,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -638,7 +638,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-18
+### Automated Audit : 2026-06-18
 
 Found 184 potential issue(s):
 
@@ -655,7 +655,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -829,7 +829,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-19
+### Automated Audit : 2026-06-19
 
 Found 187 potential issue(s):
 
@@ -846,7 +846,7 @@ Found 187 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -1023,7 +1023,7 @@ Found 187 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-20
+### Automated Audit : 2026-06-20
 
 Found 187 potential issue(s):
 
@@ -1040,7 +1040,7 @@ Found 187 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -1217,7 +1217,7 @@ Found 187 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-21
+### Automated Audit : 2026-06-21
 
 Found 187 potential issue(s):
 
@@ -1234,7 +1234,7 @@ Found 187 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -1411,7 +1411,7 @@ Found 187 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-22
+### Automated Audit : 2026-06-22
 
 Found 187 potential issue(s):
 
@@ -1428,7 +1428,7 @@ Found 187 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -1605,7 +1605,7 @@ Found 187 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-23
+### Automated Audit : 2026-06-23
 
 Found 187 potential issue(s):
 
@@ -1622,7 +1622,7 @@ Found 187 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -1799,7 +1799,7 @@ Found 187 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-24
+### Automated Audit : 2026-06-24
 
 Found 184 potential issue(s):
 
@@ -1816,7 +1816,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -1990,7 +1990,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-25
+### Automated Audit : 2026-06-25
 
 Found 184 potential issue(s):
 
@@ -2007,7 +2007,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -2181,7 +2181,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-26
+### Automated Audit : 2026-06-26
 
 Found 184 potential issue(s):
 
@@ -2198,7 +2198,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -2372,7 +2372,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-27
+### Automated Audit : 2026-06-27
 
 Found 184 potential issue(s):
 
@@ -2389,7 +2389,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -2563,7 +2563,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-28
+### Automated Audit : 2026-06-28
 
 Found 184 potential issue(s):
 
@@ -2580,7 +2580,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -2754,7 +2754,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-29
+### Automated Audit : 2026-06-29
 
 Found 184 potential issue(s):
 
@@ -2771,7 +2771,7 @@ Found 184 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -2945,7 +2945,7 @@ Found 184 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-06-30
+### Automated Audit : 2026-06-30
 
 Found 178 potential issue(s):
 
@@ -2962,7 +2962,7 @@ Found 178 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -3130,7 +3130,7 @@ Found 178 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-01
+### Automated Audit : 2026-07-01
 
 Found 172 potential issue(s):
 
@@ -3147,7 +3147,7 @@ Found 172 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -3309,7 +3309,7 @@ Found 172 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-02
+### Automated Audit : 2026-07-02
 
 Found 172 potential issue(s):
 
@@ -3326,7 +3326,7 @@ Found 172 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -3488,7 +3488,7 @@ Found 172 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-03
+### Automated Audit : 2026-07-03
 
 Found 172 potential issue(s):
 
@@ -3505,7 +3505,7 @@ Found 172 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -3667,7 +3667,7 @@ Found 172 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-04
+### Automated Audit : 2026-07-04
 
 Found 172 potential issue(s):
 
@@ -3684,7 +3684,7 @@ Found 172 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -3846,7 +3846,7 @@ Found 172 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-05
+### Automated Audit : 2026-07-05
 
 Found 172 potential issue(s):
 
@@ -3863,7 +3863,7 @@ Found 172 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -4025,7 +4025,7 @@ Found 172 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-06
+### Automated Audit : 2026-07-06
 
 Found 172 potential issue(s):
 
@@ -4042,7 +4042,7 @@ Found 172 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 651 | new Date() on potentially null value without guard | `const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;` |
 | MEDIUM | `backend/routes/analytics.js` | 742 | new Date() on potentially null value without guard | `const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updat` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 251 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 324 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -4204,7 +4204,7 @@ Found 172 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-07
+### Automated Audit : 2026-07-07
 
 Found 189 potential issue(s):
 
@@ -4230,7 +4230,7 @@ Found 189 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1092 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1093 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 237 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -4400,7 +4400,7 @@ Found 189 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-08
+### Automated Audit : 2026-07-08
 
 Found 187 potential issue(s):
 
@@ -4426,7 +4426,7 @@ Found 187 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1093 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1094 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -4594,7 +4594,7 @@ Found 187 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-10
+### Automated Audit : 2026-07-10
 
 Found 188 potential issue(s):
 
@@ -4617,7 +4617,7 @@ Found 188 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -4789,7 +4789,7 @@ Found 188 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-11
+### Automated Audit : 2026-07-11
 
 Found 188 potential issue(s):
 
@@ -4812,7 +4812,7 @@ Found 188 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -4984,7 +4984,7 @@ Found 188 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-12
+### Automated Audit : 2026-07-12
 
 Found 188 potential issue(s):
 
@@ -5007,7 +5007,7 @@ Found 188 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -5179,7 +5179,7 @@ Found 188 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-13
+### Automated Audit : 2026-07-13
 
 Found 188 potential issue(s):
 
@@ -5202,7 +5202,7 @@ Found 188 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -5374,7 +5374,7 @@ Found 188 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-14
+### Automated Audit : 2026-07-14
 
 Found 190 potential issue(s):
 
@@ -5397,7 +5397,7 @@ Found 190 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -5571,7 +5571,7 @@ Found 190 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-15
+### Automated Audit : 2026-07-15
 
 Found 190 potential issue(s):
 
@@ -5594,7 +5594,7 @@ Found 190 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -5768,7 +5768,7 @@ Found 190 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-16
+### Automated Audit : 2026-07-16
 
 Found 192 potential issue(s):
 
@@ -5791,7 +5791,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -5967,7 +5967,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-17
+### Automated Audit : 2026-07-17
 
 Found 195 potential issue(s):
 
@@ -5990,7 +5990,7 @@ Found 195 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -6169,7 +6169,7 @@ Found 195 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-18
+### Automated Audit : 2026-07-18
 
 Found 195 potential issue(s):
 
@@ -6192,7 +6192,7 @@ Found 195 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -6371,7 +6371,7 @@ Found 195 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-19
+### Automated Audit : 2026-07-19
 
 Found 195 potential issue(s):
 
@@ -6394,7 +6394,7 @@ Found 195 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -6573,7 +6573,7 @@ Found 195 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-20
+### Automated Audit : 2026-07-20
 
 Found 195 potential issue(s):
 
@@ -6596,7 +6596,7 @@ Found 195 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -6775,7 +6775,7 @@ Found 195 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-21
+### Automated Audit : 2026-07-21
 
 Found 194 potential issue(s):
 
@@ -6798,7 +6798,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -6976,7 +6976,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-22
+### Automated Audit : 2026-07-22
 
 Found 194 potential issue(s):
 
@@ -6999,7 +6999,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -7177,7 +7177,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-23
+### Automated Audit : 2026-07-23
 
 Found 194 potential issue(s):
 
@@ -7200,7 +7200,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -7378,7 +7378,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-24
+### Automated Audit : 2026-07-24
 
 Found 194 potential issue(s):
 
@@ -7401,7 +7401,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -7579,7 +7579,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-25
+### Automated Audit : 2026-07-25
 
 Found 194 potential issue(s):
 
@@ -7602,7 +7602,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -7780,7 +7780,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-26
+### Automated Audit : 2026-07-26
 
 Found 194 potential issue(s):
 
@@ -7803,7 +7803,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -7981,7 +7981,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-27
+### Automated Audit : 2026-07-27
 
 Found 194 potential issue(s):
 
@@ -8004,7 +8004,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -8182,7 +8182,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-28
+### Automated Audit : 2026-07-28
 
 Found 195 potential issue(s):
 
@@ -8205,7 +8205,7 @@ Found 195 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -8384,7 +8384,7 @@ Found 195 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-29
+### Automated Audit : 2026-07-29
 
 Found 195 potential issue(s):
 
@@ -8407,7 +8407,7 @@ Found 195 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -8586,7 +8586,7 @@ Found 195 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-30
+### Automated Audit : 2026-07-30
 
 Found 192 potential issue(s):
 
@@ -8609,7 +8609,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -8785,7 +8785,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-07-31
+### Automated Audit : 2026-07-31
 
 Found 192 potential issue(s):
 
@@ -8808,7 +8808,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -8984,7 +8984,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-01
+### Automated Audit : 2026-08-01
 
 Found 192 potential issue(s):
 
@@ -9007,7 +9007,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -9183,7 +9183,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-02
+### Automated Audit : 2026-08-02
 
 Found 192 potential issue(s):
 
@@ -9206,7 +9206,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -9382,7 +9382,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-03
+### Automated Audit : 2026-08-03
 
 Found 192 potential issue(s):
 
@@ -9405,7 +9405,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -9581,7 +9581,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-04
+### Automated Audit : 2026-08-04
 
 Found 192 potential issue(s):
 
@@ -9604,7 +9604,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -9780,7 +9780,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-05
+### Automated Audit : 2026-08-05
 
 Found 192 potential issue(s):
 
@@ -9803,7 +9803,7 @@ Found 192 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -9979,7 +9979,7 @@ Found 192 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-06
+### Automated Audit : 2026-08-06
 
 Found 194 potential issue(s):
 
@@ -10002,7 +10002,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -10180,7 +10180,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-07
+### Automated Audit : 2026-08-07
 
 Found 194 potential issue(s):
 
@@ -10203,7 +10203,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -10381,7 +10381,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-08
+### Automated Audit : 2026-08-08
 
 Found 194 potential issue(s):
 
@@ -10404,7 +10404,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -10582,7 +10582,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-09
+### Automated Audit : 2026-08-09
 
 Found 194 potential issue(s):
 
@@ -10605,7 +10605,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -10783,7 +10783,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-10
+### Automated Audit : 2026-08-10
 
 Found 194 potential issue(s):
 
@@ -10806,7 +10806,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -10984,7 +10984,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-11
+### Automated Audit : 2026-08-11
 
 Found 194 potential issue(s):
 
@@ -11007,7 +11007,7 @@ Found 194 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 270 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 497 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -11185,7 +11185,7 @@ Found 194 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-12
+### Automated Audit : 2026-08-12
 
 Found 196 potential issue(s):
 
@@ -11208,7 +11208,7 @@ Found 196 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -11388,7 +11388,7 @@ Found 196 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-13
+### Automated Audit : 2026-08-13
 
 Found 196 potential issue(s):
 
@@ -11411,7 +11411,7 @@ Found 196 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -11591,7 +11591,7 @@ Found 196 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-14
+### Automated Audit : 2026-08-14
 
 Found 196 potential issue(s):
 
@@ -11614,7 +11614,7 @@ Found 196 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -11794,7 +11794,7 @@ Found 196 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-15
+### Automated Audit : 2026-08-15
 
 Found 196 potential issue(s):
 
@@ -11817,7 +11817,7 @@ Found 196 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -11997,7 +11997,7 @@ Found 196 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-16
+### Automated Audit : 2026-08-16
 
 Found 196 potential issue(s):
 
@@ -12020,7 +12020,7 @@ Found 196 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -12200,7 +12200,7 @@ Found 196 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-17
+### Automated Audit : 2026-08-17
 
 Found 196 potential issue(s):
 
@@ -12223,7 +12223,7 @@ Found 196 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -12403,7 +12403,7 @@ Found 196 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-18
+### Automated Audit : 2026-08-18
 
 Found 196 potential issue(s):
 
@@ -12426,7 +12426,7 @@ Found 196 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -12606,7 +12606,7 @@ Found 196 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-19
+### Automated Audit : 2026-08-19
 
 Found 199 potential issue(s):
 
@@ -12629,7 +12629,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -12812,7 +12812,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-20
+### Automated Audit : 2026-08-20
 
 Found 199 potential issue(s):
 
@@ -12835,7 +12835,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -13018,7 +13018,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-21
+### Automated Audit : 2026-08-21
 
 Found 199 potential issue(s):
 
@@ -13041,7 +13041,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -13224,7 +13224,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-22
+### Automated Audit : 2026-08-22
 
 Found 199 potential issue(s):
 
@@ -13247,7 +13247,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -13430,7 +13430,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-23
+### Automated Audit : 2026-08-23
 
 Found 199 potential issue(s):
 
@@ -13453,7 +13453,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -13636,7 +13636,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-24
+### Automated Audit : 2026-08-24
 
 Found 200 potential issue(s):
 
@@ -13659,7 +13659,7 @@ Found 200 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1044 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1045 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -13843,7 +13843,7 @@ Found 200 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-25
+### Automated Audit : 2026-08-25
 
 Found 203 potential issue(s):
 
@@ -13866,7 +13866,7 @@ Found 203 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -14020,7 +14020,7 @@ Found 203 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -14053,7 +14053,7 @@ Found 203 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-26
+### Automated Audit : 2026-08-26
 
 Found 204 potential issue(s):
 
@@ -14076,7 +14076,7 @@ Found 204 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -14231,7 +14231,7 @@ Found 204 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -14264,7 +14264,7 @@ Found 204 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-27
+### Automated Audit : 2026-08-27
 
 Found 204 potential issue(s):
 
@@ -14287,7 +14287,7 @@ Found 204 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -14442,7 +14442,7 @@ Found 204 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -14475,7 +14475,7 @@ Found 204 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-28
+### Automated Audit : 2026-08-28
 
 Found 204 potential issue(s):
 
@@ -14498,7 +14498,7 @@ Found 204 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -14653,7 +14653,7 @@ Found 204 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -14686,7 +14686,7 @@ Found 204 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-29
+### Automated Audit : 2026-08-29
 
 Found 204 potential issue(s):
 
@@ -14709,7 +14709,7 @@ Found 204 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -14864,7 +14864,7 @@ Found 204 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -14897,7 +14897,7 @@ Found 204 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-30
+### Automated Audit : 2026-08-30
 
 Found 204 potential issue(s):
 
@@ -14920,7 +14920,7 @@ Found 204 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -15075,7 +15075,7 @@ Found 204 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -15108,7 +15108,7 @@ Found 204 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-08-31
+### Automated Audit : 2026-08-31
 
 Found 204 potential issue(s):
 
@@ -15131,7 +15131,7 @@ Found 204 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -15286,7 +15286,7 @@ Found 204 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -15319,7 +15319,7 @@ Found 204 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-01
+### Automated Audit : 2026-09-01
 
 Found 199 potential issue(s):
 
@@ -15342,7 +15342,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -15492,7 +15492,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -15525,7 +15525,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-02
+### Automated Audit : 2026-09-02
 
 Found 199 potential issue(s):
 
@@ -15548,7 +15548,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -15698,7 +15698,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 519 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 553 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -15731,7 +15731,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-03
+### Automated Audit : 2026-09-03
 
 Found 199 potential issue(s):
 
@@ -15754,7 +15754,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -15904,7 +15904,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 523 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 557 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -15937,7 +15937,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-04
+### Automated Audit : 2026-09-04
 
 Found 199 potential issue(s):
 
@@ -15960,7 +15960,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -16110,7 +16110,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 523 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 557 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -16143,7 +16143,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-05
+### Automated Audit : 2026-09-05
 
 Found 199 potential issue(s):
 
@@ -16166,7 +16166,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -16316,7 +16316,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 523 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 557 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -16349,7 +16349,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-06
+### Automated Audit : 2026-09-06
 
 Found 199 potential issue(s):
 
@@ -16372,7 +16372,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -16522,7 +16522,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 523 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 557 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -16555,7 +16555,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-07
+### Automated Audit : 2026-09-07
 
 Found 199 potential issue(s):
 
@@ -16578,7 +16578,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -16728,7 +16728,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 523 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 557 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -16761,7 +16761,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-08
+### Automated Audit : 2026-09-08
 
 Found 199 potential issue(s):
 
@@ -16784,7 +16784,7 @@ Found 199 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -16934,7 +16934,7 @@ Found 199 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 523 | new Date() on potentially null value without guard | `{en ? 'Sends at:' : 'Envoi à :'} {new Date(q.scheduled_at).toLocaleString(en ? '` |
 | MEDIUM | `frontend/src/pages/CampaignsList.jsx` | 557 | new Date() on potentially null value without guard | `{en ? 'Sent:' : 'Envoyé :'} {new Date(q.sent_at).toLocaleString(en ? 'en-US' : '` |
@@ -16967,7 +16967,7 @@ Found 199 potential issue(s):
 | HIGH | `frontend/src/services/auth.js` | 144 | fetch() without res.ok check before .json() | `const res = await fetch('/api/auth/account', {` |
 | HIGH | `frontend/src/services/auth.js` | 161 | fetch() without res.ok check before .json() | `await fetch('/api/auth/logout', {` |
 
-### Automated Audit — 2026-09-09
+### Automated Audit : 2026-09-09
 
 Found 197 potential issue(s):
 
@@ -16990,7 +16990,7 @@ Found 197 potential issue(s):
 | MEDIUM | `backend/routes/analytics.js` | 1114 | new Date() on potentially null value without guard | `: o.won_date ? new Date(new Date(o.won_date).getTime() + 365 * DAY_MS)` |
 | MEDIUM | `backend/routes/analytics.js` | 1115 | new Date() on potentially null value without guard | `: o.updated_at ? new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS) : nul` |
 | MEDIUM | `backend/routes/auth.js` | 272 | Empty catch block (swallowed error) | `} catch { /* no team */ }` |
-| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team — ok */ }` |
+| MEDIUM | `backend/routes/auth.js` | 499 | Empty catch block (swallowed error) | `} catch { /* no team : ok */ }` |
 | MEDIUM | `backend/routes/campaigns.js` | 238 | new Date() on potentially null value without guard | `const lastOpt = campaign.last_optimized_at ? new Date(campaign.last_optimized_at` |
 | MEDIUM | `backend/routes/chat.js` | 264 | Empty catch block (swallowed error) | `} catch { /* default to fr */ }` |
 | MEDIUM | `backend/routes/chat.js` | 341 | new Date() on potentially null value without guard | `new Date(c.created_at).getTime() > sixtyAgo` |
@@ -17140,7 +17140,7 @@ Found 197 potential issue(s):
 | MEDIUM | `frontend/src/components/campaigns/tabs/RepliesTab.jsx` | 125 | new Date() on potentially null value without guard | `const happenedAt = a.happened_at ? new Date(a.happened_at) : null;` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 14 | Native alert()/prompt() in frontend | `expect(escapeHtml('<script>alert("xss")</script>')).toBe(` |
 | MEDIUM | `frontend/src/components/editor/__tests__/editor-helpers.test.js` | 15 | Native alert()/prompt() in frontend | `'&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'` |
-| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : '—'}</span` |
+| MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 500 | new Date() on potentially null value without guard | `<span>{d.lastTouchAt ? new Date(d.lastTouchAt).toLocaleDateString() : ' '}</span` |
 | MEDIUM | `frontend/src/pages/CRMAnalyticsPage.jsx` | 1100 | new Date() on potentially null value without guard | `{c.last_activity ? new Date(c.last_activity).toLocaleDateString() : '\u2014'}` |
 | HIGH | `frontend/src/pages/CopyEditorPage.jsx` | 809 | JSON.parse without try/catch | `const copy = { ...JSON.parse(JSON.stringify(original)), id: tpId + '-copy', labe` |
 | MEDIUM | `frontend/src/pages/MembershipPage.jsx` | 136 | new Date() on potentially null value without guard | `<div style={{ fontWeight: 600 }}>{new Date(r.renewal_date).toLocaleDateString(en` |

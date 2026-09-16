@@ -14,7 +14,7 @@
  * dans la base du client. Pour un produit dont l'un des quatre métiers est de
  * détecter et fusionner les doublons, c'était intenable. On ancre désormais
  * toute écriture sur `crm_contact_id`, et un contact sans cet identifiant est
- * ignoré — il n'existe pas côté CRM, il n'y a rien à y mettre à jour.
+ * ignoré · il n'existe pas côté CRM, il n'y a rien à y mettre à jour.
  *
  * Elle poussait aussi des propriétés personnalisées (`bakal_score`,
  * `bakal_status` chez HubSpot) qui n'existent dans aucun compte client : ces
@@ -23,7 +23,7 @@
  * toucher au modèle de données du client.
  *
  * Enfin elle parcourait hubspot → salesforce → pipedrive dans un ordre codé en
- * dur et prenait le premier connecté, en ignorant `users.active_crm_provider` —
+ * dur et prenait le premier connecté, en ignorant `users.active_crm_provider` · 
  * contraire à la règle 2 du CLAUDE.md. Sur un compte à plusieurs CRM connectés,
  * l'export partait vers le mauvais.
  */
@@ -41,7 +41,7 @@ const WRITABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'folk'
  * Résout le CRM cible.
  *
  * Règle : quand l'utilisateur a désigné un CRM actif, c'est celui-là ou rien.
- * Pas de repli silencieux vers un autre — même si un autre est connecté et
+ * Pas de repli silencieux vers un autre · même si un autre est connecté et
  * saurait écrire. Écrire dans un CRM que l'utilisateur n'a pas désigné, c'est
  * déposer des notes dans une base qu'il ne regarde pas, et c'est le défaut de
  * l'implémentation précédente (parcours hubspot → salesforce → pipedrive codé
@@ -53,7 +53,7 @@ const WRITABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'folk'
  * de Notion. On renvoie plutôt un motif explicite, remonté à l'appelant.
  *
  * L'ordre de WRITABLE_PROVIDERS ne sert que lorsque aucun CRM actif n'est
- * défini — un compte en cours d'onboarding, typiquement.
+ * défini · un compte en cours d'onboarding, typiquement.
  */
 async function resolveTargetCrm(userId) {
   const row = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
@@ -80,7 +80,7 @@ async function resolveTargetCrm(userId) {
  *
  * L'empreinte gouverne la ré-écriture : tant qu'elle ne change pas, on ne
  * réécrit pas. Un score stable ne produit donc aucune écriture, quel que soit
- * le temps écoulé — c'est ce qui empêche la note quotidienne en double.
+ * le temps écoulé · c'est ce qui empêche la note quotidienne en double.
  *
  * Le score est toujours accompagné de ses facteurs : un score nu (« 72/100 »)
  * n'apprend rien au commercial qui le lit dans son CRM et ne déclenche aucune
@@ -100,7 +100,7 @@ function buildInsight(opp) {
     let factors = opp.churn_factors;
     if (typeof factors === 'string') { try { factors = JSON.parse(factors); } catch { factors = null; } }
     if (Array.isArray(factors) && factors.length) {
-      const top = factors.slice(0, 4).map(f => `${f.signal} (${f.weight > 0 ? '+' : ''}${f.weight})${f.detail ? ` — ${f.detail}` : ''}`);
+      const top = factors.slice(0, 4).map(f => `${f.signal} (${f.weight > 0 ? '+' : ''}${f.weight})${f.detail ? `, ${f.detail}` : ''}`);
       lines.push('Facteurs : ' + top.join(' · '));
       parts.push('f:' + factors.slice(0, 4).map(f => f.signal).join(','));
     }
@@ -110,7 +110,7 @@ function buildInsight(opp) {
   if (lastActivity && !['won', 'lost'].includes(opp.status)) {
     const days = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 86400000);
     if (days >= 14) {
-      lines.push(`Sans activité depuis ${days} jours — deal candidat à une relance.`);
+      lines.push(`Sans activité depuis ${days} jours, deal candidat à une relance.`);
       // Tranche de 7 jours dans l'empreinte : sinon le compteur de jours change
       // chaque nuit et réécrit une note quotidienne, exactement le défaut qu'on
       // vient de supprimer.
@@ -125,7 +125,7 @@ function buildInsight(opp) {
 
   if (!lines.length) return null;
   return {
-    content: 'baakalai — analyse CRM\n' + lines.join('\n'),
+    content: 'baakalai, analyse CRM\n' + lines.join('\n'),
     fingerprint: parts.join('|'),
   };
 }
@@ -142,10 +142,10 @@ async function writeNote(provider, creds, userId, opp, content) {
       return require('../api/hubspot').createNote(creds, content, { contactId: opp.crm_contact_id });
     case 'salesforce': {
       const integration = await db.userIntegrations.get(userId, 'salesforce');
-      if (!integration?.instance_url) throw new Error('Salesforce instance URL manquante — reconnecter Salesforce');
+      if (!integration?.instance_url) throw new Error('Salesforce instance URL manquante, reconnecter Salesforce');
       return require('../api/salesforce').createNote(integration.instance_url, creds, {
         parentId: opp.crm_contact_id,
-        title: 'baakalai — analyse CRM',
+        title: 'baakalai, analyse CRM',
         body: content,
       });
     }
@@ -156,7 +156,7 @@ async function writeNote(provider, creds, userId, opp, content) {
         content,
       });
     case 'folk':
-      // api/folk.js attend `personId` — pas `contactId`, qui serait ignoré et
+      // api/folk.js attend `personId` · pas `contactId`, qui serait ignoré et
       // produirait une note flottante, rattachée à personne.
       return require('../api/folk').createNote(creds, {
         personId: opp.crm_contact_id,
@@ -178,14 +178,14 @@ async function writeNote(provider, creds, userId, opp, content) {
  *
  * @param {string} userId
  * @param {Array}  opportunities  contacts à considérer
- * @param {{dryRun?: boolean}} options  dryRun : calcule tout, n'écrit rien —
+ * @param {{dryRun?: boolean}} options  dryRun : calcule tout, n'écrit rien · 
  *        à utiliser pour vérifier ce qui partirait avant d'écrire chez un client.
  */
 async function exportScoresToCRM(userId, opportunities, { dryRun = false } = {}) {
   // ── Opt-in ──
   // Écrire dans le CRM du client est un acte sortant sur SA base de production,
   // pas une feature qu'on active pour lui. Off par défaut ; le dry-run reste
-  // permis sans opt-in — c'est justement la preview qui permet de décider en
+  // permis sans opt-in · c'est justement la preview qui permet de décider en
   // connaissance de cause ce que l'activation écrirait.
   if (!dryRun) {
     const row = await db.query(
@@ -204,7 +204,7 @@ async function exportScoresToCRM(userId, opportunities, { dryRun = false } = {})
   const { provider, creds, reason, activeCrm } = await resolveTargetCrm(userId);
   if (!provider) {
     const messages = {
-      active_crm_not_writable: `Le CRM actif (${activeCrm}) ne permet pas l'écriture — connecteur en création seule. Providers supportés : ${WRITABLE_PROVIDERS.join(', ')}.`,
+      active_crm_not_writable: `Le CRM actif (${activeCrm}) ne permet pas l'écriture, connecteur en création seule. Providers supportés : ${WRITABLE_PROVIDERS.join(', ')}.`,
       active_crm_not_connected: `Le CRM actif (${activeCrm}) n'est pas connecté.`,
       no_crm_connected: 'Aucun CRM inscriptible connecté.',
     };
@@ -219,7 +219,7 @@ async function exportScoresToCRM(userId, opportunities, { dryRun = false } = {})
 
   for (const opp of opportunities) {
     // Un contact sans identifiant CRM n'existe pas côté CRM : rien à mettre à
-    // jour, et surtout pas de création — c'est ce qui dupliquait la base.
+    // jour, et surtout pas de création · c'est ce qui dupliquait la base.
     if (!opp.crm_contact_id) { skip('no_crm_id'); continue; }
     // Ne jamais écrire dans un CRM dont ce contact ne provient pas.
     if (opp.crm_provider && opp.crm_provider !== provider) { skip('other_provider'); continue; }

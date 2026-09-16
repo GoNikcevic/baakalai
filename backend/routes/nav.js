@@ -1,8 +1,8 @@
 /**
- * Nav counts — cheap per-user action counters for the sidebar badges.
+ * Nav counts · cheap per-user action counters for the sidebar badges.
  *
  * Everything here must stay DB-only and fast: this endpoint is polled by the
- * layout on every session. No Claude calls, no CRM API calls, no scans —
+ * layout on every session. No Claude calls, no CRM API calls, no scans · 
  * data quality reads existing scan caches only (badge fills once a scan ran).
  */
 
@@ -30,7 +30,7 @@ router.get('/counts', async (req, res, next) => {
          WHERE user_id = $1 AND status = 'pending'`,
         [userId]
       ),
-      // Latest cached report per provider — includes the __deal_quality__ /
+      // Latest cached report per provider · includes the __deal_quality__ /
       // __client_quality__ sentinel rows written by routes/data-quality.js.
       db.query(
         `SELECT DISTINCT ON (provider) provider, issues

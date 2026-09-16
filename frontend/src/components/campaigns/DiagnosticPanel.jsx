@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   DiagnosticPanel — Detailed diagnostic viewer
+   DiagnosticPanel · Detailed diagnostic viewer
    Fetches and displays AI diagnostics for a campaign
    ═══════════════════════════════════════════════════ */
 
@@ -72,7 +72,7 @@ export default function DiagnosticPanel({ campaignId, sequence }) {
   if (loading) {
     return (
       <div className="diag-panel">
-        <div className="diag-panel-header">{en ? 'Step-by-step diagnostic — Baakalai' : 'Diagnostic par étape — Baakalai'}</div>
+        <div className="diag-panel-header">{en ? 'Step-by-step diagnostic, Baakalai' : 'Diagnostic par étape, Baakalai'}</div>
         <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
           {en ? 'Loading diagnostics...' : 'Chargement des diagnostics...'}
         </div>
@@ -83,7 +83,7 @@ export default function DiagnosticPanel({ campaignId, sequence }) {
   if (error) {
     return (
       <div className="diag-panel">
-        <div className="diag-panel-header">{en ? 'Step-by-step diagnostic — Baakalai' : 'Diagnostic par étape — Baakalai'}</div>
+        <div className="diag-panel-header">{en ? 'Step-by-step diagnostic, Baakalai' : 'Diagnostic par étape, Baakalai'}</div>
         <div style={{ padding: '24px', textAlign: 'center', color: 'var(--danger)', fontSize: '13px' }}>
           {en ? 'Error: ' : 'Erreur : '}{error}
         </div>
@@ -94,7 +94,7 @@ export default function DiagnosticPanel({ campaignId, sequence }) {
   if (diagnostics.length === 0) {
     return (
       <div className="diag-panel">
-        <div className="diag-panel-header">{en ? 'Step-by-step diagnostic — Baakalai' : 'Diagnostic par étape — Baakalai'}</div>
+        <div className="diag-panel-header">{en ? 'Step-by-step diagnostic, Baakalai' : 'Diagnostic par étape, Baakalai'}</div>
         <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
           {en ? 'No diagnostic available for this campaign.' : 'Aucun diagnostic disponible pour cette campagne.'}
         </div>
@@ -104,7 +104,7 @@ export default function DiagnosticPanel({ campaignId, sequence }) {
 
   return (
     <div className="diag-panel">
-      <div className="diag-panel-header">Diagnostic par étape — Baakalai</div>
+      <div className="diag-panel-header">Diagnostic par étape, Baakalai</div>
       <div className="diag-timeline">
         {diagnostics.map((d) => {
           const isOpen = expanded[d.id];

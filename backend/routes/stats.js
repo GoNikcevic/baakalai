@@ -22,7 +22,7 @@ async function fetchWithRetry(url, options, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
     const resp = await fetch(url, options);
     if (resp.status === 429) {
-      // Rate limited — exponential backoff
+      // Rate limited · exponential backoff
       const backoff = Math.pow(2, attempt + 1) * 1000;
       console.warn(`[stats] Lemlist rate limited, backing off ${backoff}ms`);
       await sleep(backoff);
@@ -33,7 +33,7 @@ async function fetchWithRetry(url, options, retries = 3) {
   return null;
 }
 
-// POST /api/stats/collect — with rate limiting and concurrency control
+// POST /api/stats/collect · with rate limiting and concurrency control
 router.post('/collect', statsLimiter, async (req, res, next) => {
   try {
     const keyRow = await db.userIntegrations.get(req.user.id, 'lemlist');
@@ -75,7 +75,7 @@ router.post('/collect', statsLimiter, async (req, res, next) => {
               userId: req.user.id,
             });
           } else {
-            // Preserve archived status — don't un-archive on sync
+            // Preserve archived status · don't un-archive on sync
             const updates = {
               nb_prospects: stats.contacts,
               open_rate: stats.openRate,
@@ -187,7 +187,7 @@ router.get('/diagnostics/:campaignId', async (req, res, next) => {
   }
 });
 
-// POST /api/stats/sync-activities — Sync activities from Lemlist + Apollo
+// POST /api/stats/sync-activities · Sync activities from Lemlist + Apollo
 router.post('/sync-activities', async (req, res, next) => {
   try {
     const campaigns = await db.campaigns.list({ userId: req.user.id });
@@ -315,7 +315,7 @@ router.post('/sync-activities', async (req, res, next) => {
   }
 });
 
-// GET /api/stats/activities/:campaignId — Get activities for a campaign
+// GET /api/stats/activities/:campaignId · Get activities for a campaign
 router.get('/activities/:campaignId', async (req, res, next) => {
   try {
     const { type, limit, offset } = req.query;
@@ -330,7 +330,7 @@ router.get('/activities/:campaignId', async (req, res, next) => {
   }
 });
 
-// GET /api/stats/replies — Get all replies across user's campaigns
+// GET /api/stats/replies · Get all replies across user's campaigns
 router.get('/replies', async (req, res, next) => {
   try {
     const { limit, offset } = req.query;

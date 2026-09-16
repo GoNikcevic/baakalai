@@ -2,7 +2,7 @@
  * Tests d'extraction de la date de dernière activité CRM.
  *
  * Les formes d'enregistrements reproduisent ce que chaque API renvoie
- * réellement — c'est là que sont les pièges (epoch HubSpot en chaîne,
+ * réellement · c'est là que sont les pièges (epoch HubSpot en chaîne,
  * datetime Odoo sans fuseau).
  */
 
@@ -11,7 +11,7 @@ const assert = require('node:assert');
 
 const { extractActivityDate, parseDate } = require('../lib/crm-activity-date');
 
-test('pipedrive — prend la derniere activite avant la modification', () => {
+test('pipedrive, prend la derniere activite avant la modification', () => {
   const out = extractActivityDate('pipedrive', {
     add_time: '2026-01-10 09:00:00',
     update_time: '2026-06-01 12:00:00',
@@ -21,12 +21,12 @@ test('pipedrive — prend la derniere activite avant la modification', () => {
   assert.strictEqual(out.slice(0, 10), '2026-03-15');
 });
 
-test('pipedrive — retombe sur update_time si aucune activite', () => {
+test('pipedrive, retombe sur update_time si aucune activite', () => {
   const out = extractActivityDate('pipedrive', { add_time: '2026-01-10 09:00:00', update_time: '2026-06-01 12:00:00' });
   assert.strictEqual(out.slice(0, 7), '2026-06');
 });
 
-test('hubspot — lit les proprietes imbriquees et l epoch en millisecondes', () => {
+test('hubspot, lit les proprietes imbriquees et l epoch en millisecondes', () => {
   const out = extractActivityDate('hubspot', {
     id: '1',
     properties: { hs_last_sales_activity_timestamp: '1748000000000', createdate: '2026-01-01T00:00:00Z' },
@@ -34,14 +34,14 @@ test('hubspot — lit les proprietes imbriquees et l epoch en millisecondes', ()
   assert.ok(out.startsWith('2025-') || out.startsWith('2026-'), `date inattendue: ${out}`);
 });
 
-test('hubspot — priorite a l activite commerciale sur la date de modification', () => {
+test('hubspot, priorite a l activite commerciale sur la date de modification', () => {
   const out = extractActivityDate('hubspot', {
     properties: { lastmodifieddate: '2026-07-01T00:00:00Z', notes_last_contacted: '2026-02-01T00:00:00Z' },
   });
   assert.strictEqual(out.slice(0, 7), '2026-02');
 });
 
-test('salesforce — LastActivityDate prime sur LastModifiedDate', () => {
+test('salesforce, LastActivityDate prime sur LastModifiedDate', () => {
   const out = extractActivityDate('salesforce', {
     LastModifiedDate: '2026-07-20T10:00:00.000+0000',
     LastActivityDate: '2026-04-05',
@@ -50,7 +50,7 @@ test('salesforce — LastActivityDate prime sur LastModifiedDate', () => {
   assert.strictEqual(out.slice(0, 10), '2026-04-05');
 });
 
-test('odoo — le datetime sans fuseau est lu en UTC, pas en heure locale', () => {
+test('odoo, le datetime sans fuseau est lu en UTC, pas en heure locale', () => {
   // Sans forcage UTC, le decalage fait basculer un deal de part et d'autre
   // d'un seuil de recence selon le fuseau du serveur.
   const out = extractActivityDate('odoo', { write_date: '2026-05-30 14:22:01' });

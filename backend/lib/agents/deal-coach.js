@@ -28,7 +28,7 @@ async function run(userId) {
     const opps = onlyCrmContacts(await db.opportunities.listByUser(userId, 500, 0));
     const now = Date.now();
 
-    // Deals stagnants, au seuil choisi par l'utilisateur (cf. lib/stagnation.js) —
+    // Deals stagnants, au seuil choisi par l'utilisateur (cf. lib/stagnation.js) · 
     // le même que celui de la file de réactivation, qui coachait auparavant sur
     // 14 jours en dur pendant que l'Activation en retenait 30.
     // `updated_at` est réécrit à chaque synchro CRM (cf. churn-scoring.js) :
@@ -131,7 +131,7 @@ function formatChurnFactors(raw) {
 
 /**
  * On-demand coaching + email draft for a SINGLE deal, combined into one Claude call
- * (used by the "Voir le mail" on-demand flow — no daily batch, no separate coach-then-draft
+ * (used by the "Voir le mail" on-demand flow · no daily batch, no separate coach-then-draft
  * pass). Returns { opportunity, subject, body, reason, urgency } or { error }.
  */
 async function coachAndDraftOne(userId, opportunityId) {
@@ -183,7 +183,7 @@ ${timing.bestDay ? `\nBEST SEND TIMING: ${timing.bestDay}${timing.bestHour != nu
 RULES:
 - "reason" explains briefly, in French, why this deal needs reactivating now
 - Email: max 6 lines, must sound human and personal (NOT marketing)
-- Tone: professional but warm — the goal is to re-engage, not to sell aggressively
+- Tone: professional but warm, the goal is to re-engage, not to sell aggressively
 ${HUMAN_STYLE_RULES}
 
 Return JSON:
@@ -212,7 +212,7 @@ Return JSON:
  * Même assemblage de contexte que coachAndDraftOne, mais le modèle produit un
  * plan complet : 4-6 steps email/LinkedIn étalés sur ~2 semaines, avec une
  * bifurcation « si l'invitation LinkedIn est acceptée » exécutable par le
- * moteur natif (migration 103). Le résultat est un BROUILLON — rien ne part
+ * moteur natif (migration 103). Le résultat est un BROUILLON · rien ne part
  * sans approbation explicite de l'utilisateur.
  * Returns { reason, urgency, steps, patternIds } ou { error }.
  */
@@ -258,12 +258,12 @@ async function proposeWorkflow(userId, opportunityId, goal = 'reactivation') {
   }[goal] || 'Réactiver la relation.';
 
   const prompt = `You are a B2B sales coach and copywriter. Design a complete multichannel
-follow-up workflow for this CRM contact — an existing relationship, NOT a cold prospect.
+follow-up workflow for this CRM contact, an existing relationship, NOT a cold prospect.
 
 GOAL: ${goalBrief}
 
 Contact: ${deal.name} (${deal.title || 'N/A'}) at ${deal.company || 'N/A'}
-Deal status: ${deal.status || 'open'}${deal.deal_value ? ` — value ${deal.deal_value} €` : ''}
+Deal status: ${deal.status || 'open'}${deal.deal_value ? `, value ${deal.deal_value} €` : ''}
 Days since last activity: ${daysSinceUpdate}
 Churn risk score: ${deal.churn_score || 'N/A'}/100
 Churn factors: ${formatChurnFactors(deal.churn_factors)}
@@ -278,8 +278,8 @@ ${timing.bestDay ? `\nBEST SEND TIMING: ${timing.bestDay}${timing.bestHour != nu
 
 RULES:
 - 4 to 6 steps over 10-15 days. "timing" is "J+N" = N days AFTER the PREVIOUS step (J+0 for the first).
-- Types: "email", "linkedin_visit", "linkedin_invite", "linkedin_message".${hasLinkedin ? '' : ' NO LinkedIn steps — this contact has no LinkedIn URL.'}${hasEmail ? '' : ' NO email steps — this contact has no email address.'}
-- Everything the contact reads is in FRENCH. Emails max 6 lines, human and personal (NOT marketing). This person KNOWS the sender — reference the existing relationship, never introduce yourself like a stranger.
+- Types: "email", "linkedin_visit", "linkedin_invite", "linkedin_message".${hasLinkedin ? '' : ' NO LinkedIn steps, this contact has no LinkedIn URL.'}${hasEmail ? '' : ' NO email steps, this contact has no email address.'}
+- Everything the contact reads is in FRENCH. Emails max 6 lines, human and personal (NOT marketing). This person KNOWS the sender, reference the existing relationship, never introduce yourself like a stranger.
 - linkedin_visit: no subject, no body. linkedin_invite: no subject, body max 300 characters, warm note (no pitch).
 - ${hasEmail && hasLinkedin ? 'If you include a linkedin_invite, give it EXACTLY two children: one with conditionType "accepted" (a linkedin_message continuing the conversation) and one with conditionType "not_accepted" (an email taking a different angle). Steps after the fork go back to the top-level array.' : 'No conditional branches (single channel).'}
 - "reason": 2-3 French sentences explaining WHY this plan for THIS deal (cite the signals: dormancy, opens, patterns). Shown to the user before approval.

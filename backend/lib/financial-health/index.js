@@ -1,15 +1,15 @@
 /**
- * Financial Health Orchestrator — santé financière des sociétés clientes via les
+ * Financial Health Orchestrator · santé financière des sociétés clientes via les
  * registres officiels, par pays (pattern adaptateur, comme les providers CRM).
  *
  * FR : recherche-entreprises + BODACC (gratuit, sans clé)
  * GB : Companies House (gratuit, COMPANIES_HOUSE_API_KEY)
  * US : CourtListener faillites fédérales (gratuit, COURTLISTENER_API_TOKEN optionnel)
- * EU : OpenCorporates (OPENCORPORATES_API_KEY, quota 50/j — désactivé sans clé)
+ * EU : OpenCorporates (OPENCORPORATES_API_KEY, quota 50/j · désactivé sans clé)
  *
  * Les correspondances nom → registre sont mises en cache GLOBAL 7 jours
  * (company_registry_matches, migration 087). Les signaux détectés sont émis dans
- * churn_external_signals avec source 'registry_*' — le facteur 9 du scoring churn
+ * churn_external_signals avec source 'registry_*' · le facteur 9 du scoring churn
  * les lit séparément des signaux Brave (source 'brave_search', facteur 8).
  */
 
@@ -24,7 +24,7 @@ const REFRESH_MS = 7 * 24 * 3600 * 1000;
 
 // TLD → tentative(s) de registre. Les TLD génériques (.com, .io…) ne disent rien :
 // on tente le domestique d'abord (produit FR, les PME vendent surtout chez elles),
-// puis les faillites US — les deux sont gratuits et tolèrent un miss.
+// puis les faillites US · les deux sont gratuits et tolèrent un miss.
 const EU_JURISDICTIONS = ['be', 'de', 'nl', 'es', 'it', 'lu', 'at', 'ie', 'pt', 'dk', 'se', 'fi', 'pl', 'ch'];
 
 function detectAttempts(email) {
@@ -42,7 +42,7 @@ function detectAttempts(email) {
   ];
 }
 
-// Clé de cache uniquement — pas un matching : minuscules, accents et espaces normalisés.
+// Clé de cache uniquement · pas un matching : minuscules, accents et espaces normalisés.
 function normalizeName(name) {
   return name.normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/\s+/g, ' ').trim();
@@ -80,7 +80,7 @@ async function checkCompany(companyName, email) {
       result = await attempt.adapter.lookup(companyName, { jurisdiction: attempt.jurisdiction });
     } catch (err) {
       // Quota/réseau : on n'écrit pas le cache (pour réessayer au prochain run) et
-      // on ne tente pas les registres suivants pour cette société — throw remonté
+      // on ne tente pas les registres suivants pour cette société · throw remonté
       // en erreur de rapport par l'appelant, le scan continue sur les autres.
       throw Object.assign(err, { registryCountry: attempt.cacheCountry });
     }
@@ -122,7 +122,7 @@ async function scanFinancialHealthForUser(userId, { maxCompanies = 150 } = {}) {
     [userId]
   );
 
-  // Une vérification par société — mais les signaux vont à toutes ses opportunités.
+  // Une vérification par société · mais les signaux vont à toutes ses opportunités.
   const byCompany = new Map();
   for (const opp of opps.rows) {
     const key = normalizeName(opp.company);

@@ -1,15 +1,15 @@
 /**
- * Email Preferences — désinscription PUBLIQUE (sans login) depuis les emails.
+ * Email Preferences · désinscription PUBLIQUE (sans login) depuis les emails.
  *
  * Monté sur /api/public/email-prefs AVANT le mur d'auth (server.js) : le lien
  * arrive dans une boîte mail, l'utilisateur ne doit pas avoir à se connecter
- * pour s'opposer (RGPD art. 21 — opposition « simple et effective »).
+ * pour s'opposer (RGPD art. 21 · opposition « simple et effective »).
  *
  * GET  /unsubscribe?token=  → clic humain : coupe la catégorie, page de confirmation
  * POST /unsubscribe?token=  → one-click RFC 8058 (Gmail/Yahoo) : coupe, 200 vide
  *
  * Le token est un HMAC sans état (lib/email-prefs.js) : inforgeable, pas de
- * table à maintenir, idempotent — re-cliquer un vieux lien re-coupe juste la
+ * table à maintenir, idempotent · re-cliquer un vieux lien re-coupe juste la
  * même catégorie.
  */
 
@@ -33,7 +33,7 @@ async function applyUnsubscribe(token) {
   return parsed;
 }
 
-// POST — one-click RFC 8058 : les clients mail attendent un 200 sans contenu.
+// POST · one-click RFC 8058 : les clients mail attendent un 200 sans contenu.
 router.post('/unsubscribe', async (req, res) => {
   try {
     const parsed = await applyUnsubscribe(req.query.token);
@@ -44,7 +44,7 @@ router.post('/unsubscribe', async (req, res) => {
   }
 });
 
-// GET — clic humain : confirmation minimaliste, lien vers les Paramètres.
+// GET · clic humain : confirmation minimaliste, lien vers les Paramètres.
 router.get('/unsubscribe', async (req, res) => {
   try {
     const parsed = await applyUnsubscribe(req.query.token);
@@ -63,7 +63,7 @@ router.get('/unsubscribe', async (req, res) => {
 function page(title, message) {
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} — baakalai</title></head>
+<title>${title}, baakalai</title></head>
 <body style="font-family: -apple-system, sans-serif; background: #FAFAF9; margin: 0; padding: 60px 20px;">
   <div style="max-width: 420px; margin: 0 auto; background: white; border: 1px solid #e4e4e7; border-radius: 12px; padding: 32px; text-align: center;">
     <div style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: #6E57FA; color: white; border-radius: 12px; font-weight: 700; font-size: 20px; margin-bottom: 20px;">b</div>

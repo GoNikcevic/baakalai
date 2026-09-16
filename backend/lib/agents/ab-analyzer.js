@@ -38,7 +38,7 @@ async function analyzeAbTests(userId) {
   const report = { analyzed: 0, winners: [], errors: [] };
 
   // Tenant des patterns (audit 02/09) : l'équipe si l'utilisateur en a une,
-  // sinon l'utilisateur — jamais les deux (règle DAO, migration 089).
+  // sinon l'utilisateur · jamais les deux (règle DAO, migration 089).
   // Résolu une seule fois par run, réutilisé pour chaque écriture.
   let tenant = { userId };
   try {

@@ -1,5 +1,5 @@
 /**
- * Tests de hubspot.getActivities — la lecture des engagements (emails loggés
+ * Tests de hubspot.getActivities · la lecture des engagements (emails loggés
  * + notes) qui alimente le response-analysis-agent, et donc l'autopilot.
  *
  * Points couverts :

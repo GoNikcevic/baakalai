@@ -99,7 +99,7 @@ async function getDeal(accessToken, dealId) {
 
 async function getDealStageLabels(accessToken) {
   // dealstage renvoie l'id interne d'étape (ex. "appointmentscheduled"), pas le libellé
-  // que l'utilisateur voit — /crm/v3/pipelines/deals donne la correspondance, tous
+  // que l'utilisateur voit · /crm/v3/pipelines/deals donne la correspondance, tous
   // pipelines confondus (les ids d'étape sont uniques au portail).
   const pipelines = await getDealPipelines(accessToken);
   const map = new Map();
@@ -133,11 +133,11 @@ async function getDealPipelines(accessToken) {
 }
 
 async function getDeals(accessToken, limit = 10000) {
-  // hs_is_closed / hs_is_closed_won are default calculated properties on every HubSpot portal —
+  // hs_is_closed / hs_is_closed_won are default calculated properties on every HubSpot portal · 
   // the native won/lost signal, independent of the pipeline's (fully customizable) dealstage IDs.
   // Paginé via le curseur `after` (pages de 100, le max de l'API v3) : le plafond
   // de 100 sans pagination laissait les deals anciens des vrais portails sans
-  // mapping won/lost — donc invisibles comme clients.
+  // mapping won/lost · donc invisibles comme clients.
   const deals = [];
   let after = null;
   do {
@@ -315,7 +315,7 @@ function mapOpportunityToContact(opportunity) {
  */
 function mapOpportunityToDeal(opportunity, campaign) {
   return {
-    dealname: `${opportunity.company || opportunity.name} — ${campaign?.name || 'Bakal'}`,
+    dealname: `${opportunity.company || opportunity.name}, ${campaign?.name || 'Bakal'}`,
     pipeline: 'default',
     dealstage: mapStatusToDealStage(opportunity.status),
     description: [
@@ -350,7 +350,7 @@ function formatPatternsAsNote(patterns) {
   const lines = patterns.map((p) =>
     `<li><strong>[${p.category}]</strong> ${p.pattern} <em>(${p.confidence})</em></li>`
   );
-  return `<h3>Bakal — Patterns haute confiance</h3><ul>${lines.join('')}</ul>`;
+  return `<h3>Bakal, Patterns haute confiance</h3><ul>${lines.join('')}</ul>`;
 }
 
 // =============================================
@@ -445,11 +445,11 @@ async function listDealsForDiagnostic(accessToken, { maxDeals = 2000 } = {}) {
     if (err.status !== 403) throw err;
   }
 
-  // Fallback « — » : société associée mais nom illisible (scope manquant) —
+  // Fallback « · » : société associée mais nom illisible (scope manquant) · 
   // compte dans pctCompany sans afficher un nom bidon dans le top 3.
   return raw.map(({ companyId, ...d }) => ({
     ...d,
-    company: companyId ? (companyNames[companyId] || '—') : null,
+    company: companyId ? (companyNames[companyId] || ' ') : null,
   }));
 }
 

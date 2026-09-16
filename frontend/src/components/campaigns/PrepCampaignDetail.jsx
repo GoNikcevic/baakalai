@@ -62,12 +62,12 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
     (s) => s.type && s.type.startsWith('linkedin')
   ).length;
 
-  /* ── Launch handler — deploys to Lemlist ── */
+  /* ── Launch handler · deploys to Lemlist ── */
   const handleLaunch = async () => {
     if (!c.sequence || c.sequence.length === 0) {
       setLaunchAlert({
         type: 'error',
-        title: en ? 'Cannot launch — missing sequences' : 'Impossible de lancer — séquences manquantes',
+        title: en ? 'Cannot launch, missing sequences' : 'Impossible de lancer, séquences manquantes',
         desc: en ? "Generate sequences first via Baakalai from the Copy & Sequences editor." : "Générez d'abord les séquences via Baakalai depuis l'éditeur Copy & Séquences.",
       });
       return;
@@ -97,7 +97,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
       const statusLine = result.started
         ? ' · Campagne démarrée automatiquement'
         : result.startError
-          ? ` · Démarrage auto échoué (${result.startError}) — démarrez manuellement depuis Lemlist`
+          ? ` · Démarrage auto échoué (${result.startError}), démarrez manuellement depuis Lemlist`
           : ' · ℹ️ Campagne en draft sur Lemlist (pas de leads/étapes à envoyer)';
       setLaunchAlert({
         type: 'success',
@@ -108,7 +108,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
       setLaunchAlert({
         type: 'error',
         title: en ? 'Lemlist launch failed' : 'Échec du lancement Lemlist',
-        desc: err.message || (en ? 'Unknown error — check your Lemlist API key in Integrations.' : 'Erreur inconnue — vérifiez votre clé API Lemlist dans Intégrations.'),
+        desc: err.message || (en ? 'Unknown error, check your Lemlist API key in Integrations.' : 'Erreur inconnue, vérifiez votre clé API Lemlist dans Intégrations.'),
       });
     }
     setLaunching(false);
@@ -119,7 +119,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
     if (!c.sequence || c.sequence.length === 0) {
       setLaunchAlert({
         type: 'error',
-        title: en ? 'Cannot deploy — missing sequences' : 'Impossible de deployer — sequences manquantes',
+        title: en ? 'Cannot deploy, missing sequences' : 'Impossible de deployer, sequences manquantes',
         desc: en ? 'Generate sequences first via Baakalai.' : "Generez d'abord les sequences via Baakalai.",
       });
       return;
@@ -323,7 +323,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
         </div>
       </div>
 
-      {/* Prospect generator — Apollo search + bulk add */}
+      {/* Prospect generator · Apollo search + bulk add */}
       <ProspectGenerator campaign={c} />
 
       {/* Sequence preview */}
@@ -331,7 +331,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
         <div className="sequence-header">
           <div className="sequence-title">
             <Icon name="eye" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-            {en ? 'Sequence preview — Awaiting validation' : 'Aperçu des séquences — En attente de validation'}
+            {en ? 'Sequence preview, Awaiting validation' : 'Aperçu des séquences, En attente de validation'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {(c.sequence || []).length} touchpoints &middot; Email ({emailCount})
@@ -365,7 +365,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
             }}
           >
             <Icon name="bot" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-            {en ? 'Pre-launch recommendation — Baakalai' : 'Recommandation pré-lancement — Baakalai'}
+            {en ? 'Pre-launch recommendation, Baakalai' : 'Recommandation pré-lancement, Baakalai'}
           </div>
           <div
             style={{
@@ -393,7 +393,7 @@ export default function PrepCampaignDetail({ campaign: c, onBack, setCampaigns }
                   }}
                 >
                   <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-                  {en ? 'Suggestion applied — will be integrated in sequence generation' : 'Suggestion appliquée — sera intégrée dans la génération des séquences'}
+                  {en ? 'Suggestion applied, will be integrated in sequence generation' : 'Suggestion appliquée, sera intégrée dans la génération des séquences'}
                 </div>
               ) : (
                 <>

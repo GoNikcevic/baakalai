@@ -1,12 +1,12 @@
 /**
  * CRM Analytics Routes
  *
- * GET /api/analytics/pipeline      — Pipeline stage breakdown + conversion rates
- * GET /api/analytics/attribution   — Revenue attribution per campaign
- * GET /api/analytics/trends        — Weekly KPI trend data
- * GET /api/analytics/channels      — Channel performance comparison
- * GET /api/analytics/health        — CRM health score + alerts
- * GET /api/analytics/engagement    — Engagement scoring (0-100 per contact)
+ * GET /api/analytics/pipeline · Pipeline stage breakdown + conversion rates
+ * GET /api/analytics/attribution · Revenue attribution per campaign
+ * GET /api/analytics/trends · Weekly KPI trend data
+ * GET /api/analytics/channels · Channel performance comparison
+ * GET /api/analytics/health · CRM health score + alerts
+ * GET /api/analytics/engagement · Engagement scoring (0-100 per contact)
  */
 
 const { Router } = require('express');
@@ -52,14 +52,14 @@ function canonicalStage(status) {
 
 // ── Filtres transverses produit / secteur (barre de filtres Analytics) ──
 // Les routes de cette page agrègent déjà en mémoire sur listByUser : on filtre
-// donc en JS après chargement — zéro changement de comportement sans filtre.
+// donc en JS après chargement · zéro changement de comportement sans filtre.
 // `productLine` = UUID de product_lines. `sector` = secteur normalisé
-// (lib/sector-classifier.js) — ne couvre que les textes bruts déjà classifiés
+// (lib/sector-classifier.js) · ne couvre que les textes bruts déjà classifiés
 // en cache (sector_normalization_cache), jamais de classification à la volée
 // ici : coûteux (appel Claude) et hors-sujet pour un simple filtre d'écran.
 
 // Valeur spéciale des deux filtres : deals sans ligne produit / sans secteur
-// déterminé — sinon invisibles dans les deux dropdowns (ils n'apparaissent dans
+// déterminé · sinon invisibles dans les deux dropdowns (ils n'apparaissent dans
 // aucune option nommée puisqu'ils n'ont justement rien d'assigné).
 const UNASSIGNED = '__unassigned__';
 
@@ -138,7 +138,7 @@ async function listFilteredOpportunities(userId, query) {
 }
 
 // Pour les routes en SQL pur (/stages) : liste d'IDs autorisés, ou null
-// si aucun filtre — à passer en $n::uuid[] avec `($n::uuid[] IS NULL OR id = ANY($n))`.
+// si aucun filtre · à passer en $n::uuid[] avec `($n::uuid[] IS NULL OR id = ANY($n))`.
 async function filteredOppIds(userId, query) {
   const filters = await resolveAnalyticsFilters(userId, query);
   if (!filters.active) return null;
@@ -147,9 +147,9 @@ async function filteredOppIds(userId, query) {
 }
 
 // =============================================
-// GET /api/analytics/sectors — options du filtre « secteur »
+// GET /api/analytics/sectors · options du filtre « secteur »
 // =============================================
-// Ne renvoie que les secteurs déjà classifiés (sector_normalization_cache) —
+// Ne renvoie que les secteurs déjà classifiés (sector_normalization_cache) · 
 // alimenté au fil de l'eau par le scoring de churn/contact (lib/sector-classifier.js).
 // Aucune classification à la volée ici.
 
@@ -167,7 +167,7 @@ router.get('/sectors', async (req, res, next) => {
     );
 
     // Secteur non déterminé : brut vide, classifié "non_determine", ou jamais
-    // encore classifié — tout ce qui n'apparaît pas ci-dessus.
+    // encore classifié · tout ce qui n'apparaît pas ci-dessus.
     const unassigned = await db.query(
       `SELECT COUNT(*)::int AS count FROM opportunities o
        WHERE o.user_id = $1
@@ -191,16 +191,16 @@ router.get('/sectors', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/product-lines — options du filtre « ligne produit »
+// GET /api/analytics/product-lines · options du filtre « ligne produit »
 // =============================================
 // Comptages scopés sur le tenant (req.user.id), contrairement à /crm/product-lines
-// qui compte par team_id — nécessaire pour rester cohérent avec le reste des
+// qui compte par team_id · nécessaire pour rester cohérent avec le reste des
 // filtres Analytics, tous scopés utilisateur.
 
 router.get('/product-lines', async (req, res, next) => {
   try {
     // LEFT JOIN : une ligne produit sans deal assigné doit rester visible
-    // (count 0), pas disparaître — le FILTER ne compte que les deals du
+    // (count 0), pas disparaître · le FILTER ne compte que les deals du
     // user courant parmi celles visibles à son équipe.
     const r = await db.query(
       `SELECT pl.id, pl.name, pl.icon,
@@ -291,7 +291,7 @@ router.get('/pipeline', async (req, res, next) => {
     }
     // Le flux mensuel et les cohortes sont une vue historique sur 12 mois glissants :
     // leur appliquer le filtre de période (créé après telle date) viderait à tort la
-    // plupart des mois — un deal créé avant la fenêtre mais gagné/perdu dedans en
+    // plupart des mois · un deal créé avant la fenêtre mais gagné/perdu dedans en
     // disparaîtrait complètement. Seuls produit/secteur s'y appliquent ; la période
     // n'alimente que le total net affiché à droite du titre (calculé plus bas).
     const historyOpportunities = applyAnalyticsFilters(rawOpportunities, { ...filters, from: '', to: '' });
@@ -352,7 +352,7 @@ router.get('/pipeline', async (req, res, next) => {
       flowNetTotal = flow.reduce((sum, f) => sum + f.net, 0);
     }
     // Cohortes de création : issue ACTUELLE des deals créés ce mois-là (pas leur
-    // date de clôture) — répond à « les deals créés en mars, où en sont-ils aujourd'hui ? »
+    // date de clôture) · répond à « les deals créés en mars, où en sont-ils aujourd'hui ? »
     const cohorts = months.map(m => {
       const c = cohortMap[m];
       const closed = c.won + c.lost;
@@ -366,9 +366,9 @@ router.get('/pipeline', async (req, res, next) => {
     });
     const SIZE_BUCKETS = [
       { label: '< 1k€', max: 1000 },
-      { label: '1k–5k€', max: 5000 },
-      { label: '5k–20k€', max: 20000 },
-      { label: '20k–50k€', max: 50000 },
+      { label: '1k 5k€', max: 5000 },
+      { label: '5k 20k€', max: 20000 },
+      { label: '20k 50k€', max: 50000 },
       { label: '> 50k€', max: Infinity },
     ];
     const sizeDistribution = SIZE_BUCKETS.map(b => ({ label: b.label, count: 0 }));
@@ -389,7 +389,7 @@ router.get('/pipeline', async (req, res, next) => {
       top5Pct: totalOpenValue > 0 ? Math.round((top5Value / totalOpenValue) * 100) : 0,
     };
 
-    // Gagnés/perdus sur les 30 derniers jours — distinct des comptages "stages"
+    // Gagnés/perdus sur les 30 derniers jours · distinct des comptages "stages"
     // qui sont all-time. La date qui compte est celle de clôture (won_date /
     // lost_date), pas la date de création.
     const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -554,7 +554,7 @@ router.get('/attribution', async (req, res, next) => {
         won: parseInt(ta.untouched_won),
       },
       reactivated: { count: parseInt(ta.reactivated_count), value: num(ta.reactivated_value) },
-      // Deals touchés par un workflow de relance (sous-ensemble de touched) —
+      // Deals touchés par un workflow de relance (sous-ensemble de touched) · 
       // permet de mesurer cadence multicanal vs one-shot.
       workflow: {
         count: parseInt(ta.workflow_touched_count),
@@ -589,7 +589,7 @@ router.get('/trends', async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // Date range filtering — defaults to last 90 days
+    // Date range filtering · defaults to last 90 days
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const defaultTo = now.toISOString().split('T')[0];
@@ -882,7 +882,7 @@ router.get('/forecast', async (req, res, next) => {
     const now = Date.now();
     const DAY_MS = 1000 * 60 * 60 * 24;
 
-    // Date range filtering — defaults to last 90 days
+    // Date range filtering · defaults to last 90 days
     const defaultFrom = new Date(now - 90 * DAY_MS).toISOString().split('T')[0];
     const defaultTo = new Date(now).toISOString().split('T')[0];
     const fromDate = req.query.from || defaultFrom;
@@ -924,7 +924,7 @@ router.get('/forecast', async (req, res, next) => {
     stageProbability['won'] = 1;
     stageProbability['lost'] = 0;
 
-    // ── Pipeline deals — weighted forecast ──
+    // ── Pipeline deals · weighted forecast ──
     const pipelineDeals = opportunities.filter(o => {
       const s = canonicalStage(o.status);
       return s !== 'won' && s !== 'lost' && o.deal_value;
@@ -982,7 +982,7 @@ router.get('/forecast', async (req, res, next) => {
     const totalWonRevenue = wonDeals.reduce((sum, o) => sum + Number(o.deal_value || 0), 0);
 
     // Forecast intelligent : probabilité PAR DEAL calibrée sur l'historique
-    // réel du tenant (cycle appris, activité, lead score, calibration) —
+    // réel du tenant (cycle appris, activité, lead score, calibration) · 
     // best-effort, l'ancien forecast par stage reste le repli d'affichage.
     let memoryForecast = null;
     try {
@@ -1028,7 +1028,7 @@ router.get('/engagement', async (req, res, next) => {
   }
 });
 
-// GET /api/analytics/engagement/csv — now uses unified contact scoring
+// GET /api/analytics/engagement/csv · now uses unified contact scoring
 router.get('/engagement/csv', async (req, res, next) => {
   try {
     const result = await scoreAllContacts(req.user.id);
@@ -1206,12 +1206,12 @@ router.get('/renewals/csv', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/stages — étapes de pipeline CRM réelles (migration 092)
+// GET /api/analytics/stages · étapes de pipeline CRM réelles (migration 092)
 // =============================================
 // Contrairement à /pipeline (statuts canoniques dérivés de `status`), ici ce
 // sont les étapes telles que l'utilisateur les a nommées dans SON CRM,
 // rapatriées par le delta sync. L'historique des transitions ne démarre qu'à
-// l'installation du tracking — le front doit l'afficher honnêtement.
+// l'installation du tracking · le front doit l'afficher honnêtement.
 
 router.get('/stages', async (req, res, next) => {
   try {
@@ -1257,7 +1257,7 @@ router.get('/stages', async (req, res, next) => {
     });
 
     // Où meurent les deals : l'étape d'origine de la DERNIÈRE transition d'un
-    // deal perdu (from_stage) — pas son étape courante, qui est souvent une
+    // deal perdu (from_stage) · pas son étape courante, qui est souvent une
     // étape terminale type « Closed lost » sans valeur diagnostique.
     const lost = await db.query(
       `SELECT COALESCE(h.from_stage, o.crm_stage) AS stage, COUNT(*)::int AS count
@@ -1288,7 +1288,7 @@ router.get('/stages', async (req, res, next) => {
     );
 
     // Temps moyen passé par étape : uniquement les séjours TERMINÉS (une
-    // transition suivante existe) — un deal encore dans son étape actuelle
+    // transition suivante existe) · un deal encore dans son étape actuelle
     // n'a pas de durée finale connue, l'inclure biaiserait la moyenne vers le bas.
     const avgDays = await db.query(
       `WITH ordered AS (
@@ -1322,7 +1322,7 @@ router.get('/stages', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/lost-reasons — pourquoi les deals sont perdus
+// GET /api/analytics/lost-reasons · pourquoi les deals sont perdus
 // =============================================
 // lost_reason (migration 095) vient soit du CRM (Pipedrive, natif), soit d'une
 // saisie manuelle dans baakalai. Les deals perdus sans raison encore connue
@@ -1372,10 +1372,10 @@ router.get('/lost-reasons', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/upsell-performance — performance de la détection upsell
+// GET /api/analytics/upsell-performance · performance de la détection upsell
 // =============================================
 // Vue d'ensemble du portefeuille entier, non filtrée par produit/secteur/
-// période (même granularité que trends/channels/membership) — cohérent avec
+// période (même granularité que trends/channels/membership) · cohérent avec
 // GET /api/crm/upsell/summary, déjà non filtré.
 
 router.get('/upsell-performance', async (req, res, next) => {
@@ -1412,7 +1412,7 @@ router.get('/upsell-performance', async (req, res, next) => {
     const emailedOpps = parseInt(emailStats.rows[0].emailed_opps, 10) || 0;
 
     // Conversion : ligne produit ajoutée après le dernier email d'upsell envoyé
-    // sur ce même deal — corrélation temporelle (pas de FK directe entre l'email
+    // sur ce même deal · corrélation temporelle (pas de FK directe entre l'email
     // et l'assignation), added_at posé par migration 098.
     const conversions = await db.query(
       `SELECT DISTINCT o.id, o.deal_value
@@ -1447,10 +1447,10 @@ router.get('/upsell-performance', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/churn-risk-performance — performance de la détection churn
+// GET /api/analytics/churn-risk-performance · performance de la détection churn
 // =============================================
 // Vue d'ensemble du portefeuille entier (clients gagnés uniquement), non
-// filtrée par produit/secteur/période — cohérent avec /api/crm/churn/summary.
+// filtrée par produit/secteur/période · cohérent avec /api/crm/churn/summary.
 
 router.get('/churn-risk-performance', async (req, res, next) => {
   try {
@@ -1502,7 +1502,7 @@ router.get('/churn-risk-performance', async (req, res, next) => {
       [userId, AT_RISK_THRESHOLD]
     );
 
-    // Sauvés vs perdus — nécessite un historique constitué depuis ~45j minimum
+    // Sauvés vs perdus · nécessite un historique constitué depuis ~45j minimum
     // (churn_score_history démarre vide, migration 098) : sans ça, on ne peut
     // pas savoir qui était à risque il y a 45-75 jours.
     const historyRange = await db.query(
@@ -1559,11 +1559,11 @@ router.get('/churn-risk-performance', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/geography — répartition géographique du portefeuille
+// GET /api/analytics/geography · répartition géographique du portefeuille
 // =============================================
 // Pays = colonne CRM (migration 093) normalisée en ISO-2, sinon TLD de l'email.
 // Les TLD génériques (.com, .io) ne donnent rien : la part « non déterminé »
-// est retournée telle quelle — le front doit l'afficher honnêtement.
+// est retournée telle quelle · le front doit l'afficher honnêtement.
 
 router.get('/geography', async (req, res, next) => {
   try {
@@ -1606,7 +1606,7 @@ router.get('/geography', async (req, res, next) => {
       countries,
       total,
       undetermined,
-      // Part des pays issus du CRM (vs déduits du TLD email) — indicateur de fiabilité
+      // Part des pays issus du CRM (vs déduits du TLD email) · indicateur de fiabilité
       crmCoverage: total > 0 ? Math.round((fromCrm / total) * 100) : 0,
     });
   } catch (err) {
@@ -1615,7 +1615,7 @@ router.get('/geography', async (req, res, next) => {
 });
 
 // =============================================
-// buildAnalyticsContext — agrégats CRM pour l'Assistant (routes/ai.js)
+// buildAnalyticsContext · agrégats CRM pour l'Assistant (routes/ai.js)
 // =============================================
 // Paquet d'agrégats SQL calculés à la volée : les réponses de l'Assistant ne
 // peuvent citer que ce que la base contient vraiment.
@@ -1625,7 +1625,7 @@ async function buildAnalyticsContext(userId, filterQuery = null) {
 
   // Restriction produit éventuelle. Quand un filtre est actif, les blocs
   // globaux (emails d'activation, forecast, patterns) sont omis : ils ne sont
-  // pas filtrables et mélangeraient des périmètres — Claude citerait des
+  // pas filtrables et mélangeraient des périmètres · Claude citerait des
   // chiffres « globaux » comme s'ils étaient filtrés.
   let oppIds = null;
   if (filterQuery) {
@@ -1705,6 +1705,6 @@ async function buildAnalyticsContext(userId, filterQuery = null) {
 }
 
 module.exports = router;
-// Réutilisé par le playbook à la demande (routes/ai.js) — mêmes agrégats,
+// Réutilisé par le playbook à la demande (routes/ai.js) · mêmes agrégats,
 // même garantie : rien qui ne vienne pas de la base.
 module.exports.buildAnalyticsContext = buildAnalyticsContext;

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Applied Patterns Banner
+   BAKAL · Applied Patterns Banner
    Small, discreet card shown next to an AI-generated draft, listing the memory
    patterns (pattern_ids) that were injected into the prompt. Fetches labels once
    via POST /ai/memory/labels; renders nothing when there is nothing to show

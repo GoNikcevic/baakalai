@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Deal Pipeline KPIs — total deals CRM, pipeline ouvert, deals à relancer.
+   Deal Pipeline KPIs · total deals CRM, pipeline ouvert, deals à relancer.
    Partagé entre le Dashboard (onglet Deals) et Analytics (onglet Pipeline)
    pour garantir que les deux vues affichent exactement les mêmes chiffres,
    depuis /crm/reactivation-stats. Rend null tant que le CRM n'a rien donné.
@@ -28,24 +28,24 @@ export default function DealPipelineKpis({ stats }) {
       icon: 'database',
       label: en ? 'Total CRM deals' : 'Total deals CRM',
       help: en
-        ? 'Only deals currently qualified as such — once a deal is won (it becomes a client) or lost, it no longer counts here.'
-        : 'Uniquement les deals actuellement qualifiés comme tels — une fois gagné (le deal devient client) ou perdu, il ne compte plus ici.',
+        ? 'Only deals currently qualified as such, once a deal is won (it becomes a client) or lost, it no longer counts here.'
+        : 'Uniquement les deals actuellement qualifiés comme tels, une fois gagné (le deal devient client) ou perdu, il ne compte plus ici.',
       value: String(pipeline.openDeals || 0),
     },
     {
       icon: 'briefcase',
       label: en ? 'Open pipeline' : 'Pipeline ouvert',
       help: en
-        ? 'The deal count includes deals with no value set — they count toward the number but not toward the total amount.'
-        : 'Le nombre de deals inclut ceux sans valeur renseignée — ils comptent dans le total de deals mais pas dans le montant.',
+        ? 'The deal count includes deals with no value set, they count toward the number but not toward the total amount.'
+        : 'Le nombre de deals inclut ceux sans valeur renseignée, ils comptent dans le total de deals mais pas dans le montant.',
       value: money(pipeline.totalValue),
     },
     {
       icon: 'moon',
       label: en ? 'Deals to follow up' : 'Deals à relancer',
       help: en
-        ? `Deals with no activity for ${pipeline.stagnantThresholdDays || 14}+ days, or whose planned follow-up date has passed — even if they've had recent activity.`
-        : `Deals sans activité depuis ${pipeline.stagnantThresholdDays || 14}j ou plus, ou dont la date de relance planifiée est dépassée — même s'ils ont eu de l'activité récente.`,
+        ? `Deals with no activity for ${pipeline.stagnantThresholdDays || 14}+ days, or whose planned follow-up date has passed, even if they've had recent activity.`
+        : `Deals sans activité depuis ${pipeline.stagnantThresholdDays || 14}j ou plus, ou dont la date de relance planifiée est dépassée, même s'ils ont eu de l'activité récente.`,
       value: String(pipeline.stagnantDeals || 0),
     },
   ];

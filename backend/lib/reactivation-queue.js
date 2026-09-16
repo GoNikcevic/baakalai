@@ -1,8 +1,8 @@
 /**
- * Reactivation Queue — shared, AI-free detection for both "Deals à relancer" and
+ * Reactivation Queue · shared, AI-free detection for both "Deals à relancer" and
  * "Clients à upseller" list pages, plus the "Reporter" (postpone) action shared by both.
  *
- * No Claude calls here — only cheap CRM-data queries. AI generation happens on-demand,
+ * No Claude calls here · only cheap CRM-data queries. AI generation happens on-demand,
  * per single item, in lib/agents/deal-coach.js's coachAndDraftOne / lib/agents/
  * upsell-detector.js's draftOne, triggered only when the user opens a single candidate.
  */
@@ -13,7 +13,7 @@ const upsellDetector = require('./agents/upsell-detector');
 const DAY_MS = 86400000;
 const { getStagnantDays } = require('./stagnation');
 
-// `last_activity_at` (populated from real CRM changes) is the trustworthy staleness signal —
+// `last_activity_at` (populated from real CRM changes) is the trustworthy staleness signal · 
 // `updated_at` gets reset to now() by a DB trigger on every internal write (churn scoring,
 // chain executions, etc.) and can't be used to measure genuine inactivity.
 function lastRealActivity(opp) {
@@ -50,7 +50,7 @@ function isDue(opp, stagnantDays) {
 }
 
 /**
- * List active (not won/lost) deals due for reactivation — no planned date and stagnant past the
+ * List active (not won/lost) deals due for reactivation · no planned date and stagnant past the
  * user's threshold, or a planned date that has passed. Rule-based only, no AI call.
  */
 async function listDealsToReactivate(userId, sort = 'overdue') {
@@ -96,7 +96,7 @@ async function listDealsToReactivate(userId, sort = 'overdue') {
 
 /**
  * List won clients eligible for upsell (score-based, from upsell-detector.js's rule-based
- * scoring — no AI), gated by the same planned_followup_date rule as deal reactivation.
+ * scoring · no AI), gated by the same planned_followup_date rule as deal reactivation.
  */
 async function listClientsToUpsell(userId, sort = 'score') {
   const stagnantDays = await getStagnantDays(userId);
@@ -117,7 +117,7 @@ async function listClientsToUpsell(userId, sort = 'score') {
     .map(c => {
       const opp = oppById.get(c.contactId);
       if (!opp) return null;
-      if (!isDue(opp, stagnantDays)) return null; // planned_followup_date set in the future — not due yet
+      if (!isDue(opp, stagnantDays)) return null; // planned_followup_date set in the future, not due yet
       const overdue = computeOverdue(opp);
       return {
         id: c.contactId,
@@ -144,7 +144,7 @@ async function listClientsToUpsell(userId, sort = 'score') {
 }
 
 /**
- * "Reporter" — set (or clear) the planned follow-up date for a deal or upsell candidate.
+ * "Reporter" · set (or clear) the planned follow-up date for a deal or upsell candidate.
  */
 async function postponeOpportunity(userId, opportunityId, date) {
   const result = await db.query(
@@ -155,7 +155,7 @@ async function postponeOpportunity(userId, opportunityId, date) {
 }
 
 /**
- * Opportunity ids (for this kind's candidate pool) whose most recent draft failed to send —
+ * Opportunity ids (for this kind's candidate pool) whose most recent draft failed to send · 
  * surfaced as an alert badge on the queue tab, NOT in history (the mail never actually left).
  */
 async function failedSendIds(userId, kind, opportunityIds) {
@@ -171,8 +171,8 @@ async function failedSendIds(userId, kind, opportunityIds) {
 }
 
 /**
- * History tab: everything that has happened via Baakalai for this kind's candidates —
- * emails actually sent, follow-ups postponed (manual or automatic — post-send cooldown is
+ * History tab: everything that has happened via Baakalai for this kind's candidates · 
+ * emails actually sent, follow-ups postponed (manual or automatic · post-send cooldown is
  * excluded, it's covered by the "sent" entry already), and deals/clients closed CRM-side
  * (won/lost). No AI call, rule-based reads only.
  */

@@ -1,12 +1,12 @@
 /**
  * Churn Outcomes Routes
  *
- * POST /api/churn/outcomes         — Log one outcome (true_positive/false_positive/false_negative)
- * POST /api/churn/outcomes/import  — Bulk-import a historical seed list of past churns
- * GET  /api/churn/outcomes         — List outcomes for audit/review
+ * POST /api/churn/outcomes · Log one outcome (true_positive/false_positive/false_negative)
+ * POST /api/churn/outcomes/import · Bulk-import a historical seed list of past churns
+ * GET  /api/churn/outcomes · List outcomes for audit/review
  *
  * The churn list/summary itself is served by existing routes (dashboard/opportunities,
- * crm/churn/score, crm/churn/summary) — this file only covers the feedback-loop surface.
+ * crm/churn/score, crm/churn/summary) · this file only covers the feedback-loop surface.
  */
 
 const { Router } = require('express');
@@ -50,7 +50,7 @@ async function insertOutcome(userId, o) {
   return result.rows[0];
 }
 
-// POST /api/churn/outcomes — log one outcome
+// POST /api/churn/outcomes · log one outcome
 router.post('/outcomes', async (req, res, next) => {
   try {
     const err = validateOutcome(req.body);
@@ -63,7 +63,7 @@ router.post('/outcomes', async (req, res, next) => {
   }
 });
 
-// POST /api/churn/outcomes/import — bulk historical seed list
+// POST /api/churn/outcomes/import · bulk historical seed list
 router.post('/outcomes/import', async (req, res, next) => {
   try {
     const { outcomes } = req.body;
@@ -89,7 +89,7 @@ router.post('/outcomes/import', async (req, res, next) => {
   }
 });
 
-// GET /api/churn/outcomes — list for audit/review
+// GET /api/churn/outcomes · list for audit/review
 router.get('/outcomes', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);

@@ -214,11 +214,11 @@ describe('CampaignsList', () => {
   });
 });
 
-describe('CampaignsList — filtered empty', () => {
+describe('CampaignsList, filtered empty', () => {
   it('shows no-result message when filter matches nothing', () => {
     renderList();
 
-    // Apply "En préparation" filter, then "Active" — toggle quickly
+    // Apply "En préparation" filter, then "Active" · toggle quickly
     fireEvent.click(screen.getByRole('button', { name: 'En préparation' }));
 
     // Prep campaigns should show, active ones hidden from rows

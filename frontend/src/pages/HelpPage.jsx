@@ -8,7 +8,7 @@ const FAQ_FR = [
       { q: 'Comment connecter mon CRM ?', a: 'Va dans Paramètres → Intégrations. Baakalai supporte Pipedrive, HubSpot, Salesforce et Odoo. Clique sur "Connecter" et suis les instructions (clé API ou OAuth).' },
       { q: 'Comment lancer ma première campagne ?', a: 'Tape dans le chat : "Crée une campagne de prospection pour [ton secteur cible]". L\'IA génère une séquence email + LinkedIn que tu peux déployer sur Lemlist, Apollo ou Smartlead.' },
       { q: 'Comment connecter mon email (Gmail/Outlook) ?', a: 'Va dans Paramètres → Comptes Email → "Connecter Gmail" ou "Connecter Microsoft". L\'authentification OAuth sécurisée se fait en un clic.' },
-      { q: 'Qu\'est-ce que l\'extension Chrome ?', a: 'L\'extension Baakalai te permet d\'ajouter des contacts depuis LinkedIn, voir leur statut CRM et envoyer des emails — sans quitter LinkedIn. Installe-la depuis les paramètres.' },
+      { q: 'Qu\'est-ce que l\'extension Chrome ?', a: 'L\'extension Baakalai te permet d\'ajouter des contacts depuis LinkedIn, voir leur statut CRM et envoyer des emails, sans quitter LinkedIn. Installe-la depuis les paramètres.' },
     ],
   },
   {
@@ -53,7 +53,7 @@ const FAQ_EN = [
       { q: 'How do I connect my CRM?', a: 'Go to Settings → Integrations. Baakalai supports Pipedrive, HubSpot, Salesforce and Odoo. Click "Connect" and follow the instructions (API key or OAuth).' },
       { q: 'How do I launch my first campaign?', a: 'Type in chat: "Create a prospecting campaign for [your target sector]". The AI generates a full email + LinkedIn sequence you can deploy to Lemlist, Apollo or Smartlead.' },
       { q: 'How do I connect my email (Gmail/Outlook)?', a: 'Go to Settings → Email Accounts → "Connect Gmail" or "Connect Microsoft". Secure OAuth authentication in one click.' },
-      { q: 'What is the Chrome extension?', a: 'The Baakalai extension lets you add contacts from LinkedIn, see their CRM status and send emails — without leaving LinkedIn. Install it from settings.' },
+      { q: 'What is the Chrome extension?', a: 'The Baakalai extension lets you add contacts from LinkedIn, see their CRM status and send emails, without leaving LinkedIn. Install it from settings.' },
     ],
   },
   {

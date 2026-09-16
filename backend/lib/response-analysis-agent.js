@@ -2,7 +2,7 @@
  * Response Analysis Agent
  *
  * Reads replies/activities from the user's connected CRM (Pipedrive, Salesforce,
- * Odoo, or HubSpot — the no-activity-feed providers Notion/Airtable/Folk aren't
+ * Odoo, or HubSpot · the no-activity-feed providers Notion/Airtable/Folk aren't
  * supported), analyzes them with Claude, and tracks nurture campaign effectiveness.
  *
  * Flow:
@@ -27,7 +27,7 @@ const DAY_MS = 86400000;
 
 // Providers with a getActivities-equivalent feed. Notion/Airtable/Folk have no
 // activity concept at all (same as the deal-sync gap). HubSpot lit les
-// engagements (emails loggés + notes) — le corps des emails demande le scope
+// engagements (emails loggés + notes) · le corps des emails demande le scope
 // sales-email-read sur l'app OAuth, sans lui il retombe sur les notes seules.
 async function fetchActivities(crmProvider, creds, contactId) {
   if (!contactId) return [];
@@ -98,7 +98,7 @@ async function analyzeResponses(userId) {
 
       if (activityTexts.length === 0) continue;
 
-      // A genuine reply/activity is real prospect-side signal — record it as the
+      // A genuine reply/activity is real prospect-side signal · record it as the
       // opportunity's real last activity (only advancing forward, never backward).
       if (email.opp_id) {
         const latestActivityDate = new Date(Math.max(...recentActivities.map(a => new Date(a.dueDate || 0).getTime())));
@@ -126,7 +126,7 @@ async function analyzeResponses(userId) {
           newStatus: analysis.suggestedStatus,
         });
       } else if (email.opp_id && analysis.sentiment === 'negative') {
-        // Negative signal, but Claude wasn't confident enough to call the deal lost —
+        // Negative signal, but Claude wasn't confident enough to call the deal lost · 
         // stop suggesting reactivation for a while rather than nagging on a cold trail,
         // without auto-declaring the deal dead (that stays a human call).
         await db.opportunities.update(email.opp_id, {
@@ -203,7 +203,7 @@ async function analyzeResponses(userId) {
         const content = typeof activity.content === 'string' ? JSON.parse(activity.content) : (activity.content || {});
 
         // Any LinkedIn activity (accepted connection or reply) is genuine prospect-side
-        // signal — same last_activity_at treatment as email replies above.
+        // signal · same last_activity_at treatment as email replies above.
         if (activity.opp_id && activity.created_at) {
           await db.opportunities.update(activity.opp_id, { last_activity_at: new Date(activity.created_at).toISOString() });
         }
@@ -297,14 +297,14 @@ async function analyzeResponses(userId) {
  */
 /**
  * Signale une intention hors liste. L'autopilot traite l'inconnu en poursuivant
- * l'échange, ce qui est le comportement sûr — mais silencieux. Sans cette trace,
+ * l'échange, ce qui est le comportement sûr · mais silencieux. Sans cette trace,
  * une intention ajoutée au prompt et oubliée dans lib/reply-intents.js resterait
  * invisible : elle ne clôturerait rien et ne déclencherait aucun RDV, sans que
  * personne ne comprenne pourquoi.
  */
 function checkIntent(analysis) {
   if (analysis?.intent && !isKnownIntent(analysis.intent)) {
-    logger.warn('response-analysis', `intention hors liste : "${analysis.intent}" — a declarer dans lib/reply-intents.js`);
+    logger.warn('response-analysis', `intention hors liste : "${analysis.intent}", a declarer dans lib/reply-intents.js`);
   }
   return analysis;
 }
@@ -435,7 +435,7 @@ async function scoreTrigger(triggerId, outcome) {
  * Create a memory pattern from accumulated response data.
  *
  * Historique : les trois appels ci-dessous passaient (userId, {...}) à
- * replaceOrCreate — signature à un seul argument — donc `data.pattern` était
+ * replaceOrCreate · signature à un seul argument · donc `data.pattern` était
  * undefined et aucun de ces patterns n'a jamais été écrit (corrigé). Depuis la
  * migration 089, chaque écriture porte son tenant : l'équipe de l'utilisateur
  * si elle existe, sinon l'utilisateur lui-même (jamais les deux).
@@ -443,7 +443,7 @@ async function scoreTrigger(triggerId, outcome) {
 async function createMemoryPattern(userId, report) {
   if (report.analyzed < 5) return;
 
-  // Tenant des patterns — résolu une seule fois pour les trois écritures.
+  // Tenant des patterns · résolu une seule fois pour les trois écritures.
   let tenant = { userId };
   try {
     const team = await db.teams.getByUser(userId);
@@ -503,7 +503,7 @@ async function createMemoryPattern(userId, report) {
 
   // Global pattern (backward compat)
   const pattern = successRate >= 50
-    ? `Activation : ${successRate}% de r\u00E9ponses positives (${report.positive}/${report.analyzed}) — email + LinkedIn`
+    ? `Activation : ${successRate}% de r\u00E9ponses positives (${report.positive}/${report.analyzed}), email + LinkedIn`
     : `Activation : taux de r\u00E9ponse positive de ${successRate}% (${report.positive}/${report.analyzed})`;
   try {
     await db.memoryPatterns.replaceOrCreate({

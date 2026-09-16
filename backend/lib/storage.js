@@ -6,7 +6,7 @@ try {
   ({ S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3'));
   ({ getSignedUrl } = require('@aws-sdk/s3-request-presigner'));
 } catch {
-  // S3 SDK not installed — local storage only
+  // S3 SDK not installed · local storage only
 }
 
 const s3Endpoint = process.env.S3_ENDPOINT;

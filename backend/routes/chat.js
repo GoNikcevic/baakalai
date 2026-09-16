@@ -14,7 +14,7 @@ const ASSISTANT_TYPES = ['general', 'campaign'];
 /**
  * Context for the general assistant (first sidebar tab).
  *
- * It used to be deliberately lean — language + whether a CRM was connected — back when this
+ * It used to be deliberately lean · language + whether a CRM was connected · back when this
  * assistant only answered questions. It now owns the whole activation surface (relaunch
  * dormant deals, triggers, autopilot, CRM scan/clean/import, sending an email), so it needs
  * to know the state of the CRM it is being asked to act on: an assistant that has to call
@@ -22,11 +22,11 @@ const ASSISTANT_TYPES = ['general', 'campaign'];
  * one aggregate query answers.
  *
  * Still deliberately excluded: campaigns, documents, prospect sources, memory patterns,
- * diagnostics and versions — all of them serve cold-prospecting campaign building, which
+ * diagnostics and versions · all of them serve cold-prospecting campaign building, which
  * belongs to the other assistant.
  *
  * Uses getValidatedIntegrations (decrypts to confirm a real, usable connection) rather than
- * the plain access_token-exists check the prospecting assistant's context still uses below —
+ * the plain access_token-exists check the prospecting assistant's context still uses below · 
  * a stale/placeholder token must not count as "connected."
  */
 async function buildGeneralContext(userId) {
@@ -39,7 +39,7 @@ async function buildGeneralContext(userId) {
   const [userRow, connectedCrms, crmStats, triggers] = await Promise.all([
     db.query('SELECT language, settings FROM users WHERE id = $1', [userId]),
     getValidatedIntegrations(userId, CRM_PROVIDERS),
-    // Stagnance sur COALESCE(last_activity_at, created_at) — jamais updated_at,
+    // Stagnance sur COALESCE(last_activity_at, created_at) · jamais updated_at,
     // réécrit en masse par chaque import (cf. /api/crm/reading-summary).
     db.query(`
       SELECT
@@ -74,10 +74,10 @@ async function buildGeneralContext(userId) {
 
     const c = crmStats.rows[0] || {};
     contextParts.push([
-      'ÉTAT DU CRM (chiffres réels, réutilise-les tels quels — ne les invente pas et ne les arrondis pas au hasard) :',
+      'ÉTAT DU CRM (chiffres réels, réutilise-les tels quels, ne les invente pas et ne les arrondis pas au hasard) :',
       `- ${c.total || 0} contacts synchronisés`,
       `- ${c.open_deals || 0} deals ouverts, ${Math.round(c.open_value || 0)} € au total`,
-      `- ${c.dormant || 0} deals dormants (aucune activité depuis plus de ${stagnantDays} jours — seuil réglé par l'utilisateur)`,
+      `- ${c.dormant || 0} deals dormants (aucune activité depuis plus de ${stagnantDays} jours, seuil réglé par l'utilisateur)`,
       `- ${c.clients || 0} clients gagnés, dont ${c.churn_risk || 0} à risque de churn (score ≥ 60)`,
       `- ${c.missing_email || 0} contacts sans email`,
     ].join('\n'));
@@ -88,7 +88,7 @@ async function buildGeneralContext(userId) {
       );
       contextParts.push(`TRIGGERS D'ACTIVATION EXISTANTS:\n${lines.join('\n')}\n\nNe propose pas de créer un trigger qui fait déjà doublon avec l'un d'eux.`);
     } else {
-      contextParts.push("TRIGGERS D'ACTIVATION EXISTANTS: aucun. L'utilisateur relance encore tout à la main — create_trigger est souvent la bonne suggestion.");
+      contextParts.push("TRIGGERS D'ACTIVATION EXISTANTS: aucun. L'utilisateur relance encore tout à la main, create_trigger est souvent la bonne suggestion.");
     }
 
     contextParts.push(
@@ -168,7 +168,7 @@ router.get('/threads/:id/messages', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/messages — bounded context building
+// POST /api/chat/threads/:id/messages · bounded context building
 router.post('/threads/:id/messages', async (req, res, next) => {
   try {
     const thread = await db.chatThreads.get(req.params.id);
@@ -192,7 +192,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     if (thread.assistant_type === 'general') {
       context = await buildGeneralContext(req.user.id);
     } else {
-    // Build bounded context — all queries in parallel
+    // Build bounded context · all queries in parallel
     const { listUserSources } = require('../lib/prospect-sources');
     const [profile, docs, campaigns, patterns, prospectSources, userIntegrations] = await Promise.all([
       db.profiles.get(req.user.id),
@@ -265,7 +265,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     // Outreach / prospect sources configured by user
     if (prospectSources && prospectSources.length > 0) {
       const lines = prospectSources.map(s =>
-        `- ${s.name} (${s.provider}) — ${s.canSearch ? '✅ peut générer des listes de prospects' : '❌ ne peut pas générer de listes (exécution seule)'}`
+        `- ${s.name} (${s.provider}), ${s.canSearch ? '✅ peut générer des listes de prospects' : '❌ ne peut pas générer de listes (exécution seule)'}`
       );
       contextParts.push(`OUTILS OUTREACH CONFIGURÉS:\n${lines.join('\n')}`);
     } else {
@@ -283,7 +283,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       contextParts.push(`MEMORY PATTERNS APPRIS (à appliquer pour les recommandations A/B) :\n${patternLines.join('\n')}\n\nUtilise les patterns HAUTE confiance comme baseline automatique. Pour les MOYENNE, propose-les comme test A/B. Pour les FAIBLE, ignore ou teste avec prudence.`);
     }
 
-    // Recent diagnostics — single query with JOIN (no N+1)
+    // Recent diagnostics · single query with JOIN (no N+1)
     const recentDiags = await db.diagnostics.listByUserCampaigns(req.user.id, MAX_DIAGNOSTICS_IN_CONTEXT);
     if (recentDiags.length > 0) {
       const diagLines = recentDiags.map(d => {
@@ -295,7 +295,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       contextParts.push(`DIAGNOSTICS RÉCENTS:\n${diagLines.join('\n')}`);
     }
 
-    // Recent optimization history — batch load (no N+1)
+    // Recent optimization history · batch load (no N+1)
     if (campaigns.length > 0) {
       const campIds = campaigns.slice(0, MAX_VERSIONS_IN_CONTEXT).map(c => c.id);
       const latestVersions = await db.versions.latestForCampaigns(campIds);
@@ -323,7 +323,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const hasDocuments = docs && docs.length > 0;
     const hasActiveCampaign = campaigns.some(c => c.status === 'active');
 
-    // CRM integration context — tell Claude which CRM is connected
+    // CRM integration context · tell Claude which CRM is connected
     const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
     const connectedCrms = userIntegrations.filter(i => crmProviders.includes(i.provider) && i.access_token);
     if (connectedCrms.length > 0) {
@@ -353,7 +353,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
         '5. Launch',
         '',
         'Use quick_replies buttons at each step to make it easy.',
-        "Don't overwhelm — one step at a time.",
+        "Don't overwhelm, one step at a time.",
       ];
       contextParts.push(onboardingLines.join('\n'));
     }
@@ -368,7 +368,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
 
     // Insert language instruction at the BEGINNING of context (high priority)
     if (userLang === 'en') {
-      contextParts.unshift('CRITICAL LANGUAGE RULE: You MUST reply in ENGLISH. The user speaks English. ALL your responses, campaign copy, sequences, suggestions, action labels, and quick_replies MUST be in English. The context below may contain French labels — ignore the language of the context, always respond in English.');
+      contextParts.unshift('CRITICAL LANGUAGE RULE: You MUST reply in ENGLISH. The user speaks English. ALL your responses, campaign copy, sequences, suggestions, action labels, and quick_replies MUST be in English. The context below may contain French labels, ignore the language of the context, always respond in English.');
     } else {
       contextParts.unshift('LANGUE: Réponds en français. Tout le contenu (campagnes, séquences, suggestions, quick_replies) doit être en français.');
     }
@@ -394,7 +394,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
 
     // Notify stream end with full content so frontend can add the message.
     // This is the ONLY socket event that adds the assistant message to the UI.
-    // We intentionally do NOT also emit 'chat:message' here — that caused
+    // We intentionally do NOT also emit 'chat:message' here · that caused
     // duplicate messages because the frontend was receiving both events.
     notifyUser(userId, 'chat:stream-end', {
       threadId,
@@ -416,7 +416,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       created_at: new Date().toISOString(),
     };
 
-    // NOTE: emitToThread('chat:message') removed here — it was sending the same
+    // NOTE: emitToThread('chat:message') removed here · it was sending the same
     // message a second time. stream-end already delivered the full content.
     // If multi-user threading is needed later, add dedup by message ID.
 
@@ -530,7 +530,7 @@ router.post('/threads/:id/create-campaign', async (req, res, next) => {
 //  CRM / Activation actions from chat
 // ═══════════════════════════════════════════════════
 
-// POST /api/chat/threads/:id/send-email — Send personal email from chat
+// POST /api/chat/threads/:id/send-email · Send personal email from chat
 router.post('/threads/:id/send-email', emailLimit, async (req, res, next) => {
   try {
     const { sendNurtureEmail } = require('../lib/email-outbound');
@@ -565,7 +565,7 @@ router.post('/threads/:id/send-email', emailLimit, async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/scan-crm — Trigger CRM health scan
+// POST /api/chat/threads/:id/scan-crm · Trigger CRM health scan
 router.post('/threads/:id/scan-crm', async (req, res, next) => {
   try {
     const { runAgent } = require('../lib/crm-agent');
@@ -576,7 +576,7 @@ router.post('/threads/:id/scan-crm', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/clean-crm — Auto-fix CRM issues
+// POST /api/chat/threads/:id/clean-crm · Auto-fix CRM issues
 router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
   try {
     const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
@@ -606,10 +606,10 @@ router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
       if (issue.type === 'format_name_caps' && issue.contacts?.length > 0) {
         safeFixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
       } else if (issue.type === 'duplicate_email' && issue.contacts?.length >= 2) {
-        // Duplicates require manual review — no auto-merge
+        // Duplicates require manual review · no auto-merge
         reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       } else if (issue.type === 'invalid_email' && issue.contacts?.length > 0) {
-        // Invalid emails require manual review — no auto-delete
+        // Invalid emails require manual review · no auto-delete
         reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       }
     }
@@ -632,7 +632,7 @@ router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/run-nurture — Run nurture via CRM agent
+// POST /api/chat/threads/:id/run-nurture · Run nurture via CRM agent
 router.post('/threads/:id/run-nurture', async (req, res, next) => {
   try {
     const { runAgent } = require('../lib/crm-agent');
@@ -643,7 +643,7 @@ router.post('/threads/:id/run-nurture', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/import-crm — Import contacts from CRM
+// POST /api/chat/threads/:id/import-crm · Import contacts from CRM
 router.post('/threads/:id/import-crm', async (req, res, next) => {
   try {
     const { importContactsForUser } = require('./crm');
@@ -663,7 +663,7 @@ router.post('/threads/:id/import-crm', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/list-clients — List clients with filter
+// POST /api/chat/threads/:id/list-clients · List clients with filter
 router.post('/threads/:id/list-clients', async (req, res, next) => {
   try {
     const { filter, days } = req.body;
@@ -694,7 +694,7 @@ router.post('/threads/:id/list-clients', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/create-trigger — Create nurture trigger from chat
+// POST /api/chat/threads/:id/create-trigger · Create nurture trigger from chat
 router.post('/threads/:id/create-trigger', async (req, res, next) => {
   try {
     const { name, triggerType, actionType, days, mode } = req.body;
@@ -731,7 +731,7 @@ router.post('/threads/:id/create-trigger', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/toggle-autopilot — Enable/disable autopilot from chat
+// POST /api/chat/threads/:id/toggle-autopilot · Enable/disable autopilot from chat
 router.post('/threads/:id/toggle-autopilot', async (req, res, next) => {
   try {
     // Une portée obligatoire : « active l'autopilot » sans préciser sur qui
@@ -753,7 +753,7 @@ router.post('/threads/:id/toggle-autopilot', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/list-reactivation-targets — List stagnant/lost deals for reactivation
+// POST /api/chat/threads/:id/list-reactivation-targets · List stagnant/lost deals for reactivation
 router.post('/threads/:id/list-reactivation-targets', async (req, res, next) => {
   try {
     const { minDays = 14, maxResults = 20 } = req.body;
@@ -784,7 +784,7 @@ router.post('/threads/:id/list-reactivation-targets', async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-// POST /api/chat/threads/:id/reactivation-stats — Get reactivation KPIs for chat
+// POST /api/chat/threads/:id/reactivation-stats · Get reactivation KPIs for chat
 router.post('/threads/:id/reactivation-stats', async (req, res, next) => {
   try {
     const { reactivationStats } = require('./crm');
@@ -822,7 +822,7 @@ router.post('/threads/:id/reactivation-stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/chat/threads/:id/send-reactivation — Generate & queue reactivation email for a specific contact
+// POST /api/chat/threads/:id/send-reactivation · Generate & queue reactivation email for a specific contact
 router.post('/threads/:id/send-reactivation', async (req, res, next) => {
   try {
     const { contactId } = req.body;

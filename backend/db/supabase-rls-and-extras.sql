@@ -1,5 +1,5 @@
 -- =============================================
--- Bakal — Supabase RLS Policies + Missing Tables
+-- Bakal, Supabase RLS Policies + Missing Tables
 -- Run AFTER supabase-schema.sql in Supabase SQL Editor
 -- =============================================
 

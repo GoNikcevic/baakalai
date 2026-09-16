@@ -1,9 +1,9 @@
 /**
- * Memory Feedback Loops — phase 2 de l'audit mémoire du 02/09.
+ * Memory Feedback Loops · phase 2 de l'audit mémoire du 02/09.
  *
  * Transforme trois gisements de résultats RÉELS en apprentissage :
  *   1. Les verdicts churn humains (churn_outcomes) recalibrent les poids
- *      sectoriels — le « future work » annoncé dans churn-scoring.js.
+ *      sectoriels · le « future work » annoncé dans churn-scoring.js.
  *   2. Les réactivations attribuées (deal mort → email causal → gagné)
  *      deviennent des patterns tactiques par tenant.
  *   3. Les signaux registres corrélés au churn effectif deviennent un
@@ -25,7 +25,7 @@ const WEIGHT_MIN = 0.7;
 const WEIGHT_MAX = 1.3;
 
 /**
- * Décision de réglage pour un secteur — fonction pure, testée unitairement.
+ * Décision de réglage pour un secteur · fonction pure, testée unitairement.
  * fpRate élevé = on crie au loup → baisser le multiplicateur ;
  * des churns ratés (FN) avec peu de faux positifs = trop timide → monter.
  */
@@ -48,7 +48,7 @@ function computeWeightNudge({ truePositives, falsePositives, falseNegatives, cur
 /**
  * Verdicts (180 j) → secteur normalisé du client → ajustement du multiplicateur.
  * Les poids sont GLOBAUX (design de la table sector_churn_weights) : le
- * recalibrage agrège donc tous les tenants — c'est un fait de marché, pas
+ * recalibrage agrège donc tous les tenants · c'est un fait de marché, pas
  * une donnée client, et les seuils d'échantillon le protègent du bruit.
  */
 async function recalibrateSectorWeights() {
@@ -92,7 +92,7 @@ async function recalibrateSectorWeights() {
     logger.info('memory-feedback',
       `Poids secteur « ${sector} » : ${current} → ${next} (TP:${counts.truePositives} FP:${counts.falsePositives} FN:${counts.falseNegatives})`);
 
-    // Trace le réglage en mémoire (fait global, sans tenant — pool partagé
+    // Trace le réglage en mémoire (fait global, sans tenant · pool partagé
     // uniquement s'il passe l'anonymiseur ; les noms de secteur sont normalisés).
     try {
       await db.memoryPatterns.replaceOrCreate({
@@ -136,7 +136,7 @@ async function learnFromReactivations(userId, tenant) {
   const sectors = [...new Set(rows.rows.map(r => r.sector).filter(Boolean))];
 
   const pattern = `Réactivation : ${n} deals gagnés après relance sur 90 j`
-    + (avgDelay != null ? ` — conversion en moyenne ${avgDelay} j après l'email` : '')
+    + (avgDelay != null ? `, conversion en moyenne ${avgDelay} j après l'email` : '')
     + (avgValue != null ? `, valeur moyenne ${avgValue.toLocaleString('fr-FR')} €` : '')
     + '. Les deals dormants de ce profil méritent une relance systématique.';
 
@@ -171,10 +171,10 @@ async function learnFromRegistrySignals() {
   const total = rows.rows.length;
   const churned = rows.rows.filter(r => r.status === 'lost' || r.confirmed_churn).length;
   const rate = churned / total;
-  if (rate < 0.5) return null; // corrélation pas (encore) probante — ne rien affirmer
+  if (rate < 0.5) return null; // corrélation pas (encore) probante, ne rien affirmer
 
   return db.memoryPatterns.replaceOrCreate({
-    pattern: `Signaux registres : ${churned}/${total} clients avec procédure ou insolvabilité détectée ont churné dans les mois suivants — traiter ces alertes en priorité absolue.`,
+    pattern: `Signaux registres : ${churned}/${total} clients avec procédure ou insolvabilité détectée ont churné dans les mois suivants, traiter ces alertes en priorité absolue.`,
     category: 'Cible',
     confidence: total >= 15 ? 'Haute' : 'Moyenne',
     source: 'registry_feedback',

@@ -23,7 +23,7 @@ const dropcontact = require('../api/dropcontact');
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
-// Domaines jetables les plus répandus — liste statique volontairement courte
+// Domaines jetables les plus répandus · liste statique volontairement courte
 // (les gros services) : un faux positif ici coûte plus cher qu'un raté.
 const DISPOSABLE_DOMAINS = new Set([
   'mailinator.com', 'yopmail.com', 'yopmail.fr', 'guerrillamail.com', '10minutemail.com',
@@ -49,7 +49,7 @@ const TYPO_DOMAINS = {
 /**
  * Resolve credentials for a specific provider. Every provider except Salesforce returns the
  * same bare decrypted string getUserKey() already returns. Salesforce's real API calls need
- * { instanceUrl, accessToken } — getUserKey only returns the decrypted access token, so
+ * { instanceUrl, accessToken } · getUserKey only returns the decrypted access token, so
  * instance_url is read separately (same query pattern used elsewhere, e.g. routes/crm.js's
  * /fields/:provider and lib/crm-token.js's resolveCrmForUser).
  */
@@ -101,7 +101,7 @@ function getAdapter(provider) {
         },
         async createPerson(token, data) {
           const created = await pipedrive.createPerson(token, data);
-          // createPerson doesn't accept phone directly — patch it in immediately so a
+          // createPerson doesn't accept phone directly · patch it in immediately so a
           // recreated (undone) contact restores as many original fields as possible.
           if (data.phone) await pipedrive.updatePerson(token, created.id, { phone: data.phone });
           return created;
@@ -133,7 +133,7 @@ function getAdapter(provider) {
           return odoo.updateContact(parseOdooCreds(token), id, data);
         },
         async deletePerson(token, id) {
-          // Archive (not a hard delete) — res.partner is frequently FK-referenced, and
+          // Archive (not a hard delete) · res.partner is frequently FK-referenced, and
           // archiving keeps the id + relations intact so undo is instant (unarchivePerson).
           return odoo.archiveContact(parseOdooCreds(token), id);
         },
@@ -194,9 +194,9 @@ function getAdapter(provider) {
     }
 
     case 'salesforce': {
-      // Real, native-ID adapter (pulled out of the notion/airtable local-DB-only bucket —
+      // Real, native-ID adapter (pulled out of the notion/airtable local-DB-only bucket · 
       // api/salesforce.js already has a real listContacts/updateContact that was never wired
-      // in here). `token` for this provider is { accessToken, instanceUrl } — see
+      // in here). `token` for this provider is { accessToken, instanceUrl } · see
       // getProviderCredentials, not a bare string like every other provider.
       const salesforce = require('../api/salesforce');
       return {
@@ -229,15 +229,15 @@ function getAdapter(provider) {
 
     case 'notion':
     case 'airtable': {
-      // No update/delete capability exists for these providers (create-only push functions —
-      // see api/notion-crm.js / api/airtable-crm.js) — scan from Baakalai's own imported
+      // No update/delete capability exists for these providers (create-only push functions · 
+      // see api/notion-crm.js / api/airtable-crm.js) · scan from Baakalai's own imported
       // opportunities rows instead of the live API, and keep updatePerson/deletePerson as
-      // documented no-ops ("manual only" — the Data Quality page's duplicates strate shows a
+      // documented no-ops ("manual only" · the Data Quality page's duplicates strate shows a
       // manual checklist instead of attempting a remote write for these two).
       return {
         async listPersons(_token, userId) {
           const opps = await db.opportunities.listByUser(userId, 500);
-          // listByUser returns every local opportunity regardless of source — scope strictly to
+          // listByUser returns every local opportunity regardless of source · scope strictly to
           // contacts actually from this provider. Contacts with no known CRM origin at all get
           // their own separate "__no_crm__" bucket instead (see below), not folded in here.
           return opps.filter(o => o.crm_provider === provider);
@@ -254,14 +254,14 @@ function getAdapter(provider) {
             raw,
           };
         },
-        async updatePerson() { /* no external CRM update for these — scan only */ },
-        async deletePerson() { /* no external CRM delete for these — scan only */ },
+        async updatePerson() { /* no external CRM update for these, scan only */ },
+        async deletePerson() { /* no external CRM delete for these, scan only */ },
       };
     }
 
     case '__no_crm__': {
       // Pseudo-provider (not a real integration, never in CONNECTABLE_PROVIDERS) for contacts
-      // with no known CRM origin — manually created, or imported before owner-mapping existed.
+      // with no known CRM origin · manually created, or imported before owner-mapping existed.
       // Always scanned regardless of which real CRMs are connected, same local-DB-only,
       // no-remote-write shape as Notion/Airtable.
       return {
@@ -281,8 +281,8 @@ function getAdapter(provider) {
             raw,
           };
         },
-        async updatePerson() { /* no CRM to update — local contact only */ },
-        async deletePerson() { /* no CRM to delete from — local contact only */ },
+        async updatePerson() { /* no CRM to update, local contact only */ },
+        async deletePerson() { /* no CRM to delete from, local contact only */ },
       };
     }
 
@@ -310,7 +310,7 @@ function isValidEmail(email) {
 
 /**
  * Given the full-snapshot contacts array for one duplicate group (from scanCRM's
- * duplicate_email/duplicate_name issues), compare ALL fields — not just name — and surface
+ * duplicate_email/duplicate_name issues), compare ALL fields · not just name · and surface
  * exactly which contact had which value, plus a heuristic reconciled record. This is what the
  * merge-review UI reads before a user confirms a merge, so nothing is silently dropped.
  */
@@ -341,7 +341,7 @@ function computeMergeDiff(contacts) {
 /**
  * Full CRM health scan.
  * @param {string} userId
- * @param {string} provider — 'pipedrive', 'hubspot', 'salesforce'
+ * @param {string} provider · 'pipedrive', 'hubspot', 'salesforce'
  * @returns {{ score, totalContacts, issues[], summary }}
  */
 async function scanCRM(userId, provider) {
@@ -363,7 +363,7 @@ async function scanCRM(userId, provider) {
     if (!p.email) continue;
     const key = p.email.toLowerCase();
     if (!emailGroups.has(key)) emailGroups.set(key, []);
-    // Full snapshot (not just id/name/email/company) — this is what confirm-merge's field
+    // Full snapshot (not just id/name/email/company) · this is what confirm-merge's field
     // diff/reconciliation reads, persisted as-is into crm_cleaning_reports.issues so the
     // merge-review UI never needs an extra live re-fetch.
     emailGroups.get(key).push({ id: p.id, name: p.name, email: p.email, phone: p.phone, title: p.title, company: p.company, updatedAt: p.updatedAt });
@@ -453,7 +453,7 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // 4b. Invalid email domain (MX check) — only for emails that pass regex
+  // 4b. Invalid email domain (MX check) · only for emails that pass regex
   const validFormatEmails = persons.filter(p => p.email && isValidEmail(p.email));
   // Group by domain to avoid redundant DNS lookups, limit to first 100 contacts
   const domainGroups = new Map();
@@ -480,7 +480,7 @@ async function scanCRM(userId, provider) {
   for (const [domain, contacts] of domainGroups) {
     const mx = mxCache.get(domain);
     if (mx === null) {
-      // No MX records — domain cannot receive email
+      // No MX records · domain cannot receive email
       for (const p of contacts) {
         invalidDomainContacts.push({ id: p.id, name: p.name, email: p.email, domain });
       }
@@ -498,7 +498,7 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // 4c. Disposable email domains — a throwaway address is never a real buyer contact.
+  // 4c. Disposable email domains · a throwaway address is never a real buyer contact.
   const disposable = validFormatEmails.filter(p => DISPOSABLE_DOMAINS.has(p.email.split('@')[1].toLowerCase()));
   if (disposable.length > 0) {
     issues.push({
@@ -510,7 +510,7 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // 4d. Typo'd provider domains (gmial.com…) — fixable in one click, so worth
+  // 4d. Typo'd provider domains (gmial.com…) · fixable in one click, so worth
   // its own issue type with the corrected address precomputed.
   const typos = [];
   for (const p of validFormatEmails) {
@@ -529,7 +529,7 @@ async function scanCRM(userId, provider) {
   }
 
   // 4e. Emails ayant bouncé à l'envoi (tamponnés par email-outbound sur rejet 5xx
-  // définitif) — le signal le plus fiable : l'adresse n'existe plus, la personne
+  // définitif) · le signal le plus fiable : l'adresse n'existe plus, la personne
   // a probablement quitté la société.
   const bounced = [];
   try {
@@ -545,7 +545,7 @@ async function scanCRM(userId, provider) {
         bounced.push({ id: r.id, name: r.name, email: r.email, bouncedAt: r.email_bounced_at, reason: r.email_bounce_reason });
       }
     }
-  } catch { /* colonne absente (migration 088 pas encore appliquée) — check silencieux */ }
+  } catch { /* colonne absente (migration 088 pas encore appliquée), check silencieux */ }
   if (bounced.length > 0) {
     issues.push({
       type: 'email_bounced',
@@ -560,7 +560,7 @@ async function scanCRM(userId, provider) {
   const invalidEmails = [...invalidFormatEmails, ...invalidDomainContacts];
 
   // 5. Inactive contacts (no genuine activity in 6+ months)
-  // lastActivityAt (vraie activité CRM) en priorité — updatedAt est réécrit par
+  // lastActivityAt (vraie activité CRM) en priorité · updatedAt est réécrit par
   // les synchros et surestime l'activité ; on ne le garde qu'en repli faute de mieux.
   const now = Date.now();
   const inactive = persons.filter(p => {
@@ -578,7 +578,7 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // 6. Format issues — names in ALL CAPS
+  // 6. Format issues · names in ALL CAPS
   const allCaps = persons.filter(p => p.name && p.name === p.name.toUpperCase() && p.name.length > 2);
   if (allCaps.length > 0) {
     issues.push({
@@ -594,7 +594,7 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // Compute health score — proportional to contact base size
+  // Compute health score · proportional to contact base size
   const dupEmailCount = issues.filter(i => i.type === 'duplicate_email').reduce((s, i) => s + i.contacts.length, 0);
   const dupNameCount = issues.filter(i => i.type === 'duplicate_name').reduce((s, i) => s + i.contacts.length, 0);
 
@@ -610,7 +610,7 @@ async function scanCRM(userId, provider) {
 
   // Le score est la somme exacte des facteurs affichés (100 + Σ poids négatifs) :
   // chaque poids étant arrondi individuellement, il peut dévier de ±1-2 pts vs
-  // l'ancien arrondi global — accepté pour que le détail colle au total à l'UI.
+  // l'ancien arrondi global · accepté pour que le détail colle au total à l'UI.
   const scoreFactors = computeScoreFactors(summary, persons.length);
   const score = Math.max(0, 100 + scoreFactors.reduce((s, f) => s + f.weight, 0));
 
@@ -623,7 +623,7 @@ async function scanCRM(userId, provider) {
  * catégorie déduit jusqu'à son poids max, proportionnellement à la part de
  * contacts affectés, avec un multiplicateur de sévérité (ex. 20 %+ d'emails
  * invalides = déduction pleine de 20 pts). Recalculable depuis un rapport
- * stocké (summary + total_contacts) — rien à migrer.
+ * stocké (summary + total_contacts) · rien à migrer.
  */
 function computeScoreFactors(summary, totalContacts) {
   const total = totalContacts || 1;
@@ -771,7 +771,7 @@ async function applyFixes(userId, provider, fixes) {
 }
 
 /**
- * Scan hebdomadaire persistant — appelé par le job digest du lundi pour que le
+ * Scan hebdomadaire persistant · appelé par le job digest du lundi pour que le
  * score data quality ait un historique même si personne ne visite la page
  * (le GET de la page se contente du cache 24h). Force un scan frais par
  * provider connecté (+ le bucket hors-CRM), persiste chaque rapport, n'échoue

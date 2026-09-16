@@ -1,7 +1,7 @@
 /**
- * Data Quality — Deal & Client quality checks (Strate 2 / Strate 3)
+ * Data Quality · Deal & Client quality checks (Strate 2 / Strate 3)
  *
- * Rule-based, read-only, no AI calls — same convention as lib/reactivation-queue.js: logic
+ * Rule-based, read-only, no AI calls · same convention as lib/reactivation-queue.js: logic
  * lives here, routes/data-quality.js just calls it. Returns the same
  * { type, severity, contacts[], count, suggestedAction } issue shape used by
  * crm-cleaning-agent.js's scanCRM, so the frontend renders both with one card component.
@@ -14,10 +14,10 @@ const CONNECTABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'no
 /**
  * Deal-data quality: surfaces missing/problematic fields that degrade "Deals à relancer" and
  * churn scoring. Every issue resolves to 'review' (navigate to the client) or
- * 'configure_mapping' (deep-link /settings) — none is auto-fixable. In particular,
+ * 'configure_mapping' (deep-link /settings) · none is auto-fixable. In particular,
  * missing_won_lost_date is NOT backfilled from `updated_at`: that column is reset by a DB
  * trigger on every internal write (including churn scoring's own writes), which is exactly why
- * last_activity_at/won_date/lost_date exist as separate, trigger-immune signals — inferring a
+ * last_activity_at/won_date/lost_date exist as separate, trigger-immune signals · inferring a
  * close date from it would silently produce a wrong one.
  */
 async function computeDealQualityIssues(userId) {
@@ -120,7 +120,7 @@ async function computeDealQualityIssues(userId) {
 
 /**
  * Client/upsell-data quality: surfaces missing fields that block lib/agents/upsell-detector.js
- * from ever considering a won client — chiefly, zero product-line assignments (upsell-detector
+ * from ever considering a won client · chiefly, zero product-line assignments (upsell-detector
  * compares assigned vs. available product lines to find cross-sell gaps; with none assigned, a
  * client can never surface, whether or not there's real upsell potential).
  */
@@ -131,7 +131,7 @@ async function computeClientQualityIssues(userId) {
     [userId]
   );
   if (parseInt(plCountResult.rows[0].count, 10) === 0) {
-    // Nothing configured yet — don't flag every single client, guide the user to set up
+    // Nothing configured yet · don't flag every single client, guide the user to set up
     // product lines first (ProductLinesSettings, already in Settings).
     return [{
       type: 'no_product_lines_configured',

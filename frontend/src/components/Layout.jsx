@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Main Layout (Sidebar + Content + Mobile Nav)
+   BAKAL · Main Layout (Sidebar + Content + Mobile Nav)
    React equivalent of the vanilla app's sidebar navigation and page shell.
    =============================================================================== */
 
@@ -24,7 +24,7 @@ const NAV_ITEMS = [
   { i18nKey: 'nav.assistant',           to: '/chat',                icon: 'chat' },
   { i18nKey: 'nav.dashboard',           to: '/dashboard',           icon: 'dashboard',  end: true },
   // Ordre voulu : Prospection > Deals > Clients > Activation > CRM.
-  // Prospection ouvre la liste parce qu'elle est la porte d'entrée — mais elle
+  // Prospection ouvre la liste parce qu'elle est la porte d'entrée · mais elle
   // reste hors des sections CRM : campagnes froides et deals CRM sont deux
   // populations disjointes (cf. backend/lib/crm-scope.js), deux moteurs
   // distincts. Deals et Clients suivent, ce sont les deux populations du CRM ;
@@ -59,7 +59,7 @@ const NAV_ITEMS = [
 
 const NAV_SECTIONS_STORAGE_KEY = 'nav_open_sections';
 
-// '/clients' must not match '/clients-to-upsell' — exact segment boundary only.
+// '/clients' must not match '/clients-to-upsell' · exact segment boundary only.
 function routeMatches(pathname, to) {
   return pathname === to || pathname.startsWith(to + '/');
 }
@@ -91,7 +91,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Collapsible nav sections — all closed by default, state persisted per section.
+  // Collapsible nav sections · all closed by default, state persisted per section.
   const [openSections, setOpenSections] = useState(() => {
     const defaults = { deals: false, clients: false, crm: false };
     try {
@@ -142,7 +142,7 @@ export default function Layout() {
     }
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Action counters for the nav badges — refreshed on navigation (throttled)
+  // Action counters for the nav badges · refreshed on navigation (throttled)
   // so approving emails or postponing a deal updates the numbers, plus a slow
   // interval for long-lived tabs. The endpoint is cheap (DB-only) by contract.
   const [navCounts, setNavCounts] = useState({});
@@ -228,7 +228,7 @@ export default function Layout() {
             const sectionCount = children.reduce((sum, c) => sum + countFor(c), 0);
             const showHeaderBadge = !isOpen && sectionCount > 0;
 
-            // Collapsed sidebar: no room for headers — surface the children as icons.
+            // Collapsed sidebar: no room for headers · surface the children as icons.
             if (sidebarCollapsed) {
               return children.map(child => (
                 <NavLink
@@ -303,7 +303,7 @@ export default function Layout() {
           </svg>
         </button>
 
-        {/* Sidebar bottom — user section */}
+        {/* Sidebar bottom · user section */}
         {user && (
           <div className="sidebar-user-section">
             <div className="sidebar-user-avatar">{userInitial}</div>
@@ -337,7 +337,7 @@ export default function Layout() {
 
       {/* ═══ Main content area ═══ */}
       <main className="main" style={sidebarCollapsed ? { marginLeft: 60 } : undefined}>
-        {/* Topbar — notification bell + nudge vers l'Assistant, empilés à droite */}
+        {/* Topbar · notification bell + nudge vers l'Assistant, empilés à droite */}
         <div
           className="main-topbar"
           style={{

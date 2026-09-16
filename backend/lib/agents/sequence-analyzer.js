@@ -6,7 +6,7 @@
  * - Winning sequence patterns: which step chains lead to replies
  * - Optimal sequence length by sector
  *
- * Pure SQL analytics — no Claude API calls.
+ * Pure SQL analytics · no Claude API calls.
  */
 
 const db = require('../../db');
@@ -16,7 +16,7 @@ async function run(userId) {
   const report = { insights: 0, recommendations: [], errors: [] };
 
   // Tenant des patterns (audit 02/09) : l'équipe si l'utilisateur en a une,
-  // sinon l'utilisateur — jamais les deux (règle DAO, migration 089).
+  // sinon l'utilisateur · jamais les deux (règle DAO, migration 089).
   // Résolu une seule fois par run, réutilisé pour chaque écriture.
   let tenant = { userId };
   try {
@@ -83,7 +83,7 @@ async function run(userId) {
 
     if (worstDropoff && worstDropoffRate > 0.5) {
       const pct = Math.round(worstDropoffRate * 100);
-      const insight = `Drop-off critique : ${pct}% des prospects décrochent entre le step ${worstDropoff.prevStep} et ${worstDropoff.step} — revoir le contenu ou le timing de ce step`;
+      const insight = `Drop-off critique : ${pct}% des prospects décrochent entre le step ${worstDropoff.prevStep} et ${worstDropoff.step}, revoir le contenu ou le timing de ce step`;
       report.recommendations.push(insight);
 
       await db.memoryPatterns.replaceOrCreate({
@@ -112,7 +112,7 @@ async function run(userId) {
       const totalReplies = replyByStep.rows.reduce((a, r) => a + parseInt(r.replies), 0);
       const pct = Math.round((parseInt(bestStep.replies) / totalReplies) * 100);
 
-      const insight = `Le step ${bestStep.sequence_step} génère le plus de réponses (${pct}% des replies) — concentrer l'effort de personnalisation sur ce step`;
+      const insight = `Le step ${bestStep.sequence_step} génère le plus de réponses (${pct}% des replies), concentrer l'effort de personnalisation sur ce step`;
       report.recommendations.push(insight);
 
       await db.memoryPatterns.replaceOrCreate({

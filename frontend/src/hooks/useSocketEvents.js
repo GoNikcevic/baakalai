@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — useSocketEvents Hook
+   BAKAL · useSocketEvents Hook
    Listens to Socket.io events and updates app state + shows notifications.
    Use in Layout or any top-level component to wire real-time updates.
    =============================================================================== */

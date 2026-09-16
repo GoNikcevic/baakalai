@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Activation Page (wrapper)
+   BAKAL · Activation Page (wrapper)
    Merges Nurture (activation triggers/emails) + Signals into one nav entry.
    =============================================================================== */
 

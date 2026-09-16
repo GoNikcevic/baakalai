@@ -107,12 +107,12 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
 async function getDeals(instanceUrl, accessToken, limit = 10000) {
   // LastActivityDate / LastModifiedDate : sans elles, la récence d'un deal est
   // inconnue et rien ne peut être signalé comme dormant. Voir lib/crm-activity-date.js.
-  // IsWon/IsClosed are native Opportunity fields (true source of truth for won/lost — no need
+  // IsWon/IsClosed are native Opportunity fields (true source of truth for won/lost · no need
   // to cross-reference OpportunityStage). The OpportunityContactRoles subquery resolves the
   // primary contact, since Opportunity has no direct contact lookup (only AccountId).
   // Paginé via nextRecordsUrl (comme listContacts) : le plafond de 100 sans
   // pagination laissait les opportunités anciennes des vrais orgs sans mapping
-  // won/lost — donc invisibles comme clients.
+  // won/lost · donc invisibles comme clients.
   const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed, AccountId,
     (SELECT ContactId FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
     FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
@@ -140,10 +140,10 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
   }
 
   // Fallback contact role manquant (décision Goran 15/09) : beaucoup d'orgs ne
-  // remplissent pas les OpportunityContactRoles — sans eux, personId reste null
+  // remplissent pas les OpportunityContactRoles · sans eux, personId reste null
   // et le deal n'est jamais rattaché (donc jamais mappé won/lost côté app). Si
   // le compte de l'opp n'a qu'UN seul contact emailable, on rattache le deal à
-  // ce contact : zéro ambiguïté. À 2 contacts ou plus, on s'abstient — on ne
+  // ce contact : zéro ambiguïté. À 2 contacts ou plus, on s'abstient · on ne
   // devine jamais qui est le bon interlocuteur. Best-effort : ne fait jamais
   // échouer getDeals.
   const orphans = deals.filter(d => !d.personId && d.accountId);
@@ -174,7 +174,7 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
 }
 
 // Diagnostic public (lead magnet) : lecture unique et anonyme des
-// opportunités via OAuth central — même forme de retour que
+// opportunités via OAuth central · même forme de retour que
 // pipedrive/hubspot.listDealsForDiagnostic (routes/public-diagnostic.js).
 async function listDealsForDiagnostic({ accessToken, instanceUrl }, { maxDeals = 2000 } = {}) {
   const soql = `SELECT Name, Amount, CreatedDate, LastActivityDate, LastModifiedDate, IsClosed, IsWon, Account.Name FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${maxDeals}`;
@@ -243,7 +243,7 @@ async function updateContact(instanceUrl, accessToken, contactId, data) {
   // (name, resolvedFields de la fusion Data Quality). On ne touche JAMAIS à
   // Account : Salesforce rejette un {Account:{Name}} imbriqué (Name n'est pas un
   // External ID), et l'appartenance à un compte est portée par AccountId, pas le
-  // nom — d'où l'INVALID_FIELD qui faisait échouer chaque fusion.
+  // nom · d'où l'INVALID_FIELD qui faisait échouer chaque fusion.
   const body = {};
   if (data.firstName !== undefined || data.lastName !== undefined) {
     if (data.firstName !== undefined) body.FirstName = data.firstName;
@@ -268,7 +268,7 @@ async function updateContact(instanceUrl, accessToken, contactId, data) {
 
 // ── Delete Contact ──
 // Hard delete via REST (Salesforce retains it in the Recycle Bin ~15 days server-side, but from
-// our API's perspective it's gone). Undo recreates a NEW Contact via createContact — it gets a
+// our API's perspective it's gone). Undo recreates a NEW Contact via createContact · it gets a
 // new Salesforce Id, a known limitation of this approach vs. the Recycle Bin's `undelete`
 // composite API, which could restore the exact same Id within the 15-day window if ever needed.
 async function deleteContact(instanceUrl, accessToken, contactId) {
@@ -299,7 +299,7 @@ async function upsertContact(instanceUrl, accessToken, data) {
 
 // ── Existence checks ──
 // 404 = supprimé côté Salesforce (corbeille comprise, du point de vue REST) ;
-// toute autre erreur remonte — un token expiré ne doit pas passer pour
+// toute autre erreur remonte · un token expiré ne doit pas passer pour
 // « le record n'existe plus » et déclencher une recréation.
 
 async function contactExists(instanceUrl, accessToken, contactId) {
@@ -403,7 +403,7 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
     }
   };
   mapRecords(result.records);
-  // queryMore pagination — nextRecordsUrl is a full path, fetch directly
+  // queryMore pagination · nextRecordsUrl is a full path, fetch directly
   while (!result.done && result.nextRecordsUrl && all.length < limit) {
     const url = `${instanceUrl}${result.nextRecordsUrl}`;
     const res = await fetch(url, {

@@ -92,7 +92,7 @@ router.post('/generate-sequence', async (req, res, next) => {
       return res.status(400).json({ error: 'Au moins sector ou position requis' });
     }
 
-    // Mémoire cross-campagne dans le prompt de génération — le masterPrompt
+    // Mémoire cross-campagne dans le prompt de génération · le masterPrompt
     // demandait au modèle de citer la mémoire sans jamais la lui donner.
     try {
       params.memory = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
@@ -202,12 +202,12 @@ router.post('/analyze', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/regenerate — bounded memory loading
+// POST /api/ai/regenerate · bounded memory loading
 router.post('/regenerate', async (req, res, next) => {
   try {
     const { campaignId, diagnostic, originalMessages, clientParams, regenerationInstructions } = req.body;
 
-    // Bounded: only load relevant patterns (limit 30), scoped to the tenant —
+    // Bounded: only load relevant patterns (limit 30), scoped to the tenant · 
     // sans userId, le DAO ne renverrait plus que le pool global partagé.
     const memory = await db.memoryPatterns.list({ limit: 30, userId: req.user.id });
 
@@ -251,7 +251,7 @@ router.post('/run-refinement', async (req, res, next) => {
 
     const [sequence, memory] = await Promise.all([
       db.touchpoints.listByCampaign(campaignId),
-      // Scopé au tenant — sans userId, le DAO ne renvoie que le pool global.
+      // Scopé au tenant · sans userId, le DAO ne renvoie que le pool global.
       db.memoryPatterns.list({ limit: 30, userId: req.user.id }),
     ]);
 
@@ -338,7 +338,7 @@ router.post('/generate-variables', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/consolidate-memory — bounded loading with JOINs
+// POST /api/ai/consolidate-memory · bounded loading with JOINs
 router.post('/consolidate-memory', async (req, res, next) => {
   try {
     // Use JOIN to load diagnostics with campaign info in a single query
@@ -350,7 +350,7 @@ router.post('/consolidate-memory', async (req, res, next) => {
       : await claude.consolidateMemory(allDiagnostics, existingMemory);
 
     // Tenant des patterns : les diagnostics consolidés ici sont ceux de
-    // l'appelant — le pattern appartient à son équipe si elle existe, sinon à
+    // l'appelant · le pattern appartient à son équipe si elle existe, sinon à
     // lui (jamais les deux, règle DAO migration 089). Avant, ces créations
     // étaient sans tenant : invisibles pour lui, curables par personne.
     let tenant = { userId: req.user.id };
@@ -400,7 +400,7 @@ router.post('/consolidate-memory', async (req, res, next) => {
 });
 
 /**
- * Contrôle de propriété pour la curation mémoire (audit 02/09 — avant ce
+ * Contrôle de propriété pour la curation mémoire (audit 02/09 · avant ce
  * check, n'importe quel utilisateur authentifié pouvait modifier/écarter les
  * patterns de tous les tenants). Autorisé si :
  * - le pattern appartient à l'utilisateur (user_id), ou
@@ -421,7 +421,7 @@ async function canCuratePattern(pattern, user) {
   return false;
 }
 
-// POST /api/ai/memory/:id/toggle-apply — toggle pattern applied status
+// POST /api/ai/memory/:id/toggle-apply · toggle pattern applied status
 router.post('/memory/:id/toggle-apply', async (req, res, next) => {
   try {
     const pattern = await db.memoryPatterns.get(req.params.id);
@@ -438,7 +438,7 @@ router.post('/memory/:id/toggle-apply', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/ai/memory/:id/toggle-share — toggle pattern shared (cross-team) status
+// POST /api/ai/memory/:id/toggle-share · toggle pattern shared (cross-team) status
 // Admin-only: publishing a pattern to the global pool exposes it to every tenant,
 // so this is a curation action on shared state, not a per-user preference.
 router.post('/memory/:id/toggle-share', requireAdmin, async (req, res, next) => {
@@ -452,7 +452,7 @@ router.post('/memory/:id/toggle-share', requireAdmin, async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-// GET /api/ai/memory/:id/story — pattern story: origin, usage, results
+// GET /api/ai/memory/:id/story · pattern story: origin, usage, results
 router.get('/memory/:id/story', async (req, res, next) => {
   try {
     const pattern = await db.memoryPatterns.get(req.params.id);
@@ -519,7 +519,7 @@ router.get('/memory/:id/story', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory/recommendations — proactive pattern recommendations for a context
+// GET /api/ai/memory/recommendations · proactive pattern recommendations for a context
 router.get('/memory/recommendations', async (req, res, next) => {
   try {
     const { sector, triggerType } = req.query;
@@ -550,7 +550,7 @@ router.get('/memory/recommendations', async (req, res, next) => {
   }
 });
 
-// DELETE /api/ai/memory/:id — soft-delete (dismiss) a memory pattern
+// DELETE /api/ai/memory/:id · soft-delete (dismiss) a memory pattern
 // Pattern won't be recreated by agents for 7 days
 router.delete('/memory/:id', async (req, res, next) => {
   try {
@@ -569,13 +569,13 @@ router.delete('/memory/:id', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory — paginated
+// GET /api/ai/memory · paginated
 router.get('/memory', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
     // Tenant via userId : le filtre DAO couvre les patterns de l'utilisateur,
-    // ceux de ses équipes (sous-requête team_members) et le pool global — plus
+    // ceux de ses équipes (sous-requête team_members) et le pool global · plus
     // besoin de résoudre teamId ici. count() reçoit le MÊME filtre pour que le
     // total colle au tableau affiché (avant, il comptait tous les tenants).
     const [patterns, count] = await Promise.all([
@@ -588,9 +588,9 @@ router.get('/memory', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/memory/playbook — playbook commercial généré À LA DEMANDE depuis
+// POST /api/ai/memory/playbook · playbook commercial généré À LA DEMANDE depuis
 // la mémoire du tenant (jamais en cron : décision Goran 03/09, coût tokens).
-// Sources : patterns du tenant (pas le pool mutualisé — c'est SON playbook),
+// Sources : patterns du tenant (pas le pool mutualisé · c'est SON playbook),
 // agrégats CRM (mêmes requêtes que le chat analytique), profil entreprise.
 router.post('/memory/playbook', async (req, res, next) => {
   try {
@@ -642,7 +642,7 @@ ${maturity === 'young' ? `- IMPORTANT : la mémoire de ce compte est jeune (${co
 - Langue : ${isEN ? 'anglais' : 'français'}.
 
 Structure imposée :
-# ${isEN ? 'Sales playbook' : 'Playbook commercial'}${company ? ` — ${company}` : ''}
+# ${isEN ? 'Sales playbook' : 'Playbook commercial'}${company ? `, ${company}` : ''}
 ${maturity === 'young' ? `> ${isEN ? 'Note on maturity (young memory)' : 'Avertissement maturité (mémoire jeune)'}` : ''}
 ## ${isEN ? '1. What works for you' : '1. Ce qui marche chez vous'}
 ## ${isEN ? '2. Your reference numbers' : '2. Vos chiffres de référence'}
@@ -674,7 +674,7 @@ ${JSON.stringify(context)}`;
   }
 });
 
-// POST /api/ai/memory/labels — résout des pattern_ids en libellés pour le bandeau
+// POST /api/ai/memory/labels · résout des pattern_ids en libellés pour le bandeau
 // « patterns appliqués » des brouillons. Scopé : ne renvoie que les patterns
 // visibles par l'appelant (les siens, ceux de ses équipes, ou le pool partagé).
 router.post('/memory/labels', async (req, res, next) => {
@@ -696,7 +696,7 @@ router.post('/memory/labels', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory/effectiveness — pattern ROI based on nurture email outcomes
+// GET /api/ai/memory/effectiveness · pattern ROI based on nurture email outcomes
 router.get('/memory/effectiveness', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -769,7 +769,7 @@ router.post('/deploy-to-lemlist', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/ab-select-winner — manually select A/B test winner
+// POST /api/ai/ab-select-winner · manually select A/B test winner
 router.post('/ab-select-winner', async (req, res, next) => {
   try {
     const { campaignId, winner } = req.body;
@@ -791,7 +791,7 @@ router.post('/ab-select-winner', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/ab-status/:campaignId — get current A/B test status
+// GET /api/ai/ab-status/:campaignId · get current A/B test status
 router.get('/ab-status/:campaignId', async (req, res, next) => {
   try {
     const campaignId = req.params.campaignId;
@@ -866,7 +866,7 @@ router.post('/score-leads', async (req, res, next) => {
       try { campaignMap[cid] = await db.campaigns.get(cid); } catch {}
     }
 
-    // Match sectoriel ICP normalisé (cache DB — coûteux uniquement au 1er passage)
+    // Match sectoriel ICP normalisé (cache DB · coûteux uniquement au 1er passage)
     const sectorCtx = await buildSectorContext(profile, opps).catch(() => null);
     const scored = scoreOpportunities(opps, profile, campaignMap, sectorCtx);
 
@@ -882,7 +882,7 @@ router.post('/score-leads', async (req, res, next) => {
 });
 
 // POST /api/ai/export-scores-crm
-// { dryRun: true } calcule tout et n'écrit rien — à utiliser pour vérifier ce
+// { dryRun: true } calcule tout et n'écrit rien · à utiliser pour vérifier ce
 // qui partirait avant d'écrire dans le CRM d'un client. Une écriture sortante
 // ne s'annule pas d'un clic.
 router.post('/export-scores-crm', async (req, res, next) => {
@@ -977,7 +977,7 @@ router.post('/rollback/:versionId', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/prospect-sources — list configured outreach tools with search capability
+// GET /api/ai/prospect-sources · list configured outreach tools with search capability
 router.get('/prospect-sources', async (req, res, next) => {
   try {
     const { listUserSources } = require('../lib/prospect-sources');
@@ -988,7 +988,7 @@ router.get('/prospect-sources', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/reveal-options — which email-reveal paths this user can use.
+// GET /api/ai/reveal-options · which email-reveal paths this user can use.
 // 'lemlist' = ses propres crédits ; 'baakal' = clé centrale DropContact,
 // option payante opt-in (le prix affiché ici est celui que la route
 // reveal-emails exigera de confirmer avant toute consommation).
@@ -1020,7 +1020,7 @@ router.get('/reveal-options', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/ab-categories — return the closed set of A/B test categories
+// GET /api/ai/ab-categories · return the closed set of A/B test categories
 router.get('/ab-categories', async (req, res, next) => {
   try {
     const { AB_CATEGORIES } = require('../lib/ab-memory');
@@ -1030,7 +1030,7 @@ router.get('/ab-categories', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/ab-recommendations — get recommendations for a segment
+// POST /api/ai/ab-recommendations · get recommendations for a segment
 // Body: { sectors: [], targets: [], size: '' }
 router.post('/ab-recommendations', async (req, res, next) => {
   try {
@@ -1043,7 +1043,7 @@ router.post('/ab-recommendations', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/ab-record-winner — record the winner of an A/B test
+// POST /api/ai/ab-record-winner · record the winner of an A/B test
 // Body: { campaignId, winner: 'A'|'B' }
 router.post('/ab-record-winner', async (req, res, next) => {
   try {
@@ -1116,7 +1116,7 @@ router.post('/ab-record-winner', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/lemlist-credits — return user's Lemlist credit balance
+// GET /api/ai/lemlist-credits · return user's Lemlist credit balance
 router.get('/lemlist-credits', async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
@@ -1135,7 +1135,7 @@ router.get('/lemlist-credits', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/lemlist-senders — return available senders (email + LinkedIn accounts)
+// GET /api/ai/lemlist-senders · return available senders (email + LinkedIn accounts)
 router.get('/lemlist-senders', async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
@@ -1145,13 +1145,13 @@ router.get('/lemlist-senders', async (req, res, next) => {
 
     const raw = await getTeamSenders(apiKey);
 
-    // Normalize the response — Lemlist returns team members with their sender info
+    // Normalize the response · Lemlist returns team members with their sender info
     const senders = (Array.isArray(raw) ? raw : [raw]).map(member => ({
       id: member._id || member.id,
       name: member.name || member.firstName || '',
       email: member.email || '',
       picture: member.picture || null,
-      // Connected channels vary by response shape — extract what's available
+      // Connected channels vary by response shape · extract what's available
       linkedinConnected: !!(member.linkedin || member.linkedinConnected || member.channels?.linkedin),
       calendarConnected: !!(member.calendar || member.calendarConnected),
     })).filter(s => s.id && s.email);
@@ -1174,7 +1174,7 @@ function pruneOldRevealJobs() {
   }
 }
 
-// Reveal via la clé centrale DropContact de baakalai — option payante, opt-in.
+// Reveal via la clé centrale DropContact de baakalai · option payante, opt-in.
 // Jamais de consommation sans confirmCharge: true dans le body : c'est le
 // verrou serveur derrière la modal d'avertissement du frontend.
 async function startCentralReveal(req, res, leads, { confirmCharge, campaignId }) {
@@ -1270,7 +1270,7 @@ async function startCentralReveal(req, res, leads, { confirmCharge, campaignId }
 
 // POST /api/ai/reveal-emails
 // Body: { source, leads: [{id, firstName, lastName, company, linkedinUrl}],
-//         confirmCharge?, campaignId? } — confirmCharge requis pour source 'baakal'
+//         confirmCharge?, campaignId? } · confirmCharge requis pour source 'baakal'
 router.post('/reveal-emails', async (req, res, next) => {
   try {
     pruneOldRevealJobs();
@@ -1374,7 +1374,7 @@ router.post('/reveal-emails', async (req, res, next) => {
 });
 
 // Sonde un job DropContact central. À la complétion : résultats figés sur le
-// job, puis enregistrement de l'usage UNE seule fois — facturé uniquement sur
+// job, puis enregistrement de l'usage UNE seule fois · facturé uniquement sur
 // les emails trouvés ET vérifiés (les not_found et les risky sont gratuits).
 async function pollCentralReveal(req, res, job) {
   const { config } = require('../config');
@@ -1447,7 +1447,7 @@ async function pollCentralReveal(req, res, job) {
   });
 }
 
-// GET /api/ai/reveal-emails/:jobId — poll enrichment results
+// GET /api/ai/reveal-emails/:jobId · poll enrichment results
 router.get('/reveal-emails/:jobId', async (req, res, next) => {
   try {
     const job = _revealJobs.get(req.params.jobId);
@@ -1507,7 +1507,7 @@ router.get('/reveal-emails/:jobId', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/search-prospects — search contacts via chosen provider (default: apollo)
+// POST /api/ai/search-prospects · search contacts via chosen provider (default: apollo)
 router.post('/search-prospects', async (req, res, next) => {
   try {
     const { searchProspects, listSearchableSources } = require('../lib/prospect-sources');
@@ -1525,7 +1525,7 @@ router.post('/search-prospects', async (req, res, next) => {
       }
       if (searchable.length > 1) {
         return res.status(400).json({
-          error: 'Plusieurs outils disponibles — précise lequel utiliser.',
+          error: 'Plusieurs outils disponibles, précise lequel utiliser.',
           code: 'MULTIPLE_SOURCES',
           sources: searchable.map(s => ({ provider: s.provider, name: s.name })),
         });
@@ -1547,7 +1547,7 @@ router.post('/search-prospects', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/web-search-prospects — deep web search for contacts at specific companies
+// POST /api/ai/web-search-prospects · deep web search for contacts at specific companies
 router.post('/web-search-prospects', async (req, res, next) => {
   try {
     const { companies, titles, location, limit } = req.body;
@@ -1577,7 +1577,7 @@ router.post('/web-search-prospects', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/enrich-contact — enrich a single contact by email
+// POST /api/ai/enrich-contact · enrich a single contact by email
 router.post('/enrich-contact', async (req, res, next) => {
   try {
     const { email } = req.body;
@@ -1590,7 +1590,7 @@ router.post('/enrich-contact', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/enrich-campaign — enrich all prospects with personalized icebreakers
+// POST /api/ai/enrich-campaign · enrich all prospects with personalized icebreakers
 router.post('/enrich-campaign', async (req, res, next) => {
   try {
     const { campaignId } = req.body;
@@ -1614,7 +1614,7 @@ router.post('/enrich-campaign', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/weekly-report/preview — generate and return the report HTML without sending
+// GET /api/ai/weekly-report/preview · generate and return the report HTML without sending
 router.get('/weekly-report/preview', async (req, res, next) => {
   try {
     const { buildUserReport } = require('../orchestrator/jobs/weekly-report');
@@ -1627,7 +1627,7 @@ router.get('/weekly-report/preview', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/weekly-report/send — manually trigger for the current user
+// POST /api/ai/weekly-report/send · manually trigger for the current user
 router.post('/weekly-report/send', async (req, res, next) => {
   try {
     const { buildUserReport } = require('../orchestrator/jobs/weekly-report');
@@ -1642,7 +1642,7 @@ router.post('/weekly-report/send', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory-search — semantic vector search in memory patterns
+// GET /api/ai/memory-search · semantic vector search in memory patterns
 router.get('/memory-search', async (req, res, next) => {
   try {
     const q = req.query.q;
@@ -1656,7 +1656,7 @@ router.get('/memory-search', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/deliverability-check — run deliverability check for the current user
+// GET /api/ai/deliverability-check · run deliverability check for the current user
 router.get('/deliverability-check', async (req, res, next) => {
   try {
     const { checkDeliverability } = require('../lib/deliverability-agent');
@@ -1667,7 +1667,7 @@ router.get('/deliverability-check', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/icp-analysis — returns the user's ICP analysis (cached or fresh)
+// GET /api/ai/icp-analysis · returns the user's ICP analysis (cached or fresh)
 router.get('/icp-analysis', async (req, res, next) => {
   try {
     const result = await icpAgent.getICPAnalysis(req.user.id);
@@ -1677,7 +1677,7 @@ router.get('/icp-analysis', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/icp-analysis/refresh — force recompute
+// POST /api/ai/icp-analysis/refresh · force recompute
 router.post('/icp-analysis/refresh', async (req, res, next) => {
   try {
     const result = await icpAgent.analyzeICP(req.user.id);

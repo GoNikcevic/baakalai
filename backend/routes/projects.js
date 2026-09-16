@@ -94,7 +94,7 @@ async function getProjectOrFail(req, res) {
   return project;
 }
 
-// GET /api/projects — batch load with counts (no N+1)
+// GET /api/projects · batch load with counts (no N+1)
 router.get('/', async (req, res, next) => {
   try {
     let projects;
@@ -218,7 +218,7 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/projects/:id/files — async file parsing
+// POST /api/projects/:id/files · async file parsing
 router.post('/:id/files', upload.single('file'), async (req, res, next) => {
   try {
     const project = await getProjectOrFail(req, res);

@@ -3,15 +3,15 @@
  *
  * Trois niveaux de surcharge, du plus spécifique au plus général :
  *
- *   1. CLAUDE_MODEL_<ACTION>   — surcharge une action précise.
+ *   1. CLAUDE_MODEL_<ACTION> · surcharge une action précise.
  *                                ex: CLAUDE_MODEL_DEAL_COACH=claude-opus-5
- *   2. CLAUDE_TIER_<TIER>      — surcharge tout un palier.
+ *   2. CLAUDE_TIER_<TIER> · surcharge tout un palier.
  *                                ex: CLAUDE_TIER_BALANCED=claude-sonnet-5
- *   3. defaults ci-dessous     — le palier déclaré par l'action.
+ *   3. defaults ci-dessous · le palier déclaré par l'action.
  *
  * `CLAUDE_MODEL` reste supporté comme défaut global (rétrocompatibilité) et,
  * s'il contient "opus", conserve son comportement historique de surcharge
- * globale — c'est le commutateur du panneau Settings.
+ * globale · c'est le commutateur du panneau Settings.
  *
  * ────────────────────────────────────────────────────────────────────────────
  * ⚠️ GÉNÉRATION 5 (claude-sonnet-5 / claude-opus-5)
@@ -23,7 +23,7 @@
  * se ferait tronquer au milieu.
  *
  * C'est pourquoi chaque action à sortie courte déclare ici `thinking: 'disabled'`
- * — y compris les actions `deep` à sortie JSON serrée (icp_refiner,
+ * · y compris les actions `deep` à sortie JSON serrée (icp_refiner,
  * win_loss_analysis, competitor_watch, generateIcebreaker). No-op sur les
  * modèles 4.x, indispensable sur gen 5. Contrainte Opus 5 : `disabled` n'est
  * accepté qu'à effort `high` ou moins (on n'envoie pas d'effort, défaut = high).
@@ -38,7 +38,7 @@
 const TIERS = {
   // Sorties courtes et mécaniques, gros volume.
   fast:     process.env.CLAUDE_TIER_FAST     || 'claude-haiku-4-5',
-  // Génération et analyse courantes — le gros du produit.
+  // Génération et analyse courantes · le gros du produit.
   balanced: process.env.CLAUDE_TIER_BALANCED || 'claude-sonnet-4-6',
   // Raisonnement lourd, faible volume.
   deep:     process.env.CLAUDE_TIER_DEEP     || process.env.CLAUDE_OPUS_MODEL || 'claude-opus-5',
@@ -46,8 +46,8 @@ const TIERS = {
 
 /**
  * Une entrée par action passée à callClaude(..., action).
- *   tier     — palier (fast | balanced | deep)
- *   thinking — 'disabled' pour les sorties courtes (voir avertissement ci-dessus)
+ *   tier · palier (fast | balanced | deep)
+ *   thinking · 'disabled' pour les sorties courtes (voir avertissement ci-dessus)
  *
  * Toute action absente de cette table retombe sur DEFAULT_TIER : la table doit
  * donc rester exhaustive pour que le routage soit réel. `listUnrouted()` en bas
@@ -106,7 +106,7 @@ const ACTIONS = {
 
   // Extraction depuis des snippets de recherche web : tâches purement
   // mécaniques, sorties courtes et structurées. Ces quatre actions appelaient
-  // le SDK en direct sur un modèle codé en dur — donc hors routage, hors
+  // le SDK en direct sur un modèle codé en dur · donc hors routage, hors
   // timeout, hors retry et absentes de llm_usage.
   personalization_icebreaker: { tier: 'fast', thinking: 'disabled' },
   enrich_company_from_web:    { tier: 'fast', thinking: 'disabled' },
@@ -153,7 +153,7 @@ function modelFor(action) {
 
 /**
  * Paramètre `thinking` à passer à l'API pour une action, ou null si aucun.
- * Émis uniquement quand l'action le déclare — on ne change pas le comportement
+ * Émis uniquement quand l'action le déclare · on ne change pas le comportement
  * des actions qui n'en demandent pas.
  */
 function thinkingFor(action) {
@@ -163,7 +163,7 @@ function thinkingFor(action) {
   return null;
 }
 
-/** Table de routage résolue — pour le debug et un futur endpoint d'admin. */
+/** Table de routage résolue · pour le debug et un futur endpoint d'admin. */
 function describeRouting() {
   return Object.fromEntries(
     Object.keys(ACTIONS).sort().map(a => [a, { model: modelFor(a), tier: ACTIONS[a].tier }])
