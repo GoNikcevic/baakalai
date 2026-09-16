@@ -85,6 +85,17 @@ async function searchPersonByEmail(apiToken, email) {
   return items[0]?.item || items[0] || null;
 }
 
+// 404 = supprimé côté Pipedrive ; toute autre erreur remonte — un token
+// invalide ne doit pas passer pour « la personne n'existe plus ».
+async function getPerson(apiToken, personId) {
+  try {
+    return await pdFetch(apiToken, `/persons/${personId}`);
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
 async function updatePerson(apiToken, personId, data) {
   const body = {};
   if (data.name) body.name = data.name;
@@ -107,6 +118,20 @@ async function deletePerson(apiToken, personId) {
  * Returns { person, action: 'created' | 'updated' }
  */
 async function upsertPerson(apiToken, data) {
+  // L'ID connu (data.personId, posé par un push ou un import précédent) prime
+  // sur l'email : sans lui, une personne sans email ou dont l'email a divergé
+  // était recréée à chaque re-push. active_flag=false = supprimée dans
+  // Pipedrive (soft delete) : on repasse alors par le matching email/création.
+  if (data.personId) {
+    const id = parseInt(data.personId, 10);
+    if (Number.isInteger(id)) {
+      const existing = await getPerson(apiToken, id);
+      if (existing && existing.active_flag !== false) {
+        const updated = await updatePerson(apiToken, id, data);
+        return { person: updated, action: 'updated' };
+      }
+    }
+  }
   if (data.email) {
     const existing = await searchPersonByEmail(apiToken, data.email);
     if (existing) {
@@ -200,6 +225,19 @@ async function createDeal(apiToken, data) {
       status: data.status === 'won' ? 'won' : data.status === 'lost' ? 'lost' : 'open',
     }),
   });
+}
+
+// status 'deleted' = corbeille Pipedrive : traité comme absent pour qu'un
+// re-push recrée un deal vivant plutôt que de pointer un fantôme.
+async function getDeal(apiToken, dealId) {
+  try {
+    const deal = await pdFetch(apiToken, `/deals/${dealId}`);
+    if (!deal || deal.status === 'deleted') return null;
+    return deal;
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
 }
 
 async function updateDeal(apiToken, dealId, data) {
@@ -300,6 +338,7 @@ module.exports = {
   createPerson,
   searchPersons,
   searchPersonByEmail,
+  getPerson,
   updatePerson,
   deletePerson,
   upsertPerson,
@@ -309,6 +348,7 @@ module.exports = {
   getPersonFields,
   getActivities,
   createDeal,
+  getDeal,
   updateDeal,
   getDeals,
   listDealsForDiagnostic,

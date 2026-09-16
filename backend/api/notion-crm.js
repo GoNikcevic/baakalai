@@ -333,6 +333,20 @@ async function queryContacts(notionToken, databaseId) {
  * @param {string} notionToken
  * @param {{ pageId: string, content: string }} data  pageId = crm_contact_id
  */
+// Une page archivée ou à la corbeille n'apparaît plus dans la base : traitée
+// comme absente pour qu'un re-push recrée une page visible. object_not_found
+// couvre aussi la page sortie du partage avec l'intégration.
+async function pageExists(notionToken, pageId) {
+  const notion = new Client({ auth: notionToken });
+  try {
+    const page = await notion.pages.retrieve({ page_id: pageId });
+    return !(page.archived || page.in_trash);
+  } catch (err) {
+    if (err.code === 'object_not_found' || err.status === 404) return false;
+    throw err;
+  }
+}
+
 async function createNote(notionToken, { pageId, content }) {
   const notion = new Client({ auth: notionToken });
   const lines = String(content || '').split('\n').filter(Boolean);
@@ -365,5 +379,6 @@ module.exports = {
   buildProperties,
   queryContacts,
   normalizeNotionStatus,
+  pageExists,
   createNote,
 };

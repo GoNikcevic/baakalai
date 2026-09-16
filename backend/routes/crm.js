@@ -167,38 +167,72 @@ async function syncOpportunityToProvider(userId, provider, opportunity) {
     const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
     const instanceUrl = metadata.instance_url || integration.instance_url;
     if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
+    const fromSf = opportunity.crm_provider === 'salesforce';
     const contactData = salesforce.mapOpportunityToContact(opportunity);
-    const contacts = opportunity.email ? await salesforce.searchContacts(instanceUrl, token, opportunity.email) : [];
-    let contactId = contacts.length > 0 ? contacts[0].Id : null;
-    if (!contactId) { contactId = (await salesforce.createContact(instanceUrl, token, contactData)).id; }
-    const deal = await salesforce.createDeal(instanceUrl, token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, status: opportunity.status });
-    await db.opportunities.update(opportunity.id, { crm_provider: 'salesforce', crm_contact_id: contactId, crm_deal_id: deal.id });
-    return { opportunityId: opportunity.id, provider: 'salesforce', contactId, dealId: deal.id };
+    contactData.contactId = fromSf ? opportunity.crm_contact_id : null;
+    const { id: contactId, created } = await salesforce.upsertContact(instanceUrl, token, contactData);
+    // Réutiliser l'Opportunity déjà poussée — la création inconditionnelle
+    // dupliquait le deal à chaque re-sync. On ne réécrit pas son contenu :
+    // les éditions faites dans Salesforce priment.
+    let dealId = fromSf && opportunity.crm_deal_id ? opportunity.crm_deal_id : null;
+    if (dealId && !(await salesforce.dealExists(instanceUrl, token, dealId))) dealId = null;
+    if (!dealId) {
+      const deal = await salesforce.createDeal(instanceUrl, token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, status: opportunity.status });
+      dealId = deal.id;
+    }
+    await db.opportunities.update(opportunity.id, { crm_provider: 'salesforce', crm_contact_id: contactId, crm_deal_id: dealId });
+    return { opportunityId: opportunity.id, provider: 'salesforce', contactId, dealId, action: created ? 'created' : 'updated' };
   } else if (provider === 'pipedrive') {
+    const fromPd = opportunity.crm_provider === 'pipedrive';
     const personData = pipedrive.mapOpportunityToPerson(opportunity);
+    personData.personId = fromPd ? opportunity.crm_contact_id : null;
     const { person, action } = await pipedrive.upsertPerson(token, personData);
-    const deal = await pipedrive.createDeal(token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, personId: person.id, status: opportunity.status });
-    await db.opportunities.update(opportunity.id, { crm_provider: 'pipedrive', crm_contact_id: person.id, crm_deal_id: deal.id });
-    return { opportunityId: opportunity.id, provider: 'pipedrive', personId: person.id, dealId: deal.id, action };
+    // Même logique que Salesforce/Odoo : le deal déjà poussé est réutilisé
+    // tel quel s'il vit encore côté Pipedrive.
+    let dealId = fromPd && opportunity.crm_deal_id ? parseInt(opportunity.crm_deal_id, 10) : null;
+    if (dealId && !(await pipedrive.getDeal(token, dealId))) dealId = null;
+    if (!dealId) {
+      const deal = await pipedrive.createDeal(token, { name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`, personId: person.id, status: opportunity.status });
+      dealId = deal.id;
+    }
+    await db.opportunities.update(opportunity.id, { crm_provider: 'pipedrive', crm_contact_id: person.id, crm_deal_id: dealId });
+    return { opportunityId: opportunity.id, provider: 'pipedrive', personId: person.id, dealId, action };
   } else if (provider === 'folk') {
+    // Connecteur en création seule : si le contact déjà poussé vit encore
+    // côté Folk, ne rien recréer — c'était un doublon à chaque re-sync.
+    if (opportunity.crm_provider === 'folk' && opportunity.crm_contact_id
+        && await folk.personExists(token, opportunity.crm_contact_id)) {
+      return { opportunityId: opportunity.id, provider: 'folk', personId: opportunity.crm_contact_id, action: 'unchanged' };
+    }
     const personData = folk.mapOpportunityToPerson(opportunity);
     const person = await folk.createPerson(token, personData);
     await db.opportunities.update(opportunity.id, { crm_provider: 'folk', crm_contact_id: person.id });
-    return { opportunityId: opportunity.id, provider: 'folk', personId: person.id };
+    return { opportunityId: opportunity.id, provider: 'folk', personId: person.id, action: 'created' };
   } else if (provider === 'notion') {
     const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
     if (!metadata.database_id) throw new Error('Notion database ID not configured');
+    // Création seule : réutiliser la page déjà poussée si elle vit encore
+    // (ni archivée ni à la corbeille), sinon chaque re-sync dupliquait la ligne.
+    if (opportunity.crm_provider === 'notion' && opportunity.crm_contact_id
+        && await notionCrm.pageExists(token, opportunity.crm_contact_id)) {
+      return { opportunityId: opportunity.id, provider: 'notion', pageId: opportunity.crm_contact_id, action: 'unchanged' };
+    }
     const prospect = { name: opportunity.name || '', email: opportunity.email || '', title: opportunity.title || '', company: opportunity.company || '', company_size: opportunity.company_size || '', linkedin_url: opportunity.linkedin_url || '' };
     const { pageId } = await notionCrm.pushProspectToNotion(token, metadata.database_id, prospect);
     await db.opportunities.update(opportunity.id, { crm_provider: 'notion', crm_contact_id: pageId });
-    return { opportunityId: opportunity.id, provider: 'notion', pageId };
+    return { opportunityId: opportunity.id, provider: 'notion', pageId, action: 'created' };
   } else if (provider === 'airtable') {
     const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
     if (!metadata.base_id || !metadata.table_name) throw new Error('Airtable base/table not configured');
+    // Création seule : réutiliser le record déjà poussé s'il existe encore.
+    if (opportunity.crm_provider === 'airtable' && opportunity.crm_contact_id
+        && await airtableCrm.recordExists(token, metadata.base_id, metadata.table_name, opportunity.crm_contact_id)) {
+      return { opportunityId: opportunity.id, provider: 'airtable', recordId: opportunity.crm_contact_id, action: 'unchanged' };
+    }
     const prospect = airtableCrm.mapOpportunityToProspect(opportunity);
     const { recordId } = await airtableCrm.pushProspectToAirtable(token, metadata.base_id, metadata.table_name, prospect);
     await db.opportunities.update(opportunity.id, { crm_provider: 'airtable', crm_contact_id: recordId });
-    return { opportunityId: opportunity.id, provider: 'airtable', recordId };
+    return { opportunityId: opportunity.id, provider: 'airtable', recordId, action: 'created' };
   } else if (provider === 'odoo') {
     let creds;
     try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are invalid JSON'); }
@@ -384,108 +418,20 @@ router.post('/sync-to/:provider', async (req, res, next) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const integration = await db.userIntegrations.get(req.user.id, provider);
-    if (!integration) {
-      return res.status(400).json({ error: `${provider} not configured. Add credentials in Settings.` });
+    // Délègue à syncOpportunityToProvider : la même logique provider par
+    // provider était dupliquée ici, et les deux copies divergeaient (les fixes
+    // anti-doublons devaient être appliqués deux fois). Une seule
+    // implémentation à maintenir désormais.
+    try {
+      const result = await syncOpportunityToProvider(req.user.id, provider, opportunity);
+      return res.json(result);
+    } catch (err) {
+      // Erreur de configuration (CRM non connecté, creds invalides, metadata
+      // manquante) → 400 comme avant. Les erreurs des API CRM portent un
+      // status HTTP amont : elles gardent le chemin next(err) → 500.
+      if (err.status) throw err;
+      return res.status(400).json({ error: err.message });
     }
-
-    let token;
-    try { token = decrypt(integration.access_token); } catch { return res.status(400).json({ error: 'Invalid stored credentials' }); }
-
-    let result;
-
-    if (provider === 'hubspot') {
-      result = await syncOpportunityToHubspot(token, opportunity);
-    } else if (provider === 'salesforce') {
-      const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
-      const instanceUrl = metadata.instance_url || integration.instance_url;
-      if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
-
-      const contactData = salesforce.mapOpportunityToContact(opportunity);
-      const contacts = opportunity.email ? await salesforce.searchContacts(instanceUrl, token, opportunity.email) : [];
-      let contactId = contacts.length > 0 ? contacts[0].Id : null;
-      if (!contactId) {
-        const created = await salesforce.createContact(instanceUrl, token, contactData);
-        contactId = created.id;
-      }
-      const deal = await salesforce.createDeal(instanceUrl, token, {
-        name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`,
-        status: opportunity.status,
-      });
-      result = { opportunityId: opportunity.id, provider: 'salesforce', contactId, dealId: deal.id };
-      await db.opportunities.update(opportunity.id, { crm_provider: 'salesforce', crm_contact_id: contactId, crm_deal_id: deal.id });
-    } else if (provider === 'pipedrive') {
-      const personData = pipedrive.mapOpportunityToPerson(opportunity);
-      const { person, action } = await pipedrive.upsertPerson(token, personData);
-      const deal = await pipedrive.createDeal(token, {
-        name: `${opportunity.name} — ${opportunity.company || 'Bakal'}`,
-        personId: person.id,
-        status: opportunity.status,
-      });
-      result = { opportunityId: opportunity.id, provider: 'pipedrive', personId: person.id, dealId: deal.id, action };
-      await db.opportunities.update(opportunity.id, { crm_provider: 'pipedrive', crm_contact_id: person.id, crm_deal_id: deal.id });
-    } else if (provider === 'folk') {
-      const personData = folk.mapOpportunityToPerson(opportunity);
-      const person = await folk.createPerson(token, personData);
-      result = { opportunityId: opportunity.id, provider: 'folk', personId: person.id };
-      await db.opportunities.update(opportunity.id, { crm_provider: 'folk', crm_contact_id: person.id });
-    } else if (provider === 'notion') {
-      const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
-      const databaseId = metadata.database_id;
-      if (!databaseId) return res.status(400).json({ error: 'Notion database ID not configured. Select a database in Settings.' });
-
-      const prospect = {
-        name: opportunity.name || '',
-        email: opportunity.email || '',
-        title: opportunity.title || '',
-        company: opportunity.company || '',
-        company_size: opportunity.company_size || '',
-        linkedin_url: opportunity.linkedin_url || '',
-      };
-      const { pageId } = await notionCrm.pushProspectToNotion(token, databaseId, prospect);
-      result = { opportunityId: opportunity.id, provider: 'notion', pageId };
-      await db.opportunities.update(opportunity.id, { crm_provider: 'notion', crm_contact_id: pageId });
-    } else if (provider === 'airtable') {
-      const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
-      const baseId = metadata.base_id;
-      const tableName = metadata.table_name;
-      if (!baseId || !tableName) return res.status(400).json({ error: 'Airtable base ID and table name not configured. Update in Settings.' });
-
-      const prospect = airtableCrm.mapOpportunityToProspect(opportunity);
-      const { recordId } = await airtableCrm.pushProspectToAirtable(token, baseId, tableName, prospect);
-      result = { opportunityId: opportunity.id, provider: 'airtable', recordId };
-      await db.opportunities.update(opportunity.id, { crm_provider: 'airtable', crm_contact_id: recordId });
-    } else if (provider === 'odoo') {
-      // token is JSON string: { url, db, username, password }
-      let creds;
-      try { creds = JSON.parse(token); } catch { return res.status(400).json({ error: 'Odoo credentials are invalid JSON' }); }
-      const fromOdoo = opportunity.crm_provider === 'odoo';
-      const { id, action } = await odoo.upsertContact(creds, {
-        contactId: fromOdoo ? opportunity.crm_contact_id : null,
-        name: opportunity.name,
-        email: opportunity.email,
-        title: opportunity.title,
-        company: opportunity.company,
-      });
-      // Réutiliser la crm.lead déjà poussée — la création inconditionnelle
-      // dupliquait le deal à chaque re-sync. On ne réécrit pas son contenu :
-      // les éditions faites dans Odoo priment.
-      let dealId = fromOdoo && opportunity.crm_deal_id ? parseInt(opportunity.crm_deal_id, 10) : null;
-      if (dealId && !(await odoo.dealExists(creds, dealId))) dealId = null;
-      if (!dealId) {
-        const deal = await odoo.createDeal(creds, {
-          name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`,
-          contactId: id,
-        });
-        dealId = deal.id;
-      }
-      result = { opportunityId: opportunity.id, provider: 'odoo', contactId: id, dealId, action };
-      await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(dealId) });
-    } else {
-      return res.status(400).json({ error: `Unsupported CRM provider: ${provider}` });
-    }
-
-    res.json(result);
   } catch (err) {
     next(err);
   }

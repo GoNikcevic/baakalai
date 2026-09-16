@@ -112,6 +112,22 @@ async function pushProspectsToAirtable(apiKey, baseId, tableName, prospects) {
   return { records: allRecords };
 }
 
+// ── Record existence ──
+
+// 404/403 = record ou table disparus côté Airtable ; toute autre erreur
+// remonte — un token invalide (401) ne doit pas passer pour « le record
+// n'existe plus » et déclencher une recréation.
+async function recordExists(apiKey, baseId, tableName, recordId) {
+  const url = `${AIRTABLE_BASE_URL}/${encodeURIComponent(baseId)}/${encodeURIComponent(tableName)}/${encodeURIComponent(recordId)}`;
+  try {
+    await airtableFetch(apiKey, url);
+    return true;
+  } catch (err) {
+    if (err.status === 404 || err.status === 403) return false;
+    throw err;
+  }
+}
+
 // ── List Tables in a Base ──
 
 /**
@@ -180,6 +196,7 @@ async function listRecords(apiKey, baseId, tableName) {
 module.exports = {
   pushProspectToAirtable,
   pushProspectsToAirtable,
+  recordExists,
   listAirtableTables,
   listRecords,
   mapOpportunityToProspect,

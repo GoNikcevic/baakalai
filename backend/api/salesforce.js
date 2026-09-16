@@ -239,14 +239,47 @@ async function deleteContact(instanceUrl, accessToken, contactId) {
 // ── Upsert Contact (search by email, update or create) ──
 
 async function upsertContact(instanceUrl, accessToken, data) {
-  const existing = await searchContacts(instanceUrl, accessToken, data.email);
-  if (existing && existing.length > 0) {
-    const contactId = existing[0].Id;
-    await updateContact(instanceUrl, accessToken, contactId, data);
-    return { id: contactId, created: false };
+  // L'ID connu prime sur l'email : un contact sans email ou dont l'email a
+  // divergé entre baakalai et Salesforce était recréé à chaque re-push.
+  if (data.contactId && await contactExists(instanceUrl, accessToken, data.contactId)) {
+    await updateContact(instanceUrl, accessToken, data.contactId, data);
+    return { id: data.contactId, created: false };
+  }
+  if (data.email) {
+    const existing = await searchContacts(instanceUrl, accessToken, data.email);
+    if (existing && existing.length > 0) {
+      const contactId = existing[0].Id;
+      await updateContact(instanceUrl, accessToken, contactId, data);
+      return { id: contactId, created: false };
+    }
   }
   const created = await createContact(instanceUrl, accessToken, data);
   return { id: created.id, created: true };
+}
+
+// ── Existence checks ──
+// 404 = supprimé côté Salesforce (corbeille comprise, du point de vue REST) ;
+// toute autre erreur remonte — un token expiré ne doit pas passer pour
+// « le record n'existe plus » et déclencher une recréation.
+
+async function contactExists(instanceUrl, accessToken, contactId) {
+  try {
+    await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}?fields=Id`);
+    return true;
+  } catch (err) {
+    if (err.status === 404) return false;
+    throw err;
+  }
+}
+
+async function dealExists(instanceUrl, accessToken, dealId) {
+  try {
+    await sfFetch(instanceUrl, accessToken, `/sobjects/Opportunity/${dealId}?fields=Id`);
+    return true;
+  } catch (err) {
+    if (err.status === 404) return false;
+    throw err;
+  }
 }
 
 // ── Get Deal by ID ──
@@ -835,6 +868,8 @@ module.exports = {
   upsertContact,
   searchContacts,
   listContacts,
+  contactExists,
+  dealExists,
   createDeal,
   updateDeal,
   getDeal,
