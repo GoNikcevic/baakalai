@@ -13,17 +13,13 @@
        plateforme RevOps : ni forecast consolidé, ni territoires, ni variable,
        ni CPQ. Toujours « le travail qu'un RevOps ferait ». -->
   <title>baakalai — le système IA qui exploite ton CRM | RevOps de la PME</title>
-  <meta name="description" content="Le RevOps sans l'équipe RevOps. baakalai lit ton CRM 24/7, repère les deals à relancer, les upsells et les risques de churn — et agit. Sans changer de CRM.">
+  <meta name="description" content="Le RevOps sans l'équipe RevOps. baakalai lit ton CRM 24/7, repère les deals à relancer, les upsells et les risques de churn — et exécute la séquence de relance depuis ta boîte mail. Connexion CRM en un clic, 69 €/siège/mois.">
   <meta property="og:site_name" content="baakalai">
   <meta property="og:title" content="Le RevOps, sans l'équipe RevOps.">
-  <meta property="og:description" content="Ton CRM sait déjà qui relancer. Personne ne le lit. baakalai le lit 24/7 — réactivation, upsell, churn, nettoyage. Opérationnel en 30 minutes.">
+  <meta property="og:description" content="Ton CRM sait déjà qui relancer. Personne ne le lit. baakalai le lit 24/7 et relance à ta place, depuis ta propre boîte mail. Connexion en un clic, opérationnel en 30 minutes.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://baakal.ai/">
   <meta property="og:locale" content="fr_FR">
-  <!-- og-home.png reste à produire (1200×630, même système visuel que
-       og-diagnostic.png mais CTA beta, pas diagnostic). Tant qu'il manque, le
-       partage social n'affiche pas d'image — comportement identique à
-       aujourd'hui, donc pas de régression. -->
   <meta property="og:image" content="https://baakal.ai/assets/og-home.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -221,8 +217,8 @@
     </a>
     <div class="links">
       <a href="how-it-works.html" data-i18n="nav.how">Comment ça marche</a>
-      <a href="#crm-intelligence" data-i18n="nav.features">Fonctionnalites</a>
-      <a href="#beta" data-i18n="nav.pricing">Beta</a>
+      <a href="#crm-intelligence" data-i18n="nav.features">Ce que fait le système</a>
+      <a href="#beta" data-i18n="nav.pricing">Tarif</a>
       <a href="#faq" data-i18n="nav.faq">FAQ</a>
       <a href="#blog" data-i18n="nav.blog">Blog</a>
       <a href="diagnostic.html" data-i18n="nav.diag" style="color:var(--primary);font-weight:600;">Diagnostic gratuit</a>
@@ -255,9 +251,11 @@
           <a href="#crm-intelligence" class="btn btn-ghost" data-i18n="hero.cta_2">Voir ce que fait le système</a>
         </div>
         <div style="margin-top:40px; display:flex; gap:24px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--grey-500);">
-          <span data-i18n="hero.tag_1">Opérationnel en 30 min</span>
+          <span data-i18n="hero.tag_1">CRM connecté en un clic</span>
           <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_2">Beta sur candidature</span>
+          <span data-i18n="hero.tag_2">Opérationnel en 30 min</span>
+          <span style="color:var(--border-strong)">·</span>
+          <span data-i18n="hero.tag_3">69 €/siège/mois</span>
         </div>
       </div>
 
@@ -302,19 +300,28 @@
   <div class="integrations-strip">
     <div class="container">
       <div class="row">
-        <span class="label" data-i18n="integrations.label">S'intègre avec</span>
+        <span class="label" data-i18n="integrations.label">Se connecte à ton CRM</span>
         <span class="name">Pipedrive</span>
         <span class="name">HubSpot</span>
-        <span class="name">Odoo</span>
         <span class="name">Salesforce</span>
-        <span class="name">Lemlist</span>
-        <span class="name">Apollo</span>
-        <span class="name">Smartlead</span>
+        <span class="name">Odoo</span>
         <span class="name">Notion</span>
         <span class="name">Airtable</span>
         <span class="name">Folk</span>
         <span class="name">Gmail</span>
         <span class="name">Outlook</span>
+        <span class="name">LinkedIn</span>
+      </div>
+      <!-- Depuis le moteur d'envoi natif (sept. 2026), les outils d'emailing
+           tiers ne sont plus une dépendance : on les garde affichés pour les
+           équipes qui en ont déjà un, mais en second rang et explicitement
+           marqués optionnels. -->
+      <div class="row" style="margin-top:16px;gap:20px;">
+        <span class="label" data-i18n="integrations.optional">Compatible aussi</span>
+        <span class="name" style="font-size:14.5px;opacity:0.45;">Lemlist</span>
+        <span class="name" style="font-size:14.5px;opacity:0.45;">Apollo</span>
+        <span class="name" style="font-size:14.5px;opacity:0.45;">Smartlead</span>
+        <span class="label" style="text-transform:none;letter-spacing:0;font-size:12px;" data-i18n="integrations.optional_note">Optionnels : baakalai envoie depuis ta propre boîte mail.</span>
       </div>
     </div>
   </div>
@@ -325,10 +332,10 @@
       <div style="max-width:760px;">
         <span class="eyebrow" data-i18n="how.eyebrow">COMMENT ÇA MARCHE</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="how.title_a">Quatre étapes. </span><em class="accent" data-i18n="how.title_em">Aucune complexité.</em>
+          <span data-i18n="how.title_a">Branche ton CRM. </span><em class="accent" data-i18n="how.title_em">Le système fait le reste.</em>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="how.sub">
-          Tu importes tes contacts, tu décris ton intention en langage naturel, baakalai refine, déploie, et apprend à chaque envoi.
+          Pas d'implémentation. Pas d'équipe RevOps. 30 minutes entre la connexion et le premier deal détecté.
         </p>
       </div>
 
@@ -342,11 +349,11 @@
   <section class="section" id="crm-intelligence">
     <div class="container feature-block">
       <div class="feature-text">
-        <span class="eyebrow" data-i18n="crm.eyebrow">CRM INTELLIGENCE</span>
+        <span class="eyebrow" data-i18n="crm.eyebrow">CE QUE FAIT LE SYSTÈME</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="crm.title_a">Ton CRM sait tout. </span><em class="accent" data-i18n="crm.title_em">Il ne te dit</em><span data-i18n="crm.title_b"> rien.</span>
+          <span data-i18n="crm.title_a">La donnée que tu as déjà payée </span><em class="accent" data-i18n="crm.title_em">génère du CA</em><span data-i18n="crm.title_b"> — sans nouveau lead.</span>
         </h2>
-        <p class="body large" data-i18n="crm.sub">baakalai connecte ton CRM existant et le transforme en copilote commercial : churn prediction, deal coaching, data cleaning, upsell detection — sans changer d'outil.</p>
+        <p class="body large" data-i18n="crm.sub">Réactiver un deal, détecter un upsell, prévenir un churn : trois gestes qui génèrent du revenu sans coût d'acquisition, à partir de ta base existante.</p>
         <ul class="feature-list" id="crm-list"></ul>
       </div>
 
@@ -384,7 +391,7 @@
               <span style="background:var(--ink);color:var(--paper);padding:4px 8px;border-radius:6px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">REFINE</span>
             </div>
             <div style="font-size:13px;line-height:1.5;color:var(--grey-900);background:var(--paper);border-radius:8px;padding:10px;border:1px dashed var(--primary);">
-              "Salut Marc, je sais que la fin Q2 t'a accapare — je te repropose un creneau jeudi 16h pour finaliser le devis. — Alex"
+              « Salut Marc, je sais que la fin de trimestre t'a pris tout ton temps. Je te repropose un créneau jeudi 16h pour finaliser le devis. Alex »
             </div>
           </div>
         </div>
@@ -414,39 +421,68 @@
   <section class="section paper-2" id="activation">
     <div class="container feature-block reverse">
       <div class="feature-text">
-        <span class="eyebrow" data-i18n="activation.eyebrow">ACTIVATION CLIENT</span>
+        <span class="eyebrow" data-i18n="activation.eyebrow">AUTOMATISATION</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="activation.title_a">Tes clients </span><em class="accent" data-i18n="activation.title_em">ne devraient pas</em><span data-i18n="activation.title_b"> mourir dans le pipeline.</span>
+          <span data-i18n="activation.title_a">Il ne te prévient pas. </span><em class="accent" data-i18n="activation.title_em">Il relance</em><span data-i18n="activation.title_b">.</span>
         </h2>
-        <p class="body large" data-i18n="activation.sub">baakalai surveille tes deals 24/7, repere ceux qui stagnent ou churnent, et envoie le follow-up exact qui les a reveilles la derniere fois — depuis ton propre email.</p>
+        <p class="body large" data-i18n="activation.sub">Le Deal Coach repère le deal qui stagne et te propose la séquence de relance complète : le premier message, la relance à J+4, le repli LinkedIn si personne ne répond. Tu valides d'un clic, le système exécute depuis ta boîte mail.</p>
         <ul class="feature-list" id="activation-list"></ul>
       </div>
 
-      <!-- Mockup: activation triggers -->
+      <!-- Mockup : séquence de relance proposée par le Deal Coach, en attente
+           d'approbation. Remplace l'ancienne liste de triggers — depuis les
+           workflows (sept. 2026), la promesse n'est plus « il détecte » mais
+           « il exécute la relance complète, branches comprises ». -->
       <div class="mockup">
         <div class="chrome">
           <div class="dots"><span></span><span></span><span></span></div>
-          <div class="url">app.baakal.ai/nurture</div>
+          <div class="url">app.baakal.ai/workflows</div>
         </div>
         <div class="body-pad" style="display:flex;flex-direction:column;gap:10px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--border);">
-            <div style="font-weight:500;font-size:15px;">8 triggers actifs</div>
-            <span style="font-family:var(--font-mono);font-size:10.5px;color:#16A34A;text-transform:uppercase;">14 emails envoyes aujourd'hui</span>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">Relance — Atelier Brun · 24 800 €</div>
+              <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--primary-deep);text-transform:uppercase;letter-spacing:0.04em;margin-top:4px;">Proposé par le Deal Coach</div>
+            </div>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--grey-700);background:var(--paper);border:1px solid var(--border);padding:4px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">En attente</span>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--paper-2);border-radius:10px;border:1px solid var(--border);">
-            <span style="width:8px;height:8px;border-radius:50%;background:#16A34A;flex-shrink:0;"></span>
-            <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Deal stagnant > 14j</div><div style="font-size:11px;color:var(--grey-500);">5 contacts a relancer</div></div>
-            <span style="font-family:var(--font-mono);font-size:10px;color:var(--primary-deep);background:var(--primary-soft);padding:4px 8px;border-radius:6px;">AUTO</span>
+
+          <div style="display:flex;gap:12px;align-items:stretch;">
+            <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:4px;">
+              <span style="width:9px;height:9px;border-radius:50%;background:var(--primary);flex-shrink:0;"></span>
+              <span style="width:1px;flex:1;background:var(--border-strong);margin-top:4px;"></span>
+            </div>
+            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+              <div style="font-size:13px;font-weight:500;">Email · Relance du devis</div>
+              <div style="font-size:11px;color:var(--grey-500);margin-top:2px;">Immédiat · depuis alex@atelierbrun.fr</div>
+            </div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--paper-2);border-radius:10px;border:1px solid var(--border);">
-            <span style="width:8px;height:8px;border-radius:50%;background:#16A34A;flex-shrink:0;"></span>
-            <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Deal won — onboarding</div><div style="font-size:11px;color:var(--grey-500);">Email de bienvenue auto</div></div>
-            <span style="font-family:var(--font-mono);font-size:10px;color:var(--primary-deep);background:var(--primary-soft);padding:4px 8px;border-radius:6px;">AUTO</span>
+
+          <div style="display:flex;gap:12px;align-items:stretch;">
+            <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:4px;">
+              <span style="width:9px;height:9px;border-radius:50%;background:var(--primary);flex-shrink:0;"></span>
+              <span style="width:1px;flex:1;background:var(--border-strong);margin-top:4px;"></span>
+            </div>
+            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+              <div style="font-size:13px;font-weight:500;">Email · Deuxième relance, angle budget</div>
+              <div style="font-size:11px;color:var(--grey-500);margin-top:2px;">J+4 · uniquement si pas de réponse</div>
+            </div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--paper-2);border-radius:10px;border:1px solid var(--border);">
-            <span style="width:8px;height:8px;border-radius:50%;background:#EAB308;flex-shrink:0;"></span>
-            <div style="flex:1;"><div style="font-size:13px;font-weight:500;">Upsell opportunity</div><div style="font-size:11px;color:var(--grey-500);">3 clients eligibles</div></div>
-            <span style="font-family:var(--font-mono);font-size:10px;color:var(--grey-700);background:var(--paper);border:1px solid var(--border);padding:4px 8px;border-radius:6px;">APPROVAL</span>
+
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;background:var(--paper);border:1px solid #16A34A;border-radius:10px;padding:10px 12px;">
+              <div style="font-family:var(--font-mono);font-size:10px;color:#16A34A;text-transform:uppercase;letter-spacing:0.04em;">S'il répond</div>
+              <div style="font-size:12.5px;line-height:1.45;color:var(--grey-900);margin-top:4px;">Séquence arrêtée, le deal repasse en négociation et la main te revient.</div>
+            </div>
+            <div style="flex:1;background:var(--paper);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--grey-500);text-transform:uppercase;letter-spacing:0.04em;">S'il ignore</div>
+              <div style="font-size:12.5px;line-height:1.45;color:var(--grey-900);margin-top:4px;">J+9 · message LinkedIn court, puis on arrête de le relancer.</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+            <span style="background:var(--primary);color:var(--paper);border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:500;">Approuver la séquence</span>
+            <span style="background:var(--paper);border:1px solid var(--border);color:var(--grey-700);border-radius:8px;padding:8px 14px;font-size:12.5px;">Modifier</span>
           </div>
         </div>
       </div>
@@ -457,11 +493,11 @@
   <section class="section" id="prospection">
     <div class="container feature-block">
       <div class="feature-text">
-        <span class="eyebrow" data-i18n="prosp.eyebrow">PROSPECTION IA</span>
+        <span class="eyebrow" data-i18n="prosp.eyebrow">PROSPECTION</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="prosp.title_a">L'outbound qui </span><em class="accent" data-i18n="prosp.title_em">refine tout seul</em><span data-i18n="prosp.title_b">.</span>
+          <span data-i18n="prosp.title_a">Et quand tu veux prospecter, </span><em class="accent" data-i18n="prosp.title_em">le système gère</em><span data-i18n="prosp.title_b"> aussi.</span>
         </h2>
-        <p class="body large" data-i18n="prosp.sub">Cree une campagne en discutant avec l'IA. baakalai genere 3 variantes, les A/B teste, et garde celle qui marche — sans que tu aies a toucher au copywriting.</p>
+        <p class="body large" data-i18n="prosp.sub">Campagnes outbound par chat, A/B test automatique, envoi depuis ta propre boîte mail. Et chaque réponse nourrit la mémoire qui améliore tout le reste.</p>
         <ul class="feature-list" id="prosp-list"></ul>
       </div>
 
@@ -483,7 +519,7 @@
               <svg width="14" height="14" viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="#FAFAF9"/></svg>
             </div>
             <div style="background:var(--primary);color:var(--paper);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;max-width:85%;">
-              Compris. Je genere 3 variantes — un cold email court, un long, une approche LinkedIn-first. Je deploie sur Lemlist des que tu valides.
+              Compris. Je génère 3 variantes — un cold email court, un long, une approche LinkedIn-first. Dès que tu valides, j'envoie depuis ta boîte mail et j'arrête toute séquence dont le contact répond.
             </div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
@@ -501,12 +537,12 @@
     <div class="dotgrid" style="position:absolute;inset:0;opacity:0.5;"></div>
     <div class="container" style="position:relative;">
       <div style="max-width:760px;">
-        <span class="eyebrow" data-i18n="synapse.eyebrow">SYNAPSE — INTELLIGENCE AUTONOME</span>
+        <span class="eyebrow" data-i18n="synapse.eyebrow">SOUS LE CAPOT — MÉMOIRE SYNAPSE</span>
         <h2 class="h-section" style="margin-top:18px; color:var(--paper);">
           <span data-i18n="synapse.title_a">Plus tu l'utilises, </span><em class="accent" data-i18n="synapse.title_em">plus il est précis.</em><span data-i18n="synapse.title_b"></span>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="synapse.sub">
-          Synapse n'est pas un assistant. C'est un système de 12 agents spécialisés qui collaborent en arrière-plan pour transformer chaque interaction en pattern réutilisable.
+          Le système apprend de chaque interaction. Chaque deal relancé, chaque churn évité, chaque upsell détecté crée un pattern réutilisable. Cette mémoire ne se transfère pas — elle crée un avantage qui se renforce avec le temps.
         </p>
       </div>
       <div class="agents-grid" id="agents-grid"></div>
@@ -517,13 +553,20 @@
   <section class="section" id="beta">
     <div class="container">
       <div style="max-width:720px;">
-        <span class="eyebrow" data-i18n="pricing.eyebrow">PROGRAMME BETA — EN COURS</span>
+        <span class="eyebrow" data-i18n="pricing.eyebrow">TARIF</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="pricing.title_a">On teste baakalai </span><em class="accent" data-i18n="pricing.title_em">avec une poignée d'équipes</em><span data-i18n="pricing.title_b">.</span>
+          <span data-i18n="pricing.title_a">Un seul plan. </span><em class="accent" data-i18n="pricing.title_em">Le produit complet</em><span data-i18n="pricing.title_b">.</span>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="pricing.sub">
-          Pas de plans, pas de prix public — pour l'instant. On ouvre la beta à un petit groupe d'équipes commerciales pour refine le produit avec elles. Les beta testers gardent un tarif préférentiel à la sortie publique.
+          Pas de palier qui cache la moitié des fonctionnalités derrière un devis. Un prix par siège, tout dedans. La beta reste sur candidature : les équipes qui entrent maintenant gardent 50 % de remise à la sortie publique.
         </p>
+        <div style="margin-top:36px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
+          <!-- Police sans (pas mono) : en monospace, l'espace fine avant le €
+               prend une chasse pleine et creuse un trou visible à 64px. -->
+          <span style="font-size:clamp(44px,7vw,64px);font-weight:600;letter-spacing:-0.03em;word-spacing:-0.1em;line-height:1;color:var(--ink);" data-i18n="pricing.amount">69 €</span>
+          <span style="font-size:16px;color:var(--grey-700);" data-i18n="pricing.period">par siège et par mois</span>
+        </div>
+        <div style="margin-top:14px;font-family:var(--font-mono);font-size:11.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--grey-500);" data-i18n="pricing.note">Engagement annuel : 2 mois offerts · Founding members beta : −50 %</div>
       </div>
       <div class="beta-grid" id="beta-grid"></div>
     </div>
@@ -572,7 +615,7 @@
             Notes de terrain, expérimentations, retours bruts de nos premiers utilisateurs.
           </p>
         </div>
-        <a href="#" class="btn btn-ghost" data-i18n="nav.blog">Voir tous les articles →</a>
+        <a href="#blog" class="btn btn-ghost" data-i18n="blog.all">Voir tous les articles</a>
       </div>
       <div class="blog-grid" id="blog-grid"></div>
     </div>
@@ -587,17 +630,17 @@
             <img src="assets/synapse-mark-on-dark.svg" width="28" height="28" alt="">
             <span style="font-weight:600;font-size:18px;letter-spacing:-0.022em;color:var(--paper);">baakalai</span>
           </div>
-          <p style="font-size:14.5px;line-height:1.6;max-width:340px;" data-i18n="footer.blurb">L'IA qui orchestre ta prospection ET tes clients. Lowercase, on insiste.</p>
+          <p style="font-size:14.5px;line-height:1.6;max-width:340px;" data-i18n="footer.blurb">Le système IA qui exploite ton CRM pour générer du CA — réactivation, upsell, churn, nettoyage.</p>
         </div>
         <div>
           <h5 data-i18n="footer.product">PRODUIT</h5>
           <ul>
             <li><a href="how-it-works.html" data-i18n="footer.links.how">Comment ça marche</a></li>
-            <li><a href="#crm-intelligence" data-i18n="footer.links.crm">CRM Intelligence</a></li>
-            <li><a href="#activation" data-i18n="footer.links.activation">Activation client</a></li>
-            <li><a href="#prospection" data-i18n="footer.links.prosp">Prospection IA</a></li>
-            <li><a href="#synapse" data-i18n="footer.links.synapse">Synapse</a></li>
-            <li><a href="#beta" data-i18n="footer.links.pricing">Beta</a></li>
+            <li><a href="#crm-intelligence" data-i18n="footer.links.crm">Ce que fait le système</a></li>
+            <li><a href="#activation" data-i18n="footer.links.activation">Automatisation</a></li>
+            <li><a href="#prospection" data-i18n="footer.links.prosp">Prospection</a></li>
+            <li><a href="#synapse" data-i18n="footer.links.synapse">Sous le capot</a></li>
+            <li><a href="#beta" data-i18n="footer.links.pricing">Tarif</a></li>
           </ul>
         </div>
         <div>
