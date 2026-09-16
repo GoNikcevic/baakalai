@@ -10,7 +10,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 **3 pillars:** CRM Intelligence > Automatisation (ex-« Activation », renommée 2026-09-14) > Prospection (prospection = door, not the product).
 
-**Pricing:** Starter 49€/mo, Growth 149€/mo, Scale 349€/mo. Team plan up to 5 members.
+**Pricing:** 69 €/siège/mois, produit complet (décision Goran 2026-09-03, remplace l'ancienne grille 49/149/349). Annuel : 2 mois offerts. Founding members beta : −50 % à la sortie publique. Team plan up to 5 members. Affiché publiquement sur la landing depuis le 2026-09-16. ⚠️ Le socle Stripe (migration 078) est construit pour 3 tiers — à adapter en un price unique × quantité de sièges.
 
 ## 2. Tech Stack
 
