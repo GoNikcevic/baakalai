@@ -202,10 +202,25 @@ async function syncOpportunityToProvider(userId, provider, opportunity) {
   } else if (provider === 'odoo') {
     let creds;
     try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are invalid JSON'); }
-    const { id, action } = await odoo.upsertContact(creds, { name: opportunity.name, email: opportunity.email, title: opportunity.title, company: opportunity.company });
-    const deal = await odoo.createDeal(creds, { name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`, contactId: id });
-    await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(deal.id) });
-    return { opportunityId: opportunity.id, provider: 'odoo', contactId: id, dealId: deal.id, action };
+    const fromOdoo = opportunity.crm_provider === 'odoo';
+    const { id, action } = await odoo.upsertContact(creds, {
+      contactId: fromOdoo ? opportunity.crm_contact_id : null,
+      name: opportunity.name,
+      email: opportunity.email,
+      title: opportunity.title,
+      company: opportunity.company,
+    });
+    // Réutiliser la crm.lead déjà poussée — la création inconditionnelle
+    // dupliquait le deal à chaque re-sync. On ne réécrit pas son contenu :
+    // les éditions faites dans Odoo priment.
+    let dealId = fromOdoo && opportunity.crm_deal_id ? parseInt(opportunity.crm_deal_id, 10) : null;
+    if (dealId && !(await odoo.dealExists(creds, dealId))) dealId = null;
+    if (!dealId) {
+      const deal = await odoo.createDeal(creds, { name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`, contactId: id });
+      dealId = deal.id;
+    }
+    await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(dealId) });
+    return { opportunityId: opportunity.id, provider: 'odoo', contactId: id, dealId, action };
   }
   throw new Error(`Unsupported CRM provider: ${provider}`);
 }
@@ -444,18 +459,28 @@ router.post('/sync-to/:provider', async (req, res, next) => {
       // token is JSON string: { url, db, username, password }
       let creds;
       try { creds = JSON.parse(token); } catch { return res.status(400).json({ error: 'Odoo credentials are invalid JSON' }); }
+      const fromOdoo = opportunity.crm_provider === 'odoo';
       const { id, action } = await odoo.upsertContact(creds, {
+        contactId: fromOdoo ? opportunity.crm_contact_id : null,
         name: opportunity.name,
         email: opportunity.email,
         title: opportunity.title,
         company: opportunity.company,
       });
-      const deal = await odoo.createDeal(creds, {
-        name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`,
-        contactId: id,
-      });
-      result = { opportunityId: opportunity.id, provider: 'odoo', contactId: id, dealId: deal.id, action };
-      await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(deal.id) });
+      // Réutiliser la crm.lead déjà poussée — la création inconditionnelle
+      // dupliquait le deal à chaque re-sync. On ne réécrit pas son contenu :
+      // les éditions faites dans Odoo priment.
+      let dealId = fromOdoo && opportunity.crm_deal_id ? parseInt(opportunity.crm_deal_id, 10) : null;
+      if (dealId && !(await odoo.dealExists(creds, dealId))) dealId = null;
+      if (!dealId) {
+        const deal = await odoo.createDeal(creds, {
+          name: `${opportunity.name} — ${opportunity.company || 'Baakalai'}`,
+          contactId: id,
+        });
+        dealId = deal.id;
+      }
+      result = { opportunityId: opportunity.id, provider: 'odoo', contactId: id, dealId, action };
+      await db.opportunities.update(opportunity.id, { crm_provider: 'odoo', crm_contact_id: String(id), crm_deal_id: String(dealId) });
     } else {
       return res.status(400).json({ error: `Unsupported CRM provider: ${provider}` });
     }

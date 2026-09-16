@@ -101,14 +101,31 @@ async function listAllContacts(creds) {
 }
 
 async function searchContactByEmail(creds, email) {
-  const ids = await call(creds, 'res.partner', 'search', [
+  let ids = await call(creds, 'res.partner', 'search', [
     [['email', '=ilike', email]],
   ], { limit: 1 });
+  if (!ids || ids.length === 0) {
+    // Un contact archivé garde son email mais est invisible pour la recherche
+    // par défaut (l'ORM filtre active=true) : sans ce second passage, chaque
+    // re-push d'un contact archivé en recréait un doublon actif à côté.
+    // Deux passages plutôt qu'un seul avec active_test:false, pour qu'un
+    // homonyme actif gagne toujours sur l'archivé.
+    ids = await call(creds, 'res.partner', 'search', [
+      [['email', '=ilike', email]],
+    ], { limit: 1, context: { active_test: false } });
+  }
   if (!ids || ids.length === 0) return null;
   const contacts = await call(creds, 'res.partner', 'read', [ids], {
     fields: ['id', 'name', 'email', 'phone', 'function', 'company_name', 'parent_id'],
   });
   return contacts[0] || null;
+}
+
+async function contactExists(creds, contactId) {
+  const ids = await call(creds, 'res.partner', 'search', [
+    [['id', '=', contactId]],
+  ], { limit: 1, context: { active_test: false } });
+  return Boolean(ids && ids.length);
 }
 
 async function createContact(creds, data) {
@@ -148,6 +165,16 @@ async function unarchiveContact(creds, contactId) {
 }
 
 async function upsertContact(creds, data) {
+  // L'ID connu (posé par un import ou un push précédent) prime sur l'email :
+  // l'email peut diverger entre baakalai et Odoo, et un contact sans email
+  // n'a aucun autre critère de matching — chaque re-sync le recréait.
+  if (data.contactId) {
+    const id = parseInt(data.contactId, 10);
+    if (Number.isInteger(id) && await contactExists(creds, id)) {
+      await updateContact(creds, id, data);
+      return { id, action: 'updated' };
+    }
+  }
   if (data.email) {
     const existing = await searchContactByEmail(creds, data.email);
     if (existing) {
@@ -195,6 +222,15 @@ async function getDeals(creds, { limit = 100 } = {}) {
       closeDate: d.date_closed || null,
     };
   });
+}
+
+// active_test:false — une lead « perdue » est archivée par Odoo, elle existe
+// toujours ; sans le contexte, on la croirait supprimée et on la recréerait.
+async function dealExists(creds, dealId) {
+  const ids = await call(creds, 'crm.lead', 'search', [
+    [['id', '=', dealId]],
+  ], { limit: 1, context: { active_test: false } });
+  return Boolean(ids && ids.length);
 }
 
 async function createDeal(creds, data) {
@@ -300,12 +336,14 @@ module.exports = {
   listContacts,
   listAllContacts,
   searchContactByEmail,
+  contactExists,
   createContact,
   updateContact,
   archiveContact,
   unarchiveContact,
   upsertContact,
   getDeals,
+  dealExists,
   createDeal,
   getStages,
   getInvoices,
