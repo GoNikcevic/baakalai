@@ -1,5 +1,5 @@
 // ============================================================
-// BAAKALAI — Constellation Visualization (production)
+// BAAKALAI · Constellation Visualization (production)
 // Data + Layout + Scene + SidePanel + App
 // ============================================================
 
@@ -29,7 +29,7 @@ const AGENTS_FR = [
     stats: { patterns_appris: 4129, sources: 9, hits_semaine: 2840 },
     tools: ['supabase', 'pgvector', 'notion-store'] },
   { id: 'reporting', name: 'Reporting', short: 'RPRT',
-    tagline: "Te dit ce qui marche \u2014 et ce qui meurt.",
+    tagline: "Te dit ce qui marche \  et ce qui meurt.",
     desc: "G\u00e9n\u00e8re diagnostics hebdo, rep\u00e8re les deals \u00e0 r\u00e9activer, livre des recommandations en langage clair. 12 agents au total, 4 quotidiens + 7 strat\u00e9giques + 1 g\u00e9n\u00e9rateur de templates.",
     stats: { rapports_generes: 156, anomalies_detectees: 38, recos_actives: 12 },
     tools: ['notion-store', 'resend', 'gmail'] },
@@ -52,7 +52,7 @@ const AGENTS_EN = [
     stats: { patterns_learned: 4129, sources: 9, hits_this_week: 2840 },
     tools: ['supabase', 'pgvector', 'notion-store'] },
   { id: 'reporting', name: 'Reporting', short: 'RPRT',
-    tagline: "Tells you what works \u2014 and what's dying.",
+    tagline: "Tells you what works \  and what's dying.",
     desc: "Writes weekly diagnostics, flags deals to reactivate, delivers recommendations in plain language. 12 agents total: 4 daily + 7 strategic + 1 template generator.",
     stats: { reports_shipped: 156, anomalies_flagged: 38, active_recos: 12 },
     tools: ['notion-store', 'resend', 'gmail'] },
@@ -60,7 +60,7 @@ const AGENTS_EN = [
 
 const TOOLS_FR = [
   { id: 'apollo', name: 'Apollo', cat: 'prospecting', desc: 'Recherche & enrichissement prospects',
-    role: "Le moteur de recherche de prospects. baakalai l\u2019utilise pour trouver des contacts qui matchent un ICP \u2014 par poste, secteur, taille, localisation \u2014 et r\u00e9cup\u00e8re les infos enrichies.",
+    role: "Le moteur de recherche de prospects. baakalai l\u2019utilise pour trouver des contacts qui matchent un ICP \  par poste, secteur, taille, localisation \  et r\u00e9cup\u00e8re les infos enrichies.",
     interactions: [
       { agent: 'prospection', action: 'search(icp)', purpose: 'trouve les leads qui matchent le crit\u00e8re' },
       { agent: 'prospection', action: 'enrich(contact)', purpose: 'remplit les champs manquants avant envoi' } ] },
@@ -116,7 +116,7 @@ const TOOLS_FR = [
     role: "\u00c9quivalent Gmail pour l\u2019\u00e9cosyst\u00e8me Microsoft. baakalai s\u2019authentifie via Microsoft OAuth et envoie depuis ton adresse.",
     interactions: [ { agent: 'crm', action: 'send_personal', purpose: 'envoi depuis ton Outlook' } ] },
   { id: 'smtp', name: 'SMTP', cat: 'email', desc: 'Tout provider (OVH, Gmail\u2026)',
-    role: "Pour les configs custom \u2014 OVH, serveur d\u00e9di\u00e9, Gmail SMTP. Quand l\u2019OAuth ne suffit pas, baakalai utilise un SMTP brut avec credentials chiffr\u00e9s.",
+    role: "Pour les configs custom \  OVH, serveur d\u00e9di\u00e9, Gmail SMTP. Quand l\u2019OAuth ne suffit pas, baakalai utilise un SMTP brut avec credentials chiffr\u00e9s.",
     interactions: [ { agent: 'crm', action: 'send_via_smtp', purpose: 'envoi sur ton serveur custom' } ] },
   { id: 'resend', name: 'Resend', cat: 'email', desc: 'Emails syst\u00e8me',
     role: "Le canal d\u2019emails syst\u00e8me baakalai \u2192 toi : rapports hebdo, alertes, digests. Pas pour l\u2019outbound.",
@@ -134,7 +134,7 @@ const TOOLS_FR = [
       { agent: 'memory', action: 'vector_search', purpose: 'trouve les cas similaires' },
       { agent: 'memory', action: 'embed(text)', purpose: 'vectorise nouveau pattern' } ] },
   { id: 'notion-store', name: 'Notion (store)', cat: 'data', desc: 'Diagnostics & versions',
-    role: "Notion utilis\u00e9 comme store de documents \u2014 diagnostics versionn\u00e9s, rapports archiv\u00e9s. Chaque rapport hebdo y a sa page.",
+    role: "Notion utilis\u00e9 comme store de documents \  diagnostics versionn\u00e9s, rapports archiv\u00e9s. Chaque rapport hebdo y a sa page.",
     interactions: [
       { agent: 'reporting', action: 'archive_report', purpose: 'pose le rapport versionn\u00e9' },
       { agent: 'memory', action: 'read_diagnostic', purpose: 'consulte les diagnostics pass\u00e9s' } ] },
@@ -142,7 +142,7 @@ const TOOLS_FR = [
 
 const TOOLS_EN = [
   { id: 'apollo', name: 'Apollo', cat: 'prospecting', desc: 'Lead search & enrichment',
-    role: "The lead search engine. baakalai uses it to find contacts matching an ICP \u2014 by role, industry, size, location \u2014 and pulls back enriched data.",
+    role: "The lead search engine. baakalai uses it to find contacts matching an ICP \  by role, industry, size, location \  and pulls back enriched data.",
     interactions: [
       { agent: 'prospection', action: 'search(icp)', purpose: 'finds leads matching the criteria' },
       { agent: 'prospection', action: 'enrich(contact)', purpose: 'fills missing fields before sending' } ] },
@@ -198,7 +198,7 @@ const TOOLS_EN = [
     role: "Gmail equivalent for the Microsoft world. baakalai authenticates via Microsoft OAuth and sends from your address.",
     interactions: [ { agent: 'crm', action: 'send_personal', purpose: 'send from your Outlook' } ] },
   { id: 'smtp', name: 'SMTP', cat: 'email', desc: 'Any provider (OVH, Gmail\u2026)',
-    role: "For custom configs \u2014 OVH, dedicated server, Gmail SMTP. When OAuth isn't enough, baakalai uses raw SMTP with encrypted creds.",
+    role: "For custom configs \  OVH, dedicated server, Gmail SMTP. When OAuth isn't enough, baakalai uses raw SMTP with encrypted creds.",
     interactions: [ { agent: 'crm', action: 'send_via_smtp', purpose: 'send through your custom server' } ] },
   { id: 'resend', name: 'Resend', cat: 'email', desc: 'System emails',
     role: "The system-email channel from baakalai \u2192 you: weekly reports, alerts, digests. Not for outbound.",
@@ -216,7 +216,7 @@ const TOOLS_EN = [
       { agent: 'memory', action: 'vector_search', purpose: 'finds similar cases' },
       { agent: 'memory', action: 'embed(text)', purpose: 'vectorises new pattern' } ] },
   { id: 'notion-store', name: 'Notion (store)', cat: 'data', desc: 'Diagnostics & versions',
-    role: "Notion used as a doc store \u2014 versioned diagnostics, archived reports. Each weekly report gets its own page.",
+    role: "Notion used as a doc store \  versioned diagnostics, archived reports. Each weekly report gets its own page.",
     interactions: [
       { agent: 'reporting', action: 'archive_report', purpose: 'drops the versioned report' },
       { agent: 'memory', action: 'read_diagnostic', purpose: 'consults past diagnostics' } ] },
@@ -224,7 +224,7 @@ const TOOLS_EN = [
 
 const SCENARIOS_FR = [
   { id: 'cold_outreach', title: 'Une nouvelle campagne, de z\u00e9ro',
-    caption: 'Tu lances "CTOs SaaS Paris" \u2014 voici comment baakalai, Prospection et tes outils s\'organisent.',
+    caption: 'Tu lances "CTOs SaaS Paris" \  voici comment baakalai, Prospection et tes outils s\'organisent.',
     steps: [
       { from: 'user', to: 'claude', verb: 'demande campagne', detail: 'CTOs SaaS \u00b7 Paris \u00b7 100 leads', dur: 1200 },
       { from: 'claude', to: 'memory', verb: 'consulte patterns', detail: 'segments gagnants \u00b7 saisonnalit\u00e9', dur: 1800 },
@@ -236,7 +236,7 @@ const SCENARIOS_FR = [
       { from: 'prospection', to: 'lemlist', verb: 'd\u00e9ploie', detail: 'cmp_847 \u00b7 118 leads \u00b7 d\u00e9marrage 09h', dur: 1800 },
       { from: 'lemlist', to: 'prospection', verb: 'confirme', detail: 'campagne live \u00b7 A/B 50/50', dur: 1200 } ] },
   { id: 'crm_revival', title: 'Un deal qui dort se r\u00e9veille',
-    caption: 'Pipedrive ping un deal stagnant \u2014 l\'agent CRM enqu\u00eate, baakalai r\u00e9dige, ton SMTP envoie.',
+    caption: 'Pipedrive ping un deal stagnant \  l\'agent CRM enqu\u00eate, baakalai r\u00e9dige, ton SMTP envoie.',
     steps: [
       { from: 'pipedrive', to: 'crm', verb: 'webhook', detail: 'deal #4218 \u00b7 14j sans activit\u00e9', dur: 1400 },
       { from: 'crm', to: 'memory', verb: 'cherche similaires', detail: 'deals stagnants \u2192 relances OK', dur: 1600 },
@@ -259,7 +259,7 @@ const SCENARIOS_FR = [
 
 const SCENARIOS_EN = [
   { id: 'cold_outreach', title: 'A new campaign, from scratch',
-    caption: 'You launch "SaaS CTOs in Paris" \u2014 here\'s how baakalai, Prospection and your tools coordinate.',
+    caption: 'You launch "SaaS CTOs in Paris" \  here\'s how baakalai, Prospection and your tools coordinate.',
     steps: [
       { from: 'user', to: 'claude', verb: 'requests campaign', detail: 'SaaS CTOs \u00b7 Paris \u00b7 100 leads', dur: 1200 },
       { from: 'claude', to: 'memory', verb: 'queries patterns', detail: 'winning segments \u00b7 seasonality', dur: 1800 },
@@ -271,7 +271,7 @@ const SCENARIOS_EN = [
       { from: 'prospection', to: 'lemlist', verb: 'deploys', detail: 'cmp_847 \u00b7 118 leads \u00b7 starts 9am', dur: 1800 },
       { from: 'lemlist', to: 'prospection', verb: 'confirms', detail: 'campaign live \u00b7 A/B 50/50', dur: 1200 } ] },
   { id: 'crm_revival', title: 'A sleeping deal wakes up',
-    caption: 'Pipedrive pings a stagnant deal \u2014 CRM agent investigates, baakalai writes, your SMTP sends.',
+    caption: 'Pipedrive pings a stagnant deal \  CRM agent investigates, baakalai writes, your SMTP sends.',
     steps: [
       { from: 'pipedrive', to: 'crm', verb: 'webhook', detail: 'deal #4218 \u00b7 14d no activity', dur: 1400 },
       { from: 'crm', to: 'memory', verb: 'finds similar', detail: 'stagnant deals \u2192 revivals OK', dur: 1600 },
@@ -298,11 +298,11 @@ const UI_FR = {
   reset: 'RESET',
   filterAll: 'Tout',
   brain: 'CERVEAU', agent: 'AGENT', tool: 'OUTIL',
-  brainTitle: 'baakalai \u2014 orchestrateur',
-  brainTooltip: "Le cerveau de baakalai. D\u00e9cide quel agent activer, \u00e9crit, analyse, consolide la m\u00e9moire \u2014 propuls\u00e9 par Claude.",
+  brainTitle: 'baakalai \  orchestrateur',
+  brainTooltip: "Le cerveau de baakalai. D\u00e9cide quel agent activer, \u00e9crit, analyse, consolide la m\u00e9moire \  propuls\u00e9 par Claude.",
   brainBig: 'baakalai',
-  brainSub: "orchestre tout, lit, \u00e9crit, refine \u2014 propuls\u00e9 par Claude",
-  brainBody: "baakalai est au centre \u2014 pas parce qu\u2019il fait tout, mais parce qu\u2019il d\u00e9cide. \u00c0 chaque demande, il lit l\u2019historique, consulte la Memory, choisit l\u2019agent qui doit prendre le relai, puis r\u00e9dige le langage humain (s\u00e9quences, emails, rapports). Le moteur de raisonnement est Claude (Anthropic).",
+  brainSub: "orchestre tout, lit, \u00e9crit, refine \  propuls\u00e9 par Claude",
+  brainBody: "baakalai est au centre \  pas parce qu\u2019il fait tout, mais parce qu\u2019il d\u00e9cide. \u00c0 chaque demande, il lit l\u2019historique, consulte la Memory, choisit l\u2019agent qui doit prendre le relai, puis r\u00e9dige le langage humain (s\u00e9quences, emails, rapports). Le moteur de raisonnement est Claude (Anthropic).",
   agentEyebrow: 'AGENT AUTONOME',
   isolate: '\u2192 Isoler',
   showAll: '\u21a9 Tout r\u00e9afficher',
@@ -313,8 +313,8 @@ const UI_FR = {
   heroTitle1: 'Pendant que tu dors,',
   heroTitle2: 'la constellation',
   heroTitle3: 'travaille.',
-  heroSub: "baakalai au centre. Douze agents qui lisent ton CRM 24/7. Dix-neuf outils qui ob\u00e9issent au doigt et \u00e0 l\u2019\u0153il. Regarde-les r\u00e9activer tes deals \u2014 en direct.",
-  ctaTitle: "Connecte tes outils \u2014 baakalai prend le relais.",
+  heroSub: "baakalai au centre. Douze agents qui lisent ton CRM 24/7. Dix-neuf outils qui ob\u00e9issent au doigt et \u00e0 l\u2019\u0153il. Regarde-les r\u00e9activer tes deals \  en direct.",
+  ctaTitle: "Connecte tes outils \  baakalai prend le relais.",
   ctaButton: 'Rejoindre la beta',
   ctaNote: '14 jours offerts. Pas de carte requise.',
 };
@@ -325,11 +325,11 @@ const UI_EN = {
   reset: 'RESET',
   filterAll: 'All',
   brain: 'BRAIN', agent: 'AGENT', tool: 'TOOL',
-  brainTitle: 'baakalai \u2014 orchestrator',
-  brainTooltip: "baakalai\u2019s brain. Decides which agent to activate, writes, analyses, consolidates memory \u2014 powered by Claude.",
+  brainTitle: 'baakalai \  orchestrator',
+  brainTooltip: "baakalai\u2019s brain. Decides which agent to activate, writes, analyses, consolidates memory \  powered by Claude.",
   brainBig: 'baakalai',
-  brainSub: "orchestrates everything, reads, writes, refines \u2014 powered by Claude",
-  brainBody: "baakalai sits at the center \u2014 not because it does everything, but because it decides. On every request it reads the history, queries Memory, picks the agent that should take over, then writes the human language (sequences, emails, reports). The reasoning engine is Claude (Anthropic).",
+  brainSub: "orchestrates everything, reads, writes, refines \  powered by Claude",
+  brainBody: "baakalai sits at the center \  not because it does everything, but because it decides. On every request it reads the history, queries Memory, picks the agent that should take over, then writes the human language (sequences, emails, reports). The reasoning engine is Claude (Anthropic).",
   agentEyebrow: 'AUTONOMOUS AGENT',
   isolate: '\u2192 Isolate',
   showAll: '\u21a9 Show all',
@@ -340,14 +340,14 @@ const UI_EN = {
   heroTitle1: 'While you sleep,',
   heroTitle2: 'the constellation',
   heroTitle3: 'is working.',
-  heroSub: "baakalai at the center. Twelve agents reading your CRM 24/7. Nineteen tools at its fingertips. Watch them reactivate your deals \u2014 live.",
-  ctaTitle: "Connect your tools \u2014 baakalai takes over.",
+  heroSub: "baakalai at the center. Twelve agents reading your CRM 24/7. Nineteen tools at its fingertips. Watch them reactivate your deals \  live.",
+  ctaTitle: "Connect your tools \  baakalai takes over.",
   ctaButton: 'Join the beta',
   ctaNote: '14 days free. No card required.',
 };
 
-const TR_NAV_FR = { how: "Comment \u00e7a marche", pricing: 'Beta', login: 'Login', try: 'Rejoindre la beta \u2192', philEyebrow: '\u2014 LA PHILOSOPHIE', philTitle: ['On a d\u00e9coup\u00e9 le boulot en ', 'douze agents', " \u2014 quatre op\u00e9rationnels quotidiens, sept strat\u00e9giques, un g\u00e9n\u00e9rateur de templates."], hintCaption: '\u2191 survol une \u00e9toile \u00b7 clique pour voir ce qu\u2019elle fait \u00b7 isole un agent pour suivre son fil', filterAll: 'Tout afficher', focus: 'focus', pause: '\u23f8 Pause', resume: '\u25b6 Reprendre', readyCaption: 'pr\u00eat \u00e0 voir ta propre constellation ?' };
-const TR_NAV_EN = { how: 'How it works', pricing: 'Pricing', login: 'Login', try: 'Join the beta \u2192', philEyebrow: '\u2014 THE PHILOSOPHY', philTitle: ['We split the job into ', 'twelve agents', " \u2014 four daily operators, seven strategic, one template generator."], hintCaption: '\u2191 hover a star \u00b7 click to see what it does \u00b7 isolate an agent to follow its thread', filterAll: 'Show all', focus: 'focus', pause: '\u23f8 Pause', resume: '\u25b6 Resume', readyCaption: 'ready to see your own constellation?' };
+const TR_NAV_FR = { how: "Comment \u00e7a marche", pricing: 'Beta', login: 'Login', try: 'Rejoindre la beta \u2192', philEyebrow: '\  LA PHILOSOPHIE', philTitle: ['On a d\u00e9coup\u00e9 le boulot en ', 'douze agents', " \  quatre op\u00e9rationnels quotidiens, sept strat\u00e9giques, un g\u00e9n\u00e9rateur de templates."], hintCaption: '\u2191 survol une \u00e9toile \u00b7 clique pour voir ce qu\u2019elle fait \u00b7 isole un agent pour suivre son fil', filterAll: 'Tout afficher', focus: 'focus', pause: '\u23f8 Pause', resume: '\u25b6 Reprendre', readyCaption: 'pr\u00eat \u00e0 voir ta propre constellation ?' };
+const TR_NAV_EN = { how: 'How it works', pricing: 'Pricing', login: 'Login', try: 'Join the beta \u2192', philEyebrow: '\  THE PHILOSOPHY', philTitle: ['We split the job into ', 'twelve agents', " \  four daily operators, seven strategic, one template generator."], hintCaption: '\u2191 hover a star \u00b7 click to see what it does \u00b7 isolate an agent to follow its thread', filterAll: 'Show all', focus: 'focus', pause: '\u23f8 Pause', resume: '\u25b6 Resume', readyCaption: 'ready to see your own constellation?' };
 
 function getConstData(lang) {
   const isEn = lang === 'en';
@@ -661,7 +661,7 @@ const Constellation = ({ onSelect, focusedAgent, activeFilter, paused, data, t }
     React.createElement('div', { style: { position: 'absolute', top: 20, right: 20, display: 'flex', flexDirection: 'column', gap: 6, zIndex: 4 } },
       React.createElement('button', { onClick: () => setZoomClamped(zoom + 0.2), style: zoomBtnStyle }, '+'),
       React.createElement('button', { onClick: () => setZoomClamped(zoom - 0.2), style: zoomBtnStyle }, '\u2212'),
-      React.createElement('button', { onClick: resetView, style: { ...zoomBtnStyle, fontSize: 10, fontFamily: 'Geist Mono, monospace', letterSpacing: '0.06em' } }, t.reset),
+      React.createElement('button', { onClick: resetView, style: {...zoomBtnStyle, fontSize: 10, fontFamily: 'Geist Mono, monospace', letterSpacing: '0.06em' } }, t.reset),
       React.createElement('div', { style: { marginTop: 4, padding: '6px 8px', background: 'rgba(10,8,32,0.85)', border: '1px solid rgba(110,87,250,0.4)', borderRadius: 6, fontFamily: 'Geist Mono, monospace', fontSize: 10, color: '#A998FF', textAlign: 'center' } }, Math.round(zoom * 100) + '%'),
     ),
 
@@ -820,7 +820,7 @@ const ConstellationApp = () => {
     // HERO
     h('section', { style: { minHeight: '100vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 110 } },
       h('div', { className: 'fade-up', style: { textAlign: 'center', maxWidth: 920, padding: '0 32px', marginBottom: 32 } },
-        h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#A998FF' } }, '\u2014 BAAKALAI \u00b7 ' + t.heroEyebrow),
+        h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#A998FF' } }, '\  BAAKALAI \u00b7 ' + t.heroEyebrow),
         h('h1', { style: { fontSize: 'clamp(38px, 5.5vw, 68px)', fontWeight: 500, letterSpacing: '-0.035em', color: '#FFFFFF', lineHeight: 1.02, margin: '14px 0 16px' } },
           t.heroTitle1, h('br'), h('em', { style: { fontStyle: 'normal', color: '#A998FF' } }, t.heroTitle2), ' ', t.heroTitle3),
         h('p', { style: { fontSize: 17, color: '#C4B5FD', lineHeight: 1.55, margin: 0, maxWidth: 660, marginInline: 'auto' } }, t.heroSub),

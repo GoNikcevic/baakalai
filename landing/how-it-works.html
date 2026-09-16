@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>baakalai — comment ca marche | how it works</title>
+  <title>baakalai, comment ca marche | how it works</title>
   <meta name="description" content="baakalai au centre, douze agents autonomes, dix-neuf outils. Le système IA qui exploite ton CRM pour générer du CA.">
   <link rel="icon" href="assets/favicon.svg">
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
@@ -29,10 +29,10 @@
     /* Animations */
     @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-    .fade-up { animation: fadeUp 600ms cubic-bezier(0.2,0.6,0.2,1) both; }
+.fade-up { animation: fadeUp 600ms cubic-bezier(0.2,0.6,0.2,1) both; }
 
     /* Nav */
-    .c-nav {
+.c-nav {
       position: fixed; top: 0; left: 0; right: 0;
       padding: 18px 32px;
       display: flex; justify-content: space-between; align-items: center;
@@ -40,40 +40,40 @@
       background: linear-gradient(180deg, rgba(5,4,16,0.85) 0%, rgba(5,4,16,0) 100%);
       backdrop-filter: blur(8px);
     }
-    .c-wordmark {
+.c-wordmark {
       display: flex; align-items: center; gap: 10px;
       font-weight: 600; letter-spacing: -0.01em; color: #FFFFFF; font-size: 16px;
       text-decoration: none;
     }
 
     /* Lang switch */
-    .c-lang-switch {
+.c-lang-switch {
       display: inline-flex; border: 1px solid #2A2A48; border-radius: 999px;
       padding: 2px; background: rgba(10,8,32,0.6);
     }
-    .c-lang-switch button {
+.c-lang-switch button {
       background: transparent; border: 0; color: #7A7A78;
       font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em;
       padding: 5px 10px; border-radius: 999px; cursor: pointer; transition: all 200ms;
     }
-    .c-lang-switch button.active { background: #6E57FA; color: #FFFFFF; }
-    .c-lang-switch button:hover:not(.active) { color: #C4B5FD; }
+.c-lang-switch button.active { background: #6E57FA; color: #FFFFFF; }
+.c-lang-switch button:hover:not(.active) { color: #C4B5FD; }
 
     /* Chips */
-    .c-chip {
+.c-chip {
       padding: 5px 11px; border: 1.5px solid #2A2A48; border-radius: 999px;
       font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
       letter-spacing: 0.06em; color: #C4B5FD; cursor: pointer;
       transition: all 200ms cubic-bezier(0.2,0.6,0.2,1); background: transparent;
     }
-    .c-chip:hover { border-color: #6E57FA; color: #FFFFFF; }
-    .c-chip.active { background: #6E57FA; border-color: #6E57FA; color: #FFFFFF; }
+.c-chip:hover { border-color: #6E57FA; color: #FFFFFF; }
+.c-chip.active { background: #6E57FA; border-color: #6E57FA; color: #FFFFFF; }
 
     /* Responsive */
     @media (max-width: 768px) {
-      .c-nav { padding: 14px 16px; }
-      .c-nav > div:last-child { gap: 12px !important; }
-      .c-nav > div:last-child a:not(:last-child) { display: none; }
+.c-nav { padding: 14px 16px; }
+.c-nav > div:last-child { gap: 12px !important; }
+.c-nav > div:last-child a:not(:last-child) { display: none; }
     }
   </style>
 </head>
