@@ -105,29 +105,55 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
   }
 
   const others = group.contacts.filter(c => String(c.id) !== String(keepId));
+  const kept = group.contacts.find(c => String(c.id) === String(keepId));
 
   return (
     <div className="card" style={{ marginTop: 8, border: '1px solid var(--border)' }}>
       <div className="card-body" style={{ padding: '14px 16px' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{t('dataQuality.duplicates.reviewDiff')}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{t('dataQuality.duplicates.reviewDiff')}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{t('dataQuality.duplicates.pickColumnHint')}</div>
 
         <div style={{ overflowX: 'auto', marginBottom: 12 }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
             <thead>
               <tr>
                 <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-muted)' }}></th>
-                {diff.perContact.map((c, i) => (
-                  <th key={c.id} style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                    {t('dataQuality.duplicates.fieldFromContact', { n: i + 1 })}
-                  </th>
-                ))}
+                {diff.perContact.map((c, i) => {
+                  const isKept = String(c.id) === String(keepId);
+                  return (
+                    <th key={c.id} onClick={() => setKeepId(c.id)} title={t('dataQuality.duplicates.pickColumnHint')}
+                      style={{
+                        textAlign: 'left', padding: '8px', cursor: 'pointer', verticalAlign: 'top',
+                        background: isKept ? 'var(--accent-glow)' : 'transparent',
+                        borderBottom: `2px solid ${isKept ? 'var(--accent)' : 'var(--border-light)'}`,
+                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input type="radio" checked={isKept} onChange={() => setKeepId(c.id)} style={{ cursor: 'pointer' }} />
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{c.name || c.email || t('dataQuality.duplicates.fieldFromContact', { n: i + 1 })}</span>
+                      </div>
+                      {c.name && c.email && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 22, wordBreak: 'break-all' }}>{c.email}</div>
+                      )}
+                      <div style={{ marginLeft: 22, marginTop: 4 }}>
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3,
+                          padding: '2px 6px', borderRadius: 4,
+                          background: isKept ? 'var(--accent)' : 'var(--danger-bg)',
+                          color: isKept ? 'var(--text-on-color)' : 'var(--danger)',
+                        }}>
+                          {isKept ? t('dataQuality.duplicates.keptBadge') : t('dataQuality.duplicates.toRemoveBadge')}
+                        </span>
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
                 <td style={{ padding: '4px 8px', fontWeight: 600 }}>{t('dataQuality.duplicates.activityRow')}</td>
                 {diff.perContact.map(c => (
-                  <td key={c.id} style={{ padding: '4px 8px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <td key={c.id} style={{ padding: '4px 8px', fontWeight: 600, whiteSpace: 'nowrap', background: String(c.id) === String(keepId) ? 'var(--accent-glow)' : 'transparent' }}>
                     {formatActivity(activityCounts[c.id], t)}
                   </td>
                 ))}
@@ -135,11 +161,14 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
               {diff.fields.map(field => (
                 <tr key={field}>
                   <td style={{ padding: '4px 8px', fontWeight: 600 }}>{FIELD_LABELS[field] || field}</td>
-                  {diff.perContact.map(c => (
-                    <td key={c.id} style={{ padding: '4px 8px', color: diff.diffs[field].conflict ? 'var(--warning)' : 'inherit' }}>
-                      {c[field] || '—'}
-                    </td>
-                  ))}
+                  {diff.perContact.map(c => {
+                    const isKept = String(c.id) === String(keepId);
+                    return (
+                      <td key={c.id} style={{ padding: '4px 8px', background: isKept ? 'var(--accent-glow)' : 'transparent', color: diff.diffs[field].conflict ? 'var(--warning)' : 'inherit' }}>
+                        {c[field] || '—'}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -163,20 +192,15 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
           </div>
         ))}
 
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>{t('dataQuality.duplicates.keepThis')}</div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {group.contacts.map(c => (
-              <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
-                <input type="radio" checked={String(keepId) === String(c.id)} onChange={() => setKeepId(c.id)} />
-                {c.name || c.email}
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({formatActivity(activityCounts[c.id], t)})</span>
-              </label>
-            ))}
+        {kept && (
+          <div style={{ marginTop: 10, fontSize: 12 }}>
+            <span style={{ color: 'var(--text-muted)' }}>{t('dataQuality.duplicates.keepSummary')} </span>
+            <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{kept.name || kept.email}</span>
+            {kept.name && kept.email && <span style={{ color: 'var(--text-muted)' }}> ({kept.email})</span>}
           </div>
-        </div>
+        )}
 
-        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--danger)' }}>
+        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--danger)' }}>
           {t('dataQuality.duplicates.willBeRemoved')}
           <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
             {others.map(c => <li key={c.id}>{c.name || c.email}{c.email && c.name ? ` (${c.email})` : ''}</li>)}
