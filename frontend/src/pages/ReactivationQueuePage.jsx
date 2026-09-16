@@ -511,7 +511,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                       }
                       return (
                         <button
-                          className="btn btn-primary"
+                          className="btn btn-accent"
                           style={{ fontSize: 11, padding: '4px 12px' }}
                           onClick={() => navigate(`${detailRouteBase}/${c.id}/workflow`)}
                         >

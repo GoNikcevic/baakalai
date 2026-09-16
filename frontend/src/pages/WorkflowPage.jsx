@@ -319,7 +319,12 @@ export default function WorkflowPage({ goal, backBase }) {
       <div className="dashboard-page">
         <div style={{ textAlign: 'center', padding: '80px 20px' }}>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>{t(errorKey)}</div>
-          <button className="btn btn-ghost" onClick={() => navigate(backBase)}>{t('workflow.backToQueue')}</button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            {errorKey === 'workflow.errorGeneration' && (
+              <button className="btn btn-accent" onClick={propose}>{t('workflow.retry')}</button>
+            )}
+            <button className="btn btn-ghost" onClick={() => navigate(backBase)}>{t('workflow.backToQueue')}</button>
+          </div>
         </div>
       </div>
     );

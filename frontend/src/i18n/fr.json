@@ -1405,6 +1405,7 @@
     "repliedBanner": "{name} a répondu — le workflow s'est arrêté. 1 relation réengagée.",
     "propose": "Proposer un workflow",
     "resumeDraft": "Reprendre le brouillon",
+    "retry": "Réessayer",
     "badgeActive": "Workflow actif — étape {done}/{total}",
     "badgePaused": "Workflow en pause — étape {done}/{total}",
     "addStep": "Ajouter une étape",

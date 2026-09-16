@@ -1405,6 +1405,7 @@
     "repliedBanner": "{name} replied — the workflow stopped. 1 relationship re-engaged.",
     "propose": "Propose a workflow",
     "resumeDraft": "Resume draft",
+    "retry": "Try again",
     "badgeActive": "Workflow active — step {done}/{total}",
     "badgePaused": "Workflow paused — step {done}/{total}",
     "addStep": "Add a step",
