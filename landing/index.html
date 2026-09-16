@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Ancre de catégorie : « RevOps », et non « revenue intelligence » — cette
+  <!-- Ancre de catégorie : « RevOps », et non « revenue intelligence », cette
        dernière est la catégorie que Gong possède et a définie, la revendiquer
        nous placerait dans une comparaison frontale avec un produit à 55 k$.
        « RevOps » désigne une fonction que personne ne possède, et nomme
        exactement le manque de l'ICP (PME 5-50 sans RevOps).
-       Le métier reste en premier dans le titre — la catégorie sert à être
+       Le métier reste en premier dans le titre : la catégorie sert à être
        trouvé, la promesse à convertir. Ne jamais écrire que baakalai EST une
        plateforme RevOps : ni forecast consolidé, ni territoires, ni variable,
        ni CPQ. Toujours « le travail qu'un RevOps ferait ». -->
-  <title>baakalai — le système IA qui exploite ton CRM | RevOps de la PME</title>
-  <meta name="description" content="Le RevOps sans l'équipe RevOps. baakalai lit ton CRM 24/7, repère les deals à relancer, les upsells et les risques de churn — et exécute la séquence de relance depuis ta boîte mail. Connexion CRM en un clic, 69 €/siège/mois.">
+  <title>baakalai : le système IA qui exploite ton CRM | RevOps de la PME</title>
+  <meta name="description" content="Le RevOps sans l'équipe RevOps. baakalai lit ton CRM 24/7, repère les deals à relancer, les upsells et les risques de churn, et exécute la séquence de relance depuis ta boîte mail. Connexion CRM en un clic, 69 €/siège/mois.">
   <meta property="og:site_name" content="baakalai">
   <meta property="og:title" content="Le RevOps, sans l'équipe RevOps.">
   <meta property="og:description" content="Ton CRM sait déjà qui relancer. Personne ne le lit. baakalai le lit 24/7 et relance à ta place, depuis ta propre boîte mail. Connexion en un clic, opérationnel en 30 minutes.">
@@ -28,17 +28,17 @@
   <link rel="icon" href="assets/favicon.svg">
   <link rel="stylesheet" href="site.css">
   <style>
-    /* Hero stage fix — give the aspect-ratio box an explicit width */
-    .hero-stage { width: 100%; }
+    /* Hero stage fix : give the aspect-ratio box an explicit width */
+.hero-stage { width: 100%; }
 
     /* ─── Hero mockup (variant D) ──────────────────────── */
-    .hero-mockup-wrap {
+.hero-mockup-wrap {
       position: relative;
       aspect-ratio: auto;
       max-width: 560px;
       margin-left: auto;
     }
-    .hero-mockup-wrap .browser-frame {
+.hero-mockup-wrap.browser-frame {
       position: relative;
       background: var(--paper);
       border: 1px solid var(--border);
@@ -49,7 +49,7 @@
       flex-direction: column;
       aspect-ratio: 1 / 1;
     }
-    .hero-mockup-wrap .browser-chrome {
+.hero-mockup-wrap.browser-chrome {
       display: flex;
       align-items: center;
       gap: 10px;
@@ -57,14 +57,14 @@
       background: var(--paper-2);
       border-bottom: 1px solid var(--border);
     }
-    .hero-mockup-wrap .browser-chrome .dots { display:flex; gap:6px; }
-    .hero-mockup-wrap .browser-chrome .dots span {
+.hero-mockup-wrap.browser-chrome.dots { display:flex; gap:6px; }
+.hero-mockup-wrap.browser-chrome.dots span {
       width: 11px; height: 11px; border-radius: 50%;
     }
-    .hero-mockup-wrap .browser-chrome .dots span:nth-child(1) { background: #FF5F57; }
-    .hero-mockup-wrap .browser-chrome .dots span:nth-child(2) { background: #FEBC2E; }
-    .hero-mockup-wrap .browser-chrome .dots span:nth-child(3) { background: #28C840; }
-    .hero-mockup-wrap .browser-chrome .url {
+.hero-mockup-wrap.browser-chrome.dots span:nth-child(1) { background: #FF5F57; }
+.hero-mockup-wrap.browser-chrome.dots span:nth-child(2) { background: #FEBC2E; }
+.hero-mockup-wrap.browser-chrome.dots span:nth-child(3) { background: #28C840; }
+.hero-mockup-wrap.browser-chrome.url {
       flex: 1;
       background: var(--paper);
       border: 1px solid var(--border);
@@ -75,7 +75,7 @@
       color: var(--grey-700);
       text-align: center;
     }
-    .hero-mockup-wrap .browser-body {
+.hero-mockup-wrap.browser-body {
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -85,21 +85,21 @@
       position: relative;
       overflow: hidden;
     }
-    .hero-mockup-wrap .chat-bubble {
+.hero-mockup-wrap.chat-bubble {
       display: flex;
       gap: 10px;
       align-items: flex-start;
       max-width: 88%;
     }
-    .hero-mockup-wrap .chat-bubble.me { flex-direction: row-reverse; align-self: flex-end; }
-    .hero-mockup-wrap .chat-bubble .avatar {
+.hero-mockup-wrap.chat-bubble.me { flex-direction: row-reverse; align-self: flex-end; }
+.hero-mockup-wrap.chat-bubble.avatar {
       width: 28px; height: 28px; border-radius: 50%;
       flex-shrink: 0; display:flex; align-items:center; justify-content:center;
       font-size: 11px; font-weight: 600;
     }
-    .hero-mockup-wrap .chat-bubble.them .avatar { background: var(--lavender); color: var(--ink); }
-    .hero-mockup-wrap .chat-bubble.me .avatar { background: var(--primary); color: var(--paper); }
-    .hero-mockup-wrap .chat-bubble .msg {
+.hero-mockup-wrap.chat-bubble.them.avatar { background: var(--lavender); color: var(--ink); }
+.hero-mockup-wrap.chat-bubble.me.avatar { background: var(--primary); color: var(--paper); }
+.hero-mockup-wrap.chat-bubble.msg {
       background: var(--paper);
       border: 1px solid var(--border);
       border-radius: 13px;
@@ -108,12 +108,12 @@
       line-height: 1.5;
       color: var(--ink);
     }
-    .hero-mockup-wrap .chat-bubble.me .msg {
+.hero-mockup-wrap.chat-bubble.me.msg {
       background: var(--primary);
       color: var(--paper);
       border-color: transparent;
     }
-    .hero-mockup-wrap .typing {
+.hero-mockup-wrap.typing {
       display: inline-block;
       width: 4px; height: 13px;
       background: currentColor;
@@ -122,7 +122,7 @@
       margin-left: 2px;
     }
     @keyframes caret { 50% { opacity: 0; } }
-    .hero-mockup-wrap .play-overlay {
+.hero-mockup-wrap.play-overlay {
       position: absolute;
       inset: 0;
       display: flex;
@@ -131,7 +131,7 @@
       background: linear-gradient(180deg, rgba(20,18,30,0) 35%, rgba(20,18,30,0.45) 100%);
       pointer-events: none;
     }
-    .hero-mockup-wrap .play-btn {
+.hero-mockup-wrap.play-btn {
       width: 72px; height: 72px;
       border-radius: 50%;
       background: rgba(255,255,255,0.96);
@@ -141,8 +141,8 @@
       cursor: pointer;
       transition: transform 220ms;
     }
-    .hero-mockup-wrap .play-btn:hover { transform: scale(1.06); }
-    .hero-mockup-wrap .play-btn::after {
+.hero-mockup-wrap.play-btn:hover { transform: scale(1.06); }
+.hero-mockup-wrap.play-btn::after {
       content: "";
       width: 0; height: 0;
       border-left: 20px solid var(--primary);
@@ -150,7 +150,7 @@
       border-bottom: 13px solid transparent;
       margin-left: 5px;
     }
-    .hero-mockup-wrap .video-meta {
+.hero-mockup-wrap.video-meta {
       position: absolute;
       bottom: 16px; left: 16px;
       display: flex; gap: 8px;
@@ -161,12 +161,12 @@
       text-transform: uppercase;
       pointer-events: none;
     }
-    .hero-mockup-wrap .video-meta .pill {
+.hero-mockup-wrap.video-meta.pill {
       background: rgba(0,0,0,0.5);
       padding: 5px 9px;
       border-radius: 4px;
     }
-    .hero-mockup-wrap .badge-live {
+.hero-mockup-wrap.badge-live {
       position: absolute;
       top: -12px; right: 18px;
       background: var(--ink);
@@ -182,7 +182,7 @@
       align-items: center;
       gap: 6px;
     }
-    .hero-mockup-wrap .badge-live .dot {
+.hero-mockup-wrap.badge-live.dot {
       width: 7px; height: 7px; border-radius: 50%;
       background: #16A34A;
       box-shadow: 0 0 0 0 rgba(22,163,74,0.5);
@@ -192,7 +192,7 @@
       0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.5); }
       50% { box-shadow: 0 0 0 6px rgba(22,163,74,0); }
     }
-    .hero-mockup-wrap .powered-by {
+.hero-mockup-wrap.powered-by {
       position: absolute;
       bottom: 14px; right: 16px;
       display: flex;
@@ -241,7 +241,7 @@
           <span data-i18n="hero.title_a">Ton CRM sait déjà qui relancer. </span><em class="accent" data-i18n="hero.title_em">Personne</em><span data-i18n="hero.title_b"> ne le lit.</span>
         </h1>
         <p class="body large" style="margin-top:28px; max-width:540px;" data-i18n="hero.sub">
-          baakalai lit ton CRM 24/7, repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner — et agit. Un deal récupéré rembourse l'outil pour des mois.
+          baakalai lit ton CRM 24/7, repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner, et agit. Un deal récupéré rembourse l'outil pour des mois.
         </p>
         <div style="margin-top:36px; display:flex; gap:12px; flex-wrap:wrap;">
           <a href="#book" class="btn btn-primary">
@@ -259,7 +259,7 @@
         </div>
       </div>
 
-      <!-- Hero mockup (variant D — platform mockup) -->
+      <!-- Hero mockup (variant D : platform mockup) -->
       <div class="hero-stage hero-mockup-wrap">
         <div class="badge-live"><span class="dot"></span><span data-i18n="hero.beta_badge">BETA TEST · ACCÈS LIMITÉ</span></div>
         <div class="browser-frame">
@@ -351,7 +351,7 @@
       <div class="feature-text">
         <span class="eyebrow" data-i18n="crm.eyebrow">CE QUE FAIT LE SYSTÈME</span>
         <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="crm.title_a">La donnée que tu as déjà payée </span><em class="accent" data-i18n="crm.title_em">génère du CA</em><span data-i18n="crm.title_b"> — sans nouveau lead.</span>
+          <span data-i18n="crm.title_a">La donnée que tu as déjà payée </span><em class="accent" data-i18n="crm.title_em">génère du CA</em><span data-i18n="crm.title_b">, sans nouveau lead.</span>
         </h2>
         <p class="body large" data-i18n="crm.sub">Réactiver un deal, détecter un upsell, prévenir un churn : trois gestes qui génèrent du revenu sans coût d'acquisition, à partir de ta base existante.</p>
         <ul class="feature-list" id="crm-list"></ul>
@@ -410,7 +410,7 @@
         <h2 class="h-section" style="margin:14px 0 10px;">
           <span data-i18n="diagcta.title_a">Sur Pipedrive, HubSpot ou Salesforce ? </span><em class="accent" data-i18n="diagcta.title_em">Mesurez le CA qui attend une relance</em><span data-i18n="diagcta.title_b"> dans votre pipeline.</span>
         </h2>
-        <p class="body large" data-i18n="diagcta.sub" style="max-width:560px;margin:0 auto 22px;">20 à 40 % des deals d'une PME restent sans suite. Collez votre clé API, obtenez le chiffre des vôtres en 30 secondes — sans compte. Autre CRM ? Le même diagnostic vous attend dans l'app.</p>
+        <p class="body large" data-i18n="diagcta.sub" style="max-width:560px;margin:0 auto 22px;">20 à 40 % des deals d'une PME restent sans suite. Collez votre clé API, obtenez le chiffre des vôtres en 30 secondes, sans compte. Autre CRM ? Le même diagnostic vous attend dans l'app.</p>
         <a href="diagnostic.html" class="btn btn-accent" style="padding:13px 26px;font-size:15px;" data-i18n="diagcta.cta">Lire mon CRM gratuitement</a>
         <div style="margin-top:14px;font-size:12px;color:var(--grey-500);" data-i18n="diagcta.trust">Lecture seule · clé jamais stockée · rapport supprimé après 30 jours</div>
       </div>
@@ -430,7 +430,7 @@
       </div>
 
       <!-- Mockup : séquence de relance proposée par le Deal Coach, en attente
-           d'approbation. Remplace l'ancienne liste de triggers — depuis les
+           d'approbation. Remplace l'ancienne liste de triggers : depuis les
            workflows (sept. 2026), la promesse n'est plus « il détecte » mais
            « il exécute la relance complète, branches comprises ». -->
       <div class="mockup">
@@ -441,7 +441,7 @@
         <div class="body-pad" style="display:flex;flex-direction:column;gap:10px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
             <div>
-              <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">Relance — Atelier Brun · 24 800 €</div>
+              <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">Relance : Atelier Brun · 24 800 €</div>
               <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--primary-deep);text-transform:uppercase;letter-spacing:0.04em;margin-top:4px;">Proposé par le Deal Coach</div>
             </div>
             <span style="font-family:var(--font-mono);font-size:10px;color:var(--grey-700);background:var(--paper);border:1px solid var(--border);padding:4px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">En attente</span>
@@ -519,7 +519,7 @@
               <svg width="14" height="14" viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="#FAFAF9"/></svg>
             </div>
             <div style="background:var(--primary);color:var(--paper);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;max-width:85%;">
-              Compris. Je génère 3 variantes — un cold email court, un long, une approche LinkedIn-first. Dès que tu valides, j'envoie depuis ta boîte mail et j'arrête toute séquence dont le contact répond.
+              Compris. Je génère 3 variantes : un cold email court, un long, une approche LinkedIn-first. Dès que tu valides, j'envoie depuis ta boîte mail et j'arrête toute séquence dont le contact répond.
             </div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
@@ -537,12 +537,12 @@
     <div class="dotgrid" style="position:absolute;inset:0;opacity:0.5;"></div>
     <div class="container" style="position:relative;">
       <div style="max-width:760px;">
-        <span class="eyebrow" data-i18n="synapse.eyebrow">SOUS LE CAPOT — MÉMOIRE SYNAPSE</span>
+        <span class="eyebrow" data-i18n="synapse.eyebrow">SOUS LE CAPOT · MÉMOIRE SYNAPSE</span>
         <h2 class="h-section" style="margin-top:18px; color:var(--paper);">
           <span data-i18n="synapse.title_a">Plus tu l'utilises, </span><em class="accent" data-i18n="synapse.title_em">plus il est précis.</em><span data-i18n="synapse.title_b"></span>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="synapse.sub">
-          Le système apprend de chaque interaction. Chaque deal relancé, chaque churn évité, chaque upsell détecté crée un pattern réutilisable. Cette mémoire ne se transfère pas — elle crée un avantage qui se renforce avec le temps.
+          Le système apprend de chaque interaction. Chaque deal relancé, chaque churn évité, chaque upsell détecté crée un pattern réutilisable. Cette mémoire ne se transfère pas, elle crée un avantage qui se renforce avec le temps.
         </p>
       </div>
       <div class="agents-grid" id="agents-grid"></div>
@@ -581,7 +581,7 @@
           <span data-i18n="book.title_a">Vingt minutes pour voir si </span><em class="accent" data-i18n="book.title_em">on peut t'embarquer</em><span data-i18n="book.title_b">.</span>
         </h2>
         <p class="body large" style="margin-top:24px;" data-i18n="book.sub">
-          On prend 20 minutes ensemble pour comprendre ton cas. Si baakalai colle, on t'ouvre un accès beta dans la semaine. Sinon, on te le dit franchement — pas de pitch déguisé.
+          On prend 20 minutes ensemble pour comprendre ton cas. Si baakalai colle, on t'ouvre un accès beta dans la semaine. Sinon, on te le dit franchement, pas de pitch déguisé.
         </p>
         <ul class="feature-list" id="book-points" style="margin-top:32px;"></ul>
       </div>
@@ -630,7 +630,7 @@
             <img src="assets/synapse-mark-on-dark.svg" width="28" height="28" alt="">
             <span style="font-weight:600;font-size:18px;letter-spacing:-0.022em;color:var(--paper);">baakalai</span>
           </div>
-          <p style="font-size:14.5px;line-height:1.6;max-width:340px;" data-i18n="footer.blurb">Le système IA qui exploite ton CRM pour générer du CA — réactivation, upsell, churn, nettoyage.</p>
+          <p style="font-size:14.5px;line-height:1.6;max-width:340px;" data-i18n="footer.blurb">Le système IA qui exploite ton CRM pour générer du CA, réactivation, upsell, churn, nettoyage.</p>
         </div>
         <div>
           <h5 data-i18n="footer.product">PRODUIT</h5>
@@ -675,8 +675,8 @@
       const target = document.getElementById('hero-typed');
       if (!target) return;
       const lines = {
-        fr: "23 deals stagnants détectés, 74 800 € de pipe récupérable. Atelier Brun (24 800 €, stagnant 18j) — le même angle a réveillé 3 deals similaires. Je relance ?",
-        en: "23 stagnant deals detected, €74,800 in recoverable pipeline. Atelier Brun (€24,800, stagnant 18d) — same angle reactivated 3 similar deals. Shall I follow up?"
+        fr: "23 deals stagnants détectés, 74 800 € de pipe récupérable. Atelier Brun (24 800 €, stagnant 18j), le même angle a réveillé 3 deals similaires. Je relance ?",
+        en: "23 stagnant deals detected, €74,800 in recoverable pipeline. Atelier Brun (€24,800, stagnant 18d), same angle reactivated 3 similar deals. Shall I follow up?"
       };
       let i = 0, mode = 'typing', timer;
       function tick() {

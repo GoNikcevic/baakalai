@@ -1,786 +1,883 @@
 // ============================================================
-// BAAKALAI — Constellation Visualization (production)
-// Data + Layout + Scene + SidePanel + App
+// BAAKALAI : Comment ça marche : le noyau et la boucle
+// Vanilla JS, aucune dépendance. Données FR/EN + scène SVG +
+// séquenceur de boucle + panneau de détail.
 // ============================================================
 
-// ─── DATA ───────────────────────────────────────────────────
+// ─── DATA · ÉTAPES DE LA BOUCLE (briques natives) ───────────
 
-const TOOL_CATEGORIES = [
-  { id: 'prospecting', label: 'PROSPECTING', color: '#A998FF' },
-  { id: 'crm',         label: 'CRM',         color: '#C4B5FD' },
-  { id: 'email',       label: 'EMAIL',       color: '#9A84EB' },
-  { id: 'data',        label: 'DATA',        color: '#6E57FA' },
+const STEPS_FR = [
+  { id: 'crm-read', num: 1, name: 'Lecture CRM', sub: 'SYNC 24/7', badge: 'BRIQUE NATIVE',
+    tip: 'Sync bidirectionnelle avec ton CRM : lecture des deals, écriture des activités.',
+    role: 'La porte d’entrée. baakalai se connecte à ton CRM (HubSpot, Pipedrive et Salesforce en OAuth un clic ; Odoo, Notion, Airtable et Folk par clé API) et lit deals, contacts et historique en continu. Il écrit en retour chaque activité.',
+    agents: ['CRM'],
+    interactions: [
+      { agent: 'CRM', action: 'sync_bidirectionnelle', purpose: 'lit les deals, écrit les activités' },
+      { agent: 'CRM', action: 'webhook → deal_event', purpose: 'réagit en temps réel aux changements' } ] },
+  { id: 'detect', num: 2, name: 'Détection', sub: 'STAGNATION · CHURN · UPSELL', badge: 'BRIQUE NATIVE',
+    tip: 'Repère les deals stagnants, les signaux de churn et les upsells, c’est ce qui déclenche la boucle.',
+    role: 'Le radar. À chaque sync, les agents cherchent les deals qui dorment, les signaux de churn et les opportunités d’upsell. C’est la détection qui déclenche la boucle, pas toi.',
+    agents: ['CRM', 'Upsell Detector', 'Win/Loss Analyst'],
+    interactions: [
+      { agent: 'CRM', action: 'detect_stagnation', purpose: 'deal sans activité depuis N jours' },
+      { agent: 'Upsell Detector', action: 'score_upsell', purpose: 'repère les comptes à étendre' },
+      { agent: 'Win/Loss Analyst', action: 'analyse_perdus', purpose: 'comprend pourquoi un deal meurt' } ] },
+  { id: 'sequence', num: 3, name: 'Séquence proposée', sub: 'BRANCHES CONDITIONNELLES', badge: 'MOTEUR DE SÉQUENCES',
+    tip: 'Le Deal Coach propose une séquence de relance à branches : répond / ne répond pas.',
+    role: 'Le Deal Coach propose une séquence de relance à branches conditionnelles : si le prospect répond, on arrête ; s’il ignore, l’étape suivante part au moment choisi. Chaque étape est rédigée à partir des patterns de la Memory.',
+    agents: ['Deal Coach', 'Memory', 'Copy Optimizer', 'Timing Agent'],
+    interactions: [
+      { agent: 'Deal Coach', action: 'propose_sequence', purpose: '3 5 étapes, 2 branches par étape' },
+      { agent: 'Memory', action: 'patterns_gagnants', purpose: 'angle, ton et timing qui ont déjà marché' },
+      { agent: 'Copy Optimizer', action: 'redige_variantes', purpose: '80 mots max, ta voix' } ] },
+  { id: 'approve', num: 4, name: 'Ton approbation', sub: 'RIEN NE PART SANS TOI', badge: 'TOI',
+    tip: 'La séquence arrive avec son raisonnement, tu valides, tu édites ou tu refuses.',
+    role: 'Rien ne part sans toi. La séquence proposée arrive avec son raisonnement, tu valides, tu édites ou tu refuses. Une fois approuvée, elle tourne toute seule.',
+    agents: ['Deal Coach', 'Reporting'],
+    interactions: [
+      { agent: 'Deal Coach', action: 'soumet_sequence', purpose: 'te montre le plan avant tout envoi' },
+      { agent: 'Reporting', action: 'trace_approbation', purpose: 'archive qui a validé quoi, quand' } ] },
+  { id: 'send', num: 5, name: 'Envoi', sub: 'DEPUIS TA BOÎTE', badge: 'ENVOI NATIF',
+    tip: 'Pas d’outil tiers requis : baakalai envoie depuis ta boîte Gmail ou Outlook.',
+    role: 'Pas d’outil tiers requis : baakalai envoie depuis ta boîte Gmail ou Outlook (OAuth un clic) ou ton SMTP. Tes relances partent de ton adresse, avec ta signature, dans ton fuseau.',
+    agents: ['CRM', 'Prospection', 'Timing Agent'],
+    interactions: [
+      { agent: 'CRM', action: 'send_personal', purpose: 'relance 1-to-1 depuis ton adresse' },
+      { agent: 'Prospection', action: 'send_step', purpose: 'déroule l’étape N de la séquence' },
+      { agent: 'Timing Agent', action: 'schedule', purpose: 'choisit le créneau qui répond le mieux' } ] },
+  { id: 'reply', num: 6, name: 'Réponse', sub: 'STOP OU ÉTAPE SUIVANTE', badge: 'DÉTECTION DE RÉPONSE',
+    tip: 'Dès qu’un prospect répond, la séquence s’arrête net. S’il ignore, l’étape suivante part.',
+    role: 'baakalai surveille ta boîte : dès qu’un prospect répond, la séquence s’arrête net et le deal te revient. S’il ignore, l’étape suivante part comme prévu. C’est la branche conditionnelle au cœur du moteur.',
+    agents: ['CRM', 'Memory'],
+    interactions: [
+      { agent: 'CRM', action: 'detect_reply → stop_sequence', purpose: 'coupe la branche, te notifie' },
+      { agent: 'Memory', action: 'enregistre_issue', purpose: 'réponse ou silence, tout devient pattern' } ] },
+  { id: 'memory', num: 7, name: 'Mémoire', sub: 'NOURRIT LA SUITE', badge: 'BRIQUE NATIVE',
+    tip: 'Consolide les patterns gagnants et nourrit la détection suivante. Le moat.',
+    role: 'Chaque issue (réponse, silence, deal relancé) devient un pattern. La Memory consolide, vectorise, et nourrit la détection suivante. Plus tu l’utilises, plus la boucle est précise.',
+    agents: ['Memory', 'ICP Refiner', 'Competitor Watch'],
+    interactions: [
+      { agent: 'Memory', action: 'persist_pattern', purpose: 'stocke ce qui a marché, et pourquoi' },
+      { agent: 'ICP Refiner', action: 'affine_cible', purpose: 'resserre le profil qui répond' },
+      { agent: 'Memory', action: 'alimente_11_agents', purpose: 'les autres agents lisent les patterns' } ] },
 ];
+
+const STEPS_EN = [
+  { id: 'crm-read', num: 1, name: 'CRM read', sub: 'SYNC 24/7', badge: 'NATIVE BRICK',
+    tip: 'Two-way sync with your CRM: reads deals, writes activities back.',
+    role: 'The entry point. baakalai connects to your CRM (HubSpot, Pipedrive and Salesforce in one-click OAuth; Odoo, Notion, Airtable and Folk via API key) and reads deals, contacts and history continuously. It writes every activity back.',
+    agents: ['CRM'],
+    interactions: [
+      { agent: 'CRM', action: 'two_way_sync', purpose: 'reads deals, writes activities' },
+      { agent: 'CRM', action: 'webhook → deal_event', purpose: 'reacts to changes in real time' } ] },
+  { id: 'detect', num: 2, name: 'Detection', sub: 'STALL · CHURN · UPSELL', badge: 'NATIVE BRICK',
+    tip: 'Spots stalled deals, churn signals and upsells, this is what triggers the loop.',
+    role: 'The radar. On every sync, the agents look for sleeping deals, churn signals and upsell opportunities. Detection triggers the loop, not you.',
+    agents: ['CRM', 'Upsell Detector', 'Win/Loss Analyst'],
+    interactions: [
+      { agent: 'CRM', action: 'detect_stagnation', purpose: 'deal with no activity for N days' },
+      { agent: 'Upsell Detector', action: 'score_upsell', purpose: 'flags accounts to expand' },
+      { agent: 'Win/Loss Analyst', action: 'analyse_losses', purpose: 'understands why a deal dies' } ] },
+  { id: 'sequence', num: 3, name: 'Proposed sequence', sub: 'CONDITIONAL BRANCHES', badge: 'SEQUENCE ENGINE',
+    tip: 'The Deal Coach proposes a branching follow-up sequence: replies / doesn\u2019t reply.',
+    role: 'The Deal Coach proposes a follow-up sequence with conditional branches: if the prospect replies, it stops; if they ignore, the next step goes out at the chosen moment. Every step is written from Memory patterns.',
+    agents: ['Deal Coach', 'Memory', 'Copy Optimizer', 'Timing Agent'],
+    interactions: [
+      { agent: 'Deal Coach', action: 'propose_sequence', purpose: '3 5 steps, 2 branches per step' },
+      { agent: 'Memory', action: 'winning_patterns', purpose: 'angle, tone and timing that already worked' },
+      { agent: 'Copy Optimizer', action: 'draft_variants', purpose: '80 words max, your voice' } ] },
+  { id: 'approve', num: 4, name: 'Your approval', sub: 'NOTHING SHIPS WITHOUT YOU', badge: 'YOU',
+    tip: 'The sequence arrives with its reasoning, you approve, edit or reject.',
+    role: 'Nothing ships without you. The proposed sequence arrives with its reasoning, you approve, edit or reject. Once approved, it runs on its own.',
+    agents: ['Deal Coach', 'Reporting'],
+    interactions: [
+      { agent: 'Deal Coach', action: 'submit_sequence', purpose: 'shows you the plan before anything sends' },
+      { agent: 'Reporting', action: 'log_approval', purpose: 'records who approved what, when' } ] },
+  { id: 'send', num: 5, name: 'Send', sub: 'FROM YOUR OWN INBOX', badge: 'NATIVE SENDING',
+    tip: 'No third-party tool required: baakalai sends from your Gmail or Outlook inbox.',
+    role: 'No third-party tool required: baakalai sends from your Gmail or Outlook inbox (one-click OAuth) or your SMTP. Your follow-ups leave from your address, with your signature, in your timezone.',
+    agents: ['CRM', 'Prospection', 'Timing Agent'],
+    interactions: [
+      { agent: 'CRM', action: 'send_personal', purpose: '1-to-1 follow-up from your address' },
+      { agent: 'Prospection', action: 'send_step', purpose: 'runs step N of the sequence' },
+      { agent: 'Timing Agent', action: 'schedule', purpose: 'picks the slot that gets replies' } ] },
+  { id: 'reply', num: 6, name: 'Reply', sub: 'STOP OR NEXT STEP', badge: 'REPLY DETECTION',
+    tip: 'The moment a prospect replies, the sequence stops dead. If they ignore, the next step goes out.',
+    role: 'baakalai watches your inbox: the moment a prospect replies, the sequence stops dead and the deal comes back to you. If they ignore, the next step goes out as planned. This is the conditional branch at the heart of the engine.',
+    agents: ['CRM', 'Memory'],
+    interactions: [
+      { agent: 'CRM', action: 'detect_reply → stop_sequence', purpose: 'cuts the branch, notifies you' },
+      { agent: 'Memory', action: 'record_outcome', purpose: 'reply or silence, everything becomes a pattern' } ] },
+  { id: 'memory', num: 7, name: 'Memory', sub: 'FEEDS THE NEXT PASS', badge: 'NATIVE BRICK',
+    tip: 'Consolidates winning patterns and feeds the next detection. The moat.',
+    role: 'Every outcome (reply, silence, revived deal) becomes a pattern. Memory consolidates, vectorises, and feeds the next detection. The more you use it, the sharper the loop.',
+    agents: ['Memory', 'ICP Refiner', 'Competitor Watch'],
+    interactions: [
+      { agent: 'Memory', action: 'persist_pattern', purpose: 'stores what worked, and why' },
+      { agent: 'ICP Refiner', action: 'refine_target', purpose: 'tightens the profile that replies' },
+      { agent: 'Memory', action: 'feeds_11_agents', purpose: 'the other agents read the patterns' } ] },
+];
+
+// ─── DATA · TA BOÎTE (envoi natif, dans le noyau) ───────────
+
+const INBOX_FR = {
+  id: 'inbox', name: 'Ta boîte', badge: 'NATIF', sub: 'GMAIL · OUTLOOK · SMTP',
+  tip: 'baakalai envoie depuis ta propre boîte et y détecte les réponses. Aucun outil tiers requis.',
+  role: 'Le canal d’envoi par défaut, et il t’appartient. Gmail et Outlook se connectent en OAuth un clic ; un SMTP custom (OVH, serveur dédié…) se branche avec des credentials chiffrés. baakalai envoie chaque étape depuis ton adresse, surveille les réponses et coupe la séquence dès que le prospect répond.',
+  agents: ['CRM', 'Prospection', 'Reporting'],
+  interactions: [
+    { agent: 'CRM', action: 'send_personal', purpose: 'relance depuis ton adresse, ta signature' },
+    { agent: 'CRM', action: 'detect_reply', purpose: 'lit ta boîte, stoppe la branche' },
+    { agent: 'Reporting', action: 'send_report', purpose: 'livre le rapport hebdo dans ta boîte' } ] };
+
+const INBOX_EN = {
+  id: 'inbox', name: 'Your inbox', badge: 'NATIVE', sub: 'GMAIL · OUTLOOK · SMTP',
+  tip: 'baakalai sends from your own inbox and detects replies there. No third-party tool required.',
+  role: 'The default sending channel, and it belongs to you. Gmail and Outlook connect in one-click OAuth; a custom SMTP (OVH, dedicated server…) plugs in with encrypted credentials. baakalai sends every step from your address, watches for replies and cuts the sequence the moment the prospect answers.',
+  agents: ['CRM', 'Prospection', 'Reporting'],
+  interactions: [
+    { agent: 'CRM', action: 'send_personal', purpose: 'follow-up from your address, your signature' },
+    { agent: 'CRM', action: 'detect_reply', purpose: 'reads your inbox, stops the branch' },
+    { agent: 'Reporting', action: 'send_report', purpose: 'drops the weekly report in your inbox' } ] };
+
+// ─── DATA · OUTILS PÉRIPHÉRIQUES ────────────────────────────
+// group: 'crm-oauth' | 'crm-config' | 'outbound' | 'infra'
+
+const TOOLS_FR = [
+  { id: 'hubspot', name: 'HubSpot', group: 'crm-oauth', tag: '1 CLIC',
+    tip: 'CRM : connexion OAuth un clic.',
+    role: 'CRM connecté en OAuth un clic. baakalai lit les contacts et les deals, pousse les activités et remonte les scores calculés par la Memory.',
+    interactions: [
+      { agent: 'CRM', action: 'sync_contacts', purpose: 'maintient une base unifiée' },
+      { agent: 'CRM', action: 'push_score', purpose: 'remonte le score deal calculé par Memory' } ] },
+  { id: 'pipedrive', name: 'Pipedrive', group: 'crm-oauth', tag: '1 CLIC',
+    tip: 'CRM : connexion OAuth un clic, webhooks temps réel.',
+    role: 'CRM connecté en OAuth un clic. Sync bidirectionnelle : baakalai lit les deals et contacts, renvoie les activités, et réagit aux webhooks en temps réel.',
+    interactions: [
+      { agent: 'CRM', action: 'webhook → deal_stagnant', purpose: 'déclenche la boucle de relance' },
+      { agent: 'CRM', action: 'log_activity', purpose: 'écrit note + tag dans le deal' } ] },
+  { id: 'salesforce', name: 'Salesforce', group: 'crm-oauth', tag: '1 CLIC',
+    tip: 'CRM : connexion OAuth un clic, field mapping custom.',
+    role: 'Pour les structures qui tournent sur Salesforce, OAuth un clic. baakalai fait du field mapping custom, lit les opportunities et écrit dans les custom fields.',
+    interactions: [
+      { agent: 'CRM', action: 'sync_opportunities', purpose: 'lecture pipeline' },
+      { agent: 'CRM', action: 'write_custom_field', purpose: 'pousse les insights baakalai' } ] },
+  { id: 'odoo', name: 'Odoo', group: 'crm-config', tag: 'CLÉ API',
+    tip: 'CRM : connexion par clé API (JSON-RPC).',
+    role: 'Pour les boîtes sur stack Odoo. Connexion JSON-RPC par clé API, pas encore d’OAuth un clic. Sync des contacts et deals comme un CRM standard.',
+    interactions: [ { agent: 'CRM', action: 'rpc_sync', purpose: 'sync contacts/deals via Odoo' } ] },
+  { id: 'notion', name: 'Notion', group: 'crm-config', tag: 'CLÉ API',
+    tip: 'Base de contacts : connexion par clé API.',
+    role: 'Pour les équipes qui gèrent leurs contacts dans Notion. Connexion par clé API : baakalai détecte le schema et sync les bases de contacts comme un CRM.',
+    interactions: [ { agent: 'CRM', action: 'sync_database', purpose: 'lit/écrit la base Notion contacts' } ] },
+  { id: 'airtable', name: 'Airtable', group: 'crm-config', tag: 'CLÉ API',
+    tip: 'Base de contacts : connexion par clé API, batch de 10.',
+    role: 'Pour les bases de contacts dans Airtable. Connexion par clé API, sync par batch de 10 (rate limit), même rôle que les autres CRM.',
+    interactions: [ { agent: 'CRM', action: 'batch_sync', purpose: 'sync 10 records à la fois' } ] },
+  { id: 'folk', name: 'Folk', group: 'crm-config', tag: 'CLÉ API',
+    tip: 'CRM léger : connexion par clé API.',
+    role: 'Pour les équipes qui pilotent leurs relations dans Folk. Connexion par clé API, pas encore d’OAuth un clic. baakalai sync les contacts et les groupes comme un CRM.',
+    interactions: [ { agent: 'CRM', action: 'api_sync', purpose: 'sync contacts/groupes Folk' } ] },
+  { id: 'apollo', name: 'Apollo', group: 'outbound', tag: 'OPTIONNEL',
+    tip: 'Recherche & enrichissement de prospects : optionnel.',
+    role: 'Le moteur de recherche de prospects. Optionnel : utile quand tu fais de l’outbound à froid. baakalai l’utilise pour trouver des contacts qui matchent un ICP et récupère les infos enrichies.',
+    interactions: [
+      { agent: 'Prospection', action: 'search(icp)', purpose: 'trouve les leads qui matchent le critère' },
+      { agent: 'Prospection', action: 'enrich(contact)', purpose: 'remplit les champs manquants avant envoi' } ] },
+  { id: 'lemlist', name: 'Lemlist', group: 'outbound', tag: 'OPTIONNEL',
+    tip: 'Campagnes & séquences : optionnel depuis l’envoi natif.',
+    role: 'Optionnel depuis le moteur d’envoi natif : baakalai envoie par défaut depuis ta propre boîte. Si tu as déjà Lemlist, il y déploie les séquences rédigées par Claude, surveille l’A/B test, et rapatrie les réponses vers la Memory.',
+    interactions: [
+      { agent: 'Prospection', action: 'create_campaign', purpose: 'pousse une séquence prête à envoyer' },
+      { agent: 'Prospection', action: 'sync_replies', purpose: 'récupère réponses → Memory' } ] },
+  { id: 'smartlead', name: 'Smartlead', group: 'outbound', tag: 'OPTIONNEL',
+    tip: 'Campagnes multi-inboxes : optionnel, gros volumes.',
+    role: 'Optionnel, alternative à Lemlist pour les volumes plus importants. Même rôle : déployer la séquence, gérer la délivrabilité, remonter les analytics.',
+    interactions: [
+      { agent: 'Prospection', action: 'create_campaign', purpose: 'pousse séquence multi-inboxes' },
+      { agent: 'Prospection', action: 'fetch_analytics', purpose: 'remonte open/reply pour Reporting' } ] },
+  { id: 'instantly', name: 'Instantly', group: 'outbound', tag: 'OPTIONNEL',
+    tip: 'Workflows & séquences : les branches tournent nativement.',
+    role: 'Optionnel : les séquences conditionnelles à branches tournent désormais nativement dans baakalai. Reste branchable pour les équipes qui pilotent déjà leur outbound depuis Instantly.',
+    interactions: [ { agent: 'Prospection', action: 'create_workflow', purpose: 'séquence conditionnelle' } ] },
+  { id: 'lgm', name: 'LaGrowthMachine', group: 'outbound', tag: 'OPTIONNEL',
+    tip: 'Workflows multicanal email + LinkedIn : optionnel.',
+    role: 'Multicanal email + LinkedIn + Twitter. Optionnel : baakalai l’orchestre quand un prospect doit recevoir un mix de touches sur plusieurs canaux.',
+    interactions: [ { agent: 'Prospection', action: 'multichannel_seq', purpose: 'mixe email + LI + X' } ] },
+  { id: 'brave', name: 'Brave Search', group: 'outbound', tag: 'OPTIONNEL',
+    tip: 'Recherche web pour personnaliser : optionnel.',
+    role: 'Le navigateur silencieux. Quand baakalai a besoin de comprendre une société (actu, levée, prod) avant de personnaliser un message, il consulte Brave.',
+    interactions: [ { agent: 'Prospection', action: 'web_search(company)', purpose: 'contexte récent pour personnalisation' } ] },
+  { id: 'supabase', name: 'Supabase', group: 'infra', tag: 'INFRA',
+    tip: 'PostgreSQL principal : sous le capot.',
+    role: 'La base PostgreSQL principale de baakalai. Stocke les campagnes, contacts unifiés, événements, logs.',
+    interactions: [
+      { agent: 'Reporting', action: 'query_week', purpose: 'aggrège les KPI de la semaine' },
+      { agent: 'Memory', action: 'persist_pattern', purpose: 'stocke les patterns gagnants' } ] },
+  { id: 'pgvector', name: 'pgvector', group: 'infra', tag: 'INFRA',
+    tip: 'Recherche vectorielle de la Memory : sous le capot.',
+    role: 'L’extension PostgreSQL qui rend la Memory vectorielle. baakalai y indexe les emails, deals et contextes pour retrouver les patterns par similarité sémantique.',
+    interactions: [
+      { agent: 'Memory', action: 'vector_search', purpose: 'trouve les cas similaires' },
+      { agent: 'Memory', action: 'embed(text)', purpose: 'vectorise nouveau pattern' } ] },
+  { id: 'notion-store', name: 'Notion (store)', group: 'infra', tag: 'INFRA',
+    tip: 'Store de diagnostics versionnés : sous le capot.',
+    role: 'Notion utilisé comme store de documents : diagnostics versionnés, rapports archivés. Chaque rapport hebdo y a sa page.',
+    interactions: [
+      { agent: 'Reporting', action: 'archive_report', purpose: 'pose le rapport versionné' },
+      { agent: 'Memory', action: 'read_diagnostic', purpose: 'consulte les diagnostics passés' } ] },
+  { id: 'resend', name: 'Resend', group: 'infra', tag: 'INFRA',
+    tip: 'Emails système baakalai → toi : jamais pour l’outbound.',
+    role: 'Le canal d’emails système baakalai → toi : rapports hebdo, alertes, digests. Pas pour l’outbound.',
+    interactions: [
+      { agent: 'Reporting', action: 'send_digest', purpose: 'livre le rapport vendredi 17h' },
+      { agent: 'Reporting', action: 'send_alert', purpose: 'flag anomalie en temps réel' } ] },
+];
+
+const TOOLS_EN = [
+  { id: 'hubspot', name: 'HubSpot', group: 'crm-oauth', tag: '1 CLICK',
+    tip: 'CRM: one-click OAuth connection.',
+    role: 'CRM connected in one-click OAuth. baakalai reads contacts and deals, pushes activities and writes back the scores computed by Memory.',
+    interactions: [
+      { agent: 'CRM', action: 'sync_contacts', purpose: 'keeps a unified base' },
+      { agent: 'CRM', action: 'push_score', purpose: 'pushes back the deal score from Memory' } ] },
+  { id: 'pipedrive', name: 'Pipedrive', group: 'crm-oauth', tag: '1 CLICK',
+    tip: 'CRM: one-click OAuth, real-time webhooks.',
+    role: 'CRM connected in one-click OAuth. Two-way sync: baakalai reads deals and contacts, writes back activities, and reacts to webhooks in real time.',
+    interactions: [
+      { agent: 'CRM', action: 'webhook → stagnant_deal', purpose: 'triggers the follow-up loop' },
+      { agent: 'CRM', action: 'log_activity', purpose: 'writes note + tag in the deal' } ] },
+  { id: 'salesforce', name: 'Salesforce', group: 'crm-oauth', tag: '1 CLICK',
+    tip: 'CRM: one-click OAuth, custom field mapping.',
+    role: 'For Salesforce-driven orgs: one-click OAuth. baakalai handles custom field mapping, reads opportunities and writes into custom fields.',
+    interactions: [
+      { agent: 'CRM', action: 'sync_opportunities', purpose: 'reads the pipeline' },
+      { agent: 'CRM', action: 'write_custom_field', purpose: 'pushes baakalai insights' } ] },
+  { id: 'odoo', name: 'Odoo', group: 'crm-config', tag: 'API KEY',
+    tip: 'CRM: API-key connection (JSON-RPC).',
+    role: 'For Odoo-stack companies. JSON-RPC connection via API key, no one-click OAuth yet. Syncs contacts and deals like a standard CRM.',
+    interactions: [ { agent: 'CRM', action: 'rpc_sync', purpose: 'syncs contacts/deals via Odoo' } ] },
+  { id: 'notion', name: 'Notion', group: 'crm-config', tag: 'API KEY',
+    tip: 'Contact base: API-key connection.',
+    role: 'For teams running their contacts in Notion. API-key connection: baakalai detects the schema and syncs the contact base like a CRM.',
+    interactions: [ { agent: 'CRM', action: 'sync_database', purpose: 'reads/writes the Notion contacts base' } ] },
+  { id: 'airtable', name: 'Airtable', group: 'crm-config', tag: 'API KEY',
+    tip: 'Contact base: API-key connection, batches of 10.',
+    role: 'For Airtable-based contact bases. API-key connection, sync in batches of 10 (rate limit), same role as the other CRMs.',
+    interactions: [ { agent: 'CRM', action: 'batch_sync', purpose: 'syncs 10 records at a time' } ] },
+  { id: 'folk', name: 'Folk', group: 'crm-config', tag: 'API KEY',
+    tip: 'Lightweight CRM: API-key connection.',
+    role: 'For teams running their relationships in Folk. API-key connection, no one-click OAuth yet. baakalai syncs contacts and groups like a CRM.',
+    interactions: [ { agent: 'CRM', action: 'api_sync', purpose: 'syncs Folk contacts/groups' } ] },
+  { id: 'apollo', name: 'Apollo', group: 'outbound', tag: 'OPTIONAL',
+    tip: 'Lead search & enrichment: optional.',
+    role: 'The lead search engine. Optional: useful when you run cold outbound. baakalai uses it to find contacts matching an ICP and pulls back enriched data.',
+    interactions: [
+      { agent: 'Prospection', action: 'search(icp)', purpose: 'finds leads matching the criteria' },
+      { agent: 'Prospection', action: 'enrich(contact)', purpose: 'fills missing fields before sending' } ] },
+  { id: 'lemlist', name: 'Lemlist', group: 'outbound', tag: 'OPTIONAL',
+    tip: 'Campaigns & sequences: optional since native sending.',
+    role: 'Optional since the native sending engine: baakalai sends from your own inbox by default. If you already run Lemlist, it deploys Claude-written sequences there, watches the A/B, and pulls replies back into Memory.',
+    interactions: [
+      { agent: 'Prospection', action: 'create_campaign', purpose: 'pushes a ready-to-send sequence' },
+      { agent: 'Prospection', action: 'sync_replies', purpose: 'pulls replies → Memory' } ] },
+  { id: 'smartlead', name: 'Smartlead', group: 'outbound', tag: 'OPTIONAL',
+    tip: 'Multi-inbox campaigns: optional, higher volumes.',
+    role: 'Optional, alternative to Lemlist for higher volumes. Same role: deploy the sequence, manage deliverability, surface analytics.',
+    interactions: [
+      { agent: 'Prospection', action: 'create_campaign', purpose: 'pushes multi-inbox sequence' },
+      { agent: 'Prospection', action: 'fetch_analytics', purpose: 'feeds open/reply rates to Reporting' } ] },
+  { id: 'instantly', name: 'Instantly', group: 'outbound', tag: 'OPTIONAL',
+    tip: 'Workflows & sequences: branches now run natively.',
+    role: 'Optional: branching conditional sequences now run natively inside baakalai. Still pluggable for teams already driving their outbound from Instantly.',
+    interactions: [ { agent: 'Prospection', action: 'create_workflow', purpose: 'conditional sequence' } ] },
+  { id: 'lgm', name: 'LaGrowthMachine', group: 'outbound', tag: 'OPTIONAL',
+    tip: 'Multichannel email + LinkedIn workflows: optional.',
+    role: 'Multichannel: email + LinkedIn + Twitter. Optional: baakalai orchestrates it when a prospect needs touches across multiple channels.',
+    interactions: [ { agent: 'Prospection', action: 'multichannel_seq', purpose: 'mixes email + LI + X' } ] },
+  { id: 'brave', name: 'Brave Search', group: 'outbound', tag: 'OPTIONAL',
+    tip: 'Web research for personalisation: optional.',
+    role: 'The silent browser. When baakalai needs to understand a company (news, funding, product) before personalising a message, it queries Brave.',
+    interactions: [ { agent: 'Prospection', action: 'web_search(company)', purpose: 'fresh context for personalisation' } ] },
+  { id: 'supabase', name: 'Supabase', group: 'infra', tag: 'INFRA',
+    tip: 'Main PostgreSQL: under the hood.',
+    role: 'baakalai\u2019s main PostgreSQL database. Stores campaigns, unified contacts, events, logs.',
+    interactions: [
+      { agent: 'Reporting', action: 'query_week', purpose: 'aggregates the week\u2019s KPIs' },
+      { agent: 'Memory', action: 'persist_pattern', purpose: 'stores winning patterns' } ] },
+  { id: 'pgvector', name: 'pgvector', group: 'infra', tag: 'INFRA',
+    tip: 'Vector search behind Memory: under the hood.',
+    role: 'The PostgreSQL extension that makes Memory vectorial. baakalai indexes emails, deals and context here to retrieve patterns by semantic similarity.',
+    interactions: [
+      { agent: 'Memory', action: 'vector_search', purpose: 'finds similar cases' },
+      { agent: 'Memory', action: 'embed(text)', purpose: 'vectorises new pattern' } ] },
+  { id: 'notion-store', name: 'Notion (store)', group: 'infra', tag: 'INFRA',
+    tip: 'Versioned diagnostics store: under the hood.',
+    role: 'Notion used as a doc store: versioned diagnostics, archived reports. Each weekly report gets its own page.',
+    interactions: [
+      { agent: 'Reporting', action: 'archive_report', purpose: 'drops the versioned report' },
+      { agent: 'Memory', action: 'read_diagnostic', purpose: 'consults past diagnostics' } ] },
+  { id: 'resend', name: 'Resend', group: 'infra', tag: 'INFRA',
+    tip: 'System emails baakalai → you: never for outbound.',
+    role: 'The system-email channel from baakalai → you: weekly reports, alerts, digests. Not for outbound.',
+    interactions: [
+      { agent: 'Reporting', action: 'send_digest', purpose: 'delivers the report Friday 5pm' },
+      { agent: 'Reporting', action: 'send_alert', purpose: 'flags anomalies in real time' } ] },
+];
+
+// ─── DATA · SÉQUENCE ANIMÉE (une passe de la boucle) ────────
+// via:'bezier' = le trajet ENTRANT emprunte la branche « ignore »
+
+const SEQ_FR = [
+  { node: 'crm-read', verb: 'lit ton CRM', detail: 'deals · contacts · historique' },
+  { node: 'detect', verb: 'détecte', detail: 'deal #4218 · 14 j sans activité' },
+  { node: 'sequence', verb: 'propose une séquence', detail: 'Deal Coach · 3 étapes · 2 branches' },
+  { node: 'approve', verb: 'attend ton feu vert', detail: 'tu valides, tu édites ou tu refuses' },
+  { node: 'send', verb: 'envoie depuis ta boîte', detail: 'Gmail OAuth · étape 1 · mar. 10:00' },
+  { node: 'reply', verb: 'pas de réponse', detail: 'branche « ignore » → étape suivante', branch: 'ignore' },
+  { node: 'send', verb: 'renvoie', detail: 'étape 2 · toujours depuis ton adresse', via: 'bezier' },
+  { node: 'reply', verb: 'réponse détectée', detail: 'branche « répond » → séquence stoppée', branch: 'stop' },
+  { node: 'memory', verb: 'mémorise', detail: 'pattern gagnant → les 11 autres agents' },
+];
+
+const SEQ_EN = [
+  { node: 'crm-read', verb: 'reads your CRM', detail: 'deals · contacts · history' },
+  { node: 'detect', verb: 'detects', detail: 'deal #4218 · 14d no activity' },
+  { node: 'sequence', verb: 'proposes a sequence', detail: 'Deal Coach · 3 steps · 2 branches' },
+  { node: 'approve', verb: 'waits for your go', detail: 'you approve, edit or reject' },
+  { node: 'send', verb: 'sends from your inbox', detail: 'Gmail OAuth · step 1 · tue 10:00' },
+  { node: 'reply', verb: 'no reply', detail: '"ignore" branch → next step', branch: 'ignore' },
+  { node: 'send', verb: 'sends again', detail: 'step 2 · still from your address', via: 'bezier' },
+  { node: 'reply', verb: 'reply detected', detail: '"reply" branch → sequence stopped', branch: 'stop' },
+  { node: 'memory', verb: 'memorises', detail: 'winning pattern → the 11 other agents' },
+];
+
+// ─── DATA · AGENTS (section philosophie) ────────────────────
 
 const AGENTS_FR = [
   { id: 'prospection', name: 'Prospection', short: 'PRSP',
-    tagline: "G\u00e8re l'outbound quand tu en as besoin.",
-    desc: "G\u00e9n\u00e8re s\u00e9quences email/LinkedIn, recherche prospects via Apollo, envoie depuis ta propre bo\u00eete mail, refine en A/B continu. Coordonne le Copy Optimizer et le Timing Agent.",
-    stats: { campagnes_actives: 23, prospects_traites: 12847, taux_reponse: '8.4%' },
-    tools: ['apollo', 'lemlist', 'smartlead', 'instantly', 'lgm', 'brave'] },
+    tagline: 'Gère l’outbound quand tu en as besoin.',
+    desc: 'Génère séquences email/LinkedIn, recherche prospects (Apollo, en option), envoie depuis ta propre boîte mail, refine en A/B continu. Coordonne le Copy Optimizer et le Timing Agent.' },
   { id: 'crm', name: 'CRM', short: 'CRM',
-    tagline: "Lit ton CRM 24/7. R\u00e9active les deals, d\u00e9tecte les upsells.",
-    desc: "Sync bidirectionnelle, d\u00e9tecte stagnation et churn, d\u00e9clenche follow-ups personnalis\u00e9s. Coordonne le Deal Coach, l'Upsell Detector et le Win/Loss Analyst. Le c\u0153ur du produit.",
-    stats: { deals_suivis: 847, deals_relances: 124, taux_reactivation: '31%' },
-    tools: ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'] },
+    tagline: 'Lit ton CRM 24/7. Réactive les deals, détecte les upsells.',
+    desc: 'Sync bidirectionnelle, détecte stagnation et churn, déclenche follow-ups personnalisés. Coordonne le Deal Coach, l’Upsell Detector et le Win/Loss Analyst. Le cœur du produit.' },
   { id: 'memory', name: 'Memory', short: 'MEM',
-    tagline: "Plus tu l'utilises, plus il est pr\u00e9cis.",
-    desc: "Consolide les patterns gagnants, vectorise les contextes via pgvector, alimente les 11 autres agents. Coordonne l'ICP Refiner et le Competitor Watch. C'est le moat.",
-    stats: { patterns_appris: 4129, sources: 9, hits_semaine: 2840 },
-    tools: ['supabase', 'pgvector', 'notion-store'] },
+    tagline: 'Plus tu l’utilises, plus il est précis.',
+    desc: 'Consolide les patterns gagnants, vectorise les contextes via pgvector, alimente les 11 autres agents. Coordonne l’ICP Refiner et le Competitor Watch. C’est le moat.' },
   { id: 'reporting', name: 'Reporting', short: 'RPRT',
-    tagline: "Te dit ce qui marche \u2014 et ce qui meurt.",
-    desc: "G\u00e9n\u00e8re diagnostics hebdo, rep\u00e8re les deals \u00e0 r\u00e9activer, livre des recommandations en langage clair. 12 agents au total, 4 quotidiens + 7 strat\u00e9giques + 1 g\u00e9n\u00e9rateur de templates.",
-    stats: { rapports_generes: 156, anomalies_detectees: 38, recos_actives: 12 },
-    tools: ['notion-store', 'resend', 'gmail'] },
+    tagline: 'Te dit ce qui marche, et ce qui meurt.',
+    desc: 'Génère diagnostics hebdo, repère les deals à réactiver, livre des recommandations en langage clair. 12 agents au total, 4 quotidiens + 7 stratégiques + 1 générateur de templates.' },
 ];
 
 const AGENTS_EN = [
   { id: 'prospection', name: 'Prospection', short: 'PRSP',
-    tagline: "Handles outbound when you need it.",
-    desc: "Generates email/LinkedIn sequences, sources prospects via Apollo, sends from your own inbox, refines through continuous A/B testing. Coordinates the Copy Optimizer and Timing Agent.",
-    stats: { active_campaigns: 23, prospects_processed: 12847, reply_rate: '8.4%' },
-    tools: ['apollo', 'lemlist', 'smartlead', 'instantly', 'lgm', 'brave'] },
+    tagline: 'Handles outbound when you need it.',
+    desc: 'Generates email/LinkedIn sequences, sources prospects (Apollo, optional), sends from your own inbox, refines through continuous A/B testing. Coordinates the Copy Optimizer and Timing Agent.' },
   { id: 'crm', name: 'CRM', short: 'CRM',
-    tagline: "Reads your CRM 24/7. Reactivates deals, detects upsells.",
-    desc: "Two-way sync, detects stagnation and churn, fires personalised follow-ups. Coordinates the Deal Coach, Upsell Detector, and Win/Loss Analyst. The core of the product.",
-    stats: { deals_tracked: 847, deals_revived: 124, reactivation_rate: '31%' },
-    tools: ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'] },
+    tagline: 'Reads your CRM 24/7. Reactivates deals, detects upsells.',
+    desc: 'Two-way sync, detects stagnation and churn, fires personalised follow-ups. Coordinates the Deal Coach, Upsell Detector, and Win/Loss Analyst. The core of the product.' },
   { id: 'memory', name: 'Memory', short: 'MEM',
-    tagline: "The more you use it, the sharper it gets.",
-    desc: "Consolidates winning patterns, vectorises context through pgvector, feeds the 11 other agents. Coordinates the ICP Refiner and Competitor Watch. This is the moat.",
-    stats: { patterns_learned: 4129, sources: 9, hits_this_week: 2840 },
-    tools: ['supabase', 'pgvector', 'notion-store'] },
+    tagline: 'The more you use it, the sharper it gets.',
+    desc: 'Consolidates winning patterns, vectorises context through pgvector, feeds the 11 other agents. Coordinates the ICP Refiner and Competitor Watch. This is the moat.' },
   { id: 'reporting', name: 'Reporting', short: 'RPRT',
-    tagline: "Tells you what works \u2014 and what's dying.",
-    desc: "Writes weekly diagnostics, flags deals to reactivate, delivers recommendations in plain language. 12 agents total: 4 daily + 7 strategic + 1 template generator.",
-    stats: { reports_shipped: 156, anomalies_flagged: 38, active_recos: 12 },
-    tools: ['notion-store', 'resend', 'gmail'] },
+    tagline: 'Tells you what works, and what\u2019s dying.',
+    desc: 'Writes weekly diagnostics, flags deals to reactivate, delivers recommendations in plain language. 12 agents total: 4 daily + 7 strategic + 1 template generator.' },
 ];
 
-const TOOLS_FR = [
-  { id: 'apollo', name: 'Apollo', cat: 'prospecting', desc: 'Recherche & enrichissement prospects',
-    role: "Le moteur de recherche de prospects. baakalai l\u2019utilise pour trouver des contacts qui matchent un ICP \u2014 par poste, secteur, taille, localisation \u2014 et r\u00e9cup\u00e8re les infos enrichies.",
-    interactions: [
-      { agent: 'prospection', action: 'search(icp)', purpose: 'trouve les leads qui matchent le crit\u00e8re' },
-      { agent: 'prospection', action: 'enrich(contact)', purpose: 'remplit les champs manquants avant envoi' } ] },
-  { id: 'lemlist', name: 'Lemlist', cat: 'prospecting', desc: 'Campagnes & s\u00e9quences',
-    role: "Optionnel depuis le moteur d\u2019envoi natif : baakalai envoie par d\u00e9faut depuis ta propre bo\u00eete mail. Si tu as d\u00e9j\u00e0 Lemlist, il y d\u00e9ploie les s\u00e9quences r\u00e9dig\u00e9es par Claude, surveille l\u2019A/B test, et rapatrie les r\u00e9ponses vers la Memory.",
-    interactions: [
-      { agent: 'prospection', action: 'create_campaign', purpose: 'pousse une s\u00e9quence pr\u00eate \u00e0 envoyer' },
-      { agent: 'prospection', action: 'sync_replies', purpose: 'r\u00e9cup\u00e8re r\u00e9ponses \u2192 Memory' } ] },
-  { id: 'smartlead', name: 'Smartlead', cat: 'prospecting', desc: 'Campagnes, leads, analytics',
-    role: "Optionnel, alternative \u00e0 Lemlist pour les volumes plus importants. M\u00eame r\u00f4le : d\u00e9ployer la s\u00e9quence, g\u00e9rer la d\u00e9livrabilit\u00e9, remonter les analytics.",
-    interactions: [
-      { agent: 'prospection', action: 'create_campaign', purpose: 'pousse s\u00e9quence multi-inboxes' },
-      { agent: 'prospection', action: 'fetch_analytics', purpose: 'remonte open/reply pour Reporting' } ] },
-  { id: 'instantly', name: 'Instantly', cat: 'prospecting', desc: 'Workflows & s\u00e9quences',
-    role: "Optionnel : les s\u00e9quences conditionnelles \u00e0 branches tournent d\u00e9sormais nativement dans baakalai. Reste branchable pour les \u00e9quipes qui pilotent d\u00e9j\u00e0 leur outbound depuis Instantly.",
-    interactions: [ { agent: 'prospection', action: 'create_workflow', purpose: 's\u00e9quence conditionnelle' } ] },
-  { id: 'lgm', name: 'LaGrowthMachine', cat: 'prospecting', desc: 'Workflows multicanal',
-    role: "Multicanal email + LinkedIn + Twitter. baakalai l\u2019orchestre quand un prospect doit recevoir un mix de touches sur plusieurs canaux.",
-    interactions: [ { agent: 'prospection', action: 'multichannel_seq', purpose: 'mixe email + LI + X' } ] },
-  { id: 'brave', name: 'Brave Search', cat: 'prospecting', desc: 'Recherche web pour enrichir',
-    role: "Le navigateur silencieux. Quand baakalai a besoin de comprendre une soci\u00e9t\u00e9 (actu, lev\u00e9e, prod) avant de personnaliser un message, il consulte Brave.",
-    interactions: [ { agent: 'prospection', action: 'web_search(company)', purpose: 'contexte r\u00e9cent pour personnalisation' } ] },
-  { id: 'pipedrive', name: 'Pipedrive', cat: 'crm', desc: 'Sync bidirectionnelle + webhooks',
-    role: "Le CRM source de v\u00e9rit\u00e9 c\u00f4t\u00e9 commercial. Sync bidirectionnelle : baakalai lit les deals/contacts et renvoie les activit\u00e9s.",
-    interactions: [
-      { agent: 'crm', action: 'webhook \u2192 deal_stagnant', purpose: 'd\u00e9clenche relance automatique' },
-      { agent: 'crm', action: 'log_activity', purpose: '\u00e9crit note + tag dans le deal' } ] },
-  { id: 'hubspot', name: 'HubSpot', cat: 'crm', desc: 'Contacts/deals, score pushing',
-    role: "CRM alternatif. M\u00eames responsabilit\u00e9s que Pipedrive : lecture des deals, push des activit\u00e9s, mise \u00e0 jour des scores.",
-    interactions: [
-      { agent: 'crm', action: 'sync_contacts', purpose: 'maintient base unifi\u00e9e' },
-      { agent: 'crm', action: 'push_score', purpose: 'remonte score deal calcul\u00e9 par Memory' } ] },
-  { id: 'salesforce', name: 'Salesforce', cat: 'crm', desc: 'REST API, field mapping',
-    role: "Pour les structures qui tournent sur Salesforce. baakalai fait du field mapping custom, lit les opportunities et \u00e9crit dans les custom fields.",
-    interactions: [
-      { agent: 'crm', action: 'sync_opportunities', purpose: 'lecture pipeline' },
-      { agent: 'crm', action: 'write_custom_field', purpose: 'pousse les insights baakalai' } ] },
-  { id: 'odoo', name: 'Odoo', cat: 'crm', desc: 'JSON-RPC, contacts/deals',
-    role: "Pour les bo\u00eetes sur stack Odoo. Connexion JSON-RPC, sync des contacts et deals comme un CRM standard.",
-    interactions: [ { agent: 'crm', action: 'rpc_sync', purpose: 'sync contacts/deals via Odoo' } ] },
-  { id: 'notion', name: 'Notion', cat: 'crm', desc: 'Sync contacts, schema',
-    role: "Pour les \u00e9quipes qui g\u00e8rent leurs contacts dans Notion. baakalai d\u00e9tecte le schema et sync les bases de contacts comme un CRM.",
-    interactions: [ { agent: 'crm', action: 'sync_database', purpose: 'lit/\u00e9crit la base Notion contacts' } ] },
-  { id: 'airtable', name: 'Airtable', cat: 'crm', desc: 'Sync contacts (batch 10)',
-    role: "Pour les bases de contacts dans Airtable. Sync par batch de 10 (rate limit), m\u00eame r\u00f4le que les autres CRM.",
-    interactions: [ { agent: 'crm', action: 'batch_sync', purpose: 'sync 10 records \u00e0 la fois' } ] },
-  { id: 'gmail', name: 'Gmail', cat: 'email', desc: 'Envoi 1-click via OAuth',
-    role: "Ton inbox personnel. Quand baakalai doit envoyer depuis ton adresse pro (relance personnelle, follow-up deal), il passe par OAuth Gmail.",
-    interactions: [
-      { agent: 'crm', action: 'send_personal', purpose: 'envoi 1-to-1 depuis ton adresse' },
-      { agent: 'reporting', action: 'send_report', purpose: 'livre le rapport hebdo dans ta bo\u00eete' } ] },
-  { id: 'outlook', name: 'Outlook', cat: 'email', desc: 'Envoi via Microsoft OAuth',
-    role: "\u00c9quivalent Gmail pour l\u2019\u00e9cosyst\u00e8me Microsoft. baakalai s\u2019authentifie via Microsoft OAuth et envoie depuis ton adresse.",
-    interactions: [ { agent: 'crm', action: 'send_personal', purpose: 'envoi depuis ton Outlook' } ] },
-  { id: 'smtp', name: 'SMTP', cat: 'email', desc: 'Tout provider (OVH, Gmail\u2026)',
-    role: "Pour les configs custom \u2014 OVH, serveur d\u00e9di\u00e9, Gmail SMTP. Quand l\u2019OAuth ne suffit pas, baakalai utilise un SMTP brut avec credentials chiffr\u00e9s.",
-    interactions: [ { agent: 'crm', action: 'send_via_smtp', purpose: 'envoi sur ton serveur custom' } ] },
-  { id: 'resend', name: 'Resend', cat: 'email', desc: 'Emails syst\u00e8me',
-    role: "Le canal d\u2019emails syst\u00e8me baakalai \u2192 toi : rapports hebdo, alertes, digests. Pas pour l\u2019outbound.",
-    interactions: [
-      { agent: 'reporting', action: 'send_digest', purpose: 'livre le rapport vendredi 17h' },
-      { agent: 'reporting', action: 'send_alert', purpose: 'flag anomalie en temps r\u00e9el' } ] },
-  { id: 'supabase', name: 'Supabase', cat: 'data', desc: 'PostgreSQL principal',
-    role: "La base PostgreSQL principale de baakalai. Stocke les campagnes, contacts unifi\u00e9s, \u00e9v\u00e9nements, logs.",
-    interactions: [
-      { agent: 'reporting', action: 'query_week', purpose: 'aggr\u00e8ge les KPI de la semaine' },
-      { agent: 'memory', action: 'persist_pattern', purpose: 'stocke les patterns gagnants' } ] },
-  { id: 'pgvector', name: 'pgvector', cat: 'data', desc: 'Recherche vectorielle',
-    role: "L\u2019extension PostgreSQL qui rend la Memory vectorielle. baakalai y indexe les emails, deals et contextes pour retrouver les patterns par similarit\u00e9 s\u00e9mantique.",
-    interactions: [
-      { agent: 'memory', action: 'vector_search', purpose: 'trouve les cas similaires' },
-      { agent: 'memory', action: 'embed(text)', purpose: 'vectorise nouveau pattern' } ] },
-  { id: 'notion-store', name: 'Notion (store)', cat: 'data', desc: 'Diagnostics & versions',
-    role: "Notion utilis\u00e9 comme store de documents \u2014 diagnostics versionn\u00e9s, rapports archiv\u00e9s. Chaque rapport hebdo y a sa page.",
-    interactions: [
-      { agent: 'reporting', action: 'archive_report', purpose: 'pose le rapport versionn\u00e9' },
-      { agent: 'memory', action: 'read_diagnostic', purpose: 'consulte les diagnostics pass\u00e9s' } ] },
-];
-
-const TOOLS_EN = [
-  { id: 'apollo', name: 'Apollo', cat: 'prospecting', desc: 'Lead search & enrichment',
-    role: "The lead search engine. baakalai uses it to find contacts matching an ICP \u2014 by role, industry, size, location \u2014 and pulls back enriched data.",
-    interactions: [
-      { agent: 'prospection', action: 'search(icp)', purpose: 'finds leads matching the criteria' },
-      { agent: 'prospection', action: 'enrich(contact)', purpose: 'fills missing fields before sending' } ] },
-  { id: 'lemlist', name: 'Lemlist', cat: 'prospecting', desc: 'Email campaigns & sequences',
-    role: "Optional since the native sending engine: baakalai sends from your own inbox by default. If you already run Lemlist, it deploys Claude-written sequences there, watches the A/B, and pulls replies back into Memory.",
-    interactions: [
-      { agent: 'prospection', action: 'create_campaign', purpose: 'pushes a ready-to-send sequence' },
-      { agent: 'prospection', action: 'sync_replies', purpose: 'pulls replies \u2192 Memory' } ] },
-  { id: 'smartlead', name: 'Smartlead', cat: 'prospecting', desc: 'Campaigns, leads, analytics',
-    role: "Optional, alternative to Lemlist for higher volumes. Same role: deploy the sequence, manage deliverability, surface analytics.",
-    interactions: [
-      { agent: 'prospection', action: 'create_campaign', purpose: 'pushes multi-inbox sequence' },
-      { agent: 'prospection', action: 'fetch_analytics', purpose: 'feeds open/reply rates to Reporting' } ] },
-  { id: 'instantly', name: 'Instantly', cat: 'prospecting', desc: 'Workflows & sequences',
-    role: "Optional: branching conditional sequences now run natively inside baakalai. Still pluggable for teams already driving their outbound from Instantly.",
-    interactions: [ { agent: 'prospection', action: 'create_workflow', purpose: 'conditional sequence' } ] },
-  { id: 'lgm', name: 'LaGrowthMachine', cat: 'prospecting', desc: 'Multichannel workflows',
-    role: "Multichannel: email + LinkedIn + Twitter. baakalai orchestrates it when a prospect needs touches across multiple channels.",
-    interactions: [ { agent: 'prospection', action: 'multichannel_seq', purpose: 'mixes email + LI + X' } ] },
-  { id: 'brave', name: 'Brave Search', cat: 'prospecting', desc: 'Web research for enrichment',
-    role: "The silent browser. When baakalai needs to understand a company before personalising a message, it queries Brave.",
-    interactions: [ { agent: 'prospection', action: 'web_search(company)', purpose: 'fresh context for personalisation' } ] },
-  { id: 'pipedrive', name: 'Pipedrive', cat: 'crm', desc: 'Two-way sync + webhooks',
-    role: "The source-of-truth CRM on the sales side. Two-way sync: baakalai reads deals/contacts and writes back activities.",
-    interactions: [
-      { agent: 'crm', action: 'webhook \u2192 stagnant_deal', purpose: 'triggers automatic follow-up' },
-      { agent: 'crm', action: 'log_activity', purpose: 'writes note + tag in the deal' } ] },
-  { id: 'hubspot', name: 'HubSpot', cat: 'crm', desc: 'Contacts/deals, score pushing',
-    role: "Alternative CRM. Same responsibilities as Pipedrive: read deals, push activities, update predictive scores.",
-    interactions: [
-      { agent: 'crm', action: 'sync_contacts', purpose: 'keeps unified base' },
-      { agent: 'crm', action: 'push_score', purpose: 'pushes back the deal score from Memory' } ] },
-  { id: 'salesforce', name: 'Salesforce', cat: 'crm', desc: 'REST API, field mapping',
-    role: "For Salesforce-driven orgs. baakalai handles custom field mapping, reads opportunities and writes into custom fields.",
-    interactions: [
-      { agent: 'crm', action: 'sync_opportunities', purpose: 'reads the pipeline' },
-      { agent: 'crm', action: 'write_custom_field', purpose: 'pushes baakalai insights' } ] },
-  { id: 'odoo', name: 'Odoo', cat: 'crm', desc: 'JSON-RPC, contacts/deals',
-    role: "For Odoo-stack companies. JSON-RPC connection, syncs contacts and deals like a standard CRM.",
-    interactions: [ { agent: 'crm', action: 'rpc_sync', purpose: 'syncs contacts/deals via Odoo' } ] },
-  { id: 'notion', name: 'Notion', cat: 'crm', desc: 'Contact sync, schema',
-    role: "For teams running their contacts in Notion. baakalai detects the schema and syncs the contact base like a CRM.",
-    interactions: [ { agent: 'crm', action: 'sync_database', purpose: 'reads/writes the Notion contacts base' } ] },
-  { id: 'airtable', name: 'Airtable', cat: 'crm', desc: 'Contact sync (batch 10)',
-    role: "For Airtable-based contact bases. Sync in batches of 10 (rate limit), same role as the other CRMs.",
-    interactions: [ { agent: 'crm', action: 'batch_sync', purpose: 'syncs 10 records at a time' } ] },
-  { id: 'gmail', name: 'Gmail', cat: 'email', desc: '1-click send via OAuth',
-    role: "Your personal inbox. When baakalai needs to send from your work address, it goes through Gmail OAuth.",
-    interactions: [
-      { agent: 'crm', action: 'send_personal', purpose: '1-to-1 send from your address' },
-      { agent: 'reporting', action: 'send_report', purpose: 'drops the weekly report in your inbox' } ] },
-  { id: 'outlook', name: 'Outlook', cat: 'email', desc: 'Send via Microsoft OAuth',
-    role: "Gmail equivalent for the Microsoft world. baakalai authenticates via Microsoft OAuth and sends from your address.",
-    interactions: [ { agent: 'crm', action: 'send_personal', purpose: 'send from your Outlook' } ] },
-  { id: 'smtp', name: 'SMTP', cat: 'email', desc: 'Any provider (OVH, Gmail\u2026)',
-    role: "For custom configs \u2014 OVH, dedicated server, Gmail SMTP. When OAuth isn't enough, baakalai uses raw SMTP with encrypted creds.",
-    interactions: [ { agent: 'crm', action: 'send_via_smtp', purpose: 'send through your custom server' } ] },
-  { id: 'resend', name: 'Resend', cat: 'email', desc: 'System emails',
-    role: "The system-email channel from baakalai \u2192 you: weekly reports, alerts, digests. Not for outbound.",
-    interactions: [
-      { agent: 'reporting', action: 'send_digest', purpose: 'delivers the report Friday 5pm' },
-      { agent: 'reporting', action: 'send_alert', purpose: 'flags anomalies in real time' } ] },
-  { id: 'supabase', name: 'Supabase', cat: 'data', desc: 'Main PostgreSQL',
-    role: "baakalai's main PostgreSQL database. Stores campaigns, unified contacts, events, logs.",
-    interactions: [
-      { agent: 'reporting', action: 'query_week', purpose: "aggregates the week's KPIs" },
-      { agent: 'memory', action: 'persist_pattern', purpose: 'stores winning patterns' } ] },
-  { id: 'pgvector', name: 'pgvector', cat: 'data', desc: 'Vector search',
-    role: "The PostgreSQL extension that makes Memory vectorial. baakalai indexes emails, deals and context here to retrieve patterns by semantic similarity.",
-    interactions: [
-      { agent: 'memory', action: 'vector_search', purpose: 'finds similar cases' },
-      { agent: 'memory', action: 'embed(text)', purpose: 'vectorises new pattern' } ] },
-  { id: 'notion-store', name: 'Notion (store)', cat: 'data', desc: 'Diagnostics & versions',
-    role: "Notion used as a doc store \u2014 versioned diagnostics, archived reports. Each weekly report gets its own page.",
-    interactions: [
-      { agent: 'reporting', action: 'archive_report', purpose: 'drops the versioned report' },
-      { agent: 'memory', action: 'read_diagnostic', purpose: 'consults past diagnostics' } ] },
-];
-
-const SCENARIOS_FR = [
-  { id: 'cold_outreach', title: 'Une nouvelle campagne, de z\u00e9ro',
-    caption: 'Tu lances "CTOs SaaS Paris" \u2014 voici comment baakalai, Prospection et tes outils s\'organisent.',
-    steps: [
-      { from: 'user', to: 'claude', verb: 'demande campagne', detail: 'CTOs SaaS \u00b7 Paris \u00b7 100 leads', dur: 1200 },
-      { from: 'claude', to: 'memory', verb: 'consulte patterns', detail: 'segments gagnants \u00b7 saisonnalit\u00e9', dur: 1800 },
-      { from: 'memory', to: 'claude', verb: 'renvoie 3 angles', detail: 'pricing \u00b7 scaling \u00b7 hiring', dur: 1400 },
-      { from: 'claude', to: 'prospection', verb: 'd\u00e9l\u00e8gue', detail: 's\u00e9quence 7 touches', dur: 1200 },
-      { from: 'prospection', to: 'apollo', verb: 'search', detail: 'role:CTO \u00b7 industry:SaaS \u00b7 loc:Paris', dur: 1600 },
-      { from: 'apollo', to: 'prospection', verb: 'returns', detail: '118 contacts \u00b7 96% enrichis', dur: 1200 },
-      { from: 'prospection', to: 'brave', verb: 'enrichit', detail: 'context web \u00b7 12 soci\u00e9t\u00e9s', dur: 1400 },
-      { from: 'prospection', to: 'lemlist', verb: 'd\u00e9ploie', detail: 'cmp_847 \u00b7 118 leads \u00b7 d\u00e9marrage 09h', dur: 1800 },
-      { from: 'lemlist', to: 'prospection', verb: 'confirme', detail: 'campagne live \u00b7 A/B 50/50', dur: 1200 } ] },
-  { id: 'crm_revival', title: 'Un deal qui dort se r\u00e9veille',
-    caption: 'Pipedrive ping un deal stagnant \u2014 l\'agent CRM enqu\u00eate, baakalai r\u00e9dige, ton SMTP envoie.',
-    steps: [
-      { from: 'pipedrive', to: 'crm', verb: 'webhook', detail: 'deal #4218 \u00b7 14j sans activit\u00e9', dur: 1400 },
-      { from: 'crm', to: 'memory', verb: 'cherche similaires', detail: 'deals stagnants \u2192 relances OK', dur: 1600 },
-      { from: 'memory', to: 'crm', verb: 'renvoie pattern', detail: 'mardi 10h \u00b7 ton direct \u00b7 47% reply', dur: 1200 },
-      { from: 'crm', to: 'claude', verb: 'demande email', detail: 'contexte deal + pattern Memory', dur: 1500 },
-      { from: 'claude', to: 'crm', verb: 'r\u00e9dige', detail: '3 variantes \u00b7 80 mots chacune', dur: 1800 },
-      { from: 'crm', to: 'smtp', verb: 'envoie', detail: 'variante B \u00b7 prog. mardi 10:00', dur: 1200 },
-      { from: 'crm', to: 'pipedrive', verb: 'log activit\u00e9', detail: 'note + tag "auto-follow"', dur: 1000 } ] },
-  { id: 'weekly_report', title: 'Le rapport du vendredi',
-    caption: 'Reporting analyse la semaine, rep\u00e8re ce qui m\u00e9rite ton attention, te livre le tout en clair.',
-    steps: [
-      { from: 'reporting', to: 'supabase', verb: 'query semaine', detail: '23 campagnes \u00b7 156 envois', dur: 1400 },
-      { from: 'reporting', to: 'memory', verb: 'compare', detail: 'vs S17 \u00b7 drift segments', dur: 1500 },
-      { from: 'memory', to: 'reporting', verb: 'flag anomalie', detail: 'cmp_823 \u00b7 open rate -34%', dur: 1300 },
-      { from: 'reporting', to: 'claude', verb: 'demande synth\u00e8se', detail: 'ton conversationnel \u00b7 3 actions', dur: 1500 },
-      { from: 'claude', to: 'reporting', verb: 'r\u00e9dige', detail: '4 paragraphes \u00b7 1 reco prio', dur: 1700 },
-      { from: 'reporting', to: 'notion-store', verb: 'archive', detail: 'rapport_S18 \u00b7 versionn\u00e9', dur: 1100 },
-      { from: 'reporting', to: 'resend', verb: 'envoie', detail: '\u00e0 toi \u00b7 vendredi 17h', dur: 1100 } ] },
-];
-
-const SCENARIOS_EN = [
-  { id: 'cold_outreach', title: 'A new campaign, from scratch',
-    caption: 'You launch "SaaS CTOs in Paris" \u2014 here\'s how baakalai, Prospection and your tools coordinate.',
-    steps: [
-      { from: 'user', to: 'claude', verb: 'requests campaign', detail: 'SaaS CTOs \u00b7 Paris \u00b7 100 leads', dur: 1200 },
-      { from: 'claude', to: 'memory', verb: 'queries patterns', detail: 'winning segments \u00b7 seasonality', dur: 1800 },
-      { from: 'memory', to: 'claude', verb: 'returns 3 angles', detail: 'pricing \u00b7 scaling \u00b7 hiring', dur: 1400 },
-      { from: 'claude', to: 'prospection', verb: 'delegates', detail: '7-touch sequence', dur: 1200 },
-      { from: 'prospection', to: 'apollo', verb: 'search', detail: 'role:CTO \u00b7 industry:SaaS \u00b7 loc:Paris', dur: 1600 },
-      { from: 'apollo', to: 'prospection', verb: 'returns', detail: '118 contacts \u00b7 96% enriched', dur: 1200 },
-      { from: 'prospection', to: 'brave', verb: 'enriches', detail: 'web context \u00b7 12 companies', dur: 1400 },
-      { from: 'prospection', to: 'lemlist', verb: 'deploys', detail: 'cmp_847 \u00b7 118 leads \u00b7 starts 9am', dur: 1800 },
-      { from: 'lemlist', to: 'prospection', verb: 'confirms', detail: 'campaign live \u00b7 A/B 50/50', dur: 1200 } ] },
-  { id: 'crm_revival', title: 'A sleeping deal wakes up',
-    caption: 'Pipedrive pings a stagnant deal \u2014 CRM agent investigates, baakalai writes, your SMTP sends.',
-    steps: [
-      { from: 'pipedrive', to: 'crm', verb: 'webhook', detail: 'deal #4218 \u00b7 14d no activity', dur: 1400 },
-      { from: 'crm', to: 'memory', verb: 'finds similar', detail: 'stagnant deals \u2192 revivals OK', dur: 1600 },
-      { from: 'memory', to: 'crm', verb: 'returns pattern', detail: 'tue 10am \u00b7 direct tone \u00b7 47% reply', dur: 1200 },
-      { from: 'crm', to: 'claude', verb: 'requests email', detail: 'deal context + Memory pattern', dur: 1500 },
-      { from: 'claude', to: 'crm', verb: 'writes', detail: '3 variants \u00b7 80 words each', dur: 1800 },
-      { from: 'crm', to: 'smtp', verb: 'sends', detail: 'variant B \u00b7 scheduled tue 10:00', dur: 1200 },
-      { from: 'crm', to: 'pipedrive', verb: 'logs activity', detail: 'note + tag "auto-follow"', dur: 1000 } ] },
-  { id: 'weekly_report', title: 'The Friday report',
-    caption: 'Reporting analyses the week, flags what deserves your attention, delivers it in plain words.',
-    steps: [
-      { from: 'reporting', to: 'supabase', verb: 'query week', detail: '23 campaigns \u00b7 156 sends', dur: 1400 },
-      { from: 'reporting', to: 'memory', verb: 'compares', detail: 'vs W17 \u00b7 segment drift', dur: 1500 },
-      { from: 'memory', to: 'reporting', verb: 'flags anomaly', detail: 'cmp_823 \u00b7 open rate -34%', dur: 1300 },
-      { from: 'reporting', to: 'claude', verb: 'requests synthesis', detail: 'conversational tone \u00b7 3 actions', dur: 1500 },
-      { from: 'claude', to: 'reporting', verb: 'writes', detail: '4 paragraphs \u00b7 1 prio reco', dur: 1700 },
-      { from: 'reporting', to: 'notion-store', verb: 'archives', detail: 'report_W18 \u00b7 versioned', dur: 1100 },
-      { from: 'reporting', to: 'resend', verb: 'sends', detail: 'to you \u00b7 friday 5pm', dur: 1100 } ] },
-];
+// ─── DATA · UI ──────────────────────────────────────────────
 
 const UI_FR = {
-  hint: 'GLISSER \u00b7 MOLETTE POUR ZOOMER',
-  scenario: 'SC\u00c9NARIO',
-  reset: 'RESET',
-  filterAll: 'Tout',
-  brain: 'CERVEAU', agent: 'AGENT', tool: 'OUTIL',
-  brainTitle: 'baakalai \u2014 orchestrateur',
-  brainTooltip: "Le cerveau de baakalai. D\u00e9cide quel agent activer, \u00e9crit, analyse, consolide la m\u00e9moire \u2014 propuls\u00e9 par Claude.",
-  brainBig: 'baakalai',
-  brainSub: "orchestre tout, lit, \u00e9crit, refine \u2014 propuls\u00e9 par Claude",
-  brainBody: "baakalai est au centre \u2014 pas parce qu\u2019il fait tout, mais parce qu\u2019il d\u00e9cide. \u00c0 chaque demande, il lit l\u2019historique, consulte la Memory, choisit l\u2019agent qui doit prendre le relai, puis r\u00e9dige le langage humain (s\u00e9quences, emails, rapports). Le moteur de raisonnement est Claude (Anthropic).",
-  agentEyebrow: 'AGENT AUTONOME',
-  isolate: '\u2192 Isoler',
-  showAll: '\u21a9 Tout r\u00e9afficher',
-  focusMode: '(focus mode)',
-  role: 'R\u00d4LE',
-  interactions: 'INTERACTIONS',
-  heroEyebrow: 'COMMENT BAAKALAI TRAVAILLE',
-  heroTitle1: 'Pendant que tu dors,',
-  heroTitle2: 'la constellation',
-  heroTitle3: 'travaille.',
-  heroSub: "baakalai au centre. Douze agents qui lisent ton CRM 24/7. Dix-neuf outils qui ob\u00e9issent au doigt et \u00e0 l\u2019\u0153il. Regarde-les r\u00e9activer tes deals \u2014 en direct.",
-  ctaTitle: "Connecte tes outils \u2014 baakalai prend le relais.",
+  navHow: 'Comment ça marche', navPricing: 'Tarif', navLogin: 'Se connecter', navTry: 'Rejoindre la beta →',
+  heroEyebrow: 'BAAKALAI · COMMENT ÇA MARCHE',
+  heroT1: 'Une ', heroEm: 'boucle', heroT2: ' qui se referme.', heroT3: 'Pas une pile d’outils.',
+  heroSub: 'baakalai lit ton CRM, détecte les deals qui dorment, propose une séquence de relance, attend ton feu vert, envoie depuis ta boîte Gmail ou Outlook, et s’arrête dès qu’on te répond. Ce qu’il apprend nourrit la détection suivante. Douze agents qui font le travail qu’un RevOps ferait.',
+  legendCore: 'Natif : tourne dans baakalai',
+  legendInbox: 'Ta boîte : Gmail · Outlook · SMTP',
+  legendOpt: 'Optionnel : si tu l’as déjà',
+  pause: '⏸ Pause', resume: '▶ Reprendre',
+  hint: '↑ clique une étape ou un outil pour voir son rôle · la boucle tourne toute seule',
+  scrollHint: '← fais défiler le schéma →',
+  capEyebrow: 'LA BOUCLE', step: 'ÉTAPE',
+  coreLabel: 'LE NOYAU BAAKALAI', coreSub: '12 AGENTS · PROPULSÉ PAR CLAUDE',
+  coreTip: 'Le cerveau de baakalai. Décide quel agent activer, écrit, analyse, consolide la mémoire, propulsé par Claude.',
+  coreTitle: 'baakalai : le noyau',
+  coreBody: 'baakalai est au centre, pas parce qu’il fait tout, mais parce qu’il décide. À chaque passe de la boucle, il lit l’historique, consulte la Memory, choisit lequel des douze agents doit prendre le relai, puis rédige le langage humain (séquences, emails, rapports). Le moteur de raisonnement est Claude (Anthropic). Ensemble, ils font le travail qu’un RevOps ferait, la boucle entière, de la lecture du CRM à la mémoire.',
+  coreBadges: ['12 AGENTS', 'ENVOI NATIF', 'MOTEUR DE SÉQUENCES', 'MÉMOIRE'],
+  branchStop: 'RÉPOND → ON ARRÊTE',
+  branchIgnore: 'IGNORE → ÉTAPE SUIVANTE',
+  inboxLabel: 'TA BOÎTE · NATIF',
+  grpCrm: 'TON CRM', grpCrmOauth: 'OAUTH 1 CLIC', grpCrmConfig: 'CLÉ API', grpCrmNote: 'BRANCHE LE TIEN',
+  grpOutbound: 'DÉJÀ OUTILLÉ ?', grpOutboundNote: 'OPTIONNEL : BAAKALAI ENVOIE SANS EUX',
+  grpInfra: 'SOUS LE CAPOT',
+  kindStep: 'ÉTAPE DE LA BOUCLE', kindTool: 'OUTIL TIERS', kindInfra: 'INFRA BAAKALAI', kindInbox: 'ENVOI NATIF', kindCore: 'ORCHESTRATEUR',
+  panelRole: 'RÔLE', panelInter: 'INTERACTIONS', panelAgents: 'AGENTS IMPLIQUÉS',
+  philEyebrow: 'LA PHILOSOPHIE',
+  philTitle: ['On a découpé le boulot en ', 'douze agents', ', quatre opérationnels quotidiens, sept stratégiques, un générateur de templates.'],
+  agentWord: 'AGENT',
+  ctaCaption: 'prêt à voir ta propre boucle tourner ?',
+  ctaTitle: 'Connecte ton CRM et ta boîte : baakalai prend le relais.',
   ctaButton: 'Rejoindre la beta',
-  ctaNote: '14 jours offerts. Pas de carte requise.',
+  ctaNote: 'Beta sur candidature · 20 minutes avec un fondateur',
 };
 
 const UI_EN = {
-  hint: 'DRAG \u00b7 SCROLL TO ZOOM',
-  scenario: 'SCENARIO',
-  reset: 'RESET',
-  filterAll: 'All',
-  brain: 'BRAIN', agent: 'AGENT', tool: 'TOOL',
-  brainTitle: 'baakalai \u2014 orchestrator',
-  brainTooltip: "baakalai\u2019s brain. Decides which agent to activate, writes, analyses, consolidates memory \u2014 powered by Claude.",
-  brainBig: 'baakalai',
-  brainSub: "orchestrates everything, reads, writes, refines \u2014 powered by Claude",
-  brainBody: "baakalai sits at the center \u2014 not because it does everything, but because it decides. On every request it reads the history, queries Memory, picks the agent that should take over, then writes the human language (sequences, emails, reports). The reasoning engine is Claude (Anthropic).",
-  agentEyebrow: 'AUTONOMOUS AGENT',
-  isolate: '\u2192 Isolate',
-  showAll: '\u21a9 Show all',
-  focusMode: '(focus mode)',
-  role: 'ROLE',
-  interactions: 'INTERACTIONS',
-  heroEyebrow: 'HOW BAAKALAI WORKS',
-  heroTitle1: 'While you sleep,',
-  heroTitle2: 'the constellation',
-  heroTitle3: 'is working.',
-  heroSub: "baakalai at the center. Twelve agents reading your CRM 24/7. Nineteen tools at its fingertips. Watch them reactivate your deals \u2014 live.",
-  ctaTitle: "Connect your tools \u2014 baakalai takes over.",
+  navHow: 'How it works', navPricing: 'Pricing', navLogin: 'Sign in', navTry: 'Join the beta →',
+  heroEyebrow: 'BAAKALAI · HOW IT WORKS',
+  heroT1: 'A ', heroEm: 'loop', heroT2: ' that closes.', heroT3: 'Not a stack of tools.',
+  heroSub: 'baakalai reads your CRM, spots sleeping deals, drafts a follow-up sequence, waits for your go, sends from your own Gmail or Outlook inbox, and stops the moment someone replies. What it learns feeds the next detection. Twelve agents doing the work a RevOps hire would do.',
+  legendCore: 'Native: runs inside baakalai',
+  legendInbox: 'Your inbox: Gmail · Outlook · SMTP',
+  legendOpt: 'Optional: if you already have it',
+  pause: '⏸ Pause', resume: '▶ Resume',
+  hint: '↑ click a step or a tool to see its role · the loop runs on its own',
+  scrollHint: '← scroll the diagram →',
+  capEyebrow: 'THE LOOP', step: 'STEP',
+  coreLabel: 'THE BAAKALAI CORE', coreSub: '12 AGENTS · POWERED BY CLAUDE',
+  coreTip: 'baakalai\u2019s brain. Decides which agent to activate, writes, analyses, consolidates memory, powered by Claude.',
+  coreTitle: 'baakalai: the core',
+  coreBody: 'baakalai sits at the center, not because it does everything, but because it decides. On every pass of the loop it reads the history, queries Memory, picks which of the twelve agents should take over, then writes the human language (sequences, emails, reports). The reasoning engine is Claude (Anthropic). Together they do the work a RevOps hire would do, the whole loop, from CRM read to memory.',
+  coreBadges: ['12 AGENTS', 'NATIVE SENDING', 'SEQUENCE ENGINE', 'MEMORY'],
+  branchStop: 'REPLIES → WE STOP',
+  branchIgnore: 'IGNORES → NEXT STEP',
+  inboxLabel: 'YOUR INBOX · NATIVE',
+  grpCrm: 'YOUR CRM', grpCrmOauth: 'ONE-CLICK OAUTH', grpCrmConfig: 'API KEY', grpCrmNote: 'PLUG IN YOURS',
+  grpOutbound: 'ALREADY TOOLED UP?', grpOutboundNote: 'OPTIONAL: BAAKALAI SENDS WITHOUT THEM',
+  grpInfra: 'UNDER THE HOOD',
+  kindStep: 'LOOP STEP', kindTool: 'THIRD-PARTY TOOL', kindInfra: 'BAAKALAI INFRA', kindInbox: 'NATIVE SENDING', kindCore: 'ORCHESTRATOR',
+  panelRole: 'ROLE', panelInter: 'INTERACTIONS', panelAgents: 'AGENTS INVOLVED',
+  philEyebrow: 'THE PHILOSOPHY',
+  philTitle: ['We split the job into ', 'twelve agents', ', four daily operators, seven strategic, one template generator.'],
+  agentWord: 'AGENT',
+  ctaCaption: 'ready to watch your own loop run?',
+  ctaTitle: 'Connect your CRM and your inbox: baakalai takes over.',
   ctaButton: 'Join the beta',
-  ctaNote: '14 days free. No card required.',
+  ctaNote: 'Beta by application · 20 minutes with a founder',
 };
 
-const TR_NAV_FR = { how: "Comment \u00e7a marche", pricing: 'Beta', login: 'Login', try: 'Rejoindre la beta \u2192', philEyebrow: '\u2014 LA PHILOSOPHIE', philTitle: ['On a d\u00e9coup\u00e9 le boulot en ', 'douze agents', " \u2014 quatre op\u00e9rationnels quotidiens, sept strat\u00e9giques, un g\u00e9n\u00e9rateur de templates."], hintCaption: '\u2191 survol une \u00e9toile \u00b7 clique pour voir ce qu\u2019elle fait \u00b7 isole un agent pour suivre son fil', filterAll: 'Tout afficher', focus: 'focus', pause: '\u23f8 Pause', resume: '\u25b6 Reprendre', readyCaption: 'pr\u00eat \u00e0 voir ta propre constellation ?' };
-const TR_NAV_EN = { how: 'How it works', pricing: 'Pricing', login: 'Login', try: 'Join the beta \u2192', philEyebrow: '\u2014 THE PHILOSOPHY', philTitle: ['We split the job into ', 'twelve agents', " \u2014 four daily operators, seven strategic, one template generator."], hintCaption: '\u2191 hover a star \u00b7 click to see what it does \u00b7 isolate an agent to follow its thread', filterAll: 'Show all', focus: 'focus', pause: '\u23f8 Pause', resume: '\u25b6 Resume', readyCaption: 'ready to see your own constellation?' };
-
-function getConstData(lang) {
-  const isEn = lang === 'en';
+function getData(lang) {
+  const en = lang === 'en';
   return {
-    AGENTS: isEn ? AGENTS_EN : AGENTS_FR,
-    TOOLS:  isEn ? TOOLS_EN  : TOOLS_FR,
-    TOOL_CATEGORIES,
-    SCENARIOS: isEn ? SCENARIOS_EN : SCENARIOS_FR,
-    UI: isEn ? UI_EN : UI_FR,
-    lang: isEn ? 'en' : 'fr',
+    lang: en ? 'en' : 'fr',
+    STEPS: en ? STEPS_EN : STEPS_FR,
+    TOOLS: en ? TOOLS_EN : TOOLS_FR,
+    INBOX: en ? INBOX_EN : INBOX_FR,
+    SEQ: en ? SEQ_EN : SEQ_FR,
+    AGENTS: en ? AGENTS_EN : AGENTS_FR,
+    UI: en ? UI_EN : UI_FR,
   };
 }
 
-// ─── LAYOUT ─────────────────────────────────────────────────
+// ─── GÉOMÉTRIE ──────────────────────────────────────────────
 
-const CX = 600, CY = 420;
+const W = 1280, H = 880, CX = 640, CY = 430;
+const RX = 270, RY = 185; // anneau des étapes
+const BX = 360, BY = 272; // frontière du noyau
 
-const seedRand = (seed) => {
-  let s = seed;
-  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
-};
+const ORDER = ['crm-read', 'detect', 'sequence', 'approve', 'send', 'reply', 'memory'];
+const STEP_DEG = 360 / 7;
+const angleOf = (i) => 180 + i * STEP_DEG;
+const rad = (d) => (d * Math.PI) / 180;
+const ringPt = (deg) => ({ x: CX + Math.cos(rad(deg)) * RX, y: CY + Math.sin(rad(deg)) * RY });
 
-const AGENT_ANCHORS = {
-  prospection: { angle: -150, distX: 280, distY: 150 },
-  crm:         { angle:  -30, distX: 280, distY: 150 },
-  memory:      { angle:   30, distX: 280, distY: 150 },
-  reporting:   { angle:  150, distX: 280, distY: 150 },
-};
+const STEP_POS = {};
+ORDER.forEach((id, i) => { STEP_POS[id] = {...ringPt(angleOf(i)), deg: angleOf(i), i }; });
 
-const CAT_AGENT = {
-  prospecting: 'prospection',
-  crm:         'crm',
-  email:       'memory',
-  data:        'reporting',
-};
+// Branche « ignore » : bézier quadratique reply → send
+const BR = { p0: STEP_POS['reply'], p1: { x: 830, y: 645 }, p2: { x: STEP_POS['send'].x - 14, y: STEP_POS['send'].y + 22 } };
+const bezierPt = (t) => ({
+  x: (1 - t) * (1 - t) * BR.p0.x + 2 * (1 - t) * t * BR.p1.x + t * t * BR.p2.x,
+  y: (1 - t) * (1 - t) * BR.p0.y + 2 * (1 - t) * t * BR.p1.y + t * t * BR.p2.y,
+});
 
-const polarXY = (cx, cy, angleDeg, distX, distY) => {
-  const r = (angleDeg * Math.PI) / 180;
-  return { x: cx + Math.cos(r) * distX, y: cy + Math.sin(r) * distY };
-};
+// Colonnes périphériques
+const CRM_COL_X = 150;
+const CRM_YS = { header: 108, oauthSub: 142, oauth: [176, 230, 284], configSub: 342, config: [376, 430, 484, 538] };
+const OUT_COL_X = 1130;
+const OUT_YS = { header: 108, note: 126, tools: [168, 226, 284, 342, 400, 458] };
+const INFRA_Y = 812;
+const INFRA_XS = [478, 586, 694, 802];
 
-const buildLayout = (agents, tools) => {
-  const r1 = seedRand(7);
-  const r2 = seedRand(42);
+const seedRand = (seed) => { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; };
 
-  const agentPos = {};
-  Object.entries(AGENT_ANCHORS).forEach(([id, a]) => {
-    agentPos[id] = polarXY(CX, CY, a.angle, a.distX, a.distY);
-  });
+// ─── SCÈNE SVG ──────────────────────────────────────────────
 
-  const byAgent = { prospection: [], crm: [], memory: [], reporting: [] };
-  tools.forEach(t => {
-    const agentId = CAT_AGENT[t.cat];
-    byAgent[agentId].push(t);
-  });
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
-  const TOOL_RADIUS_X = [430, 500];
-  const TOOL_RADIUS_Y = [240, 290];
-
-  const toolPos = {};
-  Object.entries(byAgent).forEach(([agentId, items]) => {
-    const baseAngle = AGENT_ANCHORS[agentId].angle;
-    const n = items.length;
-    items.forEach((t, i) => {
-      const t01 = n === 1 ? 0.5 : i / (n - 1);
-      const arcDeg = (t01 - 0.5) * 50;
-      const angleDeg = baseAngle + arcDeg;
-      const ring = i % 2;
-      toolPos[t.id] = polarXY(CX, CY, angleDeg, TOOL_RADIUS_X[ring], TOOL_RADIUS_Y[ring]);
-    });
-  });
-
-  const dust = Array.from({ length: 220 }).map(() => ({
-    x: r1() * 1200,
-    y: r2() * 840,
-    size: r1() * 1.4 + 0.2,
-    op: 0.15 + r2() * 0.55,
-  }));
-
-  return { agentPos, toolPos, dust, claudePos: { x: CX, y: CY } };
-};
-
-// ─── ZOOM BTN STYLE ────────────────────────────────────────
-
-const zoomBtnStyle = {
-  width: 36, height: 36,
-  background: 'rgba(10,8,32,0.85)',
-  border: '1px solid rgba(110,87,250,0.45)',
-  borderRadius: 6,
-  color: '#FFFFFF', fontSize: 18, fontWeight: 500,
-  cursor: 'pointer', fontFamily: 'Geist, sans-serif',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backdropFilter: 'blur(8px)',
-};
-
-// ─── CONSTELLATION SCENE ────────────────────────────────────
-
-const Constellation = ({ onSelect, focusedAgent, activeFilter, paused, data, t }) => {
-  const W = 1200, H = 840;
-  const { AGENTS: A2, TOOLS: T2, TOOL_CATEGORIES: TC2, SCENARIOS } = data;
-
-  const layout = React.useMemo(() => buildLayout(A2, T2), []);
-  const [hover, setHover] = React.useState(null);
-  const [scenarioIdx, setScenarioIdx] = React.useState(0);
-  const [stepIdx, setStepIdx] = React.useState(0);
-  const [zoom, setZoom] = React.useState(1);
-  const [pan, setPan] = React.useState({ x: 0, y: 0 });
-  const dragRef = React.useRef(null);
-
-  React.useEffect(() => {
-    if (paused) return;
-    const scenario = SCENARIOS[scenarioIdx];
-    const step = scenario.steps[stepIdx];
-    const tm = setTimeout(() => {
-      const next = stepIdx + 1;
-      if (next >= scenario.steps.length) {
-        setStepIdx(0);
-        setScenarioIdx((s) => (s + 1) % SCENARIOS.length);
-      } else {
-        setStepIdx(next);
-      }
-    }, step.dur);
-    return () => clearTimeout(tm);
-  }, [scenarioIdx, stepIdx, paused, SCENARIOS]);
-
-  const currentScenario = SCENARIOS[scenarioIdx];
-  const currentStep = currentScenario.steps[stepIdx];
-
-  const nodePos = (id) => {
-    if (id === 'claude') return layout.claudePos;
-    if (id === 'user')   return { x: 80, y: H - 80 };
-    if (layout.agentPos[id]) return layout.agentPos[id];
-    if (layout.toolPos[id])  return layout.toolPos[id];
-    return null;
-  };
-
-  const isDimmed = (kind, id) => {
-    if (focusedAgent) {
-      if (kind === 'claude') return false;
-      if (kind === 'agent') return id !== focusedAgent;
-      if (kind === 'tool') {
-        const ag = A2.find((x) => x.id === focusedAgent);
-        return !ag.tools.includes(id);
-      }
-    }
-    if (activeFilter !== 'all' && kind === 'tool') {
-      const tool = T2.find((x) => x.id === id);
-      return tool.cat !== activeFilter;
-    }
-    return false;
-  };
-
-  const onPanStart = (e) => {
-    if (e.target.closest('[data-node]')) return;
-    dragRef.current = { sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y };
-  };
-  const onPanMove = (e) => {
-    if (!dragRef.current) return;
-    setPan({ x: dragRef.current.px + e.clientX - dragRef.current.sx, y: dragRef.current.py + e.clientY - dragRef.current.sy });
-  };
-  const onPanEnd = () => { dragRef.current = null; };
-  const onWheel = (e) => {
-    e.preventDefault();
-    setZoom((z) => Math.max(0.5, Math.min(2.5, z - e.deltaY * 0.0015)));
-  };
-  const setZoomClamped = (z) => setZoom(Math.max(0.5, Math.min(2.5, z)));
-  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
-
-  const fromPos = nodePos(currentStep.from);
-  const toPos   = nodePos(currentStep.to);
-  const worldTransform = `translate(${W/2 + pan.x}, ${H/2 + pan.y}) scale(${zoom}) translate(${-W/2}, ${-H/2})`;
-
-  return React.createElement('div', {
-    onMouseDown: onPanStart, onMouseMove: onPanMove, onMouseUp: onPanEnd, onMouseLeave: onPanEnd, onWheel: onWheel,
-    style: { width: W, height: H, position: 'relative', overflow: 'hidden', background: 'radial-gradient(ellipse at 50% 40%, #1a1538 0%, #0a0820 50%, #050410 100%)', cursor: dragRef.current ? 'grabbing' : 'grab' }
-  },
-    React.createElement('svg', { width: W, height: H, style: { position: 'absolute', inset: 0, userSelect: 'none' } },
-      React.createElement('defs', null,
-        React.createElement('radialGradient', { id: 'claudeGlow' },
-          React.createElement('stop', { offset: '0%', stopColor: '#A998FF', stopOpacity: 0.9 }),
-          React.createElement('stop', { offset: '40%', stopColor: '#6E57FA', stopOpacity: 0.5 }),
-          React.createElement('stop', { offset: '100%', stopColor: '#6E57FA', stopOpacity: 0 }),
-        ),
-        React.createElement('radialGradient', { id: 'agentGlow' },
-          React.createElement('stop', { offset: '0%', stopColor: '#C4B5FD', stopOpacity: 0.85 }),
-          React.createElement('stop', { offset: '100%', stopColor: '#9A84EB', stopOpacity: 0 }),
-        ),
-        React.createElement('radialGradient', { id: 'toolGlow' },
-          React.createElement('stop', { offset: '0%', stopColor: '#A998FF', stopOpacity: 0.7 }),
-          React.createElement('stop', { offset: '100%', stopColor: '#A998FF', stopOpacity: 0 }),
-        ),
-      ),
-      React.createElement('g', { transform: worldTransform },
-        // Dust
-        layout.dust.map((d, i) => React.createElement('circle', { key: 'd'+i, cx: d.x, cy: d.y, r: d.size, fill: '#A998FF', opacity: d.op })),
-
-        // Agent warm glows
-        A2.map((a) => {
-          const p = layout.agentPos[a.id];
-          return React.createElement('circle', { key: 'tw'+a.id, cx: p.x, cy: p.y, r: 70, fill: 'url(#agentGlow)', opacity: isDimmed('agent', a.id) ? 0.06 : 0.5 });
-        }),
-
-        // Hub-to-agent lines
-        A2.map((a) => {
-          const p = layout.agentPos[a.id];
-          const dim = isDimmed('agent', a.id);
-          return React.createElement('line', { key: 'l'+a.id, x1: layout.claudePos.x, y1: layout.claudePos.y, x2: p.x, y2: p.y, stroke: '#A998FF', strokeWidth: 1.4, opacity: dim ? 0.06 : 0.38 });
-        }),
-
-        // Agent-to-tool lines
-        A2.map((agent) => {
-          const ap = layout.agentPos[agent.id];
-          return agent.tools.map((toolId) => {
-            const tp = layout.toolPos[toolId];
-            if (!tp) return null;
-            const dim = isDimmed('agent', agent.id) || isDimmed('tool', toolId);
-            const isLit = (currentStep.from === agent.id && currentStep.to === toolId) || (currentStep.from === toolId && currentStep.to === agent.id);
-            return React.createElement('line', { key: 'at-'+agent.id+'-'+toolId, x1: ap.x, y1: ap.y, x2: tp.x, y2: tp.y, stroke: isLit ? '#FFFFFF' : '#A998FF', strokeWidth: isLit ? 2 : 0.9, opacity: dim ? 0.04 : (isLit ? 0.95 : 0.18) },
-              isLit ? React.createElement('animate', { attributeName: 'opacity', values: '0.5;1;0.5', dur: '1.2s', repeatCount: 'indefinite' }) : null
-            );
-          });
-        }),
-
-        // Active step line + particles
-        fromPos && toPos && React.createElement('g', null,
-          React.createElement('line', { x1: fromPos.x, y1: fromPos.y, x2: toPos.x, y2: toPos.y, stroke: '#FAFAF9', strokeWidth: 2, opacity: 0.9 },
-            React.createElement('animate', { attributeName: 'opacity', values: '0.6;1;0.6', dur: '1.4s', repeatCount: 'indefinite' })
-          ),
-          React.createElement('circle', { r: 4.5, fill: '#FFFFFF' },
-            React.createElement('animateMotion', { dur: (currentStep.dur / 1000) + 's', repeatCount: '1', path: 'M '+fromPos.x+' '+fromPos.y+' L '+toPos.x+' '+toPos.y })
-          ),
-          React.createElement('circle', { r: 3, fill: '#A998FF', opacity: 0.6 },
-            React.createElement('animateMotion', { dur: (currentStep.dur / 1000) + 's', begin: '0.1s', repeatCount: '1', path: 'M '+fromPos.x+' '+fromPos.y+' L '+toPos.x+' '+toPos.y })
-          ),
-        ),
-
-        // Tools
-        T2.map((tl) => {
-          const p = layout.toolPos[tl.id];
-          if (!p) return null;
-          const dim = isDimmed('tool', tl.id);
-          const sz = 16;
-          const cat = TC2.find(c => c.id === tl.cat);
-          const catColor = cat ? cat.color : '#A998FF';
-          const isOnPath = currentStep.from === tl.id || currentStep.to === tl.id;
-          const letter = (tl.name[0] || '?').toUpperCase();
-          return React.createElement('g', { key: tl.id, 'data-node': '1', onMouseEnter: () => setHover({ kind: 'tool', node: tl, x: p.x, y: p.y }), onMouseLeave: () => setHover(null), onClick: () => onSelect({ kind: 'tool', data: tl }), style: { cursor: 'pointer' }, opacity: dim ? 0.25 : 1 },
-            isOnPath && React.createElement('circle', { cx: p.x, cy: p.y, r: sz + 14, fill: 'url(#toolGlow)' },
-              React.createElement('animate', { attributeName: 'r', values: (sz+10)+';'+(sz+22)+';'+(sz+10), dur: '1.6s', repeatCount: 'indefinite' })
-            ),
-            React.createElement('circle', { cx: p.x, cy: p.y, r: sz, fill: '#FAFAF9', stroke: isOnPath ? '#FFFFFF' : catColor, strokeWidth: isOnPath ? 2.5 : 1.5 }),
-            React.createElement('text', { x: p.x, y: p.y + 5, textAnchor: 'middle', fontFamily: 'Geist, sans-serif', fontSize: 15, fontWeight: 600, fill: '#0A0A0A', letterSpacing: '-0.02em' }, letter),
-            React.createElement('circle', { cx: p.x + sz - 4, cy: p.y - sz + 4, r: 3.5, fill: catColor, stroke: '#0a0820', strokeWidth: 1 }),
-            React.createElement('text', { x: p.x, y: p.y + sz + 14, textAnchor: 'middle', fontFamily: 'Geist Mono, monospace', fontSize: 9.5, fill: '#FFFFFF', opacity: dim ? 0.3 : 0.85, letterSpacing: '0.04em' }, tl.name.toUpperCase()),
-          );
-        }),
-
-        // Agents
-        A2.map((a) => {
-          const p = layout.agentPos[a.id];
-          const dim = isDimmed('agent', a.id);
-          const sz = 26;
-          const isOnPath = currentStep.from === a.id || currentStep.to === a.id;
-          const letter = a.short[0];
-          return React.createElement('g', { key: a.id, 'data-node': '1', onMouseEnter: () => setHover({ kind: 'agent', node: a, x: p.x, y: p.y }), onMouseLeave: () => setHover(null), onClick: () => onSelect({ kind: 'agent', data: a }), style: { cursor: 'pointer' }, opacity: dim ? 0.25 : 1 },
-            React.createElement('circle', { cx: p.x, cy: p.y, r: 48, fill: 'url(#agentGlow)', opacity: dim ? 0.1 : 0.7 }),
-            isOnPath && React.createElement('circle', { cx: p.x, cy: p.y, r: sz + 10, fill: 'none', stroke: '#FFFFFF', strokeWidth: 1.5, opacity: 0.7 },
-              React.createElement('animate', { attributeName: 'r', values: (sz+6)+';'+(sz+16)+';'+(sz+6), dur: '1.6s', repeatCount: 'indefinite' })
-            ),
-            React.createElement('circle', { cx: p.x, cy: p.y, r: sz, fill: '#C4B5FD', stroke: '#FFFFFF', strokeWidth: focusedAgent === a.id ? 2.5 : 1 }),
-            React.createElement('text', { x: p.x, y: p.y + 8, textAnchor: 'middle', fontFamily: 'Geist, sans-serif', fontSize: 22, fontWeight: 600, fill: '#0A0A0A', letterSpacing: '-0.02em' }, letter),
-            React.createElement('text', { x: p.x, y: p.y + sz + 18, textAnchor: 'middle', fontFamily: 'Geist Mono, monospace', fontSize: 11, fontWeight: 500, fill: '#FFFFFF', opacity: dim ? 0.3 : 1, letterSpacing: '0.06em' }, a.name.toUpperCase()),
-            React.createElement('text', { x: p.x, y: p.y + sz + 36, textAnchor: 'middle', fontFamily: 'Geist Mono, monospace', fontSize: 9.5, fontWeight: 500, letterSpacing: '0.04em', fill: '#A998FF', opacity: dim ? 0.2 : 0.85 }, a.tagline.split(',')[0].toUpperCase()),
-          );
-        }),
-
-        // Baakalai hub
-        React.createElement('g', { 'data-node': '1', onMouseEnter: () => setHover({ kind: 'claude', x: layout.claudePos.x, y: layout.claudePos.y }), onMouseLeave: () => setHover(null), onClick: () => onSelect({ kind: 'claude' }), style: { cursor: 'pointer' } },
-          React.createElement('circle', { cx: layout.claudePos.x, cy: layout.claudePos.y, r: 100, fill: 'url(#claudeGlow)' }),
-          React.createElement('circle', { cx: layout.claudePos.x, cy: layout.claudePos.y, r: 65, fill: 'url(#claudeGlow)', opacity: 0.9 }),
-          React.createElement('circle', { cx: layout.claudePos.x, cy: layout.claudePos.y, r: 40, fill: '#6E57FA', stroke: '#FFFFFF', strokeWidth: 1.5 }),
-          React.createElement('g', { transform: 'translate('+(layout.claudePos.x - 18)+', '+(layout.claudePos.y - 18)+') scale(0.36)' },
-            React.createElement('line', { x1: 50, y1: 50, x2: 22, y2: 26, stroke: '#FFFFFF', strokeWidth: 6, strokeLinecap: 'round', opacity: 0.9 }),
-            React.createElement('line', { x1: 50, y1: 50, x2: 82, y2: 30, stroke: '#FFFFFF', strokeWidth: 6, strokeLinecap: 'round', opacity: 0.7 }),
-            React.createElement('line', { x1: 50, y1: 50, x2: 30, y2: 80, stroke: '#FFFFFF', strokeWidth: 6, strokeLinecap: 'round', opacity: 0.9 }),
-            React.createElement('circle', { cx: 22, cy: 26, r: 9, fill: '#FFFFFF', opacity: 0.9 }),
-            React.createElement('circle', { cx: 82, cy: 30, r: 10, fill: '#FFFFFF', opacity: 0.7 }),
-            React.createElement('circle', { cx: 30, cy: 80, r: 9, fill: '#FFFFFF', opacity: 0.9 }),
-            React.createElement('circle', { cx: 50, cy: 50, r: 14, fill: '#FFFFFF' }),
-          ),
-          React.createElement('text', { x: layout.claudePos.x, y: layout.claudePos.y + 60, textAnchor: 'middle', fontFamily: 'Geist Mono, monospace', fontSize: 12, fontWeight: 600, fill: '#FFFFFF', letterSpacing: '0.1em' }, 'BAAKALAI'),
-        ),
-      ),
-    ),
-
-    // Tooltip
-    hover && (() => {
-      const sx = (hover.x - W / 2) * zoom + W / 2 + pan.x;
-      const sy = (hover.y - H / 2) * zoom + H / 2 + pan.y;
-      return React.createElement('div', { style: { position: 'absolute', left: sx + 18, top: sy - 10, padding: '8px 12px', background: 'rgba(10,8,32,0.92)', border: '1px solid #6E57FA', borderRadius: 8, pointerEvents: 'none', maxWidth: 240, zIndex: 5, backdropFilter: 'blur(8px)' } },
-        React.createElement('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#A998FF' } },
-          hover.kind === 'claude' ? 'BAAKALAI \u00b7 ' + t.brain : hover.kind === 'agent' ? t.agent : t.tool),
-        React.createElement('div', { style: { fontFamily: 'Geist, sans-serif', fontSize: 14, fontWeight: 500, color: '#FFFFFF', marginTop: 2 } },
-          hover.kind === 'claude' ? t.brainTitle : hover.node.name),
-        React.createElement('div', { style: { fontSize: 11.5, color: '#C4B5FD', marginTop: 4, lineHeight: 1.4 } },
-          hover.kind === 'claude' ? t.brainTooltip : hover.kind === 'agent' ? hover.node.tagline : hover.node.desc),
-      );
-    })(),
-
-    // Zoom controls
-    React.createElement('div', { style: { position: 'absolute', top: 20, right: 20, display: 'flex', flexDirection: 'column', gap: 6, zIndex: 4 } },
-      React.createElement('button', { onClick: () => setZoomClamped(zoom + 0.2), style: zoomBtnStyle }, '+'),
-      React.createElement('button', { onClick: () => setZoomClamped(zoom - 0.2), style: zoomBtnStyle }, '\u2212'),
-      React.createElement('button', { onClick: resetView, style: { ...zoomBtnStyle, fontSize: 10, fontFamily: 'Geist Mono, monospace', letterSpacing: '0.06em' } }, t.reset),
-      React.createElement('div', { style: { marginTop: 4, padding: '6px 8px', background: 'rgba(10,8,32,0.85)', border: '1px solid rgba(110,87,250,0.4)', borderRadius: 6, fontFamily: 'Geist Mono, monospace', fontSize: 10, color: '#A998FF', textAlign: 'center' } }, Math.round(zoom * 100) + '%'),
-    ),
-
-    // Caption
-    React.createElement('div', { style: { position: 'absolute', left: 32, bottom: 32, right: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', pointerEvents: 'none' } },
-      React.createElement('div', { style: { maxWidth: 540 } },
-        React.createElement('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A998FF', marginBottom: 8 } },
-          t.scenario + ' ' + String(scenarioIdx + 1).padStart(2, '0') + ' \u00b7 ' + currentScenario.title.toUpperCase()),
-        React.createElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: 12, fontFamily: 'Geist Mono, monospace', fontSize: 11, color: '#FAFAF9' } },
-          React.createElement('span', { style: { color: '#A998FF' } }, currentStep.from.toUpperCase()),
-          React.createElement('span', { style: { color: '#525251' } }, '\u2192'),
-          React.createElement('span', { style: { color: '#A998FF' } }, currentStep.to.toUpperCase()),
-        ),
-        React.createElement('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 14, fontWeight: 500, color: '#FFFFFF', marginTop: 6, lineHeight: 1.4, letterSpacing: '-0.005em' } }, currentStep.verb),
-        React.createElement('div', { style: { fontFamily: 'Geist, sans-serif', fontSize: 13, color: '#C4B5FD', marginTop: 4 } }, currentStep.detail),
-      ),
-      React.createElement('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
-        currentScenario.steps.map((_, i) => React.createElement('span', { key: i, style: { width: i === stepIdx ? 24 : 6, height: 3, borderRadius: 999, background: i === stepIdx ? '#FFFFFF' : (i < stepIdx ? '#A998FF' : '#2A2A48'), transition: 'all 200ms cubic-bezier(0.2,0.6,0.2,1)' } })),
-      ),
-    ),
-
-    // Hint
-    React.createElement('div', { style: { position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)', fontFamily: 'Geist Mono, monospace', fontSize: 10, color: 'rgba(169,152,255,0.55)', letterSpacing: '0.08em', pointerEvents: 'none' } }, t.hint),
-  );
-};
-
-// ─── SIDE PANEL ─────────────────────────────────────────────
-
-const SidePanel = ({ selection, onClose, focusedAgent, setFocusedAgent, data, t }) => {
-  if (!selection) return null;
-  const { kind, data: node } = selection;
-  const h = React.createElement;
-
-  const Header = ({ eyebrow, title, sub }) => h('div', { style: { paddingBottom: 16, borderBottom: '1px solid #2A2A48', marginBottom: 16 } },
-    h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A998FF' } }, eyebrow),
-    h('div', { style: { fontFamily: 'Geist, sans-serif', fontSize: 24, fontWeight: 500, letterSpacing: '-0.025em', color: '#FFFFFF', marginTop: 6 } }, title),
-    sub && h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#C4B5FD', marginTop: 6, lineHeight: 1.45 } }, sub),
-  );
-
-  const Stat = ({ k, v }) => h('div', null,
-    h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7A7A78' } }, k),
-    h('div', { style: { fontFamily: 'Geist, sans-serif', fontSize: 22, fontWeight: 500, letterSpacing: '-0.03em', color: '#FFFFFF', marginTop: 2, fontFeatureSettings: '"tnum"' } }, v),
-  );
-
-  let body;
-  if (kind === 'claude') {
-    body = h(React.Fragment, null,
-      h(Header, { eyebrow: t.brain, title: t.brainBig, sub: t.brainSub }),
-      h('div', { style: { fontSize: 14, color: '#FAFAF9', lineHeight: 1.55 } }, t.brainBody),
-    );
-  } else if (kind === 'agent') {
-    const isFocused = focusedAgent === node.id;
-    body = h(React.Fragment, null,
-      h(Header, { eyebrow: t.agentEyebrow, title: node.name, sub: node.tagline }),
-      h('div', { style: { fontSize: 14, color: '#FAFAF9', lineHeight: 1.55 } }, node.desc),
-      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 18, paddingTop: 14, borderTop: '1px dashed #2A2A48' } },
-        Object.entries(node.stats).map(([k, v]) => h(Stat, { key: k, k: k.replace(/_/g, ' '), v: v }))
-      ),
-      h('button', { onClick: () => setFocusedAgent(isFocused ? null : node.id), style: { marginTop: 18, width: '100%', padding: '10px 14px', background: isFocused ? '#FFFFFF' : 'transparent', color: isFocused ? '#0A0A0A' : '#FFFFFF', border: '1.5px solid #FFFFFF', borderRadius: 999, fontFamily: 'Geist, sans-serif', fontSize: 13, fontWeight: 500, cursor: 'pointer', letterSpacing: '-0.005em' } },
-        isFocused ? t.showAll : t.isolate + ' ' + node.name + ' ' + t.focusMode),
-    );
-  } else if (kind === 'tool') {
-    const cat = data.TOOL_CATEGORIES.find(c => c.id === node.cat);
-    const catColor = cat ? cat.color : '#A998FF';
-    body = h(React.Fragment, null,
-      h(Header, { eyebrow: t.tool + ' \u00b7 ' + node.cat.toUpperCase(), title: node.name, sub: node.desc }),
-      h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7A7A78', marginBottom: 8 } }, t.role),
-      h('div', { style: { fontSize: 13.5, color: '#FAFAF9', lineHeight: 1.55, marginBottom: 18 } }, node.role || node.desc),
-      node.interactions && node.interactions.length > 0 && h('div', { style: { paddingTop: 16, borderTop: '1px dashed #2A2A48' } },
-        h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7A7A78', marginBottom: 10 } }, t.interactions + ' \u00b7 ' + node.interactions.length),
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
-          node.interactions.map((it, i) => {
-            const agent = data.AGENTS.find(a => a.id === it.agent);
-            const agentName = agent ? agent.name : it.agent;
-            return h('div', { key: i, style: { display: 'flex', gap: 10, alignItems: 'flex-start' } },
-              h('span', { style: { flexShrink: 0, padding: '3px 9px', background: 'rgba(196,181,253,0.14)', border: '1px solid rgba(196,181,253,0.35)', borderRadius: 999, fontFamily: 'Geist Mono, monospace', fontSize: 9.5, color: '#C4B5FD', letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' } }, agentName),
-              h('div', { style: { flex: 1, minWidth: 0 } },
-                h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11.5, color: catColor, letterSpacing: '-0.005em' } }, it.action),
-                h('div', { style: { fontFamily: 'Geist, sans-serif', fontSize: 12.5, color: '#FAFAF9', marginTop: 2, lineHeight: 1.4 } }, it.purpose),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
+function svgScene(d) {
+  const t = d.UI;
+  const r1 = seedRand(7), r2 = seedRand(42);
+  let dust = '';
+  for (let i = 0; i < 200; i++) {
+    dust += `<circle cx="${(r1() * W).toFixed(1)}" cy="${(r2() * H).toFixed(1)}" r="${(r1() * 1.4 + 0.2).toFixed(2)}" fill="#A998FF" opacity="${(0.12 + r2() * 0.45).toFixed(2)}"/>`;
   }
 
-  return h('div', { style: { position: 'absolute', right: 24, top: 24, width: 360, maxHeight: 'calc(100% - 48px)', overflowY: 'auto', padding: 24, background: 'rgba(10,8,32,0.85)', border: '1px solid #2A2A48', borderRadius: 14, backdropFilter: 'blur(16px)', zIndex: 10, animation: 'slideIn 200ms cubic-bezier(0.2,0.6,0.2,1)' } },
-    h('button', { onClick: onClose, style: { position: 'absolute', right: 14, top: 14, width: 28, height: 28, border: '1px solid #2A2A48', background: 'transparent', color: '#A998FF', borderRadius: 999, cursor: 'pointer', fontSize: 14, lineHeight: 1 } }, '\u00d7'),
-    body,
-  );
-};
+  // Anneau de la boucle + chevrons de direction
+  let ring = `<ellipse cx="${CX}" cy="${CY}" rx="${RX}" ry="${RY}" fill="none" stroke="#A998FF" stroke-width="1.2" opacity="0.28"/>`;
+  for (let i = 0; i < 7; i++) {
+    const mid = angleOf(i) + STEP_DEG / 2;
+    const p = ringPt(mid);
+    const dir = Math.atan2(Math.cos(rad(mid)) * RY, -Math.sin(rad(mid)) * RX) * 180 / Math.PI;
+    ring += `<path d="M -6 -4.5 L 3 0 L -6 4.5" fill="none" stroke="#A998FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.6" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)}) rotate(${dir.toFixed(1)})"/>`;
+  }
+
+  // Nœuds d’étapes
+  let steps = '';
+  d.STEPS.forEach((s) => {
+    const p = STEP_POS[s.id];
+    const isYou = s.id === 'approve';
+    steps += `<g class="nx-step" data-node="step:${s.id}" data-step="${s.id}">
+      <circle class="halo" cx="${p.x}" cy="${p.y}" r="42" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0"/>
+      <circle cx="${p.x}" cy="${p.y}" r="44" fill="rgba(196,181,253,0.12)"/>
+      <circle class="body" cx="${p.x}" cy="${p.y}" r="27" fill="${isYou ? '#FFFFFF' : '#C4B5FD'}" stroke="rgba(255,255,255,0.35)" stroke-width="1"/>
+      <text x="${p.x}" y="${p.y + 7}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="19" font-weight="600" fill="#0A0A0A">${isYou ? '★' : s.num}</text>
+      <text x="${p.x}" y="${p.y + 47}" text-anchor="middle" font-family="Geist, sans-serif" font-size="14.5" font-weight="500" fill="#FFFFFF" letter-spacing="-0.01em">${esc(s.name)}</text>
+      <text x="${p.x}" y="${p.y + 63}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8.5" letter-spacing="0.05em" fill="#A998FF">${esc(s.sub)}</text>
+    </g>`;
+  });
+
+  // Branche conditionnelle
+  const rp = STEP_POS['reply'];
+  const branch = `
+    <g id="branch-stop" class="nx-branch" data-node="step:reply">
+      <line class="branch-line" x1="${rp.x - 20}" y1="${rp.y + 18}" x2="592" y2="676" stroke="#C4B5FD" stroke-width="1.4" opacity="0.55"/>
+      <rect x="580" y="670" width="11" height="11" rx="2" fill="#C4B5FD"/>
+      <text x="570" y="680" text-anchor="end" font-family="Geist Mono, monospace" font-size="9.5" letter-spacing="0.05em" fill="#C4B5FD">${esc(t.branchStop)}</text>
+    </g>
+    <g id="branch-ignore" class="nx-branch" data-node="step:reply">
+      <path class="branch-line" d="M ${BR.p0.x} ${BR.p0.y} Q ${BR.p1.x} ${BR.p1.y} ${BR.p2.x} ${BR.p2.y}" fill="none" stroke="#A998FF" stroke-width="1.4" stroke-dasharray="4 5" opacity="0.55" marker-end="url(#arrow)"/>
+      <text x="852" y="668" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9.5" letter-spacing="0.05em" fill="#A998FF">${esc(t.branchIgnore)}</text>
+    </g>`;
+
+  // Ta boîte (chip natif près de l’envoi)
+  const sp = STEP_POS['send'];
+  const inbox = `
+    <g data-node="inbox">
+      <line x1="${sp.x - 27}" y1="${sp.y + 6}" x2="852" y2="547" stroke="#FFFFFF" stroke-width="1.2" opacity="0.4"/>
+      <text x="770" y="524" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8.5" letter-spacing="0.07em" fill="#FFFFFF" opacity="0.85">${esc(t.inboxLabel)}</text>
+      <rect x="688" y="533" width="164" height="26" rx="13" fill="rgba(250,250,249,0.08)" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="1.2"/>
+      <text x="770" y="550" text-anchor="middle" font-family="Geist Mono, monospace" font-size="10" letter-spacing="0.06em" fill="#FAFAF9">GMAIL · OUTLOOK · SMTP</text>
+    </g>`;
+
+  // Frontière du noyau
+  const core = `
+    <ellipse cx="${CX}" cy="${CY}" rx="${BX}" ry="${BY}" fill="rgba(110,87,250,0.05)" stroke="#2A2A48" stroke-width="1.5"/>
+    <text x="${CX}" y="${CY - BY - 16}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="10.5" letter-spacing="0.1em" fill="#A998FF">${esc(t.coreLabel)}</text>`;
+
+  // Cœur : marque synapse + wordmark
+  const mark = `
+    <g data-node="core">
+      <circle cx="${CX}" cy="${CY - 14}" r="86" fill="url(#coreGlow)"/>
+      <circle cx="${CX}" cy="${CY - 14}" r="34" fill="#6E57FA" stroke="#FFFFFF" stroke-width="1.5"/>
+      <g transform="translate(${CX - 15.5}, ${CY - 29.5}) scale(0.31)">
+        <line x1="50" y1="50" x2="22" y2="26" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+        <line x1="50" y1="50" x2="82" y2="30" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+        <line x1="50" y1="50" x2="30" y2="80" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+        <circle cx="22" cy="26" r="9" fill="#FFFFFF" opacity="0.9"/>
+        <circle cx="82" cy="30" r="10" fill="#FFFFFF" opacity="0.7"/>
+        <circle cx="30" cy="80" r="9" fill="#FFFFFF" opacity="0.9"/>
+        <circle cx="50" cy="50" r="14" fill="#FFFFFF"/>
+      </g>
+      <text x="${CX}" y="${CY + 46}" text-anchor="middle" font-family="Geist, sans-serif" font-size="21" font-weight="600" letter-spacing="-0.01em" fill="#FFFFFF">baakalai</text>
+      <text x="${CX}" y="${CY + 66}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" letter-spacing="0.08em" fill="#A998FF">${esc(t.coreSub)}</text>
+    </g>`;
+
+  // Colonne CRM (gauche)
+  const crmPort = { x: CX - BX + 2, y: CY };
+  const crmNode = STEP_POS['crm-read'];
+  let crmCol = `
+    <text x="${CRM_COL_X}" y="${CRM_YS.header}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="10.5" letter-spacing="0.1em" fill="#FAFAF9" opacity="0.9">${esc(t.grpCrm)}</text>
+    <text x="${CRM_COL_X}" y="${CRM_YS.header + 16}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8.5" letter-spacing="0.07em" fill="#7A7A78">${esc(t.grpCrmNote)}</text>
+    <text x="${CRM_COL_X}" y="${CRM_YS.oauthSub + 12}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8.5" letter-spacing="0.07em" fill="#A998FF">⚡ ${esc(t.grpCrmOauth)}</text>
+    <text x="${CRM_COL_X}" y="${CRM_YS.configSub + 12}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8.5" letter-spacing="0.07em" fill="#7A7A78">${esc(t.grpCrmConfig)}</text>
+    <line x1="${crmPort.x}" y1="${crmPort.y}" x2="${crmNode.x - 28}" y2="${crmNode.y}" stroke="#A998FF" stroke-width="1.4" opacity="0.5"/>
+    <circle cx="${crmPort.x}" cy="${crmPort.y}" r="4" fill="#050410" stroke="#A998FF" stroke-width="1.5"/>`;
+  const crmTools = d.TOOLS.filter(x => x.group === 'crm-oauth' || x.group === 'crm-config');
+  crmTools.forEach((tool) => {
+    const oauth = tool.group === 'crm-oauth';
+    const idx = oauth ? CRM_YS.oauth[['hubspot','pipedrive','salesforce'].indexOf(tool.id)] : CRM_YS.config[['odoo','notion','airtable','folk'].indexOf(tool.id)];
+    const y = idx;
+    crmCol += `<g data-node="tool:${tool.id}">
+      <line x1="${CRM_COL_X + 14}" y1="${y}" x2="${crmPort.x - 4}" y2="${crmPort.y}" stroke="#A998FF" stroke-width="1" ${oauth ? 'opacity="0.32"' : 'stroke-dasharray="3 4" opacity="0.24"'}/>
+      <circle cx="${CRM_COL_X}" cy="${y}" r="12" fill="#FAFAF9" stroke="${oauth ? '#6E57FA' : '#2A2A48'}" stroke-width="${oauth ? 1.8 : 1.2}"/>
+      <text x="${CRM_COL_X}" y="${y + 4.5}" text-anchor="middle" font-family="Geist, sans-serif" font-size="12" font-weight="600" fill="#0A0A0A">${esc(tool.name[0])}</text>
+      <text x="${CRM_COL_X - 22}" y="${y + 1}" text-anchor="end" font-family="Geist Mono, monospace" font-size="9.5" letter-spacing="0.04em" fill="#FFFFFF" opacity="0.9">${esc(tool.name.toUpperCase())}</text>
+      <text x="${CRM_COL_X - 22}" y="${y + 13}" text-anchor="end" font-family="Geist Mono, monospace" font-size="7.5" letter-spacing="0.05em" fill="${oauth ? '#A998FF' : '#7A7A78'}">${esc(tool.tag)}</text>
+    </g>`;
+  });
+
+  // Colonne outbound (droite)
+  const outPort = { x: CX + BX - 2, y: CY };
+  let outCol = `
+    <text x="${OUT_COL_X}" y="${OUT_YS.header}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="10.5" letter-spacing="0.1em" fill="#FAFAF9" opacity="0.9">${esc(t.grpOutbound)}</text>
+    <text x="${OUT_COL_X}" y="${OUT_YS.note}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8" letter-spacing="0.05em" fill="#7A7A78">${esc(t.grpOutboundNote)}</text>
+    <circle cx="${outPort.x}" cy="${outPort.y}" r="4" fill="#050410" stroke="#A998FF" stroke-width="1.5" opacity="0.7"/>`;
+  const outTools = d.TOOLS.filter(x => x.group === 'outbound');
+  outTools.forEach((tool, i) => {
+    const y = OUT_YS.tools[i];
+    outCol += `<g data-node="tool:${tool.id}" opacity="0.85">
+      <line x1="${OUT_COL_X - 14}" y1="${y}" x2="${outPort.x + 4}" y2="${outPort.y}" stroke="#A998FF" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>
+      <circle cx="${OUT_COL_X}" cy="${y}" r="12" fill="#FAFAF9" stroke="#2A2A48" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <text x="${OUT_COL_X}" y="${y + 4.5}" text-anchor="middle" font-family="Geist, sans-serif" font-size="12" font-weight="600" fill="#0A0A0A">${esc(tool.name[0])}</text>
+      <text x="${OUT_COL_X + 22}" y="${y + 1}" text-anchor="start" font-family="Geist Mono, monospace" font-size="9.5" letter-spacing="0.04em" fill="#FFFFFF" opacity="0.9">${esc(tool.name.toUpperCase())}</text>
+      <text x="${OUT_COL_X + 22}" y="${y + 13}" text-anchor="start" font-family="Geist Mono, monospace" font-size="7.5" letter-spacing="0.05em" fill="#7A7A78">${esc(tool.tag)}</text>
+    </g>`;
+  });
+
+  // Infra (bas, discret)
+  let infra = `<text x="${CX}" y="${INFRA_Y - 38}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" letter-spacing="0.1em" fill="#7A7A78">${esc(t.grpInfra)}</text>`;
+  const infraTools = d.TOOLS.filter(x => x.group === 'infra');
+  infraTools.forEach((tool, i) => {
+    const x = INFRA_XS[i];
+    infra += `<g data-node="tool:${tool.id}" opacity="0.65">
+      <line x1="${x}" y1="${INFRA_Y - 10}" x2="${CX}" y2="${CY + BY + 3}" stroke="#A998FF" stroke-width="0.8" stroke-dasharray="2 4" opacity="0.18"/>
+      <circle cx="${x}" cy="${INFRA_Y}" r="9" fill="rgba(250,250,249,0.9)" stroke="#2A2A48" stroke-width="1"/>
+      <text x="${x}" y="${INFRA_Y + 3.5}" text-anchor="middle" font-family="Geist, sans-serif" font-size="10" font-weight="600" fill="#0A0A0A">${esc(tool.name[0])}</text>
+      <text x="${x}" y="${INFRA_Y + 26}" text-anchor="middle" font-family="Geist Mono, monospace" font-size="8" letter-spacing="0.05em" fill="#7A7A78">${esc(tool.name.toUpperCase())}</text>
+    </g>`;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="coreGlow">
+        <stop offset="0%" stop-color="#A998FF" stop-opacity="0.85"/>
+        <stop offset="40%" stop-color="#6E57FA" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#6E57FA" stop-opacity="0"/>
+      </radialGradient>
+      <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 8 5 L 0 9" fill="none" stroke="#A998FF" stroke-width="1.6" stroke-linecap="round"/>
+      </marker>
+    </defs>
+    ${dust}
+    ${core}
+    ${ring}
+    ${branch}
+    ${inbox}
+    ${crmCol}
+    ${outCol}
+    ${infra}
+    ${mark}
+    ${steps}
+    <circle id="seq-dot" r="5" fill="#FFFFFF" opacity="0"/>
+    <circle id="seq-dot2" r="3" fill="#A998FF" opacity="0"/>
+  </svg>`;
+}
+
+// ─── PAGE ───────────────────────────────────────────────────
+
+function pageHTML(d) {
+  const t = d.UI;
+  const markSvg = `<svg width="22" height="22" viewBox="0 0 100 100" aria-hidden="true">
+    <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" stroke-width="6" stroke-linecap="round"/>
+    <line x1="50" y1="50" x2="82" y2="30" stroke="#9A84EB" stroke-width="6" stroke-linecap="round"/>
+    <line x1="50" y1="50" x2="30" y2="80" stroke="#C4B5FD" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="22" cy="26" r="8" fill="#C4B5FD"/><circle cx="82" cy="30" r="9" fill="#9A84EB"/>
+    <circle cx="30" cy="80" r="8" fill="#C4B5FD"/><circle cx="50" cy="50" r="14" fill="#6E57FA"/>
+  </svg>`;
+
+  const agentCards = d.AGENTS.map(a => `
+    <div class="c-agent-card">
+      <div class="dot"></div>
+      <div class="k">${esc(t.agentWord)} · ${esc(a.short)}</div>
+      <div class="n">${esc(a.name)}</div>
+      <div class="t">${esc(a.tagline)}</div>
+      <div class="d">${esc(a.desc)}</div>
+    </div>`).join('');
+
+  return `
+  <nav class="c-nav">
+    <a href="/" class="c-wordmark">${markSvg}<span>baakalai</span></a>
+    <div class="c-nav-links">
+      <a href="#">${esc(t.navHow)}</a>
+      <a href="/#beta" class="dim">${esc(t.navPricing)}</a>
+      <a href="https://app.baakal.ai" class="dim">${esc(t.navLogin)}</a>
+      <div class="c-lang-switch" role="group">
+        <button data-lang="fr" class="${d.lang === 'fr' ? 'active' : ''}">FR</button>
+        <button data-lang="en" class="${d.lang === 'en' ? 'active' : ''}">EN</button>
+      </div>
+      <a href="/#book" class="c-cta-pill">${esc(t.navTry)}</a>
+    </div>
+  </nav>
+
+  <section class="c-hero">
+    <div class="c-hero-copy fade-up">
+      <div class="c-eyebrow">${esc(t.heroEyebrow)}</div>
+      <h1>${esc(t.heroT1)}<em>${esc(t.heroEm)}</em>${esc(t.heroT2)}<br>${esc(t.heroT3)}</h1>
+      <p>${esc(t.heroSub)}</p>
+    </div>
+
+    <div class="c-legend fade-up" style="animation-delay:120ms; margin-bottom:18px; padding:0 24px;">
+      <span><span class="swatch" style="background:#C4B5FD"></span>${esc(t.legendCore)}</span>
+      <span><span class="swatch" style="background:transparent; border:1.5px solid #FFFFFF"></span>${esc(t.legendInbox)}</span>
+      <span><span class="swatch" style="background:transparent; border:1.5px dashed #7A7A78"></span>${esc(t.legendOpt)}</span>
+      <button class="c-chip" data-pause>${esc(t.pause)}</button>
+    </div>
+
+    <div class="c-scroll-hint">${esc(t.scrollHint)}</div>
+    <div class="c-stage-scroll fade-up" style="animation-delay:240ms;">
+      <div class="c-stage" id="stage">
+        ${svgScene(d)}
+        <div class="c-caption">
+          <div class="eyebrow" id="cap-eyebrow">${esc(t.capEyebrow)}</div>
+          <div class="verb" id="cap-verb"></div>
+          <div class="detail" id="cap-detail"></div>
+        </div>
+        <div class="c-tip" id="tip"><div class="k" id="tip-k"></div><div class="n" id="tip-n"></div><div class="d" id="tip-d"></div></div>
+        <div id="panel-root"></div>
+      </div>
+    </div>
+    <div class="c-hint">${esc(t.hint)}</div>
+  </section>
+
+  <section class="c-phil">
+    <div class="c-eyebrow">${esc(t.philEyebrow)}</div>
+    <h2>${esc(t.philTitle[0])}<em>${esc(t.philTitle[1])}</em>${esc(t.philTitle[2])}</h2>
+    <div class="c-agent-grid">${agentCards}</div>
+  </section>
+
+  <section class="c-cta">
+    <div class="c-eyebrow" style="margin-bottom:14px;">${esc(t.ctaCaption)}</div>
+    <h3>${esc(t.ctaTitle)}</h3>
+    <a href="/#book" class="btn">${esc(t.ctaButton)}</a>
+    <div class="note">${esc(t.ctaNote)}</div>
+  </section>`;
+}
+
+// ─── PANNEAU DE DÉTAIL ──────────────────────────────────────
+
+function panelHTML(d, sel) {
+  const t = d.UI;
+  let kind, item, badges = [];
+  if (sel.kind === 'core') {
+    kind = t.kindCore;
+    item = { name: t.coreTitle, role: t.coreBody, interactions: [], agents: [] };
+    badges = t.coreBadges;
+  } else if (sel.kind === 'inbox') {
+    kind = t.kindInbox; item = d.INBOX; badges = [d.INBOX.badge, d.INBOX.sub];
+  } else if (sel.kind === 'step') {
+    kind = t.kindStep; item = d.STEPS.find(s => s.id === sel.id);
+    badges = [item.badge, `${t.step} ${item.num}/7`];
+  } else {
+    item = d.TOOLS.find(x => x.id === sel.id);
+    kind = item.group === 'infra' ? t.kindInfra : t.kindTool;
+    badges = [item.tag];
+  }
+  if (!item) return '';
+
+  const badgeHtml = badges.map((b, i) => `<span class="c-badge ${i === 0 ? (sel.kind === 'tool' && (item.tag === 'OPTIONNEL' || item.tag === 'OPTIONAL' || item.tag === 'INFRA') ? 'ghost' : 'primary') : ''}">${esc(b)}</span>`).join('');
+  const inters = (item.interactions || []).map(x => `
+    <div class="c-inter">
+      <div><span class="act">${esc(x.action)}</span><span class="agent">${esc(x.agent)}</span></div>
+      <div class="why">${esc(x.purpose)}</div>
+    </div>`).join('');
+  const agents = (item.agents || []).map(a => `<span>${esc(a)}</span>`).join('');
+
+  return `<aside class="c-panel">
+    <button class="c-panel-close" data-close aria-label="Fermer">✕</button>
+    <div class="eyebrow">${esc(kind)}</div>
+    <h3>${esc(item.name)}</h3>
+    <div class="badges">${badgeHtml}</div>
+    <div class="sec">${esc(t.panelRole)}</div>
+    <div class="role">${esc(item.role)}</div>
+    ${agents ? `<div class="sec">${esc(t.panelAgents)}</div><div class="c-agents-row">${agents}</div>` : ''}
+    ${inters ? `<div class="sec">${esc(t.panelInter)}</div>${inters}` : ''}
+  </aside>`;
+}
+
+// ─── SÉQUENCEUR ─────────────────────────────────────────────
+
+function makeSequencer(d) {
+  const seq = d.SEQ;
+  const t = d.UI;
+  const dot = document.getElementById('seq-dot');
+  const dot2 = document.getElementById('seq-dot2');
+  const capE = document.getElementById('cap-eyebrow');
+  const capV = document.getElementById('cap-verb');
+  const capD = document.getElementById('cap-detail');
+  const HOLD = 1700, TRAVEL = 950;
+
+  let idx = 0, phase = 'hold', phaseStart = performance.now(), paused = false, pausedAt = 0, raf = 0, stopped = false;
+
+  const stepEls = {};
+  ORDER.forEach(id => { stepEls[id] = document.querySelector(`[data-step="${id}"]`); });
+  const brStop = document.getElementById('branch-stop');
+  const brIgnore = document.getElementById('branch-ignore');
+
+  const setDot = (p, on) => {
+    dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y); dot.setAttribute('opacity', on ? '1' : '0');
+    dot2.setAttribute('cx', p.x); dot2.setAttribute('cy', p.y); dot2.setAttribute('opacity', on ? '0.6' : '0');
+  };
+
+  const enterHold = (i) => {
+    idx = i; phase = 'hold'; phaseStart = performance.now();
+    const e = seq[idx];
+    Object.values(stepEls).forEach(el => el && el.classList.remove('active'));
+    const el = stepEls[e.node]; if (el) el.classList.add('active');
+    brStop.classList.toggle('lit', e.branch === 'stop');
+    brIgnore.classList.toggle('lit', e.branch === 'ignore');
+    const stepNum = (d.STEPS.find(s => s.id === e.node) || {}).num;
+    capE.textContent = `${t.capEyebrow} · ${t.step} ${String(stepNum).padStart(2, '0')}`;
+    capV.textContent = e.verb;
+    capD.textContent = e.detail;
+    setDot(STEP_POS[e.node], true);
+  };
+
+  const travelPos = (from, to, viaBezier, k) => {
+    if (viaBezier) return bezierPt(k);
+    let a1 = from.deg, a2 = to.deg;
+    while (a2 <= a1) a2 += 360;
+    return ringPt(a1 + (a2 - a1) * k);
+  };
+
+  const tick = (now) => {
+    if (stopped) return;
+    if (paused) { raf = requestAnimationFrame(tick); return; }
+    const el = now - phaseStart;
+    if (phase === 'hold') {
+      if (el >= HOLD) { phase = 'travel'; phaseStart = now; }
+    } else {
+      const k = Math.min(1, el / TRAVEL);
+      const next = (idx + 1) % seq.length;
+      const from = STEP_POS[seq[idx].node];
+      const to = STEP_POS[seq[next].node];
+      const ease = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      setDot(travelPos(from, to, seq[next].via === 'bezier', ease), true);
+      if (k >= 1) enterHold(next);
+    }
+    raf = requestAnimationFrame(tick);
+  };
+
+  enterHold(0);
+  raf = requestAnimationFrame(tick);
+
+  return {
+    setPaused(p) {
+      if (p && !paused) { paused = true; pausedAt = performance.now(); }
+      else if (!p && paused) { paused = false; phaseStart += performance.now() - pausedAt; }
+    },
+    get paused() { return paused; },
+    destroy() { stopped = true; cancelAnimationFrame(raf); },
+  };
+}
 
 // ─── APP ────────────────────────────────────────────────────
 
-const initialLang = (() => {
-  try {
-    const url = new URLSearchParams(window.location.search).get('lang');
-    if (url === 'en' || url === 'fr') return url;
-    const ls = localStorage.getItem('baakalai-lang');
-    if (ls === 'en' || ls === 'fr') return ls;
-  } catch (e) {}
-  return 'fr';
-})();
+(function () {
+  const app = document.getElementById('app');
+  let lang = (() => {
+    try {
+      const url = new URLSearchParams(window.location.search).get('lang');
+      if (url === 'en' || url === 'fr') return url;
+      const ls = localStorage.getItem('baakalai-lang');
+      if (ls === 'en' || ls === 'fr') return ls;
+    } catch (e) {}
+    return 'fr';
+  })();
 
-const ConstellationApp = () => {
-  const h = React.createElement;
-  const [lang, setLang] = React.useState(initialLang);
-  const data = React.useMemo(() => getConstData(lang), [lang]);
-  const t = data.UI;
-  const tn = lang === 'en' ? TR_NAV_EN : TR_NAV_FR;
-  const { TOOL_CATEGORIES: TC, AGENTS } = data;
+  let d = getData(lang);
+  let sequencer = null;
+  let selection = null;
 
-  const [selection, setSelection] = React.useState(null);
-  const [focusedAgent, setFocusedAgent] = React.useState(null);
-  const [activeFilter, setActiveFilter] = React.useState('all');
-  const [paused, setPaused] = React.useState(false);
-
-  React.useEffect(() => {
+  function persistLang() {
     try { localStorage.setItem('baakalai-lang', lang); } catch (e) {}
     document.documentElement.lang = lang;
     try {
@@ -788,90 +885,76 @@ const ConstellationApp = () => {
       url.searchParams.set('lang', lang);
       window.history.replaceState({}, '', url);
     } catch (e) {}
-  }, [lang]);
+  }
 
-  return h(React.Fragment, null,
-    // NAV
-    h('nav', { className: 'c-nav' },
-      h('a', { href: '/', className: 'c-wordmark' },
-        h('svg', { width: 22, height: 22, viewBox: '0 0 100 100' },
-          h('line', { x1: 50, y1: 50, x2: 22, y2: 26, stroke: '#C4B5FD', strokeWidth: 6, strokeLinecap: 'round' }),
-          h('line', { x1: 50, y1: 50, x2: 82, y2: 30, stroke: '#9A84EB', strokeWidth: 6, strokeLinecap: 'round' }),
-          h('line', { x1: 50, y1: 50, x2: 30, y2: 80, stroke: '#C4B5FD', strokeWidth: 6, strokeLinecap: 'round' }),
-          h('circle', { cx: 22, cy: 26, r: 8, fill: '#C4B5FD' }),
-          h('circle', { cx: 82, cy: 30, r: 9, fill: '#9A84EB' }),
-          h('circle', { cx: 30, cy: 80, r: 8, fill: '#C4B5FD' }),
-          h('circle', { cx: 50, cy: 50, r: 14, fill: '#6E57FA' }),
-        ),
-        h('span', null, 'baakalai'),
-      ),
-      h('div', { style: { display: 'flex', gap: 24, alignItems: 'center', fontFamily: 'Geist, sans-serif', fontSize: 13 } },
-        h('a', { href: '#', style: { color: '#A998FF', textDecoration: 'none' } }, tn.how),
-        h('a', { href: '/#beta', style: { color: '#7A7A78', textDecoration: 'none' } }, tn.pricing),
-        h('a', { href: 'https://app.baakal.ai', style: { color: '#7A7A78', textDecoration: 'none' } }, tn.login),
-        h('div', { className: 'c-lang-switch', role: 'group' },
-          h('button', { className: lang === 'fr' ? 'active' : '', onClick: () => setLang('fr') }, 'FR'),
-          h('button', { className: lang === 'en' ? 'active' : '', onClick: () => setLang('en') }, 'EN'),
-        ),
-        h('a', { href: '/#book', style: { background: '#FFFFFF', color: '#0A0A0A', padding: '8px 14px', borderRadius: 999, fontWeight: 500, textDecoration: 'none' } }, tn.try),
-      ),
-    ),
+  function renderPanel() {
+    document.getElementById('panel-root').innerHTML = selection ? panelHTML(d, selection) : '';
+  }
 
-    // HERO
-    h('section', { style: { minHeight: '100vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 110 } },
-      h('div', { className: 'fade-up', style: { textAlign: 'center', maxWidth: 920, padding: '0 32px', marginBottom: 32 } },
-        h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#A998FF' } }, '\u2014 BAAKALAI \u00b7 ' + t.heroEyebrow),
-        h('h1', { style: { fontSize: 'clamp(38px, 5.5vw, 68px)', fontWeight: 500, letterSpacing: '-0.035em', color: '#FFFFFF', lineHeight: 1.02, margin: '14px 0 16px' } },
-          t.heroTitle1, h('br'), h('em', { style: { fontStyle: 'normal', color: '#A998FF' } }, t.heroTitle2), ' ', t.heroTitle3),
-        h('p', { style: { fontSize: 17, color: '#C4B5FD', lineHeight: 1.55, margin: 0, maxWidth: 660, marginInline: 'auto' } }, t.heroSub),
-      ),
+  function render() {
+    if (sequencer) sequencer.destroy();
+    d = getData(lang);
+    app.innerHTML = pageHTML(d);
+    renderPanel();
+    sequencer = makeSequencer(d);
+  }
 
-      // Filter chips
-      h('div', { className: 'fade-up', style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20, justifyContent: 'center', padding: '0 32px', animationDelay: '120ms' } },
-        h('button', { className: 'c-chip' + (activeFilter === 'all' ? ' active' : ''), onClick: () => setActiveFilter('all') }, tn.filterAll),
-        TC.map(c => h('button', { key: c.id, className: 'c-chip' + (activeFilter === c.id ? ' active' : ''), onClick: () => setActiveFilter(c.id) }, c.label)),
-        h('span', { style: { width: 1, alignSelf: 'stretch', background: '#2A2A48', margin: '0 4px' } }),
-        AGENTS.map(a => h('button', { key: a.id, className: 'c-chip' + (focusedAgent === a.id ? ' active' : ''), onClick: () => setFocusedAgent(focusedAgent === a.id ? null : a.id), style: { borderColor: focusedAgent === a.id ? '#FFFFFF' : undefined } }, tn.focus + ' \u00b7 ' + a.name)),
-        h('span', { style: { width: 1, alignSelf: 'stretch', background: '#2A2A48', margin: '0 4px' } }),
-        h('button', { className: 'c-chip', onClick: () => setPaused(p => !p) }, paused ? tn.resume : tn.pause),
-      ),
+  // Tooltip data lookup
+  function tipFor(kind, id) {
+    const t = d.UI;
+    if (kind === 'core') return { k: t.kindCore, n: t.coreTitle, tip: t.coreTip };
+    if (kind === 'inbox') return { k: t.kindInbox, n: d.INBOX.name, tip: d.INBOX.tip };
+    if (kind === 'step') { const s = d.STEPS.find(x => x.id === id); return s && { k: t.kindStep, n: s.name, tip: s.tip }; }
+    const tool = d.TOOLS.find(x => x.id === id);
+    return tool && { k: tool.group === 'infra' ? t.kindInfra : t.kindTool, n: tool.name, tip: tool.tip };
+  }
 
-      // Stage
-      h('div', { className: 'fade-up', style: { position: 'relative', width: 1200, maxWidth: '100%', borderRadius: 18, overflow: 'hidden', border: '1px solid #2A2A48', boxShadow: '0 40px 100px -30px rgba(110,87,250,0.3), 0 80px 160px -60px rgba(110,87,250,0.15)', animationDelay: '240ms' } },
-        h(Constellation, { onSelect: setSelection, focusedAgent, activeFilter, paused, data, t }),
-        h(SidePanel, { selection, onClose: () => setSelection(null), focusedAgent, setFocusedAgent, data, t }),
-      ),
+  function parseNode(el) {
+    const v = el.getAttribute('data-node');
+    if (v === 'core') return { kind: 'core' };
+    if (v === 'inbox') return { kind: 'inbox' };
+    const [kind, id] = v.split(':');
+    return { kind, id };
+  }
 
-      // Hint
-      h('div', { style: { marginTop: 18, fontFamily: 'Geist Mono, monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#A998FF', textAlign: 'center', lineHeight: 1.6 } }, tn.hintCaption),
-    ),
+  document.addEventListener('click', (e) => {
+    const langBtn = e.target.closest('[data-lang]');
+    if (langBtn) { lang = langBtn.getAttribute('data-lang'); persistLang(); render(); return; }
+    const pauseBtn = e.target.closest('[data-pause]');
+    if (pauseBtn) {
+      sequencer.setPaused(!sequencer.paused);
+      pauseBtn.textContent = sequencer.paused ? d.UI.resume : d.UI.pause;
+      return;
+    }
+    if (e.target.closest('[data-close]')) { selection = null; renderPanel(); return; }
+    const node = e.target.closest('[data-node]');
+    if (node) { selection = parseNode(node); renderPanel(); return; }
+  });
 
-    // PHILOSOPHY
-    h('section', { style: { padding: '120px 32px', maxWidth: 1240, margin: '0 auto' } },
-      h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#A998FF' } }, tn.philEyebrow),
-      h('h2', { style: { fontSize: 'clamp(28px, 3.5vw, 44px)', fontWeight: 500, letterSpacing: '-0.03em', color: '#FFFFFF', lineHeight: 1.08, margin: '14px 0 0', maxWidth: 880 } },
-        tn.philTitle[0], h('em', { style: { fontStyle: 'normal', color: '#A998FF' } }, tn.philTitle[1]), tn.philTitle[2]),
-      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 24, marginTop: 60 } },
-        AGENTS.map(a => h('div', { key: a.id, style: { padding: 24, background: 'rgba(110,87,250,0.05)', border: '1px solid #2A2A48', borderRadius: 14 } },
-          h('div', { style: { width: 36, height: 36, borderRadius: '50%', background: '#C4B5FD', marginBottom: 16 } }),
-          h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#A998FF' } }, t.agent + ' \u00b7 ' + a.short),
-          h('div', { style: { fontSize: 22, fontWeight: 500, letterSpacing: '-0.025em', color: '#FFFFFF', marginTop: 6, lineHeight: 1.15 } }, a.name),
-          h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#A998FF', marginTop: 8, lineHeight: 1.4 } }, a.tagline),
-          h('div', { style: { fontSize: 13, color: '#C4B5FD', marginTop: 14, lineHeight: 1.55 } }, a.desc),
-        )),
-      ),
-    ),
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && selection) { selection = null; renderPanel(); }
+  });
 
-    // CTA
-    h('section', { style: { padding: '80px 32px 140px', textAlign: 'center' } },
-      h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#A998FF', marginBottom: 14, lineHeight: 1.4 } }, tn.readyCaption),
-      h('h3', { style: { fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 500, letterSpacing: '-0.03em', color: '#FFFFFF', margin: '0 0 32px', maxWidth: 720, marginInline: 'auto', lineHeight: 1.1 } }, t.ctaTitle),
-      h('a', { href: '/#book', style: { display: 'inline-block', padding: '14px 28px', background: '#FFFFFF', color: '#0A0A0A', borderRadius: 999, fontFamily: 'Geist, sans-serif', fontSize: 15, fontWeight: 500, textDecoration: 'none' } }, t.ctaButton),
-      h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#7A7A78', marginTop: 20 } }, t.ctaNote),
-    ),
-  );
-};
+  // Tooltip (survol desktop)
+  document.addEventListener('mousemove', (e) => {
+    const tipEl = document.getElementById('tip');
+    if (!tipEl) return;
+    const node = e.target.closest ? e.target.closest('[data-node]') : null;
+    if (!node || selection) { tipEl.style.display = 'none'; return; }
+    const info = tipFor(...(function () { const p = parseNode(node); return [p.kind, p.id]; })());
+    if (!info) { tipEl.style.display = 'none'; return; }
+    const stage = document.getElementById('stage');
+    const r = stage.getBoundingClientRect();
+    tipEl.style.display = 'block';
+    document.getElementById('tip-k').textContent = info.k;
+    document.getElementById('tip-n').textContent = info.n;
+    document.getElementById('tip-d').textContent = info.tip;
+    const x = Math.min(e.clientX - r.left + 16, r.width - 270);
+    const y = Math.min(e.clientY - r.top + 12, r.height - 110);
+    tipEl.style.left = x + 'px';
+    tipEl.style.top = y + 'px';
+  });
 
-// ─── MOUNT ──────────────────────────────────────────────────
-const root = ReactDOM.createRoot(document.getElementById('constellation-root'));
-root.render(React.createElement(ConstellationApp));
+  persistLang();
+  render();
+})();
