@@ -1303,7 +1303,7 @@ export default function CampaignAssistant() {
   /* ─── Init ─── */
   useEffect(() => {
     loadThreads();
-    if (inputRef.current) inputRef.current.focus();
+    if (inputRef.current) inputRef.current.focus({ preventScroll: true });
   }, [loadThreads]);
 
   /* ─── Auto-select latest thread or show welcome ─── */
@@ -1325,7 +1325,7 @@ export default function CampaignAssistant() {
     try {
       const thread = await api.request('/chat/threads', {
         method: 'POST',
-        body: JSON.stringify({ title: lang === 'en' ? 'New conversation' : 'Nouvelle conversation' }),
+        body: JSON.stringify({ title: lang === 'en' ? 'New campaign' : 'Nouvelle campagne' }),
       });
       setCurrentThreadId(thread.id);
       await loadThreads();
@@ -1337,8 +1337,8 @@ export default function CampaignAssistant() {
       setMessages([]);
       setShowWelcome(true);
     }
-    if (inputRef.current) inputRef.current.focus();
-  }, [backendAvailable, loadThreads]);
+    if (inputRef.current) inputRef.current.focus({ preventScroll: true });
+  }, [backendAvailable, loadThreads, lang]);
 
   /* ─── Select thread ─── */
   const selectThread = useCallback(async (threadId) => {
@@ -1664,7 +1664,7 @@ export default function CampaignAssistant() {
     }
 
     setSending(false);
-    if (inputRef.current) inputRef.current.focus();
+    if (inputRef.current) inputRef.current.focus({ preventScroll: true });
   }, [sending, inputValue, attachedFiles, currentThreadId, backendAvailable, loadThreads, scrollToBottom]);
 
   /* ─── Execute structured action from chat ─── */
@@ -1863,6 +1863,8 @@ export default function CampaignAssistant() {
           onSelect={selectThread}
           onDelete={deleteThread}
           onNew={newThread}
+          newLabel={lang === 'en' ? 'New campaign' : 'Nouvelle campagne'}
+          emptyLabel={lang === 'en' ? 'No campaigns' : 'Aucune campagne'}
         />
       </div>
 

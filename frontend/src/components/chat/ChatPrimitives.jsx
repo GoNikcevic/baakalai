@@ -71,7 +71,7 @@ export function TypingIndicator() {
   );
 }
 
-export function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew }) {
+export function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew, newLabel, emptyLabel }) {
   const { lang } = useI18n();
   const en = lang === 'en';
   return (
@@ -82,12 +82,12 @@ export function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew
           style={{ width: '100%', fontSize: '12px', padding: '8px 12px' }}
           onClick={onNew}
         >
-          + {en ? 'New conversation' : 'Nouvelle conversation'}
+          + {newLabel || (en ? 'New conversation' : 'Nouvelle conversation')}
         </button>
       </div>
       {threads.length === 0 ? (
         <div style={{ padding: '20px 12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
-          {en ? 'No conversations' : 'Aucune conversation'}
+          {emptyLabel || (en ? 'No conversations' : 'Aucune conversation')}
         </div>
       ) : (
         threads.map((t) => {
