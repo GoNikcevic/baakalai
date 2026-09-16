@@ -36,6 +36,80 @@ const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
   : 'http://localhost:5173');
 
 // ═══════════════════════════════════════════════════
+//  Stats — historique consolidé de l'automatisation
+// ═══════════════════════════════════════════════════
+
+// GET /api/nurture/stats — l'équivalent des KPIs de l'Historique de
+// prospection, côté Automatisation : emails de relance (nurture_emails),
+// actions des workflows (campaign_sends liées à un enrollment), workflows par
+// objectif et envois par mois. Les réponses viennent des enrollments stoppés
+// pour cause de réponse — c'est le signal de succès du moteur, pas un
+// tracking d'ouverture (inexistant sur ces envois).
+router.get('/stats', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [emails, byTrigger, workflows, wfActions, monthly] = await Promise.all([
+      db.query(`
+        SELECT COUNT(*) FILTER (WHERE status = 'sent')::int AS sent,
+               COUNT(*) FILTER (WHERE status = 'sent' AND sent_at > now() - interval '30 days')::int AS sent_30d,
+               COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+               COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
+          FROM nurture_emails WHERE user_id = $1
+      `, [userId]),
+      db.query(`
+        SELECT COALESCE(t.trigger_type, 'custom') AS type, COUNT(*)::int AS sent
+          FROM nurture_emails e
+          LEFT JOIN nurture_triggers t ON t.id = e.trigger_id
+         WHERE e.user_id = $1 AND e.status = 'sent'
+         GROUP BY 1 ORDER BY 2 DESC
+      `, [userId]),
+      db.query(`
+        SELECT goal,
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+               COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+               COUNT(*) FILTER (WHERE stop_reason = 'replied')::int AS replied
+          FROM sequence_enrollments
+         WHERE user_id = $1 AND status <> 'draft'
+         GROUP BY goal
+      `, [userId]),
+      db.query(`
+        SELECT COUNT(*)::int AS sent,
+               COUNT(*) FILTER (WHERE sent_at > now() - interval '30 days')::int AS sent_30d
+          FROM campaign_sends
+         WHERE user_id = $1 AND enrollment_id IS NOT NULL AND status = 'sent'
+      `, [userId]),
+      db.query(`
+        SELECT to_char(date_trunc('month', sent_at), 'YYYY-MM') AS month,
+               COUNT(*) FILTER (WHERE source = 'nurture')::int AS nurture,
+               COUNT(*) FILTER (WHERE source = 'workflow')::int AS workflow
+          FROM (
+            SELECT sent_at, 'nurture' AS source FROM nurture_emails
+             WHERE user_id = $1 AND status = 'sent'
+               AND sent_at >= date_trunc('month', now()) - interval '5 months'
+            UNION ALL
+            SELECT sent_at, 'workflow' AS source FROM campaign_sends
+             WHERE user_id = $1 AND enrollment_id IS NOT NULL AND status = 'sent'
+               AND sent_at >= date_trunc('month', now()) - interval '5 months'
+          ) s
+         GROUP BY 1 ORDER BY 1
+      `, [userId]),
+    ]);
+
+    res.json({
+      emails: emails.rows[0],
+      workflowActions: wfActions.rows[0],
+      byTrigger: byTrigger.rows,
+      workflows: workflows.rows,
+      monthly: monthly.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════
 //  Email Accounts
 // ═══════════════════════════════════════════════════
 

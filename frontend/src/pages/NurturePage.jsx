@@ -25,7 +25,7 @@ const FIELD_LABEL = {
   marginBottom: 4,
 };
 
-function getTriggerTypes(lang) {
+export function getTriggerTypes(lang) {
   const en = lang === 'en';
   return [
     { value: 'deal_won', label: en ? 'Lead won' : 'Lead gagn\u00E9', desc: en ? 'Welcome/onboarding email when a lead is won' : 'Email de bienvenue quand un lead est gagn\u00E9', icon: 'award', defaultDays: 1, defaultName: en ? 'Welcome new client' : 'Bienvenue nouveau client' },

@@ -7,10 +7,12 @@ import { useSearchParams } from 'react-router-dom';
 import { useT } from '../i18n';
 import NurturePage from './NurturePage';
 import SignalsPage from './SignalsPage';
+import AutomationStats from '../components/AutomationStats';
 
 const SECTIONS = [
   { key: 'nurture', i18n: 'activation.title' },
   { key: 'signals', i18n: 'nav.signals' },
+  { key: 'stats', i18n: 'automationStats.tab' },
 ];
 
 export default function ActivationPage() {
@@ -50,6 +52,7 @@ export default function ActivationPage() {
 
       {section === 'nurture' && <NurturePage />}
       {section === 'signals' && <SignalsPage />}
+      {section === 'stats' && <AutomationStats />}
     </div>
   );
 }
