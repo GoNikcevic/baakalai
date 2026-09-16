@@ -264,6 +264,15 @@ function PrivacyFR() {
 
     <SectionTitle>10. Cookies</SectionTitle>
     <p>Baakalai n'utilise pas de cookies tiers ni de tracking. Seuls des tokens d'authentification sont stockés dans le localStorage du navigateur.</p>
+
+    <SectionTitle>11. Extension Chrome « baakalai — LinkedIn Connect »</SectionTitle>
+    <p>L'extension Chrome optionnelle a une finalité unique : relier votre session LinkedIn à votre compte Baakalai, à votre demande explicite.</p>
+    <ul>
+      <li><strong>Données traitées</strong> — Votre cookie de session LinkedIn (li_at), lu uniquement après un clic explicite de votre part dans l'extension, puis transmis chiffré (TLS) à votre compte et stocké chiffré (AES-256-GCM). Votre token de session Baakalai est conservé localement par l'extension pour vous authentifier.</li>
+      <li><strong>Ce que l'extension ne fait pas</strong> — Aucune lecture du contenu des pages, aucune collecte de navigation, aucune action sans votre premier clic, aucun partage ni revente.</li>
+      <li><strong>Maintien de la connexion</strong> — Après votre première connexion, l'extension met à jour le cookie auprès de votre compte quand LinkedIn le renouvelle, jusqu'à ce que vous déconnectiez LinkedIn.</li>
+      <li><strong>Déconnexion</strong> — À tout moment depuis l'extension ou depuis Réglages → LinkedIn ; le cookie est alors supprimé de nos serveurs.</li>
+    </ul>
   </>);
 }
 
@@ -337,5 +346,14 @@ function PrivacyEN() {
 
     <SectionTitle>10. Cookies</SectionTitle>
     <p>Baakalai does not use third-party cookies or tracking. Only authentication tokens are stored in the browser's localStorage.</p>
+
+    <SectionTitle>11. Chrome Extension "baakalai — LinkedIn Connect"</SectionTitle>
+    <p>The optional Chrome extension has a single purpose: linking your LinkedIn session to your Baakalai account, at your explicit request.</p>
+    <ul>
+      <li><strong>Data processed</strong> — Your LinkedIn session cookie (li_at), read only after an explicit click in the extension, then transmitted encrypted (TLS) to your account and stored encrypted (AES-256-GCM). Your Baakalai session token is kept locally by the extension to authenticate you.</li>
+      <li><strong>What the extension does not do</strong> — No page content reading, no browsing data collection, no action without your initial click, no sharing or selling.</li>
+      <li><strong>Keeping the connection alive</strong> — After your first connection, the extension updates the cookie on your account whenever LinkedIn rotates it, until you disconnect LinkedIn.</li>
+      <li><strong>Disconnecting</strong> — At any time from the extension or from Settings → LinkedIn; the cookie is then deleted from our servers.</li>
+    </ul>
   </>);
 }
