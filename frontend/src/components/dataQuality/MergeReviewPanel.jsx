@@ -14,6 +14,52 @@ import { useT } from '../../i18n';
 
 const FIELD_LABELS = { name: 'Nom', email: 'Email', phone: 'Téléphone', title: 'Poste', company: 'Entreprise' };
 
+/**
+ * Valeurs par défaut du contact conservé : les SIENNES d'abord, celles des doublons
+ * seulement pour les champs qu'il n'a pas (le cas « à importer de l'autre contact »).
+ * Choisir une colonne, c'est dire « je garde ce contact » — ses valeurs doivent suivre,
+ * sinon l'heuristique serveur (`diff.suggested` = contact modifié le plus récemment)
+ * réécrit silencieusement le contact conservé avec les valeurs du doublon : un doublon
+ * sale créé après l'original est toujours le plus récent, donc c'est lui qui gagnait
+ * (« Sophie Blanchard » écrasée par « S. Blanchard », casse d'origine par « LAURA FONTAINE »).
+ */
+function fieldsFromKept(diff, keepId) {
+  const resolved = {};
+  const kept = diff.perContact.find(c => String(c.id) === String(keepId));
+  for (const field of diff.fields) {
+    if (kept?.[field]) { resolved[field] = kept[field]; continue; }
+    // Champ vide chez le conservé : reprendre celui du doublon le plus récemment modifié qui l'a.
+    const donor = diff.perContact
+      .filter(c => String(c.id) !== String(keepId) && c[field])
+      .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))[0];
+    resolved[field] = donor ? donor[field] : (diff.suggested?.[field] ?? null);
+  }
+  return resolved;
+}
+
+/**
+ * Contact conservé par défaut. L'ordre du scan est arbitraire (`group.contacts[0]` tombait
+ * régulièrement sur le doublon sale), donc on classe : plus d'historique réel d'abord
+ * (emails/activités/lignes de produit — ce qui se perd le plus mal), puis fiche la plus
+ * remplie, puis la plus ancienne (le doublon est créé après l'original). Reste un défaut :
+ * le choix de l'utilisateur prime toujours.
+ */
+function defaultKeepId(diff, activityCounts) {
+  const rank = (c) => {
+    const a = activityCounts[c.id] || {};
+    return {
+      activity: (a.emails || 0) + (a.activities || 0) + (a.productLines || 0),
+      filled: diff.fields.filter(f => c[f]).length,
+      updatedAt: new Date(c.updatedAt || 0).getTime(),
+    };
+  };
+  const best = [...diff.perContact].sort((x, y) => {
+    const a = rank(x), b = rank(y);
+    return (b.activity - a.activity) || (b.filled - a.filled) || (a.updatedAt - b.updatedAt);
+  })[0];
+  return best?.id ?? null;
+}
+
 function formatActivity(counts, t) {
   if (!counts) return '—';
   return t('dataQuality.duplicates.activityCounts', {
@@ -44,15 +90,24 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
         method: 'POST',
         body: JSON.stringify({ contactIds }),
       });
+      const counts = data.activityCounts || {};
+      const initialKeepId = defaultKeepId(data.diff, counts) ?? group.contacts[0].id;
       setDiff(data.diff);
-      setActivityCounts(data.activityCounts || {});
-      setResolvedFields(data.diff.suggested);
-      setKeepId(group.contacts[0].id);
+      setActivityCounts(counts);
+      setKeepId(initialKeepId);
+      setResolvedFields(fieldsFromKept(data.diff, initialKeepId));
     } catch (err) {
       showToast({ type: 'error', title: t('common.error'), message: err.message });
       setExpanded(false);
     }
     setLoading(false);
+  };
+
+  // Changer de contact conservé réaligne les valeurs par défaut sur lui (un choix de champ
+  // fait avant est écrasé : le survivant est la décision de tête, les champs en découlent).
+  const chooseKept = (id) => {
+    setKeepId(id);
+    if (diff) setResolvedFields(fieldsFromKept(diff, id));
   };
 
   const handleConfirm = async () => {
@@ -134,14 +189,14 @@ export default function MergeReviewPanel({ provider, group, onMerged }) {
                 {diff.perContact.map((c, i) => {
                   const isKept = String(c.id) === String(keepId);
                   return (
-                    <th key={c.id} onClick={() => setKeepId(c.id)} title={t('dataQuality.duplicates.pickColumnHint')}
+                    <th key={c.id} onClick={() => chooseKept(c.id)} title={t('dataQuality.duplicates.pickColumnHint')}
                       style={{
                         textAlign: 'left', padding: '8px', cursor: 'pointer', verticalAlign: 'top',
                         background: isKept ? 'var(--accent-glow)' : 'transparent',
                         borderBottom: `2px solid ${isKept ? 'var(--accent)' : 'var(--border-light)'}`,
                       }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <input type="radio" checked={isKept} onChange={() => setKeepId(c.id)} style={{ cursor: 'pointer' }} />
+                        <input type="radio" checked={isKept} onChange={() => chooseKept(c.id)} style={{ cursor: 'pointer' }} />
                         <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{c.name || c.email || t('dataQuality.duplicates.fieldFromContact', { n: i + 1 })}</span>
                       </div>
                       {c.name && c.email && (
