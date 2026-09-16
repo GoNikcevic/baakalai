@@ -273,7 +273,7 @@ export default function ClientsPage({ scope }) {
     { key: 'meeting', label: STATUS_LABELS.meeting, count: statusCounts.meeting || 0 },
     // « Gagné » et « À risque » ne concernent que les clients : hors de portée
     // côté deals, et redondant avec la portée elle-même côté clients.
-    ...(scope === 'deals' ? [] : [
+...(scope === 'deals' ? [] : [
       { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
       { key: 'churn_risk', label: t('clients.churnRisk'), count: scopedClients.filter(c => c.status === 'won' && c.churn_score >= 50).length },
     ]),
@@ -538,7 +538,7 @@ export default function ClientsPage({ scope }) {
                 const showCrmBadge = c.crm_provider && Object.keys(crmProviderCounts).length > 1;
 
                 // Deal-quality drill-down keeps its own grid layout, built around whatever field
-                // was flagged \u2014 untouched here, only the plain browsing row below was restyled.
+                // was flagged, untouched here, only the plain browsing row below was restyled.
                 if (isDealQualityContext) {
                   return (
                     <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -551,16 +551,16 @@ export default function ClientsPage({ scope }) {
                         transition: 'all 0.15s',
                       }}>
                         <div>
-                          <div style={{ fontWeight: 600 }}>{c.name || '\u2014'}</div>
+                          <div style={{ fontWeight: 600 }}>{c.name || ' '}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.title || c.email || ''}</div>
                         </div>
-                        {!selectedClient && <div style={{ color: 'var(--text-secondary)' }}>{c.company || '\u2014'}</div>}
+                        {!selectedClient && <div style={{ color: 'var(--text-secondary)' }}>{c.company || ' '}</div>}
                         <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, width: 'fit-content', justifySelf: selectedClient ? 'end' : 'start' }}>
-                          {STATUS_LABELS[c.status] || c.status || '\u2014'}
+                          {STATUS_LABELS[c.status] || c.status || ' '}
                         </span>
                         {!selectedClient && owners.length > 1 && (
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {c.owner_email ? c.owner_email.split('@')[0] : '\u2014'}
+                            {c.owner_email ? c.owner_email.split('@')[0] : ' '}
                           </div>
                         )}
                       </div>
@@ -584,7 +584,7 @@ export default function ClientsPage({ scope }) {
                       transition: 'all 0.15s',
                     }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600 }}>{c.name || '\u2014'}</div>
+                        <div style={{ fontWeight: 600 }}>{c.name || ' '}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {!selectedClient ? (c.company || c.title || c.email || '') : (c.title || c.email || '')}
                         </div>
@@ -593,11 +593,11 @@ export default function ClientsPage({ scope }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                         {!selectedClient && owners.length > 1 && (
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                            {c.owner_email ? c.owner_email.split('@')[0] : '\u2014'}
+                            {c.owner_email ? c.owner_email.split('@')[0] : ' '}
                           </span>
                         )}
 
-                        {/* Churn risk is a retention concept \u2014 only meaningful once a deal has
+                        {/* Churn risk is a retention concept, only meaningful once a deal has
                             actually become a client, so it only ever replaces the deal-value
                             pill for status === 'won'. */}
                         {!selectedClient && c.status === 'won' && c.churn_score != null && (
@@ -619,12 +619,12 @@ export default function ClientsPage({ scope }) {
                           </span>
                         )}
 
-                        {/* Every row here is status === 'won' when scope is 'clients' \u2014
+                        {/* Every row here is status === 'won' when scope is 'clients'  
                             showing "Gagn\u00e9" on every single card is a constant, not
                             information, so it's skipped entirely for that scope. */}
                         {scope !== 'clients' && (
                           <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            {STATUS_LABELS[c.status] || c.status || '\u2014'}
+                            {STATUS_LABELS[c.status] || c.status || ' '}
                           </span>
                         )}
                       </div>
@@ -644,8 +644,8 @@ export default function ClientsPage({ scope }) {
               issueType={dealQualityIssue}
               onClose={() => setSelectedClient(null)}
               onFieldSaved={(id, patch) => {
-                setClients(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
-                setSelectedClient(prev => (prev && prev.id === id) ? { ...prev, ...patch } : prev);
+                setClients(prev => prev.map(c => c.id === id ? {...c,...patch } : c));
+                setSelectedClient(prev => (prev && prev.id === id) ? {...prev,...patch } : prev);
               }}
             />
           ) : (
@@ -685,7 +685,7 @@ function SectorFixBox({ client, t, onSaved }) {
         showToast({ type: 'success', title: t('dataQuality.dealQuality.sectorSaveTitle'), message: t('dataQuality.dealQuality.sectorSaved', { sector: saved }) });
         setValue(saved);
       }
-      onSaved?.(client.id, { data: { ...(client.data || {}), sector: saved } });
+      onSaved?.(client.id, { data: {...(client.data || {}), sector: saved } });
     } catch (err) {
       showToast({ type: 'error', title: t('common.error'), message: err.message });
     }
@@ -836,9 +836,9 @@ function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
     setTimelineLoading(true);
     setTimelineExpanded(false);
     request(`/crm/client/${client.id}/timeline`)
-      .then(data => setTimeline(data.timeline || []))
-      .catch(() => setTimeline([]))
-      .finally(() => setTimelineLoading(false));
+.then(data => setTimeline(data.timeline || []))
+.catch(() => setTimeline([]))
+.finally(() => setTimelineLoading(false));
   }, [client.id]);
 
   const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
@@ -932,13 +932,13 @@ function ClientDetailPanel({ client, onClose }) {
     setTimelineLoading(true);
     setTimelineExpanded(false);
     request(`/crm/client/${client.id}`)
-      .then(data => setDetail(data))
-      .catch(() => setDetail(null))
-      .finally(() => setLoading(false));
+.then(data => setDetail(data))
+.catch(() => setDetail(null))
+.finally(() => setLoading(false));
     request(`/crm/client/${client.id}/timeline`)
-      .then(data => setTimeline(data.timeline || []))
-      .catch(() => setTimeline([]))
-      .finally(() => setTimelineLoading(false));
+.then(data => setTimeline(data.timeline || []))
+.catch(() => setTimeline([]))
+.finally(() => setTimelineLoading(false));
   }, [client.id]);
 
   const handleQuickEmail = async () => {
@@ -964,7 +964,7 @@ function ClientDetailPanel({ client, onClose }) {
 
   const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
 
-  // Deals show only CRM activity + Baakalai emails + the current follow-up report \u2014
+  // Deals show only CRM activity + Baakalai emails + the current follow-up report  
   // campaign/prospecting activity is an Activation-tab concern, not the deal's own
   // CRM-facing history. Clients (status === 'won') keep every source, unchanged.
   const displayTimeline = useMemo(() => {
@@ -1124,7 +1124,7 @@ function formatRelativeDate(dateStr, lang) {
   const diffD = Math.floor(diffMs / 86400000);
 
   if (diffMs < 0) {
-    // Future date (e.g. a planned follow-up report) \u2014 count forward, not back.
+    // Future date (e.g. a planned follow-up report), count forward, not back.
     const futureD = Math.ceil(-diffMs / 86400000);
     if (futureD < 1) return lang === 'en' ? 'today' : "aujourd'hui";
     return lang === 'en' ? `in ${futureD}d` : `dans ${futureD}j`;

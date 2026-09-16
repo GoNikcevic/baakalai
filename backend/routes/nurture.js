@@ -588,7 +588,7 @@ router.post('/preview', async (req, res, next) => {
 
         const prompt = `G\u00E9n\u00E8re un email personnel pour :
 - ${sample.name} (${sample.title || ''}) chez ${sample.company || ''}
-- Trigger : ${trigger.trigger_type} \u2014 ${trigger.name}
+- Trigger : ${trigger.trigger_type}, ${trigger.name}
 - Ton : ${template.tone || 'professionnel mais chaleureux'}
 - Max 6 lignes, texte simple${patternsCtx}
 Retourne un JSON : { "subject": "...", "body": "..." }`;

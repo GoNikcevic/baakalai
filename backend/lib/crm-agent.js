@@ -216,7 +216,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
         const payload = JSON.stringify(contacts.map(c => ({
           id: c.id,
           score: c.score,
-          breakdown: { ...c.breakdown, factors: c.factors },
+          breakdown: {...c.breakdown, factors: c.factors },
         })));
         const updated = await db.query(
           `UPDATE opportunities o
@@ -665,14 +665,14 @@ async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = nul
   if (effectiveness && effectiveness.total >= 3) {
     effectivenessContext = `\n\nEFFICACIT\u00C9 DE CE TRIGGER : ${effectiveness.successRate}% de r\u00E9ponses positives sur ${effectiveness.total} envois.`;
     if (effectiveness.successRate < 30) {
-      effectivenessContext += ` Le taux est faible \u2014 essaie un angle diff\u00E9rent.`;
+      effectivenessContext += ` Le taux est faible, essaie un angle diff\u00E9rent.`;
     } else if (effectiveness.successRate >= 60) {
-      effectivenessContext += ` Le taux est bon \u2014 garde un ton similaire.`;
+      effectivenessContext += ` Le taux est bon, garde un ton similaire.`;
     }
   }
 
   const contactCtx = `${opp.name} (${opp.title || ''}) chez ${opp.company || ''}`;
-  const triggerCtx = `${trigger.trigger_type} \u2014 ${trigger.name}`;
+  const triggerCtx = `${trigger.trigger_type}, ${trigger.name}`;
   const toneCtx = template.tone || 'professionnel mais chaleureux';
 
   if (abTest) {
@@ -695,7 +695,7 @@ Retourne un JSON : { "A": { "subject": "...", "body": "..." }, "B": { "subject":
         const match = (result.raw || '').match(/\{[\s\S]*"A"[\s\S]*"B"[\s\S]*\}/);
         if (match) parsed = JSON.parse(match[0]);
       }
-      if (parsed?.A?.subject && parsed?.B?.subject) return { ...parsed, patternIds };
+      if (parsed?.A?.subject && parsed?.B?.subject) return {...parsed, patternIds };
     } catch { /* fallback to single */ }
   }
 
@@ -710,13 +710,13 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
 
   try {
     const result = await claude.callClaude('Retourne uniquement du JSON valide.', prompt, 500);
-    if (result.parsed) return { ...result.parsed, patternIds };
+    if (result.parsed) return {...result.parsed, patternIds };
     const match = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
-    if (match) return { ...JSON.parse(match[0]), patternIds };
+    if (match) return {...JSON.parse(match[0]), patternIds };
   } catch { /* fallback below */ }
 
   return {
-    subject: `Suivi \u2014 ${opp.company || opp.name}`,
+    subject: `Suivi, ${opp.company || opp.name}`,
     body: `Bonjour ${(opp.name || '').split(' ')[0]},\n\nJe me permets de revenir vers vous.\n\nBien cordialement`,
     patternIds,
   };
@@ -767,7 +767,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // source au niveau colonne : c'est elle que lit la politique de partage du
   // DAO (agrégats business jamais auto-partagés) · le data JSON garde le
   // détail (crm_analysis / title_analysis / multitouch_analysis).
-  const createPattern = (data) => db.memoryPatterns.create({ source: 'crm_analysis', ...data, teamId, userId: teamId ? null : userId });
+  const createPattern = (data) => db.memoryPatterns.create({ source: 'crm_analysis',...data, teamId, userId: teamId ? null : userId });
   // Les gardes anti-doublon doivent chercher dans la mémoire DU tenant.
   // Historiquement list() sans tenant renvoyait les patterns de TOUS les
   // clients : dès qu'un client avait son « taux de conversion CRM », plus
@@ -802,8 +802,8 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Pattern 2: Average deal velocity (time to won)
   if (won.length >= 3) {
     const velocities = won
-      .filter(o => o.created_at && o.updated_at)
-      .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
+.filter(o => o.created_at && o.updated_at)
+.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (velocities.length >= 3) {
       const avgDays = Math.round(velocities.reduce((s, v) => s + v, 0) / velocities.length);
       const existing = await listExisting('Timing');
@@ -824,15 +824,15 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Pattern 3: Stagnation threshold · at what point do deals die?
   if (lost.length >= 3) {
     const stagnation = lost
-      .filter(o => o.created_at && o.updated_at)
-      .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
+.filter(o => o.created_at && o.updated_at)
+.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (stagnation.length >= 3) {
       const avgStagnation = Math.round(stagnation.reduce((s, v) => s + v, 0) / stagnation.length);
       const existing = await listExisting('Timing');
       const hasStagnation = existing.some(p => p.pattern.includes('deals perdus stagnent'));
       if (!hasStagnation) {
         await createPattern({
-          pattern: `Les deals perdus stagnent en moyenne ${avgStagnation} jours avant d'\u00EAtre clos \u2014 relancer avant ce seuil`,
+          pattern: `Les deals perdus stagnent en moyenne ${avgStagnation} jours avant d'\u00EAtre clos, relancer avant ce seuil`,
           category: 'Timing',
           data: JSON.stringify({ source: 'crm_analysis', avgStagnation, sampleSize: stagnation.length }),
           confidence: stagnation.length >= 10 ? 'Haute' : 'Moyenne',
@@ -938,7 +938,7 @@ async function runAllAgents() {
   for (const { user_id } of users.rows) {
     try {
       const report = await runAgent(user_id, { trigger: 'scheduled' });
-      results.push({ userId: user_id, ...report });
+      results.push({ userId: user_id,...report });
     } catch (err) {
       logger.error('crm-agent', `Agent failed for ${user_id}: ${err.message}`);
     }

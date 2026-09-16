@@ -12,7 +12,7 @@ const BASE = '/api';
 
 export async function request(path, opts = {}) {
   const url = BASE + path;
-  const headers = { 'Content-Type': 'application/json', ...opts.headers };
+  const headers = { 'Content-Type': 'application/json',...opts.headers };
 
   // Attach JWT token if available
   const token = getToken();
@@ -20,7 +20,7 @@ export async function request(path, opts = {}) {
     headers['Authorization'] = 'Bearer ' + token;
   }
 
-  let res = await fetch(url, { headers, ...opts });
+  let res = await fetch(url, { headers,...opts });
 
   // Handle 401 · try refreshing the access token before giving up
   if (res.status === 401) {
@@ -28,7 +28,7 @@ export async function request(path, opts = {}) {
     if (newToken) {
       // Retry the original request with the new token
       headers['Authorization'] = 'Bearer ' + newToken;
-      res = await fetch(url, { headers, ...opts });
+      res = await fetch(url, { headers,...opts });
     }
 
     // Still 401 after refresh · session is dead
@@ -54,7 +54,7 @@ export async function request(path, opts = {}) {
 // l'analytics. Le backend valide le nom ([a-z0-9_]) et borne les metadata.
 export function trackEvent(event, metadata = null) {
   request('/events', { method: 'POST', body: JSON.stringify({ event, metadata }) })
-    .catch(() => {});
+.catch(() => {});
 }
 
 /* ─── Channel helpers ─── */
@@ -329,12 +329,12 @@ export function patternsToRecommendations(patterns, lang = null) {
     Faible: 'blue',
   };
   const labelMap = userLang === 'en' ? {
-    Haute: '\u2705 Apply \u2014 High impact',
-    Moyenne: '\uD83D\uDCA1 Test \u2014 Opportunity',
+    Haute: '\u2705 Apply, High impact',
+    Moyenne: '\uD83D\uDCA1 Test, Opportunity',
     Faible: '\uD83D\uDCCA Insight',
   } : {
-    Haute: '\u2705 Appliquer \u2014 Impact fort',
-    Moyenne: '\uD83D\uDCA1 Tester \u2014 Opportunit\u00e9',
+    Haute: '\u2705 Appliquer, Impact fort',
+    Moyenne: '\uD83D\uDCA1 Tester, Opportunit\u00e9',
     Faible: '\uD83D\uDCCA Insight',
   };
 
@@ -485,7 +485,7 @@ export async function generateTouchpoint(type, params, dryRun = false) {
   const qs = dryRun ? '?dry_run=true' : '';
   return request('/ai/generate-touchpoint' + qs, {
     method: 'POST',
-    body: JSON.stringify({ type, ...params }),
+    body: JSON.stringify({ type,...params }),
   });
 }
 
@@ -557,8 +557,8 @@ export async function getChurnSummary() {
 export function downloadScoresCSV() {
   const token = getToken();
   fetch(BASE + '/ai/export-scores-csv', { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = 'bakal-scores.csv';
@@ -570,8 +570,8 @@ export function downloadScoresCSV() {
 export function downloadAnalyticsCSV(tab) {
   const token = getToken();
   fetch(BASE + '/analytics/' + tab + '/csv', { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `baakal-${tab}-${new Date().toISOString().split('T')[0]}.csv`;
@@ -676,8 +676,8 @@ export function exportCampaignsCsv() {
   const link = document.createElement('a');
   // Use fetch to include auth header, then trigger download
   fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       link.href = URL.createObjectURL(blob);
       link.download = 'bakal-campagnes.csv';
       link.click();
@@ -690,8 +690,8 @@ export function exportCampaignCsv(campaignId) {
   const token = getToken();
   const url = BASE + '/export/campaigns/' + campaignId + '/csv';
   fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = 'bakal-campagne-' + campaignId + '.csv';
@@ -705,8 +705,8 @@ export function exportReportPdf() {
   const token = getToken();
   const url = BASE + '/export/report/pdf';
   fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.text())
-    .then(html => {
+.then(r => r.text())
+.then(html => {
       const w = window.open('', '_blank');
       w.document.write(html);
       w.document.close();
@@ -827,7 +827,7 @@ export async function getRevealOptions() {
 export async function revealEmails(source, leads, opts = {}) {
   return request('/ai/reveal-emails', {
     method: 'POST',
-    body: JSON.stringify({ source, leads, ...opts }),
+    body: JSON.stringify({ source, leads,...opts }),
   });
 }
 

@@ -130,7 +130,7 @@ export default function SettingsPage() {
       if (res.url) { window.location.href = res.url; return; }
       throw new Error('no url');
     } catch {
-      setOauthUnavailable(prev => ({ ...prev, [provider]: true }));
+      setOauthUnavailable(prev => ({...prev, [provider]: true }));
     }
   };
   const [saving, setSaving] = useState(false);
@@ -148,7 +148,7 @@ export default function SettingsPage() {
   const EXTENDED_TOOLS = getExtendedTools(lang);
   const [preferences, setPreferences] = useState(() => {
     const saved = localStorage.getItem('bakal-preferences');
-    try { return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : { ...DEFAULT_PREFERENCES }; } catch { return { ...DEFAULT_PREFERENCES }; }
+    try { return saved ? {...DEFAULT_PREFERENCES,...JSON.parse(saved) } : {...DEFAULT_PREFERENCES }; } catch { return {...DEFAULT_PREFERENCES }; }
   });
   const [theme, setTheme] = useState(() =>
     document.documentElement.getAttribute('data-theme') || 'light'
@@ -159,17 +159,17 @@ export default function SettingsPage() {
   useEffect(() => {
     let cancelled = false;
     request('/settings/email-prefs')
-      .then(d => { if (!cancelled) setEmailPrefs(d.prefs || null); })
-      .catch(() => {});
+.then(d => { if (!cancelled) setEmailPrefs(d.prefs || null); })
+.catch(() => {});
     return () => { cancelled = true; };
   }, []);
   const toggleEmailPref = async (category) => {
     const next = !(emailPrefs?.[category] !== false);
-    setEmailPrefs(prev => ({ ...prev, [category]: next }));
+    setEmailPrefs(prev => ({...prev, [category]: next }));
     try {
       await request('/settings/email-prefs', { method: 'PATCH', body: JSON.stringify({ [category]: next }) });
     } catch {
-      setEmailPrefs(prev => ({ ...prev, [category]: !next }));
+      setEmailPrefs(prev => ({...prev, [category]: !next }));
     }
   };
 
@@ -360,18 +360,18 @@ export default function SettingsPage() {
   /* ─── Edit / cancel / save per-field ─── */
 
   function startEdit(field) {
-    setEditing(prev => ({ ...prev, [field]: true }));
-    setDrafts(prev => ({ ...prev, [field]: '' }));
+    setEditing(prev => ({...prev, [field]: true }));
+    setDrafts(prev => ({...prev, [field]: '' }));
   }
 
   function cancelEdit(field) {
     setEditing(prev => {
-      const next = { ...prev };
+      const next = {...prev };
       delete next[field];
       return next;
     });
     setDrafts(prev => {
-      const next = { ...prev };
+      const next = {...prev };
       delete next[field];
       return next;
     });
@@ -405,7 +405,7 @@ export default function SettingsPage() {
       showToast(en ? 'Key deleted' : 'Clé supprimée');
       cancelEdit(field);
       setTestStatus(prev => {
-        const next = { ...prev };
+        const next = {...prev };
         delete next[field];
         return next;
       });
@@ -451,14 +451,14 @@ export default function SettingsPage() {
 
   function updatePreference(key, value) {
     setPreferences(prev => {
-      const next = { ...prev, [key]: value };
+      const next = {...prev, [key]: value };
       localStorage.setItem('bakal-preferences', JSON.stringify(next));
       return next;
     });
   }
 
   function resetPreferences() {
-    setPreferences({ ...DEFAULT_PREFERENCES });
+    setPreferences({...DEFAULT_PREFERENCES });
     localStorage.removeItem('bakal-preferences');
     showToast(en ? 'Preferences reset' : 'Préférences réinitialisées');
   }
@@ -470,7 +470,7 @@ export default function SettingsPage() {
 
   /* ─── Count configured keys ─── */
 
-  const allKeyDefs = [...MAIN_TOOLS, ...EXTENDED_TOOLS.flatMap(g => g.keys)];
+  const allKeyDefs = [...MAIN_TOOLS,...EXTENDED_TOOLS.flatMap(g => g.keys)];
   const [showMore, setShowMore] = useState(false);
   const configuredCount = Object.values(keyStatus).filter(k => k.configured).length;
   const totalCount = Object.keys(keyStatus).length || allKeyDefs.length;
@@ -551,7 +551,7 @@ export default function SettingsPage() {
                 type="password"
                 placeholder={keyDef.placeholder}
                 value={drafts[keyDef.field] || ''}
-                onChange={e => setDrafts(prev => ({ ...prev, [keyDef.field]: e.target.value }))}
+                onChange={e => setDrafts(prev => ({...prev, [keyDef.field]: e.target.value }))}
                 autoFocus
                 onKeyDown={e => {
                   if (e.key === 'Enter') saveField(keyDef.field);
@@ -671,7 +671,7 @@ export default function SettingsPage() {
                   {isEditing && tool.multiField === true && (
                     <OdooConfigForm
                       draft={drafts[tool.field] || ''}
-                      onSave={(json) => { setDrafts(prev => ({ ...prev, [tool.field]: json })); saveField(tool.field, json); }}
+                      onSave={(json) => { setDrafts(prev => ({...prev, [tool.field]: json })); saveField(tool.field, json); }}
                       onCancel={() => cancelEdit(tool.field)}
                       saving={saving}
                       isConnected={isConnected}
@@ -721,7 +721,7 @@ export default function SettingsPage() {
                         type="password"
                         placeholder={tool.placeholder}
                         value={drafts[tool.field] || ''}
-                        onChange={e => setDrafts(prev => ({ ...prev, [tool.field]: e.target.value }))}
+                        onChange={e => setDrafts(prev => ({...prev, [tool.field]: e.target.value }))}
                         autoFocus
                         onKeyDown={e => {
                           if (e.key === 'Enter') saveField(tool.field);
@@ -1254,7 +1254,7 @@ export default function SettingsPage() {
             const tkn = localStorage.getItem('bakal_token');
             fetch('/api/auth/onboarding-reset', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
+              headers: { 'Content-Type': 'application/json',...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
             }).catch(() => {});
             window.location.reload();
           }}>
@@ -1397,7 +1397,7 @@ function SlaSection({ t, showToast, lang }) {
                 max={f.max}
                 value={cfg[f.key]}
                 disabled={busy}
-                onChange={(e) => setCfg((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                onChange={(e) => setCfg((prev) => ({...prev, [f.key]: e.target.value }))}
                 onBlur={(e) => {
                   const v = parseInt(e.target.value, 10);
                   if (Number.isInteger(v) && v >= f.min && v <= f.max) save({ [f.key]: v });
@@ -1892,7 +1892,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
         <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>{en ? 'Connected!' : 'Connect\u00E9 !'}</div>
       )}
       {status === 'test_failed' && (
-        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed \u2014 token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9 \u2014 le token a peut-\u00EAtre expir\u00E9'}</div>
+        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed, token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9, le token a peut-\u00EAtre expir\u00E9'}</div>
       )}
       {status === 'error' && (
         <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{en ? 'Connection failed' : '\u00C9chec de connexion'}</div>

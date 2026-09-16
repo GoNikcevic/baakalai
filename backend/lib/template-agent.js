@@ -180,7 +180,7 @@ function buildPatternContext(patterns) {
   if (!patterns || patterns.length === 0) return '';
 
   // La liste blanche portait 'Canaux', cat\u00e9gorie qu'aucun agent n'\u00e9crit (ils
-  // \u00e9crivent 'Canal'), et omettait 'Corps' / 'Objets' / 'Timing' \u2014 soit
+  // \u00e9crivent 'Canal'), et omettait 'Corps' / 'Objets' / 'Timing', soit
   // pr\u00e9cis\u00e9ment les insights de copy utiles \u00e0 la g\u00e9n\u00e9ration de templates.
   // R\u00e9sultat : le filtre vidait le contexte m\u00eame quand des patterns existaient.
   const RELEVANT_CATEGORIES = [
@@ -212,8 +212,8 @@ function buildStatsContext(campaigns) {
   }
 
   const lines = Object.entries(bySector)
-    .filter(([, v]) => v.count >= 2)
-    .map(([sector, v]) => {
+.filter(([, v]) => v.count >= 2)
+.map(([sector, v]) => {
       const avgOpen = Math.round(v.openRate / v.count);
       const avgReply = Math.round(v.replyRate / v.count);
       return `- ${sector}: ${v.count} campaigns, avg ${avgOpen}% open, ${avgReply}% reply`;

@@ -5,7 +5,7 @@ import Icon from '../Icon';
 
 /**
  * 3-step prospect generator for a campaign in prep:
- * 1. Search (Lemlist Leads / Apollo / ...) · returns profiles without emails
+ * 1. Search (Lemlist Leads / Apollo /...) · returns profiles without emails
  * 2. Reveal emails · async enrichment via Lemlist (consumes credits)
  * 3. Add selected prospects to the campaign
  */
@@ -57,18 +57,18 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
   useEffect(() => {
     const backendId = campaign._backendId || campaign.id;
     api.listCampaignProspects(backendId)
-      .then(data => setExistingCount((data.prospects || []).length))
-      .catch(() => {});
+.then(data => setExistingCount((data.prospects || []).length))
+.catch(() => {});
     api.getLemlistCredits()
-      .then(data => {
+.then(data => {
         if (data.configured === false) setCreditsConfigured(false);
         else if (data.error || data.credits == null) setCredits('error');
         else setCredits(data.credits);
       })
-      .catch(() => setCredits('error'));
+.catch(() => setCredits('error'));
     api.getRevealOptions()
-      .then(setRevealOptions)
-      .catch(() => {});
+.then(setRevealOptions)
+.catch(() => {});
   }, [campaign._backendId, campaign.id]);
 
   // Cleanup polling on unmount
@@ -95,7 +95,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
       };
       const data = await api.searchProspects(criteria);
       const contacts = (data.contacts || []).map(c => ({
-        ...c,
+...c,
         revealStatus: c.email ? 'verified' : 'pending',
       }));
       setResults(contacts);
@@ -156,7 +156,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
 
       // Mark them as pending in UI
       setResults(prev => prev.map(c =>
-        leadsToReveal.find(l => l.id === c.id) ? { ...c, revealStatus: 'revealing' } : c
+        leadsToReveal.find(l => l.id === c.id) ? {...c, revealStatus: 'revealing' } : c
       ));
 
       // Start polling
@@ -170,7 +170,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             const r = status.results.find(r => r.id === c.id);
             if (!r || r.status === 'pending') return c;
             return {
-              ...c,
+...c,
               email: r.email || c.email,
               revealStatus: r.status,
               revealError: r.error || null,
@@ -189,10 +189,10 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             } else {
               // Refresh credits
               api.getLemlistCredits()
-                .then(data => {
+.then(data => {
                   if (data.credits != null) setCredits(data.credits);
                 })
-                .catch(() => {});
+.catch(() => {});
             }
           }
         } catch (err) {
@@ -332,7 +332,7 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
       }
       contacts.push({
         id: `csv_${i}_${key}`,
-        ...record,
+...record,
       });
     }
 
@@ -588,13 +588,13 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
                     gap: 8,
                   }}>
                     <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || '\u2014'}
+                      {c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || ' '}
                     </div>
                     <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {c.title || '\u2014'}
+                      {c.title || ' '}
                     </div>
                     <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {c.company || '\u2014'} {'\u00B7'} {c.email}
+                      {c.company || ' '} {'\u00B7'} {c.email}
                     </div>
                   </div>
                 ))}

@@ -93,8 +93,8 @@ async function analyzeResponses(userId) {
 
       // 3. Analyze each response with Claude
       const activityTexts = recentActivities
-        .map(a => `[${a.type}] ${a.subject || ''} ${a.note || ''}`.trim())
-        .filter(t => t.length > 10);
+.map(a => `[${a.type}] ${a.subject || ''} ${a.note || ''}`.trim())
+.filter(t => t.length > 10);
 
       if (activityTexts.length === 0) continue;
 
@@ -464,10 +464,10 @@ async function createMemoryPattern(userId, report) {
     const emailRate = Math.round((emailPositive / emailActions.length) * 100);
     const emailPattern = emailRate >= 50
       ? `Les emails automatiques g\u00E9n\u00E8rent ${emailRate}% de r\u00E9ponses positives (${emailPositive}/${emailActions.length})`
-      : `Les emails automatiques ont un taux de r\u00E9ponse positive de ${emailRate}% \u2014 envisager d'ajuster le ton ou le timing`;
+      : `Les emails automatiques ont un taux de r\u00E9ponse positive de ${emailRate}%, envisager d'ajuster le ton ou le timing`;
     try {
       await db.memoryPatterns.replaceOrCreate({
-        ...tenant,
+...tenant,
         pattern: emailPattern,
         category: 'Corps',
         source: 'response_analysis_email',
@@ -489,7 +489,7 @@ async function createMemoryPattern(userId, report) {
       : `LinkedIn : taux de r\u00E9ponse positive ${liRate}%. ${connectAccepted} connexions accept\u00E9es sur ${linkedinActions.length} actions.`;
     try {
       await db.memoryPatterns.replaceOrCreate({
-        ...tenant,
+...tenant,
         pattern: liPattern,
         category: 'Canal',
         source: 'response_analysis_linkedin',
@@ -507,7 +507,7 @@ async function createMemoryPattern(userId, report) {
     : `Activation : taux de r\u00E9ponse positive de ${successRate}% (${report.positive}/${report.analyzed})`;
   try {
     await db.memoryPatterns.replaceOrCreate({
-      ...tenant,
+...tenant,
       pattern,
       category: 'Corps',
       source: 'response_analysis_global',

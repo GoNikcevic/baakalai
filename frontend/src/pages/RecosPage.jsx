@@ -47,9 +47,9 @@ export default function RecosPage() {
       if (campaignEntries.length === 0) return;
 
       // Fetch diagnostics for all campaigns + memory patterns in parallel
-      const [memoryRes, ...diagResults] = await Promise.all([
+      const [memoryRes,...diagResults] = await Promise.all([
         api.getMemory().catch(() => ({ patterns: [] })),
-        ...campaignEntries.map(c =>
+...campaignEntries.map(c =>
           api.getDiagnostics(c._backendId || c.id).catch(() => ({ diagnostics: [] }))
         ),
       ]);
@@ -164,7 +164,7 @@ export default function RecosPage() {
     setRecos(prev => prev.map(r => {
       if (r.id !== id) return r;
       return {
-        ...r,
+...r,
         status: 'applied',
         priority: 'applied',
         appliedNote: en
@@ -178,7 +178,7 @@ export default function RecosPage() {
   const dismissReco = useCallback((id) => {
     setRecos(prev => prev.map(r => {
       if (r.id !== id) return r;
-      return { ...r, status: 'dismissed' };
+      return {...r, status: 'dismissed' };
     }));
   }, []);
 
@@ -199,7 +199,7 @@ export default function RecosPage() {
   const applyModified = useCallback((id) => {
     setRecos(prev => prev.map(r => {
       if (r.id !== id) return r;
-      return { ...r, after: editText };
+      return {...r, after: editText };
     }));
     applyReco(id);
   }, [editText, applyReco]);
@@ -225,7 +225,7 @@ export default function RecosPage() {
   }, [backendAvailable, campaigns]);
 
   const handleInsightFeedback = useCallback(async (idx, insight, feedback) => {
-    setRatedInsights(prev => ({ ...prev, [idx]: feedback }));
+    setRatedInsights(prev => ({...prev, [idx]: feedback }));
     try {
       await sendRecoFeedback(null, insight.title + ': ' + insight.text, feedback);
     } catch {
@@ -412,7 +412,7 @@ export default function RecosPage() {
           <div className="reco-stat-value" style={{ color: 'var(--warning)' }}>{stats.pending}</div>
           <div className="reco-stat-label">{en ? 'Pending' : 'En attente'}</div>
           <div className="reco-stat-trend" style={{ color: 'var(--warning)' }}>
-            {stats.pending > 0 ? (en ? `${stats.pending} pending` : `${stats.pending} en attente`) : '\u2014'}
+            {stats.pending > 0 ? (en ? `${stats.pending} pending` : `${stats.pending} en attente`) : ' '}
           </div>
         </div>
         <div className="reco-stat-card">

@@ -47,16 +47,16 @@ function renderReadingSummary(s, t) {
     <div>
       <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
         {t('wizard.readTitle')
-          .replace('{count}', s.totalDeals)
-          .replace('{value}', moneyEUR(s.openValue))}
+.replace('{count}', s.totalDeals)
+.replace('{value}', moneyEUR(s.openValue))}
       </div>
       {s.dormant.count > 0 ? (
         <>
           <div style={{ marginTop: 6 }}>
             {t('wizard.readDormant')
-              .replace('{count}', s.dormant.count)
-              .replace('{days}', s.stagnantDays ?? 30)
-              .replace('{value}', moneyEUR(s.dormant.value))}
+.replace('{count}', s.dormant.count)
+.replace('{days}', s.stagnantDays ?? 30)
+.replace('{value}', moneyEUR(s.dormant.value))}
             {s.dormant.sharePct != null && s.dormant.sharePct > 0 && (
               <> {t('wizard.readDormantShare').replace('{pct}', s.dormant.sharePct)}</>
             )}
@@ -240,12 +240,12 @@ const CRM_GUIDES = {
     guideFr: [
       'Cr\u00E9ez une int\u00E9gration sur notion.so/my-integrations',
       'Partagez votre base CRM avec cette int\u00E9gration (\u22EF \u2192 Connexions)',
-      'Copiez le token (secret_... ou ntn_...) \u2014 vous choisirez la base dans Param\u00E8tres',
+      'Copiez le token (secret_... ou ntn_...), vous choisirez la base dans Param\u00E8tres',
     ],
     guideEn: [
       'Create an integration at notion.so/my-integrations',
       'Share your CRM database with it (\u22EF \u2192 Connections)',
-      'Copy the token (secret_... or ntn_...) \u2014 you will pick the database in Settings',
+      'Copy the token (secret_... or ntn_...), you will pick the database in Settings',
     ],
     link: 'https://www.notion.so/my-integrations',
   },
@@ -278,7 +278,7 @@ const CRM_GUIDES = {
 };
 
 /**
- * Champ saveKeys par fournisseur CRM \u2014 doit refl\u00E9ter PROVIDER_MAP c\u00F4t\u00E9
+ * Champ saveKeys par fournisseur CRM, doit refl\u00E9ter PROVIDER_MAP c\u00F4t\u00E9
  * backend (routes/settings.js). Odoo/Notion/Airtable/Folk manquaient : le
  * wizard proposait Odoo dans la liste mais jetait silencieusement sa cl\u00E9.
  */
@@ -366,7 +366,7 @@ export default function OnboardingWizard({ onComplete }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setUploadedDocs(prev => [...prev, ...(data.documents || [{ name: 'Document uploaded' }])]);
+        setUploadedDocs(prev => [...prev,...(data.documents || [{ name: 'Document uploaded' }])]);
       }
     } catch { /* ignore */ }
     setUploading(false);
@@ -539,7 +539,7 @@ export default function OnboardingWizard({ onComplete }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ field: crmField, key: crmKey.trim() }),
         });
@@ -600,7 +600,7 @@ export default function OnboardingWizard({ onComplete }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(profile),
     }).catch(() => {/* ignore */});
@@ -612,7 +612,7 @@ export default function OnboardingWizard({ onComplete }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         }).catch(() => {});
       } else if (['apollo', 'instantly', 'smartlead'].includes(outreachProvider)) {
@@ -620,7 +620,7 @@ export default function OnboardingWizard({ onComplete }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ provider: outreachProvider }),
         }).catch(() => {});
@@ -657,7 +657,7 @@ export default function OnboardingWizard({ onComplete }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
       const body = await res.json().catch(() => ({}));
@@ -668,8 +668,8 @@ export default function OnboardingWizard({ onComplete }) {
       // Compte-rendu de lecture : pur SQL, disponible immédiatement. Échec
       // non bloquant · on retombe sur le message générique importDone.
       request('/crm/reading-summary')
-        .then(setReadingSummary)
-        .catch((err) => { console.warn('reading-summary failed:', err.message); });
+.then(setReadingSummary)
+.catch((err) => { console.warn('reading-summary failed:', err.message); });
 
       // L'analyse peut rester en tâche de fond : elle n'est pas nécessaire à
       // l'affichage des deals dormants, qui se calcule à la demande en SQL.
@@ -677,7 +677,7 @@ export default function OnboardingWizard({ onComplete }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       }).catch(() => {});
     } catch (err) {
@@ -696,7 +696,7 @@ export default function OnboardingWizard({ onComplete }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     }).catch(() => {});
 
@@ -755,8 +755,8 @@ export default function OnboardingWizard({ onComplete }) {
                     marginTop: 4,
                   }}>
                     {SECTOR_SUGGESTIONS
-                      .filter(s => !sector || s.toLowerCase().includes(sector.toLowerCase()))
-                      .map(s => (
+.filter(s => !sector || s.toLowerCase().includes(sector.toLowerCase()))
+.map(s => (
                         <div
                           key={s}
                           style={{
@@ -1077,7 +1077,7 @@ export default function OnboardingWizard({ onComplete }) {
               <div className="wizard-key-row">
                 <div className="wizard-key-icon">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <path d="M4 4h16c1.1 0 2.9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                     <polyline points="22,6 12,13 2,6" />
                   </svg>
                 </div>
@@ -1161,30 +1161,30 @@ export default function OnboardingWizard({ onComplete }) {
                 <span className="wizard-check-icon">
                   <Icon name={company ? 'checkCircle' : 'circle'} size={14} />
                 </span>
-                <span>{t('wizard.checkCompany')} {company ? `\u2014 ${company}` : t('wizard.checkCompanyLater')}</span>
+                <span>{t('wizard.checkCompany')} {company ? `  ${company}` : t('wizard.checkCompanyLater')}</span>
               </div>
               {/* CRM avant outreach : m\u00EAme hi\u00E9rarchie que les \u00E9tapes du wizard. */}
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">
                   <Icon name={(crmKey || crmOauthConnected) && crmProvider ? 'checkCircle' : 'circle'} size={14} />
                 </span>
-                <span>CRM {(crmKey || crmOauthConnected) && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
+                <span>CRM {(crmKey || crmOauthConnected) && crmProvider ? `  ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">
                   <Icon name={outreachKey && outreachProvider ? 'checkCircle' : 'circle'} size={14} />
                 </span>
-                <span>{outreachLabel} {outreachKey && outreachProvider ? `\u2014 ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
+                <span>{outreachLabel} {outreachKey && outreachProvider ? `  ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon">
                   <Icon name={targetSectors || personaPrimary ? 'checkCircle' : 'circle'} size={14} />
                 </span>
-                <span>{t('wizard.checkTargeting')} {targetSectors ? `\u2014 ${targetSectors}` : t('wizard.checkTargetingLater')}</span>
+                <span>{t('wizard.checkTargeting')} {targetSectors ? `  ${targetSectors}` : t('wizard.checkTargetingLater')}</span>
               </div>
               <div className="wizard-check-item">
                 <span className="wizard-check-icon"><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>
-                <span>{t('wizard.checkStyle')} {'\u2014'} {tone}, {formality}</span>
+                <span>{t('wizard.checkStyle')} {' '} {tone}, {formality}</span>
               </div>
             </div>
             {/* Etat du premier import CRM. Sans ce retour, un import qui echoue
@@ -1260,7 +1260,7 @@ export default function OnboardingWizard({ onComplete }) {
     const tkn = localStorage.getItem('bakal_token');
     fetch('/api/auth/onboarding-complete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
+      headers: { 'Content-Type': 'application/json',...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
     }).catch(() => {});
     localStorage.setItem('bakal_onboarding_complete', 'true');
     if (onComplete) onComplete();

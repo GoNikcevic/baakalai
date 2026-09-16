@@ -23,7 +23,7 @@ const VARGEN_SCENARIOS = {
     },
     explanation: {
       title: 'Pourquoi ces variables pour les brasseries ?',
-      text: "Dans l'industrie brassicole, <strong>le produit est le point d'entree emotionnel</strong> \u2014 chaque brasseur est passionne par sa biere phare. En identifiant le nom de leur biere et le type de fermentation, on peut predire les problemes microbiologiques probables (contamination Brettanomyces pour les IPA, Lactobacillus pour les sours\u2026). <strong>Cette intelligence cree un icebreaker ultra-cible</strong> qui prouve qu'on connait leur metier, pas juste leur entreprise.",
+      text: "Dans l'industrie brassicole, <strong>le produit est le point d'entree emotionnel</strong>, chaque brasseur est passionne par sa biere phare. En identifiant le nom de leur biere et le type de fermentation, on peut predire les problemes microbiologiques probables (contamination Brettanomyces pour les IPA, Lactobacillus pour les sours\u2026). <strong>Cette intelligence cree un icebreaker ultra-cible</strong> qui prouve qu'on connait leur metier, pas juste leur entreprise.",
     },
     chain: [
       {
@@ -43,7 +43,7 @@ const VARGEN_SCENARIOS = {
         label: 'Risque microbiologique probable',
         type: 'enrichment',
         desc: 'Problème microbiologique le plus courant selon le type de bière produite. Généré par IA à partir du style de bière.',
-        source: { icon: 'bot', label: 'IA \u2014 base sur le type de fermentation' },
+        source: { icon: 'bot', label: 'IA, base sur le type de fermentation' },
         dependsOn: ['beerName'],
         derivationHint: 'Le type de bière (IPA, Stout, Sour, Lager\u2026) détermine la levure et les risques de contamination.',
         formula: {
@@ -51,9 +51,9 @@ const VARGEN_SCENARIOS = {
           prompt: "À partir du style de bière, identifie le risque microbiologique le plus probable. Sois spécifique et technique mais compréhensible.",
         },
         examples: [
-          { prospect: 'Chateau Rouge (Amber)', value: "Oxydation prématurée \u2014 les malts caramélisés sont plus sensibles aux réactions de Maillard post-embouteillage" },
-          { prospect: 'La Blanche (Witbier)', value: "Contamination Lactobacillus \u2014 les bières de blé à pH élevé sont un terrain propice" },
-          { prospect: 'Saison Station (Saison)', value: "Refermentation non contrôlée \u2014 les levures Saison sont notoirement imprévisibles en bouteille" },
+          { prospect: 'Chateau Rouge (Amber)', value: "Oxydation prématurée, les malts caramélisés sont plus sensibles aux réactions de Maillard post-embouteillage" },
+          { prospect: 'La Blanche (Witbier)', value: "Contamination Lactobacillus, les bières de blé à pH élevé sont un terrain propice" },
+          { prospect: 'Saison Station (Saison)', value: "Refermentation non contrôlée, les levures Saison sont notoirement imprévisibles en bouteille" },
         ],
       },
       {
@@ -61,16 +61,16 @@ const VARGEN_SCENARIOS = {
         label: 'Icebreaker brasseur',
         type: 'derived',
         desc: "Accroche personnalisée qui combine la bière phare et le risque microbio pour montrer une expertise crédible du métier.",
-        source: { icon: 'sparkles', label: 'IA \u2014 combinaison de beerName + microbioProblem' },
+        source: { icon: 'sparkles', label: 'IA, combinaison de beerName + microbioProblem' },
         dependsOn: ['beerName', 'microbioProblem'],
         formula: {
           inputs: ['beerName', 'microbioProblem'],
           prompt: "Combine le nom de la bière phare et le risque microbiologique en une phrase d'accroche qui montre une expertise du métier brassicole. Ton conversationnel, pas de jargon excessif. Max 2 phrases.",
         },
         examples: [
-          { prospect: "Brasserie de la Goutte d'Or", value: "<em>Chateau Rouge</em> est une de mes ambers préférées \u2014 vous avez mis en place un protocole anti-oxydation spécifique pour protéger ces malts caramélisés post-embouteillage ?" },
-          { prospect: 'Brasserie du Mont Blanc', value: "J'ai goûté <em>La Blanche</em> récemment, très réussie. Cela dit, les witbiers à pH élevé sont un vrai défi côté Lactobacillus \u2014 c'est un sujet que vous maîtrisez déjà ?" },
-          { prospect: 'Deck & Donohue', value: "Les Saisons, c'est une de mes passions \u2014 mais je sais que <em>Saison Station</em> doit vous donner du fil à retordre en refermentation bouteille. Vous avez trouvé une parade ?" },
+          { prospect: "Brasserie de la Goutte d'Or", value: "<em>Chateau Rouge</em> est une de mes ambers préférées, vous avez mis en place un protocole anti-oxydation spécifique pour protéger ces malts caramélisés post-embouteillage ?" },
+          { prospect: 'Brasserie du Mont Blanc', value: "J'ai goûté <em>La Blanche</em> récemment, très réussie. Cela dit, les witbiers à pH élevé sont un vrai défi côté Lactobacillus, c'est un sujet que vous maîtrisez déjà ?" },
+          { prospect: 'Deck & Donohue', value: "Les Saisons, c'est une de mes passions, mais je sais que <em>Saison Station</em> doit vous donner du fil à retordre en refermentation bouteille. Vous avez trouvé une parade ?" },
         ],
       },
     ],
@@ -82,11 +82,11 @@ const VARGEN_SCENARIOS = {
       campaign: 'DAF Ile-de-France',
       industry: 'Cabinets comptables / Finance',
       target: 'DAF, Directeurs financiers',
-      angle: 'Douleur client \u2014 automatisation',
+      angle: 'Douleur client, automatisation',
     },
     explanation: {
       title: 'Pourquoi ces variables pour les DAF ?',
-      text: "Les DAF sont submerges de taches repetitives mais n'ont pas le temps de quantifier le cout reel. En identifiant <strong>l'outil comptable utilise</strong> (Sage, Cegid, QuickBooks\u2026) et en calculant le <strong>temps perdu estime</strong> sur des taches automatisables, on cree un icebreaker chiffre qui parle leur langage \u2014 les chiffres.",
+      text: "Les DAF sont submerges de taches repetitives mais n'ont pas le temps de quantifier le cout reel. En identifiant <strong>l'outil comptable utilise</strong> (Sage, Cegid, QuickBooks\u2026) et en calculant le <strong>temps perdu estime</strong> sur des taches automatisables, on cree un icebreaker chiffre qui parle leur langage, les chiffres.",
     },
     chain: [
       {
@@ -106,7 +106,7 @@ const VARGEN_SCENARIOS = {
         label: 'Heures perdues estimées / semaine',
         type: 'enrichment',
         desc: "Estimation du temps consacré aux tâches automatisables, calculé selon l'outil utilisé et la taille du cabinet.",
-        source: { icon: 'bot', label: 'IA \u2014 base sur accountingSoftware + companySize' },
+        source: { icon: 'bot', label: 'IA, base sur accountingSoftware + companySize' },
         dependsOn: ['accountingSoftware', 'companySize'],
         derivationHint: "Chaque logiciel a des fonctionnalités d'automatisation connues. On estime le gap entre usage courant et potentiel.",
         formula: {
@@ -114,9 +114,9 @@ const VARGEN_SCENARIOS = {
           prompt: "Estime le nombre d'heures par semaine perdues en tâches automatisables, selon le logiciel comptable et la taille de l'entreprise. Sois spécifique sur ce qui cause la perte de temps.",
         },
         examples: [
-          { prospect: 'Cabinet Fidrec (Sage 100)', value: "~14h/semaine \u2014 Sage 100 n'a pas d'OCR natif, saisie manuelle des factures" },
-          { prospect: 'Nexia Conseil (Cegid Loop)', value: "~8h/semaine \u2014 Loop a de l'automatisation partielle, gap principalement sur le rapprochement bancaire" },
-          { prospect: 'BDO France (SAP B1)', value: "~6h/semaine \u2014 SAP bien automatise, mais les PME n'utilisent que 40% des fonctions" },
+          { prospect: 'Cabinet Fidrec (Sage 100)', value: "~14h/semaine, Sage 100 n'a pas d'OCR natif, saisie manuelle des factures" },
+          { prospect: 'Nexia Conseil (Cegid Loop)', value: "~8h/semaine, Loop a de l'automatisation partielle, gap principalement sur le rapprochement bancaire" },
+          { prospect: 'BDO France (SAP B1)', value: "~6h/semaine, SAP bien automatise, mais les PME n'utilisent que 40% des fonctions" },
         ],
       },
       {
@@ -124,16 +124,16 @@ const VARGEN_SCENARIOS = {
         label: 'Icebreaker DAF chiffre',
         type: 'derived',
         desc: "Accroche qui combine l'outil comptable et les heures perdues en une question qui parle le langage du DAF.",
-        source: { icon: 'sparkles', label: 'IA \u2014 combinaison accountingSoftware + estimatedTimeLost' },
+        source: { icon: 'sparkles', label: 'IA, combinaison accountingSoftware + estimatedTimeLost' },
         dependsOn: ['accountingSoftware', 'estimatedTimeLost'],
         formula: {
           inputs: ['accountingSoftware', 'estimatedTimeLost'],
           prompt: "Crée une accroche pour un DAF qui mentionne leur outil comptable et le temps perdu estimé. La question doit être chiffrée et provoquer une prise de conscience. Ton professionnel décontracté, 1-2 phrases max.",
         },
         examples: [
-          { prospect: 'Cabinet Fidrec', value: "<em>14h par semaine</em> en saisie manuelle sur Sage 100 \u2014 c'est ce qu'on observe en moyenne chez les cabinets de votre taille. Si vous pouviez recuperer ne serait-ce que la moitie, qu'est-ce que ca changerait ?" },
+          { prospect: 'Cabinet Fidrec', value: "<em>14h par semaine</em> en saisie manuelle sur Sage 100, c'est ce qu'on observe en moyenne chez les cabinets de votre taille. Si vous pouviez recuperer ne serait-ce que la moitie, qu'est-ce que ca changerait ?" },
           { prospect: 'Nexia Conseil', value: "Cegid Loop fait bien le job, mais on voit souvent <em>8h/semaine</em> perdues sur le rapprochement bancaire. C'est un sujet que vous avez déjà creusé chez Nexia ?" },
-          { prospect: 'BDO France', value: "SAP B1 est puissant, mais la plupart des PME n'utilisent que 40% de ses capacités \u2014 ça représente environ <em>6h récupérables par semaine</em>. Ça vous parle ?" },
+          { prospect: 'BDO France', value: "SAP B1 est puissant, mais la plupart des PME n'utilisent que 40% de ses capacités, ça représente environ <em>6h récupérables par semaine</em>. Ça vous parle ?" },
         ],
       },
     ],
@@ -159,9 +159,9 @@ const VARGEN_SCENARIOS = {
         desc: "Si l'organisme est certifie Qualiopi (obligatoire pour fonds publics). Verifiable sur la base publique DataDock / Qualiopi.",
         source: { icon: 'search', label: 'Base publique Qualiopi / site web' },
         examples: [
-          { prospect: 'FormaPro Consulting', value: 'Certifie Qualiopi \u2014 Actions de formation' },
-          { prospect: 'CreActifs', value: 'Certifie Qualiopi \u2014 Formation + VAE' },
-          { prospect: 'OpenClassrooms B2B', value: 'Certifie Qualiopi \u2014 Actions de formation a distance' },
+          { prospect: 'FormaPro Consulting', value: 'Certifie Qualiopi, Actions de formation' },
+          { prospect: 'CreActifs', value: 'Certifie Qualiopi, Formation + VAE' },
+          { prospect: 'OpenClassrooms B2B', value: 'Certifie Qualiopi, Actions de formation a distance' },
         ],
       },
       {
@@ -181,16 +181,16 @@ const VARGEN_SCENARIOS = {
         label: 'Icebreaker formation',
         type: 'derived',
         desc: "Accroche qui combine statut Qualiopi et taille catalogue pour parler de la problématique de remplissage.",
-        source: { icon: 'sparkles', label: 'IA \u2014 combinaison qualiopiStatus + catalogSize' },
+        source: { icon: 'sparkles', label: 'IA, combinaison qualiopiStatus + catalogSize' },
         dependsOn: ['qualiopiStatus', 'catalogSize'],
         formula: {
           inputs: ['qualiopiStatus', 'catalogSize'],
           prompt: "Crée une accroche pour un dirigeant d'organisme de formation en utilisant leur statut Qualiopi et la taille de leur catalogue. L'angle est la difficulté à remplir les sessions. Ton conversationnel, 1-2 phrases.",
         },
         examples: [
-          { prospect: 'FormaPro Consulting', value: "Avec <em>12 formations</em> au catalogue et Qualiopi en poche, le plus dur c'est pas la qualité \u2014 c'est de remplir les sessions. Comment vous gérez votre acquisition de stagiaires aujourd'hui ?" },
-          { prospect: 'CreActifs', value: "8 formations en entrepreneuriat, c'est un positionnement pointu. Mais les organismes spécialisés comme le vôtre ont souvent du mal à <em>toucher les bons candidats</em> au bon moment \u2014 c'est votre cas aussi ?" },
-          { prospect: 'OpenClassrooms B2B', value: "Avec <em>150+ parcours</em>, vous avez le catalogue. Mais pour les entreprises B2B, le défi c'est souvent de convaincre les DRH de passer à la formation en ligne \u2014 comment vous approchez ce frein ?" },
+          { prospect: 'FormaPro Consulting', value: "Avec <em>12 formations</em> au catalogue et Qualiopi en poche, le plus dur c'est pas la qualité, c'est de remplir les sessions. Comment vous gérez votre acquisition de stagiaires aujourd'hui ?" },
+          { prospect: 'CreActifs', value: "8 formations en entrepreneuriat, c'est un positionnement pointu. Mais les organismes spécialisés comme le vôtre ont souvent du mal à <em>toucher les bons candidats</em> au bon moment, c'est votre cas aussi ?" },
+          { prospect: 'OpenClassrooms B2B', value: "Avec <em>150+ parcours</em>, vous avez le catalogue. Mais pour les entreprises B2B, le défi c'est souvent de convaincre les DRH de passer à la formation en ligne, comment vous approchez ce frein ?" },
         ],
       },
     ],

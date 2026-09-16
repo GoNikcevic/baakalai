@@ -291,8 +291,8 @@ function WebSearchProspectsCard({ metadata, onActionExecute }) {
   };
 
   const pickableCampaigns = Object.values(campaigns || {})
-    .filter(c => c.status === 'prep')
-    .map(c => ({ id: c._backendId || c.id, name: c.name }));
+.filter(c => c.status === 'prep')
+.map(c => ({ id: c._backendId || c.id, name: c.name }));
 
   return (
     <div className="chat-action-card">
@@ -467,7 +467,7 @@ function ChooseSourceCard({ metadata, onActionExecute }) {
             onClick={() => onActionExecute && onActionExecute({
               action: 'search_prospects',
               source: s.provider,
-              ...(metadata.pending_criteria || {}),
+...(metadata.pending_criteria || {}),
             })}
           >
             {s.name}
@@ -535,8 +535,8 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
   };
 
   const pickableCampaigns = Object.values(campaigns || {})
-    .filter(c => c.status === 'prep')
-    .map(c => ({
+.filter(c => c.status === 'prep')
+.map(c => ({
       id: c._backendId || c.id,
       name: c.name,
       sector: c.sector,
@@ -576,13 +576,13 @@ function AddProspectsManualCard({ metadata, onActionExecute }) {
               gap: 8,
             }}>
               <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {c.name || '\u2014'}
+                {c.name || ' '}
               </div>
               <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {c.title || '\u2014'}
+                {c.title || ' '}
               </div>
               <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {c.company || '\u2014'} {'\u00B7'} {c.email}
+                {c.company || ' '} {'\u00B7'} {c.email}
               </div>
             </div>
           ))}
@@ -681,8 +681,8 @@ function CreateCampaignCard({ campaign, onCreateCampaign, onModify, onPreview })
   }, []);
 
   const params = [campaign.sector, campaign.position, campaign.size, campaign.channel, campaign.angle, campaign.zone]
-    .filter(Boolean)
-    .map((p) => (
+.filter(Boolean)
+.map((p) => (
       <span key={p} className="chat-action-param">{p}</span>
     ));
 
@@ -829,8 +829,8 @@ function ProspectSearchCard({ metadata, onActionExecute }) {
 
   // Build list of pickable campaigns (only prep campaigns make sense before launch)
   const pickableCampaigns = Object.values(campaigns || {})
-    .filter(c => c.status === 'prep')
-    .map(c => ({
+.filter(c => c.status === 'prep')
+.map(c => ({
       id: c._backendId || c.id,
       name: c.name,
       sector: c.sector,
@@ -1063,8 +1063,8 @@ function WelcomeScreen({ suggestions, onSuggestionClick, onAction, userState }) 
     title = userName ? t('chat.hello', { name: userName }) : (lang === 'en' ? 'Hello!' : 'Bonjour !');
     const topInfo = topCampaign
       ? (lang === 'en'
-        ? ` "${topCampaign.name}" has a ${topCampaign.openRate || '\u2014'}% open rate.`
-        : ` "${topCampaign.name}" a un taux d'ouverture de ${topCampaign.openRate || '\u2014'}%.`)
+        ? ` "${topCampaign.name}" has a ${topCampaign.openRate || ' '}% open rate.`
+        : ` "${topCampaign.name}" a un taux d'ouverture de ${topCampaign.openRate || ' '}%.`)
       : '';
     subtitle = lang === 'en'
       ? `${activeCampaigns} active campaign${activeCampaigns > 1 ? 's' : ''}.${topInfo} What can I do for you?`
@@ -1238,7 +1238,7 @@ export default function CampaignAssistant() {
       // Avoid duplicating messages we already added from our own POST response
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, { ...msg, animate: true }];
+        return [...prev, {...msg, animate: true }];
       });
       scrollToBottom();
     };
@@ -1465,12 +1465,12 @@ export default function CampaignAssistant() {
             info: { period: '', copyDesc: '', channelsDesc: '', launchEstimate: '' },
           };
 
-          setCampaigns((prev) => ({ ...prev, [id]: newCampaign }));
+          setCampaigns((prev) => ({...prev, [id]: newCampaign }));
         }
 
         // Add success message
         setMessages((prev) => [
-          ...prev,
+...prev,
           {
             id: Date.now(),
             role: 'assistant',
@@ -1490,7 +1490,7 @@ export default function CampaignAssistant() {
         return { id: result.campaign.id };
       } catch (err) {
         setMessages((prev) => [
-          ...prev,
+...prev,
           {
             id: Date.now(),
             role: 'assistant',
@@ -1506,7 +1506,7 @@ export default function CampaignAssistant() {
     } else {
       // Offline fallback
       setMessages((prev) => [
-        ...prev,
+...prev,
         {
           id: Date.now(),
           role: 'assistant',
@@ -1630,7 +1630,7 @@ export default function CampaignAssistant() {
       } catch (err) {
         setShowTyping(false);
         setMessages((prev) => [
-          ...prev,
+...prev,
           {
             id: Date.now() + 1,
             role: 'assistant',
@@ -1648,7 +1648,7 @@ export default function CampaignAssistant() {
       setTimeout(() => {
         setShowTyping(false);
         setMessages((prev) => [
-          ...prev,
+...prev,
           {
             id: Date.now() + 1,
             role: 'assistant',
@@ -1700,12 +1700,12 @@ export default function CampaignAssistant() {
       // Injected from ChooseSourceCard: render a new message with the search card
       const sourceName = (metadata.source || '').replace(/^./, c => c.toUpperCase());
       setMessages((prev) => [
-        ...prev,
+...prev,
         {
           id: Date.now(),
           role: 'assistant',
           content: lang === 'en' ? `Great, I'm using **${sourceName}** for the search.` : `Parfait, j'utilise **${sourceName}** pour la recherche.`,
-          metadata: { action: 'search_prospects', ...metadata },
+          metadata: { action: 'search_prospects',...metadata },
           animate: true,
         },
       ]);
@@ -1756,7 +1756,7 @@ export default function CampaignAssistant() {
       return true;
     });
     if (newFiles.length > 0) {
-      setAttachedFiles(prev => [...prev, ...newFiles]);
+      setAttachedFiles(prev => [...prev,...newFiles]);
     }
   }, []);
 
@@ -2118,8 +2118,8 @@ export default function CampaignAssistant() {
                     type="text"
                     value={editedSubject !== undefined ? editedSubject : tp.subject}
                     onChange={(e) => setCampaignPreview(prev => ({
-                      ...prev,
-                      edits: { ...prev.edits, [`${editKey}_subject`]: e.target.value },
+...prev,
+                      edits: {...prev.edits, [`${editKey}_subject`]: e.target.value },
                     }))}
                     className="form-input"
                     style={{ fontSize: 12, padding: '4px 8px', marginBottom: 6, fontWeight: 600 }}
@@ -2128,8 +2128,8 @@ export default function CampaignAssistant() {
                 <textarea
                   value={editedBody !== undefined ? editedBody : (tp.body || '')}
                   onChange={(e) => setCampaignPreview(prev => ({
-                    ...prev,
-                    edits: { ...prev.edits, [`${editKey}_body`]: e.target.value },
+...prev,
+                    edits: {...prev.edits, [`${editKey}_body`]: e.target.value },
                   }))}
                   className="form-input"
                   style={{ fontSize: 11, padding: '6px 8px', minHeight: 80, resize: 'vertical', lineHeight: 1.5 }}
@@ -2143,10 +2143,10 @@ export default function CampaignAssistant() {
             <button className="btn btn-primary" style={{ flex: 1, fontSize: 12, justifyContent: 'center' }}
               onClick={() => {
                 // Apply edits to campaign and trigger creation
-                const edited = { ...campaignPreview.campaign };
+                const edited = {...campaignPreview.campaign };
                 const steps = edited.sequence || edited.touchpoints || [];
                 const editedSteps = steps.map((tp, i) => ({
-                  ...tp,
+...tp,
                   subject: campaignPreview.edits?.[`tp_${i}_subject`] || tp.subject,
                   body: campaignPreview.edits?.[`tp_${i}_body`] || tp.body,
                 }));
