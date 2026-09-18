@@ -510,6 +510,172 @@ router.post('/run', async (req, res, next) => {
   }
 });
 
+// POST /api/nurture/run-scoped · Relance CADRÉE, issue du dialogue de l'assistant
+//
+// /run ci-dessus lance l'agent complet sur tous les triggers actifs : il ignore le
+// périmètre, l'angle et le mode. Tant que l'assistant exécutait sans rien demander, ça
+// n'avait aucune conséquence visible. Depuis qu'il cadre en trois questions, y router la
+// relance reviendrait à jeter les trois réponses de l'utilisateur et à envoyer autre chose
+// que ce qu'il vient de valider. D'où ce chemin séparé : une population explicite, un
+// angle transmis au rédacteur, un mode d'envoi respecté.
+const SCOPED_RUN_MAX = 25;
+const SCOPED_RUN_DEFAULT = 5;
+
+const SCOPED_POPULATIONS = {
+  // Deals ouverts sans activité depuis N jours · même base que le compte-rendu de lecture
+  // (COALESCE(last_activity_at, created_at), jamais updated_at que l'import réécrit).
+  deal_stagnant: {
+    chain: 'deal_reactivation',
+    where: `status NOT IN ('won', 'lost') AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')`,
+  },
+  inactive_contact: {
+    chain: 'deal_reactivation',
+    where: `status <> 'lost' AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')`,
+  },
+  upsell_opportunity: {
+    chain: 'auto_upsell',
+    where: `status = 'won'`,
+  },
+  churn_risk: {
+    chain: 'auto_upsell',
+    // Seuil partagé avec la file de priorités et le scoring, sinon le chat proposerait
+    // une population « à risque » différente de celle que l'app affiche.
+    where: `status = 'won' AND churn_score >= ${require('../lib/churn-scoring').AT_RISK_THRESHOLD}`,
+  },
+};
+
+router.post('/run-scoped', async (req, res, next) => {
+  try {
+    const { triggerType, angle, mode, contactIds } = req.body || {};
+    const population = SCOPED_POPULATIONS[triggerType];
+    if (!population && !Array.isArray(contactIds)) {
+      return res.status(400).json({
+        error: `triggerType must be one of: ${Object.keys(SCOPED_POPULATIONS).join(', ')} (or pass contactIds)`,
+      });
+    }
+
+    const limit = Math.min(
+      Math.max(parseInt(req.body?.limit, 10) || SCOPED_RUN_DEFAULT, 1),
+      SCOPED_RUN_MAX
+    );
+    const days = parseInt(req.body?.days, 10) || await getStagnantDays(req.user.id);
+
+    // Dédup (règle produit) : jamais deux emails au même contact à 7 jours d'intervalle,
+    // et jamais un doublon d'un email déjà en attente d'approbation.
+    const dedup = `AND NOT EXISTS (
+      SELECT 1 FROM nurture_emails ne
+      WHERE ne.user_id = o.user_id AND ne.opportunity_id = o.id
+        AND (ne.status = 'pending' OR ne.created_at > NOW() - INTERVAL '7 days')
+    )`;
+
+    let candidates;
+    if (Array.isArray(contactIds) && contactIds.length > 0) {
+      candidates = await db.query(
+        `SELECT o.id, o.name, o.company, o.email, o.deal_value, o.status FROM opportunities o
+         WHERE o.user_id = $1 AND o.id = ANY($2::uuid[]) AND o.email IS NOT NULL AND o.email <> ''
+         ${dedup}
+         ORDER BY o.deal_value DESC NULLS LAST LIMIT $3`,
+        [req.user.id, contactIds.slice(0, SCOPED_RUN_MAX), limit]
+      );
+    } else {
+      candidates = await db.query(
+        // `$2::int >= 0` est un garde-fou de typage, pas un filtre : les populations
+        // « clients » n'utilisent pas le seuil de jours, et Postgres refuse un paramètre
+        // fourni mais jamais référencé (« could not determine data type of parameter $2 »).
+        `SELECT o.id, o.name, o.company, o.email, o.deal_value, o.status FROM opportunities o
+         WHERE o.user_id = $1 AND $2::int >= 0 AND o.email IS NOT NULL AND o.email <> ''
+           AND ${population.where}
+         ${dedup}
+         ORDER BY o.deal_value DESC NULLS LAST LIMIT $3`,
+        [req.user.id, days, limit]
+      );
+    }
+
+    if (candidates.rows.length === 0) {
+      return res.json({ sent: 0, queued: 0, skipped: 0, message: 'aucun contact éligible (déjà relancé récemment, ou sans email)' });
+    }
+
+    const dealCoach = require('../lib/agents/deal-coach');
+    const upsellDetector = require('../lib/agents/upsell-detector');
+
+    let sent = 0;
+    let queued = 0;
+    const skipped = [];
+    const drafts = [];
+
+    for (const opp of candidates.rows) {
+      // Un client gagné n'est pas un deal à réactiver : le rédacteur suit le contact,
+      // pas le libellé du raccourci cliqué.
+      const useUpsell = opp.status === 'won';
+      const draft = useUpsell
+        ? await upsellDetector.draftOne(req.user.id, opp.id, { angle })
+        : await dealCoach.coachAndDraftOne(req.user.id, opp.id, { angle });
+
+      if (draft.error) {
+        skipped.push({ name: opp.name, reason: draft.error });
+        continue;
+      }
+
+      const chain = useUpsell ? 'auto_upsell' : 'deal_reactivation';
+      const inserted = await db.query(
+        `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8) RETURNING id`,
+        [
+          req.user.id, opp.id, opp.email, opp.name, draft.subject, draft.body,
+          draft.patternIds || [],
+          JSON.stringify({ chain, source: 'chat_scoped', angle: angle || null }),
+        ]
+      );
+      const emailId = inserted.rows[0].id;
+
+      // Même trace que la file de réactivation, pour que l'attribution (« Deals touchés »)
+      // et l'historique comptent aussi les relances lancées depuis le chat.
+      await db.query(
+        `INSERT INTO agent_chain_executions (user_id, chain_type, trigger_agent, trigger_data, steps_completed, result, status, nurture_email_id)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)`,
+        [
+          req.user.id, chain, useUpsell ? 'upsell_detector' : 'deal_coach',
+          JSON.stringify({ opportunityId: opp.id, source: 'chat_scoped' }), ['draft_scoped'],
+          JSON.stringify({ subject: draft.subject, contact: opp.name }), emailId,
+        ]
+      );
+
+      if (mode === 'auto') {
+        const result = await sendNurtureEmail(req.user.id, {
+          opportunityId: opp.id,
+          to: opp.email,
+          toName: opp.name,
+          subject: draft.subject,
+          body: draft.body,
+          existingEmailId: emailId,
+        });
+        await db.query(
+          `UPDATE agent_chain_executions SET status = $1, executed_at = now() WHERE nurture_email_id = $2 AND status = 'pending'`,
+          [result.success ? 'executed' : 'failed', emailId]
+        );
+        if (result.success) {
+          sent += 1;
+        } else {
+          // L'email reste en base, l'utilisateur pourra le renvoyer depuis la file.
+          skipped.push({ name: opp.name, reason: result.error || 'send_failed' });
+        }
+      } else {
+        queued += 1;
+      }
+
+      drafts.push({ contact: opp.name, company: opp.company, subject: draft.subject });
+    }
+
+    logger.info('nurture', 'Scoped run from chat', {
+      userId: req.user.id, triggerType, mode: mode || 'approval', sent, queued, skipped: skipped.length,
+    });
+
+    res.json({ sent, queued, skipped: skipped.length, skippedDetail: skipped, drafts, angle: angle || null });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/nurture/preview · Preview what would happen without sending
 router.post('/preview', async (req, res, next) => {
   try {

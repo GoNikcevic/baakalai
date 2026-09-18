@@ -143,6 +143,12 @@ export function QuickReplies({ replies, onSend, disabled }) {
   );
 }
 
+/**
+ * Actions qui ne produisent rien : la carte va chercher la donnée toute seule au montage et
+ * n'affiche aucun bouton d'exécution. Elles peuvent donc cohabiter avec des quick_replies.
+ */
+export const READ_ONLY_ACTIONS = ['lookup_client', 'list_clients'];
+
 export function InlineSuggestions({ suggestions, onSend }) {
   if (!suggestions || suggestions.length === 0) return null;
   return (
@@ -177,8 +183,13 @@ export function ChatMessage({ role, content, metadata, animate, isLast, onCreate
 
   const hasActionCard = metadata && metadata.action && ActionCardComponent;
   const quickReplies = metadata?.quick_replies;
-  // Don't show quick replies if there's already an action card with buttons (avoid duplicate CTAs)
-  const showQuickReplies = isLast && quickReplies && quickReplies.length > 0 && !hasActionCard;
+  // Don't show quick replies if there's already an action card with buttons (avoid duplicate CTAs).
+  // Les cartes en lecture seule sont exclues de cette règle : elles s'auto-exécutent et n'ont
+  // aucun CTA à elles, donc rien à dupliquer. Sans cette exception, une question de cadrage
+  // posée en même temps qu'une lecture (« voici tes 15 dormants, on part sur lesquels ? »)
+  // perdrait silencieusement ses boutons de réponse.
+  const cardHasOwnCtas = hasActionCard && !READ_ONLY_ACTIONS.includes(metadata.action);
+  const showQuickReplies = isLast && quickReplies && quickReplies.length > 0 && !cardHasOwnCtas;
 
   return (
     <div

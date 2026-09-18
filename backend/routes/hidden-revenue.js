@@ -68,6 +68,34 @@ function weekDelta(history) {
   };
 }
 
+/**
+ * Revenu réellement récupéré · le seul chiffre qui valide rétroactivement tout
+ * l'édifice.
+ *
+ * Définition volontairement stricte : un deal signé APRÈS que baakalai l'a
+ * relancé. `reactivated_at` est posé au moment de l'envoi de la relance, et on
+ * exige que la signature lui soit postérieure. Sans cette condition d'ordre, on
+ * s'attribuerait des deals que le commercial avait déjà conclus.
+ */
+async function recoveredRevenue(userId) {
+  try {
+    const r = await db.query(
+      `SELECT COUNT(*)::int AS deals,
+              COALESCE(SUM(deal_value), 0)::float AS value
+       FROM opportunities
+       WHERE user_id = $1
+         AND status = 'won'
+         AND reactivated_at IS NOT NULL
+         AND won_date IS NOT NULL
+         AND won_date > reactivated_at`,
+      [userId]
+    );
+    return { deals: r.rows[0].deals, value: Math.round(r.rows[0].value) };
+  } catch {
+    return { deals: 0, value: 0 };
+  }
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const history = await db.query(
@@ -84,6 +112,7 @@ router.get('/', async (req, res, next) => {
     res.json({
       latest: toPayload(history.rows[0]),
       delta: weekDelta(history.rows),
+      recovered: await recoveredRevenue(req.user.id),
       history: history.rows.map(r => ({
         snapshotAt: r.snapshot_at,
         hrs: r.hrs,
@@ -93,7 +122,7 @@ router.get('/', async (req, res, next) => {
   } catch (err) {
     // La migration 104 peut ne pas être jouée sur cet environnement : le front
     // doit pouvoir masquer la section plutôt que d'afficher une erreur.
-    if (err.code === '42P01') return res.json({ latest: null, delta: null, history: [] });
+    if (err.code === '42P01') return res.json({ latest: null, delta: null, recovered: { deals: 0, value: 0 }, history: [] });
     next(err);
   }
 });

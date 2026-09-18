@@ -1635,6 +1635,16 @@
     }
   },
   "hrs": {
+    "cardTitle": "Revenu dormant dans votre CRM",
+    "openDetail": "Voir le détail",
+    "recovered": "Récupéré à ce jour",
+    "recoveredSub": "{count} deals signés après relance",
+    "recoveredNone": "Aucune relance conclue pour l’instant",
+    "confidenceGap": "{count} montants encore vides",
+    "notQuantShort": "Pas encore chiffrable",
+    "trendDown": "la réserve se vide",
+    "trendUp": "la réserve se remplit",
+    "sparkCap": "Évolution du score sur les {count} dernières mesures",
     "label": "Revenu dormant récupérable",
     "to": "à",
     "rangeCap": "{count} opportunités identifiées, {qualified} de réserve qualifiée.",

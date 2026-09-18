@@ -133,8 +133,13 @@ function formatChurnFactors(raw) {
  * On-demand coaching + email draft for a SINGLE deal, combined into one Claude call
  * (used by the "Voir le mail" on-demand flow · no daily batch, no separate coach-then-draft
  * pass). Returns { opportunity, subject, body, reason, urgency } or { error }.
+ *
+ * `angle` est l'axe choisi par l'utilisateur pendant le cadrage du chat (« rappeler le
+ * dernier échange », « une nouveauté produit »...). Sans lui, la relance cadrée dans le
+ * chat repartirait sur l'angle par défaut du modèle et les questions posées ne serviraient
+ * à rien. Laissé vide, le comportement est inchangé.
  */
-async function coachAndDraftOne(userId, opportunityId) {
+async function coachAndDraftOne(userId, opportunityId, { angle } = {}) {
   const oppResult = await db.query(
     'SELECT * FROM opportunities WHERE id = $1 AND user_id = $2',
     [opportunityId, userId]
@@ -180,6 +185,7 @@ ${copyCtx ? `\nCOPY PATTERNS THAT WORK:\n${copyCtx}` : ''}
 ${patternCtx.text ? `\nMEMORY PATTERNS:\n${patternCtx.text}` : ''}
 ${timing.bestDay ? `\nBEST SEND TIMING: ${timing.bestDay}${timing.bestHour != null ? ` at ${timing.bestHour}h` : ''}` : ''}
 
+${angle ? `\nANGLE IMPOSÉ PAR L'UTILISATEUR (non négociable, construis l'email autour de ça) : ${angle}\n` : ''}
 RULES:
 - "reason" explains briefly, in French, why this deal needs reactivating now
 - Email: max 6 lines, must sound human and personal (NOT marketing)

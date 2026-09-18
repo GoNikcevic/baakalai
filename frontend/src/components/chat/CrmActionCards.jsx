@@ -132,8 +132,24 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
         endpoint = '/crm/scan/' + (metadata.provider || 'auto');
         body = {};
       } else if (actionType === 'run_nurture') {
-        endpoint = '/nurture/run';
-        body = {};
+        // Une relance cadrée dans le chat (périmètre, angle, mode) part sur le chemin qui
+        // respecte ces trois réponses. /nurture/run, lui, relance l'agent complet sur tous
+        // les triggers actifs : il ignorerait ce que l'utilisateur vient de choisir.
+        const isScoped = Boolean(metadata.limit || metadata.angle || metadata.contactIds || metadata.mode);
+        if (isScoped) {
+          endpoint = '/nurture/run-scoped';
+          body = {
+            triggerType: metadata.triggerType,
+            days: metadata.days,
+            limit: metadata.limit,
+            mode: metadata.mode,
+            angle: metadata.angle,
+            contactIds: metadata.contactIds,
+          };
+        } else {
+          endpoint = '/nurture/run';
+          body = {};
+        }
       } else if (actionType === 'import_crm') {
         endpoint = '/crm/import/' + (metadata.provider || 'auto');
         body = {};
@@ -191,6 +207,29 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
                 </div>
               )}
             </div>
+          )}
+          {/* Relance cadrée · ce qui a été préparé, contact par contact */}
+          {result?.drafts?.length > 0 && (
+            <div style={{ fontSize: 12, marginTop: 6, padding: '10px 12px', background: 'var(--bg-elevated, var(--paper-2))', borderRadius: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                {en ? 'Emails prepared' : 'Emails préparés'} ({result.drafts.length})
+              </div>
+              {result.drafts.map((d, i) => (
+                <div key={i} style={{ marginBottom: 4 }}>
+                  <strong>{d.contact}</strong>{d.company ? ` · ${d.company}` : ''} : {d.subject}
+                </div>
+              ))}
+              {result.skipped > 0 && (
+                <div style={{ color: 'var(--text-muted)', marginTop: 6 }}>
+                  {result.skipped} {en ? 'skipped (already contacted recently, or no email)' : 'ignoré(s) (déjà relancé récemment, ou sans email)'}
+                </div>
+              )}
+            </div>
+          )}
+          {result?.queued > 0 && (
+            <a href="/activation" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', display: 'inline-block', marginTop: 8 }}>
+              {en ? 'Review and approve →' : 'Relire et approuver →'}
+            </a>
           )}
           {/* Link to full analytics */}
           {(result?.score != null || result?.health?.score != null) && (
@@ -547,9 +586,12 @@ function CrmReadingSummary({ onSuggestionClick }) {
     return `${Math.round(n)} €`;
   };
 
+  // Une intention, pas un ordre : l'assistant cadre avant de rédiger (cf. la règle
+  // « CADRER AVANT DE PROPOSER » dans GENERAL_SYSTEM_RULES). Le périmètre étant déjà
+  // connu ici (un seul deal), il lui reste l'angle et le mode d'envoi à demander.
   const revivePrompt = (d) => (lang === 'en'
-    ? `Draft a follow-up for the deal "${d.name}"${d.company ? ` (${d.company})` : ''}, no activity for ${d.daysInactive} days.`
-    : `Prépare une relance pour le deal « ${d.name} »${d.company ? ` (${d.company})` : ''}, sans activité depuis ${d.daysInactive} jours.`);
+    ? `I want to revive the deal "${d.name}"${d.company ? ` (${d.company})` : ''}, no activity for ${d.daysInactive} days. Where do we start?`
+    : `Je veux relancer le deal « ${d.name} »${d.company ? ` (${d.company})` : ''}, sans activité depuis ${d.daysInactive} jours. On commence par quoi ?`);
 
   return (
     <div style={{

@@ -21,9 +21,15 @@ const ASSISTANT_TYPES = ['general', 'campaign'];
  * list_clients before it can say "you have dormant deals" wastes a round-trip on something
  * one aggregate query answers.
  *
- * Still deliberately excluded: campaigns, documents, prospect sources, memory patterns,
- * diagnostics and versions · all of them serve cold-prospecting campaign building, which
- * belongs to the other assistant.
+ * Since the framing rule (CADRER AVANT DE PROPOSER) asks the assistant to skip any question
+ * it can already answer, it also carries what makes a question skippable: the profile (tone,
+ * formality, words to avoid), the high-confidence memory patterns, and the connected
+ * mailboxes. Without them the assistant has nothing to deduce from and asks its three
+ * questions every single time, which is exactly the friction the rule exists to remove.
+ *
+ * Still deliberately excluded: campaigns, documents, prospect sources, diagnostics and
+ * versions · all of them serve cold-prospecting campaign building, which belongs to the
+ * other assistant.
  *
  * Uses getValidatedIntegrations (decrypts to confirm a real, usable connection) rather than
  * the plain access_token-exists check the prospecting assistant's context still uses below · 
@@ -36,7 +42,7 @@ async function buildGeneralContext(userId) {
   // (cf. lib/stagnation.js) : l'assistant doit annoncer le même chiffre que la file
   // de réactivation et le compte-rendu de lecture affiché juste au-dessus de lui.
   const stagnantDays = await getStagnantDays(userId);
-  const [userRow, connectedCrms, crmStats, triggers] = await Promise.all([
+  const [userRow, connectedCrms, crmStats, triggers, profile, patterns, mailboxes] = await Promise.all([
     db.query('SELECT language, settings FROM users WHERE id = $1', [userId]),
     getValidatedIntegrations(userId, CRM_PROVIDERS),
     // Stagnance sur COALESCE(last_activity_at, created_at) · jamais updated_at,
@@ -51,12 +57,20 @@ async function buildGeneralContext(userId) {
             AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')
         )::int AS dormant,
         COUNT(*) FILTER (WHERE status = 'won')::int AS clients,
-        COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS churn_risk,
+        COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= $3)::int AS churn_risk,
         COUNT(*) FILTER (WHERE email IS NULL OR email = '')::int AS missing_email
       FROM opportunities WHERE user_id = $1
-    `, [userId, stagnantDays]),
+    `, [userId, stagnantDays, require('../lib/churn-scoring').AT_RISK_THRESHOLD]),
     db.query(
       'SELECT name, trigger_type, mode, enabled FROM nurture_triggers WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10',
+      [userId]
+    ),
+    db.profiles.get(userId),
+    db.memoryPatterns.list({ limit: MAX_PATTERNS_IN_GENERAL_CONTEXT, userId }),
+    db.query(
+      `SELECT email_address, provider FROM email_accounts
+       WHERE user_id = $1 AND status = 'active'
+       ORDER BY is_default DESC, created_at ASC LIMIT 5`,
       [userId]
     ),
   ]);
@@ -78,7 +92,7 @@ async function buildGeneralContext(userId) {
       `- ${c.total || 0} contacts synchronisés`,
       `- ${c.open_deals || 0} deals ouverts, ${Math.round(c.open_value || 0)} € au total`,
       `- ${c.dormant || 0} deals dormants (aucune activité depuis plus de ${stagnantDays} jours, seuil réglé par l'utilisateur)`,
-      `- ${c.clients || 0} clients gagnés, dont ${c.churn_risk || 0} à risque de churn (score ≥ 60)`,
+      `- ${c.clients || 0} clients gagnés, dont ${c.churn_risk || 0} à risque de churn (score ≥ ${require('../lib/churn-scoring').AT_RISK_THRESHOLD})`,
       `- ${c.missing_email || 0} contacts sans email`,
     ].join('\n'));
 
@@ -98,6 +112,41 @@ async function buildGeneralContext(userId) {
     contextParts.push("CRM: Aucun CRM connecté. Toutes les actions CRM (relance, trigger, scan, import, envoi d'email) sont impossibles tant qu'il n'a pas connecté un CRM. Redirige-le vers Paramètres → Intégrations plutôt que de proposer une action qui échouera.");
   }
 
+  // Matière du cadrage · tout ce qui suit sert à NE PAS poser une question dont la réponse
+  // est déjà connue (cf. « CE QUE TU SAIS DÉJÀ, TU NE LE DEMANDES PAS » dans les règles).
+  if (profile) {
+    const prefLines = [];
+    if (profile.company) prefLines.push(`Entreprise: ${profile.company}`);
+    if (profile.sector) prefLines.push(`Secteur: ${profile.sector}`);
+    if (profile.value_prop) prefLines.push(`Proposition de valeur: ${profile.value_prop}`);
+    if (profile.default_tone) prefLines.push(`Ton habituel: ${profile.default_tone}`);
+    if (profile.default_formality) prefLines.push(`Formalité: ${profile.default_formality}`);
+    if (profile.avoid_words) prefLines.push(`Mots à éviter: ${profile.avoid_words}`);
+    if (profile.signature_phrases) prefLines.push(`Expressions signatures: ${profile.signature_phrases}`);
+    if (profile.objections) prefLines.push(`Objections fréquentes: ${profile.objections}`);
+    if (prefLines.length > 0) {
+      contextParts.push(`PRÉFÉRENCES CONNUES (ne redemande pas ce qui est ici, annonce-le et laisse un bouton pour le changer):\n${prefLines.join('\n')}`);
+    }
+  }
+
+  if (patterns.length > 0) {
+    const patternLines = patterns.map(p => {
+      const conf = p.confidence === 'Haute' ? 'HAUTE' : p.confidence === 'Moyenne' ? 'MOYENNE' : 'FAIBLE';
+      const confirmations = p.confirmations > 1 ? ` [confirmé ${p.confirmations}x]` : '';
+      return `- [${conf}] ${p.pattern}${confirmations}`;
+    });
+    contextParts.push(`CE QUE LA MÉMOIRE A APPRIS DE SES ENVOIS:\n${patternLines.join('\n')}\n\nUn pattern HAUTE confiance est une réponse déjà acquise : applique-le en l'annonçant (« je reprends l'angle qui marche chez toi »), ne le pose pas en question. Un pattern MOYENNE peut se proposer comme option dans les quick_replies.`);
+  }
+
+  const boxes = mailboxes.rows || [];
+  if (boxes.length > 1) {
+    contextParts.push(`BOÎTES EMAIL CONNECTÉES:\n${boxes.map(b => `- ${b.email_address} (${b.provider})`).join('\n')}\n\nPlusieurs expéditeurs possibles : « depuis quelle boîte ? » est une question de cadrage légitime.`);
+  } else if (boxes.length === 1) {
+    contextParts.push(`BOÎTE EMAIL CONNECTÉE: ${boxes[0].email_address} (${boxes[0].provider}). C'est le seul expéditeur possible, ne demande pas depuis quelle boîte envoyer.`);
+  } else {
+    contextParts.push("BOÎTE EMAIL: aucune boîte connectée. Aucun envoi ne partira tant qu'il n'en a pas branché une dans Paramètres → Comptes Email. Dis-le avant de cadrer une relance.");
+  }
+
   return contextParts.join('\n\n');
 }
 
@@ -106,6 +155,9 @@ const router = Router();
 // Max context sizes to bound Claude payloads
 const MAX_CAMPAIGNS_IN_CONTEXT = 20;
 const MAX_PATTERNS_IN_CONTEXT = 10;
+// Moins que pour l'assistant de prospection : ici les patterns ne servent qu'à supprimer
+// des questions de cadrage (ton, angle, timing), pas à arbitrer des variantes A/B.
+const MAX_PATTERNS_IN_GENERAL_CONTEXT = 6;
 const MAX_DIAGNOSTICS_IN_CONTEXT = 3;
 const MAX_VERSIONS_IN_CONTEXT = 5;
 // Generous limit so Claude can read full Excel/CSV tables with 50-100 rows.
@@ -384,10 +436,17 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       notifyUser(userId, 'chat:stream', { threadId, chunk });
     }, { assistantType: thread.assistant_type });
 
+    // Les règles demandent UN seul bloc JSON par réponse, mais le modèle en produit parfois
+    // deux (l'action d'un côté, les quick_replies de l'autre). Ne lire que le premier faisait
+    // disparaître les boutons de réponse sans le moindre signe : l'interface retire tous les
+    // blocs ```json de l'affichage, la question restait donc posée sans aucun moyen d'y
+    // répondre en un clic. On fusionne : la première clé rencontrée gagne.
     let metadata = null;
-    const jsonMatch = aiResponse.content.match(/```json\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      try { metadata = JSON.parse(jsonMatch[1]); } catch { /* ignore */ }
+    for (const block of aiResponse.content.matchAll(/```json\s*([\s\S]*?)```/g)) {
+      let parsed;
+      try { parsed = JSON.parse(block[1]); } catch { continue; }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+      metadata = metadata ? { ...parsed, ...metadata } : parsed;
     }
 
     const saved = await db.chatMessages.create(thread.id, 'assistant', aiResponse.content, metadata);

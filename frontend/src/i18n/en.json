@@ -1635,6 +1635,16 @@
     }
   },
   "hrs": {
+    "cardTitle": "Dormant revenue in your CRM",
+    "openDetail": "See the detail",
+    "recovered": "Recovered so far",
+    "recoveredSub": "{count} deals signed after follow-up",
+    "recoveredNone": "No follow-up closed yet",
+    "confidenceGap": "{count} amounts still empty",
+    "notQuantShort": "Not priceable yet",
+    "trendDown": "the reserve is draining",
+    "trendUp": "the reserve is filling up",
+    "sparkCap": "Score over the last {count} readings",
     "label": "Recoverable dormant revenue",
     "to": "to",
     "rangeCap": "{count} opportunities found, {qualified} of qualified reserve.",

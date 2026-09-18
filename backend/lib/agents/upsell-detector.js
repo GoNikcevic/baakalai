@@ -154,8 +154,11 @@ async function run(userId) {
  * On-demand upsell email draft for a SINGLE client (used by the "Voir le mail" on-demand
  * flow · no daily batch). Recomputes cross-sell context for just this client, then drafts
  * with one Claude call. Returns { opportunity, subject, body } or { error }.
+ *
+ * `angle` est l'axe choisi par l'utilisateur pendant le cadrage du chat. Sans lui, le
+ * modèle choisit son propre angle et la question posée n'aurait servi à rien.
  */
-async function draftOne(userId, opportunityId) {
+async function draftOne(userId, opportunityId, { angle } = {}) {
   const oppResult = await db.query(
     'SELECT * FROM opportunities WHERE id = $1 AND user_id = $2',
     [opportunityId, userId]
@@ -206,6 +209,7 @@ ${copyCtx ? `COPY PATTERNS THAT WORK:\n${copyCtx}` : ''}
 ${patternCtx.text ? `\nMEMORY PATTERNS:\n${patternCtx.text}` : ''}
 ${timing.bestDay ? `\nBEST SEND TIMING: ${timing.bestDay}${timing.bestHour != null ? ` at ${timing.bestHour}h` : ''}` : ''}
 
+${angle ? `ANGLE IMPOSÉ PAR L'UTILISATEUR (non négociable, construis l'email autour de ça) : ${angle}\n` : ''}
 RULES:
 - Max 6 lines, must sound human and personal
 - Start by acknowledging the existing relationship (they are a client)

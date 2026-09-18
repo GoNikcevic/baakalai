@@ -19,7 +19,7 @@ import { useApp } from '../context/useApp';
 import { useSocket } from '../context/SocketContext';
 import api, { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
-import { formatMarkdown, TypingIndicator, ThreadList, InlineSuggestions, ChatMessage } from '../components/chat/ChatPrimitives';
+import { formatMarkdown, TypingIndicator, ThreadList, InlineSuggestions, ChatMessage, READ_ONLY_ACTIONS } from '../components/chat/ChatPrimitives';
 import {
   SendEmailCard, CrmActionCard, CreateTriggerCard, ToggleAutopilotCard,
   ListClientsCard, SignalSearchCard, NewsletterCard, CrmReadingSummary,
@@ -420,7 +420,13 @@ export default function ChatPage() {
   }, []);
 
   const lastAssistantMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-  const inlineSuggestions = (lastAssistantMsg?.role === 'assistant' && lastAssistantMsg.metadata?.quick_replies)
+  // Repli en chips sous le fil, UNIQUEMENT quand la bulle a masqué ses quick_replies pour
+  // ne pas doubler les CTA d'une carte d'action. Sans ce garde-fou, une question de cadrage
+  // (texte + quick_replies, sans action) affichait ses boutons deux fois : une fois dans la
+  // bulle, une fois ici.
+  const lastAction = lastAssistantMsg?.metadata?.action;
+  const bubbleHidQuickReplies = Boolean(lastAction) && !READ_ONLY_ACTIONS.includes(lastAction);
+  const inlineSuggestions = (lastAssistantMsg?.role === 'assistant' && lastAssistantMsg.metadata?.quick_replies && bubbleHidQuickReplies)
     ? lastAssistantMsg.metadata.quick_replies.map(qr => typeof qr === 'string' ? qr : (qr.value || qr.label || qr))
     : [];
 

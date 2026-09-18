@@ -15,6 +15,7 @@ import { useSocket } from '../context/SocketContext';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
 import WeeklyWorkCard from '../components/WeeklyWorkCard';
+import HiddenRevenueCard from '../components/HiddenRevenueCard';
 import Icon from '../components/Icon';
 import { request } from '../services/api-client';
 import DealsTab from '../components/dashboardTabs/DealsTab';
@@ -152,6 +153,15 @@ export default function DashboardPage() {
 
       {/* Onboarding checklist for new users */}
       <OnboardingChecklist />
+
+      {/* Hidden Revenue Score. En tête de page, avant même le travail de la
+          semaine : c'est le montant que le CRM contient déjà, donc la raison
+          d'être du produit. Enfermé dans la modale de diagnostic il fallait
+          aller le chercher, et un score qu'on va chercher, personne ne le suit.
+          Se masque tout seul tant qu'aucun snapshot n'existe. */}
+      <div style={{ marginTop: 24 }}>
+        <HiddenRevenueCard onOpenDetail={() => setShowDiagnostic(true)} />
+      </div>
 
       {/* Ce que baakalai a fait depuis lundi. Au-dessus des quatre sections :
           elles disent l'état du portefeuille, ce bloc dit le travail fourni,
