@@ -213,6 +213,27 @@ async function loadWonMedians(userId, snapshotAt) {
 }
 
 /**
+ * Profil ICP de l'utilisateur · secteurs visés, taille, zones, personae.
+ *
+ * Ces champs existent depuis longtemps dans la page Profil et servent déjà au
+ * lead scoring. Le Hidden Revenue Score les relit tels quels plutôt que de
+ * redéfinir une cible de son côté : deux définitions de l'ICP dans le même
+ * produit finiraient par diverger.
+ */
+async function loadProfile(userId) {
+  try {
+    const r = await db.query(
+      `SELECT target_sectors, target_size, target_zones, persona_primary, persona_secondary
+       FROM user_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    return r.rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Engagement email par opportunité · relances restées sans réponse (180 j) et
  * réponse positive récente (90 j).
  */
@@ -259,7 +280,7 @@ async function loadEngagement(userId, snapshotAt) {
  */
 async function listDormantPipeline(userId, snapshotAt, stagnantDays) {
   const r = await db.query(
-    `SELECT id, name, company, email, status, deal_value, crm_stage, lost_reason,
+    `SELECT id, name, company, email, title, data, status, deal_value, crm_stage, lost_reason,
             created_at, email_bounced_at,
             COALESCE(last_activity_at, created_at) AS last_touch,
             COALESCE(lost_date, last_activity_at, created_at) AS closed_at
@@ -289,7 +310,7 @@ async function listDormantPipeline(userId, snapshotAt, stagnantDays) {
  */
 async function listCustomerReactivation(userId, snapshotAt) {
   const r = await db.query(
-    `SELECT id, name, company, email, status, deal_value, crm_stage, lost_reason,
+    `SELECT id, name, company, email, title, data, status, deal_value, crm_stage, lost_reason,
             created_at, email_bounced_at, won_date,
             COALESCE(last_activity_at, won_date, created_at) AS last_touch
      FROM opportunities
@@ -311,6 +332,7 @@ async function listCustomerReactivation(userId, snapshotAt) {
 module.exports = {
   loadBase,
   loadWonMedians,
+  loadProfile,
   loadEngagement,
   listDormantPipeline,
   listCustomerReactivation,

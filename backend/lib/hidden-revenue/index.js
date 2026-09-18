@@ -103,6 +103,35 @@ function reasonCodesFor(row, dimension, { estimated, engagement }) {
   return codes;
 }
 
+/**
+ * Ce compte ressemble-t-il à la cible déclarée dans le profil · true, false, ou
+ * null quand rien n'est comparable.
+ *
+ * Réutilise `computeFit` du lead scoring, appelé sans contexte de secteurs
+ * normalisés : ce chemin là est du rapprochement textuel pur, sans appel LLM,
+ * ce qui préserve la reproductibilité du score. Le chemin normalisé existe mais
+ * passe par le classifieur, donc par Claude à la première rencontre d'un
+ * libellé, ce qu'un moteur censé se refaire à la main ne peut pas se permettre.
+ *
+ * La distinction entre `false` et `null` est ce qui rend le multiplicateur
+ * honnête : décoter un compte parce qu'il ne ressemble pas à la cible n'a de
+ * sens que si on a pu comparer quelque chose. Un CRM sans secteur ni intitulé
+ * de poste renvoie null partout, et le multiplicateur ne s'applique jamais.
+ */
+function icpFitOf(row, profile) {
+  if (!profile) return null;
+  const { computeFit } = require('../contact-scoring');
+  const { score } = computeFit(row, null, profile, null);
+  if (score > 0) return true;
+
+  const comparable = Boolean(
+    (profile.target_sectors && row.data?.sector)
+    || (profile.target_size && row.company_size)
+    || ((profile.persona_primary || profile.persona_secondary) && row.title)
+  );
+  return comparable ? false : null;
+}
+
 function recommendedActionFor(row, dimension) {
   if (dimension === 'customer_reactivation') return 'reengage_customer';
   return row.status === 'lost' ? 'revive_lost_deal' : 'reactivate_deal';
@@ -113,7 +142,7 @@ function recommendedActionFor(row, dimension) {
  * dépendances (horloge, contexte appris, médianes, engagement) sont injectées,
  * ce qui la rend testable sans base.
  */
-function buildCandidate(row, dimension, { snapshotAt, ctx, medians, engagement }) {
+function buildCandidate(row, dimension, { snapshotAt, ctx, medians, engagement, profile = null }) {
   const lastTouch = row.last_touch || row.created_at;
   const daysQuiet = lastTouch
     ? Math.max(0, (new Date(snapshotAt).getTime() - new Date(lastTouch).getTime()) / DAY_MS)
@@ -121,6 +150,7 @@ function buildCandidate(row, dimension, { snapshotAt, ctx, medians, engagement }
 
   const { qualifiedValue, originalValue, estimated } = resolveValue(row, medians);
   const contactable = Boolean(row.email) && !row.email_bounced_at;
+  const icpFit = icpFitOf(row, profile);
 
   const { probability, factors } = recoveryProbability({
     daysQuiet,
@@ -130,11 +160,7 @@ function buildCandidate(row, dimension, { snapshotAt, ctx, medians, engagement }
     contactable,
     unansweredCount: engagement?.unansweredCount || 0,
     positiveReply: Boolean(engagement?.positiveReply),
-    // Le fit ICP reste non renseigné en V1 : le produit ne stocke aucune
-    // définition structurée de la cible, seulement du texte produit par
-    // l'agent ICP. Le déduire d'une sortie LLM contaminerait un moteur qui
-    // doit rester reproductible.
-    icpFit: null,
+    icpFit,
   }, ctx);
 
   return {
@@ -147,6 +173,7 @@ function buildCandidate(row, dimension, { snapshotAt, ctx, medians, engagement }
     originalValue,
     qualifiedValue,
     valueEstimated: estimated,
+    icpFit,
     recoveryProbability: probability,
     expectedValue: qualifiedValue != null ? Math.round(qualifiedValue * probability) : 0,
     reasonCodes: reasonCodesFor(row, dimension, { estimated, engagement }),
@@ -274,10 +301,11 @@ async function computeHiddenRevenue(userId, { snapshotAt = new Date(), persist =
     getLearnedContext(userId, { asOf: at }),
   ]);
 
-  const [base, medians, engagementByOpp] = await Promise.all([
+  const [base, medians, engagementByOpp, profile] = await Promise.all([
     detect.loadBase(userId, at),
     detect.loadWonMedians(userId, at),
     detect.loadEngagement(userId, at),
+    detect.loadProfile(userId),
   ]);
 
   const [dormant, reactivation] = await Promise.all([
@@ -285,7 +313,7 @@ async function computeHiddenRevenue(userId, { snapshotAt = new Date(), persist =
     detect.listCustomerReactivation(userId, at),
   ]);
 
-  const shared = { snapshotAt: at, ctx, medians, engagement: null };
+  const shared = { snapshotAt: at, ctx, medians, profile, engagement: null };
   const raw = [
     ...dormant.rows.map(row => buildCandidate(row, 'dormant_pipeline', {
       ...shared, engagement: engagementByOpp.get(row.id),
@@ -359,6 +387,15 @@ async function computeHiddenRevenue(userId, { snapshotAt = new Date(), persist =
       countWithoutValue: candidates.filter(c => c.qualifiedValue == null).length,
       countEstimatedValue: candidates.filter(c => c.valueEstimated).length,
       spread: range.spread,
+      // Combien de comptes ont réellement pu être comparés à la cible. Sans ce
+      // compteur, un multiplicateur qui ne s'applique jamais faute de secteur
+      // ou d'intitulé de poste passerait inaperçu.
+      icp: {
+        defined: Boolean(profile && (profile.target_sectors || profile.persona_primary || profile.persona_secondary)),
+        matched: candidates.filter(c => c.icpFit === true).length,
+        missed: candidates.filter(c => c.icpFit === false).length,
+        unknown: candidates.filter(c => c.icpFit == null).length,
+      },
       // Vrai si une dimension a buté sur le plafond de volume : le total est
       // alors un plancher, pas un compte exact, et l'écran doit pouvoir le dire.
       truncated: dormant.truncated || reactivation.truncated,
@@ -456,6 +493,7 @@ module.exports = {
   computeHiddenRevenue,
   getLatestSnapshot,
   buildCandidate,
+  icpFitOf,
   dedupeAndCap,
   aggregate,
   accountKeyOf,

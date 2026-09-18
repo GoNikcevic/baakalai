@@ -3,7 +3,7 @@ const assert = require('node:assert');
 
 const { recoveryProbability, stageBucket, lostReasonBucket, P_MAX, P_MIN } = require('../lib/hidden-revenue/probability');
 const scoring = require('../lib/hidden-revenue/scoring');
-const { buildCandidate, dedupeAndCap, aggregate, accountKeyOf, resolveValue } = require('../lib/hidden-revenue');
+const { buildCandidate, dedupeAndCap, aggregate, accountKeyOf, resolveValue, icpFitOf } = require('../lib/hidden-revenue');
 
 const DAY_MS = 86400000;
 const SNAPSHOT = new Date('2026-09-18T09:00:00Z');
@@ -265,6 +265,66 @@ test('la clé de compte regroupe par société avant tout', () => {
 test('une valeur négative ou nulle du CRM n est jamais prise pour argent comptant', () => {
   assert.strictEqual(resolveValue({ deal_value: -5 }, medians).qualifiedValue, 20000);
   assert.strictEqual(resolveValue({ deal_value: -5 }, medians).estimated, true);
+});
+
+// ── Fit ICP ──
+
+const profile = {
+  target_sectors: 'Finance, Logistique',
+  target_size: '',
+  target_zones: 'France',
+  persona_primary: 'Directeur commercial',
+  persona_secondary: 'Responsable des ventes',
+};
+
+test('sans profil renseigné, le fit ICP ne se prononce pas', () => {
+  assert.strictEqual(icpFitOf({ data: { sector: 'Finance' }, title: 'Directeur commercial' }, null), null);
+});
+
+test('un secteur de la cible fait un fit positif', () => {
+  assert.strictEqual(icpFitOf({ data: { sector: 'Finance' } }, profile), true);
+});
+
+test('un intitulé de poste qui recoupe le persona fait un fit positif', () => {
+  assert.strictEqual(icpFitOf({ title: 'Directeur commercial adjoint' }, profile), true);
+});
+
+test('un compte comparable mais hors cible est bien un fit négatif', () => {
+  assert.strictEqual(icpFitOf({ data: { sector: 'Restauration' } }, profile), false);
+  assert.strictEqual(icpFitOf({ title: 'Stagiaire' }, profile), false);
+});
+
+test('un compte sans secteur ni intitulé ne se prononce pas, il ne se fait pas décoter', () => {
+  assert.strictEqual(icpFitOf({ company: 'Acme' }, profile), null);
+  assert.strictEqual(icpFitOf({ data: {}, title: '' }, profile), null);
+});
+
+test('le fit ICP fait varier la probabilité dans les deux sens', () => {
+  const base = { ...dormantRow, data: {}, title: null };
+  const neutral = buildCandidate(base, 'dormant_pipeline', { snapshotAt: SNAPSHOT, ctx, medians, engagement: null, profile });
+  const inIcp = buildCandidate({ ...base, data: { sector: 'Logistique' } }, 'dormant_pipeline',
+    { snapshotAt: SNAPSHOT, ctx, medians, engagement: null, profile });
+  const outIcp = buildCandidate({ ...base, data: { sector: 'Restauration' } }, 'dormant_pipeline',
+    { snapshotAt: SNAPSHOT, ctx, medians, engagement: null, profile });
+
+  assert.strictEqual(neutral.icpFit, null);
+  assert.strictEqual(inIcp.icpFit, true);
+  assert.strictEqual(outIcp.icpFit, false);
+  assert.ok(inIcp.recoveryProbability > neutral.recoveryProbability);
+  assert.ok(outIcp.recoveryProbability < neutral.recoveryProbability);
+});
+
+test('le fit ICP ne déclenche aucun appel LLM', () => {
+  // computeFit appelé sans contexte de secteurs normalisés reste du
+  // rapprochement textuel. Si ce chemin venait à passer par le classifieur,
+  // il ferait une requête et ce test lèverait au lieu de renvoyer un booléen.
+  const original = require('../api/claude').callClaude;
+  require('../api/claude').callClaude = () => { throw new Error('appel LLM interdit dans le scoring'); };
+  try {
+    assert.strictEqual(icpFitOf({ data: { sector: 'Finance' } }, profile), true);
+  } finally {
+    require('../api/claude').callClaude = original;
+  }
 });
 
 // ── Dédup et plafonnement ──
