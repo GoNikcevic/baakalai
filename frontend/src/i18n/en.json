@@ -1557,5 +1557,81 @@
     "sentAt": "Sent:",
     "emptyProspection": "Active. When a cold prospect replies, AI will run the conversation here.",
     "emptyCrm": "Active. When a CRM contact replies, AI will run the conversation here."
+  },
+  "weeklyWork": {
+    "kicker": "What baakalai did",
+    "rangeCurrent": "since Monday",
+    "deltaSignals": "signals vs last week",
+    "and": "and",
+    "sentence": "This week baakalai {clauses}.",
+    "quietOne": "This week baakalai reviewed {count} account and found nothing that needs you.",
+    "quietOther": "This week baakalai reviewed {count} accounts and found nothing that needs you.",
+    "clause": {
+      "reactivatedOne": "got {count} stalled deal moving again",
+      "reactivatedOther": "got {count} stalled deals moving again",
+      "pipeline": " ({value} in pipeline touched)",
+      "repliesOne": "got {count} reply from a client who had gone quiet",
+      "repliesOther": "got {count} replies from clients who had gone quiet",
+      "churnOne": "flagged {count} client starting to drift away",
+      "churnOther": "flagged {count} clients starting to drift away"
+    },
+    "item": {
+      "reactivated": "{company}: the deal is moving again",
+      "reactivatedValue": "{value} in pipeline touched",
+      "reply": "{company} replied",
+      "churn": "{company} is now at risk of leaving",
+      "churnScore": "score {score}",
+      "unnamed": "An account"
+    },
+    "ledgerTitle": "The work behind it",
+    "ledger": {
+      "accountsReviewedOne": "{count} account reviewed",
+      "accountsReviewedOther": "{count} accounts reviewed",
+      "signalsOne": "{count} signal qualified",
+      "signalsOther": "{count} signals qualified",
+      "followUpsOne": "{count} follow-up written",
+      "followUpsOther": "{count} follow-ups written",
+      "issuesFoundOne": "{count} record flagged for cleanup",
+      "issuesFoundOther": "{count} records flagged for cleanup",
+      "analysesOne": "{count} analysis produced",
+      "analysesOther": "{count} analyses produced",
+      "total": "Work nobody had to do",
+      "watch": "Watch"
+    },
+    "days": {
+      "short": [
+        "M",
+        "T",
+        "W",
+        "T",
+        "F",
+        "S",
+        "S"
+      ],
+      "note": "Activity per day, Monday to Sunday.",
+      "noteEveryDay": "Not a single day without work since Monday."
+    },
+    "alert": {
+      "approvalsOne": "{count} follow-up is waiting for your approval",
+      "approvalsOther": "{count} follow-ups are waiting for your approval",
+      "since": "for {days} days now",
+      "noEmailOne": "{count} account has no valid email and could not be worked on",
+      "noEmailOther": "{count} accounts have no valid email and could not be worked on",
+      "approve": "Approve",
+      "fix": "Fix"
+    },
+    "duration": {
+      "hours": "{count} h",
+      "minutes": "{count} min"
+    },
+    "rates": {
+      "toggle": "How the time is counted",
+      "accountsReviewed": "Reading an account and its history",
+      "signals": "Spotting, qualifying and ranking a signal",
+      "followUps": "Writing a personalised follow-up",
+      "issuesFound": "Spotting a record that needs fixing",
+      "analyses": "Producing an analysis (deal coach, upsell, copy)",
+      "note": "Not counted: recalculated risk scores, CRM syncs and generated reports. The total shown is rounded down to the hour."
+    }
   }
 }

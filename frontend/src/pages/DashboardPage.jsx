@@ -14,6 +14,7 @@ import { useT, useI18n } from '../i18n';
 import { useSocket } from '../context/SocketContext';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
+import WeeklyWorkCard from '../components/WeeklyWorkCard';
 import Icon from '../components/Icon';
 import { request } from '../services/api-client';
 import DealsTab from '../components/dashboardTabs/DealsTab';
@@ -152,7 +153,15 @@ export default function DashboardPage() {
       {/* Onboarding checklist for new users */}
       <OnboardingChecklist />
 
+      {/* Ce que baakalai a fait depuis lundi. Au-dessus des quatre sections :
+          elles disent l'état du portefeuille, ce bloc dit le travail fourni,
+          et c'est la première chose qu'un utilisateur qui paie veut voir.
+          Se masque tout seul tant qu'aucun agent n'a rien produit. */}
       <div style={{ marginTop: 24 }}>
+        <WeeklyWorkCard />
+      </div>
+
+      <div style={{ marginTop: 4 }}>
         {/* Deals · strictly deal/pipeline indicators */}
         <Section title={t(SECTIONS[0].labelKey)} description={t(SECTIONS[0].descKey)}>
           <DealsTab crmStats={crmStats} />

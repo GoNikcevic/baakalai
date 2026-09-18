@@ -103,6 +103,16 @@ async function sendDigestToUser(userId, userRow = null) {
   await takeSnapshot(user.id).catch((err) =>
     logger.warn('crm-digest', `Forecast snapshot failed for ${user.email}: ${err.message}`));
 
+  // Photo du travail de la semaine écoulée (migration 105) · alimente l'en-tête
+  // de ce digest et l'historique du bloc « Cette semaine » du dashboard. Avant
+  // les early returns, même logique que le scan DQ : l'historique doit
+  // s'accumuler même pour un utilisateur désabonné.
+  const { snapshotWeek } = require('../../lib/activity-digest');
+  const activity = await snapshotWeek(user.id, 1).catch((err) => {
+    logger.warn('crm-digest', `Activity snapshot failed for ${user.email}: ${err.message}`);
+    return null;
+  });
+
   // Catégorie crm_digest (migration 101) · remplace l'interrupteur unique
   // profiles.weekly_report, dont les opt-outs existants ont été migrés.
   const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('../../lib/email-prefs');
@@ -126,7 +136,7 @@ async function sendDigestToUser(userId, userRow = null) {
   await sendEmail({
     to: user.email,
     subject,
-    html: buildDigestHTML(user, list, lang, dqTrend) + emailFooter(user.id, 'crm_digest', lang),
+    html: buildDigestHTML(user, list, lang, dqTrend, activity) + emailFooter(user.id, 'crm_digest', lang),
     headers: unsubscribeHeaders(user.id, 'crm_digest'),
   });
 
@@ -163,7 +173,132 @@ async function computeDqTrend(userId) {
   return { current, previous, delta: current != null && previous != null ? current - previous : null };
 }
 
-function buildDigestHTML(user, list, lang, dqTrend = null) {
+function money(value, isEN) {
+  const n = Math.round(Number(value) || 0);
+  return isEN ? `€${n.toLocaleString('en-US')}` : `${n.toLocaleString('fr-FR')} €`;
+}
+
+/** « A, B et C » sans virgule avant le dernier terme. */
+function joinClauses(clauses, isEN) {
+  if (clauses.length <= 1) return clauses.join('');
+  const last = clauses[clauses.length - 1];
+  return `${clauses.slice(0, -1).join(', ')} ${isEN ? 'and' : 'et'} ${last}`;
+}
+
+/**
+ * Phrase d'ouverture du bilan : ce que le travail a produit, pas ce qu'il a
+ * coûté. Sans résultat, on bascule sur la veille plutôt que d'afficher des
+ * zéros, qui se lisent comme une panne.
+ */
+function activitySentence(activity, isEN) {
+  const { results, counters } = activity;
+  const clauses = [];
+
+  if (results.reactivatedCount > 0) {
+    const n = results.reactivatedCount;
+    const value = results.reactivatedValue > 0
+      ? (isEN ? ` (${money(results.reactivatedValue, true)} in pipeline touched)`
+              : ` (${money(results.reactivatedValue, false)} de pipeline touché)`)
+      : '';
+    clauses.push(isEN
+      ? `got ${n} stalled deal${n > 1 ? 's' : ''} moving again${value}`
+      : `fait repartir ${n} deal${n > 1 ? 's' : ''} dormant${n > 1 ? 's' : ''}${value}`);
+  }
+
+  if (results.replies > 0) {
+    const n = results.replies;
+    clauses.push(isEN
+      ? `got ${n} repl${n > 1 ? 'ies' : 'y'} from clients who had gone quiet`
+      : `obtenu ${n} réponse${n > 1 ? 's' : ''} de clients qui ne répondaient plus`);
+  }
+
+  if (results.churnAlerts > 0) {
+    const n = results.churnAlerts;
+    clauses.push(isEN
+      ? `flagged ${n} client${n > 1 ? 's' : ''} starting to drift away`
+      : `repéré ${n} client${n > 1 ? 's' : ''} en train de décrocher`);
+  }
+
+  if (clauses.length === 0) {
+    const n = counters.accountsReviewed;
+    return isEN
+      ? `Last week baakalai reviewed ${n} account${n > 1 ? 's' : ''} and found nothing that needs you.`
+      : `La semaine dernière, baakalai a relu ${n} compte${n > 1 ? 's' : ''} sans rien trouver qui mérite votre attention.`;
+  }
+
+  return isEN
+    ? `Last week baakalai ${joinClauses(clauses, true)}.`
+    : `La semaine dernière, baakalai a ${joinClauses(clauses, false)}.`;
+}
+
+/**
+ * En-tête « le travail de la semaine ». Trois couches dans l'ordre : le
+ * résultat, le volume qui le rend crédible, puis ce qui attend l'utilisateur.
+ * La troisième n'est pas un aveu : sans elle, les deux premières ne sont
+ * qu'une vitrine, et une vitrine ne se fait croire qu'une fois.
+ */
+function activityHTML(activity, lang) {
+  if (!activity || !activity.hasWork) return '';
+  const isEN = lang === 'en';
+  const { counters, minutes, pending } = activity;
+  const { formatDuration } = require('../../lib/activity-digest');
+
+  // La phrase d'ouverture dit déjà « a relu N comptes » quand la semaine est
+  // calme : on ne répète pas la ligne juste en dessous.
+  const r = activity.results;
+  const quiet = !(r.reactivatedCount || r.replies || r.churnAlerts);
+
+  const volume = [
+    quiet ? null : { n: counters.accountsReviewed, fr: ['compte relu', 'comptes relus'], en: ['account reviewed', 'accounts reviewed'] },
+    { n: counters.signals, fr: ['signal qualifié', 'signaux qualifiés'], en: ['signal qualified', 'signals qualified'] },
+    { n: counters.followUps, fr: ['relance rédigée', 'relances rédigées'], en: ['follow-up written', 'follow-ups written'] },
+    { n: counters.issuesFound, fr: ['fiche à corriger repérée', 'fiches à corriger repérées'], en: ['record flagged for cleanup', 'records flagged for cleanup'] },
+  ].filter((v) => v && v.n > 0)
+    .map((v) => `${v.n} ${(isEN ? v.en : v.fr)[v.n > 1 ? 1 : 0]}`)
+    .join(' · ');
+
+  const waiting = [];
+  if (pending.approvals > 0) {
+    const d = pending.approvalsOldestDays;
+    waiting.push(isEN
+      ? `${pending.approvals} follow-up${pending.approvals > 1 ? 's' : ''} waiting for your approval${d > 1 ? `, the oldest for ${d} days` : ''}`
+      : `${pending.approvals} relance${pending.approvals > 1 ? 's' : ''} en attente de votre validation${d > 1 ? `, la plus ancienne depuis ${d} jours` : ''}`);
+  }
+  if (pending.noEmail > 0) {
+    waiting.push(isEN
+      ? `${pending.noEmail} account${pending.noEmail > 1 ? 's' : ''} with no valid email, impossible to work on`
+      : `${pending.noEmail} compte${pending.noEmail > 1 ? 's' : ''} sans email valide, impossible à travailler`);
+  }
+
+  return `
+  <tr><td style="padding:20px 32px 4px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f2ff;border:1px solid #e4dcff;border-radius:10px;">
+      <tr><td style="padding:16px 18px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#4E3ED1;">
+          ${isEN ? 'The work behind it' : 'Le travail de la semaine'}
+        </div>
+        <div style="font-size:15px;line-height:1.5;color:#27272a;margin-top:8px;">
+          ${esc(activitySentence(activity, isEN))}
+        </div>
+        ${volume ? `
+        <div style="font-size:12px;color:#71717a;margin-top:10px;">
+          ${esc(volume)}.
+          ${minutes >= 60
+            ? esc(isEN
+                ? `That is ${formatDuration(minutes, 'en')} of work nobody had to do.`
+                : `Soit ${formatDuration(minutes, 'fr')} de travail que personne n'a eu à faire.`)
+            : ''}
+        </div>` : ''}
+        ${waiting.length > 0 ? `
+        <div style="font-size:12px;color:#B45309;background:#fef3c7;border-radius:6px;padding:8px 10px;margin-top:12px;">
+          ${waiting.map((w) => esc(w)).join('<br>')}
+        </div>` : ''}
+      </td></tr>
+    </table>
+  </td></tr>`;
+}
+
+function buildDigestHTML(user, list, lang, dqTrend = null, activity = null) {
   const isEN = lang === 'en';
   const c = list.counts;
 
@@ -250,6 +385,9 @@ function buildDigestHTML(user, list, lang, dqTrend = null) {
     </div>
   </td></tr>
 
+  <!-- Le travail de la semaine écoulée -->
+  ${activityHTML(activity, lang)}
+
   <!-- Counts -->
   ${chips.length > 0 ? `
   <tr><td style="padding:20px 32px;">
@@ -290,4 +428,5 @@ function buildDigestHTML(user, list, lang, dqTrend = null) {
 </html>`;
 }
 
-module.exports = { runCrmDigests, sendDigestToUser };
+// buildDigestHTML est exporté pour pouvoir rendre le digest sans l'envoyer.
+module.exports = { runCrmDigests, sendDigestToUser, buildDigestHTML };

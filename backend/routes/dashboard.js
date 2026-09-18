@@ -353,4 +353,31 @@ router.get('/activation', async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/dashboard/weekly-activity · ce que baakalai a fait cette semaine.
+ *
+ * Agrégé à la volée depuis les tables des agents (lib/activity-digest.js), pas
+ * depuis les snapshots : le bloc doit répondre dès le premier jour, y compris
+ * sur staging où l'orchestrateur est coupé.
+ * `weeksAgo=1` renvoie la semaine complète précédente.
+ */
+router.get('/weekly-activity', async (req, res, next) => {
+  try {
+    const raw = parseInt(req.query.weeksAgo, 10);
+    const weeksAgo = Number.isFinite(raw) ? Math.min(12, Math.max(0, raw)) : 0;
+
+    const cacheKey = `activity:${req.user.id}:${weeksAgo}`;
+    const cached = kpiCache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const { getDashboardActivity } = require('../lib/activity-digest');
+    const activity = await getDashboardActivity(req.user.id, weeksAgo);
+
+    kpiCache.set(cacheKey, activity, 5 * 60 * 1000);
+    res.json(activity);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

@@ -1557,5 +1557,81 @@
     "sentAt": "Envoyé :",
     "emptyProspection": "Actif. Quand un prospect froid répondra, l'IA gérera la conversation ici.",
     "emptyCrm": "Actif. Quand un contact du CRM répondra, l'IA gérera la conversation ici."
+  },
+  "weeklyWork": {
+    "kicker": "Le travail de baakalai",
+    "rangeCurrent": "depuis lundi",
+    "deltaSignals": "de signaux vs la semaine dernière",
+    "and": "et",
+    "sentence": "Cette semaine, baakalai a {clauses}.",
+    "quietOne": "Cette semaine, baakalai a relu {count} compte sans rien trouver qui mérite votre attention.",
+    "quietOther": "Cette semaine, baakalai a relu {count} comptes sans rien trouver qui mérite votre attention.",
+    "clause": {
+      "reactivatedOne": "fait repartir {count} deal dormant",
+      "reactivatedOther": "fait repartir {count} deals dormants",
+      "pipeline": " ({value} de pipeline touché)",
+      "repliesOne": "obtenu {count} réponse d'un client qui ne répondait plus",
+      "repliesOther": "obtenu {count} réponses de clients qui ne répondaient plus",
+      "churnOne": "repéré {count} client en train de décrocher",
+      "churnOther": "repéré {count} clients en train de décrocher"
+    },
+    "item": {
+      "reactivated": "{company} : le deal est reparti",
+      "reactivatedValue": "{value} de pipeline touché",
+      "reply": "{company} a répondu",
+      "churn": "{company} passe en risque de départ",
+      "churnScore": "score {score}",
+      "unnamed": "Un compte"
+    },
+    "ledgerTitle": "Le travail derrière",
+    "ledger": {
+      "accountsReviewedOne": "{count} compte relu",
+      "accountsReviewedOther": "{count} comptes relus",
+      "signalsOne": "{count} signal qualifié",
+      "signalsOther": "{count} signaux qualifiés",
+      "followUpsOne": "{count} relance rédigée",
+      "followUpsOther": "{count} relances rédigées",
+      "issuesFoundOne": "{count} fiche à corriger repérée",
+      "issuesFoundOther": "{count} fiches à corriger repérées",
+      "analysesOne": "{count} analyse produite",
+      "analysesOther": "{count} analyses produites",
+      "total": "Travail évité",
+      "watch": "Veille"
+    },
+    "days": {
+      "short": [
+        "L",
+        "M",
+        "M",
+        "J",
+        "V",
+        "S",
+        "D"
+      ],
+      "note": "Activité par jour, du lundi au dimanche.",
+      "noteEveryDay": "Aucun jour sans travail depuis lundi."
+    },
+    "alert": {
+      "approvalsOne": "{count} relance attend votre validation",
+      "approvalsOther": "{count} relances attendent votre validation",
+      "since": "depuis {days} jours",
+      "noEmailOne": "{count} compte sans email valide n'a pas pu être travaillé",
+      "noEmailOther": "{count} comptes sans email valide n'ont pas pu être travaillés",
+      "approve": "Valider",
+      "fix": "Corriger"
+    },
+    "duration": {
+      "hours": "{count} h",
+      "minutes": "{count} min"
+    },
+    "rates": {
+      "toggle": "Comment on compte le temps",
+      "accountsReviewed": "Relire un compte et son historique",
+      "signals": "Détecter, qualifier et prioriser un signal",
+      "followUps": "Rédiger une relance personnalisée",
+      "issuesFound": "Repérer une fiche à corriger",
+      "analyses": "Produire une analyse (deal coach, upsell, copy)",
+      "note": "Non comptés : les scores de risque recalculés, les synchronisations CRM et les rapports générés. Le total affiché est arrondi à l'heure inférieure."
+    }
   }
 }
