@@ -1633,5 +1633,35 @@
       "analyses": "Producing an analysis (deal coach, upsell, copy)",
       "note": "Not counted: recalculated risk scores, CRM syncs and generated reports. The total shown is rounded down to the hour."
     }
+  },
+  "hrs": {
+    "label": "Recoverable dormant revenue",
+    "to": "to",
+    "rangeCap": "{count} opportunities found, {qualified} of qualified reserve.",
+    "notQuantTitle": "Your CRM cannot be priced yet.",
+    "notQuantBody": "{count} opportunities are genuinely dormant, but {missing} deals carry no amount. There is no way to say what they are worth.",
+    "score": "Score",
+    "confidence": "Confidence",
+    "notEvaluated": "n/a",
+    "note": "A high score is not a verdict on your work: it measures what is left to recover. Click a line to go and work it.",
+    "band": {
+      "low": "Little dormant revenue found",
+      "moderate": "A few pockets of opportunity",
+      "significant": "Identifiable untapped potential",
+      "high": "Large actionable pool",
+      "very_high": "Heavily under-used base"
+    },
+    "conf": {
+      "low": "rough estimate",
+      "medium": "read with caution",
+      "high": "robust estimate",
+      "very_high": "rich, consistent data"
+    },
+    "dim": {
+      "dormant_pipeline": "Dormant pipeline",
+      "customer_reactivation": "Customer reactivation",
+      "customer_expansion": "Customer expansion",
+      "lead_reactivation": "Lead reactivation"
+    }
   }
 }

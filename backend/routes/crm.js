@@ -1871,7 +1871,7 @@ router.post('/first-diagnostic', async (req, res, next) => {
     }
 
     // Run scan + churn + deal coach in parallel
-    const [scanResult, churnResult, dealCoachResult] = await Promise.all([
+    const [scanResult, churnResult, dealCoachResult, hiddenRevenue] = await Promise.all([
       // 1. CRM Health Scan
       connectedProvider
         ? require('../lib/crm-cleaning-agent').scanCRM(userId, connectedProvider).catch(err => ({ score: null, error: err.message }))
@@ -1884,6 +1884,14 @@ router.post('/first-diagnostic', async (req, res, next) => {
       opps.length >= 3
         ? require('../lib/agents/deal-coach').run(userId).catch(err => ({ suggestions: [], error: err.message }))
         : Promise.resolve({ suggestions: [], skipped: true }),
+
+      // 4. Hidden Revenue Score · le chiffre qui donne son titre au diagnostic.
+      // Calculé ici plutôt que lu en base : l'utilisateur vient de synchroniser,
+      // il doit voir l'état de son CRM maintenant et non celui d'hier matin. Le
+      // snapshot est persisté au passage, donc la courbe se nourrit aussi des
+      // diagnostics lancés à la main.
+      require('../lib/hidden-revenue').computeHiddenRevenue(userId)
+        .catch(err => ({ error: err.message })),
     ]);
 
     // 4. Quick stats from imported contacts
@@ -1939,6 +1947,23 @@ router.post('/first-diagnostic', async (req, res, next) => {
       dealCoach: {
         suggestions: (dealCoachResult.suggestions || []).slice(0, 5),
         coached: dealCoachResult.coached || 0,
+      },
+      // Le détail ligne à ligne reste côté serveur : il vit dans les écrans qui
+      // agissent dessus, et le servir une seconde fois ici créerait une
+      // deuxième vérité à maintenir.
+      hiddenRevenue: hiddenRevenue?.error ? null : {
+        hrs: hiddenRevenue.hrs,
+        scoreBand: hiddenRevenue.scoreBand,
+        confidence: hiddenRevenue.confidence,
+        confidenceBand: hiddenRevenue.confidenceBand,
+        quantifiable: hiddenRevenue.quantifiable,
+        qualifiedValue: hiddenRevenue.qualifiedValue,
+        expectedValue: hiddenRevenue.expectedValue,
+        expectedLow: hiddenRevenue.expectedLow,
+        expectedHigh: hiddenRevenue.expectedHigh,
+        opportunityCount: hiddenRevenue.opportunityCount,
+        dimensions: hiddenRevenue.dimensions,
+        context: hiddenRevenue.context,
       },
     });
   } catch (err) {

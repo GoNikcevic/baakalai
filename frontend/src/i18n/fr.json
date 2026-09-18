@@ -1633,5 +1633,35 @@
       "analyses": "Produire une analyse (deal coach, upsell, copy)",
       "note": "Non comptés : les scores de risque recalculés, les synchronisations CRM et les rapports générés. Le total affiché est arrondi à l'heure inférieure."
     }
+  },
+  "hrs": {
+    "label": "Revenu dormant récupérable",
+    "to": "à",
+    "rangeCap": "{count} opportunités identifiées, {qualified} de réserve qualifiée.",
+    "notQuantTitle": "Votre CRM ne permet pas encore de chiffrer.",
+    "notQuantBody": "{count} opportunités dorment bel et bien, mais {missing} deals n'ont aucun montant renseigné. Impossible de dire ce qu'ils valent.",
+    "score": "Score",
+    "confidence": "Confiance",
+    "notEvaluated": "n/a",
+    "note": "Un score élevé ne juge pas votre travail : il mesure ce qui reste à récupérer. Cliquez une ligne pour aller la traiter.",
+    "band": {
+      "low": "Peu de revenu dormant détecté",
+      "moderate": "Quelques poches d'opportunités",
+      "significant": "Potentiel inexploité identifiable",
+      "high": "Important réservoir actionnable",
+      "very_high": "Patrimoine fortement sous-exploité"
+    },
+    "conf": {
+      "low": "estimation indicative",
+      "medium": "à prendre avec réserve",
+      "high": "estimation robuste",
+      "very_high": "données riches et cohérentes"
+    },
+    "dim": {
+      "dormant_pipeline": "Pipeline dormant",
+      "customer_reactivation": "Réactivation client",
+      "customer_expansion": "Expansion client",
+      "lead_reactivation": "Réactivation de leads"
+    }
   }
 }
