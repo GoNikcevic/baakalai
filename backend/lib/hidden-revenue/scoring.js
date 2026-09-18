@@ -103,20 +103,40 @@ const CONFIDENCE_WEIGHTS = [
 
 /**
  * Confiance 0 à 100 + le détail de ce qui l'a fait monter ou descendre.
- * Une couverture absente compte pour 0 : ne pas savoir, c'est ne pas savoir.
+ *
+ * Un champ vide compte pour 0 : ne pas renseigner ses montants, c'est ne pas
+ * savoir ce qu'on a. Mais un champ que la surface de calcul ne peut PAS lire
+ * est autre chose, et il est retiré de la moyenne au lieu d'être compté zéro.
+ *
+ * La distinction est ce qui permet à l'audit public et à l'application
+ * d'afficher le même chiffre : l'audit lit le CRM par API sans créer de compte
+ * et n'a ni adresses email ni raisons de perte à sa disposition. Les compter
+ * zéro lui coûterait 20 points de confiance, donc une fourchette deux fois
+ * plus large que celle du même CRM vu de l'intérieur du produit.
+ *
+ * `measurable` : liste des clés réellement mesurables. Omise, tout l'est.
  */
-function confidenceScore(coverage = {}) {
+function confidenceScore(coverage = {}, { measurable = null } = {}) {
+  const applicable = measurable
+    ? CONFIDENCE_WEIGHTS.filter(w => measurable.includes(w.key))
+    : CONFIDENCE_WEIGHTS;
+  if (applicable.length === 0) return { confidence: 0, factors: [] };
+
+  const totalWeight = applicable.reduce((s, w) => s + w.weight, 0);
   const factors = [];
   let score = 0;
-  for (const { key, weight, label } of CONFIDENCE_WEIGHTS) {
+  for (const { key, weight, label } of applicable) {
     const raw = Number(coverage[key]);
     const value = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0;
-    const points = value * weight;
+    // Renormalisation sur les seuls critères mesurables, pour que le score
+    // reste sur 100 quelle que soit la surface.
+    const effectiveWeight = (weight / totalWeight) * 100;
+    const points = value * effectiveWeight;
     score += points;
     factors.push({
       key,
       label,
-      weight,
+      weight: Math.round(effectiveWeight * 10) / 10,
       coverage: Math.round(value * 100) / 100,
       points: Math.round(points * 10) / 10,
     });

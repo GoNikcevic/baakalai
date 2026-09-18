@@ -38,25 +38,42 @@
 .diag-label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
 .diag-note { font-size: 11.5px; color: var(--grey-500); line-height: 1.55; margin-top: 12px; }
 .diag-err { color: #DC2626; font-size: 13px; margin-top: 10px; }
-.diag-big { font-size: 46px; font-weight: 800; color: #DC2626; margin: 10px 0 4px; letter-spacing: -0.02em; }
 .diag-provider { display: inline-flex; gap: 8px; margin-bottom: 16px; }
 .diag-provider span { padding: 6px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; user-select: none; }
 .diag-provider.on { background: var(--primary); color: #fff; font-weight: 600; }
 .diag-provider.off { background: var(--paper-2); color: var(--grey-400); }
-.diag-gauge { position: relative; height: 14px; background: var(--paper-2); border-radius: 7px; }
-.diag-gauge.band { position: absolute; top: 0; bottom: 0; background: rgba(34,197,94,.25); border-radius: 7px; }
-.diag-gauge.you {
-      position: absolute; top: -3px; width: 14px; height: 20px; border-radius: 4px;
-      border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25);
+.diag-headline { font-size: clamp(21px, 3.2vw, 27px); font-weight: 700; letter-spacing: -0.02em; margin: 10px 0 14px; }
+.diag-range {
+      font-family: var(--font-mono); font-size: clamp(30px, 6vw, 46px); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.05; color: var(--primary); margin-bottom: 6px;
     }
-.diag-top-row {
-      display: flex; justify-content: space-between; gap: 10px; padding: 9px 0;
-      font-size: 14px; border-top: 1px solid var(--paper-3);
+.diag-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.diag-pill {
+      font-size: 12.5px; padding: 5px 11px; border-radius: 999px;
+      border: 1px solid var(--border-strong); background: var(--paper-2); color: var(--grey-700);
     }
-.diag-top-row:first-of-type { border-top: none; }
+.diag-pill-accent { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-deep); }
+.diag-bar-row {
+      display: grid; grid-template-columns: minmax(110px, 1.2fr) 3fr 54px;
+      align-items: center; gap: 12px; font-size: 13.5px; padding: 7px 0;
+    }
+.diag-bar-track { height: 7px; border-radius: 999px; background: var(--paper-2); overflow: hidden; }
+.diag-bar-fill { display: block; height: 7px; border-radius: 999px; background: var(--primary); }
+.diag-bar-val { font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+.diag-op {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      padding: 11px 0; border-top: 1px solid var(--paper-3); font-size: 14px;
+    }
+.diag-op:first-of-type { border-top: none; }
+.diag-op-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.diag-op-why { font-size: 12px; color: var(--grey-500); }
+.diag-op-amt { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
+.diag-locked {
+      border: 1px dashed var(--border-strong); border-radius: 14px;
+      padding: 18px 26px; margin-bottom: 16px; background: var(--paper-2);
+    }
 .diag-share { display: flex; gap: 8px; flex-wrap: wrap; }
 .diag-cta-card { border: 1px solid var(--primary); text-align: center; }
-.diag-proj { font-size: 30px; font-weight: 800; color: var(--primary); margin: 8px 0; }
 .diag-center { text-align: center; }
 .diag-muted { color: var(--grey-500); font-size: 13px; }
     details.diag-guide { margin-top: 10px; font-size: 13px; color: var(--grey-500); }
@@ -124,24 +141,51 @@
           errGeneric: 'Une erreur est survenue. Réessayez.',
           emptyTitle: 'Votre CRM ne contient aucun deal.',
           emptyBody: "Le diagnostic a besoin d'un historique de deals pour trouver ce qui attend une relance.",
-          openLine: '{deals} deals ouverts : {value} de pipeline',
-          dormantHeadline: 'restés sans activité depuis plus de {days} jours.',
-          dormantShare: 'Soit {pct} % de la valeur de votre pipeline ouvert.',
-          noValueHook: '+ {count} deals inactifs sans montant renseigné, impossible de savoir ce qu’ils valent.',
-          benchTitle: 'Où vous situez-vous ?',
-          benchMarket: 'PME moyenne : {low}-{high} % du pipeline sans activité',
-          benchYou: 'Vous : {pct} %',
-          healthTitle: 'Santé de votre CRM',
-          healthValue: 'Montants renseignés',
-          healthActivity: 'Activité tracée',
-          healthCompany: 'Sociétés renseignées',
-          healthRevops: 'C’est l’audit qu’un RevOps ferait. Vous n’en avez pas ? baakalai fait ce travail 24/7, en continu, c’est le carburant de la relance.',
-          topTitle: 'Les deals à relancer en premier :', topAnon: 'Deal',
-          daysInactive: '{days} j sans activité',
-          projTitle: 'Et si vous en récupériez ne serait-ce que 10 % ?',
-          projValue: '{value} récupérables',
-          projNote: 'Taux de réactivation prudent constaté sur les pipelines B2B.',
-          cta: 'baakalai peut les relancer pour vous : Rejoindre la beta',
+          headline: 'Votre CRM garde du revenu au chaud.',
+          readLine: '{deals} deals lus · {opps} opportunités récupérables identifiées',
+          rangeCap: 'Revenu attendu, récupérable. {qualified} d’opportunités qualifiées en réserve.',
+          scoreLabel: 'Hidden Revenue Score',
+          confLabel: 'Confiance',
+          band_low: 'Peu de revenu dormant détecté',
+          band_moderate: 'Quelques poches d’opportunités',
+          band_significant: 'Potentiel inexploité clairement identifiable',
+          band_high: 'Important réservoir de revenu actionnable',
+          band_very_high: 'Patrimoine commercial fortement sous-exploité',
+          conf_low: 'Estimation indicative',
+          conf_medium: 'À prendre avec réserve',
+          conf_high: 'Estimation robuste',
+          conf_very_high: 'Données riches et cohérentes',
+          scoreNote: 'Un score élevé ne juge pas votre travail : il mesure ce qui reste à récupérer.',
+          notQuantTitle: 'Votre CRM ne permet pas encore de chiffrer.',
+          notQuantBody: '{count} opportunités dorment bel et bien, mais {missing} deals n’ont aucun montant renseigné. Impossible de dire ce qu’ils valent, et c’est le premier chantier.',
+          dimsTitle: 'D’où vient l’opportunité',
+          dim_dormant_pipeline: 'Pipeline dormant',
+          dim_customer_reactivation: 'Réactivation client',
+          dim_customer_expansion: 'Expansion client',
+          dim_lead_reactivation: 'Réactivation de leads',
+          dimNotEvaluated: 'non mesuré',
+          topTitle: 'Les trois premières, nommées :', topAnon: 'Opportunité',
+          daysInactive: '{days} j sans activité',
+          reason_STALE_PROPOSAL: 'Proposition restée sans réponse',
+          reason_NO_DECISION: 'Aucune décision prise',
+          reason_BUDGET_POSTPONED: 'Budget reporté',
+          reason_LOST_TO_COMPETITOR: 'Perdu face à un concurrent',
+          reason_LOST_ON_PRICE: 'Perdu sur le prix',
+          reason_LOST_REASON_UNKNOWN: 'Perdu sans raison renseignée',
+          reason_HIGH_STAGE_LOSS: 'Arrêté après la proposition',
+          reason_DORMANT_CUSTOMER: 'Client devenu silencieux',
+          reason_LOW_DATA_QUALITY: 'Montant estimé, le CRM n’en porte aucun',
+          reason_CONTACT_STILL_ACTIVE: 'Contact encore réactif',
+          reason_HISTORICAL_ENGAGEMENT: 'Échanges passés',
+          reason_CONCENTRATION_CAPPED: 'Montant écrêté',
+          lockedTitle: '{count} autres opportunités',
+          lockedBody: 'Avec leur compte, leur montant, la raison et l’email prêt à partir.',
+          cta: 'Voir où se cache ce revenu',
+          ctaNote: 'Essai 14 jours, sans carte, puis 69 €/siège/mois',
+          noteEstimated: '{count} montants estimés sur la médiane de vos deals gagnés, faute de montant dans le CRM.',
+          noteTruncated: 'Analyse plafonnée en volume : le total affiché est un plancher.',
+          legacyTitle: 'Ce diagnostic date d’une version précédente.',
+          legacyBody: 'Relancez l’analyse, elle prend trente secondes.',
           shareTitle: 'Partagez votre diagnostic',
           copyLink: 'Copier le lien', copied: 'Copié !',
           shareLinkedin: 'Partager sur LinkedIn', downloadImg: 'Télécharger l’image',
@@ -149,10 +193,9 @@
           runYours: 'Faire le diagnostic de mon CRM',
           notFound: 'Ce diagnostic a expiré ou n’existe pas.',
           imgTagline: 'Diagnostic CRM gratuit',
-          imgHeadPct: '{pct} % de mon pipeline attend une relance',
-          imgHeadCount: '{count} deals attendent une relance dans mon CRM',
-          imgSub: '{value} sans activité depuis plus de {days} jours',
-          imgNoValue: '+ {count} deals inactifs sans montant renseigné',
+          imgHead: '{low} à {high} dorment dans mon CRM',
+          imgScore: 'Hidden Revenue Score {hrs}/100 · confiance {conf} %',
+          imgOpps: '{opps} opportunités récupérables identifiées',
         },
         en: {
           navCta: 'Join the beta',
@@ -182,24 +225,51 @@
           errGeneric: 'Something went wrong. Please try again.',
           emptyTitle: 'Your CRM has no deals.',
           emptyBody: 'The diagnostic needs deal history to find what is sleeping.',
-          openLine: '{deals} open deals: {value} in pipeline',
-          dormantHeadline: 'sleeping with no activity for {days}+ days.',
-          dormantShare: 'That is {pct}% of your open pipeline value.',
-          noValueHook: '+ {count} dormant deals with no amount set: impossible to know what they are worth.',
-          benchTitle: 'Where do you stand?',
-          benchMarket: 'Average SMB: {low}-{high}% of pipeline dormant',
-          benchYou: 'You: {pct}%',
-          healthTitle: 'Your CRM health',
-          healthValue: 'Amounts filled in',
-          healthActivity: 'Activity tracked',
-          healthCompany: 'Companies filled in',
-          healthRevops: 'This is the audit a RevOps would run. Don’t have one? baakalai does that job 24/7, continuously, it fuels the follow-ups.',
-          topTitle: 'The deals to wake up first:', topAnon: 'Deal',
+          headline: 'Your CRM is sitting on revenue.',
+          readLine: '{deals} deals read · {opps} recoverable opportunities found',
+          rangeCap: 'Expected revenue, recoverable. {qualified} of qualified opportunities in reserve.',
+          scoreLabel: 'Hidden Revenue Score',
+          confLabel: 'Confidence',
+          band_low: 'Little dormant revenue found',
+          band_moderate: 'A few pockets of opportunity',
+          band_significant: 'Clearly identifiable untapped potential',
+          band_high: 'Large pool of actionable revenue',
+          band_very_high: 'Heavily under-used commercial base',
+          conf_low: 'Rough estimate',
+          conf_medium: 'Read with caution',
+          conf_high: 'Robust estimate',
+          conf_very_high: 'Rich, consistent data',
+          scoreNote: 'A high score is not a verdict on your work: it measures what is left to recover.',
+          notQuantTitle: 'Your CRM cannot be priced yet.',
+          notQuantBody: '{count} opportunities are genuinely dormant, but {missing} deals carry no amount. There is no way to say what they are worth, and that is the first thing to fix.',
+          dimsTitle: 'Where the opportunity comes from',
+          dim_dormant_pipeline: 'Dormant pipeline',
+          dim_customer_reactivation: 'Customer reactivation',
+          dim_customer_expansion: 'Customer expansion',
+          dim_lead_reactivation: 'Lead reactivation',
+          dimNotEvaluated: 'not measured',
+          topTitle: 'The first three, named:', topAnon: 'Opportunity',
           daysInactive: '{days} days inactive',
-          projTitle: 'What if you reactivated just 10% of them?',
-          projValue: '{value} recoverable',
-          projNote: 'Conservative reactivation rate observed on B2B pipelines.',
-          cta: 'baakalai can follow them up for you: Join the beta',
+          reason_STALE_PROPOSAL: 'Proposal left unanswered',
+          reason_NO_DECISION: 'No decision made',
+          reason_BUDGET_POSTPONED: 'Budget postponed',
+          reason_LOST_TO_COMPETITOR: 'Lost to a competitor',
+          reason_LOST_ON_PRICE: 'Lost on price',
+          reason_LOST_REASON_UNKNOWN: 'Lost with no reason recorded',
+          reason_HIGH_STAGE_LOSS: 'Stopped after the proposal',
+          reason_DORMANT_CUSTOMER: 'Customer gone quiet',
+          reason_LOW_DATA_QUALITY: 'Amount estimated, the CRM carries none',
+          reason_CONTACT_STILL_ACTIVE: 'Contact still responsive',
+          reason_HISTORICAL_ENGAGEMENT: 'Past exchanges',
+          reason_CONCENTRATION_CAPPED: 'Amount capped',
+          lockedTitle: '{count} more opportunities',
+          lockedBody: 'With their account, their amount, the reason, and the email ready to send.',
+          cta: 'See where that revenue is hiding',
+          ctaNote: '14-day trial, no card, then 69 EUR per seat per month',
+          noteEstimated: '{count} amounts estimated from the median of your won deals, as the CRM carries none.',
+          noteTruncated: 'Volume capped: the total shown is a floor.',
+          legacyTitle: 'This diagnostic comes from an earlier version.',
+          legacyBody: 'Run it again, it takes thirty seconds.',
           shareTitle: 'Share your diagnostic',
           copyLink: 'Copy link', copied: 'Copied!',
           shareLinkedin: 'Share on LinkedIn', downloadImg: 'Download image',
@@ -207,10 +277,9 @@
           runYours: 'Run the diagnostic on my CRM',
           notFound: 'This diagnostic has expired or does not exist.',
           imgTagline: 'Free CRM diagnostic',
-          imgHeadPct: '{pct}% of my pipeline is asleep',
-          imgHeadCount: '{count} deals are asleep in my CRM',
-          imgSub: '{value} with no activity for {days}+ days',
-          imgNoValue: '+ {count} dormant deals with no amount set',
+          imgHead: '{low} to {high} sleeping in my CRM',
+          imgScore: 'Hidden Revenue Score {hrs}/100 · confidence {conf}%',
+          imgOpps: '{opps} recoverable opportunities found',
         },
       };
 
@@ -294,53 +363,109 @@
             });
           }
           return res.json().then(function (data) {
+            if (data.legacy) {
+              body.innerHTML = '<div class="diag-card diag-center"><div style="font-weight:600;margin-bottom:6px;">' + esc(t('legacyTitle')) + '</div>' +
+                '<div class="diag-muted" style="margin-bottom:14px;">' + esc(t('legacyBody')) + '</div>' +
+                '<a href="diagnostic.html" class="btn btn-accent">' + esc(t('runYours')) + '</a></div>';
+              return;
+            }
             state.report = data.report; state.id = data.id;
             renderReport(false);
           });
         }).catch(function () { renderForm(t('errGeneric')); });
       }
 
-      function gaugeHtml(r) {
-        var pct = r.dormant.sharePct;
-        if (pct == null) return '';
-        var over = pct > r.benchmark.high;
-        return '<div class="diag-card">' +
-          '<div style="font-weight:600;margin-bottom:12px;">' + esc(t('benchTitle')) + '</div>' +
-          '<div class="diag-gauge">' +
-            '<div class="band" style="left:' + r.benchmark.low + '%;width:' + (r.benchmark.high - r.benchmark.low) + '%;"></div>' +
-            '<div class="you" style="left:calc(' + Math.min(pct, 100) + '% - 7px);background:' + (over ? '#DC2626' : '#22c55e') + ';"></div>' +
-          '</div>' +
-          '<div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;" class="diag-muted">' +
-            '<span>' + esc(t('benchMarket', { low: r.benchmark.low, high: r.benchmark.high })) + '</span>' +
-            '<span style="font-weight:700;color:' + (over ? '#DC2626' : '#22c55e') + ';">' + esc(t('benchYou', { pct: pct })) + '</span>' +
-          '</div></div>';
-      }
+      var DIMS = ['dormant_pipeline', 'customer_reactivation', 'customer_expansion', 'lead_reactivation'];
 
-      function healthColor(score) {
-        return score >= 70 ? '#16A34A' : score >= 40 ? '#D97706' : '#DC2626';
-      }
-
-      function healthHtml(r) {
-        var h = r.health;
-        if (!h) return '';
-        function bar(label, pct) {
-          return '<div style="margin-top:10px;">' +
-            '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">' +
-              '<span>' + esc(label) + '</span><span style="font-weight:600;">' + pct + ' %</span></div>' +
-            '<div style="height:8px;background:var(--paper-2);border-radius:4px;">' +
-              '<div style="height:8px;width:' + Math.min(pct, 100) + '%;border-radius:4px;background:' + healthColor(pct) + ';"></div>' +
-            '</div></div>';
-        }
+      function scoreCard(r) {
+        var range = money(r.expectedLow) + ' ' + (lang === 'fr' ? 'à' : 'to') + ' ' + money(r.expectedHigh);
         return '<div class="diag-card">' +
-          '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
-            '<div style="font-weight:600;">' + esc(t('healthTitle')) + '</div>' +
-            '<div style="font-size:26px;font-weight:800;color:' + healthColor(h.score) + ';">' + h.score + '<span style="font-size:14px;color:var(--grey-500);font-weight:400;">/100</span></div>' +
+          '<div class="diag-muted" style="font-size:13px;">' +
+            esc(t('readLine', { deals: r.context.dealsRead, opps: r.opportunityCount })) + '</div>' +
+          '<div class="diag-headline">' + esc(t('headline')) + '</div>' +
+          '<div class="diag-range">' + esc(range) + '</div>' +
+          '<div class="diag-muted" style="font-size:13px;">' +
+            esc(t('rangeCap', { qualified: money(r.qualifiedValue) })) + '</div>' +
+          '<div class="diag-pills">' +
+            '<span class="diag-pill diag-pill-accent">' + esc(t('scoreLabel')) + ' <b>' + r.hrs + ' / 100</b></span>' +
+            '<span class="diag-pill">' + esc(t('band_' + r.scoreBand)) + '</span>' +
+            '<span class="diag-pill">' + esc(t('confLabel')) + ' <b>' + r.confidence + ' %</b> · ' + esc(t('conf_' + r.confidenceBand)) + '</span>' +
           '</div>' +
-          bar(t('healthValue'), h.pctValue) +
-          bar(t('healthActivity'), h.pctActivity) +
-          bar(t('healthCompany'), h.pctCompany) +
-          '<div class="diag-note" style="margin-top:14px;">' + esc(t('healthRevops')) + '</div>' +
+          '<div class="diag-note" style="margin-top:12px;">' + esc(t('scoreNote')) + '</div>' +
         '</div>';
+      }
+
+      function notQuantifiableCard(r) {
+        return '<div class="diag-card">' +
+          '<div class="diag-muted" style="font-size:13px;">' +
+            esc(t('readLine', { deals: r.context.dealsRead, opps: r.opportunityCount })) + '</div>' +
+          '<div class="diag-headline">' + esc(t('notQuantTitle')) + '</div>' +
+          '<div style="font-size:15px;margin-top:8px;">' +
+            esc(t('notQuantBody', { count: r.opportunityCount, missing: r.context.countWithoutValue })) + '</div>' +
+        '</div>';
+      }
+
+      function dimsHtml(r) {
+        var rows = DIMS.map(function (key) {
+          var d = r.dimensions[key] || { evaluated: false };
+          if (!d.evaluated) {
+            return '<div class="diag-bar-row">' +
+              '<span>' + esc(t('dim_' + key)) + '</span>' +
+              '<span class="diag-bar-track"></span>' +
+              '<span class="diag-bar-val diag-muted">' + esc(t('dimNotEvaluated')) + '</span>' +
+            '</div>';
+          }
+          return '<div class="diag-bar-row">' +
+            '<span>' + esc(t('dim_' + key)) + '</span>' +
+            '<span class="diag-bar-track"><span class="diag-bar-fill" style="width:' + Math.min(d.subScore, 100) + '%;"></span></span>' +
+            '<span class="diag-bar-val">' + d.subScore + '</span>' +
+          '</div>';
+        }).join('');
+        return '<div class="diag-card">' +
+          '<div style="font-weight:600;margin-bottom:12px;">' + esc(t('dimsTitle')) + '</div>' + rows +
+        '</div>';
+      }
+
+      function reasonLabel(code) {
+        var key = 'reason_' + code;
+        var label = t(key);
+        return label === key ? '' : label;
+      }
+
+      function topHtml(r) {
+        if (!r.top || !r.top.length) return '';
+        var rows = r.top.map(function (o) {
+          var reasons = (o.reasonCodes || []).map(reasonLabel).filter(Boolean).join(' · ');
+          var who = o.company
+            ? '<strong>' + esc(o.company) + '</strong>' + (o.name ? ' · ' + esc(o.name) : '')
+            : '<strong>' + esc(t('topAnon')) + '</strong>';
+          return '<div class="diag-op">' +
+            '<span class="diag-op-who">' + who +
+              '<span class="diag-op-why">' + esc(t('daysInactive', { days: o.daysInactive })) +
+                (reasons ? ' · ' + esc(reasons) : '') + '</span>' +
+            '</span>' +
+            '<span class="diag-op-amt">' + esc(money(o.expectedValue)) + '</span>' +
+          '</div>';
+        }).join('');
+        return '<div class="diag-card">' +
+          '<div style="font-weight:600;margin-bottom:10px;">' + esc(t('topTitle')) + '</div>' + rows +
+        '</div>';
+      }
+
+      function lockedHtml(r) {
+        if (!r.lockedCount) return '';
+        return '<div class="diag-locked">' +
+          '<div style="font-weight:600;">' + esc(t('lockedTitle', { count: r.lockedCount })) + '</div>' +
+          '<div class="diag-muted" style="font-size:13px;margin-top:4px;">' + esc(t('lockedBody')) + '</div>' +
+        '</div>';
+      }
+
+      function notesHtml(r) {
+        var notes = [];
+        if (r.context.countEstimatedValue) notes.push(t('noteEstimated', { count: r.context.countEstimatedValue }));
+        if (r.context.truncated) notes.push(t('noteTruncated'));
+        if (!notes.length) return '';
+        return '<div class="diag-note" style="margin-top:-4px;">' + notes.map(esc).join(' ') + '</div>';
       }
 
       function renderReport(shared) {
@@ -349,39 +474,22 @@
         var html = '';
         if (shared) html += '<div class="diag-center diag-muted" style="font-size:12px;margin-bottom:12px;">' + esc(t('sharedBadge')) + '</div>';
 
-        if (!r.totalDeals) {
+        if (!r.context || !r.context.dealsRead) {
           html += '<div class="diag-card diag-center"><div style="font-weight:600;margin-bottom:6px;">' + esc(t('emptyTitle')) + '</div>' +
                   '<div class="diag-muted">' + esc(t('emptyBody')) + '</div></div>';
           body.innerHTML = html;
           return;
         }
 
-        html += '<div class="diag-card diag-center">' +
-          '<div class="diag-muted">' + esc(t('openLine', { deals: r.openDeals, value: money(r.openValue) })) + '</div>' +
-          '<div class="diag-big">' + esc(money(r.dormant.value)) + '</div>' +
-          '<div style="font-size:15px;">' + esc(t('dormantHeadline', { days: r.dormantDays })) +
-            (r.dormant.sharePct ? ' ' + esc(t('dormantShare', { pct: r.dormant.sharePct })) : '') + '</div>' +
-          (r.dormant.noValueCount ? '<div style="margin-top:10px;font-size:13px;color:#DC2626;">' + esc(t('noValueHook', { count: r.dormant.noValueCount })) + '</div>' : '') +
-        '</div>';
+        html += r.quantifiable ? scoreCard(r) : notQuantifiableCard(r);
+        html += notesHtml(r);
+        html += dimsHtml(r);
+        html += topHtml(r);
+        html += lockedHtml(r);
 
-        html += gaugeHtml(r);
-        html += healthHtml(r);
-
-        if (r.dormant.top && r.dormant.top.length) {
-          html += '<div class="diag-card"><div style="font-weight:600;margin-bottom:10px;">' + esc(t('topTitle')) + '</div>' +
-            r.dormant.top.map(function (d) {
-              return '<div class="diag-top-row">' +
-                '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><strong>' + esc(d.name || t('topAnon')) + '</strong>' + (d.company ? ' · ' + esc(d.company) : '') + '</span>' +
-                '<span style="white-space:nowrap;" class="diag-muted">' + esc(money(d.dealValue)) + ' · ' + esc(t('daysInactive', { days: d.daysInactive })) + '</span>' +
-              '</div>';
-            }).join('') + '</div>';
-        }
-
-        html += '<div class="diag-card diag-cta-card">' +
-          '<div style="font-weight:600;">' + esc(t('projTitle')) + '</div>' +
-          '<div class="diag-proj">' + esc(t('projValue', { value: money(r.projection.value) })) + '</div>' +
-          '<div class="diag-muted" style="font-size:12px;margin-bottom:14px;">' + esc(t('projNote')) + '</div>' +
+        html += '<div class="diag-card diag-cta-card diag-center">' +
           '<a href="https://app.baakal.ai/?ref=diagnostic" class="btn btn-accent" style="padding:12px 22px;font-size:15px;">' + esc(t('cta')) + '</a>' +
+          '<div class="diag-muted" style="font-size:12px;margin-top:10px;">' + esc(t('ctaNote')) + '</div>' +
         '</div>';
 
         if (!shared && state.id) {
@@ -414,11 +522,9 @@
 
       function downloadImage(r) {
         function escXml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-        var head = r.dormant.sharePct != null
-          ? t('imgHeadPct', { pct: r.dormant.sharePct })
-          : t('imgHeadCount', { count: r.dormant.count + r.dormant.noValueCount });
-        var sub = t('imgSub', { value: money(r.dormant.value), days: r.dormantDays });
-        var noVal = r.dormant.noValueCount ? t('imgNoValue', { count: r.dormant.noValueCount }) : '';
+        var head = t('imgHead', { low: money(r.expectedLow), high: money(r.expectedHigh) });
+        var sub = t('imgScore', { hrs: r.hrs, conf: r.confidence });
+        var noVal = t('imgOpps', { opps: r.opportunityCount });
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">' +
           '<rect width="1200" height="630" fill="#FAFAF9"/>' +
           '<rect width="1200" height="8" fill="#6E57FA"/>' +
@@ -426,7 +532,6 @@
           '<text x="80" y="260" font-family="Arial, sans-serif" font-size="84" font-weight="bold" fill="#1a1a1a">' + escXml(head) + '</text>' +
           '<text x="80" y="340" font-family="Arial, sans-serif" font-size="40" fill="#444">' + escXml(sub) + '</text>' +
           (noVal ? '<text x="80" y="410" font-family="Arial, sans-serif" font-size="32" fill="#DC2626">' + escXml(noVal) + '</text>' : '') +
-          (r.health ? '<text x="80" y="475" font-family="Arial, sans-serif" font-size="32" fill="#666">' + escXml(t('healthTitle') + ' : ' + r.health.score + '/100') + '</text>' : '') +
           '<text x="80" y="540" font-family="Arial, sans-serif" font-size="30" fill="#6E57FA" font-weight="bold">baakal.ai/diagnostic</text>' +
         '</svg>';
         var img = new Image();

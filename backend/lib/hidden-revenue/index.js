@@ -149,7 +149,14 @@ function buildCandidate(row, dimension, { snapshotAt, ctx, medians, engagement, 
     : 0;
 
   const { qualifiedValue, originalValue, estimated } = resolveValue(row, medians);
-  const contactable = Boolean(row.email) && !row.email_bounced_at;
+  // Tri-état. Une opportunité sans adresse dans notre base est réellement
+  // injoignable, et la décote est méritée. Mais une surface qui ne LIT pas les
+  // adresses (l'audit public passe par l'API du CRM sans créer de compte) doit
+  // pouvoir dire « je ne sais pas » en posant `contactable` explicitement,
+  // sinon tous ses candidats se font décoter pour une absence de champ.
+  const contactable = row.contactable !== undefined
+    ? row.contactable
+    : Boolean(row.email) && !row.email_bounced_at;
   const icpFit = icpFitOf(row, profile);
 
   const { probability, factors } = recoveryProbability({
@@ -287,6 +294,104 @@ function aggregate(candidates, revenueBase) {
 }
 
 /**
+ * Assemblage final · dédup, agrégation, score, confiance, fourchette.
+ *
+ * Partagé mot pour mot par les deux surfaces : le calcul depuis notre base
+ * (utilisateur connecté) et le calcul depuis une lecture directe du CRM
+ * (audit public, sans compte). C'est la seule façon de garantir que les deux
+ * annoncent le même chiffre. Un écart entre l'audit qui a convaincu quelqu'un
+ * et l'application qu'il découvre juste après détruirait la confiance au pire
+ * moment possible.
+ */
+function assemble(raw, {
+  snapshotAt, ctx, base, medians, profile = null,
+  measurableConfidence = null, truncated = false, extraContext = {},
+}) {
+  const at = new Date(snapshotAt);
+  const { candidates, duplicatesDropped, accountCount, cappedAccounts, topAccountShare } = dedupeAndCap(raw);
+
+  // Base de revenu : le volume d'affaires que le CRM porte sur la fenêtre
+  // examinée, valorisé avec la même règle que les candidats (montant du CRM,
+  // sinon médiane des gagnés). Sans ce dernier terme, un CRM dont la moitié des
+  // deals n'ont pas de montant voit son numérateur estimé et son dénominateur
+  // amputé, donc une intensité qui dépasse 100 %.
+  const revenueBase = base.openValue + base.lostValue + base.wonValue
+    + (medians.global > 0 ? base.valuelessCount * medians.global : 0);
+
+  const dimensions = aggregate(candidates, revenueBase);
+  const subScores = {};
+  for (const [dim, data] of Object.entries(dimensions)) {
+    if (data.evaluated) subScores[dim] = data.subScore;
+  }
+  const { hrs, weights } = scoring.aggregateScore(subScores);
+  const { confidence, factors: confidenceFactors } = scoring.confidenceScore(
+    base.coverage, { measurable: measurableConfidence }
+  );
+
+  const qualifiedValue = candidates.reduce((s, c) => s + (c.qualifiedValue || 0), 0);
+  const expectedValue = candidates.reduce((s, c) => s + c.expectedValue, 0);
+  const range = scoring.expectedRange(expectedValue, confidence);
+
+  const maxExpected = candidates.reduce((m, c) => Math.max(m, c.expectedValue), 0);
+  for (const c of candidates) {
+    c.priority = maxExpected > 0 ? Math.max(1, Math.round((c.expectedValue / maxExpected) * 100)) : 0;
+  }
+  candidates.sort((a, b) => b.expectedValue - a.expectedValue);
+
+  return {
+    scoreVersion: scoring.SCORE_VERSION,
+    snapshotAt: at.toISOString(),
+    hrs,
+    scoreBand: scoring.scoreBand(hrs),
+    confidence,
+    confidenceBand: scoring.confidenceBand(confidence),
+    // Sous ce seuil de confiance, la page doit parler du trou de données, pas
+    // annoncer un montant. Le front décide de l'affichage, le moteur dit ce
+    // qu'il sait.
+    quantifiable: scoring.isQuantifiable(confidence) && revenueBase > 0,
+    qualifiedValue: Math.round(qualifiedValue),
+    expectedValue: Math.round(expectedValue),
+    expectedLow: range.low,
+    expectedHigh: range.high,
+    revenueBase: Math.round(revenueBase),
+    opportunityCount: candidates.length,
+    dimensions,
+    confidenceFactors,
+    context: {
+      winRate: ctx.winRate,
+      avgCycleDays: ctx.avgCycleDays,
+      wonSample: ctx.wonSample,
+      crmContacts: base.total,
+      historyMonths: base.historyMonths,
+      openValue: Math.round(base.openValue),
+      wonValue12m: Math.round(base.wonValue12m),
+      dimensionWeights: weights,
+      accountCount,
+      duplicatesDropped,
+      cappedAccounts,
+      topAccountShare,
+      countWithoutValue: candidates.filter(c => c.qualifiedValue == null).length,
+      countEstimatedValue: candidates.filter(c => c.valueEstimated).length,
+      spread: range.spread,
+      // Combien de comptes ont réellement pu être comparés à la cible. Sans ce
+      // compteur, un multiplicateur qui ne s'applique jamais faute de secteur
+      // ou d'intitulé de poste passerait inaperçu.
+      icp: {
+        defined: Boolean(profile && (profile.target_sectors || profile.persona_primary || profile.persona_secondary)),
+        matched: candidates.filter(c => c.icpFit === true).length,
+        missed: candidates.filter(c => c.icpFit === false).length,
+        unknown: candidates.filter(c => c.icpFit == null).length,
+      },
+      // Vrai si une dimension a buté sur le plafond de volume : le total est
+      // alors un plancher, pas un compte exact, et l'écran doit pouvoir le dire.
+      truncated,
+      ...extraContext,
+    },
+    candidates,
+  };
+}
+
+/**
  * Calcul complet pour un utilisateur.
  *
  * `snapshotAt` gèle l'horloge : passer une date permet de rejouer exactement un
@@ -323,85 +428,11 @@ async function computeHiddenRevenue(userId, { snapshotAt = new Date(), persist =
     })),
   ];
 
-  const { candidates, duplicatesDropped, accountCount, cappedAccounts, topAccountShare } = dedupeAndCap(raw);
-
-  // Base de revenu : le volume d'affaires que le CRM porte sur la fenêtre
-  // examinée, valorisé avec la même règle que les candidats (montant du CRM,
-  // sinon médiane des gagnés). Sans ce dernier terme, un CRM dont la moitié des
-  // deals n'ont pas de montant voit son numérateur estimé et son dénominateur
-  // amputé, donc une intensité qui dépasse 100 %.
-  const revenueBase = base.openValue + base.lostValue + base.wonValue
-    + (medians.global > 0 ? base.valuelessCount * medians.global : 0);
-
-  const dimensions = aggregate(candidates, revenueBase);
-  const subScores = {};
-  for (const [dim, data] of Object.entries(dimensions)) {
-    if (data.evaluated) subScores[dim] = data.subScore;
-  }
-  const { hrs, weights } = scoring.aggregateScore(subScores);
-  const { confidence, factors: confidenceFactors } = scoring.confidenceScore(base.coverage);
-
-  const qualifiedValue = candidates.reduce((s, c) => s + (c.qualifiedValue || 0), 0);
-  const expectedValue = candidates.reduce((s, c) => s + c.expectedValue, 0);
-  const range = scoring.expectedRange(expectedValue, confidence);
-
-  const maxExpected = candidates.reduce((m, c) => Math.max(m, c.expectedValue), 0);
-  for (const c of candidates) {
-    c.priority = maxExpected > 0 ? Math.max(1, Math.round((c.expectedValue / maxExpected) * 100)) : 0;
-  }
-  candidates.sort((a, b) => b.expectedValue - a.expectedValue);
-
-  const result = {
-    scoreVersion: scoring.SCORE_VERSION,
-    snapshotAt: at.toISOString(),
-    hrs,
-    scoreBand: scoring.scoreBand(hrs),
-    confidence,
-    confidenceBand: scoring.confidenceBand(confidence),
-    // Sous ce seuil de confiance, la page doit parler du trou de données, pas
-    // annoncer un montant. Le front décide de l'affichage, le moteur dit ce
-    // qu'il sait.
-    quantifiable: scoring.isQuantifiable(confidence) && revenueBase > 0,
-    qualifiedValue: Math.round(qualifiedValue),
-    expectedValue: Math.round(expectedValue),
-    expectedLow: range.low,
-    expectedHigh: range.high,
-    revenueBase: Math.round(revenueBase),
-    opportunityCount: candidates.length,
-    dimensions,
-    confidenceFactors,
-    context: {
-      winRate: ctx.winRate,
-      avgCycleDays: ctx.avgCycleDays,
-      wonSample: ctx.wonSample,
-      stagnantDays,
-      crmContacts: base.total,
-      historyMonths: base.historyMonths,
-      openValue: Math.round(base.openValue),
-      wonValue12m: Math.round(base.wonValue12m),
-      dimensionWeights: weights,
-      accountCount,
-      duplicatesDropped,
-      cappedAccounts,
-      topAccountShare,
-      countWithoutValue: candidates.filter(c => c.qualifiedValue == null).length,
-      countEstimatedValue: candidates.filter(c => c.valueEstimated).length,
-      spread: range.spread,
-      // Combien de comptes ont réellement pu être comparés à la cible. Sans ce
-      // compteur, un multiplicateur qui ne s'applique jamais faute de secteur
-      // ou d'intitulé de poste passerait inaperçu.
-      icp: {
-        defined: Boolean(profile && (profile.target_sectors || profile.persona_primary || profile.persona_secondary)),
-        matched: candidates.filter(c => c.icpFit === true).length,
-        missed: candidates.filter(c => c.icpFit === false).length,
-        unknown: candidates.filter(c => c.icpFit == null).length,
-      },
-      // Vrai si une dimension a buté sur le plafond de volume : le total est
-      // alors un plancher, pas un compte exact, et l'écran doit pouvoir le dire.
-      truncated: dormant.truncated || reactivation.truncated,
-    },
-    candidates,
-  };
+  const result = assemble(raw, {
+    snapshotAt: at, ctx, base, medians, profile,
+    truncated: dormant.truncated || reactivation.truncated,
+    extraContext: { stagnantDays, surface: 'app' },
+  });
 
   if (persist) {
     try {
@@ -492,6 +523,7 @@ async function getLatestSnapshot(userId) {
 module.exports = {
   computeHiddenRevenue,
   getLatestSnapshot,
+  assemble,
   buildCandidate,
   icpFitOf,
   dedupeAndCap,
