@@ -314,12 +314,12 @@
     "templateMultiDesc": "Email + LinkedIn alternés sur la même cible",
     "templateBreakup": "Dernière relance",
     "templateBreakupDesc": "Email de clôture pour les prospects restés silencieux",
-    "templateDormantPrompt": "Montre-moi mes deals dormants, priorisés par valeur, et propose-moi une relance personnalisée pour les trois plus importants.",
-    "templateReactivationPrompt": "Quels clients n'ont pas été contactés depuis plus de 3 mois ? Propose-moi une relance chaleureuse pour reprendre contact, et un trigger pour automatiser ça à l'avenir.",
-    "templateUpsellPrompt": "Quels clients existants pourraient bénéficier d'une offre complémentaire ou d'un upgrade ? Analyse mon CRM et propose-moi un angle d'upsell pour chacun.",
+    "templateDormantPrompt": "Je veux réactiver mes deals dormants. Dis-moi ce que tu vois, et aide-moi à choisir par où commencer.",
+    "templateReactivationPrompt": "Je veux reprendre contact avec mes clients devenus silencieux. Aide-moi à choisir lesquels et ce qu'on leur dit.",
+    "templateUpsellPrompt": "Je veux proposer une offre complémentaire à mes clients actuels. Aide-moi à repérer les bons comptes et à trouver l'angle.",
     "templateChurn": "Clients à risque",
     "templateChurnDesc": "Repérer les comptes qui décrochent avant qu’ils partent",
-    "templateChurnPrompt": "Quels clients présentent le plus fort risque de churn en ce moment ? Explique-moi pourquoi pour chacun, et propose une action concrète."
+    "templateChurnPrompt": "Je veux m'occuper de mes clients qui décrochent. Montre-moi les plus à risque, et aide-moi à décider quoi faire."
   },
   "common": {
     "tagline": "Le système IA qui exploite ton CRM",

@@ -314,12 +314,12 @@
     "templateMultiDesc": "Email and LinkedIn alternating on the same target",
     "templateBreakup": "Final follow-up",
     "templateBreakupDesc": "A closing email for prospects who stayed silent",
-    "templateDormantPrompt": "Show me my dormant deals, sorted by value, and draft a personal follow-up for the three biggest ones.",
-    "templateReactivationPrompt": "Which clients haven't been contacted in over 3 months? Draft a warm re-engagement message, and a trigger to automate this going forward.",
-    "templateUpsellPrompt": "Which existing clients could benefit from an add-on or an upgrade? Analyze my CRM and suggest an upsell angle for each.",
+    "templateDormantPrompt": "I want to reactivate my dormant deals. Tell me what you see, and help me pick where to start.",
+    "templateReactivationPrompt": "I want to get back in touch with clients who have gone quiet. Help me pick which ones, and what we tell them.",
+    "templateUpsellPrompt": "I want to offer an add-on to my current clients. Help me spot the right accounts and find the angle.",
     "templateChurn": "Clients at risk",
     "templateChurnDesc": "Spot the accounts slipping away before they leave",
-    "templateChurnPrompt": "Which clients are at highest risk of churning right now? Explain why for each one, and suggest a concrete action."
+    "templateChurnPrompt": "I want to deal with the clients who are slipping away. Show me the most at risk, and help me decide what to do."
   },
   "common": {
     "tagline": "The AI system that exploits your CRM",
