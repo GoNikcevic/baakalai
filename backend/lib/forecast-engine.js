@@ -76,9 +76,13 @@ function categorize(probability) {
  * calibration mémorisée. Calculé depuis la base (pas depuis le texte des
  * patterns · plus robuste), fallbacks neutres si l'historique manque.
  */
-async function getLearnedContext(userId) {
+async function getLearnedContext(userId, { asOf = null } = {}) {
   const ctx = { winRate: null, avgCycleDays: null, calibration: 1.0, wonSample: 0 };
   try {
+    // `asOf` gèle la fenêtre de 365 jours. Le forecast n'en a pas besoin (il
+    // raisonne toujours au présent), mais le Hidden Revenue Score doit pouvoir
+    // rejouer un score passé à l'identique : sans horloge figée, la fenêtre
+    // glisse et le taux de conversion appris change sous les pieds du calcul.
     const hist = await db.query(
       `SELECT
          count(*) FILTER (WHERE status = 'won') AS won,
@@ -86,8 +90,9 @@ async function getLearnedContext(userId) {
          AVG(EXTRACT(EPOCH FROM (won_date - created_at)) / 86400)
            FILTER (WHERE status = 'won' AND won_date IS NOT NULL AND won_date > created_at) AS avg_cycle
        FROM opportunities
-       WHERE user_id = $1 AND COALESCE(won_date, lost_date, updated_at) > now() - interval '365 days'`,
-      [userId]
+       WHERE user_id = $1
+         AND COALESCE(won_date, lost_date, updated_at) > COALESCE($2::timestamptz, now()) - interval '365 days'`,
+      [userId, asOf]
     );
     const h = hist.rows[0];
     const won = parseInt(h.won, 10) || 0;

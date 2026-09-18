@@ -234,6 +234,29 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       report.errors.push(`Lead scoring: ${err.message}`);
     }
 
+    // ── Step 5d: Hidden Revenue Score ──
+    // Placé après la synchro, le churn et le lead scoring : le score agrège ce
+    // que les étapes précédentes viennent de rafraîchir, il doit les lire à
+    // jour. L'horloge du calcul est gelée ici pour que le score soit
+    // reproductible (cf. lib/hidden-revenue/index.js).
+    try {
+      const { computeHiddenRevenue } = require('./hidden-revenue');
+      const hrs = await computeHiddenRevenue(userId, { snapshotAt: new Date() });
+      report.hiddenRevenue = {
+        hrs: hrs.hrs,
+        confidence: hrs.confidence,
+        expectedValue: hrs.expectedValue,
+        expectedLow: hrs.expectedLow,
+        expectedHigh: hrs.expectedHigh,
+        qualifiedValue: hrs.qualifiedValue,
+        opportunityCount: hrs.opportunityCount,
+        quantifiable: hrs.quantifiable,
+      };
+      logger.info('crm-agent', `Hidden revenue user ${userId}: HRS ${hrs.hrs}, ${hrs.opportunityCount} opportunités, ${hrs.expectedLow} à ${hrs.expectedHigh} EUR (confiance ${hrs.confidence})`);
+    } catch (err) {
+      report.errors.push(`Hidden revenue: ${err.message}`);
+    }
+
     // ── Step 6: AI Analysis (if significant changes) ──
     if (report.sync.imported > 0 || report.alerts.length > 0 || trigger === 'manual') {
       await stepAnalysis(userId, report, teamId);
