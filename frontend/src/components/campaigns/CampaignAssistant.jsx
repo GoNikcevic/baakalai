@@ -1386,6 +1386,23 @@ export default function CampaignAssistant() {
     }
   }, [backendAvailable, currentThreadId, loadThreads]);
 
+  // Renommage optimiste : la liste se met à jour tout de suite, le rechargement
+  // en cas d'échec remet le titre d'avant plutôt que de laisser un mensonge à
+  // l'écran.
+  const renameThread = useCallback(async (threadId, title) => {
+    if (!backendAvailable) return;
+    setThreads((prev) => prev.map((th) => (th.id === threadId ? { ...th, title } : th)));
+    try {
+      await api.request('/chat/threads/' + threadId, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      });
+    } catch (err) {
+      console.warn('Failed to rename thread:', err.message);
+      await loadThreads();
+    }
+  }, [backendAvailable, loadThreads]);
+
   /* ─── Get context suggestions ─── */
   const getSuggestions = useCallback((metadata) => {
     // Use Claude-generated quick replies if available
@@ -1862,6 +1879,7 @@ export default function CampaignAssistant() {
           currentThreadId={currentThreadId}
           onSelect={selectThread}
           onDelete={deleteThread}
+          onRename={renameThread}
           onNew={newThread}
           newLabel={lang === 'en' ? 'New campaign' : 'Nouvelle campagne'}
           emptyLabel={lang === 'en' ? 'No campaigns' : 'Aucune campagne'}

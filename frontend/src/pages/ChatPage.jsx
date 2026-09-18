@@ -336,6 +336,23 @@ export default function ChatPage() {
     }
   }, [backendAvailable, currentThreadId, loadThreads]);
 
+  // Renommage optimiste : la liste se met à jour tout de suite, le rechargement
+  // en cas d'échec remet le titre d'avant plutôt que de laisser un mensonge à
+  // l'écran.
+  const renameThread = useCallback(async (threadId, title) => {
+    if (!backendAvailable) return;
+    setThreads((prev) => prev.map((th) => (th.id === threadId ? { ...th, title } : th)));
+    try {
+      await api.request('/chat/threads/' + threadId, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      });
+    } catch (err) {
+      console.warn('Failed to rename thread:', err.message);
+      await loadThreads();
+    }
+  }, [backendAvailable, loadThreads]);
+
   const sendMessage = useCallback(async (overrideText) => {
     if (sending) return;
     const text = overrideText || inputValue.trim();
@@ -457,7 +474,7 @@ export default function ChatPage() {
             </svg>
           </button>
         </div>
-        <ThreadList threads={threads} currentThreadId={currentThreadId} onSelect={selectThread} onDelete={deleteThread} onNew={newThread} />
+        <ThreadList threads={threads} currentThreadId={currentThreadId} onSelect={selectThread} onDelete={deleteThread} onRename={renameThread} onNew={newThread} />
       </div>
 
       <div className="chat-main">

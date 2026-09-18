@@ -3,6 +3,7 @@ const db = require('../db');
 const claude = require('../api/claude');
 const { emitToThread, notifyUser } = require('../socket');
 const { sanitizeText } = require('../lib/sanitize');
+const { buildThreadTitle, MAX_LEN: TITLE_MAX_LEN } = require('../lib/chat-title');
 const { rateLimit } = require('../lib/rate-limit');
 const { getValidatedIntegrations } = require('../config');
 const { getPatternContext, getTeamId } = require('../lib/email-context');
@@ -184,6 +185,32 @@ router.post('/threads', async (req, res, next) => {
     const assistantType = ASSISTANT_TYPES.includes(req.body.assistantType) ? req.body.assistantType : 'campaign';
     const thread = await db.chatThreads.create(req.body.title, req.user.id, assistantType);
     res.status(201).json(thread);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/chat/threads/:id · renommage manuel depuis la liste.
+// Le titre automatique se trompe forcément parfois (message d'ouverture vague,
+// conversation qui dérive) : c'est le filet de sécurité. Volontairement sans
+// `touch` : renommer ne doit pas faire remonter la conversation en haut de la
+// liste ni changer sa date affichée.
+router.patch('/threads/:id', async (req, res, next) => {
+  try {
+    const thread = await db.chatThreads.get(req.params.id);
+    if (!thread) return res.status(404).json({ error: 'Thread not found' });
+    if (thread.user_id && thread.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // sanitizeText renvoie son entrée telle quelle si ce n'est pas une chaîne :
+    // un titre non textuel doit sortir en 400, pas exploser sur .trim().
+    const raw = typeof req.body.title === 'string' ? req.body.title : '';
+    const title = sanitizeText(raw).trim().slice(0, TITLE_MAX_LEN * 2);
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    await db.chatThreads.rename(thread.id, title);
+    res.json({ ...thread, title });
   } catch (err) {
     next(err);
   }
@@ -462,9 +489,11 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       messageId: saved.id || Date.now(),
     });
 
+    // Le titre se fige sur le premier message. Il n'est pas recalculé ensuite :
+    // un titre qui change sous les yeux de l'utilisateur, ou qui écrase un
+    // renommage manuel, coûte plus qu'il ne rapporte.
     if (history.length <= 1) {
-      const title = trimmedMessage.slice(0, 60) + (trimmedMessage.length > 60 ? '...' : '');
-      await db.chatThreads.updateTitle(thread.id, title);
+      await db.chatThreads.updateTitle(thread.id, buildThreadTitle(trimmedMessage));
     }
 
     const responseMsg = {

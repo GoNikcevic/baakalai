@@ -267,6 +267,8 @@
     "revealBillingSummary": "{found} email{plural} found and verified · €{amount} billed"
   },
   "chat": {
+    "renameThread": "Rename conversation",
+    "renameHint": "Double-click to rename",
     "welcome": "Welcome",
     "hello": "Hello {name}!",
     "readyToProspect": "Who are we prospecting today, {name}?",

@@ -1230,6 +1230,12 @@ const chatThreads = {
     await query('UPDATE chat_threads SET title = $1, updated_at = now() WHERE id = $2', [title, id]);
   },
 
+  // Renommage manuel : le titre change, pas la place de la conversation dans la
+  // liste (triée sur updated_at) ni la date affichée à côté.
+  async rename(id, title) {
+    await query('UPDATE chat_threads SET title = $1 WHERE id = $2', [title, id]);
+  },
+
   async touch(id) {
     await query('UPDATE chat_threads SET updated_at = now() WHERE id = $1', [id]);
   },

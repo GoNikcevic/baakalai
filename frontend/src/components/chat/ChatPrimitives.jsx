@@ -7,7 +7,8 @@
    chrome is shared here, and the CRM/activation cards in components/chat/CrmActionCards.jsx.
    =============================================================================== */
 
-import { useI18n } from '../../i18n';
+import { useState, useRef, useMemo } from 'react';
+import { useI18n, useT } from '../../i18n';
 import { sanitizeHtml } from '../../services/sanitize';
 
 export function escapeHtml(str) {
@@ -71,9 +72,64 @@ export function TypingIndicator() {
   );
 }
 
-export function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew, newLabel, emptyLabel }) {
+/**
+ * Liste des conversations.
+ *
+ * Le titre tient sur deux lignes au lieu d'une : le titre automatique vient du
+ * premier message (backend lib/chat-title.js), et sur une seule ligne tronquée
+ * deux conversations différentes se ressemblaient parce qu'on ne lisait que
+ * leur amorce commune.
+ *
+ * Deux conversations lancées depuis le même bouton de suggestion portent le
+ * même titre, et aucune heuristique de texte ne peut les distinguer : l'heure
+ * s'affiche alors à côté de la date, et le double-clic renomme.
+ */
+export function ThreadList({ threads, currentThreadId, onSelect, onDelete, onRename, onNew, newLabel, emptyLabel }) {
   const { lang } = useI18n();
+  const t = useT();
   const en = lang === 'en';
+  const locale = en ? 'en-US' : 'fr-FR';
+
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState('');
+  // Fermer le champ (Échap ou Entrée) peut déclencher un blur sur un input qui
+  // disparaît : sans ce drapeau, l'annulation serait enregistrée et la
+  // validation partirait deux fois. Il est remis à zéro à chaque ouverture,
+  // sinon un blur qui ne vient jamais le laisserait armé pour la fois d'après.
+  const skipBlur = useRef(false);
+
+  // Titres en double · seul cas où la date seule ne suffit plus à s'y retrouver.
+  const duplicates = useMemo(() => {
+    const counts = new Map();
+    for (const th of threads) {
+      const key = (th.title || '').trim().toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, [threads]);
+
+  const startRename = (thread, e) => {
+    if (!onRename) return;
+    e.stopPropagation();
+    skipBlur.current = false;
+    setEditingId(thread.id);
+    setDraft(thread.title || '');
+  };
+
+  const commitRename = (thread) => {
+    if (skipBlur.current) return;
+    skipBlur.current = true;
+    const value = draft.trim();
+    setEditingId(null);
+    if (!value || value === (thread.title || '').trim()) return;
+    onRename(thread.id, value);
+  };
+
+  const cancelRename = () => {
+    skipBlur.current = true;
+    setEditingId(null);
+  };
+
   return (
     <div className="chat-thread-list" id="chatThreadList">
       <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
@@ -90,21 +146,52 @@ export function ThreadList({ threads, currentThreadId, onSelect, onDelete, onNew
           {emptyLabel || (en ? 'No conversations' : 'Aucune conversation')}
         </div>
       ) : (
-        threads.map((t) => {
-          const active = t.id === currentThreadId ? ' active' : '';
-          const date = new Date(t.updated_at || t.created_at);
-          const dateStr = date.toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
+        threads.map((thread) => {
+          const active = thread.id === currentThreadId ? ' active' : '';
+          const date = new Date(thread.updated_at || thread.created_at);
+          const dateStr = date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+          const homonym = (duplicates.get((thread.title || '').trim().toLowerCase()) || 0) > 1;
+          const timeStr = homonym
+            ? date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+            : null;
+          const editing = editingId === thread.id;
+
           return (
             <div
-              key={t.id}
+              key={thread.id}
               className={`chat-thread-item${active}`}
-              onClick={() => onSelect(t.id)}
+              onClick={() => !editing && onSelect(thread.id)}
             >
-              <span className="thread-title">{t.title}</span>
-              <span className="thread-date">{dateStr}</span>
+              <div className="thread-main">
+                {editing ? (
+                  <input
+                    className="thread-rename-input"
+                    value={draft}
+                    autoFocus
+                    maxLength={120}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={() => commitRename(thread)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename(thread);
+                      else if (e.key === 'Escape') cancelRename();
+                    }}
+                    aria-label={t('chat.renameThread')}
+                  />
+                ) : (
+                  <span
+                    className="thread-title"
+                    onDoubleClick={(e) => startRename(thread, e)}
+                    title={onRename ? `${thread.title}\n${t('chat.renameHint')}` : thread.title}
+                  >
+                    {thread.title}
+                  </span>
+                )}
+                <span className="thread-date">{timeStr ? `${dateStr} · ${timeStr}` : dateStr}</span>
+              </div>
               <button
                 className="chat-thread-delete"
-                onClick={(e) => onDelete(t.id, e)}
+                onClick={(e) => onDelete(thread.id, e)}
                 title={en ? 'Delete' : 'Supprimer'}
               >
                 x
