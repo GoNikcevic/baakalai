@@ -53,14 +53,17 @@ const fakeDb = {
       return { rows: [{ won: 18, lost: 12, avg_cycle: 88 }] };
     }
     if (/FROM memory_patterns/.test(sql)) return { rows: [] };
-    if (/AS oldest_record/.test(sql)) {
+    if (/AS oldest_event/.test(sql)) {
       return {
         rows: [{
           total: 300, with_value: 240, with_activity: 270, contactable: 255,
           won_count: 18, lost_count: 12, lost_with_reason: 9,
           zombie_open: 6, won_without_date: 3,
-          oldest_record: daysBefore(900),
-          open_value: 1170000, won_value_12m: 800000,
+          oldest_event: daysBefore(900),
+          open_value: 1170000, valueless_open: 0,
+          lost_value: 150000, valueless_lost: 0,
+          won_value: 800000, valueless_won: 0,
+          won_value_12m: 800000,
         }],
       };
     }
@@ -115,8 +118,35 @@ test('le montant attendu reste sous la réserve qualifiée', () => {
     `attendu ${result.expectedValue} devrait être sous qualifié ${result.qualifiedValue}`);
 });
 
-test('la base de revenu est le pipeline ouvert plus le gagné sur 12 mois', () => {
-  assert.strictEqual(result.revenueBase, 1970000);
+test('la base couvre les trois populations où les candidats sont pris', () => {
+  // Ouvertes 1 170 000 + perdues 24 mois 150 000 + gagnées 24 mois 800 000.
+  // Sans les perdues et les gagnées, l'intensité dépasserait 100 % dès qu'un
+  // deal perdu ou un client dormant entre dans le numérateur.
+  assert.strictEqual(result.revenueBase, 2120000);
+});
+
+test('les lignes sans montant gonflent aussi le dénominateur', async () => {
+  const original = fakeDb.query;
+  fakeDb.query = async (sql, params) => {
+    if (/AS oldest_event/.test(sql)) {
+      const r = await original.call(fakeDb, sql, params);
+      return { rows: [{ ...r.rows[0], valueless_open: 10 }] };
+    }
+    return original.call(fakeDb, sql, params);
+  };
+  try {
+    const r = await computeHiddenRevenue('user-1', { snapshotAt: SNAPSHOT, persist: false });
+    // 10 lignes sans montant valorisées à la médiane globale des gagnés (20 000).
+    assert.strictEqual(r.revenueBase, 2120000 + 200000);
+  } finally {
+    fakeDb.query = original;
+  }
+});
+
+test('l intensité ne peut jamais dépasser 100 pour cent', () => {
+  for (const d of Object.values(result.dimensions)) {
+    if (d.evaluated) assert.ok(d.intensity <= 1, `intensité hors bornes : ${d.intensity}`);
+  }
 });
 
 test('seules les dimensions de la V1 sont évaluées', () => {

@@ -55,8 +55,22 @@ function capRows(rows, source) {
 
 /**
  * Base de revenu et couvertures de données, en une passe.
- * La base de revenu (pipeline ouvert + gagné sur 12 mois) est le dénominateur
- * des intensités : elle répond à « dormant par rapport à quoi ».
+ *
+ * La base répond à « dormant par rapport à quoi ». Elle doit couvrir
+ * exactement les populations où les candidats sont pris, sinon l'intensité
+ * n'est plus une part de quoi que ce soit : mesuré sur le CRM de staging, une
+ * base limitée au pipeline ouvert donnait 102 % d'intensité, donc un
+ * sous-score collé à 100 pour un CRM tout à fait ordinaire. Les deals perdus
+ * et les clients gagnés comptent dans les candidats, ils doivent compter dans
+ * le dénominateur.
+ *
+ * Les trois populations partagent la fenêtre et l'expression de date utilisées
+ * par les détecteurs plus bas, pour que chaque candidat soit garanti dans la
+ * base : ouvertes (sans limite d'âge), perdues et gagnées sur 24 mois.
+ *
+ * `valueless*` compte les lignes sans montant : l'appelant leur applique la
+ * médiane des gagnés, la même règle que pour les candidats, pour que
+ * numérateur et dénominateur parlent de la même monnaie.
  */
 async function loadBase(userId, snapshotAt) {
   const r = await db.query(
@@ -70,8 +84,36 @@ async function loadBase(userId, snapshotAt) {
        COUNT(*) FILTER (WHERE status = 'lost' AND lost_reason IS NOT NULL AND lost_reason <> '')::int AS lost_with_reason,
        COUNT(*) FILTER (WHERE status NOT IN ('won', 'lost') AND created_at < $2::timestamptz - interval '3 years')::int AS zombie_open,
        COUNT(*) FILTER (WHERE status = 'won' AND won_date IS NULL)::int AS won_without_date,
-       MIN(created_at) AS oldest_record,
+
+       -- Ancienneté mesurée sur les dates métier du CRM, jamais sur created_at
+       -- seul : celui-ci porte la date d'IMPORT, si bien qu'un CRM de dix ans
+       -- tout juste connecté déclarait 0,1 mois d'historique et perdait
+       -- d'office les 15 points de profondeur.
+       MIN(COALESCE(won_date, lost_date, last_activity_at, created_at)) AS oldest_event,
+
        COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0)::float AS open_value,
+       COUNT(*) FILTER (WHERE status NOT IN ('won', 'lost') AND (deal_value IS NULL OR deal_value <= 0))::int AS valueless_open,
+
+       COALESCE(SUM(deal_value) FILTER (
+         WHERE status = 'lost'
+           AND COALESCE(lost_date, last_activity_at, created_at) > $2::timestamptz - interval '${LOST_LOOKBACK_MONTHS} months'
+       ), 0)::float AS lost_value,
+       COUNT(*) FILTER (
+         WHERE status = 'lost'
+           AND COALESCE(lost_date, last_activity_at, created_at) > $2::timestamptz - interval '${LOST_LOOKBACK_MONTHS} months'
+           AND (deal_value IS NULL OR deal_value <= 0)
+       )::int AS valueless_lost,
+
+       COALESCE(SUM(deal_value) FILTER (
+         WHERE status = 'won'
+           AND COALESCE(won_date, last_activity_at, created_at) > $2::timestamptz - interval '${LOST_LOOKBACK_MONTHS} months'
+       ), 0)::float AS won_value,
+       COUNT(*) FILTER (
+         WHERE status = 'won'
+           AND COALESCE(won_date, last_activity_at, created_at) > $2::timestamptz - interval '${LOST_LOOKBACK_MONTHS} months'
+           AND (deal_value IS NULL OR deal_value <= 0)
+       )::int AS valueless_won,
+
        COALESCE(SUM(deal_value) FILTER (
          WHERE status = 'won'
            AND COALESCE(won_date, last_activity_at, created_at) > $2::timestamptz - interval '365 days'
@@ -86,15 +128,17 @@ async function loadBase(userId, snapshotAt) {
   const closed = (row.won_count || 0) + (row.lost_count || 0);
   const ratio = (n) => (total > 0 ? n / total : 0);
 
-  const historyMonths = row.oldest_record
-    ? (new Date(snapshotAt).getTime() - new Date(row.oldest_record).getTime()) / DAY_MS / MONTH_DAYS
+  const historyMonths = row.oldest_event
+    ? (new Date(snapshotAt).getTime() - new Date(row.oldest_event).getTime()) / DAY_MS / MONTH_DAYS
     : 0;
 
   return {
     total,
     openValue: row.open_value || 0,
+    lostValue: row.lost_value || 0,
+    wonValue: row.won_value || 0,
     wonValue12m: row.won_value_12m || 0,
-    revenueBase: (row.open_value || 0) + (row.won_value_12m || 0),
+    valuelessCount: (row.valueless_open || 0) + (row.valueless_lost || 0) + (row.valueless_won || 0),
     wonCount: row.won_count || 0,
     lostCount: row.lost_count || 0,
     historyMonths: Math.round(historyMonths * 10) / 10,
@@ -252,6 +296,11 @@ async function listCustomerReactivation(userId, snapshotAt) {
      WHERE user_id = $1 AND ${CRM_CONTACT_SQL}
        AND status = 'won'
        AND COALESCE(last_activity_at, won_date, created_at) < $2::timestamptz - interval '${SILENT_CLIENT_DAYS} days'
+       -- Même fenêtre et même expression de date que la population gagnée de
+       -- loadBase : le candidat est ainsi toujours contenu dans le
+       -- dénominateur. Au delà de 24 mois de silence, ce n'est plus un client
+       -- dormant, c'est un ancien client.
+       AND COALESCE(won_date, last_activity_at, created_at) > $2::timestamptz - interval '${LOST_LOOKBACK_MONTHS} months'
      ORDER BY deal_value DESC NULLS LAST
      LIMIT ${MAX_CANDIDATES_PER_DIMENSION + 1}`,
     [userId, snapshotAt]

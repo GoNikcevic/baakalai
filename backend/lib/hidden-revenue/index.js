@@ -69,6 +69,17 @@ function resolveValue(row, medians) {
   return { qualifiedValue: fallback, originalValue: null, estimated: true };
 }
 
+/** Un motif de perte reconnu donne son code. Une raison vide ou inconnue en
+ *  donne un aussi : toute opportunité doit porter au moins un motif traçable,
+ *  et « on ne sait pas pourquoi ce deal est mort » est une information utile,
+ *  pas un trou à laisser vide. */
+const LOST_REASON_CODES = {
+  postponed: 'BUDGET_POSTPONED',
+  no_decision: 'NO_DECISION',
+  competitor: 'LOST_TO_COMPETITOR',
+  price: 'LOST_ON_PRICE',
+};
+
 function reasonCodesFor(row, dimension, { estimated, engagement }) {
   const codes = [];
   const bucket = stageBucket(row.crm_stage);
@@ -76,8 +87,7 @@ function reasonCodesFor(row, dimension, { estimated, engagement }) {
   if (dimension === 'dormant_pipeline') {
     if (row.status === 'lost') {
       const reason = lostReasonBucket(row.lost_reason);
-      if (reason?.key === 'postponed') codes.push('BUDGET_POSTPONED');
-      else if (reason?.key === 'no_decision') codes.push('NO_DECISION');
+      codes.push(reason ? LOST_REASON_CODES[reason.key] : 'LOST_REASON_UNKNOWN');
       if (bucket === 'late') codes.push('HIGH_STAGE_LOSS');
     } else {
       codes.push(bucket === 'late' ? 'STALE_PROPOSAL' : 'NO_DECISION');
@@ -228,7 +238,11 @@ function aggregate(candidates, revenueBase) {
     const items = candidates.filter(c => c.dimension === dim);
     const qualifiedValue = items.reduce((s, c) => s + (c.qualifiedValue || 0), 0);
     const expectedValue = items.reduce((s, c) => s + c.expectedValue, 0);
-    const intensity = revenueBase > 0 ? qualifiedValue / revenueBase : 0;
+    // Les candidats sont contenus dans la base par construction, mais ils sont
+    // estimés à la médiane de LEUR étape quand le montant manque, là où la base
+    // applique la médiane globale. L'écart est marginal, le plafond le rend
+    // impossible à voir.
+    const intensity = revenueBase > 0 ? Math.min(1, qualifiedValue / revenueBase) : 0;
 
     dimensions[dim] = {
       evaluated: true,
@@ -283,7 +297,15 @@ async function computeHiddenRevenue(userId, { snapshotAt = new Date(), persist =
 
   const { candidates, duplicatesDropped, accountCount, cappedAccounts, topAccountShare } = dedupeAndCap(raw);
 
-  const dimensions = aggregate(candidates, base.revenueBase);
+  // Base de revenu : le volume d'affaires que le CRM porte sur la fenêtre
+  // examinée, valorisé avec la même règle que les candidats (montant du CRM,
+  // sinon médiane des gagnés). Sans ce dernier terme, un CRM dont la moitié des
+  // deals n'ont pas de montant voit son numérateur estimé et son dénominateur
+  // amputé, donc une intensité qui dépasse 100 %.
+  const revenueBase = base.openValue + base.lostValue + base.wonValue
+    + (medians.global > 0 ? base.valuelessCount * medians.global : 0);
+
+  const dimensions = aggregate(candidates, revenueBase);
   const subScores = {};
   for (const [dim, data] of Object.entries(dimensions)) {
     if (data.evaluated) subScores[dim] = data.subScore;
@@ -311,12 +333,12 @@ async function computeHiddenRevenue(userId, { snapshotAt = new Date(), persist =
     // Sous ce seuil de confiance, la page doit parler du trou de données, pas
     // annoncer un montant. Le front décide de l'affichage, le moteur dit ce
     // qu'il sait.
-    quantifiable: scoring.isQuantifiable(confidence) && base.revenueBase > 0,
+    quantifiable: scoring.isQuantifiable(confidence) && revenueBase > 0,
     qualifiedValue: Math.round(qualifiedValue),
     expectedValue: Math.round(expectedValue),
     expectedLow: range.low,
     expectedHigh: range.high,
-    revenueBase: Math.round(base.revenueBase),
+    revenueBase: Math.round(revenueBase),
     opportunityCount: candidates.length,
     dimensions,
     confidenceFactors,

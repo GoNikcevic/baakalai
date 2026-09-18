@@ -225,6 +225,37 @@ test('l horloge gelée rend le candidat reproductible', () => {
   assert.notStrictEqual(later.daysQuiet, a.daysQuiet);
 });
 
+test('toute opportunité porte au moins un motif et un facteur traçables', () => {
+  const shapes = [
+    { status: 'open', crm_stage: 'Proposition' },
+    { status: 'open', crm_stage: 'Découverte' },
+    { status: 'open', crm_stage: null },
+    { status: 'lost', lost_reason: 'Budget reporté' },
+    { status: 'lost', lost_reason: 'Parti chez un concurrent' },
+    { status: 'lost', lost_reason: 'Trop cher' },
+    { status: 'lost', lost_reason: 'raison interne 42' },
+    { status: 'lost', lost_reason: null },
+    { status: 'lost', lost_reason: null, crm_stage: 'Négociation' },
+  ];
+  for (const shape of shapes) {
+    for (const dimension of ['dormant_pipeline', 'customer_reactivation']) {
+      const c = buildCandidate({ ...dormantRow, ...shape }, dimension, {
+        snapshotAt: SNAPSHOT, ctx, medians, engagement: null,
+      });
+      assert.ok(c.reasonCodes.length >= 1, `aucun motif pour ${dimension} / ${JSON.stringify(shape)}`);
+      assert.ok(c.factors.length >= 1, `aucun facteur pour ${dimension} / ${JSON.stringify(shape)}`);
+      assert.ok(c.recommendedAction, `aucune action pour ${dimension} / ${JSON.stringify(shape)}`);
+    }
+  }
+});
+
+test('une perte sans raison renseignée le dit au lieu de se taire', () => {
+  const c = buildCandidate({ ...dormantRow, status: 'lost', lost_reason: null, crm_stage: 'Qualification' },
+    'dormant_pipeline', { snapshotAt: SNAPSHOT, ctx, medians, engagement: null });
+  assert.deepStrictEqual(c.reasonCodes, ['LOST_REASON_UNKNOWN']);
+  assert.strictEqual(c.recommendedAction, 'revive_lost_deal');
+});
+
 test('la clé de compte regroupe par société avant tout', () => {
   assert.strictEqual(accountKeyOf({ company: ' Groupe Lantier ', email: 'a@b.fr' }), 'c:groupe lantier');
   assert.strictEqual(accountKeyOf({ email: 'A@B.fr' }), 'e:a@b.fr');
