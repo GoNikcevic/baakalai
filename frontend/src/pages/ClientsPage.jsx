@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
+import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
@@ -104,7 +104,6 @@ export default function ClientsPage({ scope }) {
       setConnectedCrm(activeCrm);
       setConnectedProviders(connected);
       setClients(oppsData.opportunities || []);
-      if (churnData) setChurnSummary(churnData);
       setOwners(ownersData.owners || []);
 
       // Étapes du pipeline : une seule route pour tous les CRM. Le branchement
@@ -113,7 +112,13 @@ export default function ClientsPage({ scope }) {
       // et il ne prenait que le premier pipeline de Pipedrive.
       const stagesData = await request('/crm/stages').catch(() => ({ stages: [] }));
       setStages(stagesData.stages || []);
-    } catch { /* ignore */ }
+    } catch (err) {
+      // Surtout ne pas rester muet : un `catch {}` vide ici a masqué pendant onze
+      // jours une ReferenceError qui coupait le chargement juste avant les étapes
+      // de pipeline et les commerciaux, laissant la page à moitié remplie sans
+      // aucun signe visible. La page reste utilisable avec ce qui a été chargé.
+      console.error('[ClientsPage] loadData', err);
+    }
     setLoading(false);
   }, []);
 
@@ -217,6 +222,10 @@ export default function ClientsPage({ scope }) {
     }
     return counts;
   }, [clients]);
+
+  // Un seul CRM connecté : le badge provider ne distinguerait rien. Calculé ici et
+  // passé aux panneaux de détail, qui lisaient `crmProviderCounts` hors de portée.
+  const multiCrm = Object.keys(crmProviderCounts).length > 1;
 
   const toggleSelect = useCallback((id) => {
     setSelected(prev => {
@@ -436,7 +445,7 @@ export default function ClientsPage({ scope }) {
             ))}
           </select>
         )}
-        {Object.keys(crmProviderCounts).length > 1 && (
+        {multiCrm && (
           <select
             value={crmFilter}
             onChange={e => setCrmFilter(e.target.value)}
@@ -535,7 +544,7 @@ export default function ClientsPage({ scope }) {
                 const isSelected = selectedClient?.id === c.id;
                 const isChecked = selected.has(c.id);
                 const churnColor = c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)';
-                const showCrmBadge = c.crm_provider && Object.keys(crmProviderCounts).length > 1;
+                const showCrmBadge = c.crm_provider && multiCrm;
 
                 // Deal-quality drill-down keeps its own grid layout, built around whatever field
                 // was flagged, untouched here, only the plain browsing row below was restyled.
@@ -642,6 +651,7 @@ export default function ClientsPage({ scope }) {
             <DealDetailPanel
               client={selectedClient}
               issueType={dealQualityIssue}
+              multiCrm={multiCrm}
               onClose={() => setSelectedClient(null)}
               onFieldSaved={(id, patch) => {
                 setClients(prev => prev.map(c => c.id === id ? {...c,...patch } : c));
@@ -649,7 +659,7 @@ export default function ClientsPage({ scope }) {
               }}
             />
           ) : (
-            <ClientDetailPanel client={selectedClient} onClose={() => setSelectedClient(null)} />
+            <ClientDetailPanel client={selectedClient} multiCrm={multiCrm} onClose={() => setSelectedClient(null)} />
           )
         )}
       </div>
@@ -824,7 +834,7 @@ function LeadScoreBreakdown({ client }) {
   );
 }
 
-function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
+function DealDetailPanel({ client, issueType, multiCrm, onClose, onFieldSaved }) {
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -885,7 +895,7 @@ function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
             {t('clients.owner')}: {client.owner_email.split('@')[0]}
           </span>
         )}
-        {client.crm_provider && Object.keys(crmProviderCounts).length > 1 && (
+        {client.crm_provider && multiCrm && (
           <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, background: 'var(--bg-elevated)', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
             {client.crm_provider}
           </span>
@@ -916,7 +926,7 @@ function DealDetailPanel({ client, issueType, onClose, onFieldSaved }) {
 
 /* ═══ Client Detail Panel ═══ */
 
-function ClientDetailPanel({ client, onClose }) {
+function ClientDetailPanel({ client, multiCrm, onClose }) {
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -1034,7 +1044,7 @@ function ClientDetailPanel({ client, onClose }) {
             {t('clients.owner')}: {client.owner_email.split('@')[0]}
           </span>
         )}
-        {client.crm_provider && Object.keys(crmProviderCounts).length > 1 && (
+        {client.crm_provider && multiCrm && (
           <span style={{
             fontSize: 11, padding: '4px 10px', borderRadius: 8,
             background: 'var(--bg-elevated)', color: 'var(--text-muted)', textTransform: 'capitalize',
