@@ -159,15 +159,25 @@ router.get('/memory', async (req, res, next) => {
 
 // GET /api/dashboard/opportunities (paginated)
 // Non-admin team members only see contacts they own
+//
+// `sort=silence` classe du plus long silence au plus court, les contacts sans
+// activité connue d'abord. Ce n'est pas un confort d'affichage : la Vue globale
+// trie côté client dans la fenêtre qu'elle a reçue, et le tri par défaut
+// (created_at DESC) remplit cette fenêtre avec les contacts les plus RÉCENTS.
+// Passé le plafond, les deals qui dorment depuis le plus longtemps, exactement
+// ceux que la page existe pour retrouver, étaient donc les premiers exclus.
 router.get('/opportunities', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 500);
     const offset = parseInt(req.query.offset, 10) || 0;
+    const orderBy = req.query.sort === 'silence'
+      ? 'last_activity_at ASC NULLS FIRST'
+      : 'created_at DESC';
 
     // Filter by owner for non-admin team members
     const isAdmin = !req.teamRole || req.teamRole === 'admin';
     if (isAdmin) {
-      const opportunities = await db.opportunities.listByUser(req.user.id, limit, offset);
+      const opportunities = await db.opportunities.listByUser(req.user.id, limit, offset, orderBy);
       res.json({ opportunities });
     } else {
       // Non-admin: only show contacts owned by this user
@@ -175,7 +185,7 @@ router.get('/opportunities', async (req, res, next) => {
         `SELECT * FROM opportunities
          WHERE (user_id = $1 OR owner_id = $1)
          AND (owner_id = $1 OR owner_id IS NULL)
-         ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+         ORDER BY ${orderBy} LIMIT $2 OFFSET $3`,
         [req.user.id, limit, offset]
       );
       res.json({ opportunities: result.rows });

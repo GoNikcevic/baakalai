@@ -1624,9 +1624,13 @@ const customVariables = {
 // =============================================
 
 const opportunities = {
-  async listByUser(userId, limit = 20, offset = 0) {
+  // `orderBy` est concaténé dans le SQL : liste blanche obligatoire, jamais la
+  // valeur brute d'un appelant. Toute autre valeur retombe sur le tri par défaut.
+  async listByUser(userId, limit = 20, offset = 0, orderBy = 'created_at DESC') {
+    const ORDER_WHITELIST = ['created_at DESC', 'last_activity_at ASC NULLS FIRST'];
+    const order = ORDER_WHITELIST.includes(orderBy) ? orderBy : ORDER_WHITELIST[0];
     const result = await query(
-      'SELECT * FROM opportunities WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      `SELECT * FROM opportunities WHERE user_id = $1 ORDER BY ${order} LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
     );
     return result.rows;

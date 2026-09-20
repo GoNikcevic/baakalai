@@ -29,6 +29,41 @@ const CRM_DOT_COLORS = {
   pipedrive: '#2A2AA0', hubspot: '#FF7A59', salesforce: '#00A1E0',
   odoo: '#714B67', notion: '#37352F', airtable: '#F82B60',
 };
+// Plafond d'une page de liste. Au-delà, la fenêtre est annoncée à l'écran
+// (clients.listTruncated) plutôt que silencieusement tronquée.
+const LIST_LIMIT = 500;
+
+// Jours écoulés depuis une date. null quand la date est absente ou illisible :
+// « on ne sait pas » ne doit jamais se confondre avec « contacté aujourd'hui ».
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+}
+
+// Un deal muet depuis deux mois n'est pas « un peu en retard » : la couleur le
+// dit avant que le chiffre soit lu. Sans activité connue, gris et jamais rouge,
+// pour ne pas transformer une donnée manquante en alerte.
+function silenceColor(days) {
+  if (days == null) return 'var(--text-muted)';
+  if (days > 60) return 'var(--danger)';
+  if (days > 30) return 'var(--warning)';
+  return 'var(--success)';
+}
+
+// Rang de silence pour le tri. MAX_SAFE_INTEGER et non Infinity : deux contacts
+// sans activité donneraient Infinity - Infinity = NaN, et un comparateur qui
+// renvoie NaN rend le tri instable selon le moteur.
+function silenceRank(c) {
+  const d = daysSince(c.last_activity_at);
+  return d == null ? Number.MAX_SAFE_INTEGER : d;
+}
+
+function formatAmount(value, lang) {
+  return `${Math.round(value).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR')} €`;
+}
+
 function getStatusLabels(lang) {
   if (lang === 'en') return { new: 'New', imported: 'Imported', interested: 'Interested', meeting: 'Meeting', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
   return { new: 'Nouveau', imported: 'Import\u00e9', interested: 'Int\u00e9ress\u00e9', meeting: 'RDV', negotiation: 'N\u00e9go', won: 'Gagn\u00e9', lost: 'Perdu' };
@@ -68,6 +103,11 @@ export default function ClientsPage({ scope }) {
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkAction, setBulkAction] = useState(null);
+  const [truncated, setTruncated] = useState(false);
+  // Tri de la Vue globale Deals · « le plus long silence d'abord » répond à la
+  // question pour laquelle on ouvre la page (lesquels sont en train de mourir),
+  // le montant reste à un clic. Arbitrage Goran du 20/09.
+  const [sortBy, setSortBy] = useState('silence');
   const t = useT();
   const { lang } = useI18n();
   const navigate = useNavigate();
@@ -93,7 +133,10 @@ export default function ClientsPage({ scope }) {
       // Parallel: providers + opportunities + owners
       const [providersData, oppsData, ownersData] = await Promise.all([
         request('/crm/providers').catch(() => ({ providers: [] })),
-        request('/dashboard/opportunities?limit=500').catch(() => ({ opportunities: [] })),
+        // sort=silence : la fenêtre reçue doit contenir les deals les plus
+        // silencieux, pas les plus récemment créés. Sans ce paramètre, un compte
+        // au-delà du plafond perdait précisément les deals endormis.
+        request(`/dashboard/opportunities?limit=${LIST_LIMIT}&sort=silence`).catch(() => ({ opportunities: [] })),
         request('/crm/team-owners').catch(() => ({ owners: [] })),
       ]);
 
@@ -103,7 +146,9 @@ export default function ClientsPage({ scope }) {
       const activeCrm = providersData.activeCrm || connected[0]?.provider || null;
       setConnectedCrm(activeCrm);
       setConnectedProviders(connected);
-      setClients(oppsData.opportunities || []);
+      const opps = oppsData.opportunities || [];
+      setClients(opps);
+      setTruncated(opps.length >= LIST_LIMIT);
       setOwners(ownersData.owners || []);
 
       // Étapes du pipeline : une seule route pour tous les CRM. Le branchement
@@ -188,8 +233,12 @@ export default function ClientsPage({ scope }) {
     return true;
   }).sort((a, b) => {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
+    if (scope === 'deals') {
+      if (sortBy === 'value') return (b.deal_value || 0) - (a.deal_value || 0);
+      return silenceRank(b) - silenceRank(a);
+    }
     return 0;
-  }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue]);
+  }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue, sortBy]);
 
   // Regroupement par pipeline. Salesforce et Odoo n'en exposent pas
   // (pipelineName null) : tout tombe alors dans un groupe unique, sans titre.
@@ -215,6 +264,21 @@ export default function ClientsPage({ scope }) {
     return counts;
   }, [scopedClients]);
 
+  // Agrégats de tête de la Vue globale Deals. Le montant total est annoncé avec
+  // le nombre de deals valorisés : sur les données réelles, la majorité des deals
+  // importés n'ont pas de montant, et afficher la somme seule laisserait croire
+  // que c'est tout le pipeline.
+  const dealStats = useMemo(() => {
+    if (scope !== 'deals') return null;
+    let dormant = 0, valued = 0, value = 0;
+    for (const c of scopedClients) {
+      const d = daysSince(c.last_activity_at);
+      if (d != null && d > 30) dormant++;
+      if (c.deal_value != null) { valued++; value += Number(c.deal_value) || 0; }
+    }
+    return { dormant, valued, value };
+  }, [scope, scopedClients]);
+
   const crmProviderCounts = useMemo(() => {
     const counts = {};
     for (const c of clients) {
@@ -226,6 +290,11 @@ export default function ClientsPage({ scope }) {
   // Un seul CRM connecté : le badge provider ne distinguerait rien. Calculé ici et
   // passé aux panneaux de détail, qui lisaient `crmProviderCounts` hors de portée.
   const multiCrm = Object.keys(crmProviderCounts).length > 1;
+
+  // Les chips silence / étape / score n'enrichissent que la Vue globale Deals.
+  // Le cadrage Clients a déjà de quoi remplir ses lignes (churn, lignes produit)
+  // et n'est pas touché par ce lot.
+  const isDealsScope = scope === 'deals' && !isDealQualityContext;
 
   const toggleSelect = useCallback((id) => {
     setSelected(prev => {
@@ -375,6 +444,51 @@ export default function ClientsPage({ scope }) {
         </div>
       )}
 
+      {/* Bandeau de tête Deals · ce que la liste dit une fois lue en entier,
+          dit d'emblée : combien dorment, et quel montant est réellement chiffré. */}
+      {!isDealQualityContext && dealStats && scopedClients.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          marginBottom: 16, fontSize: 12, color: 'var(--text-muted)',
+        }}>
+          <span style={{ color: dealStats.dormant > 0 ? 'var(--warning)' : 'var(--text-muted)', fontWeight: dealStats.dormant > 0 ? 600 : 400 }}>
+            {t('clients.dealsDormant', { count: dealStats.dormant })}
+          </span>
+          <span>·</span>
+          <span>
+            {dealStats.valued > 0
+              ? t('clients.dealsValued', { value: formatAmount(dealStats.value, lang), count: dealStats.valued })
+              : t('clients.dealsNoValue')}
+          </span>
+          <div style={{ flex: 1 }} />
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>{t('clients.sortLabel')}</span>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              style={{
+                padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 8,
+                background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12,
+              }}
+            >
+              <option value="silence">{t('clients.sortSilence')}</option>
+              <option value="value">{t('clients.sortValue')}</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {/* La fenêtre de liste est annoncée dès qu'elle est pleine · une liste
+          tronquée en silence se lit comme une liste complète. */}
+      {!isDealQualityContext && truncated && (
+        <div style={{
+          padding: '8px 14px', marginBottom: 12, borderRadius: 8, fontSize: 12,
+          background: 'var(--bg-elevated)', border: '1px dashed var(--border)', color: 'var(--text-muted)',
+        }}>
+          {t('clients.listTruncated', { count: LIST_LIMIT })}
+        </div>
+      )}
+
       {/* Pipeline stages */}
       {stagesByPipeline.length > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -405,7 +519,10 @@ export default function ClientsPage({ scope }) {
                           L'ancienne heuristique par nom ne sert plus que de repli pour
                           les contacts sans étape connue · la garder inconditionnelle
                           ferait compter deux fois un même contact. */}
-                      {clients.filter(c => (
+                      {/* scopedClients et non clients : sous Deals, la barre
+                          comptait aussi les clients gagnés, donc un total qui ne
+                          correspondait à aucune ligne de la liste en dessous. */}
+                      {scopedClients.filter(c => (
                         c.crm_stage_id != null
                           ? String(c.crm_stage_id) === String(stage.id)
                           : c.status === stage.name?.toLowerCase()
@@ -545,6 +662,8 @@ export default function ClientsPage({ scope }) {
                 const isChecked = selected.has(c.id);
                 const churnColor = c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)';
                 const showCrmBadge = c.crm_provider && multiCrm;
+                const silenceDays = daysSince(c.last_activity_at);
+                const stageDays = daysSince(c.crm_stage_changed_at);
 
                 // Deal-quality drill-down keeps its own grid layout, built around whatever field
                 // was flagged, untouched here, only the plain browsing row below was restyled.
@@ -596,10 +715,53 @@ export default function ClientsPage({ scope }) {
                         <div style={{ fontWeight: 600 }}>{c.name || ' '}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {!selectedClient ? (c.company || c.title || c.email || '') : (c.title || c.email || '')}
+                          {/* Étape CRM et relance prévue en seconde ligne, seulement
+                              quand elles existent : sur les données importées, la
+                              majorité des deals n'a pas d'étape rapatriée, et une
+                              colonne réservée aurait affiché des vides alignés. */}
+                          {isDealsScope && !selectedClient && stageDays != null && (
+                            <span> · {t('clients.inStageDays', { days: stageDays })}</span>
+                          )}
+                          {isDealsScope && !selectedClient && c.planned_followup_date && (
+                            <span style={{ color: 'var(--warning)' }}>
+                              {' · '}{t('clients.followupPlanned', {
+                                date: new Date(c.planned_followup_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' }),
+                              })}
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {/* Le silence est la raison d'être de la page : premier chip,
+                            couleur avant chiffre. Il remplace la date de dernière
+                            activité que personne n'allait chercher dans le panneau. */}
+                        {isDealsScope && !selectedClient && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: silenceColor(silenceDays), flexShrink: 0 }} />
+                            <span style={{ color: silenceDays == null ? 'var(--text-muted)' : silenceColor(silenceDays) }}>
+                              {silenceDays == null
+                                ? t('clients.silenceNever')
+                                : t('clients.silenceDays', { days: silenceDays })}
+                            </span>
+                          </span>
+                        )}
+
+                        {isDealsScope && !selectedClient && c.crm_stage && (
+                          <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                            {c.crm_stage}
+                          </span>
+                        )}
+
+                        {isDealsScope && !selectedClient && c.score != null && (
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                            color: c.score >= 70 ? 'var(--success)' : c.score >= 40 ? 'var(--warning)' : 'var(--text-muted)',
+                          }}>
+                            {c.score}<span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>/100</span>
+                          </span>
+                        )}
+
                         {!selectedClient && owners.length > 1 && (
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                             {c.owner_email ? c.owner_email.split('@')[0] : ' '}
