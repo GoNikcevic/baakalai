@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { request, runChurnScoring, getChurnSummary } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT } from '../i18n';
+import ContactSubline from '../components/ContactSubline';
 
 const REASON_CATEGORIES = ['prix', 'concurrent', 'support', 'produit_inadapte', 'budget_coupe', 'autre'];
 
@@ -161,7 +162,7 @@ export default function ChurnPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{client.name || client.company || client.email}</div>
-                      {client.company && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{client.company}</div>}
+                      <ContactSubline contact={client} withEmail={false} />
                     </div>
                     <span style={{ fontSize: 14, fontWeight: 700, color }}>
                       {client.churn_score}<span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>/100</span>

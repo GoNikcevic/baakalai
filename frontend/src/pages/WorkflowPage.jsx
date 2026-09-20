@@ -13,6 +13,7 @@ import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 import { useConfirm } from '../components/ConfirmModal';
+import { contactSubline } from '../components/ContactSubline';
 
 const LINKEDIN_BLUE = '#0A66C2';
 const CHANNEL_META = {
@@ -580,7 +581,11 @@ export default function WorkflowPage({ goal, backBase }) {
             {contact?.name || contact?.company || t('workflow.title')}
           </h1>
           <div className="page-subtitle" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            {contact?.company && contact?.name && <span>{contact.company}</span>}
+            {/* Fonction avant société : c'est elle qui dit à qui on écrit, et
+                l'en-tête d'un workflow de relance est l'endroit où ça compte. */}
+            {contact?.name && contactSubline(contact, { withEmail: false }) && (
+              <span>{contactSubline(contact, { withEmail: false })}</span>
+            )}
             {contact?.deal_value != null && <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{Math.round(contact.deal_value).toLocaleString(dateLocale)} €</span>}
             <span>{t(isDraft ? 'workflow.subtitleDraft' : 'workflow.subtitleTracking')}</span>
           </div>

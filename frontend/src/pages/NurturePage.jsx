@@ -12,6 +12,7 @@ import { useConfirm } from '../components/ConfirmModal';
 import AppliedPatternsBanner from '../components/AppliedPatternsBanner';
 import Icon from '../components/Icon';
 import AutopilotSettings from '../components/AutopilotSettings';
+import ContactSubline from '../components/ContactSubline';
 
 // Texte dont le sens complet est dans l'infobulle : on le signale au survol,
 // sinon personne ne devine qu'il y a une explication a lire.
@@ -724,9 +725,9 @@ function ActivationDashboard({ metrics }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {topStagnant.map(c => (
                   <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <span style={{ fontWeight: 600 }}>{c.name}</span>
-                      {c.company && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>@ {c.company}</span>}
+                      <ContactSubline contact={c} withEmail={false} style={{ fontSize: 11 }} />
                     </div>
                     <span style={{ color: 'var(--warning)', fontSize: 11 }}>{c.daysSinceUpdate}j</span>
                   </div>
@@ -745,9 +746,9 @@ function ActivationDashboard({ metrics }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {topChurnRisk.map(c => (
                   <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <span style={{ fontWeight: 600 }}>{c.name}</span>
-                      {c.company && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>@ {c.company}</span>}
+                      <ContactSubline contact={c} withEmail={false} style={{ fontSize: 11 }} />
                     </div>
                     <span style={{ color: 'var(--danger)', fontSize: 11 }}>{c.daysSinceUpdate}j</span>
                   </div>

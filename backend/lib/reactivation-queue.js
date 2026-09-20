@@ -178,7 +178,7 @@ async function failedSendIds(userId, kind, opportunityIds) {
  */
 async function getHistory(userId, kind) {
   const sentResult = await db.query(
-    `SELECT ne.id, ne.opportunity_id, ne.to_name, ne.sent_at, o.company
+    `SELECT ne.id, ne.opportunity_id, ne.to_name, ne.sent_at, o.title, o.company
      FROM nurture_emails ne
      LEFT JOIN opportunities o ON o.id = ne.opportunity_id
      WHERE ne.user_id = $1 AND ne.metadata ->> 'chain' = $2 AND ne.status = 'sent'
@@ -190,11 +190,12 @@ async function getHistory(userId, kind) {
     date: r.sent_at,
     opportunityId: r.opportunity_id,
     name: r.to_name,
+    title: r.title,
     company: r.company,
   }));
 
   const postponedResult = await db.query(
-    `SELECT id, name, company, planned_followup_date, planned_followup_reason
+    `SELECT id, name, title, company, planned_followup_date, planned_followup_reason
      FROM opportunities
      WHERE user_id = $1 AND status ${kind === 'auto_upsell' ? "= 'won'" : "NOT IN ('won', 'lost')"}
        AND campaign_id IS NULL
@@ -208,13 +209,14 @@ async function getHistory(userId, kind) {
     date: r.planned_followup_date,
     opportunityId: r.id,
     name: r.name,
+    title: r.title,
     company: r.company,
     isManual: r.planned_followup_reason === 'manual' || !r.planned_followup_reason,
     reason: r.planned_followup_reason || 'manual',
   }));
 
   const closedResult = await db.query(
-    `SELECT id, name, company, status, won_date, lost_date
+    `SELECT id, name, title, company, status, won_date, lost_date
      FROM opportunities
      WHERE user_id = $1 AND status ${kind === 'auto_upsell' ? "= 'lost'" : "IN ('won', 'lost')"}
        AND COALESCE(won_date, lost_date) IS NOT NULL
@@ -226,6 +228,7 @@ async function getHistory(userId, kind) {
     date: r.won_date || r.lost_date,
     opportunityId: r.id,
     name: r.name,
+    title: r.title,
     company: r.company,
     status: r.status,
   }));

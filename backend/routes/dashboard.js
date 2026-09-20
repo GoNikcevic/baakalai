@@ -314,7 +314,7 @@ router.get('/activation', async (req, res, next) => {
       })
       .slice(0, 5)
       .map(o => ({
-        id: o.id, name: o.name, company: o.company, email: o.email,
+        id: o.id, name: o.name, title: o.title, company: o.company, email: o.email,
         daysSinceUpdate: Math.round(ageInDays(o)),
       }));
 

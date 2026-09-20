@@ -12,6 +12,7 @@ import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 import Icon from '../components/Icon';
 import { useConfirm } from '../components/ConfirmModal';
+import ContactSubline from '../components/ContactSubline';
 
 const CRM_BANNER_KEY = 'bakal_reactivation_crm_banner_dismissed';
 const CRM_BANNER_TTL = 24 * 60 * 60 * 1000; // reappears after 24h
@@ -413,7 +414,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                     />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name || c.company || c.email}</div>
-                      {c.company && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.company}</div>}
+                      <ContactSubline contact={c} withEmail={false} />
                       {!c.factors && (
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{c.reason}</div>
                       )}
@@ -575,7 +576,7 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                 <div className="card-body" style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{e.name || e.company}</div>
-                    {e.company && e.name && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{e.company}</div>}
+                    {e.name && <ContactSubline contact={e} withEmail={false} />}
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: historyBadgeColor(e.eventType) }}>
                     {historyLabel(e)}
