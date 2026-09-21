@@ -650,6 +650,32 @@
     },
     "teamCampaigns": "Team campaigns",
     "runEngine": "Run the rules now",
+    "recipes": {
+      "title": "Start in two clicks",
+      "subtitle": "Three rules that cover the basics. The number shows reachable contacts concerned today.",
+      "matches": "{count} contacts concerned today",
+      "none": "No contact concerned today",
+      "counting": "Counting...",
+      "unknown": "Evaluated on manual run",
+      "activate": "Turn on",
+      "customize": "Customize",
+      "created": "Rule created: {name}",
+      "dormant": {
+        "title": "Follow up on dormant deals",
+        "name": "Dormant deal follow-up",
+        "desc": "An open deal has had no activity for {days} days: baakalai writes the follow-up."
+      },
+      "silent": {
+        "title": "Reconnect with silent contacts",
+        "name": "Silent contact re-engagement",
+        "desc": "A CRM contact has gone quiet for {days} days: baakalai reopens the conversation."
+      },
+      "feedback": {
+        "title": "Ask for feedback after signing",
+        "name": "Client feedback request",
+        "desc": "{days} days after a deal is won, baakalai asks the client how it is going."
+      }
+    },
     "previewRun": {
       "createDrafts": "Create {count} drafts",
       "sendNow": "Send {count} emails",

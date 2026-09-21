@@ -7,6 +7,7 @@
  * DELETE /api/nurture/email-accounts/:id · Remove email account
  *
  * POST /api/nurture/triggers · Create a nurture trigger
+ * POST /api/nurture/triggers/match-counts · How many contacts a rule would hit
  * GET  /api/nurture/triggers · List triggers
  * PATCH /api/nurture/triggers/:id · Update trigger
  * DELETE /api/nurture/triggers/:id · Delete trigger
@@ -307,6 +308,52 @@ router.post('/triggers', async (req, res, next) => {
     ]);
 
     res.json({ trigger: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/nurture/triggers/match-counts · combien de contacts une règle
+// toucherait si on la créait maintenant.
+//
+// Un utilisateur devait choisir un type parmi dix, un délai en jours et un
+// mode d'envoi sans aucun retour sur ce que ça donnerait : en production,
+// 1 règle créée sur 15 comptes. Cette route alimente les recettes prêtes à
+// l'emploi, avec le nombre réel devant chacune.
+//
+// Une seule requête pour plusieurs recettes : la base des opportunités est
+// chargée une fois, pas une fois par carte.
+router.post('/triggers/match-counts', async (req, res, next) => {
+  try {
+    const recipes = Array.isArray(req.body?.recipes) ? req.body.recipes.slice(0, 6) : [];
+    if (!recipes.length) return res.status(400).json({ error: 'recipes (array) is required' });
+
+    const opps = await db.opportunities.listByUser(req.user.id, 10000, 0);
+    const stagnantDays = await getStagnantDays(req.user.id);
+    const now = Date.now();
+
+    const counts = recipes.map(r => {
+      const matched = matchContacts(
+        { trigger_type: r.triggerType, conditions: { days: parseInt(r.days, 10) || undefined } },
+        opps,
+        now,
+        { stagnantDays }
+      );
+      if (matched === null) {
+        return { id: r.id ?? r.triggerType, count: null, manualOnly: true, sample: [] };
+      }
+      // Un contact sans email ne peut pas être relancé : le compte annoncé
+      // doit être celui des contacts réellement joignables.
+      const reachable = matched.filter(o => (o.email || '').trim());
+      return {
+        id: r.id ?? r.triggerType,
+        count: reachable.length,
+        manualOnly: false,
+        sample: reachable.slice(0, 3).map(o => ({ name: o.name, company: o.company })),
+      };
+    });
+
+    res.json({ counts, stagnantDays });
   } catch (err) {
     next(err);
   }

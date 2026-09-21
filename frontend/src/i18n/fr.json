@@ -650,6 +650,32 @@
     },
     "teamCampaigns": "Campagnes équipe",
     "runEngine": "Lancer les règles maintenant",
+    "recipes": {
+      "title": "Démarrer en deux clics",
+      "subtitle": "Trois règles qui couvrent l'essentiel. Le chiffre annonce les contacts joignables concernés aujourd'hui.",
+      "matches": "{count} contacts concernés aujourd'hui",
+      "none": "Aucun contact concerné aujourd'hui",
+      "counting": "Calcul en cours...",
+      "unknown": "Évalué au lancement manuel",
+      "activate": "Activer",
+      "customize": "Personnaliser",
+      "created": "Règle créée : {name}",
+      "dormant": {
+        "title": "Relancer les deals dormants",
+        "name": "Relance deals dormants",
+        "desc": "Un deal encore ouvert n'a plus aucune activité depuis {days} jours : baakalai rédige la relance."
+      },
+      "silent": {
+        "title": "Reprendre contact avec les silencieux",
+        "name": "Réactivation contacts silencieux",
+        "desc": "Un contact du CRM n'a plus donné signe de vie depuis {days} jours : baakalai rouvre la conversation."
+      },
+      "feedback": {
+        "title": "Demander un retour après signature",
+        "name": "Demande de retour client",
+        "desc": "{days} jours après une signature, baakalai demande au client comment ça se passe."
+      }
+    },
     "previewRun": {
       "createDrafts": "Créer {count} brouillons",
       "sendNow": "Envoyer {count} emails",

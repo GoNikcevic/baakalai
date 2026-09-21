@@ -12,6 +12,7 @@ import { useT, useI18n } from '../../i18n';
 import { useConfirm } from '../ConfirmModal';
 import Icon from '../Icon';
 import { getTriggerTypes } from './trigger-types';
+import TriggerRecipes from './TriggerRecipes';
 
 // Texte dont le sens complet est dans l'infobulle : on le signale au survol,
 // sinon personne ne devine qu'il y a une explication a lire.
@@ -113,8 +114,32 @@ export default function TriggersSection() {
     return <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)' }}>{t('common.loading')}</div>;
   }
 
+  // Une recette déjà couverte par une règle existante n'est plus proposée.
+  const existingTypes = triggers.map(x => x.trigger_type);
+
+  const customizeFromRecipe = (recipe) => {
+    const tt = TRIGGER_TYPES.find(x => x.value === recipe.triggerType);
+    setForm(p => ({
+      ...p,
+      triggerType: recipe.triggerType,
+      days: recipe.days,
+      name: t(`activation.recipes.${recipe.key}.name`) || tt?.defaultName || '',
+      actionType: 'email',
+      mode: 'approval',
+    }));
+    setShowCreate(true);
+  };
+
   return (
     <div>
+      {!showCreate && (
+        <TriggerRecipes
+          existingTypes={existingTypes}
+          onCreated={load}
+          onCustomize={customizeFromRecipe}
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 650 }}>{t('activation.rules.title')}</div>
