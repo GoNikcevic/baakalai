@@ -1443,7 +1443,7 @@ const profiles = {
         'value_prop', 'social_proof', 'pain_points', 'objections',
         'persona_primary', 'persona_secondary', 'target_sectors',
         'target_size', 'target_zones', 'default_tone', 'default_formality',
-        'avoid_words', 'signature_phrases',
+        'avoid_words', 'signature_phrases', 'job_role',
       ];
       for (const f of fields) {
         if (data[f] !== undefined) {
@@ -1460,8 +1460,8 @@ const profiles = {
         INSERT INTO user_profiles (user_id, company, sector, website, team_size, description,
           value_prop, social_proof, pain_points, objections, persona_primary, persona_secondary,
           target_sectors, target_size, target_zones, default_tone, default_formality,
-          avoid_words, signature_phrases)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          avoid_words, signature_phrases, job_role)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       `, [
         userId, data.company || null, data.sector || null, data.website || null,
         data.team_size || null, data.description || null, data.value_prop || null,
@@ -1470,6 +1470,11 @@ const profiles = {
         data.target_sectors || null, data.target_size || null, data.target_zones || null,
         data.default_tone || 'Pro décontracté', data.default_formality || 'Vous',
         data.avoid_words || null, data.signature_phrases || null,
+        // job_role · à ajouter ici ET dans la liste `fields` de la branche
+        // UPDATE ci-dessus. Cette fonction refiltre les colonnes une seconde
+        // fois après la liste blanche de routes/profile.js : une colonne
+        // oubliée dans l'une des deux branches est perdue sans erreur.
+        data.job_role || null,
       ]);
     }
     return this.get(userId);

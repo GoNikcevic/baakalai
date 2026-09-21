@@ -24,6 +24,11 @@ router.post('/', async (req, res, next) => {
       'persona_primary', 'persona_secondary', 'target_sectors',
       'target_size', 'target_zones', 'default_tone', 'default_formality',
       'avoid_words', 'signature_phrases',
+      // Poste de l'utilisateur · seul critère ICP non déductible du CRM,
+      // demandé à l'onboarding. Les critères déduits (icp_*) ne sont PAS
+      // dans cette liste : ils sont calculés côté serveur par
+      // lib/icp-signals.js et ne doivent jamais être posés par le client.
+      'job_role',
     ];
 
     for (const key of allowed) {

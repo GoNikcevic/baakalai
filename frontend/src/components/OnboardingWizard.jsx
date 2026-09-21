@@ -319,6 +319,10 @@ export default function OnboardingWizard({ onComplete }) {
   const [sectorOpen, setSectorOpen] = useState(false);
   const [website, setWebsite] = useState('');
   const [teamSize, setTeamSize] = useState('');
+  // Poste · seul critère ICP qui ne se déduit pas du CRM connecté. Demandé
+  // ici et pas à l'inscription : on ne rajoute pas de friction avant que
+  // l'utilisateur soit entré.
+  const [jobRole, setJobRole] = useState('');
 
   // Step 2 · Keys
   const [outreachProvider, setOutreachProvider] = useState('');
@@ -390,6 +394,7 @@ export default function OnboardingWizard({ onComplete }) {
         if (draft.sector) setSector(draft.sector);
         if (draft.website) setWebsite(draft.website);
         if (draft.teamSize) setTeamSize(draft.teamSize);
+        if (draft.jobRole) setJobRole(draft.jobRole);
         if (draft.targetSectors) setTargetSectors(draft.targetSectors);
         if (draft.targetSize) setTargetSize(draft.targetSize);
         if (draft.targetZones) setTargetZones(draft.targetZones);
@@ -434,7 +439,7 @@ export default function OnboardingWizard({ onComplete }) {
       // La redirection OAuth recharge la page : sauvegarder le brouillon
       // pour ne pas perdre ce que l'utilisateur a déjà rempli.
       localStorage.setItem('bakal_wizard_draft', JSON.stringify({
-        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        company, sector, website, teamSize, jobRole, targetSectors, targetSize, targetZones,
         personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
       }));
       const res = await request(`/crm/${crmProvider}/connect?from=wizard`);
@@ -460,7 +465,7 @@ export default function OnboardingWizard({ onComplete }) {
     setCrmKeyError(null);
     try {
       localStorage.setItem('bakal_wizard_draft', JSON.stringify({
-        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        company, sector, website, teamSize, jobRole, targetSectors, targetSize, targetZones,
         personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
       }));
       await request('/crm/salesforce/manual-connect', {
@@ -493,7 +498,7 @@ export default function OnboardingWizard({ onComplete }) {
     setCrmKeyError(null);
     try {
       localStorage.setItem('bakal_wizard_draft', JSON.stringify({
-        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        company, sector, website, teamSize, jobRole, targetSectors, targetSize, targetZones,
         personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
       }));
       const res = await request('/crm/salesforce/connect?from=wizard');
@@ -587,7 +592,7 @@ export default function OnboardingWizard({ onComplete }) {
 
     // Save profile to localStorage (ProfilePage will pick it up)
     const profile = {
-      company, sector, website, team_size: teamSize,
+      company, sector, website, team_size: teamSize, job_role: jobRole,
       target_sectors: targetSectors, target_size: targetSize, target_zones: targetZones,
       persona_primary: personaPrimary,
       default_tone: tone, default_formality: formality,
@@ -787,6 +792,18 @@ export default function OnboardingWizard({ onComplete }) {
                   <option value="26-50">26-50</option>
                   <option value="51-100">51-100</option>
                   <option value="100+">100+</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{t('wizard.jobRole')}</label>
+                <select className="form-input" value={jobRole} onChange={e => setJobRole(e.target.value)}>
+                  <option value="">{t('wizard.selectPlaceholder')}</option>
+                  <option value="dirigeant">{t('wizard.jobRoleFounder')}</option>
+                  <option value="responsable_commercial">{t('wizard.jobRoleSalesLead')}</option>
+                  <option value="commercial">{t('wizard.jobRoleSales')}</option>
+                  <option value="revops">{t('wizard.jobRoleRevops')}</option>
+                  <option value="marketing">{t('wizard.jobRoleMarketing')}</option>
+                  <option value="autre">{t('wizard.jobRoleOther')}</option>
                 </select>
               </div>
             </div>

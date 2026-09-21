@@ -10,7 +10,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 **3 pillars:** CRM Intelligence > Automatisation (ex-« Activation », renommée 2026-09-14) > Prospection (prospection = door, not the product).
 
-**Pricing:** 69 €/siège/mois, produit complet (décision Goran 2026-09-03, remplace l'ancienne grille 49/149/349). Annuel : 2 mois offerts. Founding members beta : −50 % à la sortie publique. Team plan up to 5 members. Affiché publiquement sur la landing depuis le 2026-09-16. ⚠️ Le socle Stripe (migration 078) est construit pour 3 tiers : à adapter en un price unique × quantité de sièges.
+**Pricing:** 79 €/siège/mois, produit complet (décision Goran 2026-09-03, prix relevé de 69 à 79 le 2026-09-21 ; remplace l'ancienne grille 49/149/349). Annuel : 2 mois offerts. Founding members beta : −50 % à la sortie publique. **Aucun plafond de sièges** (arbitrage Goran 2026-09-21) : un seul price × quantité de sièges, le produit doit tenir 20 personnes. ⚠️ Deux dettes ouvertes : (1) le socle Stripe (migration 078) est construit pour 3 tiers à 49/149/349 et envoie `quantity: 1` (`routes/billing.js`), il reste à refondre en price unique × quantité ; (2) `ENTITLEMENTS` (`lib/billing.js`) déclare encore `teamMembers` 1/1/3/5 et `requirePlan()` (`middleware/plan-gate.js`) n'a aucun site d'appel : ces limites ne sont appliquées nulle part, elles sont à supprimer en même temps que la refonte Stripe, pas avant (sinon code à moitié branché). Prix affiché publiquement sur la landing (`landing/i18n.js`, `index.html`, `diagnostic.html`).
 
 ## 2. Tech Stack
 
@@ -82,6 +82,7 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 ## 6. Current Gaps
 
 - [x] Stripe billing + paywall : socle livré (routes /api/billing, webhook, migration 078, section Réglages, paywall d'essai expiré). Inerte tant que STRIPE_SECRET_KEY + price IDs ne sont pas posés sur Railway ; comptes existants exemptés (trial_ends_at NULL).
+- [ ] **Import CRM : date de création et owner jamais persistés** (constaté 2026-09-21 sur les 443 opportunités de prod). `opportunities.created_at` est la date d'insertion chez nous ; la vraie date CRM (`add_time` Pipedrive, `createdate` HubSpot, `CreatedDate` Salesforce) est bien récupérée par la couche `api/` puis jetée faute de colonne. `owner_email` et `crm_owner_id` sont NULL sur 100 % des lignes alors que `db.opportunities.create` les accepte : les 9 points d'appel (6 dans `routes/crm.js`, un par provider, plus `crm-agent.js` et `crm-sync.js`) ne les passent pas. Conséquence : 2 des 3 critères ICP déductibles restent NULL, et le rapprochement owner → membre d'équipe ne peut pas fonctionner. Correctif : colonne `crm_created_at` + mapping par provider.
 - [ ] Microsoft OAuth publisher verification (beta testers can't consent Outlook)
 - [ ] Salesforce campaigns (contacts + deals done, missing campaigns)
 - [ ] A/B testing on activation emails (only prospection currently)
@@ -90,7 +91,10 @@ baakalai is the AI system that exploits your CRM to generate revenue. It connect
 
 ## 7. Business Context
 
-- **ICP** (élargi 2026-09-02): PME B2B 5-200 pers, ≥12 mois historique CRM, base clients existante, pas d'équipe RevOps constituée, ≤5 personnes sur le CRM (plafond produit actuel). L'effectif est un proxy : qualifier sur ces 4 critères.
+- **ICP** (élargi 2026-09-02, révisé 2026-09-21): PME B2B 5-200 pers, ≥12 mois historique CRM, base clients existante, **pas de RevOps à temps plein**. L'effectif est un proxy : qualifier sur ces 3 critères.
+  - Le plafond « ≤5 personnes sur le CRM » est **supprimé** : il n'a jamais été appliqué dans le code, et le produit doit tenir 20 sièges (arbitrage Goran 2026-09-21).
+  - Le RevOps est un **signal, plus un disqualifiant** : l'absence d'un RevOps dédié reste un bon indicateur de douleur, mais quelqu'un qui porte la casquette en plus de son métier est l'acheteur, pas un faux positif. Ne disqualifier que les boîtes déjà outillées (Gong, Clari), où le wedge ne prend pas.
+  - **Qualification instrumentée depuis le 2026-09-21** (migration 106) : `user_profiles.job_role` demandé à l'onboarding, colonnes `icp_*` calculées par `lib/icp-signals.js` après chaque import CRM. NULL y signifie « inconnu », jamais « zéro » : `icp_crm_history_months` et `icp_crm_seat_count` restent NULL tant que les importeurs ne persistent pas la date de création CRM et l'owner du deal (cf. §6).
 - **Wedge**: Revenue intelligence for SMBs : structurally inaccessible to Gong/Clari
 - **Hero job**: Deal reactivation ("1 deal recovered = tool paid for itself")
 - **4 jobs**: Reactivation > Upsell > Churn > Data cleaning

@@ -18,6 +18,7 @@ const notionCrm = require('../api/notion-crm');
 const airtableCrm = require('../api/airtable-crm');
 const { decrypt, encrypt } = require('../config/crypto');
 const { getValidatedIntegrations } = require('../config');
+const { computeIcpSignals } = require('../lib/icp-signals');
 const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
 const logger = require('../lib/logger');
@@ -936,6 +937,15 @@ router.post('/import/:provider', async (req, res, next) => {
     }
 
     track(req.user.id, 'import_done', { provider, imported, updated, skipped });
+
+    // Qualification ICP : les critères déductibles se recalculent sur les
+    // données fraîchement importées. Volontairement attendu et non
+    // fire-and-forget, l'opération est un seul agrégat SQL, et le wizard
+    // enchaîne sur /crm/reading-summary juste après. computeIcpSignals ne
+    // throw jamais : un échec de qualification ne doit pas faire échouer un
+    // import réussi.
+    await computeIcpSignals(req.user.id);
+
     res.json({ imported, updated, skipped, errors: errors.length > 0 ? errors : undefined });
   } catch (err) {
     track(req.user.id, 'import_failed', { provider: req.params.provider, error: String(err.message).slice(0, 200) });
