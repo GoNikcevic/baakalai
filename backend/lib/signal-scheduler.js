@@ -248,4 +248,7 @@ async function runTick() {
   return report;
 }
 
-module.exports = { runTick, boostCompany, collectDueTargets, DAILY_BUDGET };
+// getRemainingBudget / consumeBudget sont exportés pour le scan manuel
+// (POST /api/signals/scan) : un clic consomme le même quota Brave que le
+// scheduler, il doit le débiter au même endroit et s'arrêter quand il est vide.
+module.exports = { runTick, boostCompany, collectDueTargets, getRemainingBudget, consumeBudget, DAILY_BUDGET };

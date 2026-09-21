@@ -1250,6 +1250,16 @@
   "signals": {
     "title": "Signaux",
     "subtitle": "Détectez les signaux d'achat et trouvez les bons prospects au bon moment",
+    "scanBudgetTitle": "Quota de recherche atteint",
+    "scanBudgetMsg": "La veille automatique a consommé les recherches web du jour. Les nouveaux signaux reprendront demain.",
+    "scanNothingTitle": "Rien à scanner",
+    "scanNothingMsg": "Aucune surveillance configurée et aucune société à vérifier dans le CRM. Créez une surveillance ci-dessous, ou connectez votre CRM.",
+    "scanScope": "{configs} surveillance(s), {companies} compte(s) CRM vérifié(s)",
+    "missing": {
+      "types": "Choisissez au moins un type de signal à surveiller.",
+      "focus": "Ajoutez au moins un secteur ou un mot-clé : sans eux, la recherche part sur tout le web et ne ramène que du bruit.",
+      "competitors": "Le type « Concurrent » demande au moins un concurrent à suivre, sinon il ne lance aucune recherche."
+    },
     "configTitle": "Surveillance des signaux",
     "configSubtitle": "Ce que baakalai surveille sur le web, et à quelle fréquence.",
     "howTitle": "Comment ça marche",

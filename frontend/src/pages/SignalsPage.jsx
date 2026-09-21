@@ -101,7 +101,34 @@ export default function SignalsPage({ view = null }) {
     setScanning(true);
     try {
       const result = await request('/signals/scan', { method: 'POST' });
-      showToast({ type: 'success', title: t('signals.scanDone'), message: t('signals.scanDetected', { count: result.detected || 0 }) });
+
+      if (result.budgetExhausted) {
+        // Le quota de recherche web du jour est consommé par la veille
+        // automatique : ne pas faire croire que la recherche a eu lieu.
+        showToast({
+          type: 'warning',
+          title: t('signals.scanBudgetTitle'),
+          message: t('signals.scanBudgetMsg'),
+        });
+      } else if (result.nothingToScan) {
+        // Ni surveillance configurée, ni société dans le CRM : annoncer
+        // « 0 signal détecté » laissait croire qu'une recherche avait eu lieu.
+        showToast({
+          type: 'warning',
+          title: t('signals.scanNothingTitle'),
+          message: t('signals.scanNothingMsg'),
+        });
+      } else {
+        showToast({
+          type: 'success',
+          title: t('signals.scanDone'),
+          message: t('signals.scanDetected', { count: result.detected || 0 })
+            + ' · ' + t('signals.scanScope', {
+              configs: result.configs || 0,
+              companies: result.companiesScanned || 0,
+            }),
+        });
+      }
       await loadData();
     } catch { showToast({ type: 'error', title: t('signals.error'), message: t('signals.scanFailed') }); }
     setScanning(false);
@@ -148,7 +175,11 @@ export default function SignalsPage({ view = null }) {
       setShowCreate(false);
       setForm({ name: '', signalTypes: ['funding', 'hiring', 'news'], targetSectors: '', targetTitles: '', targetKeywords: '', targetCompetitors: '' });
       await loadData();
-    } catch { showToast({ type: 'error', title: t('signals.error'), message: t('signals.createConfigFailed') }); }
+    } catch (err) {
+      // Le backend refuse une config qui chercherait sur tout le web : son
+      // message dit précisément quoi corriger, le message générique non.
+      showToast({ type: 'error', title: t('signals.error'), message: err.message || t('signals.createConfigFailed') });
+    }
   };
 
   const handleDeleteConfig = async (id) => {
@@ -569,8 +600,22 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
 
 /* ═══ Config Section ═══ */
 
+/** Ce qui manque à une config pour produire une recherche qui veut dire
+ *  quelque chose. Même règle que le backend (routes/signals.js,
+ *  validateConfigFocus) : une requête sans secteur ni mot-clé part chercher
+ *  sur tout le web, et le type « Concurrent » ne cherche rien sans liste. */
+function missingFocus(form) {
+  const filled = (v) => String(v || '').split(',').some(s => s.trim());
+  const types = form.signalTypes || [];
+  if (types.length === 0) return 'types';
+  if (types.some(x => x !== 'competitor') && !filled(form.targetSectors) && !filled(form.targetKeywords)) return 'focus';
+  if (types.includes('competitor') && !filled(form.targetCompetitors)) return 'competitors';
+  return null;
+}
+
 function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onDeleteConfig, onToggleConfig, setShowCreate, en, scanFrequency, onChangeFrequency }) {
   const t = useT();
+  const missing = missingFocus(form);
   return (
     <div>
       {/* Cadence de la veille automatique */}
@@ -654,11 +699,29 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                 value={form.targetCompetitors} onChange={e => setForm(p => ({ ...p, targetCompetitors: e.target.value }))}
                 className="form-input" style={{ fontSize: 13, padding: '8px 12px' }} />
 
+              {/* Dire ce qui manque, au lieu de laisser créer une surveillance
+                  qui cherchera sur tout le web. */}
+              {missing && (
+                <div style={{
+                  fontSize: 12, lineHeight: 1.5, color: 'var(--text-secondary)',
+                  background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)', padding: '10px 12px',
+                }}>
+                  {t(`signals.missing.${missing}`)}
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowCreate(false)}>
                   {t('signals.cancel')}
                 </button>
-                <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onCreateConfig} disabled={!form.name.trim()}>
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 12 }}
+                  onClick={onCreateConfig}
+                  disabled={!form.name.trim() || !!missing}
+                  title={missing ? t(`signals.missing.${missing}`) : undefined}
+                >
                   {t('signals.create')}
                 </button>
               </div>

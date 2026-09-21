@@ -1250,6 +1250,16 @@
   "signals": {
     "title": "Signals",
     "subtitle": "Detect buying signals and find the right prospects at the right time",
+    "scanBudgetTitle": "Search quota reached",
+    "scanBudgetMsg": "Automatic monitoring used up today web searches. New signals resume tomorrow.",
+    "scanNothingTitle": "Nothing to scan",
+    "scanNothingMsg": "No monitoring configured and no company to check in the CRM. Create a monitoring rule below, or connect your CRM.",
+    "scanScope": "{configs} monitoring rule(s), {companies} CRM account(s) checked",
+    "missing": {
+      "types": "Pick at least one signal type to watch.",
+      "focus": "Add at least one sector or keyword: without them the search covers the whole web and returns noise.",
+      "competitors": "The Competitor type needs at least one competitor to follow, otherwise it runs no search."
+    },
     "configTitle": "Signal monitoring",
     "configSubtitle": "What baakalai watches on the web, and how often.",
     "howTitle": "How it works",

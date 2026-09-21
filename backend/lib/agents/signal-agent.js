@@ -189,7 +189,11 @@ async function loadConfigRecentSet(userId) {
  * Run the signal agent for a user.
  */
 async function run(userId) {
-  const report = { detected: 0, configs: 0, errors: [] };
+  // `queries` : nombre de recherches Brave réellement lancées. Le scan manuel
+  // s'en sert pour débiter le budget quotidien partagé avec le scheduler
+  // (lib/signal-scheduler.js), sinon un clic pouvait consommer le quota sans
+  // que rien ne le compte.
+  const report = { detected: 0, configs: 0, queries: 0, errors: [] };
 
   try {
     // Load user's signal configs
@@ -210,8 +214,9 @@ async function run(userId) {
 
     for (const config of configs.rows) {
       try {
-        const { detected } = await scanConfig(userId, config, recentSet);
+        const { detected, queriesUsed } = await scanConfig(userId, config, recentSet);
         report.detected += detected;
+        report.queries += queriesUsed || 0;
       } catch (err) {
         report.errors.push(`Config ${config.name}: ${err.message}`);
         logger.warn('signal-agent', `Config ${config.name} failed: ${err.message}`);
@@ -357,7 +362,15 @@ async function loadCompanyAccount(userId, companyName) {
   return r.rows[0] || null;
 }
 
-async function runCrmWatch(userId) {
+/**
+ * Surveillance des comptes du CRM.
+ *
+ * `ignoreDayBucket` : la rotation hebdomadaire par société existe pour étaler
+ * le quota Brave sur la semaine. Elle a du sens pour le cron, pas pour
+ * quelqu'un qui vient de cliquer sur « Scanner » : le lancement manuel prend
+ * donc les sociétés les plus utiles du moment, avec son propre plafond.
+ */
+async function runCrmWatch(userId, { ignoreDayBucket = false, limit = CRM_WATCH_MAX_PER_DAY } = {}) {
   const report = { detected: 0, companiesScanned: 0, errors: [] };
 
   try {
@@ -375,13 +388,6 @@ async function runCrmWatch(userId) {
     );
     if (companies.rows.length === 0) return report;
 
-    const today = new Date().getUTCDay();
-    const toScan = companies.rows
-      .filter(c => companyDayBucket(c.company.toLowerCase()) === today)
-      .sort((a, b) => (b.deal_value || 0) - (a.deal_value || 0))
-      .slice(0, CRM_WATCH_MAX_PER_DAY);
-    if (toScan.length === 0) return report;
-
     // Dédup par (société, type) sur 14 jours · la dédup par titre laissait
     // passer la même actu reformulée (Vivodyne 2×, Absolute 2×).
     const recent = await db.query(
@@ -390,6 +396,25 @@ async function runCrmWatch(userId) {
       [userId]
     );
     const recentSet = new Set(recent.rows.map(r => `${r.company_name}::${r.signal_type}`.toLowerCase()));
+
+    let toScan;
+    if (ignoreDayBucket) {
+      // Lancement manuel : d'abord les sociétés sur lesquelles on n'a rien vu
+      // depuis 14 jours (les autres re-sortiraient les mêmes signaux, la dédup
+      // les jetterait, et la requête Brave serait payée pour rien).
+      const seen = new Set([...recentSet].map(k => k.split('::')[0]));
+      const fresh = companies.rows.filter(c => !seen.has(c.company.toLowerCase()));
+      toScan = (fresh.length > 0 ? fresh : companies.rows)
+        .sort((a, b) => (b.deal_value || 0) - (a.deal_value || 0))
+        .slice(0, limit);
+    } else {
+      const today = new Date().getUTCDay();
+      toScan = companies.rows
+        .filter(c => companyDayBucket(c.company.toLowerCase()) === today)
+        .sort((a, b) => (b.deal_value || 0) - (a.deal_value || 0))
+        .slice(0, limit);
+    }
+    if (toScan.length === 0) return report;
 
     for (const acct of toScan) {
       try {
