@@ -81,6 +81,12 @@ async function sfFetch(instanceUrl, accessToken, endpoint, options = {}) {
   return res.json();
 }
 
+// SOQL échappe avec un antislash, pas en doublant la quote comme SQL : une
+// valeur contenant une apostrophe passée en `''` fait un MALFORMED_QUERY.
+function soqlEscape(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 // ── Contacts ──
 
 async function createContact(instanceUrl, accessToken, data) {
@@ -97,7 +103,7 @@ async function createContact(instanceUrl, accessToken, data) {
 }
 
 async function searchContacts(instanceUrl, accessToken, email) {
-  const query = `SELECT Id, FirstName, LastName, Email, Title FROM Contact WHERE Email = '${email.replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
+  const query = `SELECT Id, FirstName, LastName, Email, Title FROM Contact WHERE Email = '${soqlEscape(email)}'`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return result.records || [];
 }
@@ -537,11 +543,6 @@ const SOQL_LIMIT_MAX = 50000;  // plafond du LIMIT SOQL
 const EMAIL_BASE_FIELDS = 'Id, Subject, Status, ToAddress, FromAddress, CreatedDate, MessageDate, HasAttachment, IsExternallyVisible, Incoming, TextBody';
 const EMAIL_TRACKING_FIELDS = 'IsTracked, IsOpened, FirstOpenedDate, LastOpenedDate';
 
-// SOQL échappe avec un antislash, pas en doublant la quote (contrairement à SQL).
-function soqlEscape(value) {
-  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
-
 // `since` arrive d'un query param : il entre dans la requête en clair (les
 // littéraux de date SOQL ne se paramètrent pas), donc rien ne passe hors liste.
 function sanitizeSince(since) {
@@ -717,7 +718,7 @@ async function createLead(instanceUrl, accessToken, data) {
 }
 
 async function searchLeads(instanceUrl, accessToken, email) {
-  const safe = email.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  const safe = soqlEscape(email);
   const query = `SELECT Id, FirstName, LastName, Email, Company, Title, Phone, Status, OwnerId, CreatedDate FROM Lead WHERE Email = '${safe}'`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return result.records || [];
@@ -789,7 +790,7 @@ async function createAccount(instanceUrl, accessToken, data) {
 }
 
 async function searchAccounts(instanceUrl, accessToken, name) {
-  const safe = name.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  const safe = soqlEscape(name);
   const query = `SELECT Id, Name, Industry, Website, Phone, BillingCity, OwnerId, CreatedDate FROM Account WHERE Name LIKE '%${safe}%' ORDER BY CreatedDate DESC LIMIT 50`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return (result.records || []).map(a => ({
