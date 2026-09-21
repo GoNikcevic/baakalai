@@ -34,6 +34,18 @@ const CRM_DOT_COLORS = {
 // (clients.listTruncated) plutôt que silencieusement tronquée.
 const LIST_LIMIT = 500;
 
+/** Seuil « à risque » du churn. Même valeur que le backend
+ *  (lib/churn-scoring.js, AT_RISK_THRESHOLD), qui sert au badge de la nav et à
+ *  la page Clients à risque : cette page comptait à 50 et annonçait donc un
+ *  autre nombre que le reste du produit pour la même question. */
+const AT_RISK_THRESHOLD = 60;
+
+/** Un client signé n'a pas de « pipeline » : ses segments sont le temps écoulé
+ *  depuis la signature et depuis le dernier échange. 90 jours de silence, c'est
+ *  un trimestre sans nouvelle, le moment où la relation commence à se perdre. */
+const CLIENT_SILENCE_DAYS = 90;
+const CLIENT_NEW_DAYS = 90;
+
 // Jours écoulés depuis une date. null quand la date est absente ou illisible :
 // « on ne sait pas » ne doit jamais se confondre avec « contacté aujourd'hui ».
 function daysSince(dateStr) {
@@ -109,6 +121,10 @@ export default function ClientsPage({ scope }) {
   // question pour laquelle on ouvre la page (lesquels sont en train de mourir),
   // le montant reste à un clic. Arbitrage Goran du 20/09.
   const [sortBy, setSortBy] = useState('silence');
+  // Tuile de tête active (étape de pipeline sous Deals, segment client sous
+  // Clients). Les chiffres étaient affichés sans rien pouvoir en faire : on ne
+  // savait pas QUI se cachait derrière un compteur.
+  const [tileFilter, setTileFilter] = useState(null);
   const t = useT();
   const { lang } = useI18n();
   const navigate = useNavigate();
@@ -203,6 +219,76 @@ export default function ClientsPage({ scope }) {
     setImporting(false);
   }, [loadData, connectedCrm, connectedProviders, clients.length, t]);
 
+  const scopedClients = useMemo(() => {
+    if (scope === 'deals') return clients.filter(c => c.status !== 'won');
+    if (scope === 'clients') return clients.filter(c => c.status === 'won');
+    return clients;
+  }, [clients, scope]);
+
+  // ── Tuiles de tête ──────────────────────────────────────────────────────
+  //
+  // Sous Deals : les étapes du pipeline CRM, regroupées par pipeline (HubSpot
+  // et Pipedrive en exposent plusieurs, fondre « Closed Won » de deux
+  // pipelines dans une seule barre les rendrait indiscernables).
+  //
+  // Sous Clients : les étapes n'ont aucun sens (un client gagné n'est plus en
+  // « Qualification »), la page affichait pourtant la même barre. Remplacée
+  // par les segments qui valent pour un client déjà signé.
+  //
+  // Dans les deux cas, une tuile est un filtre : le chiffre se lit, puis se
+  // clique pour voir qui est derrière.
+  const tileGroups = useMemo(() => {
+    const matchStage = (stage) => (c) => (
+      c.crm_stage_id != null
+        ? String(c.crm_stage_id) === String(stage.id)
+        // Repli pour les contacts sans étape connue · `crm_stage` porte le
+        // libellé et `stage.id` l'identifiant natif, les comparer ne matchait
+        // jamais (compteur figé à 0 avant la migration 092).
+        : c.status === stage.name?.toLowerCase()
+    );
+
+    if (scope === 'clients') {
+      // Activité inconnue : ni actif ni silencieux. Les deux tuiles sont des
+      // filtres, pas une répartition, donc mieux vaut ne compter personne à
+      // tort que transformer une date absente en « contacté récemment ».
+      const silent = (c) => { const d = daysSince(c.last_activity_at); return d != null && d >= CLIENT_SILENCE_DAYS; };
+      const active = (c) => { const d = daysSince(c.last_activity_at); return d != null && d < CLIENT_SILENCE_DAYS; };
+      const segments = [
+        { key: 'seg_new', label: t('clients.segNew'), match: (c) => (daysSince(c.won_date) ?? Infinity) < CLIENT_NEW_DAYS },
+        { key: 'seg_active', label: t('clients.segActive'), match: active },
+        { key: 'seg_silent', label: t('clients.segSilent'), match: silent },
+        { key: 'seg_risk', label: t('clients.segRisk'), match: (c) => (c.churn_score || 0) >= AT_RISK_THRESHOLD },
+      ];
+      return [['', segments.map(s => ({ ...s, count: scopedClients.filter(s.match).length }))]];
+    }
+
+    const groups = new Map();
+    for (const stage of stages) {
+      const key = stage.pipelineName || '';
+      if (!groups.has(key)) groups.set(key, []);
+      const match = matchStage(stage);
+      groups.get(key).push({
+        key: `stage_${stage.id}`,
+        label: stage.name,
+        match,
+        // scopedClients et non clients : sous Deals, la barre comptait aussi
+        // les clients gagnés, donc un total qui ne correspondait à aucune
+        // ligne de la liste en dessous.
+        count: scopedClients.filter(match).length,
+      });
+    }
+    return [...groups.entries()];
+  }, [scope, stages, scopedClients, t]);
+
+  const activeTile = useMemo(
+    () => tileGroups.flatMap(([, tiles]) => tiles).find(x => x.key === tileFilter) || null,
+    [tileGroups, tileFilter]
+  );
+
+  // Passer de Deals à Clients garde le composant monté, mais les clés de
+  // tuiles ne se croisent pas (`stage_*` contre `seg_*`) : un filtre d'étape
+  // ne trouve plus sa tuile côté clients, donc `activeTile` retombe à null et
+  // rien n'est filtré. Aucun état à remettre à zéro à la main.
   const filtered = useMemo(() => clients.filter(c => {
     // If highlight param is set, only show those contacts · et, en contexte deal quality,
     // seulement tant que le problème est ENCORE présent : un contact corrigé (secteur
@@ -221,7 +307,8 @@ export default function ClientsPage({ scope }) {
     }
     if (scope === 'deals' && c.status === 'won') return false;
     if (scope === 'clients' && c.status !== 'won') return false;
-    if (filter === 'churn_risk' && (c.status !== 'won' || c.churn_score == null || c.churn_score < 50)) return false;
+    if (activeTile && !activeTile.match(c)) return false;
+    if (filter === 'churn_risk' && (c.status !== 'won' || c.churn_score == null || c.churn_score < AT_RISK_THRESHOLD)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
     if (crmFilter !== 'all' && c.crm_provider !== crmFilter) return false;
@@ -239,25 +326,7 @@ export default function ClientsPage({ scope }) {
       return silenceRank(b) - silenceRank(a);
     }
     return 0;
-  }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue, sortBy]);
-
-  // Regroupement par pipeline. Salesforce et Odoo n'en exposent pas
-  // (pipelineName null) : tout tombe alors dans un groupe unique, sans titre.
-  const stagesByPipeline = useMemo(() => {
-    const groups = new Map();
-    for (const stage of stages) {
-      const key = stage.pipelineName || '';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(stage);
-    }
-    return [...groups.entries()];
-  }, [stages]);
-
-  const scopedClients = useMemo(() => {
-    if (scope === 'deals') return clients.filter(c => c.status !== 'won');
-    if (scope === 'clients') return clients.filter(c => c.status === 'won');
-    return clients;
-  }, [clients, scope]);
+  }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue, sortBy, activeTile]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
@@ -490,50 +559,69 @@ export default function ClientsPage({ scope }) {
         </div>
       )}
 
-      {/* Pipeline stages */}
-      {stagesByPipeline.length > 0 && (
+      {/* Tuiles de tête · étapes du pipeline sous Deals, segments clients sous
+          Clients. Chaque tuile filtre la liste : le chiffre se clique. */}
+      {!isDealQualityContext && tileGroups.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          {stagesByPipeline.map(([pipelineName, pipelineStages]) => (
-            <div key={pipelineName} style={{ marginBottom: 10 }}>
-              {/* HubSpot et Pipedrive exposent plusieurs pipelines. Les fondre
-                  dans une seule barre juxtaposerait deux étapes homonymes
-                  (« Closed Won » de chaque pipeline) sans moyen de les
-                  distinguer. Le titre n'apparaît que s'il y a de quoi confondre. */}
-              {stagesByPipeline.length > 1 && (
+          {tileGroups.map(([groupName, tiles]) => (
+            <div key={groupName} style={{ marginBottom: 10 }}>
+              {/* Le titre du pipeline n'apparaît que s'il y a de quoi confondre
+                  deux étapes homonymes. */}
+              {tileGroups.length > 1 && (
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-                  {pipelineName}
+                  {groupName}
                 </div>
               )}
               <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 0' }}>
-                {pipelineStages.map((stage, i) => (
-                  <div key={stage.id} style={{
-                    flex: '1 0 120px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    borderTop: `3px solid ${STAGE_COLORS[i % STAGE_COLORS.length]}`, borderRadius: 10,
-                    padding: '12px 14px', textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{stage.name}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: STAGE_COLORS[i % STAGE_COLORS.length] }}>
-                      {/* `crm_stage` porte le LIBELLÉ de l'étape et `stage.id` son
-                          identifiant natif : les comparer ne matchait jamais, d'où un
-                          compteur figé à 0. La comparaison se fait sur crm_stage_id,
-                          que lib/stage-tracking.js renseigne (migration 092).
-                          L'ancienne heuristique par nom ne sert plus que de repli pour
-                          les contacts sans étape connue · la garder inconditionnelle
-                          ferait compter deux fois un même contact. */}
-                      {/* scopedClients et non clients : sous Deals, la barre
-                          comptait aussi les clients gagnés, donc un total qui ne
-                          correspondait à aucune ligne de la liste en dessous. */}
-                      {scopedClients.filter(c => (
-                        c.crm_stage_id != null
-                          ? String(c.crm_stage_id) === String(stage.id)
-                          : c.status === stage.name?.toLowerCase()
-                      )).length}
-                    </div>
-                  </div>
-                ))}
+                {tiles.map((tile, i) => {
+                  const color = STAGE_COLORS[i % STAGE_COLORS.length];
+                  const isActive = tileFilter === tile.key;
+                  const empty = tile.count === 0;
+                  return (
+                    <button
+                      key={tile.key}
+                      type="button"
+                      onClick={() => setTileFilter(isActive ? null : tile.key)}
+                      // Une tuile vide n'a personne à montrer : la cliquer
+                      // afficherait une liste vide sans rien apprendre.
+                      disabled={empty}
+                      aria-pressed={isActive}
+                      title={empty ? undefined : t('clients.tileFilterHint', { label: tile.label })}
+                      style={{
+                        flex: '1 0 120px', background: isActive ? 'var(--bg-elevated)' : 'var(--bg-card)',
+                        border: `1px solid ${isActive ? color : 'var(--border)'}`,
+                        borderTop: `3px solid ${color}`, borderRadius: 10,
+                        padding: '12px 14px', textAlign: 'center',
+                        cursor: empty ? 'default' : 'pointer',
+                        opacity: empty ? 0.55 : 1,
+                        font: 'inherit', color: 'inherit',
+                        boxShadow: isActive ? `0 0 0 1px ${color}` : 'none',
+                        transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{tile.label}</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color }}>{tile.count}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
+
+          {activeTile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 12 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {t('clients.tileFiltered', { label: activeTile.label, count: filtered.length })}
+              </span>
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: '2px 10px' }}
+                onClick={() => setTileFilter(null)}
+              >
+                {t('clients.tileClear')}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

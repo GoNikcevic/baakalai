@@ -154,3 +154,62 @@ describe('ClientsPage · Vue globale Deals', () => {
     expect(card.textContent).toContain('0');
   });
 });
+
+function renderClients() {
+  localStorage.setItem('baakalai_lang', 'fr');
+  return render(
+    <MemoryRouter>
+      <I18nProvider>
+        <ClientsPage scope="clients" />
+      </I18nProvider>
+    </MemoryRouter>
+  );
+}
+
+/**
+ * Les chiffres de la barre de tête ne servaient à rien : on lisait « 8 » sans
+ * pouvoir voir lesquels. Et sous Clients, la barre affichait les étapes du
+ * pipeline (« Prospecting », « Qualification »), qui n'ont aucun sens pour un
+ * client déjà signé.
+ */
+describe('ClientsPage · tuiles de tête cliquables', () => {
+  it('filtre la liste sur l\'étape cliquée, et la rend au clic suivant', async () => {
+    mockApi({
+      stages: [{ id: 's1', name: 'Qualification', pipelineName: null }, { id: 's2', name: 'Proposition', pipelineName: null }],
+      opportunities: [
+        { id: 'a1', name: 'Alice Qualif', status: 'interested', crm_stage_id: 's1', last_activity_at: iso(5) },
+        { id: 'b1', name: 'Bob Proposition', status: 'interested', crm_stage_id: 's2', last_activity_at: iso(6) },
+      ],
+    });
+    renderDeals();
+
+    await screen.findByText('Alice Qualif');
+    expect(screen.getByText('Bob Proposition')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Qualification').closest('button'));
+    await waitFor(() => expect(screen.queryByText('Bob Proposition')).toBeNull());
+    expect(screen.getByText('Alice Qualif')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Qualification').closest('button'));
+    await screen.findByText('Bob Proposition');
+  });
+
+  it('remplace les étapes du pipeline par des segments clients sous Clients', async () => {
+    mockApi({
+      stages: [{ id: 's1', name: 'Qualification', pipelineName: null }],
+      opportunities: [
+        { id: 'c1', name: 'Claire Recente', status: 'won', won_date: iso(10), last_activity_at: iso(5) },
+        { id: 'c2', name: 'Silvain Silence', status: 'won', won_date: iso(400), last_activity_at: iso(200) },
+      ],
+    });
+    renderClients();
+
+    await screen.findByText('Claire Recente');
+    // Une étape de pipeline n'a rien à faire sur des clients signés.
+    expect(screen.queryByText('Qualification')).toBeNull();
+
+    fireEvent.click(screen.getByText('Silencieux (90 j+)').closest('button'));
+    await waitFor(() => expect(screen.queryByText('Claire Recente')).toBeNull());
+    expect(screen.getByText('Silvain Silence')).toBeTruthy();
+  });
+});

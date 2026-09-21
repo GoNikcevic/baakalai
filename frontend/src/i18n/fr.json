@@ -765,6 +765,13 @@
     "connectCrm": "Connectez Pipedrive et importez vos contacts pour voir les métriques d'automatisation."
   },
   "clients": {
+    "segNew": "Nouveaux (90 j)",
+    "segActive": "Actifs",
+    "segSilent": "Silencieux (90 j+)",
+    "segRisk": "À risque",
+    "tileFilterHint": "Voir les contacts : {label}",
+    "tileFiltered": "{label} : {count} affiché(s)",
+    "tileClear": "Tout afficher",
     "title": "Clients",
     "contactsInCrm": "{count} contact(s) dans votre CRM",
     "dealsInCrm": "{count} deal(s) en cours dans votre CRM",
