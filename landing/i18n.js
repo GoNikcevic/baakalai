@@ -283,7 +283,7 @@ const I18N = {
         { q: "How is this different from what my CRM already does?",
           a: "Your CRM stores data. baakalai reads it. Native AI in Pipedrive or HubSpot is built for enterprise and stays mono-CRM. baakalai is multi-CRM, SMB-focused, and most importantly it acts: it sends the follow-up, not just the dashboard." },
         { q: "How is this different from Gong or Clari?",
-          a: "Same problem, opposite segment. Gong and Clari equip an existing RevOps team: \u20ac40\ 150k/year, 3\ 5 weeks implementation. baakalai does the job a RevOps would do, for the SMBs that don't have one \  operational in 30 minutes, zero RevOps to hire." },
+          a: "Same problem, opposite segment. Gong and Clari equip an existing RevOps team: \u20ac40 150k/year, 3 5 weeks implementation. baakalai does the job a RevOps would do, for the SMBs that don't have one, operational in 30 minutes, zero RevOps to hire." },
         { q: "What does it cost?",
           a: "€69 per seat per month, whole product. Two months free on annual billing. Teams joining during the beta keep 50% off at public launch. No implementation fee, no module sold separately." },
         { q: "Do I need a separate emailing tool?",
