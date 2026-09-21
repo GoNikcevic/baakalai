@@ -14,7 +14,7 @@ const I18N = {
       sub: "baakalai lit ton CRM 24/7, repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner, et agit. Un deal récupéré rembourse l'outil pour des mois.",
       cta: "Rejoindre la beta",
       cta_2: "Voir ce que fait le système",
-      tag_1: "CRM connecté en un clic", tag_2: "Opérationnel en 30 min", tag_3: "69 €/siège/mois",
+      tag_1: "CRM connecté en un clic", tag_2: "Opérationnel en 30 min", tag_3: "79 €/siège/mois",
       beta_badge: "EARLY ACCESS",
     },
     integrations: { label: "Se connecte à ton CRM", optional: "Compatible aussi", optional_note: "Optionnels : baakalai envoie depuis ta propre boîte mail." },
@@ -89,7 +89,7 @@ const I18N = {
     pricing: {
       eyebrow: "TARIF", title_a: "Un seul plan. ", title_em: "Le produit complet", title_b: ".",
       sub: "Pas de palier qui cache la moitié des fonctionnalités derrière un devis. Un prix par siège, tout dedans. La beta reste sur candidature : les équipes qui entrent maintenant gardent 50 % de remise à la sortie publique.",
-      amount: "69 €",
+      amount: "79 €",
       period: "par siège et par mois",
       note: "Engagement annuel : 2 mois offerts · Founding members beta : −50 %",
       perks: [
@@ -127,7 +127,7 @@ const I18N = {
         { q: "En quoi c'est différent de Gong ou Clari ?",
           a: "Même problème, segment opposé. Gong et Clari outillent une équipe RevOps existante : 40 à 150 k€/an, 3 à 5 semaines d'implémentation. baakalai fait le travail qu'un RevOps ferait, pour les PME qui n'en ont pas : opérationnel en 30 minutes, zéro RevOps à recruter." },
         { q: "Combien ça coûte ?",
-          a: "69 € par siège et par mois, produit complet. Deux mois offerts sur l'engagement annuel. Les équipes qui entrent pendant la beta gardent 50 % de remise à la sortie publique. Pas de frais d'implémentation, pas de module en supplément." },
+          a: "79 € par siège et par mois, produit complet. Deux mois offerts sur l'engagement annuel. Les équipes qui entrent pendant la beta gardent 50 % de remise à la sortie publique. Pas de frais d'implémentation, pas de module en supplément." },
         { q: "Il me faut un outil d'emailing en plus ?",
           a: "Non. baakalai envoie depuis ta propre boîte Gmail ou Outlook, avec ta signature, et détecte les réponses pour arrêter la séquence. Lemlist, Apollo ou Smartlead restent branchables si tu en as déjà un, mais ce n'est plus une condition pour envoyer." },
         { q: "Et la prospection ?",
@@ -172,7 +172,7 @@ const I18N = {
       sub: "baakalai reads your CRM 24/7, spots dying deals, upsell-ready clients, accounts about to churn, and acts. One recovered deal pays for the tool for months.",
       cta: "Join the beta",
       cta_2: "See what the system does",
-      tag_1: "One-click CRM connection", tag_2: "Operational in 30 min", tag_3: "€69/seat/month",
+      tag_1: "One-click CRM connection", tag_2: "Operational in 30 min", tag_3: "€79/seat/month",
       beta_badge: "EARLY ACCESS",
     },
     integrations: { label: "Connects to your CRM", optional: "Also compatible", optional_note: "Optional: baakalai sends from your own inbox." },
@@ -247,7 +247,7 @@ const I18N = {
     pricing: {
       eyebrow: "PRICING", title_a: "One plan. ", title_em: "The whole product", title_b: ".",
       sub: "No tier hiding half the features behind a quote. One price per seat, everything included. The beta stays application-only: teams joining now keep 50% off at public launch.",
-      amount: "€69",
+      amount: "€79",
       period: "per seat, per month",
       note: "Annual billing: 2 months free · Beta founding members: −50%",
       perks: [
@@ -285,7 +285,7 @@ const I18N = {
         { q: "How is this different from Gong or Clari?",
           a: "Same problem, opposite segment. Gong and Clari equip an existing RevOps team: \u20ac40 150k/year, 3 5 weeks implementation. baakalai does the job a RevOps would do, for the SMBs that don't have one, operational in 30 minutes, zero RevOps to hire." },
         { q: "What does it cost?",
-          a: "€69 per seat per month, whole product. Two months free on annual billing. Teams joining during the beta keep 50% off at public launch. No implementation fee, no module sold separately." },
+          a: "€79 per seat per month, whole product. Two months free on annual billing. Teams joining during the beta keep 50% off at public launch. No implementation fee, no module sold separately." },
         { q: "Do I need a separate emailing tool?",
           a: "No. baakalai sends from your own Gmail or Outlook inbox, with your signature, and detects replies to stop the sequence. Lemlist, Apollo or Smartlead still plug in if you already run one, but they're no longer a condition for sending." },
         { q: "What about prospection?",
