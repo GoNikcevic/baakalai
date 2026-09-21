@@ -604,6 +604,25 @@
   "activation": {
     "title": "Automation",
     "subtitle": "Automate your client follow-up emails",
+    "mailbox": {
+      "title": "No mailbox connected",
+      "desc": "baakalai writes the follow-ups, but nothing can go out until a mailbox is connected.",
+      "descPending": "baakalai writes the follow-ups, but nothing can go out: {count} drafts are waiting for a mailbox.",
+      "gmail": "Connect Gmail",
+      "outlook": "Connect Outlook",
+      "other": "Other address",
+      "connecting": "Connecting...",
+      "connectFailed": "Connection unavailable right now",
+      "blockedHint": "Connect a mailbox to be able to send."
+    },
+    "stale": {
+      "title": "{count} drafts are older than {days} days",
+      "desc": "Those contacts have moved on since. Once a mailbox is connected, the agent replaces them with up to date drafts on its own.",
+      "cta": "Cancel these drafts",
+      "purging": "Cancelling...",
+      "confirm": "Cancel {count} stale drafts?",
+      "done": "{count} drafts cancelled"
+    },
     "overview": "Overview",
     "campaigns": "Sequences",
     "triggers": "Triggers",

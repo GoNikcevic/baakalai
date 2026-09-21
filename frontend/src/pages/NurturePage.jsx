@@ -42,7 +42,14 @@ export function getTriggerTypes(lang) {
   ];
 }
 
-export default function NurturePage() {
+// Défaut stable : une lambda écrite dans la signature change d'identité à
+// chaque rendu, donc `loadData` aussi, donc l'effet qui l'appelle boucle.
+const NOOP = () => {};
+
+/** `summary` vient d'ActivationPage : compteurs exacts de la file et présence
+ *  d'une boîte mail. Sans lui, la page ne sait pas si un envoi est possible et
+ *  ses compteurs d'onglets sont plafonnés par la pagination de /nurture/emails. */
+export default function NurturePage({ summary = null, onSummaryRefresh = NOOP }) {
   const t = useT();
   const { lang } = useI18n();
   const user = getUser();
@@ -71,8 +78,9 @@ export default function NurturePage() {
     } catch (err) {
       console.error('Failed to load nurture data:', err);
     }
+    onSummaryRefresh();
     setLoading(false);
-  }, []);
+  }, [onSummaryRefresh]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -85,12 +93,19 @@ export default function NurturePage() {
     campaignsByTrigger[key].emails.push(e);
   }
 
+  // Aucun envoi n'est possible sans boîte mail : on l'affirme seulement une
+  // fois le résumé chargé, pour ne pas griser les boutons par défaut.
+  const sendBlocked = summary ? !summary.hasMailbox : false;
+
   const tabs = [
     { key: 'dashboard', label: t('activation.overview'), count: null },
     { key: 'campaigns', label: t('activation.campaigns'), count: Object.keys(campaignsByTrigger).length },
     { key: 'triggers', label: t('activation.triggers'), count: triggers.length },
-    { key: 'pending', label: t('activation.pending'), count: emails.filter(e => e.status === 'pending').length },
-    { key: 'sent', label: t('activation.sent'), count: sentEmails.length },
+    // Compteurs pris sur /nurture/summary : la liste ci-dessus est plafonnée à
+    // 50 lignes, elle affichait « En attente (50) » pendant que la nav, qui
+    // compte en base, affichait 188.
+    { key: 'pending', label: t('activation.pending'), count: summary ? summary.pending : emails.filter(e => e.status === 'pending').length },
+    { key: 'sent', label: t('activation.sent'), count: summary ? summary.sent : sentEmails.length },
     { key: 'autopilot', label: lang === 'en' ? 'Autopilot' : 'Autopilot', count: null },
     { key: 'ab', label: 'A/B Tests', count: null },
     { key: 'newsletters', label: lang === 'en' ? 'Newsletters' : 'Newsletters', count: null },
@@ -177,7 +192,8 @@ export default function NurturePage() {
                 <button
                   className="btn btn-primary"
                   style={{ fontSize: 12, padding: '6px 16px' }}
-                  disabled={executing}
+                  disabled={executing || sendBlocked}
+                  title={sendBlocked ? t('activation.mailbox.blockedHint') : undefined}
                   onClick={async () => {
                     setExecuting(true);
                     try {
@@ -259,7 +275,13 @@ export default function NurturePage() {
         <TriggersSection triggers={triggers} onRefresh={loadData} showCreate={showCreate} setShowCreate={setShowCreate} />
       )}
       {!loading && activeTab === 'pending' && (
-        <EmailsSection emails={emails.filter(e => e.status === 'pending')} type="pending" onRefresh={loadData} />
+        <EmailsSection
+          emails={emails.filter(e => e.status === 'pending')}
+          type="pending"
+          onRefresh={loadData}
+          sendBlocked={sendBlocked}
+          summary={summary}
+        />
       )}
       {!loading && activeTab === 'sent' && (
         <EmailsSection emails={emails.filter(e => e.status === 'sent')} type="sent" onRefresh={loadData} />
@@ -543,12 +565,14 @@ function TriggersSection({ triggers, onRefresh, showCreate, setShowCreate }) {
 
 /* ═══ Emails Section ═══ */
 
-function EmailsSection({ emails, type, onRefresh }) {
+function EmailsSection({ emails, type, onRefresh, sendBlocked = false, summary = null }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  const confirm = useConfirm();
   // emails est une prop : l'état déplié/replié vit ici, pas chez le parent.
   const [expandedIds, setExpandedIds] = useState(new Set());
+  const [purging, setPurging] = useState(false);
   const toggleExpanded = (id, value) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
@@ -573,17 +597,66 @@ function EmailsSection({ emails, type, onRefresh }) {
     } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Operation failed' : 'Opération échouée' }); }
   };
 
+  const staleCount = type === 'pending' ? (summary?.stalePending || 0) : 0;
+  const staleDays = summary?.staleDays || 14;
+
+  const handlePurgeStale = async () => {
+    if (!await confirm(t('activation.stale.confirm', { count: staleCount }), { danger: true })) return;
+    setPurging(true);
+    try {
+      const res = await request('/nurture/emails/cancel-stale', {
+        method: 'POST',
+        body: JSON.stringify({ olderThanDays: staleDays }),
+      });
+      showToast({ type: 'success', title: t('activation.stale.done', { count: res.cancelled || 0 }) });
+      onRefresh();
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setPurging(false);
+  };
+
+  // La barre reste visible même quand la page d'emails ne montre rien : les
+  // brouillons périmés sont comptés en base, pas dans les 50 lignes chargées.
+  const staleBar = staleCount > 0 ? (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+      borderRadius: 10, padding: '12px 16px', marginBottom: 12,
+    }}>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>
+          {t('activation.stale.title', { count: staleCount, days: staleDays })}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.5 }}>
+          {t('activation.stale.desc')}
+        </div>
+      </div>
+      <button
+        className="btn btn-ghost"
+        style={{ fontSize: 12, padding: '6px 12px', color: 'var(--danger)', flexShrink: 0 }}
+        onClick={handlePurgeStale}
+        disabled={purging}
+      >
+        {purging ? t('activation.stale.purging') : t('activation.stale.cta')}
+      </button>
+    </div>
+  ) : null;
+
   if (emails.length === 0) {
     return (
-      <div style={{
-        textAlign: 'center', padding: 50,
-        background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
-      }}>
-        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
-          <Icon name={type === 'pending' ? 'inbox' : 'checkCircle'} size={28} strokeWidth={1.5} />
-        </div>
-        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-          {type === 'pending' ? t('activation.noPending') : t('activation.noSent')}
+      <div>
+        {staleBar}
+        <div style={{
+          textAlign: 'center', padding: 50,
+          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+        }}>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name={type === 'pending' ? 'inbox' : 'checkCircle'} size={28} strokeWidth={1.5} />
+          </div>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+            {type === 'pending' ? t('activation.noPending') : t('activation.noSent')}
+          </div>
         </div>
       </div>
     );
@@ -591,6 +664,7 @@ function EmailsSection({ emails, type, onRefresh }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {staleBar}
       {emails.map(email => (
         <div key={email.id} className="card">
           <div className="card-body" style={{ padding: '14px 18px' }}>
@@ -642,6 +716,8 @@ function EmailsSection({ emails, type, onRefresh }) {
                     className="btn btn-primary"
                     style={{ fontSize: 11, padding: '4px 12px' }}
                     onClick={() => handleApprove(email.id)}
+                    disabled={sendBlocked}
+                    title={sendBlocked ? t('activation.mailbox.blockedHint') : undefined}
                   >
                     {en ? 'Send' : 'Envoyer'}
                   </button>

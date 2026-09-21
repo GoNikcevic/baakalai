@@ -604,6 +604,25 @@
   "activation": {
     "title": "Automatisation",
     "subtitle": "Automatisez vos emails de suivi client",
+    "mailbox": {
+      "title": "Aucune boîte mail connectée",
+      "desc": "baakalai rédige les relances, mais rien ne peut partir tant qu'aucune boîte n'est connectée.",
+      "descPending": "baakalai rédige les relances, mais rien ne peut partir : {count} brouillons attendent une boîte mail.",
+      "gmail": "Connecter Gmail",
+      "outlook": "Connecter Outlook",
+      "other": "Autre adresse",
+      "connecting": "Connexion...",
+      "connectFailed": "Connexion impossible pour le moment",
+      "blockedHint": "Connectez une boîte mail pour pouvoir envoyer."
+    },
+    "stale": {
+      "title": "{count} brouillons ont plus de {days} jours",
+      "desc": "Le contexte de ces contacts a changé depuis. Une fois une boîte mail connectée, l'agent les remplace de lui-même par des brouillons à jour.",
+      "cta": "Annuler ces brouillons",
+      "purging": "Annulation...",
+      "confirm": "Annuler {count} brouillons périmés ?",
+      "done": "{count} brouillons annulés"
+    },
     "overview": "Vue d'ensemble",
     "campaigns": "Séquences",
     "triggers": "Triggers",

@@ -12,9 +12,11 @@
  * DELETE /api/nurture/triggers/:id · Delete trigger
  * POST /api/nurture/triggers/:id/run · Manually run a trigger
  *
+ * GET  /api/nurture/summary · Exact queue counters + mailbox connected or not
  * GET  /api/nurture/emails · List nurture emails (pending/sent), optional ?chain= filter
  * POST /api/nurture/emails/:id/approve · Approve a pending email
  * POST /api/nurture/emails/:id/cancel · Cancel a pending email
+ * POST /api/nurture/emails/cancel-stale · Cancel drafts older than N days
  * POST /api/nurture/run · Run nurture engine for current user
  *
  * POST /api/nurture/send · Send a one-off personal email
@@ -34,6 +36,67 @@ const router = Router();
 const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : 'http://localhost:5173');
+
+/** Âge à partir duquel un brouillon en attente est considéré périmé.
+ *
+ *  Même horloge que l'expiration automatique de `stepNurture`
+ *  (lib/crm-agent.js) : l'écran ne doit pas appeler « périmé » autre chose que
+ *  ce que l'agent annulera de lui-même au prochain passage. */
+const STALE_DRAFT_DAYS = 14;
+
+// ═══════════════════════════════════════════════════
+//  Summary · état réel de la file (compteurs exacts)
+// ═══════════════════════════════════════════════════
+
+// GET /api/nurture/summary · ce que la page d'Automatisation ne pouvait pas
+// savoir : les compteurs exacts par statut et l'existence d'une boîte mail.
+//
+// L'écran dérivait ses compteurs de GET /emails, plafonné à 50 lignes : la nav
+// affichait 188 en attente et l'onglet « En attente (50) ». Surtout, rien ne
+// disait qu'aucune boîte mail n'était connectée, alors que c'est la seule
+// raison pour laquelle ces brouillons ne partent pas (cf. getDefaultAccount
+// dans lib/email-outbound.js, et le gel de l'expiration dans stepNurture).
+router.get('/summary', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [counts, mailbox] = await Promise.all([
+      db.query(`
+        SELECT status,
+               COUNT(*)::int AS n,
+               COUNT(*) FILTER (WHERE created_at < now() - ($2::int * INTERVAL '1 day'))::int AS stale
+          FROM nurture_emails
+         WHERE user_id = $1
+         GROUP BY status
+      `, [userId, STALE_DRAFT_DAYS]),
+      // Même sélection que l'envoi : un compte `expired` ou `revoked` ne
+      // permet pas d'envoyer, donc il ne compte pas comme connecté.
+      db.query(
+        `SELECT COUNT(*)::int AS n FROM email_accounts WHERE user_id = $1 AND status = 'active'`,
+        [userId]
+      ),
+    ]);
+
+    const byStatus = {};
+    let stalePending = 0;
+    for (const row of counts.rows) {
+      byStatus[row.status] = row.n;
+      if (row.status === 'pending') stalePending = row.stale;
+    }
+
+    res.json({
+      pending: byStatus.pending || 0,
+      sent: byStatus.sent || 0,
+      cancelled: byStatus.cancelled || 0,
+      failed: byStatus.failed || 0,
+      stalePending,
+      staleDays: STALE_DRAFT_DAYS,
+      hasMailbox: mailbox.rows[0].n > 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ═══════════════════════════════════════════════════
 //  Stats · historique consolidé de l'automatisation
@@ -468,14 +531,55 @@ router.post('/emails/cancel-batch', async (req, res, next) => {
     const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
     if (!ids.length) return res.status(400).json({ error: 'ids (array) is required' });
     const result = await db.query(
-      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'`,
+      `UPDATE nurture_emails SET status = 'cancelled'
+        WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'
+        RETURNING id`,
       [ids, req.user.id]
     );
+    // Même suite que l'annulation unitaire : sans ça la chaîne reste « pending »
+    // sur un brouillon qui n'existe plus, et le contact n'est jamais relibéré.
+    await blockChainExecutions(result.rows.map(r => r.id));
     res.json({ ok: true, cancelled: result.rowCount });
   } catch (err) {
     next(err);
   }
 });
+
+// POST /api/nurture/emails/cancel-stale · Annule d'un coup les brouillons de
+// plus de N jours (14 par défaut, cf. STALE_DRAFT_DAYS).
+//
+// Tant qu'aucune boîte mail n'est connectée, `stepNurture` gèle l'expiration
+// automatique : la file grossit sans jamais se vider (188 brouillons en prod,
+// dont 157 de plus de trois semaines). Purger reste un choix de
+// l'utilisateur · d'où cette route, plutôt qu'une expiration forcée qui
+// jetterait du travail qu'il voulait peut-être encore envoyer.
+router.post('/emails/cancel-stale', async (req, res, next) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.body?.olderThanDays, 10) || STALE_DRAFT_DAYS, 1), 365);
+    const result = await db.query(
+      `UPDATE nurture_emails SET status = 'cancelled'
+        WHERE user_id = $1 AND status = 'pending'
+          AND created_at < now() - ($2::int * INTERVAL '1 day')
+        RETURNING id`,
+      [req.user.id, days]
+    );
+    await blockChainExecutions(result.rows.map(r => r.id));
+    logger.info('nurture', `${result.rowCount} brouillons de plus de ${days}j annulés (user ${req.user.id})`);
+    res.json({ ok: true, cancelled: result.rowCount, olderThanDays: days });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Une chaîne en attente sur un brouillon annulé doit passer « blocked ». */
+async function blockChainExecutions(emailIds) {
+  if (!emailIds.length) return;
+  await db.query(
+    `UPDATE agent_chain_executions SET status = 'blocked'
+      WHERE nurture_email_id = ANY($1) AND status = 'pending'`,
+    [emailIds]
+  );
+}
 
 // POST /api/nurture/emails/:id/cancel
 router.post('/emails/:id/cancel', async (req, res, next) => {

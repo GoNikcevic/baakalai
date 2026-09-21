@@ -3,11 +3,14 @@
    Merges Nurture (activation triggers/emails) + Signals into one nav entry.
    =============================================================================== */
 
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useT } from '../i18n';
+import { request } from '../services/api-client';
 import NurturePage from './NurturePage';
 import SignalsPage from './SignalsPage';
 import AutomationStats from '../components/AutomationStats';
+import MailboxBanner from '../components/MailboxBanner';
 
 const SECTIONS = [
   { key: 'nurture', i18n: 'activation.title' },
@@ -23,8 +26,19 @@ export default function ActivationPage() {
   const urlSection = searchParams.get('section');
   const section = SECTIONS.some(s => s.key === urlSection) ? urlSection : 'nurture';
 
+  // L'état de la file (compteurs exacts + boîte mail connectée) est chargé une
+  // fois ici : le bandeau en a besoin sur les trois sections, et Nurture s'en
+  // sert pour savoir si un envoi est seulement possible.
+  const [summary, setSummary] = useState(null);
+  const loadSummary = useCallback(() => {
+    request('/nurture/summary').then(setSummary).catch(() => setSummary(null));
+  }, []);
+  useEffect(() => { loadSummary(); }, [loadSummary]);
+
   return (
     <div>
+      <MailboxBanner summary={summary} />
+
       {/* Top-level section switcher */}
       <div style={{
         display: 'inline-flex', gap: 2, padding: 3,
@@ -50,7 +64,7 @@ export default function ActivationPage() {
         ))}
       </div>
 
-      {section === 'nurture' && <NurturePage />}
+      {section === 'nurture' && <NurturePage summary={summary} onSummaryRefresh={loadSummary} />}
       {section === 'signals' && <SignalsPage />}
       {section === 'stats' && <AutomationStats />}
     </div>
