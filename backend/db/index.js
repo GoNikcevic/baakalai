@@ -2286,8 +2286,16 @@ const teams = {
   async addMember(teamId, userId, role = 'viewer') {
     const team = await query('SELECT max_members FROM teams WHERE id = $1', [teamId]);
     const members = await query('SELECT COUNT(*) as count FROM team_members WHERE team_id = $1', [teamId]);
-    if (parseInt(members.rows[0]?.count || 0, 10) >= (team.rows[0]?.max_members || 5)) {
-      throw new Error('Nombre maximum de membres atteint (5)');
+
+    // NULL = aucun plafond (migration 107). Le repli sur 5 qui existait ici
+    // bloquait réellement le 6e membre en production, contrairement aux
+    // entitlements de lib/billing.js qui ne sont lus par personne. Le nombre
+    // de sièges est désormais une question de facturation, pas de constante.
+    const maxMembers = team.rows[0]?.max_members ?? null;
+    if (maxMembers !== null && parseInt(members.rows[0]?.count || 0, 10) >= maxMembers) {
+      // Le message codait « (5) » en dur : une équipe plafonnée à 20 lisait
+      // quand même « maximum atteint (5) ».
+      throw new Error(`Nombre maximum de membres atteint (${maxMembers})`);
     }
     const result = await query(`
       INSERT INTO team_members (team_id, user_id, role)

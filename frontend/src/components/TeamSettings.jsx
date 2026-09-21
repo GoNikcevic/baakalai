@@ -157,7 +157,12 @@ export default function TeamSettings() {
         <div>
           <div className="card-title"><Icon name="users" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('team.title')}: {team.name}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-            {members.length}/{team.max_members || 5} {t('team.members')}
+            {/* max_members NULL = aucun plafond (migration 107). Le repli sur
+                5 affichait « 3/5 membres » à des équipes qui ne sont plus
+                plafonnées, donc une limite inventée par l'écran. */}
+            {team.max_members == null
+              ? `${members.length} ${t('team.members')}`
+              : `${members.length}/${team.max_members} ${t('team.members')}`}
           </div>
         </div>
       </div>
