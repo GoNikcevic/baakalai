@@ -13,8 +13,8 @@
     "memory": "Mémoire IA",
     "clients": "Clients",
     "signals": "Signaux",
-    "nurture": "Automatisation",
-    "activation": "Automatisation",
+    "nurture": "Automatisations",
+    "activation": "Automatisations",
     "analytics": "Analytics",
     "help": "Aide",
     "openSidebar": "Ouvrir la sidebar",
@@ -603,7 +603,7 @@
     "loadError": "Impossible de charger les statistiques."
   },
   "activation": {
-    "title": "Automatisation",
+    "title": "Automatisations",
     "subtitle": "Automatisez vos emails de suivi client",
     "mailbox": {
       "title": "Aucune boîte mail connectée",
@@ -846,7 +846,7 @@
     "subtitle": "Analysez plus finement les données de votre CRM et de vos campagnes",
     "groupDeals": "Deals",
     "groupClients": "Clients",
-    "groupActivation": "Automatisation",
+    "groupActivation": "Automatisations",
     "groupProspection": "Prospection",
     "membershipTab": "Vue d'ensemble",
     "tabDescMembership": "Ancienneté, valeur vie client, distribution du churn et renouvellements à venir.",
@@ -1139,7 +1139,7 @@
       "deals": "Deals",
       "clients": "Clients",
       "crm": "CRM",
-      "activation": "Automatisation"
+      "activation": "Automatisations"
     },
     "tabDescs": {
       "deals": "Pipeline en cours et deals à relancer",

@@ -16,9 +16,9 @@ const FAQ_FR = [
     ],
   },
   {
-    category: 'Automatisation & Nurture',
+    category: 'Automatisations & Nurture',
     items: [
-      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger envoie automatiquement un email personnalise quand une condition est remplie (lead stagnant, contact inactif, lead gagne...). Configure-les dans Automatisation → Triggers.' },
+      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger envoie automatiquement un email personnalise quand une condition est remplie (lead stagnant, contact inactif, lead gagne...). Configure-les dans Automatisations → Triggers.' },
       { q: 'Mode "auto" vs "approbation" ?', a: 'En auto, l\'email part immediatement. En approbation, il est mis en file d\'attente pour validation.' },
       { q: 'Qu\'est-ce que le churn score ?', a: 'Score de 0 a 100 qui predit le risque de perte d\'un client. Base sur : inactivite, sentiment, duree du lead, retard de paiement.' },
     ],

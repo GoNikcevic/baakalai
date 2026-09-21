@@ -22,7 +22,7 @@ const TIPS = {
   fr: [
     'Demandez a l\'IA "analyse la sante de mon CRM" pour un diagnostic complet.',
     'Connectez votre email (Gmail/Outlook) pour envoyer des emails automatiques.',
-    'Configurez des triggers dans Automatisation pour relancer les leads stagnants.',
+    'Configurez des triggers dans Automatisations pour relancer les leads stagnants.',
     'L\'IA apprend de chaque campagne, plus vous l\'utilisez, plus elle est efficace.',
     'Utilisez l\'onglet Renouvellements dans Analytics pour suivre les expirations.',
     'Les alertes churn vous notifient quand un contact devient a risque.',

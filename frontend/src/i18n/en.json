@@ -13,8 +13,8 @@
     "memory": "AI Memory",
     "clients": "Clients",
     "signals": "Signals",
-    "nurture": "Automation",
-    "activation": "Automation",
+    "nurture": "Automations",
+    "activation": "Automations",
     "analytics": "Analytics",
     "help": "Help",
     "openSidebar": "Open sidebar",
@@ -603,7 +603,7 @@
     "loadError": "Could not load statistics."
   },
   "activation": {
-    "title": "Automation",
+    "title": "Automations",
     "subtitle": "Automate your client follow-up emails",
     "mailbox": {
       "title": "No mailbox connected",
@@ -846,7 +846,7 @@
     "subtitle": "Dig deeper into your CRM and campaign data",
     "groupDeals": "Deals",
     "groupClients": "Clients",
-    "groupActivation": "Automation",
+    "groupActivation": "Automations",
     "groupProspection": "Prospection",
     "membershipTab": "Overview",
     "tabDescMembership": "Tenure, lifetime value, churn distribution and upcoming renewals.",
@@ -1139,7 +1139,7 @@
       "deals": "Deals",
       "clients": "Clients",
       "crm": "CRM",
-      "activation": "Automation"
+      "activation": "Automations"
     },
     "tabDescs": {
       "deals": "Open pipeline and deals to reactivate",
