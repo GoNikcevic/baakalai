@@ -18,28 +18,50 @@ async function sfFetch(instanceUrl, accessToken, endpoint, options = {}) {
   }
   const url = `${instanceUrl}/services/data/v58.0${endpoint}`;
 
-  const fetchOptions = {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
+  const run = async (token) => {
+    const fetchOptions = {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+    };
+
+    let res;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await fetch(url, fetchOptions);
+      } catch (netErr) {
+        // Pendant une maintenance, Salesforce coupe des connexions (fetch failed) :
+        // c'est transitoire, on retente comme pour un 503 avant d'abandonner.
+        if (attempt >= TRANSIENT_RETRIES) throw netErr;
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
+      if (res.ok || !TRANSIENT_STATUSES.has(res.status) || attempt >= TRANSIENT_RETRIES) break;
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+    }
+    return res;
   };
 
-  let res;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      res = await fetch(url, fetchOptions);
-    } catch (netErr) {
-      // Pendant une maintenance, Salesforce coupe des connexions (fetch failed) :
-      // c'est transitoire, on retente comme pour un 503 avant d'abandonner.
-      if (attempt >= TRANSIENT_RETRIES) throw netErr;
-      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
-      continue;
+  let res = await run(accessToken);
+
+  // Une session Salesforce peut mourir avant l'expiration qu'on avait estimée
+  // (révocation, rotation, timeout de session de l'org). Sans ce rattrapage,
+  // TOUS les appels du user échouent jusqu'à ce que le refresh préventif de
+  // crm-token.js se déclenche : on rafraîchit ici et on rejoue une fois.
+  if (res.status === 401) {
+    let body = '';
+    try { body = await res.clone().text(); } catch { body = ''; }
+    if (/INVALID_SESSION_ID/.test(body)) {
+      let fresh = null;
+      try {
+        const { refreshSalesforceByToken } = require('../lib/crm-token');
+        fresh = await refreshSalesforceByToken(accessToken);
+      } catch { fresh = null; }
+      if (fresh && fresh !== accessToken) res = await run(fresh);
     }
-    if (res.ok || !TRANSIENT_STATUSES.has(res.status) || attempt >= TRANSIENT_RETRIES) break;
-    await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
   }
 
   if (!res.ok) {
@@ -499,48 +521,137 @@ async function updateCampaignMemberStatus(instanceUrl, accessToken, memberId, st
   });
 }
 
-// ── Email Messages (Fonteva / Salesforce transactional emails) ──
+// ── Email Messages (emails transactionnels Salesforce, dont Fonteva) ──
 
-async function getEmailMessages(instanceUrl, accessToken, { contactId, contactEmail, limit = 200, since } = {}) {
-  let where = '';
-  if (contactId) {
-    where = `WHERE RelatedToId = '${contactId}' OR (ToAddress = (SELECT Email FROM Contact WHERE Id = '${contactId}'))`;
-  } else if (contactEmail) {
-    where = `WHERE ToAddress = '${contactEmail.replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
-  } else {
-    where = 'WHERE CreatedDate > ' + (since || 'LAST_N_DAYS:90');
-  }
-  if (since && contactId) {
-    where += ` AND CreatedDate > ${since}`;
-  }
+const DEFAULT_SINCE = 'LAST_N_DAYS:90';
+const SINCE_KEYWORDS = new Set([
+  'TODAY', 'YESTERDAY', 'THIS_WEEK', 'LAST_WEEK', 'THIS_MONTH', 'LAST_MONTH',
+  'THIS_QUARTER', 'LAST_QUARTER', 'THIS_YEAR', 'LAST_YEAR',
+]);
+const SF_ID_RE = /^[a-zA-Z0-9]{15,18}$/;
+const EMAIL_PAGE_MAX = 2000;   // taille d'une page REST
+const SOQL_LIMIT_MAX = 50000;  // plafond du LIMIT SOQL
 
-  const query = `SELECT Id, Subject, Status, ToAddress, FromAddress, CreatedDate, MessageDate,
-    HasAttachment, IsExternallyVisible, TextBody
-    FROM EmailMessage ${where}
-    ORDER BY CreatedDate DESC LIMIT ${limit}`;
+// Les champs d'ouverture viennent d'Enhanced Email : toutes les orgs ne les
+// exposent pas, d'où la requête de repli plus bas.
+const EMAIL_BASE_FIELDS = 'Id, Subject, Status, ToAddress, FromAddress, CreatedDate, MessageDate, HasAttachment, IsExternallyVisible, Incoming, TextBody';
+const EMAIL_TRACKING_FIELDS = 'IsTracked, IsOpened, FirstOpenedDate, LastOpenedDate';
 
-  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  return (result.records || []).map(e => ({
+// SOQL échappe avec un antislash, pas en doublant la quote (contrairement à SQL).
+function soqlEscape(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+// `since` arrive d'un query param : il entre dans la requête en clair (les
+// littéraux de date SOQL ne se paramètrent pas), donc rien ne passe hors liste.
+function sanitizeSince(since) {
+  if (!since) return DEFAULT_SINCE;
+  const raw = String(since).trim();
+  const upper = raw.toUpperCase();
+  if (SINCE_KEYWORDS.has(upper)) return upper;
+  const relative = upper.match(/^LAST_N_(DAYS|WEEKS|MONTHS|QUARTERS|YEARS):(\d{1,4})$/);
+  if (relative) return `LAST_N_${relative[1]}:${parseInt(relative[2], 10)}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00:00Z`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(raw)) return raw;
+  return DEFAULT_SINCE;
+}
+
+function isUnknownFieldError(err) {
+  return /INVALID_FIELD|No such column/i.test(err?.message || '');
+}
+
+function mapEmailMessage(e) {
+  return {
     id: e.Id,
     subject: e.Subject,
     status: e.Status, // 0=New, 1=Read, 2=Replied, 3=Sent, 4=Forwarded, 5=Draft
     to: e.ToAddress,
+    toAddresses: String(e.ToAddress || '').split(/[;,]/).map(a => a.trim()).filter(Boolean),
     from: e.FromAddress,
+    incoming: e.Incoming === true,
+    isTracked: e.IsTracked === true,
+    isOpened: e.IsOpened === true,
+    firstOpenedAt: e.FirstOpenedDate || null,
+    lastOpenedAt: e.LastOpenedDate || null,
     createdAt: e.CreatedDate,
     messageDate: e.MessageDate,
     hasAttachment: e.HasAttachment,
     preview: (e.TextBody || '').slice(0, 200),
-  }));
+  };
 }
 
-async function getEmailMessageStats(instanceUrl, accessToken, { since = 'LAST_N_DAYS:90' } = {}) {
+/**
+ * Liste les EmailMessage d'une org.
+ * @returns {Promise<{messages: object[], trackingAvailable: boolean, truncated: boolean}>}
+ *   trackingAvailable = l'org expose le suivi d'ouverture (Enhanced Email).
+ *   truncated = le plafond a été atteint, la fenêtre n'est pas complète.
+ */
+async function getEmailMessages(instanceUrl, accessToken, { contactId, contactEmail, limit = 200, since, paginate = false } = {}) {
+  const sinceLiteral = sanitizeSince(since);
+  const pageSize = Math.min(Math.max(parseInt(limit, 10) || 200, 1), EMAIL_PAGE_MAX);
+  const hardCap = paginate ? Math.max(parseInt(limit, 10) || 0, 10000) : pageSize;
+
+  const clauses = [];
+  if (contactId) {
+    if (!SF_ID_RE.test(contactId)) throw new Error('Salesforce contact id invalide');
+    // SOQL n'accepte pas de sous-requête scalaire dans une comparaison :
+    // il faut résoudre l'adresse du contact avant de filtrer dessus.
+    let email = contactEmail || null;
+    if (!email) {
+      const contact = await sfFetch(instanceUrl, accessToken,
+        `/query?q=${encodeURIComponent(`SELECT Email FROM Contact WHERE Id = '${contactId}'`)}`);
+      email = contact.records?.[0]?.Email || null;
+    }
+    const or = [`RelatedToId = '${contactId}'`];
+    if (email) or.push(`ToAddress = '${soqlEscape(email)}'`, `FromAddress = '${soqlEscape(email)}'`);
+    clauses.push(`(${or.join(' OR ')})`);
+  } else if (contactEmail) {
+    const safe = soqlEscape(contactEmail);
+    clauses.push(`(ToAddress = '${safe}' OR FromAddress = '${safe}')`);
+  }
+  // Sur un contact précis, on ne borne dans le temps que si l'appelant l'a demandé.
+  if (since || !(contactId || contactEmail)) clauses.push(`CreatedDate > ${sinceLiteral}`);
+
+  const build = (tracking) => `SELECT ${EMAIL_BASE_FIELDS}${tracking ? `, ${EMAIL_TRACKING_FIELDS}` : ''}
+    FROM EmailMessage WHERE ${clauses.join(' AND ')}
+    ORDER BY CreatedDate DESC LIMIT ${Math.min(hardCap, SOQL_LIMIT_MAX)}`;
+
+  let trackingAvailable = true;
+  let result;
+  try {
+    result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(build(true))}`);
+  } catch (err) {
+    if (!isUnknownFieldError(err)) throw err;
+    trackingAvailable = false;
+    result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(build(false))}`);
+  }
+
+  const messages = (result.records || []).map(mapEmailMessage);
+  while (paginate && !result.done && result.nextRecordsUrl && messages.length < hardCap) {
+    const res = await fetch(`${instanceUrl}${result.nextRecordsUrl}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) break;
+    result = await res.json();
+    for (const r of (result.records || [])) messages.push(mapEmailMessage(r));
+  }
+
+  return {
+    messages,
+    trackingAvailable,
+    truncated: messages.length >= hardCap,
+  };
+}
+
+async function getEmailMessageStats(instanceUrl, accessToken, { since } = {}) {
+  const sinceLiteral = sanitizeSince(since);
   const query = `SELECT Status, COUNT(Id) total
     FROM EmailMessage
-    WHERE CreatedDate > ${since}
+    WHERE CreatedDate > ${sinceLiteral}
     GROUP BY Status`;
 
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  const stats = { sent: 0, read: 0, replied: 0, forwarded: 0, total: 0 };
+  const stats = { sent: 0, read: 0, replied: 0, forwarded: 0, total: 0, tracked: 0, opened: 0, trackingAvailable: false };
   for (const r of (result.records || [])) {
     const count = r.total || 0;
     stats.total += count;
@@ -550,25 +661,41 @@ async function getEmailMessageStats(instanceUrl, accessToken, { since = 'LAST_N_
     else if (r.Status === '2') stats.replied += count;
     else if (r.Status === '4') stats.forwarded += count;
   }
+
+  // Status ne mesure pas l'ouverture d'un email sortant : seul le suivi
+  // Enhanced Email le fait. Absent de l'org, on le dit au lieu de l'inventer.
+  try {
+    const trackingQuery = `SELECT IsTracked, IsOpened, COUNT(Id) total
+      FROM EmailMessage
+      WHERE CreatedDate > ${sinceLiteral} AND Incoming = false
+      GROUP BY IsTracked, IsOpened`;
+    const tracked = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(trackingQuery)}`);
+    stats.trackingAvailable = true;
+    for (const r of (tracked.records || [])) {
+      if (r.IsTracked !== true) continue;
+      stats.tracked += r.total || 0;
+      if (r.IsOpened === true) stats.opened += r.total || 0;
+    }
+  } catch {
+    // Le suivi est un bonus : son absence ne doit pas casser les stats de base.
+    stats.trackingAvailable = false;
+  }
+
   return stats;
 }
 
 async function getContactEmailActivity(instanceUrl, accessToken, contactEmail) {
-  const safe = contactEmail.replace(/'/g, "''").replace(/\\/g, '\\\\');
-  const query = `SELECT Id, Subject, Status, CreatedDate, ToAddress, FromAddress
-    FROM EmailMessage
-    WHERE ToAddress = '${safe}' OR FromAddress = '${safe}'
-    ORDER BY CreatedDate DESC LIMIT 50`;
-
-  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  return (result.records || []).map(e => ({
-    id: e.Id,
-    subject: e.Subject,
-    status: e.Status,
-    createdAt: e.CreatedDate,
-    to: e.ToAddress,
-    from: e.FromAddress,
-    direction: e.ToAddress?.toLowerCase() === contactEmail.toLowerCase() ? 'inbound' : 'outbound',
+  const { messages } = await getEmailMessages(instanceUrl, accessToken, { contactEmail, limit: 50 });
+  return messages.map(e => ({
+    id: e.id,
+    subject: e.subject,
+    status: e.status,
+    createdAt: e.createdAt,
+    to: e.to,
+    from: e.from,
+    isOpened: e.isOpened,
+    firstOpenedAt: e.firstOpenedAt,
+    direction: e.incoming ? 'inbound' : 'outbound',
   }));
 }
 

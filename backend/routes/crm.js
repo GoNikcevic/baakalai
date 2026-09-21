@@ -1153,13 +1153,13 @@ router.get('/salesforce/emails', async (req, res, next) => {
     if (!instanceUrl) return res.status(400).json({ error: 'Salesforce instance URL not configured' });
 
     const sf = require('../api/salesforce');
-    const emails = await sf.getEmailMessages(instanceUrl, token, {
+    const { messages, trackingAvailable } = await sf.getEmailMessages(instanceUrl, token, {
       contactEmail: req.query.email || undefined,
       contactId: req.query.contactId || undefined,
       limit: parseInt(req.query.limit) || 200,
       since: req.query.since || undefined,
     });
-    res.json({ emails });
+    res.json({ emails: messages, trackingAvailable });
   } catch (err) { next(err); }
 });
 

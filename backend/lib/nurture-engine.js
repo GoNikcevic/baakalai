@@ -69,6 +69,8 @@ async function evaluateTriggers(userId) {
   }
 
   const results = [];
+  // Partagé par les triggers newsletter sur un même run.
+  const sfEmailActivityCache = new Map();
 
   for (const trigger of triggers.rows) {
     const conditions = trigger.conditions || {};
@@ -142,30 +144,23 @@ async function evaluateTriggers(userId) {
       }
 
       case 'newsletter_inactive': {
-        // Contacts who received newsletters (via Fonteva/Salesforce) but never opened/replied
+        // Contacts à qui l'org a envoyé des emails suivis et qui ne les ont ni
+        // ouverts ni répondus. Sans suivi d'ouverture, l'information n'existe
+        // pas : on ne déclenche rien plutôt que de relancer toute la base.
         if (crmProvider !== 'salesforce') break;
-        const sf = require('../api/salesforce');
-        const integration = await db.query(
-          `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
-        );
-        const instanceUrl = integration.rows[0]?.instance_url;
-        if (!instanceUrl) break;
-
-        const days = conditions.days || 30;
-        const since = `LAST_N_DAYS:${days}`;
         try {
-          const emails = await sf.getEmailMessages(instanceUrl, crmToken, { since, limit: 500 });
-          // Group by recipient · find those with only status 0 (New) or 3 (Sent), never 1 (Read) or 2 (Replied)
-          const byRecipient = {};
-          for (const e of emails) {
-            const to = e.to?.toLowerCase();
-            if (!to) continue;
-            if (!byRecipient[to]) byRecipient[to] = { hasOpened: false, hasSent: false };
-            if (e.status === '0' || e.status === '3') byRecipient[to].hasSent = true;
-            if (e.status === '1' || e.status === '2' || e.status === '4') byRecipient[to].hasOpened = true;
+          const activity = await loadSalesforceEmailActivity(userId, crmToken, conditions.days || 30, sfEmailActivityCache);
+          if (!activity) break;
+          if (!activity.trackingAvailable || activity.trackedCount === 0) {
+            logger.warn('nurture-engine', `newsletter_inactive ignoré : le suivi d'ouverture n'est pas actif dans l'org Salesforce (${activity.trackedCount} email suivi sur la période)`);
+            break;
           }
-          for (const [email, data] of Object.entries(byRecipient)) {
-            if (data.hasSent && !data.hasOpened) {
+          if (activity.truncated) {
+            logger.warn('nurture-engine', 'newsletter_inactive ignoré : volume d\'emails au-dessus du plafond, une ouverture a pu être coupée');
+            break;
+          }
+          for (const [email, data] of activity.byContact) {
+            if (data.trackedSent > 0 && !data.engaged) {
               const contact = contacts.find(c => c.email?.toLowerCase() === email);
               if (contact) matched.push(normalizeContact(contact));
             }
@@ -177,30 +172,14 @@ async function evaluateTriggers(userId) {
       }
 
       case 'newsletter_engaged': {
-        // Contacts who actively engaged with newsletters (replied/forwarded) · notify sales or start sequence
+        // Contacts qui ont ouvert ou répondu · alerter le commercial.
         if (crmProvider !== 'salesforce') break;
-        const sfE = require('../api/salesforce');
-        const integE = await db.query(
-          `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
-        );
-        const instanceUrlE = integE.rows[0]?.instance_url;
-        if (!instanceUrlE) break;
-
-        const daysE = conditions.days || 30;
         const minEngagements = conditions.min_engagements || 2;
         try {
-          const emails = await sfE.getEmailMessages(instanceUrlE, crmToken, { since: `LAST_N_DAYS:${daysE}`, limit: 500 });
-          // Count engagements (read + replied + forwarded) per recipient
-          const engagements = {};
-          for (const e of emails) {
-            const to = e.to?.toLowerCase();
-            if (!to) continue;
-            if (e.status === '1' || e.status === '2' || e.status === '4') {
-              engagements[to] = (engagements[to] || 0) + 1;
-            }
-          }
-          for (const [email, count] of Object.entries(engagements)) {
-            if (count >= minEngagements) {
+          const activity = await loadSalesforceEmailActivity(userId, crmToken, conditions.days || 30, sfEmailActivityCache);
+          if (!activity) break;
+          for (const [email, data] of activity.byContact) {
+            if (data.opens + data.replies >= minEngagements) {
               const contact = contacts.find(c => c.email?.toLowerCase() === email);
               if (contact) matched.push(normalizeContact(contact));
             }
@@ -231,6 +210,65 @@ async function evaluateTriggers(userId) {
   }
 
   return results;
+}
+
+/**
+ * Activité email d'une org Salesforce sur les N derniers jours, agrégée par
+ * contact. L'ouverture vient des champs de suivi (Enhanced Email) : le champ
+ * Status ne la mesure pas, il décrit l'état du message côté Salesforce.
+ * @returns {Promise<{byContact: Map, trackedCount: number, trackingAvailable: boolean, truncated: boolean}|null>}
+ */
+async function loadSalesforceEmailActivity(userId, crmToken, days, cache) {
+  const window = Math.max(1, parseInt(days, 10) || 30);
+  // Les deux triggers newsletter tombent sur la même fenêtre : on ne rapatrie
+  // pas deux fois les mêmes milliers d'emails dans un run.
+  if (cache?.has(window)) return cache.get(window);
+  const loading = loadSalesforceEmailActivityUncached(userId, crmToken, window);
+  cache?.set(window, loading);
+  return loading;
+}
+
+async function loadSalesforceEmailActivityUncached(userId, crmToken, window) {
+  const sf = require('../api/salesforce');
+  const integration = await db.query(
+    `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`, [userId]
+  );
+  const instanceUrl = integration.rows[0]?.instance_url;
+  if (!instanceUrl) return null;
+
+  const { messages, trackingAvailable, truncated } = await sf.getEmailMessages(instanceUrl, crmToken, {
+    since: `LAST_N_DAYS:${window}`,
+    limit: 10000,
+    paginate: true,
+  });
+
+  const byContact = new Map();
+  let trackedCount = 0;
+  const touch = (address) => {
+    const key = String(address || '').trim().toLowerCase();
+    if (!key) return null;
+    if (!byContact.has(key)) byContact.set(key, { trackedSent: 0, opens: 0, replies: 0, engaged: false });
+    return byContact.get(key);
+  };
+
+  for (const m of messages) {
+    if (m.incoming) {
+      // Un message entrant est une réponse du contact : engagement certain.
+      const entry = touch(m.from);
+      if (entry) { entry.replies++; entry.engaged = true; }
+      continue;
+    }
+    if (m.isTracked) trackedCount++;
+    for (const address of m.toAddresses) {
+      const entry = touch(address);
+      if (!entry) continue;
+      if (m.isTracked) entry.trackedSent++;
+      if (m.isOpened) { entry.opens++; entry.engaged = true; }
+      if (m.status === '2' || m.status === '4') entry.engaged = true; // Replied / Forwarded
+    }
+  }
+
+  return { byContact, trackedCount, trackingAvailable, truncated };
 }
 
 function normalizeContact(raw, deal = null) {

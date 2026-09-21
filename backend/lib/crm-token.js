@@ -8,6 +8,97 @@
 const { decrypt, encrypt } = require('../config/crypto');
 const db = require('../db');
 
+// Qui est le propriétaire d'un access token Salesforce en circulation.
+// api/salesforce.js ne reçoit qu'un token : sans ce registre il ne peut pas
+// savoir quel user rafraîchir quand l'org répond INVALID_SESSION_ID.
+const sfTokenOwners = new Map();
+const SF_OWNERS_MAX = 500;
+// Un appelant garde son token pendant toute une opération (une synchro CRM en
+// fait des dizaines d'appels) : une fois la session remplacée, on sert le
+// successeur au lieu de refaire un refresh à chaque requête.
+const sfTokenSuccessors = new Map();
+const SF_SUCCESSOR_TTL_MS = 2 * 60 * 1000;
+// Un refresh en vol par user : la synchro CRM lance des dizaines d'appels en
+// parallèle, et la Connected App fait tourner le refresh token à chaque appel.
+const sfRefreshInflight = new Map();
+
+// metadata est du JSONB : selon le driver il arrive en objet ou en texte, et
+// un enregistrement abîmé ne doit pas faire tomber un refresh.
+function parseMetadata(raw) {
+  if (typeof raw !== 'string') return raw || {};
+  try { return JSON.parse(raw) || {}; } catch { return {}; }
+}
+
+function rememberSalesforceToken(token, userId) {
+  if (!token || !userId) return token;
+  if (sfTokenOwners.size >= SF_OWNERS_MAX) sfTokenOwners.clear();
+  sfTokenOwners.set(token, userId);
+  return token;
+}
+
+/**
+ * Échange le refresh token Salesforce contre un access token neuf et le
+ * persiste (la Connected App peut faire tourner le refresh token : on réécrit
+ * toujours celui qu'elle renvoie, sinon la connexion casse au prochain appel).
+ * @returns {Promise<string|null>} le nouvel access token, ou null
+ */
+async function refreshSalesforceToken(userId) {
+  if (sfRefreshInflight.has(userId)) return sfRefreshInflight.get(userId);
+
+  const run = (async () => {
+    const integration = await db.userIntegrations.get(userId, 'salesforce');
+    if (!integration?.refresh_token) return null;
+    const metadata = parseMetadata(integration.metadata);
+    const { salesforceCredentials } = require('./crm-oauth');
+    const creds = salesforceCredentials(metadata) || {};
+    if (!creds.clientId || !creds.clientSecret) return null;
+
+    const refreshHost = metadata.loginHost || 'login.salesforce.com';
+    const tokenBody = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: decrypt(integration.refresh_token),
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+    });
+    const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: tokenBody,
+    });
+    if (!tokenRes.ok) return null;
+
+    const tokens = await tokenRes.json();
+    await db.userIntegrations.upsert(userId, 'salesforce', {
+      accessToken: encrypt(tokens.access_token),
+      ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    });
+    return rememberSalesforceToken(tokens.access_token, userId);
+  })().catch(() => null).finally(() => sfRefreshInflight.delete(userId));
+
+  sfRefreshInflight.set(userId, run);
+  return run;
+}
+
+/**
+ * Rattrapage appelé par api/salesforce.js sur INVALID_SESSION_ID : retrouve le
+ * user derrière un token mort et renvoie un token frais.
+ */
+async function refreshSalesforceByToken(deadToken) {
+  const known = sfTokenSuccessors.get(deadToken);
+  if (known && Date.now() - known.at < SF_SUCCESSOR_TTL_MS) return known.token;
+  if (known) sfTokenSuccessors.delete(deadToken);
+
+  const userId = sfTokenOwners.get(deadToken);
+  if (!userId) return null;
+
+  const fresh = await refreshSalesforceToken(userId);
+  if (fresh) {
+    if (sfTokenSuccessors.size >= SF_OWNERS_MAX) sfTokenSuccessors.clear();
+    sfTokenSuccessors.set(deadToken, { token: fresh, at: Date.now() });
+    sfTokenOwners.delete(deadToken);
+  }
+  return fresh;
+}
+
 /**
  * Get CRM token for any provider, with auto-refresh for Salesforce OAuth.
  * @param {string} userId
@@ -19,39 +110,15 @@ async function getUserCrmToken(userId, provider) {
     const integration = await db.userIntegrations.get(userId, 'salesforce');
     if (!integration) return null;
     try {
-      // Auto-refresh if token expires within 5 minutes and we have a refresh_token.
-      // Credentials : Connected App du client, sinon app centrale (env vars).
-      const metadata = typeof integration.metadata === 'string' ? JSON.parse(integration.metadata) : (integration.metadata || {});
-      const { salesforceCredentials } = require('./crm-oauth');
-      const creds = salesforceCredentials(metadata);
-      const clientId = creds?.clientId;
-      const clientSecret = creds?.clientSecret;
-      if (integration.refresh_token && clientId && clientSecret) {
-        const shouldRefresh = integration.expires_at
-          ? new Date(integration.expires_at).getTime() < Date.now() + 5 * 60 * 1000
-          : false; // manual tokens without expires_at: don't auto-refresh
-        if (shouldRefresh) {
-          const refreshToken = decrypt(integration.refresh_token);
-          const refreshHost = metadata.loginHost || 'login.salesforce.com';
-          const tokenBody = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret });
-          const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
-            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: tokenBody,
-          });
-          if (tokenRes.ok) {
-            const tokens = await tokenRes.json();
-            const encryptedAccess = encrypt(tokens.access_token);
-            const expiresAtNew = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-            // Rotation éventuelle du refresh token : persister le nouveau
-            await db.userIntegrations.upsert(userId, 'salesforce', {
-              accessToken: encryptedAccess,
-              ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
-              expiresAt: expiresAtNew,
-            });
-            return tokens.access_token;
-          }
-        }
+      // Refresh préventif si le token expire dans moins de 5 minutes. L'échéance
+      // stockée n'est qu'une estimation (+2h) : le vrai filet de sécurité est le
+      // rattrapage sur INVALID_SESSION_ID dans api/salesforce.js.
+      const expiresAt = integration.expires_at ? new Date(integration.expires_at).getTime() : null;
+      if (expiresAt && expiresAt < Date.now() + 5 * 60 * 1000) {
+        const fresh = await refreshSalesforceToken(userId);
+        if (fresh) return fresh;
       }
-      return decrypt(integration.access_token);
+      return rememberSalesforceToken(decrypt(integration.access_token), userId);
     } catch { return null; }
   }
   // HubSpot / Pipedrive : soit clé API (legacy), soit OAuth produit
@@ -140,4 +207,9 @@ async function resolveCrmForUser(userId) {
   return { provider, creds };
 }
 
-module.exports = { getUserCrmToken, resolveCrmForUser };
+module.exports = {
+  getUserCrmToken,
+  resolveCrmForUser,
+  refreshSalesforceToken,
+  refreshSalesforceByToken,
+};
