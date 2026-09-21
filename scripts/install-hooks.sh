@@ -6,9 +6,10 @@
 #
 set -e
 ROOT="$(git rev-parse --show-toplevel)"
-chmod +x "$ROOT"/.githooks/* "$ROOT"/scripts/pre-commit-audit.js "$ROOT"/scripts/pre-push-smoke.js 2>/dev/null || true
+chmod +x "$ROOT"/.githooks/* "$ROOT"/scripts/pre-commit-audit.js "$ROOT"/scripts/pre-push-smoke.js "$ROOT"/scripts/check-conflicts.js 2>/dev/null || true
 git config core.hooksPath .githooks
 echo "✓ core.hooksPath set to .githooks"
 echo "  pre-commit: scripts/pre-commit-audit.js (anti-pattern scan on staged files)"
-echo "  pre-push:   scripts/pre-push-smoke.js   (runtime require() of changed backend modules)"
+echo "  pre-push:   scripts/check-conflicts.js  (remote desync + merge conflicts against main)"
+echo "              scripts/pre-push-smoke.js   (runtime require() of changed backend modules)"
 echo "  Bypass any hook with --no-verify."

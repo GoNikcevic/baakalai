@@ -58,7 +58,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issues[0].number,
-                body: `## Daily Audit — ${new Date().toISOString().split('T')[0]}\n\n${highCount} HIGH severity issue(s) detected.\n\n\`\`\`\n${output.slice(0, 3000)}\n\`\`\``,
+                body: `## Daily Audit, ${new Date().toISOString().split('T')[0]}\n\n${highCount} HIGH severity issue(s) detected.\n\n\`\`\`\n${output.slice(0, 3000)}\n\`\`\``,
               });
             } else {
               // Create new issue

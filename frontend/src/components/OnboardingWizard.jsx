@@ -1,15 +1,16 @@
 /* ===============================================================================
-   BAKAL — Onboarding Wizard (React)
+   BAKAL · Onboarding Wizard (React)
    Multi-step wizard shown on first login. Steps:
    1. Company basics + documents
-   2. CRM first (hero job — 7 providers), then outreach + targeting (optional)
-   3. Done — recap + first CRM import
+   2. CRM first (hero job · 7 providers), then outreach + targeting (optional)
+   3. Done · recap + first CRM import
    Sets localStorage 'bakal_onboarding_complete' on finish.
    =============================================================================== */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { saveKeys, request, trackEvent } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 const TOTAL_STEPS = 3;
 
@@ -46,15 +47,16 @@ function renderReadingSummary(s, t) {
     <div>
       <div style={{ fontWeight: 600, color: 'var(--ink)' }}>
         {t('wizard.readTitle')
-          .replace('{count}', s.totalDeals)
-          .replace('{value}', moneyEUR(s.openValue))}
+.replace('{count}', s.totalDeals)
+.replace('{value}', moneyEUR(s.openValue))}
       </div>
       {s.dormant.count > 0 ? (
         <>
           <div style={{ marginTop: 6 }}>
             {t('wizard.readDormant')
-              .replace('{count}', s.dormant.count)
-              .replace('{value}', moneyEUR(s.dormant.value))}
+.replace('{count}', s.dormant.count)
+.replace('{days}', s.stagnantDays ?? 30)
+.replace('{value}', moneyEUR(s.dormant.value))}
             {s.dormant.sharePct != null && s.dormant.sharePct > 0 && (
               <> {t('wizard.readDormantShare').replace('{pct}', s.dormant.sharePct)}</>
             )}
@@ -65,7 +67,7 @@ function renderReadingSummary(s, t) {
               <li key={d.id}>
                 <strong>{d.name}</strong>
                 {d.company ? ` (${d.company})` : ''}
-                {' — '}{moneyEUR(d.dealValue)}
+                {', '}{moneyEUR(d.dealValue)}
                 {' · '}{t('wizard.readDaysInactive').replace('{days}', d.daysInactive)}
               </li>
             ))}
@@ -238,12 +240,12 @@ const CRM_GUIDES = {
     guideFr: [
       'Cr\u00E9ez une int\u00E9gration sur notion.so/my-integrations',
       'Partagez votre base CRM avec cette int\u00E9gration (\u22EF \u2192 Connexions)',
-      'Copiez le token (secret_... ou ntn_...) \u2014 vous choisirez la base dans Param\u00E8tres',
+      'Copiez le token (secret_... ou ntn_...), vous choisirez la base dans Param\u00E8tres',
     ],
     guideEn: [
       'Create an integration at notion.so/my-integrations',
       'Share your CRM database with it (\u22EF \u2192 Connections)',
-      'Copy the token (secret_... or ntn_...) \u2014 you will pick the database in Settings',
+      'Copy the token (secret_... or ntn_...), you will pick the database in Settings',
     ],
     link: 'https://www.notion.so/my-integrations',
   },
@@ -276,7 +278,7 @@ const CRM_GUIDES = {
 };
 
 /**
- * Champ saveKeys par fournisseur CRM \u2014 doit refl\u00E9ter PROVIDER_MAP c\u00F4t\u00E9
+ * Champ saveKeys par fournisseur CRM, doit refl\u00E9ter PROVIDER_MAP c\u00F4t\u00E9
  * backend (routes/settings.js). Odoo/Notion/Airtable/Folk manquaient : le
  * wizard proposait Odoo dans la liste mais jetait silencieusement sa cl\u00E9.
  */
@@ -311,14 +313,18 @@ export default function OnboardingWizard({ onComplete }) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Step 1 — Company
+  // Step 1 · Company
   const [company, setCompany] = useState('');
   const [sector, setSector] = useState('');
   const [sectorOpen, setSectorOpen] = useState(false);
   const [website, setWebsite] = useState('');
   const [teamSize, setTeamSize] = useState('');
+  // Poste · seul critère ICP qui ne se déduit pas du CRM connecté. Demandé
+  // ici et pas à l'inscription : on ne rajoute pas de friction avant que
+  // l'utilisateur soit entré.
+  const [jobRole, setJobRole] = useState('');
 
-  // Step 2 — Keys
+  // Step 2 · Keys
   const [outreachProvider, setOutreachProvider] = useState('');
   const [outreachKey, setOutreachKey] = useState('');
   const [crmProvider, setCrmProvider] = useState('');
@@ -329,7 +335,7 @@ export default function OnboardingWizard({ onComplete }) {
   const [oauthUnavailable, setOauthUnavailable] = useState(false);
   const [showKeyField, setShowKeyField] = useState(false);
   const [keySaveStatus, setKeySaveStatus] = useState(null); // 'saved' | 'error' | null
-  // Salesforce : pas de clé API — Connected App du client (3 champs) puis OAuth.
+  // Salesforce : pas de clé API · Connected App du client (3 champs) puis OAuth.
   const [sfInstanceUrl, setSfInstanceUrl] = useState('');
   const [sfConsumerKey, setSfConsumerKey] = useState('');
   const [sfConsumerSecret, setSfConsumerSecret] = useState('');
@@ -337,13 +343,13 @@ export default function OnboardingWizard({ onComplete }) {
   const [sfShowManual, setSfShowManual] = useState(false);
   const [sfShowAdminHelp, setSfShowAdminHelp] = useState(false);
 
-  // Step 3 — Target
+  // Step 3 · Target
   const [targetSectors, setTargetSectors] = useState('');
   const [targetSize, setTargetSize] = useState('');
   const [targetZones, setTargetZones] = useState('');
   const [personaPrimary, setPersonaPrimary] = useState('');
 
-  // Step 4 — Style
+  // Step 4 · Style
   const [tone, setTone] = useState('Pro décontracté');
   const [formality, setFormality] = useState('Vous');
   const [valueProp, setValueProp] = useState('');
@@ -364,7 +370,7 @@ export default function OnboardingWizard({ onComplete }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setUploadedDocs(prev => [...prev, ...(data.documents || [{ name: 'Document uploaded' }])]);
+        setUploadedDocs(prev => [...prev,...(data.documents || [{ name: 'Document uploaded' }])]);
       }
     } catch { /* ignore */ }
     setUploading(false);
@@ -388,6 +394,7 @@ export default function OnboardingWizard({ onComplete }) {
         if (draft.sector) setSector(draft.sector);
         if (draft.website) setWebsite(draft.website);
         if (draft.teamSize) setTeamSize(draft.teamSize);
+        if (draft.jobRole) setJobRole(draft.jobRole);
         if (draft.targetSectors) setTargetSectors(draft.targetSectors);
         if (draft.targetSize) setTargetSize(draft.targetSize);
         if (draft.targetZones) setTargetZones(draft.targetZones);
@@ -432,7 +439,7 @@ export default function OnboardingWizard({ onComplete }) {
       // La redirection OAuth recharge la page : sauvegarder le brouillon
       // pour ne pas perdre ce que l'utilisateur a déjà rempli.
       localStorage.setItem('bakal_wizard_draft', JSON.stringify({
-        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        company, sector, website, teamSize, jobRole, targetSectors, targetSize, targetZones,
         personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
       }));
       const res = await request(`/crm/${crmProvider}/connect?from=wizard`);
@@ -458,7 +465,7 @@ export default function OnboardingWizard({ onComplete }) {
     setCrmKeyError(null);
     try {
       localStorage.setItem('bakal_wizard_draft', JSON.stringify({
-        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        company, sector, website, teamSize, jobRole, targetSectors, targetSize, targetZones,
         personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
       }));
       await request('/crm/salesforce/manual-connect', {
@@ -491,7 +498,7 @@ export default function OnboardingWizard({ onComplete }) {
     setCrmKeyError(null);
     try {
       localStorage.setItem('bakal_wizard_draft', JSON.stringify({
-        company, sector, website, teamSize, targetSectors, targetSize, targetZones,
+        company, sector, website, teamSize, jobRole, targetSectors, targetSize, targetZones,
         personaPrimary, tone, formality, valueProp, outreachProvider, outreachKey,
       }));
       const res = await request('/crm/salesforce/connect?from=wizard');
@@ -527,7 +534,7 @@ export default function OnboardingWizard({ onComplete }) {
     // Valider la clé CRM AVANT de la sauvegarder : sans ce contrôle, un token
     // invalide donnait une coche verte « CRM connecté » et l'utilisateur
     // découvrait le mensonge sur un import raté. On ne bloque que sur un refus
-    // explicite du fournisseur (401) — un fournisseur injoignable ou non
+    // explicite du fournisseur (401) · un fournisseur injoignable ou non
     // testable (Salesforce) laisse passer.
     const crmField = crmKey.trim() && crmProvider ? CRM_FIELD_MAP[crmProvider] : null;
     if (crmField) {
@@ -537,7 +544,7 @@ export default function OnboardingWizard({ onComplete }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ field: crmField, key: crmKey.trim() }),
         });
@@ -575,7 +582,7 @@ export default function OnboardingWizard({ onComplete }) {
 
     // Le bouton de l'etape 3 est cliquable deux fois : une fois pour lancer
     // l'import, une fois pour entrer dans l'app. Sans ce garde-fou, le second
-    // clic renverrait le profil et relancerait la synchro outreach — donc un
+    // clic renverrait le profil et relancerait la synchro outreach · donc un
     // double import chez le fournisseur.
     if (setupDoneRef.current) {
       finalize(token);
@@ -585,7 +592,7 @@ export default function OnboardingWizard({ onComplete }) {
 
     // Save profile to localStorage (ProfilePage will pick it up)
     const profile = {
-      company, sector, website, team_size: teamSize,
+      company, sector, website, team_size: teamSize, job_role: jobRole,
       target_sectors: targetSectors, target_size: targetSize, target_zones: targetZones,
       persona_primary: personaPrimary,
       default_tone: tone, default_formality: formality,
@@ -598,7 +605,7 @@ export default function OnboardingWizard({ onComplete }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(profile),
     }).catch(() => {/* ignore */});
@@ -610,7 +617,7 @@ export default function OnboardingWizard({ onComplete }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         }).catch(() => {});
       } else if (['apollo', 'instantly', 'smartlead'].includes(outreachProvider)) {
@@ -618,7 +625,7 @@ export default function OnboardingWizard({ onComplete }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ provider: outreachProvider }),
         }).catch(() => {});
@@ -627,7 +634,7 @@ export default function OnboardingWizard({ onComplete }) {
     // Import CRM : volontairement PAS en fire-and-forget.
     //
     // L'appel précédent ne visait que /keys/sync-crm, qui déclenche l'ANALYSE
-    // des deals — pas l'import des contacts. Résultat : un utilisateur
+    // des deals · pas l'import des contacts. Résultat : un utilisateur
     // Pipedrive ou HubSpot terminait l'inscription avec zéro opportunité en
     // base, donc `segments.total === 0`, donc la QuickWinCard du dashboard
     // renvoyait null. Le « wow » n'avait aucune matière sur laquelle porter.
@@ -655,7 +662,7 @@ export default function OnboardingWizard({ onComplete }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
       const body = await res.json().catch(() => ({}));
@@ -664,10 +671,10 @@ export default function OnboardingWizard({ onComplete }) {
       setImportState({ status: 'done', imported: body.imported ?? 0, error: null });
 
       // Compte-rendu de lecture : pur SQL, disponible immédiatement. Échec
-      // non bloquant — on retombe sur le message générique importDone.
+      // non bloquant · on retombe sur le message générique importDone.
       request('/crm/reading-summary')
-        .then(setReadingSummary)
-        .catch((err) => { console.warn('reading-summary failed:', err.message); });
+.then(setReadingSummary)
+.catch((err) => { console.warn('reading-summary failed:', err.message); });
 
       // L'analyse peut rester en tâche de fond : elle n'est pas nécessaire à
       // l'affichage des deals dormants, qui se calcule à la demande en SQL.
@@ -675,7 +682,7 @@ export default function OnboardingWizard({ onComplete }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       }).catch(() => {});
     } catch (err) {
@@ -694,7 +701,7 @@ export default function OnboardingWizard({ onComplete }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     }).catch(() => {});
 
@@ -753,8 +760,8 @@ export default function OnboardingWizard({ onComplete }) {
                     marginTop: 4,
                   }}>
                     {SECTOR_SUGGESTIONS
-                      .filter(s => !sector || s.toLowerCase().includes(sector.toLowerCase()))
-                      .map(s => (
+.filter(s => !sector || s.toLowerCase().includes(sector.toLowerCase()))
+.map(s => (
                         <div
                           key={s}
                           style={{
@@ -787,9 +794,21 @@ export default function OnboardingWizard({ onComplete }) {
                   <option value="100+">100+</option>
                 </select>
               </div>
+              <div className="form-group">
+                <label className="form-label">{t('wizard.jobRole')}</label>
+                <select className="form-input" value={jobRole} onChange={e => setJobRole(e.target.value)}>
+                  <option value="">{t('wizard.selectPlaceholder')}</option>
+                  <option value="dirigeant">{t('wizard.jobRoleFounder')}</option>
+                  <option value="responsable_commercial">{t('wizard.jobRoleSalesLead')}</option>
+                  <option value="commercial">{t('wizard.jobRoleSales')}</option>
+                  <option value="revops">{t('wizard.jobRoleRevops')}</option>
+                  <option value="marketing">{t('wizard.jobRoleMarketing')}</option>
+                  <option value="autre">{t('wizard.jobRoleOther')}</option>
+                </select>
+              </div>
             </div>
 
-            {/* Document upload — required */}
+            {/* Document upload · required */}
             <div style={{ marginTop: 20, padding: 16, border: `2px dashed ${uploadedDocs.length > 0 ? 'var(--success)' : 'var(--accent)'}`, borderRadius: 12, background: 'var(--bg-elevated)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
                 {t('wizard.uploadTitle')}
@@ -827,7 +846,7 @@ export default function OnboardingWizard({ onComplete }) {
             <div className="wizard-core-keys">
               {/* CRM en premier : c'est le hero job (réactivation de deals),
                   pas un à-côté. L'outreach et le ciblage descendent en bloc
-                  optionnel — l'inverse de la version précédente. */}
+                  optionnel · l'inverse de la version précédente. */}
               <div className="wizard-key-row">
                 <div className="wizard-key-icon">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -869,7 +888,8 @@ export default function OnboardingWizard({ onComplete }) {
                           fontSize: 13, color: 'var(--success)', background: 'var(--paper-2)',
                           borderRadius: 8, padding: '10px 12px', lineHeight: 1.5,
                         }}>
-                          {'✅'} {t('wizard.oauthConnected').replace('{provider}', crmLabel)}
+                          <Icon name="checkCircle" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                          {t('wizard.oauthConnected').replace('{provider}', crmLabel)}
                         </div>
                       );
                     }
@@ -1022,7 +1042,7 @@ export default function OnboardingWizard({ onComplete }) {
                     );
 
                     // HubSpot / Pipedrive : le geste par défaut est le bouton
-                    // OAuth — la clé API devient le « mode avancé ».
+                    // OAuth · la clé API devient le « mode avancé ».
                     const hasOauth = crmProvider === 'hubspot' || crmProvider === 'pipedrive';
                     if (hasOauth && !oauthUnavailable) {
                       return (
@@ -1074,7 +1094,7 @@ export default function OnboardingWizard({ onComplete }) {
               <div className="wizard-key-row">
                 <div className="wizard-key-icon">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <path d="M4 4h16c1.1 0 2.9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                     <polyline points="22,6 12,13 2,6" />
                   </svg>
                 </div>
@@ -1155,25 +1175,33 @@ export default function OnboardingWizard({ onComplete }) {
             </div>
             <div className="wizard-checklist">
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{company ? '\u2705' : '\u2B1C'}</span>
-                <span>{t('wizard.checkCompany')} {company ? `\u2014 ${company}` : t('wizard.checkCompanyLater')}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={company ? 'checkCircle' : 'circle'} size={14} />
+                </span>
+                <span>{t('wizard.checkCompany')} {company ? `  ${company}` : t('wizard.checkCompanyLater')}</span>
               </div>
               {/* CRM avant outreach : m\u00EAme hi\u00E9rarchie que les \u00E9tapes du wizard. */}
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{(crmKey || crmOauthConnected) && crmProvider ? '\u2705' : '\u2B1C'}</span>
-                <span>CRM {(crmKey || crmOauthConnected) && crmProvider ? `\u2014 ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={(crmKey || crmOauthConnected) && crmProvider ? 'checkCircle' : 'circle'} size={14} />
+                </span>
+                <span>CRM {(crmKey || crmOauthConnected) && crmProvider ? `  ${crmProvider.charAt(0).toUpperCase() + crmProvider.slice(1)}` : t('wizard.checkCrmOptional')}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{outreachKey && outreachProvider ? '\u2705' : '\u2B1C'}</span>
-                <span>{outreachLabel} {outreachKey && outreachProvider ? `\u2014 ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={outreachKey && outreachProvider ? 'checkCircle' : 'circle'} size={14} />
+                </span>
+                <span>{outreachLabel} {outreachKey && outreachProvider ? `  ${t('wizard.checkOutreachConnected')}` : t('wizard.checkOutreachSettings')}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{targetSectors || personaPrimary ? '\u2705' : '\u2B1C'}</span>
-                <span>{t('wizard.checkTargeting')} {targetSectors ? `\u2014 ${targetSectors}` : t('wizard.checkTargetingLater')}</span>
+                <span className="wizard-check-icon">
+                  <Icon name={targetSectors || personaPrimary ? 'checkCircle' : 'circle'} size={14} />
+                </span>
+                <span>{t('wizard.checkTargeting')} {targetSectors ? `  ${targetSectors}` : t('wizard.checkTargetingLater')}</span>
               </div>
               <div className="wizard-check-item">
-                <span className="wizard-check-icon">{'\u2705'}</span>
-                <span>{t('wizard.checkStyle')} {'\u2014'} {tone}, {formality}</span>
+                <span className="wizard-check-icon"><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>
+                <span>{t('wizard.checkStyle')} {' '} {tone}, {formality}</span>
               </div>
             </div>
             {/* Etat du premier import CRM. Sans ce retour, un import qui echoue
@@ -1249,7 +1277,7 @@ export default function OnboardingWizard({ onComplete }) {
     const tkn = localStorage.getItem('bakal_token');
     fetch('/api/auth/onboarding-complete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
+      headers: { 'Content-Type': 'application/json',...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
     }).catch(() => {});
     localStorage.setItem('bakal_onboarding_complete', 'true');
     if (onComplete) onComplete();

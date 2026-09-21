@@ -1,7 +1,7 @@
 /**
  * States OAuth CRM éphémères, partagés entre le flow produit
- * (routes/crm.js — connexion d'un compte, state porteur d'un userId) et le
- * diagnostic public (routes/public-diagnostic.js — lecture unique sans
+ * (routes/crm.js · connexion d'un compte, state porteur d'un userId) et le
+ * diagnostic public (routes/public-diagnostic.js · lecture unique sans
  * compte, state marqué `diagnostic: true`). Les deux flows partagent le même
  * callback enregistré chez les fournisseurs : /api/crm/:provider/callback.
  *

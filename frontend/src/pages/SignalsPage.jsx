@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Signals Page
+   BAKAL · Signals Page
    Signal-based prospecting: configure monitoring + view/action detected signals
    =============================================================================== */
 
@@ -7,12 +7,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
 import { showToast } from '../services/notifications';
+import Icon from '../components/Icon';
 
 const SIGNAL_TYPES = ['funding', 'hiring', 'news', 'job_change', 'leadership_change', 'competitor', 'product_launch', 'expansion', 'tech_adoption'];
 
 const SIGNAL_ICONS = {
-  funding: '💰', hiring: '👥', news: '📰', job_change: '🔄', leadership_change: '👔',
-  competitor: '⚔️', product_launch: '🚀', expansion: '🌍', tech_adoption: '⚡',
+  funding: 'revenue', hiring: 'users', news: 'news', job_change: 'refresh', leadership_change: 'briefcase',
+  competitor: 'shield', product_launch: 'rocket', expansion: 'globe', tech_adoption: 'zap',
 };
 
 const SIGNAL_COLORS = {
@@ -21,12 +22,27 @@ const SIGNAL_COLORS = {
   product_launch: '#EA580C', expansion: '#0D9488', tech_adoption: '#6D28D9',
 };
 
-export default function SignalsPage() {
+const HOWTO_KEY = 'bakal_signals_howto';
+
+/** `view` découpe la page en deux morceaux montables séparément :
+ *  'feed' (les signaux à traiter, dans la file « À valider ») et 'config'
+ *  (la surveillance, dans « Automatisations »). Sans `view`, la page se rend
+ *  entière, comme avant. */
+export default function SignalsPage({ view = null }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  const embedded = view === 'feed' || view === 'config';
 
-  const [activeTab, setActiveTab] = useState('feed');
+  const [activeTab, setActiveTab] = useState(embedded ? view : 'feed');
+  // « Comment ça marche » : fermable définitivement (même patron que la file de réactivation)
+  const [showHowTo, setShowHowTo] = useState(() => {
+    try { return !localStorage.getItem(HOWTO_KEY); } catch { return true; }
+  });
+  const dismissHowTo = () => {
+    setShowHowTo(false);
+    try { localStorage.setItem(HOWTO_KEY, '1'); } catch { /* ignore */ }
+  };
   const [signals, setSignals] = useState([]);
   const [counts, setCounts] = useState({});
   const [configs, setConfigs] = useState([]);
@@ -40,6 +56,7 @@ export default function SignalsPage() {
   const [companyData, setCompanyData] = useState(null);
   const [sequenceResult, setSequenceResult] = useState(null);
   const [creatingSequence, setCreatingSequence] = useState(null);
+  const [scanFrequency, setScanFrequency] = useState('weekly');
 
   const [form, setForm] = useState({
     name: '',
@@ -61,17 +78,57 @@ export default function SignalsPage() {
       setConfigs(cfgData.configs || []);
       // Load stats
       request('/signals/stats').then(d => setStats(d)).catch(() => {});
+      request('/signals/preferences').then(d => setScanFrequency(d.frequency || 'weekly')).catch(() => {});
     } catch { /* ignore */ }
     setLoading(false);
   }, [filter]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const handleFrequencyChange = async (freq) => {
+    const prev = scanFrequency;
+    setScanFrequency(freq);
+    try {
+      await request('/signals/preferences', { method: 'PUT', body: JSON.stringify({ frequency: freq }) });
+      showToast({ type: 'success', title: t('signals.freqSavedTitle'), message: t(`signals.freq_${freq}`) });
+    } catch (err) {
+      setScanFrequency(prev);
+      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+    }
+  };
+
   const handleScan = async () => {
     setScanning(true);
     try {
       const result = await request('/signals/scan', { method: 'POST' });
-      showToast({ type: 'success', title: t('signals.scanDone'), message: t('signals.scanDetected', { count: result.detected || 0 }) });
+
+      if (result.budgetExhausted) {
+        // Le quota de recherche web du jour est consommé par la veille
+        // automatique : ne pas faire croire que la recherche a eu lieu.
+        showToast({
+          type: 'warning',
+          title: t('signals.scanBudgetTitle'),
+          message: t('signals.scanBudgetMsg'),
+        });
+      } else if (result.nothingToScan) {
+        // Ni surveillance configurée, ni société dans le CRM : annoncer
+        // « 0 signal détecté » laissait croire qu'une recherche avait eu lieu.
+        showToast({
+          type: 'warning',
+          title: t('signals.scanNothingTitle'),
+          message: t('signals.scanNothingMsg'),
+        });
+      } else {
+        showToast({
+          type: 'success',
+          title: t('signals.scanDone'),
+          message: t('signals.scanDetected', { count: result.detected || 0 })
+            + ' · ' + t('signals.scanScope', {
+              configs: result.configs || 0,
+              companies: result.companiesScanned || 0,
+            }),
+        });
+      }
       await loadData();
     } catch { showToast({ type: 'error', title: t('signals.error'), message: t('signals.scanFailed') }); }
     setScanning(false);
@@ -118,7 +175,11 @@ export default function SignalsPage() {
       setShowCreate(false);
       setForm({ name: '', signalTypes: ['funding', 'hiring', 'news'], targetSectors: '', targetTitles: '', targetKeywords: '', targetCompetitors: '' });
       await loadData();
-    } catch { showToast({ type: 'error', title: t('signals.error'), message: t('signals.createConfigFailed') }); }
+    } catch (err) {
+      // Le backend refuse une config qui chercherait sur tout le web : son
+      // message dit précisément quoi corriger, le message générique non.
+      showToast({ type: 'error', title: t('signals.error'), message: err.message || t('signals.createConfigFailed') });
+    }
   };
 
   const handleDeleteConfig = async (id) => {
@@ -159,32 +220,51 @@ export default function SignalsPage() {
   const tabs = [
     { key: 'feed', label: t('signals.tabFeed'), count: counts.new || 0 },
     { key: 'config', label: t('signals.tabConfig'), count: configs.length },
-    companyView ? { key: 'company', label: `📊 ${companyView}`, count: null } : null,
+    companyView ? { key: 'company', label: companyView, icon: 'chart', count: null } : null,
   ].filter(Boolean);
 
+  const actions = (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {activeTab === 'config' && (
+        <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}
+          onClick={() => setShowCreate(true)}>
+          {t('signals.newConfigBtn')}
+        </button>
+      )}
+      <button className={`btn ${embedded ? 'btn-ghost' : 'btn-primary'}`} style={{ fontSize: embedded ? 12 : 13, padding: embedded ? '6px 14px' : '8px 18px' }}
+        onClick={handleScan} disabled={scanning}>
+        {!scanning && <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+        {scanning ? t('signals.scanning') : t('signals.scan')}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="dashboard-page">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{t('signals.title')}</h1>
-          <div className="page-subtitle">{t('signals.subtitle')}</div>
+    <div className={embedded ? undefined : 'dashboard-page'}>
+      {embedded ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 650 }}>
+              {view === 'config' ? t('signals.configTitle') : t('signals.title')}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              {view === 'config' ? t('signals.configSubtitle') : t('signals.subtitle')}
+            </div>
+          </div>
+          {actions}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {activeTab === 'config' && (
-            <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}
-              onClick={() => setShowCreate(true)}>
-              {t('signals.newConfigBtn')}
-            </button>
-          )}
-          <button className="btn btn-primary" style={{ fontSize: 13, padding: '8px 18px' }}
-            onClick={handleScan} disabled={scanning}>
-            {scanning ? t('signals.scanning') : t('signals.scan')}
-          </button>
+      ) : (
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">{t('signals.title')}</h1>
+            <div className="page-subtitle">{t('signals.subtitle')}</div>
+          </div>
+          {actions}
         </div>
-      </div>
+      )}
 
       {/* KPIs Dashboard */}
-      {stats?.kpis && (
+      {view !== 'config' && stats?.kpis && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           {[
             { label: t('signals.kpiWeek'), value: stats.kpis.this_week || 0, color: 'var(--accent)' },
@@ -204,8 +284,8 @@ export default function SignalsPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+      {/* Tabs · masqués quand la page est montée en morceau dans Automatisation */}
+      <div style={{ display: embedded ? 'none' : 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
         {tabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '10px 18px', border: 'none', background: 'transparent',
@@ -217,6 +297,32 @@ export default function SignalsPage() {
           </button>
         ))}
       </div>
+
+      {activeTab === 'feed' && showHowTo && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-body" style={{ padding: '14px 18px', position: 'relative' }}>
+            <button
+              className="btn btn-ghost"
+              style={{ position: 'absolute', top: 8, right: 8, fontSize: 12, padding: '2px 8px' }}
+              onClick={dismissHowTo}
+              aria-label={t('common.close')}
+            >
+              ×
+            </button>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('signals.howTitle')}</div>
+            {[t('signals.howStep1'), t('signals.howStep2'), t('signals.howStep3')].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{
+                  flexShrink: 0, width: 18, height: 18, borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                  background: 'var(--accent-glow)', color: 'var(--accent)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>{i + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
@@ -231,7 +337,8 @@ export default function SignalsPage() {
       ) : (
         <ConfigSection configs={configs} showCreate={showCreate} form={form} setForm={setForm}
           onCreateConfig={handleCreateConfig} onDeleteConfig={handleDeleteConfig}
-          onToggleConfig={handleToggleConfig} setShowCreate={setShowCreate} en={en} />
+          onToggleConfig={handleToggleConfig} setShowCreate={setShowCreate} en={en}
+          scanFrequency={scanFrequency} onChangeFrequency={handleFrequencyChange} />
       )}
     </div>
   );
@@ -270,7 +377,9 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
           textAlign: 'center', padding: 50, background: 'var(--bg-card)',
           border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>📡</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="radio" size={32} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t('signals.emptyFeed')}</div>
         </div>
       ) : (
@@ -290,7 +399,8 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                         fontSize: 10, padding: '2px 8px', borderRadius: 4,
                         background: `${color}15`, color, fontWeight: 600, textTransform: 'uppercase',
                       }}>
-                        {SIGNAL_ICONS[s.signal_type]} {t(`signals.type.${s.signal_type}`)}
+                        <Icon name={SIGNAL_ICONS[s.signal_type]} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                        {t(`signals.type.${s.signal_type}`)}
                       </span>
                       <span style={{
                         fontSize: 10, padding: '2px 8px', borderRadius: 4,
@@ -303,11 +413,29 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{s.title}</div>
                     {s.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{s.description}</div>}
+                    {/* Détail du relevance_score, même présentation que les facteurs
+                        churn (liste facteur + poids), en lecture positive comme l'upsell.
+                        Absent sur les signaux antérieurs à la migration 096. */}
+                    {Array.isArray(s.relevance_factors) && s.relevance_factors.length > 0 && (
+                      <div style={{
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                        borderRadius: 8, padding: '8px 12px', marginBottom: 6, maxWidth: 520,
+                      }}>
+                        {s.relevance_factors.map((f, i) => (
+                          <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                            <span>{f.label}</span>
+                            <span style={{ fontWeight: 600, color: f.weight >= 25 ? 'var(--success)' : 'var(--accent)' }}>
+                              {f.weight >= 0 ? '+' : ''}{f.weight}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
                       {s.company_name && <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
-                        onClick={(e) => { e.stopPropagation(); onViewCompany?.(s.company_name); }}>🏢 {s.company_name}</span>}
-                      {s.contact_name && <span>👤 {s.contact_name}{s.contact_title ? ` · ${s.contact_title}` : ''}</span>}
-                      {s.contact_email && <span>✉️ {s.contact_email}</span>}
+                        onClick={(e) => { e.stopPropagation(); onViewCompany?.(s.company_name); }}><Icon name="building" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.company_name}</span>}
+                      {s.contact_name && <span><Icon name="user" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.contact_name}{s.contact_title ? ` · ${s.contact_title}` : ''}</span>}
+                      {s.contact_email && <span><Icon name="mail" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.contact_email}</span>}
                       <span>{new Date(s.detected_at).toLocaleDateString(en ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' })}</span>
                     </div>
                   </div>
@@ -340,6 +468,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     )}
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', border: '1px solid var(--accent)', color: 'var(--accent)' }}
                       onClick={() => onCreateSequence?.(s.id)} disabled={creatingSequence === s.id}>
+                      {creatingSequence !== s.id && <Icon name="zap" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
                       {creatingSequence === s.id ? '...' : t('signals.createSequence')}
                     </button>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 12px', color: 'var(--text-muted)' }}
@@ -351,7 +480,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                 {sequenceResult?.signal?.id === s.id && sequenceResult?.sequence && (
                   <div style={{ marginTop: 10, padding: 12, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--accent)' }}>
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--accent)' }}>
-                      ⚡ {sequenceResult.sequence.name}
+                      <Icon name="zap" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{sequenceResult.sequence.name}
                     </div>
                     {sequenceResult.queuedEmailId && (
                       <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 8 }}>
@@ -360,7 +489,7 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                     )}
                     {sequenceResult.sequence.steps.map((step, i) => (
                       <div key={i} style={{ fontSize: 11, marginBottom: 6, paddingLeft: 8, borderLeft: '2px solid var(--border)' }}>
-                        <div style={{ fontWeight: 600 }}>{step.step} ({step.timing}) — {step.subject}</div>
+                        <div style={{ fontWeight: 600 }}>{step.step} ({step.timing}), {step.subject}</div>
                         <div style={{ color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>{step.body}</div>
                       </div>
                     ))}
@@ -368,7 +497,8 @@ function SignalFeed({ signals, counts, filter, setFilter, onAction, onLinkedInOu
                 )}
                 {s.status === 'actioned' && (
                   <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 8 }}>
-                    ✅ {s.action_taken === 'add_to_crm' ? t('signals.addedToCrm') :
+                    <Icon name="checkCircle" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                    {s.action_taken === 'add_to_crm' ? t('signals.addedToCrm') :
                         s.action_taken === 'send_email' ? t('signals.emailSent') : s.action_taken}
                   </div>
                 )}
@@ -391,7 +521,10 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>📊 {companyName}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="building" size={18} color="var(--accent)" />
+            <span>{companyName}</span>
+          </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {t('signals.signalsCount', { count: data.signals.length })} · {t('signals.contactsInCrm', { count: data.contacts.length })}
           </div>
@@ -452,9 +585,9 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
                   </span>
                 </div>
                 {s.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{s.description}</div>}
-                {s.contact_name && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>👤 {s.contact_name} {s.contact_title ? `· ${s.contact_title}` : ''}</div>}
+                {s.contact_name && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}><Icon name="user" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.contact_name} {s.contact_title ? `· ${s.contact_title}` : ''}</div>}
                 {s.status === 'actioned' && (
-                  <div style={{ fontSize: 10, color: 'var(--success)', marginTop: 4 }}>✅ {s.action_taken}</div>
+                  <div style={{ fontSize: 10, color: 'var(--success)', marginTop: 4 }}><Icon name="checkCircle" size={10} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />{s.action_taken}</div>
                 )}
               </div>
             );
@@ -467,10 +600,48 @@ function CompanyTimeline({ data, companyName, en, onClose }) {
 
 /* ═══ Config Section ═══ */
 
-function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onDeleteConfig, onToggleConfig, setShowCreate, en }) {
+/** Ce qui manque à une config pour produire une recherche qui veut dire
+ *  quelque chose. Même règle que le backend (routes/signals.js,
+ *  validateConfigFocus) : une requête sans secteur ni mot-clé part chercher
+ *  sur tout le web, et le type « Concurrent » ne cherche rien sans liste. */
+function missingFocus(form) {
+  const filled = (v) => String(v || '').split(',').some(s => s.trim());
+  const types = form.signalTypes || [];
+  if (types.length === 0) return 'types';
+  if (types.some(x => x !== 'competitor') && !filled(form.targetSectors) && !filled(form.targetKeywords)) return 'focus';
+  if (types.includes('competitor') && !filled(form.targetCompetitors)) return 'competitors';
+  return null;
+}
+
+function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onDeleteConfig, onToggleConfig, setShowCreate, en, scanFrequency, onChangeFrequency }) {
   const t = useT();
+  const missing = missingFocus(form);
   return (
     <div>
+      {/* Cadence de la veille automatique */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: '16px 20px' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{t('signals.freqTitle')}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>{t('signals.freqDesc')}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {['weekly', 'daily', 'off'].map(freq => (
+              <button key={freq} onClick={() => onChangeFrequency(freq)} style={{
+                padding: '7px 16px', fontSize: 12, borderRadius: 8,
+                border: `1px solid ${scanFrequency === freq ? 'var(--accent)' : 'var(--border)'}`,
+                background: scanFrequency === freq ? 'rgba(110,87,250,0.08)' : 'transparent',
+                color: scanFrequency === freq ? 'var(--accent)' : 'var(--text-muted)',
+                fontWeight: scanFrequency === freq ? 600 : 400, cursor: 'pointer',
+              }}>
+                {t(`signals.freq_${freq}`)}
+              </button>
+            ))}
+          </div>
+          {scanFrequency === 'off' && (
+            <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 8 }}>{t('signals.freqOffHint')}</div>
+          )}
+        </div>
+      </div>
+
       {/* Create form */}
       {showCreate && (
         <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
@@ -504,7 +675,8 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                       color: form.signalTypes.includes(value) ? 'var(--accent)' : 'var(--text-muted)',
                       cursor: 'pointer',
                     }}>
-                      {SIGNAL_ICONS[value]} {t(`signals.type.${value}`)}
+                      <Icon name={SIGNAL_ICONS[value]} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                      {t(`signals.type.${value}`)}
                     </button>
                   ))}
                 </div>
@@ -527,11 +699,29 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                 value={form.targetCompetitors} onChange={e => setForm(p => ({ ...p, targetCompetitors: e.target.value }))}
                 className="form-input" style={{ fontSize: 13, padding: '8px 12px' }} />
 
+              {/* Dire ce qui manque, au lieu de laisser créer une surveillance
+                  qui cherchera sur tout le web. */}
+              {missing && (
+                <div style={{
+                  fontSize: 12, lineHeight: 1.5, color: 'var(--text-secondary)',
+                  background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)', padding: '10px 12px',
+                }}>
+                  {t(`signals.missing.${missing}`)}
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowCreate(false)}>
                   {t('signals.cancel')}
                 </button>
-                <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={onCreateConfig} disabled={!form.name.trim()}>
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 12 }}
+                  onClick={onCreateConfig}
+                  disabled={!form.name.trim() || !!missing}
+                  title={missing ? t(`signals.missing.${missing}`) : undefined}
+                >
                   {t('signals.create')}
                 </button>
               </div>
@@ -546,7 +736,9 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
           textAlign: 'center', padding: 50, background: 'var(--bg-card)',
           border: '1px solid var(--border)', borderRadius: 12,
         }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>⚙️</div>
+          <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="settings" size={32} strokeWidth={1.5} />
+          </div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>
             {t('signals.emptyConfig')}
           </div>
@@ -572,7 +764,8 @@ function ConfigSection({ configs, showCreate, form, setForm, onCreateConfig, onD
                           background: `${SIGNAL_COLORS[st] || '#666'}15`,
                           color: SIGNAL_COLORS[st] || 'var(--text-muted)',
                         }}>
-                          {SIGNAL_ICONS[st]} {t(`signals.type.${st}`)}
+                          <Icon name={SIGNAL_ICONS[st]} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+                          {t(`signals.type.${st}`)}
                         </span>
                       ))}
                     </div>

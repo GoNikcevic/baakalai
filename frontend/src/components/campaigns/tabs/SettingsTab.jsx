@@ -39,7 +39,7 @@ export default function SettingsTab({ campaign: c, setCampaigns }) {
         </div>
       </div>
 
-      {/* Inline edit panel — always visible in settings tab */}
+      {/* Inline edit panel · always visible in settings tab */}
       <EditParamsPanel campaign={c} setCampaigns={setCampaigns} onClose={() => {}} />
     </div>
   );

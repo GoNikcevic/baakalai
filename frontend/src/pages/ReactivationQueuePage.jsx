@@ -1,0 +1,592 @@
+/* ===============================================================================
+   BAKAL · Reactivation Queue (generic)
+   Shared list page for "Deals à relancer" (kind=deal_reactivation) and
+   "Clients à upseller" (kind=auto_upsell). Rule-based candidate detection only · 
+   no AI call happens until the user opens a single candidate ("Voir le mail").
+   =============================================================================== */
+
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { request } from '../services/api-client';
+import { showToast } from '../services/notifications';
+import { useT, useI18n } from '../i18n';
+import Icon from '../components/Icon';
+import { useConfirm } from '../components/ConfirmModal';
+import ContactSubline from '../components/ContactSubline';
+
+const CRM_BANNER_KEY = 'bakal_reactivation_crm_banner_dismissed';
+const CRM_BANNER_TTL = 24 * 60 * 60 * 1000; // reappears after 24h
+const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
+
+export default function ReactivationQueuePage({ kind, i18nNamespace, detailRouteBase }) {
+  const t = useT();
+  const { lang } = useI18n();
+  // Seuil de dormance, réglable ici parce que c'est ici qu'on en voit l'effet.
+  // Il n'a de sens que pour les deals : l'upsell se déclenche sur un score.
+  const showStagnation = kind === 'deal_reactivation';
+  const [stagnation, setStagnation] = useState(null);
+  const [savingStagnation, setSavingStagnation] = useState(false);
+  // Le seuil apparaît dans quatre phrases de la page. Sans lui, elles
+  // annonçaient « 14 jours » en dur pendant que le champ affichait autre chose.
+  const stagnantDays = stagnation?.stagnantDays ?? 14;
+  const dateLocale = lang === 'en' ? 'en-US' : 'fr-FR';
+  const navigate = useNavigate();
+  const [tab, setTab] = useState('pending');
+  const [candidates, setCandidates] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [sort, setSort] = useState('overdue');
+  const [postponeFor, setPostponeFor] = useState(null);
+  const [postponeDate, setPostponeDate] = useState('');
+  const confirm = useConfirm();
+  const [selected, setSelected] = useState(() => new Set());
+  // null = pas d'envoi groupé en cours ; sinon { phase: 'drafting'|'sending', done, total }
+  const [bulk, setBulk] = useState(null);
+  // null = pas encore su ; l'état vide ne s'affiche qu'une fois la réponse connue
+  const [hasCrm, setHasCrm] = useState(null);
+  // Workflows de relance vivants (draft/active/paused), indexés par contact · 
+  // pour remplacer les boutons d'action par l'état du workflow en cours.
+  const [workflows, setWorkflows] = useState(() => new Map());
+  const [showCrmBanner, setShowCrmBanner] = useState(() => {
+    try {
+      const ts = parseInt(localStorage.getItem(CRM_BANNER_KEY) || '0', 10);
+      return !(ts > 0 && (Date.now() - ts) < CRM_BANNER_TTL);
+    } catch { return true; }
+  });
+  // « Comment ça marche » : fermable définitivement, par file (deal vs upsell)
+  const howToKey = `bakal_reactivation_howto_${kind}`;
+  const [showHowTo, setShowHowTo] = useState(() => {
+    try { return !localStorage.getItem(howToKey); } catch { return true; }
+  });
+
+  const dismissCrmBanner = () => {
+    setShowCrmBanner(false);
+    try { localStorage.setItem(CRM_BANNER_KEY, String(Date.now())); } catch { /* ignore */ }
+  };
+
+  const dismissHowTo = () => {
+    setShowHowTo(false);
+    try { localStorage.setItem(howToKey, '1'); } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    request('/reactivation/settings').then(setStagnation).catch(() => {});
+    request('/crm/providers')
+      .then(d => setHasCrm((d.providers || []).some(p => CRM_PROVIDERS.includes(p.provider) && p.connected)))
+      .catch(() => setHasCrm(true)); // en cas de doute, ne pas afficher le CTA « connecter »
+  }, []);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await request(`/reactivation/queue?kind=${kind}&sort=${sort}`);
+      setCandidates(data.candidates || []);
+    } catch {
+      setCandidates([]);
+    }
+    try {
+      const data = await request('/enrollments');
+      const map = new Map();
+      for (const e of data.enrollments || []) {
+        if (['draft', 'active', 'paused'].includes(e.status)) map.set(e.opportunity_id, e);
+      }
+      setWorkflows(map);
+    } catch { /* la file reste utilisable sans l'état des workflows */ }
+    setSelected(new Set()); // la liste a changé, une sélection sur l'ancienne n'a plus de sens
+    setLoading(false);
+  }, [kind, sort]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (tab !== 'history' || historyLoaded) return;
+    (async () => {
+      try {
+        const data = await request(`/reactivation/history?kind=${kind}`);
+        setHistory(data.events || []);
+      } catch {
+        setHistory([]);
+      }
+      setHistoryLoaded(true);
+    })();
+  }, [tab, historyLoaded, kind]);
+
+  const historyLabel = (e) => {
+    const date = new Date(e.date).toLocaleDateString(dateLocale);
+    if (e.eventType === 'sent') return t('reactivation.historySentOn', { date });
+    if (e.eventType === 'postponed') {
+      return t(e.isManual ? 'reactivation.historyPostponedManualOn' : 'reactivation.historyPostponedAutoOn', { date });
+    }
+    return t(e.status === 'won' ? 'reactivation.historyWonOn' : 'reactivation.historyLostOn', { date });
+  };
+
+  const historyBadgeColor = (eventType) => {
+    if (eventType === 'sent') return 'var(--accent)';
+    if (eventType === 'postponed') return 'var(--text-muted)';
+    return 'var(--text-secondary)';
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = candidates.length > 0 && selected.size === candidates.length;
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(candidates.map(c => c.id)));
+  };
+
+  // Plafond de POST /nurture/emails/approve-batch · au-delà on ré-appelle par tranches.
+  const APPROVE_BATCH_MAX = 20;
+
+  const handleBulkSend = async () => {
+    const targets = candidates.filter(c => selected.has(c.id));
+    if (!targets.length || bulk) return;
+    if (!await confirm(t('reactivation.bulkConfirm', { count: targets.length }))) return;
+
+    // Phase 1 · brouillons séquentiels : un appel IA par deal, et un compte SMTP
+    // perso n'aime pas les rafales de toute façon. Le endpoint réutilise un
+    // brouillon pending existant sans le régénérer.
+    setBulk({ phase: 'drafting', done: 0, total: targets.length });
+    const emailIds = [];
+    const nameByEmailId = {};
+    const failures = [];
+    for (const c of targets) {
+      const label = c.name || c.company || c.email;
+      try {
+        const data = await request(`/reactivation/${c.id}/draft?kind=${kind}`);
+        emailIds.push(data.email.id);
+        nameByEmailId[data.email.id] = label;
+      } catch (err) {
+        failures.push(`${label}, ${err.message}`);
+      }
+      setBulk(prev => (prev ? { ...prev, done: prev.done + 1 } : prev));
+    }
+
+    // Phase 2 · envoi en lot par tranches de 20.
+    let sent = 0;
+    if (emailIds.length) {
+      setBulk({ phase: 'sending', done: 0, total: emailIds.length });
+      for (let i = 0; i < emailIds.length; i += APPROVE_BATCH_MAX) {
+        const chunk = emailIds.slice(i, i + APPROVE_BATCH_MAX);
+        try {
+          const result = await request('/nurture/emails/approve-batch', {
+            method: 'POST',
+            body: JSON.stringify({ ids: chunk }),
+          });
+          sent += result.sent || 0;
+          for (const r of result.results || []) {
+            if (!r.success) failures.push(`${nameByEmailId[r.id] || r.id}, ${r.error || ''}`);
+          }
+        } catch (err) {
+          chunk.forEach(id => failures.push(`${nameByEmailId[id]}, ${err.message}`));
+        }
+        setBulk(prev => (prev ? { ...prev, done: i + chunk.length } : prev));
+      }
+    }
+
+    setBulk(null);
+    if (failures.length === 0) {
+      showToast({ type: 'success', title: t('reactivation.bulkDone', { sent }), message: '' });
+    } else {
+      showToast({
+        type: sent > 0 ? 'warning' : 'error',
+        title: t('reactivation.bulkPartial', { sent, failed: failures.length }),
+        message: failures.slice(0, 3).join('\n'),
+      });
+    }
+    loadData(); // les envoyés sortent de la file (cooldown 7 j), les échecs restent
+  };
+
+  const handlePostpone = async (id) => {
+    if (!postponeDate) return;
+    try {
+      await request(`/reactivation/${id}/postpone`, {
+        method: 'POST',
+        body: JSON.stringify({ date: postponeDate }),
+      });
+      setCandidates(prev => prev.filter(c => c.id !== id));
+      setPostponeFor(null);
+      setPostponeDate('');
+    } catch (err) {
+      showToast({ type: 'error', title: t('clients.error'), message: err.message });
+    }
+  };
+
+  return (
+    <div className="dashboard-page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{t(`${i18nNamespace}.title`)}</h1>
+          <div className="page-subtitle">{t(`${i18nNamespace}.subtitle`, { days: stagnantDays })}</div>
+        </div>
+        {showStagnation && stagnation && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            <label htmlFor="stagnant-days">{t('reactivation.stagnantAfter')}</label>
+            <input
+              id="stagnant-days"
+              type="number"
+              min={stagnation.minDays}
+              max={stagnation.maxDays}
+              defaultValue={stagnation.stagnantDays}
+              disabled={savingStagnation}
+              onBlur={async (e) => {
+                const value = Number(e.target.value);
+                if (!Number.isFinite(value) || value === stagnation.stagnantDays) return;
+                setSavingStagnation(true);
+                try {
+                  const saved = await request('/reactivation/settings', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ stagnantDays: value }),
+                  });
+                  setStagnation(prev => ({ ...prev, ...saved }));
+                  e.target.value = saved.stagnantDays;
+                  showToast({ type: 'success', title: t('reactivation.stagnantSaved'), message: t('reactivation.stagnantSavedDesc', { days: saved.stagnantDays }) });
+                  loadData();
+                } catch (err) {
+                  showToast({ type: 'error', title: t('common.error'), message: err.message });
+                  e.target.value = stagnation.stagnantDays;
+                } finally {
+                  setSavingStagnation(false);
+                }
+              }}
+              style={{
+                width: 64, padding: '5px 8px', fontSize: 12, textAlign: 'right',
+                border: '1px solid var(--border)', borderRadius: 6,
+                background: 'var(--bg-card)', color: 'var(--text-primary)',
+              }}
+            />
+            <span>{t('reactivation.stagnantDaysUnit')}</span>
+          </div>
+        )}
+        {tab === 'pending' && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className={`btn ${sort === 'value' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: 11, padding: '6px 12px' }}
+              onClick={() => setSort('value')}
+            >
+              {t('reactivation.sortByValue')}
+            </button>
+            <button
+              className={`btn ${sort === 'overdue' ? 'btn-primary' : 'btn-ghost'}`}
+              style={{ fontSize: 11, padding: '6px 12px' }}
+              onClick={() => setSort('overdue')}
+            >
+              {t('reactivation.sortByOverdue')}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-light)', marginBottom: 16 }}>
+        <button
+          onClick={() => setTab('pending')}
+          style={{
+            fontSize: 12, fontWeight: 600, padding: '8px 14px', border: 'none', cursor: 'pointer',
+            borderRadius: '6px 6px 0 0',
+            background: tab === 'pending' ? 'var(--accent-glow)' : 'none',
+            color: tab === 'pending' ? 'var(--accent)' : 'var(--text-muted)',
+            borderBottom: tab === 'pending' ? '2px solid var(--accent)' : '2px solid transparent',
+            transition: 'background 0.15s ease, color 0.15s ease',
+          }}
+        >
+          {t('reactivation.tabPending')}
+        </button>
+        <button
+          onClick={() => setTab('history')}
+          style={{
+            fontSize: 12, fontWeight: 600, padding: '8px 14px', border: 'none', cursor: 'pointer',
+            borderRadius: '6px 6px 0 0',
+            background: tab === 'history' ? 'var(--accent-glow)' : 'none',
+            color: tab === 'history' ? 'var(--accent)' : 'var(--text-muted)',
+            borderBottom: tab === 'history' ? '2px solid var(--accent)' : '2px solid transparent',
+            transition: 'background 0.15s ease, color 0.15s ease',
+          }}
+        >
+          {t('reactivation.tabHistory')}
+        </button>
+      </div>
+
+      {tab === 'pending' && showHowTo && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-body" style={{ padding: '14px 18px', position: 'relative' }}>
+            <button
+              className="btn btn-ghost"
+              style={{ position: 'absolute', top: 8, right: 8, fontSize: 12, padding: '2px 8px' }}
+              onClick={dismissHowTo}
+              aria-label={t('common.close')}
+            >
+              ×
+            </button>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{t('reactivation.howTitle')}</div>
+            {[t(`${i18nNamespace}.howStep1`, { days: stagnantDays }), t('reactivation.howStep2'), t('reactivation.howStep3')].map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{
+                  flexShrink: 0, width: 18, height: 18, borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                  background: 'var(--accent-glow)', color: 'var(--accent)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>{i + 1}</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === 'pending' && showCrmBanner && (
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          background: 'var(--accent-glow)', border: '1px solid var(--border-light)',
+          borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12,
+        }}>
+          <span style={{ color: 'var(--text-secondary)' }}>
+            <Icon name="pen" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {t('reactivation.crmHygieneBanner', { days: stagnantDays })}
+          </span>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 11, padding: '2px 8px', flexShrink: 0 }}
+            onClick={dismissCrmBanner}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {tab === 'pending' && !loading && candidates.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, minHeight: 28 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: bulk ? 'default' : 'pointer' }}>
+            <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} disabled={!!bulk} />
+            {t('reactivation.selectAll')}
+          </label>
+          {bulk ? (
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>
+              {t(bulk.phase === 'drafting' ? 'reactivation.bulkDrafting' : 'reactivation.bulkSending', { done: bulk.done, total: bulk.total })}
+            </span>
+          ) : selected.size > 0 && (
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 11, padding: '4px 12px' }}
+              onClick={handleBulkSend}
+            >
+              {t('reactivation.bulkSend', { count: selected.size })}
+            </button>
+          )}
+        </div>
+      )}
+
+      {tab === 'pending' ? (
+        loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>...</div>
+        ) : candidates.length === 0 ? (
+          hasCrm === false ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13, maxWidth: 420, margin: '0 auto 16px' }}>
+                {t('reactivation.noCandidatesNoCrm')}
+              </div>
+              <button className="btn btn-primary" onClick={() => navigate('/settings')}>
+                {t('reactivation.connectCrmCta')}
+              </button>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
+              {hasCrm === null ? t('reactivation.noCandidates') : t('reactivation.noCandidatesAllClear', { days: stagnantDays })}
+            </div>
+          )
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {candidates.map(c => (
+              <div key={c.id} className="card">
+                <div className="card-body" style={{ padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.id)}
+                      onChange={() => toggleSelect(c.id)}
+                      disabled={!!bulk}
+                      aria-label={t('reactivation.selectOne', { name: c.name || c.company || c.email })}
+                      style={{ marginTop: 3, marginRight: 12, flexShrink: 0, cursor: bulk ? 'default' : 'pointer' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name || c.company || c.email}</div>
+                      <ContactSubline contact={c} withEmail={false} />
+                      {!c.factors && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{c.reason}</div>
+                      )}
+                      {c.hasFailedSend && (
+                        <div style={{ fontSize: 11, color: 'var(--danger, #d64545)', marginTop: 4, fontWeight: 600 }}>
+                          <Icon name="alert" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                          {t('reactivation.sendFailedBadge')}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {c.factors && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                          {t('reactivation.currentContract')}
+                        </div>
+                      )}
+                      {c.dealValue != null && (
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>
+                          {Math.round(c.dealValue).toLocaleString(dateLocale)} €
+                        </div>
+                      )}
+                      {c.score != null && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Score : {c.score}/100</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Score breakdown, même présentation que la section "À risque"
+                      (liste de facteurs + poids coloré), seulement pour les
+                      candidats upsell (deal_reactivation garde la ligne "reason"
+                      simple ci-dessus, sans factors). */}
+                  {c.factors && c.factors.length > 0 && (
+                    <div style={{
+                      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                      borderRadius: 8, padding: '8px 12px', marginTop: 10,
+                    }}>
+                      {c.factors.map((f, i) => (
+                        <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>{f.detail}</span>
+                          <span style={{ fontWeight: 600, color: f.weight >= 25 ? 'var(--success)' : 'var(--accent)' }}>
+                            {f.weight >= 0 ? '+' : ''}{f.weight}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Produits déjà souscrits vs additionnels possibles, seulement
+                      si des lignes de produit existent pour cette équipe. */}
+                  {(c.ownedProducts?.length > 0 || c.crossSellProducts?.length > 0) && (
+                    <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
+                      {c.ownedProducts?.length > 0 && (
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>
+                            {t('reactivation.productsOwned')}
+                          </div>
+                          {c.ownedProducts.map((p, i) => (
+                            <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '1px 0' }}>{'✓ ' + p}</div>
+                          ))}
+                        </div>
+                      )}
+                      {c.crossSellProducts?.length > 0 && (
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <div style={{ fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>
+                            {t('reactivation.productsCrossSell')}
+                          </div>
+                          {c.crossSellProducts.map((p, i) => (
+                            <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '1px 0' }}>{'+ ' + p}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {(() => {
+                      const wf = workflows.get(c.id);
+                      if (wf?.status === 'active' || wf?.status === 'paused') {
+                        // Un workflow tourne : l'état remplace les actions.
+                        return (
+                          <button
+                            className="btn btn-ghost"
+                            style={{
+                              fontSize: 11, padding: '4px 12px', fontWeight: 700,
+                              color: wf.status === 'active' ? 'var(--success)' : 'var(--text-secondary)',
+                              border: `1px solid ${wf.status === 'active' ? 'var(--success)' : 'var(--border)'}`,
+                            }}
+                            onClick={() => navigate(`${detailRouteBase}/${c.id}/workflow`)}
+                          >
+                            {t(wf.status === 'active' ? 'workflow.badgeActive' : 'workflow.badgePaused', {
+                              done: wf.done_steps ?? 0, total: wf.total_steps ?? 0,
+                            })}
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          className="btn btn-accent"
+                          style={{ fontSize: 11, padding: '4px 12px' }}
+                          onClick={() => navigate(`${detailRouteBase}/${c.id}/workflow`)}
+                        >
+                          {t(wf?.status === 'draft' ? 'workflow.resumeDraft' : 'workflow.propose')}
+                        </button>
+                      );
+                    })()}
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: '4px 12px' }}
+                      onClick={() => navigate(`${detailRouteBase}/${c.id}`)}
+                    >
+                      {t('reactivation.viewEmail')}
+                    </button>
+
+                    {postponeFor === c.id ? (
+                      <>
+                        <input
+                          type="date"
+                          value={postponeDate}
+                          onChange={(e) => setPostponeDate(e.target.value)}
+                          style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)' }}
+                        />
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 12px' }} onClick={() => handlePostpone(c.id)}>
+                          OK
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: 11, padding: '4px 8px' }}
+                          onClick={() => { setPostponeFor(null); setPostponeDate(''); }}
+                        >
+                          ×
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn btn-ghost"
+                        style={{ fontSize: 11, padding: '4px 12px' }}
+                        onClick={() => setPostponeFor(c.id)}
+                      >
+                        {t('reactivation.postpone')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        !historyLoaded ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>...</div>
+        ) : history.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+            {t('reactivation.historyEmpty')}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {history.map((e, idx) => (
+              <div key={`${e.eventType}-${e.opportunityId}-${idx}`} className="card">
+                <div className="card-body" style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{e.name || e.company}</div>
+                    {e.name && <ContactSubline contact={e} withEmail={false} />}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: historyBadgeColor(e.eventType) }}>
+                    {historyLabel(e)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}

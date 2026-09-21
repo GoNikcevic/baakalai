@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Freeze deploys — creates .deploy-freeze at repo root, commits and pushes
+# Freeze deploys : creates .deploy-freeze at repo root, commits and pushes
 # it. The smoke-test CI workflow fails fast when this file exists, and
 # (if "Wait for CI" is enabled in Railway) production stops auto-deploying
 # until you run ./scripts/unfreeze-deploy.sh.
@@ -47,7 +47,7 @@ To unfreeze: ./scripts/unfreeze-deploy.sh
 EOF
 
 git add .deploy-freeze
-git commit -m "chore: freeze deploys — $REASON"
+git commit -m "chore: freeze deploys, $REASON"
 git push
 
 echo ""

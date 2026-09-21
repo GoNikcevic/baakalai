@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Recommendations Page (React)
+   BAKAL · Recommendations Page (React)
    Ported from app/recos.js + HTML mockup.
    Shows AI recommendations with filter, apply/modify/dismiss actions, diff panels.
    =============================================================================== */
@@ -9,6 +9,7 @@ import { useApp } from '../context/useApp';
 import api, { sendRecoFeedback } from '../services/api-client';
 import { sanitizeHtml } from '../services/sanitize';
 import { useI18n } from '../i18n';
+import Icon from '../components/Icon';
 
 /* ─── Filter definitions (keyed by internal ID, labels are i18n'd in render) ─── */
 
@@ -46,9 +47,9 @@ export default function RecosPage() {
       if (campaignEntries.length === 0) return;
 
       // Fetch diagnostics for all campaigns + memory patterns in parallel
-      const [memoryRes, ...diagResults] = await Promise.all([
+      const [memoryRes,...diagResults] = await Promise.all([
         api.getMemory().catch(() => ({ patterns: [] })),
-        ...campaignEntries.map(c =>
+...campaignEntries.map(c =>
           api.getDiagnostics(c._backendId || c.id).catch(() => ({ diagnostics: [] }))
         ),
       ]);
@@ -73,7 +74,7 @@ export default function RecosPage() {
         });
       });
 
-      // Always sync — even if empty (user should see empty state, not stale demo)
+      // Always sync · even if empty (user should see empty state, not stale demo)
       setRecos(realRecos);
 
       // Build insights from memory patterns
@@ -163,7 +164,7 @@ export default function RecosPage() {
     setRecos(prev => prev.map(r => {
       if (r.id !== id) return r;
       return {
-        ...r,
+...r,
         status: 'applied',
         priority: 'applied',
         appliedNote: en
@@ -177,7 +178,7 @@ export default function RecosPage() {
   const dismissReco = useCallback((id) => {
     setRecos(prev => prev.map(r => {
       if (r.id !== id) return r;
-      return { ...r, status: 'dismissed' };
+      return {...r, status: 'dismissed' };
     }));
   }, []);
 
@@ -198,7 +199,7 @@ export default function RecosPage() {
   const applyModified = useCallback((id) => {
     setRecos(prev => prev.map(r => {
       if (r.id !== id) return r;
-      return { ...r, after: editText };
+      return {...r, after: editText };
     }));
     applyReco(id);
   }, [editText, applyReco]);
@@ -224,7 +225,7 @@ export default function RecosPage() {
   }, [backendAvailable, campaigns]);
 
   const handleInsightFeedback = useCallback(async (idx, insight, feedback) => {
-    setRatedInsights(prev => ({ ...prev, [idx]: feedback }));
+    setRatedInsights(prev => ({...prev, [idx]: feedback }));
     try {
       await sendRecoFeedback(null, insight.title + ': ' + insight.text, feedback);
     } catch {
@@ -328,7 +329,7 @@ export default function RecosPage() {
               </div>
             )}
 
-            {/* Applied diff — show only the applied version */}
+            {/* Applied diff · show only the applied version */}
             {isApplied && reco.after && (
               <div className="reco-diff">
                 <div className="reco-diff-panel">
@@ -411,13 +412,13 @@ export default function RecosPage() {
           <div className="reco-stat-value" style={{ color: 'var(--warning)' }}>{stats.pending}</div>
           <div className="reco-stat-label">{en ? 'Pending' : 'En attente'}</div>
           <div className="reco-stat-trend" style={{ color: 'var(--warning)' }}>
-            {stats.pending > 0 ? (en ? `${stats.pending} pending` : `${stats.pending} en attente`) : '\u2014'}
+            {stats.pending > 0 ? (en ? `${stats.pending} pending` : `${stats.pending} en attente`) : ' '}
           </div>
         </div>
         <div className="reco-stat-card">
           <div className="reco-stat-value" style={{ color: 'var(--text-muted)' }}>{stats.ignored}</div>
           <div className="reco-stat-label">{en ? 'Dismissed' : 'Ignor\u00E9es'}</div>
-          <div className="reco-stat-trend" style={{ color: 'var(--text-muted)' }}>{'—'}</div>
+          <div className="reco-stat-trend" style={{ color: 'var(--text-muted)' }}>{' '}</div>
         </div>
       </div>
 
@@ -471,12 +472,12 @@ export default function RecosPage() {
                         onClick={() => handleInsightFeedback(i, ins, 'useful')}
                         style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
                         title={en ? 'Useful' : 'Utile'}
-                      >{'\uD83D\uDC4D'}</button>
+                      ><Icon name="thumbsUp" size={14} /></button>
                       <button
                         onClick={() => handleInsightFeedback(i, ins, 'not_useful')}
                         style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', fontSize: '14px', lineHeight: 1 }}
                         title={en ? 'Not useful' : 'Pas utile'}
-                      >{'\uD83D\uDC4E'}</button>
+                      ><Icon name="thumbsDown" size={14} /></button>
                     </>
                   )}
                 </div>

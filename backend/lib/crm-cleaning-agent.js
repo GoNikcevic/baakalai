@@ -23,6 +23,49 @@ const dropcontact = require('../api/dropcontact');
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
+// Domaines jetables les plus répandus · liste statique volontairement courte
+// (les gros services) : un faux positif ici coûte plus cher qu'un raté.
+const DISPOSABLE_DOMAINS = new Set([
+  'mailinator.com', 'yopmail.com', 'yopmail.fr', 'guerrillamail.com', '10minutemail.com',
+  'tempmail.com', 'temp-mail.org', 'throwaway.email', 'maildrop.cc', 'getnada.com',
+  'trashmail.com', 'trashmail.fr', 'jetable.org', 'mail-temporaire.fr', 'sharklasers.com',
+]);
+
+// Typos courantes des grands fournisseurs → domaine corrigé. Uniquement des
+// fautes non ambiguës (un vrai domaine d'entreprise ne matche jamais ces formes).
+const TYPO_DOMAINS = {
+  'gmial.com': 'gmail.com', 'gamil.com': 'gmail.com', 'gmal.com': 'gmail.com',
+  'gmai.com': 'gmail.com', 'gmail.co': 'gmail.com', 'gmail.con': 'gmail.com',
+  'gmail.cm': 'gmail.com', 'gnail.com': 'gmail.com',
+  'hotmial.com': 'hotmail.com', 'hotmal.com': 'hotmail.com', 'hotmail.con': 'hotmail.com',
+  'hotmail.fr.': 'hotmail.fr', 'hotmai.com': 'hotmail.com',
+  'outlok.com': 'outlook.com', 'outloook.com': 'outlook.com', 'outlook.con': 'outlook.com',
+  'yahooo.com': 'yahoo.com', 'yaho.com': 'yahoo.com', 'yahoo.con': 'yahoo.com',
+  'orage.fr': 'orange.fr', 'ornage.fr': 'orange.fr', 'wanado.fr': 'wanadoo.fr',
+};
+
+// ── Credentials resolution ──
+
+/**
+ * Resolve credentials for a specific provider. Every provider except Salesforce returns the
+ * same bare decrypted string getUserKey() already returns. Salesforce's real API calls need
+ * { instanceUrl, accessToken } · getUserKey only returns the decrypted access token, so
+ * instance_url is read separately (same query pattern used elsewhere, e.g. routes/crm.js's
+ * /fields/:provider and lib/crm-token.js's resolveCrmForUser).
+ */
+async function getProviderCredentials(userId, provider) {
+  const token = await getUserKey(userId, provider);
+  if (provider !== 'salesforce' || !token) return token;
+
+  const integration = await db.query(
+    `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
+    [userId]
+  );
+  const instanceUrl = integration.rows[0]?.instance_url;
+  if (!instanceUrl) return null;
+  return { accessToken: token, instanceUrl };
+}
+
 // ── Provider Adapters ──
 
 function getAdapter(provider) {
@@ -56,15 +99,23 @@ function getAdapter(provider) {
         async deletePerson(token, id) {
           return pipedrive.deletePerson(token, id);
         },
+        async createPerson(token, data) {
+          const created = await pipedrive.createPerson(token, data);
+          // createPerson doesn't accept phone directly · patch it in immediately so a
+          // recreated (undone) contact restores as many original fields as possible.
+          if (data.phone) await pipedrive.updatePerson(token, created.id, { phone: data.phone });
+          return created;
+        },
       };
 
     case 'odoo': {
       const odoo = require('../api/odoo');
+      const parseOdooCreds = (token) => {
+        try { return JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
+      };
       return {
         async listPersons(token) {
-          let creds;
-          try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
-          return odoo.listAllContacts(creds);
+          return odoo.listAllContacts(parseOdooCreds(token));
         },
         normalizePerson(raw) {
           return {
@@ -79,12 +130,18 @@ function getAdapter(provider) {
           };
         },
         async updatePerson(token, id, data) {
-          let creds;
-          try { creds = JSON.parse(token); } catch { throw new Error('Odoo credentials are malformed'); }
-          return odoo.updateContact(creds, id, data);
+          return odoo.updateContact(parseOdooCreds(token), id, data);
         },
-        async deletePerson() {
-          throw new Error('Odoo does not support contact deletion via API — archive instead');
+        async deletePerson(token, id) {
+          // Archive (not a hard delete) · res.partner is frequently FK-referenced, and
+          // archiving keeps the id + relations intact so undo is instant (unarchivePerson).
+          return odoo.archiveContact(parseOdooCreds(token), id);
+        },
+        async unarchivePerson(token, id) {
+          return odoo.unarchiveContact(parseOdooCreds(token), id);
+        },
+        async createPerson(token, data) {
+          return odoo.createContact(parseOdooCreds(token), data);
         },
       };
     }
@@ -121,22 +178,69 @@ function getAdapter(provider) {
         async deletePerson(token, id) {
           return hubspot.archiveContact(token, id);
         },
+        async createPerson(token, data) {
+          const props = {};
+          if (data.name) {
+            const parts = data.name.split(' ');
+            props.firstname = parts[0] || '';
+            props.lastname = parts.slice(1).join(' ') || '';
+          }
+          if (data.email) props.email = data.email;
+          if (data.company) props.company = data.company;
+          if (data.title) props.jobtitle = data.title;
+          return hubspot.createContact(token, props);
+        },
+      };
+    }
+
+    case 'salesforce': {
+      // Real, native-ID adapter (pulled out of the notion/airtable local-DB-only bucket · 
+      // api/salesforce.js already has a real listContacts/updateContact that was never wired
+      // in here). `token` for this provider is { accessToken, instanceUrl } · see
+      // getProviderCredentials, not a bare string like every other provider.
+      const salesforce = require('../api/salesforce');
+      return {
+        async listPersons(creds) {
+          return salesforce.listContacts(creds.instanceUrl, creds.accessToken);
+        },
+        normalizePerson(raw) {
+          return {
+            id: raw.id,
+            name: raw.name || '',
+            email: raw.email ? raw.email.toLowerCase().trim() : null,
+            phone: raw.phone || null,
+            title: raw.title || '',
+            company: raw.company || '',
+            updatedAt: raw.updatedAt || null,
+            raw,
+          };
+        },
+        async updatePerson(creds, id, data) {
+          return salesforce.updateContact(creds.instanceUrl, creds.accessToken, id, data);
+        },
+        async deletePerson(creds, id) {
+          return salesforce.deleteContact(creds.instanceUrl, creds.accessToken, id);
+        },
+        async createPerson(creds, data) {
+          return salesforce.createContact(creds.instanceUrl, creds.accessToken, data);
+        },
       };
     }
 
     case 'notion':
-    case 'airtable':
-    case 'salesforce': {
-      // For these providers, scan from already-imported opportunities in Baakalai DB
-      // Filter by crm_provider to avoid cross-CRM false duplicates
-      const dbProvider = provider;
+    case 'airtable': {
+      // No update/delete capability exists for these providers (create-only push functions · 
+      // see api/notion-crm.js / api/airtable-crm.js) · scan from Baakalai's own imported
+      // opportunities rows instead of the live API, and keep updatePerson/deletePerson as
+      // documented no-ops ("manual only" · the Data Quality page's duplicates strate shows a
+      // manual checklist instead of attempting a remote write for these two).
       return {
         async listPersons(_token, userId) {
-          const result = await db.query(
-            'SELECT * FROM opportunities WHERE user_id = $1 AND crm_provider = $2 ORDER BY created_at DESC LIMIT 500',
-            [userId, dbProvider]
-          );
-          return result.rows;
+          const opps = await db.opportunities.listByUser(userId, 500);
+          // listByUser returns every local opportunity regardless of source · scope strictly to
+          // contacts actually from this provider. Contacts with no known CRM origin at all get
+          // their own separate "__no_crm__" bucket instead (see below), not folded in here.
+          return opps.filter(o => o.crm_provider === provider);
         },
         normalizePerson(raw) {
           return {
@@ -150,8 +254,35 @@ function getAdapter(provider) {
             raw,
           };
         },
-        async updatePerson() { /* no external CRM update for these — scan only */ },
-        async deletePerson() { /* no external CRM delete for these — scan only */ },
+        async updatePerson() { /* no external CRM update for these, scan only */ },
+        async deletePerson() { /* no external CRM delete for these, scan only */ },
+      };
+    }
+
+    case '__no_crm__': {
+      // Pseudo-provider (not a real integration, never in CONNECTABLE_PROVIDERS) for contacts
+      // with no known CRM origin · manually created, or imported before owner-mapping existed.
+      // Always scanned regardless of which real CRMs are connected, same local-DB-only,
+      // no-remote-write shape as Notion/Airtable.
+      return {
+        async listPersons(_token, userId) {
+          const opps = await db.opportunities.listByUser(userId, 500);
+          return opps.filter(o => !o.crm_provider);
+        },
+        normalizePerson(raw) {
+          return {
+            id: raw.id,
+            name: raw.name || '',
+            email: raw.email ? raw.email.toLowerCase().trim() : null,
+            phone: raw.phone || null,
+            title: raw.title || '',
+            company: raw.company || '',
+            updatedAt: raw.updated_at || raw.created_at || null,
+            raw,
+          };
+        },
+        async updatePerson() { /* no CRM to update, local contact only */ },
+        async deletePerson() { /* no CRM to delete from, local contact only */ },
       };
     }
 
@@ -175,17 +306,47 @@ function isValidEmail(email) {
   return email && EMAIL_RE.test(email);
 }
 
+// ── Merge diff (full field comparison across a duplicate group) ──
+
+/**
+ * Given the full-snapshot contacts array for one duplicate group (from scanCRM's
+ * duplicate_email/duplicate_name issues), compare ALL fields · not just name · and surface
+ * exactly which contact had which value, plus a heuristic reconciled record. This is what the
+ * merge-review UI reads before a user confirms a merge, so nothing is silently dropped.
+ */
+function computeMergeDiff(contacts) {
+  const fields = ['name', 'email', 'phone', 'title', 'company'];
+  const perContact = contacts.map(c => ({
+    id: c.id, name: c.name, email: c.email, phone: c.phone, title: c.title, company: c.company, updatedAt: c.updatedAt,
+  }));
+
+  // Tiebreaker for real conflicts: prefer the most-recently-updated contact's value.
+  const mostRecent = [...contacts].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))[0];
+
+  const diffs = {};
+  const suggested = {};
+  for (const field of fields) {
+    const values = [...new Set(contacts.map(c => c[field]).filter(v => v !== null && v !== undefined && v !== ''))];
+    diffs[field] = { values, conflict: values.length > 1 };
+    if (values.length === 0) suggested[field] = null;
+    else if (values.length === 1) suggested[field] = values[0];
+    else suggested[field] = mostRecent?.[field] || values[0];
+  }
+
+  return { fields, perContact, diffs, suggested };
+}
+
 // ── Scan CRM ──
 
 /**
  * Full CRM health scan.
  * @param {string} userId
- * @param {string} provider — 'pipedrive', 'hubspot', 'salesforce'
+ * @param {string} provider · 'pipedrive', 'hubspot', 'salesforce'
  * @returns {{ score, totalContacts, issues[], summary }}
  */
 async function scanCRM(userId, provider) {
-  const dbBasedProviders = ['notion', 'airtable', 'salesforce'];
-  const token = await getUserKey(userId, provider);
+  const dbBasedProviders = ['notion', 'airtable', '__no_crm__'];
+  const token = await getProviderCredentials(userId, provider);
   if (!token && !dbBasedProviders.includes(provider)) {
     throw new Error(`No ${provider} API key configured`);
   }
@@ -202,7 +363,10 @@ async function scanCRM(userId, provider) {
     if (!p.email) continue;
     const key = p.email.toLowerCase();
     if (!emailGroups.has(key)) emailGroups.set(key, []);
-    emailGroups.get(key).push({ id: p.id, name: p.name, email: p.email, company: p.company });
+    // Full snapshot (not just id/name/email/company) · this is what confirm-merge's field
+    // diff/reconciliation reads, persisted as-is into crm_cleaning_reports.issues so the
+    // merge-review UI never needs an extra live re-fetch.
+    emailGroups.get(key).push({ id: p.id, name: p.name, email: p.email, phone: p.phone, title: p.title, company: p.company, updatedAt: p.updatedAt });
   }
   for (const [email, group] of emailGroups) {
     if (group.length > 1) {
@@ -223,7 +387,7 @@ async function scanCRM(userId, provider) {
     if (!p.name || !p.company) continue;
     const key = `${p.name.toLowerCase().trim()}|${p.company.toLowerCase().trim()}`;
     if (!nameGroups.has(key)) nameGroups.set(key, []);
-    nameGroups.get(key).push({ id: p.id, name: p.name, email: p.email, company: p.company });
+    nameGroups.get(key).push({ id: p.id, name: p.name, email: p.email, phone: p.phone, title: p.title, company: p.company, updatedAt: p.updatedAt });
   }
   for (const [nameKey, group] of nameGroups) {
     if (group.length > 1) {
@@ -289,7 +453,7 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // 4b. Invalid email domain (MX check) — only for emails that pass regex
+  // 4b. Invalid email domain (MX check) · only for emails that pass regex
   const validFormatEmails = persons.filter(p => p.email && isValidEmail(p.email));
   // Group by domain to avoid redundant DNS lookups, limit to first 100 contacts
   const domainGroups = new Map();
@@ -316,7 +480,7 @@ async function scanCRM(userId, provider) {
   for (const [domain, contacts] of domainGroups) {
     const mx = mxCache.get(domain);
     if (mx === null) {
-      // No MX records — domain cannot receive email
+      // No MX records · domain cannot receive email
       for (const p of contacts) {
         invalidDomainContacts.push({ id: p.id, name: p.name, email: p.email, domain });
       }
@@ -334,26 +498,87 @@ async function scanCRM(userId, provider) {
     });
   }
 
+  // 4c. Disposable email domains · a throwaway address is never a real buyer contact.
+  const disposable = validFormatEmails.filter(p => DISPOSABLE_DOMAINS.has(p.email.split('@')[1].toLowerCase()));
+  if (disposable.length > 0) {
+    issues.push({
+      type: 'disposable_email',
+      severity: 'medium',
+      contacts: disposable.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email })),
+      count: disposable.length,
+      suggestedAction: 'archive',
+    });
+  }
+
+  // 4d. Typo'd provider domains (gmial.com…) · fixable in one click, so worth
+  // its own issue type with the corrected address precomputed.
+  const typos = [];
+  for (const p of validFormatEmails) {
+    const domain = p.email.split('@')[1].toLowerCase();
+    const fixed = TYPO_DOMAINS[domain];
+    if (fixed) typos.push({ id: p.id, name: p.name, email: p.email, suggestedFix: p.email.split('@')[0] + '@' + fixed });
+  }
+  if (typos.length > 0) {
+    issues.push({
+      type: 'email_typo',
+      severity: 'high',
+      contacts: typos.slice(0, 50),
+      count: typos.length,
+      suggestedAction: 'fix',
+    });
+  }
+
+  // 4e. Emails ayant bouncé à l'envoi (tamponnés par email-outbound sur rejet 5xx
+  // définitif) · le signal le plus fiable : l'adresse n'existe plus, la personne
+  // a probablement quitté la société.
+  const bounced = [];
+  try {
+    const bouncedRows = await db.query(
+      `SELECT id, name, email, email_bounced_at, email_bounce_reason FROM opportunities
+       WHERE user_id = $1 AND email_bounced_at IS NOT NULL
+         AND (crm_provider = $2 OR ($2 = '__no_crm__' AND crm_provider IS NULL))`,
+      [userId, provider]
+    );
+    const personEmails = new Set(persons.map(p => (p.email || '').toLowerCase()).filter(Boolean));
+    for (const r of bouncedRows.rows) {
+      if (personEmails.has((r.email || '').toLowerCase())) {
+        bounced.push({ id: r.id, name: r.name, email: r.email, bouncedAt: r.email_bounced_at, reason: r.email_bounce_reason });
+      }
+    }
+  } catch { /* colonne absente (migration 088 pas encore appliquée), check silencieux */ }
+  if (bounced.length > 0) {
+    issues.push({
+      type: 'email_bounced',
+      severity: 'high',
+      contacts: bounced.slice(0, 50),
+      count: bounced.length,
+      suggestedAction: 'verify',
+    });
+  }
+
   // Combine for score calculation (backward compat)
   const invalidEmails = [...invalidFormatEmails, ...invalidDomainContacts];
 
-  // 5. Inactive contacts (no update in 6+ months)
+  // 5. Inactive contacts (no genuine activity in 6+ months)
+  // lastActivityAt (vraie activité CRM) en priorité · updatedAt est réécrit par
+  // les synchros et surestime l'activité ; on ne le garde qu'en repli faute de mieux.
   const now = Date.now();
   const inactive = persons.filter(p => {
-    if (!p.updatedAt) return false;
-    return (now - new Date(p.updatedAt).getTime()) > SIX_MONTHS_MS;
+    const ref = p.lastActivityAt || p.updatedAt;
+    if (!ref) return false;
+    return (now - new Date(ref).getTime()) > SIX_MONTHS_MS;
   });
   if (inactive.length > 0) {
     issues.push({
       type: 'inactive',
       severity: 'low',
-      contacts: inactive.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email, lastUpdate: p.updatedAt })),
+      contacts: inactive.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email, lastUpdate: p.lastActivityAt || p.updatedAt })),
       count: inactive.length,
       suggestedAction: 'archive',
     });
   }
 
-  // 6. Format issues — names in ALL CAPS
+  // 6. Format issues · names in ALL CAPS
   const allCaps = persons.filter(p => p.name && p.name === p.name.toUpperCase() && p.name.length > 2);
   if (allCaps.length > 0) {
     issues.push({
@@ -369,28 +594,9 @@ async function scanCRM(userId, provider) {
     });
   }
 
-  // Compute health score — proportional to contact base size
-  const total = persons.length || 1;
+  // Compute health score · proportional to contact base size
   const dupEmailCount = issues.filter(i => i.type === 'duplicate_email').reduce((s, i) => s + i.contacts.length, 0);
   const dupNameCount = issues.filter(i => i.type === 'duplicate_name').reduce((s, i) => s + i.contacts.length, 0);
-
-  // Each category can deduct up to its max weight (total = 100)
-  // Deductions scale as % of affected contacts vs total
-  const pctDupEmail = dupEmailCount / total;       // weight: 25
-  const pctDupName = dupNameCount / total;          // weight: 10
-  const pctMissingEmail = missingEmail.length / total; // weight: 20
-  const pctInvalidEmail = invalidEmails.length / total; // weight: 20
-  const pctInactive = inactive.length / total;      // weight: 15
-  const pctCaps = allCaps.length / total;           // weight: 10
-
-  let score = 100;
-  score -= Math.min(pctDupEmail * 2, 1) * 25;       // 50%+ duplicates = full 25pt deduction
-  score -= Math.min(pctDupName * 3, 1) * 10;        // 33%+ = full 10pt deduction
-  score -= Math.min(pctMissingEmail * 1.5, 1) * 20; // 67%+ missing = full 20pt deduction
-  score -= Math.min(pctInvalidEmail * 5, 1) * 20;   // 20%+ invalid = full 20pt deduction
-  score -= Math.min(pctInactive * 1.5, 1) * 15;     // 67%+ inactive = full 15pt deduction
-  score -= Math.min(pctCaps * 3, 1) * 10;           // 33%+ caps = full 10pt deduction
-  score = Math.max(0, Math.round(score));
 
   const summary = {
     duplicateEmails: dupEmailCount,
@@ -402,7 +608,36 @@ async function scanCRM(userId, provider) {
     formatIssues: allCaps.length,
   };
 
-  return { score, totalContacts: persons.length, issues, summary, provider };
+  // Le score est la somme exacte des facteurs affichés (100 + Σ poids négatifs) :
+  // chaque poids étant arrondi individuellement, il peut dévier de ±1-2 pts vs
+  // l'ancien arrondi global · accepté pour que le détail colle au total à l'UI.
+  const scoreFactors = computeScoreFactors(summary, persons.length);
+  const score = Math.max(0, 100 + scoreFactors.reduce((s, f) => s + f.weight, 0));
+
+  return { score, totalContacts: persons.length, issues, summary, scoreFactors, provider };
+}
+
+/**
+ * Déductions pondérées du health score, exposées à l'UI dans la même
+ * présentation que les facteurs churn (liste facteur + poids). Chaque
+ * catégorie déduit jusqu'à son poids max, proportionnellement à la part de
+ * contacts affectés, avec un multiplicateur de sévérité (ex. 20 %+ d'emails
+ * invalides = déduction pleine de 20 pts). Recalculable depuis un rapport
+ * stocké (summary + total_contacts) · rien à migrer.
+ */
+function computeScoreFactors(summary, totalContacts) {
+  const total = totalContacts || 1;
+  const defs = [
+    { signal: 'duplicate_email', count: summary.duplicateEmails || 0, mult: 2, max: 25 },
+    { signal: 'duplicate_name', count: summary.duplicateNames || 0, mult: 3, max: 10 },
+    { signal: 'missing_email', count: summary.missingEmails || 0, mult: 1.5, max: 20 },
+    { signal: 'invalid_email', count: summary.invalidEmails || 0, mult: 5, max: 20 },
+    { signal: 'inactive', count: summary.inactive || 0, mult: 1.5, max: 15 },
+    { signal: 'format_name_caps', count: summary.formatIssues || 0, mult: 3, max: 10 },
+  ];
+  return defs
+    .map(d => ({ signal: d.signal, count: d.count, weight: -Math.round(Math.min((d.count / total) * d.mult, 1) * d.max) }))
+    .filter(f => f.weight < 0);
 }
 
 // ── Apply Fixes ──
@@ -414,8 +649,9 @@ async function scanCRM(userId, provider) {
  * @param {{ type, action, contactIds, data }[]} fixes
  */
 async function applyFixes(userId, provider, fixes) {
-  const token = await getUserKey(userId, provider);
-  if (!token) throw new Error(`No ${provider} API key configured`);
+  const dbBasedProviders = ['notion', 'airtable', '__no_crm__'];
+  const token = await getProviderCredentials(userId, provider);
+  if (!token && !dbBasedProviders.includes(provider)) throw new Error(`No ${provider} API key configured`);
 
   const adapter = getAdapter(provider);
   let applied = 0;
@@ -534,4 +770,41 @@ async function applyFixes(userId, provider, fixes) {
   return { applied, skipped, errors };
 }
 
-module.exports = { scanCRM, applyFixes, getAdapter };
+/**
+ * Scan hebdomadaire persistant · appelé par le job digest du lundi pour que le
+ * score data quality ait un historique même si personne ne visite la page
+ * (le GET de la page se contente du cache 24h). Force un scan frais par
+ * provider connecté (+ le bucket hors-CRM), persiste chaque rapport, n'échoue
+ * jamais globalement : une erreur par provider est collectée, pas propagée.
+ */
+async function runWeeklyScans(userId) {
+  const { getValidatedIntegrations } = require('../config');
+  const CONNECTABLE = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
+  const report = { scanned: [], errors: [] };
+
+  let providers = [];
+  try {
+    providers = await getValidatedIntegrations(userId, CONNECTABLE);
+  } catch { /* aucun provider validé */ }
+  try {
+    const orphans = await db.query(
+      `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_provider IS NULL LIMIT 1`, [userId]);
+    if (orphans.rows.length > 0) providers = [...providers, '__no_crm__'];
+  } catch { /* ignore */ }
+
+  for (const provider of providers) {
+    try {
+      const scan = await scanCRM(userId, provider);
+      await db.crmCleaningReports.create({
+        userId, provider, score: scan.score, totalContacts: scan.totalContacts,
+        summary: scan.summary, issues: scan.issues,
+      });
+      report.scanned.push({ provider, score: scan.score });
+    } catch (err) {
+      report.errors.push(`${provider}: ${err.message}`);
+    }
+  }
+  return report;
+}
+
+module.exports = { scanCRM, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials, runWeeklyScans, computeScoreFactors };

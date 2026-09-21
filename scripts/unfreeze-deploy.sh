@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Unfreeze deploys — removes .deploy-freeze, commits and pushes.
+# Unfreeze deploys : removes .deploy-freeze, commits and pushes.
 # Pair with ./scripts/freeze-deploy.sh.
 #
 # Usage:

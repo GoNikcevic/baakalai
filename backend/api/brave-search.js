@@ -8,8 +8,8 @@ const BASE_URL = 'https://api.search.brave.com/res/v1/web/search';
 
 /**
  * Run a web search via Brave Search API.
- * @param {string} query — search query
- * @param {number} count — max results (default 5, max 20)
+ * @param {string} query · search query
+ * @param {number} count · max results (default 5, max 20)
  * @returns {Array<{title, url, description, age}>}
  */
 async function webSearch(query, count = 5) {

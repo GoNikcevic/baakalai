@@ -5,8 +5,8 @@
  * change pour les comptes actuels avant le branchement du billing. Les comptes
  * avec trial_ends_at NULL (fondateurs, beta gratuits) ne sont jamais bloqués.
  *
- * requireActivePlan() — bloque (402) quand l'essai est expiré sans abonnement.
- * requirePlan('growth') — exige un palier minimum (402 sinon, code plan_required).
+ * requireActivePlan() · bloque (402) quand l'essai est expiré sans abonnement.
+ * requirePlan('growth') · exige un palier minimum (402 sinon, code plan_required).
  *
  * Non câblé par défaut : le choix des routes à protéger est un arbitrage
  * produit (voir ENTITLEMENTS dans lib/billing.js).

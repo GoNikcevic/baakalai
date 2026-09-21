@@ -14,7 +14,7 @@ function safeParseClaudeJSON(result, markerKey) {
     const m = content.match(pattern);
     if (m) return JSON.parse(m[0]);
   } catch {
-    // malformed JSON — return null instead of crashing
+    // malformed JSON · return null instead of crashing
   }
   return null;
 }
@@ -27,7 +27,7 @@ function safeParseClaudeArray(result) {
     const m = content.match(/\[[\s\S]*\]/);
     if (m) return JSON.parse(m[0]);
   } catch {
-    // malformed JSON — return null
+    // malformed JSON · return null
   }
   return null;
 }

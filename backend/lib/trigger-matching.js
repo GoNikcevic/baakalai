@@ -1,12 +1,12 @@
 /**
- * Trigger Matching — logique unique de sélection des contacts pour les
+ * Trigger Matching · logique unique de sélection des contacts pour les
  * nurture_triggers, partagée entre le cron (crm-agent stepNurture) et la
  * preview (routes/nurture.js). Les deux chemins divergeaient (preview sur
  * updated_at, cron sur last_activity_at) : la preview pouvait afficher 0 ou
  * tous les contacts par rapport à ce que le cron déclenchait réellement.
  *
  * Ancrages temporels :
- * - stagnation / inactivité : last_activity_at — jamais updated_at, que la
+ * - stagnation / inactivité : last_activity_at · jamais updated_at, que la
  *   synchro CRM réécrit à chaque passage (cf. churn-scoring.js)
  * - événements liés à la clôture (won/lost) : won_date / lost_date
  *   (migration 043), fallback updated_at pour les lignes historiques
@@ -23,17 +23,19 @@ const MANUAL_ONLY_TYPES = ['newsletter_inactive', 'newsletter_engaged'];
 
 /**
  * Retourne les opportunités qui matchent un trigger à l'instant `now`.
+ * `defaults.stagnantDays` fournit le repli du trigger deal_stagnant quand il ne
+ * porte pas de seuil explicite (cf. lib/stagnation.js).
  * `opps` = lignes de la table opportunities (SELECT *).
  * Retourne null si le type n'est pas évaluable depuis la base locale
- * (types MANUAL_ONLY_TYPES) — à distinguer de [] (évalué, aucun match).
+ * (types MANUAL_ONLY_TYPES) · à distinguer de [] (évalué, aucun match).
  *
  * Les prospects froids d'une campagne de prospection sont écartés en entrée
  * (cf. crm-scope.js) : les triggers d'Activation ne parlent qu'aux contacts
  * venus du CRM. Le filtre est ici et non dans les requêtes appelantes parce
  * que cette fonction est le point de passage unique du cron (crm-agent) et
- * de la preview (routes/nurture.js) — les deux héritent donc de la règle.
+ * de la preview (routes/nurture.js) · les deux héritent donc de la règle.
  */
-function matchContacts(trigger, allOpps, now = Date.now()) {
+function matchContacts(trigger, allOpps, now = Date.now(), defaults = {}) {
   const opps = onlyCrmContacts(allOpps);
   const conditions = trigger.conditions || {};
   const days = conditions.days || 30;
@@ -47,7 +49,7 @@ function matchContacts(trigger, allOpps, now = Date.now()) {
   switch (trigger.trigger_type) {
     case 'deal_won':
       // Fenêtre de 7 jours après [days] : sans fenêtre, chaque run rematchait
-      // l'intégralité des contacts gagnés — seuls la dédup 7 jours et le
+      // l'intégralité des contacts gagnés · seuls la dédup 7 jours et le
       // plafond par run masquaient le problème.
       return opps.filter(o =>
         o.status === 'won' &&
@@ -60,12 +62,19 @@ function matchContacts(trigger, allOpps, now = Date.now()) {
         inWindow(ageDays(o, o.lost_date || o.updated_at), days, 7)
       );
 
-    case 'deal_stagnant':
+    case 'deal_stagnant': {
+      // Même job que la file de réactivation : à défaut de seuil explicite sur
+      // le trigger, on repart du réglage de dormance de l'utilisateur plutôt
+      // que d'un autre nombre en dur (cf. lib/stagnation.js). Un trigger qui
+      // porte son propre `days` le garde : écrire automatiquement plus tard
+      // qu'on ne regarde est un choix légitime, mais il part de la même base.
+      const stagnantDays = conditions.days || defaults.stagnantDays || days;
       return opps.filter(o => {
         if (o.status === 'won' || o.status === 'lost') return false;
         const age = ageDays(o, o.last_activity_at);
-        return age !== null && age >= days;
+        return age !== null && age >= stagnantDays;
       });
+    }
 
     case 'inactive_contact':
       return opps.filter(o => {

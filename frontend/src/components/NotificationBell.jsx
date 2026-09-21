@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — NotificationBell Component
+   BAKAL · NotificationBell Component
    Bell icon with unread badge + dropdown of recent notifications.
    Listens to real-time socket events and polls on mount.
    =============================================================================== */
@@ -9,19 +9,20 @@ import { useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
+import Icon from './Icon';
 
 /* ─── Type → icon mapping ─── */
 const TYPE_ICONS = {
-  campaign_launched: '🚀',
-  batch_complete: '📦',
-  ab_winner: '🏆',
-  anomaly: '⚠️',
-  reveal_done: '📧',
-  icp_ready: '🎯',
-  welcome: '👋',
-  churn_alert: '⚠️',
-  warning: '⚠️',
-  signals: '📡',
+  campaign_launched: 'rocket',
+  batch_complete: 'package',
+  ab_winner: 'award',
+  anomaly: 'alert',
+  reveal_done: 'mail',
+  icp_ready: 'target',
+  welcome: 'wave',
+  churn_alert: 'alert',
+  warning: 'alert',
+  signals: 'radio',
 };
 
 /* ─── Type → link mapping (clickable notifications) ─── */
@@ -61,7 +62,7 @@ export default function NotificationBell() {
       const data = await request('/notifications/unread-count');
       setUnreadCount(data.count);
     } catch {
-      // silent — non-critical
+      // silent · non-critical
     }
   }, []);
 
@@ -293,8 +294,8 @@ export default function NotificationBell() {
                 }}
               >
                 {/* Icon */}
-                <span style={{ fontSize: 18, flexShrink: 0, marginTop: 2 }}>
-                  {TYPE_ICONS[n.type] || '🔔'}
+                <span style={{ flexShrink: 0, marginTop: 3 }}>
+                  <Icon name={TYPE_ICONS[n.type] || 'bell'} size={16} />
                 </span>
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>

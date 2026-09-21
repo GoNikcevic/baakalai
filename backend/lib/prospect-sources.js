@@ -12,13 +12,13 @@ const PROVIDER_REGISTRY = {
     name: 'Apollo',
     label: 'Apollo',
     canSearch: true,
-    note: 'Base de données B2B complète — recherche par titre, secteur, taille, localisation',
+    note: 'Base de données B2B complète, recherche par titre, secteur, taille, localisation',
   },
   lemlist: {
     name: 'Lemlist',
     label: 'Lemlist',
     canSearch: true,
-    note: 'Base Lemlist Leads — 600M contacts, recherche par titre, secteur, taille, pays',
+    note: 'Base Lemlist Leads, 600M contacts, recherche par titre, secteur, taille, pays',
   },
   instantly: {
     name: 'Instantly',

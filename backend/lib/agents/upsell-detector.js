@@ -11,7 +11,9 @@
  */
 
 const db = require('../../db');
+const claude = require('../../api/claude');
 const logger = require('../logger');
+const { getTimingContext, getCopyContext, getPatternContext, getTeamId } = require('../email-context');
 
 const DAY_MS = 86400000;
 
@@ -60,38 +62,63 @@ async function run(userId) {
     const now = Date.now();
 
     for (const client of won) {
-      // `updated_at` est réécrit à chaque synchro CRM : la maturité client se
-      // mesure sur won_date (fallback aligné sur crm-agent.js renewal_reminder).
-      const daysSinceWon = (now - new Date(client.won_date || client.updated_at || client.created_at).getTime()) / DAY_MS;
+      // won_date is the precise signal (set by CRM sync at the moment a deal transitions to
+      // won); last_activity_at is a reasonable fallback for legacy won deals that predate it.
+      // `updated_at` is reset to now() by a DB trigger on every internal write and must
+      // never be used to measure maturity.
+      const wonReference = client.won_date || client.last_activity_at || client.created_at;
+      const daysSinceWon = (now - new Date(wonReference).getTime()) / DAY_MS;
       const assignedPLs = new Set(assignsByOpp.get(client.id) || []);
       const positiveCount = positiveByOpp.get(client.id) || 0;
 
-      // Score upsell potential
+      // Score upsell potential. `factors` mirrors churn-scoring.js's
+      // {signal, weight, detail} shape so the frontend can render the same
+      // score-breakdown UI as the churn-risk section · `reasons` (flat
+      // strings) stays untouched alongside it for existing consumers.
       let score = 0;
       const reasons = [];
+      const factors = [];
+      let crossSellProducts = [];
 
       // Mature client (30+ days since won)
-      if (daysSinceWon >= 30) { score += 20; reasons.push(`Client depuis ${Math.round(daysSinceWon)}j`); }
-      if (daysSinceWon >= 90) { score += 10; reasons.push('Client mature (90j+)'); }
+      if (daysSinceWon >= 30) {
+        const detail = `Client depuis ${Math.round(daysSinceWon)}j`;
+        score += 20; reasons.push(detail); factors.push({ signal: 'maturity_30d', weight: 20, detail });
+      }
+      if (daysSinceWon >= 90) {
+        const detail = 'Client mature (90j+)';
+        score += 10; reasons.push(detail); factors.push({ signal: 'maturity_90d', weight: 10, detail });
+      }
 
       // Positive engagement
-      if (positiveCount >= 2) { score += 25; reasons.push(`${positiveCount} interactions positives`); }
-      else if (positiveCount === 1) { score += 10; reasons.push('1 interaction positive'); }
+      if (positiveCount >= 2) {
+        const detail = `${positiveCount} interactions positives`;
+        score += 25; reasons.push(detail); factors.push({ signal: 'engagement', weight: 25, detail });
+      } else if (positiveCount === 1) {
+        const detail = '1 interaction positive';
+        score += 10; reasons.push(detail); factors.push({ signal: 'engagement', weight: 10, detail });
+      }
 
       // Cross-sell: not assigned to all product lines
       if (productLines.length > 1 && assignedPLs.size < productLines.length) {
         const unassigned = productLines.filter(pl => !assignedPLs.has(pl.id));
-        score += 15 * unassigned.length;
-        reasons.push(`Cross-sell possible : ${unassigned.map(pl => pl.name).join(', ')}`);
+        crossSellProducts = unassigned.map(pl => pl.name);
+        const weight = 15 * unassigned.length;
+        const detail = `Cross-sell possible : ${crossSellProducts.join(', ')}`;
+        score += weight; reasons.push(detail); factors.push({ signal: 'cross_sell', weight, detail });
       }
 
       // Low churn risk = good candidate
       if (client.churn_score != null && client.churn_score < 30) {
-        score += 15;
-        reasons.push('Risque churn faible');
+        const detail = 'Risque churn faible';
+        score += 15; reasons.push(detail); factors.push({ signal: 'low_churn', weight: 15, detail });
       }
 
       if (score >= 25) {
+        const ownedProducts = [...assignedPLs]
+          .map(id => productLines.find(pl => pl.id === id)?.name)
+          .filter(Boolean);
+
         report.opportunities.push({
           contactId: client.id,
           name: client.name,
@@ -99,6 +126,9 @@ async function run(userId) {
           email: client.email,
           score,
           reasons,
+          factors,
+          ownedProducts,
+          crossSellProducts,
           assignedProductLines: assignedPLs.length,
           totalProductLines: productLines.length,
         });
@@ -120,4 +150,92 @@ async function run(userId) {
   return report;
 }
 
-module.exports = { run };
+/**
+ * On-demand upsell email draft for a SINGLE client (used by the "Voir le mail" on-demand
+ * flow · no daily batch). Recomputes cross-sell context for just this client, then drafts
+ * with one Claude call. Returns { opportunity, subject, body } or { error }.
+ *
+ * `angle` est l'axe choisi par l'utilisateur pendant le cadrage du chat. Sans lui, le
+ * modèle choisit son propre angle et la question posée n'aurait servi à rien.
+ */
+async function draftOne(userId, opportunityId, { angle } = {}) {
+  const oppResult = await db.query(
+    'SELECT * FROM opportunities WHERE id = $1 AND user_id = $2',
+    [opportunityId, userId]
+  );
+  const opp = oppResult.rows[0];
+  if (!opp) return { error: 'not_found' };
+  if (opp.status !== 'won') return { error: 'not_eligible' };
+  if (!opp.email) return { error: 'no_email' };
+
+  let productLines = [];
+  try {
+    const plResult = await db.query(
+      `SELECT pl.id, pl.name, pl.description FROM product_lines pl
+       WHERE pl.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)`,
+      [userId]
+    );
+    productLines = plResult.rows;
+  } catch { /* no product lines */ }
+
+  const assignedPLIds = new Set();
+  try {
+    const assigns = await db.query(
+      'SELECT product_line_id FROM opportunity_product_lines WHERE opportunity_id = $1',
+      [opp.id]
+    );
+    assigns.rows.forEach(r => assignedPLIds.add(r.product_line_id));
+  } catch { /* ok */ }
+  const unassignedPLs = productLines.filter(pl => !assignedPLIds.has(pl.id));
+  const crossSellContext = unassignedPLs.length > 0
+    ? `Cross-sell products available: ${unassignedPLs.map(pl => `${pl.name} (${pl.description || ''})`).join(', ')}`
+    : '';
+
+  const [teamId] = await Promise.all([getTeamId(userId)]);
+  const [timing, copyCtx, patternCtx] = await Promise.all([
+    getTimingContext(userId),
+    getCopyContext(userId),
+    getPatternContext(teamId, userId),
+  ]);
+
+  const prompt = `Generate a personal upsell/cross-sell email for an existing client.
+
+CONTEXT:
+- Contact: ${opp.name} (${opp.title || 'N/A'}) at ${opp.company || 'N/A'}
+- Client since: won deal
+${crossSellContext ? `- ${crossSellContext}` : ''}
+
+${copyCtx ? `COPY PATTERNS THAT WORK:\n${copyCtx}` : ''}
+${patternCtx.text ? `\nMEMORY PATTERNS:\n${patternCtx.text}` : ''}
+${timing.bestDay ? `\nBEST SEND TIMING: ${timing.bestDay}${timing.bestHour != null ? ` at ${timing.bestHour}h` : ''}` : ''}
+
+${angle ? `ANGLE IMPOSÉ PAR L'UTILISATEUR (non négociable, construis l'email autour de ça) : ${angle}\n` : ''}
+RULES:
+- Max 6 lines, must sound human and personal
+- Start by acknowledging the existing relationship (they are a client)
+- Naturally introduce the upsell/cross-sell value proposition
+- Tone: appreciative, not pushy, this is a valued client
+- Do NOT mention scores or automated systems
+${require('../human-style').HUMAN_STYLE_RULES}
+
+Return JSON: { "subject": "...", "body": "..." }`;
+
+  const result = await claude.callClaude('Return only valid JSON.', prompt, 500, 'upsell_draft_one');
+  let email = result.parsed;
+  if (!email) {
+    const m = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
+    if (m) { try { email = JSON.parse(m[0]); } catch { email = null; } }
+  }
+  if (!email?.subject || !email?.body) return { error: 'generation_failed' };
+
+  const { humanize } = require('../human-style');
+  return {
+    opportunity: opp,
+    patternIds: patternCtx.ids,
+    subject: humanize(email.subject),
+    body: humanize(email.body),
+    crossSellProducts: unassignedPLs.map(pl => pl.name),
+  };
+}
+
+module.exports = { run, draftOne };

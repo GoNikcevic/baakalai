@@ -1,11 +1,12 @@
 /**
  * Response Analysis Agent
  *
- * Reads replies/activities from CRM (Pipedrive), analyzes them with Claude,
- * and tracks nurture campaign effectiveness.
+ * Reads replies/activities from the user's connected CRM (Pipedrive, Salesforce,
+ * Odoo, or HubSpot · the no-activity-feed providers Notion/Airtable/Folk aren't
+ * supported), analyzes them with Claude, and tracks nurture campaign effectiveness.
  *
  * Flow:
- * 1. Fetch recent activities from Pipedrive (emails received, notes)
+ * 1. Fetch recent activities from the connected CRM (emails received, notes)
  * 2. Match to nurture emails we sent (by contact + time window)
  * 3. Claude analyzes each reply → sentiment, intent, suggested action
  * 4. Update opportunity status + score
@@ -16,26 +17,44 @@
  */
 
 const db = require('../db');
-const { getUserKey } = require('../config');
-const { getUserCrmToken } = require('./crm-token');
+const { resolveCrmForUser } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const logger = require('./logger');
+const { intentEnumForPrompt, isKnownIntent } = require('./reply-intents');
 
 const DAY_MS = 86400000;
+
+// Providers with a getActivities-equivalent feed. Notion/Airtable/Folk have no
+// activity concept at all (same as the deal-sync gap). HubSpot lit les
+// engagements (emails loggés + notes) · le corps des emails demande le scope
+// sales-email-read sur l'app OAuth, sans lui il retombe sur les notes seules.
+async function fetchActivities(crmProvider, creds, contactId) {
+  if (!contactId) return [];
+  if (crmProvider === 'pipedrive') {
+    return pipedrive.getActivities(creds, parseInt(contactId, 10));
+  }
+  if (crmProvider === 'salesforce') {
+    const salesforce = require('../api/salesforce');
+    return salesforce.getActivities(creds.instanceUrl, creds.accessToken, contactId);
+  }
+  if (crmProvider === 'odoo') {
+    const odoo = require('../api/odoo');
+    return odoo.getActivities(creds, parseInt(contactId, 10));
+  }
+  if (crmProvider === 'hubspot') {
+    const hubspot = require('../api/hubspot');
+    return hubspot.getActivities(creds, contactId);
+  }
+  return [];
+}
 
 /**
  * Analyze responses for a user's nurture campaigns.
  */
 async function analyzeResponses(userId) {
-  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
-  const activeCrm = userRow.rows[0]?.active_crm_provider || 'pipedrive';
-  const token = await getUserCrmToken(userId, activeCrm);
-  if (!token) return { analyzed: 0, positive: 0, negative: 0 };
-  if (activeCrm !== 'pipedrive') {
-    logger.info('response-agent', `CRM activity analysis not yet supported for ${activeCrm}, skipping (user ${userId})`);
-    return { analyzed: 0, positive: 0, negative: 0 };
-  }
+  const { provider: crmProvider, creds } = await resolveCrmForUser(userId);
+  if (!crmProvider) return { analyzed: 0, positive: 0, negative: 0 };
 
   const report = { analyzed: 0, positive: 0, negative: 0, neutral: 0, actions: [] };
 
@@ -61,7 +80,7 @@ async function analyzeResponses(userId) {
     if (!email.crm_contact_id) continue;
 
     try {
-      const activities = await pipedrive.getActivities(token, parseInt(email.crm_contact_id, 10));
+      const activities = await fetchActivities(crmProvider, creds, email.crm_contact_id);
 
       // Find activities that happened AFTER our email was sent
       const sentAt = new Date(email.sent_at).getTime();
@@ -74,10 +93,19 @@ async function analyzeResponses(userId) {
 
       // 3. Analyze each response with Claude
       const activityTexts = recentActivities
-        .map(a => `[${a.type}] ${a.subject || ''} ${a.note || ''}`.trim())
-        .filter(t => t.length > 10);
+.map(a => `[${a.type}] ${a.subject || ''} ${a.note || ''}`.trim())
+.filter(t => t.length > 10);
 
       if (activityTexts.length === 0) continue;
+
+      // A genuine reply/activity is real prospect-side signal · record it as the
+      // opportunity's real last activity (only advancing forward, never backward).
+      if (email.opp_id) {
+        const latestActivityDate = new Date(Math.max(...recentActivities.map(a => new Date(a.dueDate || 0).getTime())));
+        if (!isNaN(latestActivityDate.getTime())) {
+          await db.opportunities.update(email.opp_id, { last_activity_at: latestActivityDate.toISOString() });
+        }
+      }
 
       const analysis = await analyzeWithClaude(email, activityTexts);
       report.analyzed++;
@@ -96,6 +124,14 @@ async function analyzeResponses(userId) {
           sentiment: analysis.sentiment,
           action: analysis.suggestedAction,
           newStatus: analysis.suggestedStatus,
+        });
+      } else if (email.opp_id && analysis.sentiment === 'negative') {
+        // Negative signal, but Claude wasn't confident enough to call the deal lost · 
+        // stop suggesting reactivation for a while rather than nagging on a cold trail,
+        // without auto-declaring the deal dead (that stays a human call).
+        await db.opportunities.update(email.opp_id, {
+          planned_followup_date: new Date(Date.now() + 90 * DAY_MS).toISOString(),
+          planned_followup_reason: 'negative_sentiment',
         });
       }
 
@@ -166,6 +202,12 @@ async function analyzeResponses(userId) {
       try {
         const content = typeof activity.content === 'string' ? JSON.parse(activity.content) : (activity.content || {});
 
+        // Any LinkedIn activity (accepted connection or reply) is genuine prospect-side
+        // signal · same last_activity_at treatment as email replies above.
+        if (activity.opp_id && activity.created_at) {
+          await db.opportunities.update(activity.opp_id, { last_activity_at: new Date(activity.created_at).toISOString() });
+        }
+
         if (activity.type === 'linkedin_connect_accepted') {
           // Connection accepted → positive signal
           report.analyzed++;
@@ -195,6 +237,11 @@ async function analyzeResponses(userId) {
 
           if (activity.opp_id && analysis.suggestedStatus) {
             await db.opportunities.update(activity.opp_id, { status: analysis.suggestedStatus });
+          } else if (activity.opp_id && analysis.sentiment === 'negative') {
+            await db.opportunities.update(activity.opp_id, {
+              planned_followup_date: new Date(Date.now() + 90 * DAY_MS).toISOString(),
+              planned_followup_reason: 'negative_sentiment',
+            });
           }
 
           report.actions.push({
@@ -248,6 +295,20 @@ async function analyzeResponses(userId) {
 /**
  * Ask Claude to analyze a reply in context of the email we sent.
  */
+/**
+ * Signale une intention hors liste. L'autopilot traite l'inconnu en poursuivant
+ * l'échange, ce qui est le comportement sûr · mais silencieux. Sans cette trace,
+ * une intention ajoutée au prompt et oubliée dans lib/reply-intents.js resterait
+ * invisible : elle ne clôturerait rien et ne déclencherait aucun RDV, sans que
+ * personne ne comprenne pourquoi.
+ */
+function checkIntent(analysis) {
+  if (analysis?.intent && !isKnownIntent(analysis.intent)) {
+    logger.warn('response-analysis', `intention hors liste : "${analysis.intent}", a declarer dans lib/reply-intents.js`);
+  }
+  return analysis;
+}
+
 async function analyzeWithClaude(email, activityTexts) {
   const prompt = `Analyse cette r\u00E9ponse \u00E0 un email de relance B2B.
 
@@ -263,7 +324,7 @@ ${activityTexts.join('\n')}
 Analyse et retourne un JSON :
 {
   "sentiment": "positive" | "negative" | "neutral",
-  "intent": "interested" | "not_now" | "not_interested" | "unsubscribe" | "question" | "meeting_request",
+  "intent": ${intentEnumForPrompt()},
   "confidence": 0.0-1.0,
   "suggestedAction": "description courte de l'action \u00E0 prendre",
   "suggestedStatus": "interested" | "meeting" | "won" | "lost" | null,
@@ -277,10 +338,10 @@ Analyse et retourne un JSON :
       400
     );
 
-    if (result.parsed) return result.parsed;
+    if (result.parsed) return checkIntent(result.parsed);
 
     const match = (result.raw || '').match(/\{[\s\S]*"sentiment"[\s\S]*\}/);
-    if (match) try { return JSON.parse(match[0]); } catch { /* fallback below */ }
+    if (match) try { return checkIntent(JSON.parse(match[0])); } catch { /* fallback below */ }
   } catch { /* fallback below */ }
 
   return {
@@ -373,17 +434,21 @@ async function scoreTrigger(triggerId, outcome) {
 /**
  * Create a memory pattern from accumulated response data.
  *
- * NOTE: `userId` n'est pas transmis à replaceOrCreate — sa signature est
- * replaceOrCreate(data), à un seul argument. Les trois appels ci-dessous
- * passaient (userId, {...}), ce qui décalait tout : `data` valait la chaîne
- * userId, `data.pattern` était undefined, l'INSERT violait le NOT NULL et
- * l'exception était avalée par les catch. Aucun de ces trois patterns n'a
- * jamais été écrit. L'attribution au tenant passe par team_id (non renseigné
- * par les agents aujourd'hui) — à traiter avec le chantier mémoire.
+ * Historique : les trois appels ci-dessous passaient (userId, {...}) à
+ * replaceOrCreate · signature à un seul argument · donc `data.pattern` était
+ * undefined et aucun de ces patterns n'a jamais été écrit (corrigé). Depuis la
+ * migration 089, chaque écriture porte son tenant : l'équipe de l'utilisateur
+ * si elle existe, sinon l'utilisateur lui-même (jamais les deux).
  */
-// eslint-disable-next-line no-unused-vars
 async function createMemoryPattern(userId, report) {
   if (report.analyzed < 5) return;
+
+  // Tenant des patterns · résolu une seule fois pour les trois écritures.
+  let tenant = { userId };
+  try {
+    const team = await db.teams.getByUser(userId);
+    if (team) tenant = { teamId: team.id };
+  } catch { /* résolution d'équipe indisponible : le pattern reste scopé user */ }
 
   const successRate = report.analyzed > 0
     ? Math.round((report.positive / report.analyzed) * 100)
@@ -398,10 +463,11 @@ async function createMemoryPattern(userId, report) {
     const emailPositive = emailActions.filter(a => a.sentiment === 'positive').length;
     const emailRate = Math.round((emailPositive / emailActions.length) * 100);
     const emailPattern = emailRate >= 50
-      ? `Les emails d'activation g\u00E9n\u00E8rent ${emailRate}% de r\u00E9ponses positives (${emailPositive}/${emailActions.length})`
-      : `Les emails d'activation ont un taux de r\u00E9ponse positive de ${emailRate}% \u2014 envisager d'ajuster le ton ou le timing`;
+      ? `Les emails automatiques g\u00E9n\u00E8rent ${emailRate}% de r\u00E9ponses positives (${emailPositive}/${emailActions.length})`
+      : `Les emails automatiques ont un taux de r\u00E9ponse positive de ${emailRate}%, envisager d'ajuster le ton ou le timing`;
     try {
       await db.memoryPatterns.replaceOrCreate({
+...tenant,
         pattern: emailPattern,
         category: 'Corps',
         source: 'response_analysis_email',
@@ -423,6 +489,7 @@ async function createMemoryPattern(userId, report) {
       : `LinkedIn : taux de r\u00E9ponse positive ${liRate}%. ${connectAccepted} connexions accept\u00E9es sur ${linkedinActions.length} actions.`;
     try {
       await db.memoryPatterns.replaceOrCreate({
+...tenant,
         pattern: liPattern,
         category: 'Canal',
         source: 'response_analysis_linkedin',
@@ -436,10 +503,11 @@ async function createMemoryPattern(userId, report) {
 
   // Global pattern (backward compat)
   const pattern = successRate >= 50
-    ? `Activation : ${successRate}% de r\u00E9ponses positives (${report.positive}/${report.analyzed}) — email + LinkedIn`
+    ? `Activation : ${successRate}% de r\u00E9ponses positives (${report.positive}/${report.analyzed}), email + LinkedIn`
     : `Activation : taux de r\u00E9ponse positive de ${successRate}% (${report.positive}/${report.analyzed})`;
   try {
     await db.memoryPatterns.replaceOrCreate({
+...tenant,
       pattern,
       category: 'Corps',
       source: 'response_analysis_global',

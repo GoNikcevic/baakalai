@@ -3,15 +3,162 @@ const db = require('../db');
 const claude = require('../api/claude');
 const { emitToThread, notifyUser } = require('../socket');
 const { sanitizeText } = require('../lib/sanitize');
+const { buildThreadTitle, MAX_LEN: TITLE_MAX_LEN } = require('../lib/chat-title');
 const { rateLimit } = require('../lib/rate-limit');
+const { getValidatedIntegrations } = require('../config');
+const { getPatternContext, getTeamId } = require('../lib/email-context');
 const emailLimit = rateLimit({ windowMs: 60000, max: 10 }); // 10 emails per minute
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 });
+
+const ASSISTANT_TYPES = ['general', 'campaign'];
+
+/**
+ * Context for the general assistant (first sidebar tab).
+ *
+ * It used to be deliberately lean · language + whether a CRM was connected · back when this
+ * assistant only answered questions. It now owns the whole activation surface (relaunch
+ * dormant deals, triggers, autopilot, CRM scan/clean/import, sending an email), so it needs
+ * to know the state of the CRM it is being asked to act on: an assistant that has to call
+ * list_clients before it can say "you have dormant deals" wastes a round-trip on something
+ * one aggregate query answers.
+ *
+ * Since the framing rule (CADRER AVANT DE PROPOSER) asks the assistant to skip any question
+ * it can already answer, it also carries what makes a question skippable: the profile (tone,
+ * formality, words to avoid), the high-confidence memory patterns, and the connected
+ * mailboxes. Without them the assistant has nothing to deduce from and asks its three
+ * questions every single time, which is exactly the friction the rule exists to remove.
+ *
+ * Still deliberately excluded: campaigns, documents, prospect sources, diagnostics and
+ * versions · all of them serve cold-prospecting campaign building, which belongs to the
+ * other assistant.
+ *
+ * Uses getValidatedIntegrations (decrypts to confirm a real, usable connection) rather than
+ * the plain access_token-exists check the prospecting assistant's context still uses below · 
+ * a stale/placeholder token must not count as "connected."
+ */
+async function buildGeneralContext(userId) {
+  const CRM_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
+  const { getStagnantDays } = require('../lib/stagnation');
+  // Le seuil de dormance est celui de l'utilisateur, pas un nombre décidé ici
+  // (cf. lib/stagnation.js) : l'assistant doit annoncer le même chiffre que la file
+  // de réactivation et le compte-rendu de lecture affiché juste au-dessus de lui.
+  const stagnantDays = await getStagnantDays(userId);
+  const [userRow, connectedCrms, crmStats, triggers, profile, patterns, mailboxes] = await Promise.all([
+    db.query('SELECT language, settings FROM users WHERE id = $1', [userId]),
+    getValidatedIntegrations(userId, CRM_PROVIDERS),
+    // Stagnance sur COALESCE(last_activity_at, created_at) · jamais updated_at,
+    // réécrit en masse par chaque import (cf. /api/crm/reading-summary).
+    db.query(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status NOT IN ('won', 'lost'))::int AS open_deals,
+        COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won', 'lost')), 0)::float AS open_value,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('won', 'lost')
+            AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')
+        )::int AS dormant,
+        COUNT(*) FILTER (WHERE status = 'won')::int AS clients,
+        COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= $3)::int AS churn_risk,
+        COUNT(*) FILTER (WHERE email IS NULL OR email = '')::int AS missing_email
+      FROM opportunities WHERE user_id = $1
+    `, [userId, stagnantDays, require('../lib/churn-scoring').AT_RISK_THRESHOLD]),
+    db.query(
+      'SELECT name, trigger_type, mode, enabled FROM nurture_triggers WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10',
+      [userId]
+    ),
+    db.profiles.get(userId),
+    db.memoryPatterns.list({ limit: MAX_PATTERNS_IN_GENERAL_CONTEXT, userId }),
+    db.query(
+      `SELECT email_address, provider FROM email_accounts
+       WHERE user_id = $1 AND status = 'active'
+       ORDER BY is_default DESC, created_at ASC LIMIT 5`,
+      [userId]
+    ),
+  ]);
+  const userLang = userRow.rows?.[0]?.language || 'fr';
+  const settings = userRow.rows?.[0]?.settings || {};
+
+  const contextParts = [];
+  contextParts.push(userLang === 'en'
+    ? 'CRITICAL LANGUAGE RULE: You MUST reply in ENGLISH. The user speaks English.'
+    : 'LANGUE: Réponds en français.');
+
+  if (connectedCrms.length > 0) {
+    const crmLines = connectedCrms.map(p => `- ${p.charAt(0).toUpperCase() + p.slice(1)}`);
+    contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}`);
+
+    const c = crmStats.rows[0] || {};
+    contextParts.push([
+      'ÉTAT DU CRM (chiffres réels, réutilise-les tels quels, ne les invente pas et ne les arrondis pas au hasard) :',
+      `- ${c.total || 0} contacts synchronisés`,
+      `- ${c.open_deals || 0} deals ouverts, ${Math.round(c.open_value || 0)} € au total`,
+      `- ${c.dormant || 0} deals dormants (aucune activité depuis plus de ${stagnantDays} jours, seuil réglé par l'utilisateur)`,
+      `- ${c.clients || 0} clients gagnés, dont ${c.churn_risk || 0} à risque de churn (score ≥ ${require('../lib/churn-scoring').AT_RISK_THRESHOLD})`,
+      `- ${c.missing_email || 0} contacts sans email`,
+    ].join('\n'));
+
+    if (triggers.rows.length > 0) {
+      const lines = triggers.rows.map(t =>
+        `- "${t.name}" (${t.trigger_type}, ${t.mode === 'auto' ? 'automatique' : 'approbation'}) ${t.enabled ? '✅ actif' : '⏸️ en pause'}`
+      );
+      contextParts.push(`TRIGGERS D'ACTIVATION EXISTANTS:\n${lines.join('\n')}\n\nNe propose pas de créer un trigger qui fait déjà doublon avec l'un d'eux.`);
+    } else {
+      contextParts.push("TRIGGERS D'ACTIVATION EXISTANTS: aucun. L'utilisateur relance encore tout à la main, create_trigger est souvent la bonne suggestion.");
+    }
+
+    contextParts.push(
+      `AUTOPILOT DE RÉPONSE: prospection ${settings.autopilot_prospection_enabled ? 'activé' : 'désactivé'}, CRM ${settings.autopilot_crm_enabled ? 'activé' : 'désactivé'}.`
+    );
+  } else {
+    contextParts.push("CRM: Aucun CRM connecté. Toutes les actions CRM (relance, trigger, scan, import, envoi d'email) sont impossibles tant qu'il n'a pas connecté un CRM. Redirige-le vers Paramètres → Intégrations plutôt que de proposer une action qui échouera.");
+  }
+
+  // Matière du cadrage · tout ce qui suit sert à NE PAS poser une question dont la réponse
+  // est déjà connue (cf. « CE QUE TU SAIS DÉJÀ, TU NE LE DEMANDES PAS » dans les règles).
+  if (profile) {
+    const prefLines = [];
+    if (profile.company) prefLines.push(`Entreprise: ${profile.company}`);
+    if (profile.sector) prefLines.push(`Secteur: ${profile.sector}`);
+    if (profile.value_prop) prefLines.push(`Proposition de valeur: ${profile.value_prop}`);
+    if (profile.default_tone) prefLines.push(`Ton habituel: ${profile.default_tone}`);
+    if (profile.default_formality) prefLines.push(`Formalité: ${profile.default_formality}`);
+    if (profile.avoid_words) prefLines.push(`Mots à éviter: ${profile.avoid_words}`);
+    if (profile.signature_phrases) prefLines.push(`Expressions signatures: ${profile.signature_phrases}`);
+    if (profile.objections) prefLines.push(`Objections fréquentes: ${profile.objections}`);
+    if (prefLines.length > 0) {
+      contextParts.push(`PRÉFÉRENCES CONNUES (ne redemande pas ce qui est ici, annonce-le et laisse un bouton pour le changer):\n${prefLines.join('\n')}`);
+    }
+  }
+
+  if (patterns.length > 0) {
+    const patternLines = patterns.map(p => {
+      const conf = p.confidence === 'Haute' ? 'HAUTE' : p.confidence === 'Moyenne' ? 'MOYENNE' : 'FAIBLE';
+      const confirmations = p.confirmations > 1 ? ` [confirmé ${p.confirmations}x]` : '';
+      return `- [${conf}] ${p.pattern}${confirmations}`;
+    });
+    contextParts.push(`CE QUE LA MÉMOIRE A APPRIS DE SES ENVOIS:\n${patternLines.join('\n')}\n\nUn pattern HAUTE confiance est une réponse déjà acquise : applique-le en l'annonçant (« je reprends l'angle qui marche chez toi »), ne le pose pas en question. Un pattern MOYENNE peut se proposer comme option dans les quick_replies.`);
+  }
+
+  const boxes = mailboxes.rows || [];
+  if (boxes.length > 1) {
+    contextParts.push(`BOÎTES EMAIL CONNECTÉES:\n${boxes.map(b => `- ${b.email_address} (${b.provider})`).join('\n')}\n\nPlusieurs expéditeurs possibles : « depuis quelle boîte ? » est une question de cadrage légitime.`);
+  } else if (boxes.length === 1) {
+    contextParts.push(`BOÎTE EMAIL CONNECTÉE: ${boxes[0].email_address} (${boxes[0].provider}). C'est le seul expéditeur possible, ne demande pas depuis quelle boîte envoyer.`);
+  } else {
+    contextParts.push("BOÎTE EMAIL: aucune boîte connectée. Aucun envoi ne partira tant qu'il n'en a pas branché une dans Paramètres → Comptes Email. Dis-le avant de cadrer une relance.");
+  }
+
+  return contextParts.join('\n\n');
+}
 
 const router = Router();
 
 // Max context sizes to bound Claude payloads
 const MAX_CAMPAIGNS_IN_CONTEXT = 20;
 const MAX_PATTERNS_IN_CONTEXT = 10;
+// Moins que pour l'assistant de prospection : ici les patterns ne servent qu'à supprimer
+// des questions de cadrage (ton, angle, timing), pas à arbitrer des variantes A/B.
+const MAX_PATTERNS_IN_GENERAL_CONTEXT = 6;
 const MAX_DIAGNOSTICS_IN_CONTEXT = 3;
 const MAX_VERSIONS_IN_CONTEXT = 5;
 // Generous limit so Claude can read full Excel/CSV tables with 50-100 rows.
@@ -21,10 +168,11 @@ const MAX_VERSIONS_IN_CONTEXT = 5;
 const MAX_DOC_CHARS = 15000;
 const MAX_HISTORY_MESSAGES = 50;
 
-// GET /api/chat/threads
+// GET /api/chat/threads?assistantType=general|campaign
 router.get('/threads', async (req, res, next) => {
   try {
-    const threads = await db.chatThreads.list(req.user.id);
+    const assistantType = ASSISTANT_TYPES.includes(req.query.assistantType) ? req.query.assistantType : undefined;
+    const threads = await db.chatThreads.list(req.user.id, { assistantType });
     res.json({ threads });
   } catch (err) {
     next(err);
@@ -34,8 +182,35 @@ router.get('/threads', async (req, res, next) => {
 // POST /api/chat/threads
 router.post('/threads', async (req, res, next) => {
   try {
-    const thread = await db.chatThreads.create(req.body.title, req.user.id);
+    const assistantType = ASSISTANT_TYPES.includes(req.body.assistantType) ? req.body.assistantType : 'campaign';
+    const thread = await db.chatThreads.create(req.body.title, req.user.id, assistantType);
     res.status(201).json(thread);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/chat/threads/:id · renommage manuel depuis la liste.
+// Le titre automatique se trompe forcément parfois (message d'ouverture vague,
+// conversation qui dérive) : c'est le filet de sécurité. Volontairement sans
+// `touch` : renommer ne doit pas faire remonter la conversation en haut de la
+// liste ni changer sa date affichée.
+router.patch('/threads/:id', async (req, res, next) => {
+  try {
+    const thread = await db.chatThreads.get(req.params.id);
+    if (!thread) return res.status(404).json({ error: 'Thread not found' });
+    if (thread.user_id && thread.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // sanitizeText renvoie son entrée telle quelle si ce n'est pas une chaîne :
+    // un titre non textuel doit sortir en 400, pas exploser sur .trim().
+    const raw = typeof req.body.title === 'string' ? req.body.title : '';
+    const title = sanitizeText(raw).trim().slice(0, TITLE_MAX_LEN * 2);
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    await db.chatThreads.rename(thread.id, title);
+    res.json({ ...thread, title });
   } catch (err) {
     next(err);
   }
@@ -72,7 +247,7 @@ router.get('/threads/:id/messages', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/messages — bounded context building
+// POST /api/chat/threads/:id/messages · bounded context building
 router.post('/threads/:id/messages', async (req, res, next) => {
   try {
     const thread = await db.chatThreads.get(req.params.id);
@@ -92,7 +267,11 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const history = await db.chatMessages.listByThread(thread.id, MAX_HISTORY_MESSAGES);
     const claudeMessages = history.map(m => ({ role: m.role, content: m.content }));
 
-    // Build bounded context — all queries in parallel
+    let context;
+    if (thread.assistant_type === 'general') {
+      context = await buildGeneralContext(req.user.id);
+    } else {
+    // Build bounded context · all queries in parallel
     const { listUserSources } = require('../lib/prospect-sources');
     const [profile, docs, campaigns, patterns, prospectSources, userIntegrations] = await Promise.all([
       db.profiles.get(req.user.id),
@@ -165,7 +344,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     // Outreach / prospect sources configured by user
     if (prospectSources && prospectSources.length > 0) {
       const lines = prospectSources.map(s =>
-        `- ${s.name} (${s.provider}) — ${s.canSearch ? '✅ peut générer des listes de prospects' : '❌ ne peut pas générer de listes (exécution seule)'}`
+        `- ${s.name} (${s.provider}), ${s.canSearch ? '✅ peut générer des listes de prospects' : '❌ ne peut pas générer de listes (exécution seule)'}`
       );
       contextParts.push(`OUTILS OUTREACH CONFIGURÉS:\n${lines.join('\n')}`);
     } else {
@@ -183,7 +362,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       contextParts.push(`MEMORY PATTERNS APPRIS (à appliquer pour les recommandations A/B) :\n${patternLines.join('\n')}\n\nUtilise les patterns HAUTE confiance comme baseline automatique. Pour les MOYENNE, propose-les comme test A/B. Pour les FAIBLE, ignore ou teste avec prudence.`);
     }
 
-    // Recent diagnostics — single query with JOIN (no N+1)
+    // Recent diagnostics · single query with JOIN (no N+1)
     const recentDiags = await db.diagnostics.listByUserCampaigns(req.user.id, MAX_DIAGNOSTICS_IN_CONTEXT);
     if (recentDiags.length > 0) {
       const diagLines = recentDiags.map(d => {
@@ -195,7 +374,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       contextParts.push(`DIAGNOSTICS RÉCENTS:\n${diagLines.join('\n')}`);
     }
 
-    // Recent optimization history — batch load (no N+1)
+    // Recent optimization history · batch load (no N+1)
     if (campaigns.length > 0) {
       const campIds = campaigns.slice(0, MAX_VERSIONS_IN_CONTEXT).map(c => c.id);
       const latestVersions = await db.versions.latestForCampaigns(campIds);
@@ -223,12 +402,15 @@ router.post('/threads/:id/messages', async (req, res, next) => {
     const hasDocuments = docs && docs.length > 0;
     const hasActiveCampaign = campaigns.some(c => c.status === 'active');
 
-    // CRM integration context — tell Claude which CRM is connected
+    // CRM integration context · tell Claude which CRM is connected
     const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
     const connectedCrms = userIntegrations.filter(i => crmProviders.includes(i.provider) && i.access_token);
     if (connectedCrms.length > 0) {
       const crmLines = connectedCrms.map(c => `- ${c.provider.charAt(0).toUpperCase() + c.provider.slice(1)}${c.instance_url ? ' (' + c.instance_url + ')' : ''}`);
-      contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}\n\nL'utilisateur a un CRM connecté. Tu peux proposer d'analyser son CRM, scanner la santé des données, importer des contacts, ou lancer des triggers d'activation.\n\nACTIONS RÉACTIVATION DISPONIBLES:\n- "list-reactivation-targets": Lister les deals stagnants/perdus à réactiver (triés par valeur)\n- "reactivation-stats": Voir les KPIs de réactivation (deals récupérés, revenu, taux de conversion)\n- "send-reactivation": Générer et mettre en file un email de réactivation pour un contact spécifique\nQuand l'utilisateur parle de deals stagnants, relance, réactivation, ou demande "qui je devrais relancer", propose ces actions via des quick_replies.`);
+      // Le CRM connecté est une info utile ici (ses contacts existants disent quels
+      // segments marchent), mais AGIR dessus n'est pas le rôle de cet assistant :
+      // scan, import, relance et triggers appartiennent à l'assistant général.
+      contextParts.push(`CRM CONNECTÉS:\n${crmLines.join('\n')}\n\nCes contacts sont DÉJÀ dans le CRM : ils ne sont pas ta cible. Si l'utilisateur veut les relancer, les nettoyer, les importer ou automatiser un suivi, émets open_general_assistant. Tu peux en revanche t'appuyer sur ce que le CRM raconte (secteurs et postes qui convertissent) pour affiner le ciblage d'une campagne de prospection FROIDE.`);
     } else {
       contextParts.push("CRM: Aucun CRM connecté. Si l'utilisateur demande une analyse CRM, redirige-le vers Paramètres pour connecter Pipedrive, HubSpot, Salesforce, Notion ou un autre CRM.");
     }
@@ -250,7 +432,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
         '5. Launch',
         '',
         'Use quick_replies buttons at each step to make it easy.',
-        "Don't overwhelm — one step at a time.",
+        "Don't overwhelm, one step at a time.",
       ];
       contextParts.push(onboardingLines.join('\n'));
     }
@@ -265,31 +447,40 @@ router.post('/threads/:id/messages', async (req, res, next) => {
 
     // Insert language instruction at the BEGINNING of context (high priority)
     if (userLang === 'en') {
-      contextParts.unshift('CRITICAL LANGUAGE RULE: You MUST reply in ENGLISH. The user speaks English. ALL your responses, campaign copy, sequences, suggestions, action labels, and quick_replies MUST be in English. The context below may contain French labels — ignore the language of the context, always respond in English.');
+      contextParts.unshift('CRITICAL LANGUAGE RULE: You MUST reply in ENGLISH. The user speaks English. ALL your responses, campaign copy, sequences, suggestions, action labels, and quick_replies MUST be in English. The context below may contain French labels, ignore the language of the context, always respond in English.');
     } else {
       contextParts.unshift('LANGUE: Réponds en français. Tout le contenu (campagnes, séquences, suggestions, quick_replies) doit être en français.');
     }
 
-    const context = contextParts.join('\n\n');
+    context = contextParts.join('\n\n');
+    }
+
     const userId = req.user.id;
     const threadId = thread.id;
 
     // Stream Claude response via Socket.io
     const aiResponse = await claude.chatStream(claudeMessages, context, (chunk) => {
       notifyUser(userId, 'chat:stream', { threadId, chunk });
-    });
+    }, { assistantType: thread.assistant_type });
 
+    // Les règles demandent UN seul bloc JSON par réponse, mais le modèle en produit parfois
+    // deux (l'action d'un côté, les quick_replies de l'autre). Ne lire que le premier faisait
+    // disparaître les boutons de réponse sans le moindre signe : l'interface retire tous les
+    // blocs ```json de l'affichage, la question restait donc posée sans aucun moyen d'y
+    // répondre en un clic. On fusionne : la première clé rencontrée gagne.
     let metadata = null;
-    const jsonMatch = aiResponse.content.match(/```json\s*([\s\S]*?)```/);
-    if (jsonMatch) {
-      try { metadata = JSON.parse(jsonMatch[1]); } catch { /* ignore */ }
+    for (const block of aiResponse.content.matchAll(/```json\s*([\s\S]*?)```/g)) {
+      let parsed;
+      try { parsed = JSON.parse(block[1]); } catch { continue; }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+      metadata = metadata ? { ...parsed, ...metadata } : parsed;
     }
 
     const saved = await db.chatMessages.create(thread.id, 'assistant', aiResponse.content, metadata);
 
     // Notify stream end with full content so frontend can add the message.
     // This is the ONLY socket event that adds the assistant message to the UI.
-    // We intentionally do NOT also emit 'chat:message' here — that caused
+    // We intentionally do NOT also emit 'chat:message' here · that caused
     // duplicate messages because the frontend was receiving both events.
     notifyUser(userId, 'chat:stream-end', {
       threadId,
@@ -298,9 +489,11 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       messageId: saved.id || Date.now(),
     });
 
+    // Le titre se fige sur le premier message. Il n'est pas recalculé ensuite :
+    // un titre qui change sous les yeux de l'utilisateur, ou qui écrase un
+    // renommage manuel, coûte plus qu'il ne rapporte.
     if (history.length <= 1) {
-      const title = trimmedMessage.slice(0, 60) + (trimmedMessage.length > 60 ? '...' : '');
-      await db.chatThreads.updateTitle(thread.id, title);
+      await db.chatThreads.updateTitle(thread.id, buildThreadTitle(trimmedMessage));
     }
 
     const responseMsg = {
@@ -311,7 +504,7 @@ router.post('/threads/:id/messages', async (req, res, next) => {
       created_at: new Date().toISOString(),
     };
 
-    // NOTE: emitToThread('chat:message') removed here — it was sending the same
+    // NOTE: emitToThread('chat:message') removed here · it was sending the same
     // message a second time. stream-end already delivered the full content.
     // If multi-user threading is needed later, add dedup by message ID.
 
@@ -425,7 +618,7 @@ router.post('/threads/:id/create-campaign', async (req, res, next) => {
 //  CRM / Activation actions from chat
 // ═══════════════════════════════════════════════════
 
-// POST /api/chat/threads/:id/send-email — Send personal email from chat
+// POST /api/chat/threads/:id/send-email · Send personal email from chat
 router.post('/threads/:id/send-email', emailLimit, async (req, res, next) => {
   try {
     const { sendNurtureEmail } = require('../lib/email-outbound');
@@ -460,7 +653,7 @@ router.post('/threads/:id/send-email', emailLimit, async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/scan-crm — Trigger CRM health scan
+// POST /api/chat/threads/:id/scan-crm · Trigger CRM health scan
 router.post('/threads/:id/scan-crm', async (req, res, next) => {
   try {
     const { runAgent } = require('../lib/crm-agent');
@@ -471,7 +664,7 @@ router.post('/threads/:id/scan-crm', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/clean-crm — Auto-fix CRM issues
+// POST /api/chat/threads/:id/clean-crm · Auto-fix CRM issues
 router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
   try {
     const { scanCRM, applyFixes } = require('../lib/crm-cleaning-agent');
@@ -501,10 +694,10 @@ router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
       if (issue.type === 'format_name_caps' && issue.contacts?.length > 0) {
         safeFixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
       } else if (issue.type === 'duplicate_email' && issue.contacts?.length >= 2) {
-        // Duplicates require manual review — no auto-merge
+        // Duplicates require manual review · no auto-merge
         reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       } else if (issue.type === 'invalid_email' && issue.contacts?.length > 0) {
-        // Invalid emails require manual review — no auto-delete
+        // Invalid emails require manual review · no auto-delete
         reviewItems.push({ type: issue.type, action: 'review', contacts: issue.contacts });
       }
     }
@@ -527,7 +720,7 @@ router.post('/threads/:id/clean-crm', cleanLimit, async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/run-nurture — Run nurture via CRM agent
+// POST /api/chat/threads/:id/run-nurture · Run nurture via CRM agent
 router.post('/threads/:id/run-nurture', async (req, res, next) => {
   try {
     const { runAgent } = require('../lib/crm-agent');
@@ -538,7 +731,7 @@ router.post('/threads/:id/run-nurture', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/import-crm — Import contacts from CRM
+// POST /api/chat/threads/:id/import-crm · Import contacts from CRM
 router.post('/threads/:id/import-crm', async (req, res, next) => {
   try {
     const { importContactsForUser } = require('./crm');
@@ -558,7 +751,7 @@ router.post('/threads/:id/import-crm', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/list-clients — List clients with filter
+// POST /api/chat/threads/:id/list-clients · List clients with filter
 router.post('/threads/:id/list-clients', async (req, res, next) => {
   try {
     const { filter, days } = req.body;
@@ -589,7 +782,7 @@ router.post('/threads/:id/list-clients', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/create-trigger — Create nurture trigger from chat
+// POST /api/chat/threads/:id/create-trigger · Create nurture trigger from chat
 router.post('/threads/:id/create-trigger', async (req, res, next) => {
   try {
     const { name, triggerType, actionType, days, mode } = req.body;
@@ -626,21 +819,29 @@ router.post('/threads/:id/create-trigger', async (req, res, next) => {
   }
 });
 
-// POST /api/chat/threads/:id/toggle-autopilot — Enable/disable autopilot from chat
+// POST /api/chat/threads/:id/toggle-autopilot · Enable/disable autopilot from chat
 router.post('/threads/:id/toggle-autopilot', async (req, res, next) => {
   try {
-    const { enabled } = req.body;
+    // Une portée obligatoire : « active l'autopilot » sans préciser sur qui
+    // activerait la réponse automatique dans les conversations clients en
+    // cours, ce que personne ne demande implicitement. L'Assistant doit
+    // demander laquelle (cf. RÈGLES toggle_autopilot dans api/claude.js).
+    const { enabled, scope } = req.body;
+    if (scope !== 'prospection' && scope !== 'crm') {
+      return res.status(400).json({ error: "scope must be 'prospection' or 'crm'" });
+    }
+    const key = scope === 'crm' ? 'autopilot_crm_enabled' : 'autopilot_prospection_enabled';
     await db.query(
       `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
-      [JSON.stringify({ autopilot_enabled: !!enabled }), req.user.id]
+      [JSON.stringify({ [key]: !!enabled }), req.user.id]
     );
-    res.json({ autopilot_enabled: !!enabled });
+    res.json({ scope, enabled: !!enabled });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/chat/threads/:id/list-reactivation-targets — List stagnant/lost deals for reactivation
+// POST /api/chat/threads/:id/list-reactivation-targets · List stagnant/lost deals for reactivation
 router.post('/threads/:id/list-reactivation-targets', async (req, res, next) => {
   try {
     const { minDays = 14, maxResults = 20 } = req.body;
@@ -671,7 +872,7 @@ router.post('/threads/:id/list-reactivation-targets', async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-// POST /api/chat/threads/:id/reactivation-stats — Get reactivation KPIs for chat
+// POST /api/chat/threads/:id/reactivation-stats · Get reactivation KPIs for chat
 router.post('/threads/:id/reactivation-stats', async (req, res, next) => {
   try {
     const { reactivationStats } = require('./crm');
@@ -709,7 +910,7 @@ router.post('/threads/:id/reactivation-stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/chat/threads/:id/send-reactivation — Generate & queue reactivation email for a specific contact
+// POST /api/chat/threads/:id/send-reactivation · Generate & queue reactivation email for a specific contact
 router.post('/threads/:id/send-reactivation', async (req, res, next) => {
   try {
     const { contactId } = req.body;
@@ -732,6 +933,14 @@ router.post('/threads/:id/send-reactivation', async (req, res, next) => {
       return res.status(409).json({ error: 'A reactivation email was already sent to this contact in the last 7 days' });
     }
 
+    // Mémoire cross-campagne : mêmes patterns que le moteur de nurture, pour
+    // que les réactivations lancées depuis le chat apprennent (et nourrissent
+    // la boucle via pattern_ids) au lieu de générer « à froid ». Best-effort.
+    let patternCtx = { text: '', ids: [] };
+    try {
+      patternCtx = await getPatternContext(await getTeamId(req.user.id), req.user.id);
+    } catch { /* mémoire optionnelle */ }
+
     // Generate email with Claude
     const daysStagnant = Math.floor((Date.now() - new Date(opp.updated_at || opp.created_at).getTime()) / 86400000);
     const prompt = `Generate a personal reactivation email for a stagnant deal.
@@ -742,12 +951,14 @@ CONTEXT:
 - Churn score: ${opp.churn_score || 'N/A'}/100
 - Status: ${opp.status}
 ${opp.deal_value ? `- Deal value: ${opp.deal_value}` : ''}
+${patternCtx.text ? `\nPATTERNS THAT WORK (cross-campaign memory):\n${patternCtx.text}\nApply the APPROVED patterns first.` : ''}
 
 RULES:
 - Max 6 lines, must sound human and personal (NOT marketing)
 - Tone: professional but warm
 - The goal is to re-engage, not to sell aggressively
 - Write in the user's language
+${require('../lib/human-style').HUMAN_STYLE_RULES}
 
 Return JSON: { "subject": "...", "body": "..." }`;
 
@@ -763,10 +974,10 @@ Return JSON: { "subject": "...", "body": "..." }`;
 
     // Queue as pending for approval
     const inserted = await db.query(
-      `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7) RETURNING id`,
+      `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, metadata, pattern_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8) RETURNING id`,
       [req.user.id, opp.id, opp.email, opp.name, email.subject, email.body,
-       JSON.stringify({ chain: 'deal_reactivation', source: 'chat' })]
+       JSON.stringify({ chain: 'deal_reactivation', source: 'chat' }), patternCtx.ids]
     );
 
     res.json({

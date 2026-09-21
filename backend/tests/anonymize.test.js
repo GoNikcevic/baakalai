@@ -22,7 +22,7 @@ function parseOrFail(value) {
   try {
     return JSON.parse(value);
   } catch (err) {
-    assert.fail(`data non parsable (${err.message}) — valeur produite : ${value}`);
+    assert.fail(`data non parsable (${err.message}), valeur produite : ${value}`);
   }
 }
 
@@ -60,7 +60,7 @@ test('redige les noms d entreprises connus', () => {
   assert.strictEqual(text, 'Portefeuille : [ENTREPRISE], [ENTREPRISE] et [ENTREPRISE]');
 });
 
-test('tolere les accents manquants — cas mesure en production', () => {
+test('tolere les accents manquants, cas mesure en production', () => {
   // En base : « Dassault Systèmes ». Dans le texte produit par le LLM :
   // « Dassault Systemes ». Sans tolerance aux accents, la fuite passe.
   const { text } = redactText('Doublons averes (Dassault Systemes x2)', LEX);

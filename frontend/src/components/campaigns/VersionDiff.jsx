@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   VersionDiff — Version history with diff & rollback
+   VersionDiff · Version history with diff & rollback
    ═══════════════════════════════════════════════════ */
 
 import { useState, useEffect, useCallback } from 'react';

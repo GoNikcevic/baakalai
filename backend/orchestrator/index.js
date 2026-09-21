@@ -1,5 +1,5 @@
 /**
- * Orchestrator — Agent-based scheduler
+ * Orchestrator · Agent-based scheduler
  *
  * 4 intelligent agents replace 7 separate cron jobs:
  *
@@ -31,7 +31,7 @@ const isEnabled = () => process.env.ORCHESTRATOR_ENABLED === 'true';
  * Fuseau des expressions cron.
  *
  * Sans `timezone`, node-cron interprete l'expression dans le fuseau du
- * conteneur — UTC sur Railway. « 9h » tombait donc a 10h ou 11h a Paris selon
+ * conteneur · UTC sur Railway. « 9h » tombait donc a 10h ou 11h a Paris selon
  * la saison. L'intention produit est l'heure de bureau francaise.
  */
 const TZ = process.env.CRON_TIMEZONE || 'Europe/Paris';
@@ -40,14 +40,14 @@ const TZ = process.env.CRON_TIMEZONE || 'Europe/Paris';
  * Planifie une tache sous verrou exclusif.
  *
  * node-cron est purement in-process : chaque instance enregistre ses propres
- * crons. Avec deux replicas — ou pendant un redeploiement qui chevauche un
- * creneau — la meme tache s'executerait deux fois, donc double facture LLM et
+ * crons. Avec deux replicas · ou pendant un redeploiement qui chevauche un
+ * creneau · la meme tache s'executerait deux fois, donc double facture LLM et
  * emails envoyes en double. Le verrou consultatif Postgres (non bloquant) fait
  * qu'une seule instance execute; les autres passent leur tour.
  *
  * Chaque declenchement est trace dans cron_runs (migration 069) : c'est la
  * matiere premiere du dead-man's switch (lib/cron-watchdog.js), ne le
- * retirer sous aucun pretexte — sans lui, une panne de scheduler redevient
+ * retirer sous aucun pretexte · sans lui, une panne de scheduler redevient
  * invisible, comme les trois mois d'extinction d'avril-juillet 2026.
  * Le tracage est best-effort : il ne doit jamais empecher un job de tourner.
  */
@@ -71,7 +71,7 @@ function schedule(name, expression, handler) {
       return { ran: true };
     });
     if (outcome && outcome.ran === false) {
-      logger.info('orchestrator', `${name} skipped — already running on another instance`, { cron: name });
+      logger.info('orchestrator', `${name} skipped, already running on another instance`, { cron: name });
     }
 
     if (runId != null) {
@@ -94,7 +94,7 @@ function start() {
   console.log(`[orchestrator] Starting scheduler (timezone: ${TZ})...`);
 
   // ═══════════════════════════════════════════════════
-  // Agent 1: Prospection Agent — Daily 8:00 AM
+  // Agent 1: Prospection Agent · Daily 8:00 AM
   // Stats collection + batch A/B + deliverability
   // ═══════════════════════════════════════════════════
   schedule('prospection', '0 8 * * *', async () => {
@@ -102,13 +102,39 @@ function start() {
     try {
       const { runProspectionAgent } = require('../lib/prospection-agent');
       const report = await runProspectionAgent();
-      console.log(`[agent:prospection] Done in ${report.duration}ms — stats: ${report.stats?.collected || 0}, batch: ${report.batch ? 'ran' : 'skipped'}, deliv: ${report.deliverability ? 'ran' : 'skipped'}, errors: ${report.errors.length}`);
+      console.log(`[agent:prospection] Done in ${report.duration}ms, stats: ${report.stats?.collected || 0}, batch: ${report.batch ? 'ran' : 'skipped'}, deliv: ${report.deliverability ? 'ran' : 'skipped'}, errors: ${report.errors.length}`);
     } catch (err) {
       logger.error('orchestrator', 'Prospection Agent failed: ' + err.message);
     }
   });
 
-  // Evening batch check (8PM) — only batch orchestrator, not full agent
+  // ═══════════════════════════════════════════════════
+  // Séquences natives · toutes les heures, 8h-18h, lun-ven
+  // Détection de réponses (Gmail) + envoi des steps dus des campagnes de
+  // prospection en canal natif. Le moteur borne les volumes par utilisateur ;
+  // le passage horaire étale les envois sur la journée ouvrée.
+  // ═══════════════════════════════════════════════════
+  schedule('native-sequences', '10 8-18 * * 1-5', async () => {
+    try {
+      const engine = require('../lib/native-sequence-engine');
+      const summary = await engine.run();
+      if (summary.emailsSent + summary.linkedinActions + summary.replies > 0) {
+        console.log(`[native-seq] ${summary.users} users, ${summary.emailsSent} emails, ${summary.linkedinActions} linkedin, ${summary.replies} replies`);
+      }
+      if (summary.errors.length > 0) {
+        logger.warn('orchestrator', `native-sequences errors: ${summary.errors.slice(0, 5).join(' | ')}`);
+      }
+      // La file autopilot (réponses différées 2-4h) ne se vidait qu'au passage
+      // de l'agent CRM de 9h · une réponse planifiée à 14h partait le lendemain.
+      // Le passage horaire la traite au fil de l'eau.
+      const { sendScheduledReplies } = require('../lib/conversation-autopilot');
+      await sendScheduledReplies();
+    } catch (err) {
+      logger.error('orchestrator', 'Native sequences failed: ' + err.message);
+    }
+  });
+
+  // Evening batch check (8PM) · only batch orchestrator, not full agent
   schedule('evening-batch', '0 20 * * *', async () => {
     try {
       const result = await runBatchOrchestrator();
@@ -119,7 +145,7 @@ function start() {
   });
 
   // ═══════════════════════════════════════════════════
-  // Agent 2: CRM Agent — Daily 9:00 AM
+  // Agent 2: CRM Agent · Daily 9:00 AM
   // Sync + cleaning + nurture
   // ═══════════════════════════════════════════════════
   schedule('crm-agent', '0 9 * * *', async () => {
@@ -128,14 +154,14 @@ function start() {
       const { runAllAgents } = require('../lib/crm-agent');
       const results = await runAllAgents();
       const summary = results.map(r => `user:${r.userId?.slice(0, 8)} sync:+${r.sync?.imported || 0} nurture:${r.nurture?.sent || 0}/${r.nurture?.queued || 0} alerts:${r.alerts?.length || 0}`);
-      console.log(`[agent:crm] Done — ${summary.join(', ') || 'no users'}`);
+      console.log(`[agent:crm] Done, ${summary.join(', ') || 'no users'}`);
     } catch (err) {
       logger.error('orchestrator', 'CRM Agent failed: ' + err.message);
     }
   });
 
   // ═══════════════════════════════════════════════════
-  // Strategic Agents (fast) — Daily 9:30 AM
+  // Strategic Agents (fast) · Daily 9:30 AM
   // Deal Coach + Upsell + Copy Optimizer (benefit from daily runs)
   // Heavy agents (ICP, Win/Loss, Competitor, Timing) stay weekly in Memory Agent
   // ═══════════════════════════════════════════════════
@@ -170,28 +196,7 @@ function start() {
   });
 
   // ═══════════════════════════════════════════════════
-  // Agent Chains — Daily 9:45 AM
-  // Autonomous action chains (deal reactivation, auto-upsell)
-  // Runs after strategic agents so data is fresh
-  // ═══════════════════════════════════════════════════
-  schedule('agent-chains', '45 9 * * *', async () => {
-    console.log('[agent:chains] Starting autonomous chains...');
-    try {
-      const { runAllChains } = require('../lib/agent-chains');
-      const results = await runAllChains();
-      const summary = results.map(r => {
-        const re = r.reactivation?.executed || r.reactivation?.pending || 0;
-        const up = r.upsell?.executed || r.upsell?.pending || 0;
-        return re + up > 0 ? `user:${r.userId} reactivation:${re} upsell:${up}` : null;
-      }).filter(Boolean);
-      console.log(`[agent:chains] Done — ${summary.length > 0 ? summary.join(', ') : 'no actions triggered'}`);
-    } catch (err) {
-      logger.error('orchestrator', 'Agent chains failed: ' + err.message);
-    }
-  });
-
-  // ═══════════════════════════════════════════════════
-  // Lifecycle Emails — Daily 10:00 AM
+  // Lifecycle Emails · Daily 10:00 AM
   // Onboarding sequences + retention re-engagement
   // ═══════════════════════════════════════════════════
   schedule('lifecycle-emails', '0 10 * * *', async () => {
@@ -207,22 +212,77 @@ function start() {
   });
 
   // ═══════════════════════════════════════════════════
-  // Agent 3: Memory Agent — Sunday 10:00 AM
+  // Agent 3: Memory Agent · Sunday 10:00 AM
   // Consolidation + pruning + templates (when needed)
   // ═══════════════════════════════════════════════════
+  // File tournante des signaux : toutes les 30 min, cibles les plus dues
+  // (configs + sociétés CRM), sous budget Brave quotidien. Remplace le
+  // passage crm-watch du batch de 8 h (retiré de prospection-agent).
+  schedule('signal-scheduler', '*/30 * * * *', async () => {
+    try {
+      const { runTick } = require('../lib/signal-scheduler');
+      await runTick();
+    } catch (err) {
+      logger.error('orchestrator', 'Signal scheduler tick failed: ' + err.message);
+    }
+  });
+
   schedule('memory-agent', '0 10 * * 0', async () => {
     console.log('[agent:memory] Starting...');
     try {
       const { runMemoryAgent } = require('../lib/memory-agent');
       const report = await runMemoryAgent();
-      console.log(`[agent:memory] Done in ${report.duration}ms — skipped: [${report.skipped.join(', ')}], errors: ${report.errors.length}`);
+      console.log(`[agent:memory] Done in ${report.duration}ms, skipped: [${report.skipped.join(', ')}], errors: ${report.errors.length}`);
+
+      // RGPD · minimisation : les snapshots d'historique data quality contiennent
+      // des données personnelles (before_data complet) ; on ne les garde pas plus
+      // de 12 mois. Conséquence assumée : ces changements ne sont plus annulables.
+      try {
+        const db = require('../db');
+        const purged = await db.query(
+          `DELETE FROM data_quality_changes WHERE created_at < now() - interval '12 months'`);
+        if (purged.rowCount > 0) console.log(`[agent:memory] RGPD: ${purged.rowCount} snapshots data quality > 12 mois purgés`);
+      } catch (err) {
+        logger.warn('orchestrator', 'Purge snapshots data quality: ' + err.message);
+      }
     } catch (err) {
       logger.error('orchestrator', 'Memory Agent failed: ' + err.message);
     }
   });
 
   // ═══════════════════════════════════════════════════
-  // CRM Digest — Monday 8:45 AM
+  // Churn External Signals · Weekly Sunday 11:00 AM
+  // Brave Search scan for medium+ risk clients only (cost control)
+  // ═══════════════════════════════════════════════════
+  schedule('churn-signals', '0 11 * * 0', async () => {
+    console.log('[churn-signals] Starting weekly external signal scan...');
+    try {
+      const { scanExternalSignalsForUser } = require('../lib/churn-external-signals');
+      const { scanFinancialHealthForUser } = require('../lib/financial-health');
+      const db = require('../db');
+      const users = await db.query('SELECT id FROM users WHERE onboarding_complete = true');
+      let scanned = 0, signalsFound = 0;
+      for (const { id } of users.rows) {
+        try {
+          // Registres officiels d'abord (gratuit, signaux durs · toutes les sociétés
+          // clientes), puis le scan news Brave (payant · clients déjà à risque only).
+          const registryReport = await scanFinancialHealthForUser(id);
+          signalsFound += registryReport.signalsFound;
+          const report = await scanExternalSignalsForUser(id);
+          scanned += report.scanned;
+          signalsFound += report.signalsFound;
+        } catch (err) {
+          logger.error('orchestrator', `Churn signals failed for user ${id}: ${err.message}`);
+        }
+      }
+      console.log(`[churn-signals] Done, ${scanned} opportunit${scanned === 1 ? 'y' : 'ies'} scanned, ${signalsFound} signal(s) found`);
+    } catch (err) {
+      logger.error('orchestrator', 'Churn external signals job failed: ' + err.message);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // CRM Digest · Monday 8:45 AM
   // Email hebdo « À traiter cette semaine » pour les utilisateurs CRM
   // (weekly-report ne couvre que ceux qui ont des campagnes actives)
   // ═══════════════════════════════════════════════════
@@ -231,14 +291,14 @@ function start() {
     try {
       const { runCrmDigests } = require('./jobs/crm-digest');
       const result = await runCrmDigests();
-      console.log(`[crm-digest] Done — ${result.sent} sent, ${result.skipped} skipped`);
+      console.log(`[crm-digest] Done, ${result.sent} sent, ${result.skipped} skipped`);
     } catch (err) {
       logger.error('orchestrator', 'CRM digest failed: ' + err.message);
     }
   });
 
   // ═══════════════════════════════════════════════════
-  // Agent 4: Reporting Agent — Monday 9:00 AM
+  // Agent 4: Reporting Agent · Monday 9:00 AM
   // Weekly report + anomaly detection
   // ═══════════════════════════════════════════════════
   schedule('reporting-agent', '0 9 * * 1', async () => {
@@ -246,21 +306,22 @@ function start() {
     try {
       const { runReportingAgent } = require('../lib/reporting-agent');
       const report = await runReportingAgent();
-      console.log(`[agent:reporting] Done in ${report.duration}ms — anomalies: ${report.anomalies.length}, errors: ${report.errors.length}`);
+      console.log(`[agent:reporting] Done in ${report.duration}ms, anomalies: ${report.anomalies.length}, errors: ${report.errors.length}`);
     } catch (err) {
       logger.error('orchestrator', 'Reporting Agent failed: ' + err.message);
     }
   });
 
-  console.log(`[orchestrator] Started — 9 cron jobs registered (timezone: ${TZ})`);
+  console.log(`[orchestrator] Started, 9 cron jobs registered (timezone: ${TZ})`);
   console.log('  Prospection:      daily 8AM + evening batch 8PM');
   console.log('  CRM:              daily 9AM');
   console.log('  Strategic (fast): daily 9:30AM (deal_coach, upsell, copy_optimizer)');
-  console.log('  Agent Chains:     daily 9:45AM (deal reactivation, auto-upsell)');
   console.log('  Lifecycle:        daily 10AM');
   console.log('  Memory:           Sunday 10AM (+ heavy strategic agents)');
+  console.log('  Churn signals:    Sunday 11AM (external web scan, medium+ risk clients only)');
   console.log('  CRM Digest:       Monday 8:45AM (à traiter cette semaine)');
   console.log('  Reporting:        Monday 9AM');
+  console.log('  (Deal reactivation / auto-upsell now generate on demand, no background cron)');
 }
 
 module.exports = { start, collectStats, regenerate, consolidate, runBatchOrchestrator };

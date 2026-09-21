@@ -1,13 +1,13 @@
 /**
- * Signal Routes — Signal-based prospecting
+ * Signal Routes · Signal-based prospecting
  *
- * GET    /api/signals             — List detected signals (with filters)
- * GET    /api/signals/configs     — List signal configs
- * POST   /api/signals/configs     — Create a signal config
- * PATCH  /api/signals/configs/:id — Update config
- * DELETE /api/signals/configs/:id — Delete config
- * POST   /api/signals/:id/action  — Take action on a signal (add to CRM, email, dismiss)
- * POST   /api/signals/scan        — Manually trigger signal scan
+ * GET    /api/signals · List detected signals (with filters)
+ * GET    /api/signals/configs · List signal configs
+ * POST   /api/signals/configs · Create a signal config
+ * PATCH  /api/signals/configs/:id · Update config
+ * DELETE /api/signals/configs/:id · Delete config
+ * POST   /api/signals/:id/action · Take action on a signal (add to CRM, email, dismiss)
+ * POST   /api/signals/scan · Manually trigger signal scan
  */
 
 const { Router } = require('express');
@@ -16,7 +16,7 @@ const logger = require('../lib/logger');
 
 const router = Router();
 
-// GET /api/signals — List signals
+// GET /api/signals · List signals
 router.get('/', async (req, res, next) => {
   try {
     const status = req.query.status || null;
@@ -53,7 +53,27 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/configs — List configs
+// GET /api/signals/preferences · Cadence de la veille automatique
+router.get('/preferences', async (req, res, next) => {
+  try {
+    const r = await db.query(`SELECT signal_scan_frequency FROM users WHERE id = $1`, [req.user.id]);
+    res.json({ frequency: r.rows[0]?.signal_scan_frequency || 'weekly' });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/signals/preferences · Choix de cadence (off = scan manuel uniquement)
+router.put('/preferences', async (req, res, next) => {
+  try {
+    const { frequency } = req.body;
+    if (!['off', 'weekly', 'daily'].includes(frequency)) {
+      return res.status(400).json({ error: 'frequency must be off, weekly or daily' });
+    }
+    await db.query(`UPDATE users SET signal_scan_frequency = $1 WHERE id = $2`, [frequency, req.user.id]);
+    res.json({ frequency });
+  } catch (err) { next(err); }
+});
+
+// GET /api/signals/configs · List configs
 router.get('/configs', async (req, res, next) => {
   try {
     const result = await db.query(
@@ -64,11 +84,45 @@ router.get('/configs', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/configs — Create config
+// POST /api/signals/configs · Create config
+/**
+ * Une config doit pouvoir produire une requête qui veut dire quelque chose.
+ *
+ * Les requêtes sont construites à partir des secteurs et des mots-clés
+ * (lib/agents/signal-agent.js, SIGNAL_QUERIES) : sans eux, « Levée de fonds »
+ * partait chercher `( ) (funding OR raised OR ...)` sur tout le web. Du bruit,
+ * et un quota Brave consommé pour rien. Le type « Concurrent », lui, ne
+ * produit aucune requête du tout sans liste de concurrents.
+ */
+function validateConfigFocus({ signalTypes, targetSectors, targetKeywords, targetCompetitors }) {
+  const types = Array.isArray(signalTypes) && signalTypes.length ? signalTypes : ['funding', 'hiring', 'news'];
+  const hasFocus = (targetSectors || []).some(s => String(s).trim())
+    || (targetKeywords || []).some(s => String(s).trim());
+  const hasCompetitors = (targetCompetitors || []).some(s => String(s).trim());
+
+  const webTypes = types.filter(t => t !== 'competitor');
+  if (webTypes.length > 0 && !hasFocus) {
+    return {
+      code: 'config_needs_focus',
+      error: 'Renseignez au moins un secteur ou un mot-clé : sans eux, la recherche part sur tout le web.',
+    };
+  }
+  if (types.includes('competitor') && !hasCompetitors) {
+    return {
+      code: 'config_needs_competitors',
+      error: 'Le type « Concurrent » demande au moins un concurrent à suivre, sinon il ne lance aucune recherche.',
+    };
+  }
+  return null;
+}
+
 router.post('/configs', async (req, res, next) => {
   try {
     const { name, signalTypes, targetSectors, targetTitles, targetCompanySizes, targetKeywords, targetCompetitors, frequency } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const invalid = validateConfigFocus({ signalTypes, targetSectors, targetKeywords, targetCompetitors });
+    if (invalid) return res.status(400).json(invalid);
 
     const result = await db.query(`
       INSERT INTO signal_configs (user_id, name, signal_types, target_sectors, target_titles, target_company_sizes, target_keywords, target_competitors, frequency)
@@ -92,6 +146,28 @@ router.post('/configs', async (req, res, next) => {
 router.patch('/configs/:id', async (req, res, next) => {
   try {
     const { name, signalTypes, targetSectors, targetTitles, targetKeywords, targetCompetitors, enabled, frequency } = req.body;
+
+    // Une modification ne doit pas pouvoir vider ce qui donnait son sens à la
+    // recherche : on valide la config telle qu'elle sera après la mise à jour,
+    // pas seulement les champs envoyés.
+    const touchesFocus = [signalTypes, targetSectors, targetKeywords, targetCompetitors].some(v => v !== undefined);
+    if (touchesFocus) {
+      const current = await db.query(
+        `SELECT signal_types, target_sectors, target_keywords, target_competitors
+           FROM signal_configs WHERE id = $1 AND user_id = $2`,
+        [req.params.id, req.user.id]
+      );
+      if (!current.rows[0]) return res.status(404).json({ error: 'Config not found' });
+      const merged = {
+        signalTypes: signalTypes !== undefined ? signalTypes : current.rows[0].signal_types,
+        targetSectors: targetSectors !== undefined ? targetSectors : current.rows[0].target_sectors,
+        targetKeywords: targetKeywords !== undefined ? targetKeywords : current.rows[0].target_keywords,
+        targetCompetitors: targetCompetitors !== undefined ? targetCompetitors : current.rows[0].target_competitors,
+      };
+      const invalid = validateConfigFocus(merged);
+      if (invalid) return res.status(400).json(invalid);
+    }
+
     const sets = [];
     const values = [];
     let i = 1;
@@ -124,7 +200,7 @@ router.delete('/configs/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/:id/action — Take action on a signal
+// POST /api/signals/:id/action · Take action on a signal
 router.post('/:id/action', async (req, res, next) => {
   try {
     const { action } = req.body; // add_to_crm, send_email, add_to_lemlist, dismiss
@@ -157,7 +233,9 @@ Contact: ${s.contact_name || 'Decision maker'} (${s.contact_title || ''}) at ${s
 Signal type: ${s.signal_type}
 
 Write a 4-5 line email that references the signal naturally (don't say "I saw a signal").
-Be specific and relevant. Return JSON: { "subject": "...", "body": "..." }`;
+Be specific and relevant.
+${require('../lib/human-style').HUMAN_STYLE_RULES}
+Return JSON: { "subject": "...", "body": "..." }`;
 
       const result = await claude.callClaude('Return only valid JSON.', prompt, 500, 'signal_outreach');
       let email = result.parsed;
@@ -187,16 +265,67 @@ Be specific and relevant. Return JSON: { "subject": "...", "body": "..." }`;
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/scan — Manual signal scan
+// POST /api/signals/scan · Manual signal scan
+// POST /api/signals/scan · le bouton « Scanner »
+//
+// Il ne lançait que les surveillances configurées, et répondait « 0 signal
+// détecté » quand il n'y en avait aucune : l'utilisateur croyait avoir cherché.
+// Or la majorité des signaux en production vient de l'autre moteur, la
+// surveillance des comptes du CRM (source `crm_watch`), qui ne tournait qu'au
+// cron. Le bouton lance désormais les deux et dit ce qu'il a réellement fait.
+// Plafond du lancement manuel, en sociétés du CRM. Chaque société coûte une
+// recherche Brave et une extraction Claude, soit une poignée de secondes :
+// au delà, on ferait patienter une minute devant un bouton.
+const MANUAL_CRM_COMPANIES = 5;
+
 router.post('/scan', async (req, res, next) => {
   try {
-    const { run } = require('../lib/agents/signal-agent');
-    const report = await run(req.user.id);
-    res.json(report);
+    const { run, runCrmWatch } = require('../lib/agents/signal-agent');
+    const { getRemainingBudget, consumeBudget } = require('../lib/signal-scheduler');
+
+    // Le quota Brave est partagé avec le scheduler continu : un clic le débite
+    // au même endroit, et s'arrête quand il ne reste rien pour la journée.
+    let remaining = await getRemainingBudget().catch(() => null);
+    const budgetExhausted = remaining !== null && remaining <= 0;
+
+    const fromConfigs = budgetExhausted
+      ? { detected: 0, configs: 0, queries: 0, errors: [] }
+      : await run(req.user.id);
+
+    if (remaining !== null) remaining -= (fromConfigs.queries || 0);
+
+    // Lancement manuel : on ignore la rotation hebdomadaire par société (elle
+    // sert à étaler le quota sur la semaine, pas à faire attendre quelqu'un qui
+    // vient de cliquer).
+    const crmLimit = remaining === null
+      ? MANUAL_CRM_COMPANIES
+      : Math.max(0, Math.min(MANUAL_CRM_COMPANIES, remaining));
+    const crm = crmLimit > 0
+      ? await runCrmWatch(req.user.id, { ignoreDayBucket: true, limit: crmLimit })
+      : { detected: 0, companiesScanned: 0, errors: [] };
+
+    const queriesUsed = (fromConfigs.queries || 0) + (crm.companiesScanned || 0);
+    if (queriesUsed > 0) await consumeBudget(queriesUsed).catch(() => {});
+
+    res.json({
+      detected: (fromConfigs.detected || 0) + (crm.detected || 0),
+      configs: fromConfigs.configs || 0,
+      fromConfigs: fromConfigs.detected || 0,
+      fromCrm: crm.detected || 0,
+      companiesScanned: crm.companiesScanned || 0,
+      queriesUsed,
+      budgetExhausted,
+      // Ni surveillance configurée, ni société à vérifier : il n'y avait rien
+      // à chercher, ce n'est pas un scan à zéro résultat.
+      nothingToScan: !budgetExhausted
+        && (fromConfigs.configs || 0) === 0
+        && (crm.companiesScanned || 0) === 0,
+      errors: [...(fromConfigs.errors || []), ...(crm.errors || [])],
+    });
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/:id/linkedin-outreach — Send LinkedIn connection from signal
+// POST /api/signals/:id/linkedin-outreach · Send LinkedIn connection from signal
 router.post('/:id/linkedin-outreach', async (req, res, next) => {
   try {
     const signal = await db.query(`SELECT * FROM signals WHERE id = $1 AND user_id = $2`, [req.params.id, req.user.id]);
@@ -214,7 +343,7 @@ router.post('/:id/linkedin-outreach', async (req, res, next) => {
     // Generate note
     const noteResult = await claude.callClaude('Return only valid JSON.', `Write a LinkedIn connection note (max 280 chars).
 Signal: ${s.title}. Contact: ${s.contact_name} at ${s.company_name}.
-Be specific, reference the signal naturally. Return JSON: { "note": "..." }`, 300, 'linkedin_note');
+Be specific, reference the signal naturally. Never use em dashes (  ); write like a busy human, no AI-sounding phrasing. Return JSON: { "note": "..." }`, 300, 'linkedin_note');
 
     let note = noteResult.parsed?.note || `Bonjour, votre profil a retenu mon attention. Curieux d'échanger.`;
     const publicId = s.contact_linkedin.match(/\/in\/([^/?]+)/)?.[1];
@@ -232,7 +361,7 @@ Be specific, reference the signal naturally. Return JSON: { "note": "..." }`, 30
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/linkedin/status — LinkedIn connection status + daily counts
+// GET /api/signals/linkedin/status · LinkedIn connection status + daily counts
 router.get('/linkedin/status', async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
@@ -242,12 +371,12 @@ router.get('/linkedin/status', async (req, res, next) => {
     const linkedin = require('../api/linkedin');
     const counts = linkedin.getDailyCounts(req.user.id);
 
-    // Cookie exists = connected (skip live test — LinkedIn blocks datacenter IPs)
+    // Cookie exists = connected (skip live test · LinkedIn blocks datacenter IPs)
     res.json({ connected: true, name: 'LinkedIn', counts });
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/stats — Signal dashboard KPIs
+// GET /api/signals/stats · Signal dashboard KPIs
 router.get('/stats', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -286,7 +415,7 @@ router.get('/stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/signals/company/:name — Signal history for a company
+// GET /api/signals/company/:name · Signal history for a company
 router.get('/company/:name', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -313,7 +442,7 @@ router.get('/company/:name', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/signals/:id/create-sequence — Create a mini outreach sequence from a signal
+// POST /api/signals/:id/create-sequence · Create a mini outreach sequence from a signal
 router.post('/:id/create-sequence', async (req, res, next) => {
   try {
     const signal = await db.query(`SELECT * FROM signals WHERE id = $1 AND user_id = $2`, [req.params.id, req.user.id]);
@@ -334,6 +463,7 @@ Generate 3 touchpoints:
 - E3 (Day 7): Break-up email
 
 Each email: personal tone, max 5 lines, reference the signal naturally.
+${require('../lib/human-style').HUMAN_STYLE_RULES}
 Return JSON:
 {
   "name": "Campaign name",
@@ -355,7 +485,7 @@ Return JSON:
       return res.status(500).json({ error: 'Could not generate sequence' });
     }
 
-    // E1 part dans la file d'approbation nurture si le contact a un email —
+    // E1 part dans la file d'approbation nurture si le contact a un email · 
     // avec la dédup standard (7 jours création / 2 heures envoi).
     let queuedEmailId = null;
     if (s.contact_email) {

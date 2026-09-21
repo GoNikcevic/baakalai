@@ -40,7 +40,7 @@ jobs:
       - name: Check deploy freeze flag
         run: |
           if [ -f .deploy-freeze ]; then
-            echo "::error::🚨 DEPLOY FROZEN — found .deploy-freeze at the repo root."
+            echo "::error::🚨 DEPLOY FROZEN, found .deploy-freeze at the repo root."
             echo ""
             echo "Contents of .deploy-freeze:"
             echo "---"
@@ -116,7 +116,7 @@ jobs:
           NODE_ENV: test
           # Dummy env vars so modules that read process.env at load time
           # don't crash on missing config. Real values are never read in
-          # this test — we only care about the module top-level code.
+          # this test : we only care about the module top-level code.
           CLAUDE_API_KEY: smoke-test-dummy
           ANTHROPIC_API_KEY: smoke-test-dummy
           LEMLIST_API_KEY: smoke-test-dummy

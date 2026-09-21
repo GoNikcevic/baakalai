@@ -1,7 +1,7 @@
 {
   "name": "bakal-backend",
   "version": "1.0.0",
-  "description": "Bakal B2B prospecting backend — API layer for Lemlist, Notion, and Claude integrations",
+  "description": "Bakal B2B prospecting backend, API layer for Lemlist, Notion, and Claude integrations",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

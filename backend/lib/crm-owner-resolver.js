@@ -1,5 +1,5 @@
 /**
- * CRM Owner Resolver — Unified owner mapping across all CRM providers
+ * CRM Owner Resolver · Unified owner mapping across all CRM providers
  *
  * Maps CRM user IDs to Baakalai team members by email.
  * Extracts owner info from raw CRM contact data.

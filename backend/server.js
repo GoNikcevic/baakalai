@@ -31,7 +31,7 @@ const app = express();
 // Trust proxy (Railway, Render, etc.)
 app.set('trust proxy', 1);
 
-// CORS — restrict origins in production, allow localhost in dev
+// CORS · restrict origins in production, allow localhost in dev
 const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'];
@@ -82,7 +82,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false, // allows loading external fonts/images
 }));
 
-// Webhook Stripe — corps BRUT exigé pour vérifier la signature, donc monté
+// Webhook Stripe · corps BRUT exigé pour vérifier la signature, donc monté
 // avant express.json (public, validé par STRIPE_WEBHOOK_SECRET).
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), require('./routes/billing').stripeWebhook);
 
@@ -111,7 +111,7 @@ window.BAKAL_SUPABASE_ANON_KEY = ${JSON.stringify(supabase.anonKey)};
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
 app.use('/landing', express.static(path.join(__dirname, '..', 'landing')));
 
-// Health check (public) — includes DB pool stats
+// Health check (public) · includes DB pool stats
 app.get('/api/health', async (_req, res) => {
   const db = require('./db');
   const dbHealth = await db.healthCheck();
@@ -146,18 +146,21 @@ app.use('/api', auditMiddleware);
 // Auth routes (public)
 app.use('/api/auth', authRouter);
 
-// Webhooks (public — validated via shared secret, not JWT)
+// Webhooks (public · validated via shared secret, not JWT)
 app.use('/api/webhooks', require('./routes/webhooks'));
 
-// Diagnostic CRM public (lead magnet, sans compte — rate-limité par IP dans la route)
+// Diagnostic CRM public (lead magnet, sans compte · rate-limité par IP dans la route)
 app.use('/api/public/diagnostic', require('./routes/public-diagnostic'));
 
-// OAuth email callbacks (public — user returns from Google/Microsoft redirect, no auth needed)
+// Désinscription emails (public · le lien arrive en boîte mail, token HMAC, pas de login)
+app.use('/api/public/email-prefs', require('./routes/email-prefs'));
+
+// OAuth email callbacks (public · user returns from Google/Microsoft redirect, no auth needed)
 const { gmailCallback, microsoftCallback } = require('./routes/nurture');
 app.get('/api/nurture/email-accounts/callback/gmail', gmailCallback);
 app.get('/api/nurture/email-accounts/callback/microsoft', microsoftCallback);
 
-// Team context — inject req.team + req.teamRole on every authenticated request
+// Team context · inject req.team + req.teamRole on every authenticated request
 const { teamContext } = require('./middleware/team-context');
 app.use('/api', requireAuth, teamContext);
 
@@ -178,6 +181,11 @@ app.use('/api/projects', requireAuth, projectsRouter);
 app.use('/api/variables', requireAuth, variablesRouter);
 app.use('/api/export', requireAuth, exportRouter);
 app.use('/api/crm', requireAuth, crmRouter);
+app.use('/api/churn', requireAuth, require('./routes/churn'));
+app.use('/api/reactivation', requireAuth, require('./routes/reactivation'));
+app.use('/api/enrollments', requireAuth, require('./routes/enrollments'));
+app.use('/api/data-quality', requireAuth, require('./routes/data-quality'));
+app.use('/api/nav', requireAuth, require('./routes/nav'));
 app.use('/api/team-campaigns', requireAuth, require('./routes/team-campaigns'));
 app.use('/api/strategic', requireAuth, require('./routes/strategic'));
 app.use('/api/signals', requireAuth, require('./routes/signals'));
@@ -188,10 +196,11 @@ app.use('/api/notifications', requireAuth, require('./routes/notifications'));
 app.use('/api/templates', requireAuth, require('./routes/templates'));
 app.use('/api/nurture', requireAuth, require('./routes/nurture'));
 app.use('/api/priorities', requireAuth, require('./routes/priorities'));
+app.use('/api/hidden-revenue', requireAuth, require('./routes/hidden-revenue'));
 app.use('/api/ext', requireAuth, require('./routes/extension'));
 app.use('/api/events', requireAuth, require('./routes/events'));
 
-// SPA catch-all — serve React index.html for non-API routes
+// SPA catch-all · serve React index.html for non-API routes
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/landing/')) return next();
   const indexPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
@@ -230,7 +239,7 @@ server.listen(config.port, '0.0.0.0', () => {
     try { await db.refreshTokens.deleteExpired(); } catch { /* ignore */ }
   }, 60 * 60 * 1000);
 
-  // Data retention cleanup — runs daily at startup + every 24h
+  // Data retention cleanup · runs daily at startup + every 24h
   const { runRetentionCleanup } = require('./lib/retention-cleanup');
   runRetentionCleanup().catch(() => {});
   const retentionInterval = setInterval(async () => {
@@ -240,7 +249,7 @@ server.listen(config.port, '0.0.0.0', () => {
   // Start orchestrator (cron jobs) if enabled
   orchestrator.start();
 
-  // Dead-man's switch des crons — démarre TOUJOURS, sans condition sur
+  // Dead-man's switch des crons · démarre TOUJOURS, sans condition sur
   // ORCHESTRATOR_ENABLED : c'est précisément quand ce flag casse (cf. les
   // trois mois d'extinction silencieuse d'avril-juillet 2026) que le
   // processus web doit donner l'alerte.
@@ -251,7 +260,7 @@ server.listen(config.port, '0.0.0.0', () => {
   async function shutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info('shutdown', `${signal} received — graceful shutdown starting...`);
+    logger.info('shutdown', `${signal} received, graceful shutdown starting...`);
 
     clearInterval(tokenCleanupInterval);
     clearInterval(retentionInterval);

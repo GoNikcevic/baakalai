@@ -19,7 +19,7 @@ function lazyRetry(importFn) {
       // while the page reloads
       return new Promise(() => {})
     }
-    // Already reloaded once — clear the flag for next deploy and throw
+    // Already reloaded once · clear the flag for next deploy and throw
     sessionStorage.removeItem('chunk_reload')
     throw err
   }))
@@ -30,9 +30,15 @@ const ChatPage = lazyRetry(() => import('./pages/ChatPage'))
 const DashboardPage = lazyRetry(() => import('./pages/DashboardPage'))
 const CampaignsList = lazyRetry(() => import('./pages/CampaignsList'))
 const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'))
-const PerformancePage = lazyRetry(() => import('./pages/PerformancePage'))
 const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
 const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
+const DealsToReactivatePage = lazyRetry(() => import('./pages/DealsToReactivatePage'))
+const ClientsToUpsellPage = lazyRetry(() => import('./pages/ClientsToUpsellPage'))
+const DealReactivationDetailRoute = lazyRetry(() => import('./pages/DealReactivationDetailRoute'))
+const UpsellDetailRoute = lazyRetry(() => import('./pages/UpsellDetailRoute'))
+const WorkflowPage = lazyRetry(() => import('./pages/WorkflowPage'))
+const DataQualityPage = lazyRetry(() => import('./pages/DataQualityPage'))
+const ChurnPage = lazyRetry(() => import('./pages/ChurnPage'))
 const ActivationPage = lazyRetry(() => import('./pages/ActivationPage'))
 const AnalyticsPage = lazyRetry(() => import('./pages/AnalyticsPage'))
 const SettingsWrapper = lazyRetry(() => import('./pages/SettingsWrapper'))
@@ -42,7 +48,7 @@ const LegalPage = lazyRetry(() => import('./pages/LegalPage'))
 // Public routes accessible without authentication
 const PUBLIC_PATHS = ['/reset-password', '/legal', '/terms', '/privacy', '/diagnostic']
 
-// Le diagnostic public vit sur la landing (baakal.ai/diagnostic) — l'app ne
+// Le diagnostic public vit sur la landing (baakal.ai/diagnostic) · l'app ne
 // garde que l'API ; on redirige les anciens liens (dont les partages /r/:id).
 function DiagnosticRedirect() {
   const { id } = useParams()
@@ -60,7 +66,7 @@ export default function App() {
   const [onboarded, setOnboarded] = useState(null) // null = checking, true/false
   const [authError, setAuthError] = useState(null)
 
-  // Re-initialize data after onboarding completes — send to dashboard for guided checklist
+  // Re-initialize data after onboarding completes · send to dashboard for guided checklist
   function handleOnboardingComplete() {
     setOnboarded(true)
     localStorage.setItem('bakal_onboarding_complete', 'true')
@@ -68,7 +74,7 @@ export default function App() {
     navigate('/dashboard', { replace: true })
   }
 
-  // Handle Google OAuth callback — exchange one-time code for tokens
+  // Handle Google OAuth callback · exchange one-time code for tokens
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('auth') === 'google') {
@@ -191,11 +197,19 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/campaigns" element={<CampaignsList />} />
             <Route path="/campaigns/:id" element={<CampaignDetailRoute />} />
-            <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/deals" element={<ClientsPage scope="deals" />} />
+            <Route path="/clients" element={<ClientsPage scope="clients" />} />
+            <Route path="/deals-to-reactivate" element={<DealsToReactivatePage />} />
+            <Route path="/deals-to-reactivate/:opportunityId" element={<DealReactivationDetailRoute />} />
+            <Route path="/deals-to-reactivate/:opportunityId/workflow" element={<WorkflowPage goal="reactivation" backBase="/deals-to-reactivate" />} />
+            <Route path="/clients-to-upsell" element={<ClientsToUpsellPage />} />
+            <Route path="/clients-to-upsell/:opportunityId" element={<UpsellDetailRoute />} />
+            <Route path="/clients-to-upsell/:opportunityId/workflow" element={<WorkflowPage goal="upsell" backBase="/clients-to-upsell" />} />
+            <Route path="/data-quality" element={<DataQualityPage />} />
+            <Route path="/churn-risk" element={<ChurnPage />} />
             <Route path="/activation" element={<ActivationPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsWrapper />} />
-            <Route path="/performance" element={<PerformancePage />} />
             <Route path="/recos" element={<RecosPage />} />
             <Route path="/help" element={<Navigate to="/chat" replace />} />
             <Route path="/join/:code" element={<JoinTeamPage />} />
@@ -203,6 +217,7 @@ export default function App() {
             <Route path="/nurture" element={<Navigate to="/activation" replace />} />
             <Route path="/signals" element={<Navigate to="/activation?section=signals" replace />} />
             <Route path="/crm-analytics" element={<Navigate to="/analytics" replace />} />
+            <Route path="/performance" element={<Navigate to="/analytics" replace />} />
             <Route path="/membership" element={<Navigate to="/analytics" replace />} />
             <Route path="/profil" element={<Navigate to="/settings" replace />} />
             <Route path="/memory" element={<Navigate to="/settings" replace />} />

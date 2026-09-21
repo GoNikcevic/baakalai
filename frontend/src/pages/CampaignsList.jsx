@@ -1,32 +1,49 @@
 /* ===============================================================================
-   BAKAL — Campaigns List Page (React)
+   BAKAL · Campaigns List Page (React)
    Lists all campaigns with filter, sort, project grouping, and row navigation.
    Migrated from renderCampaignsList / renderCampaignRow in campaigns-data.js
    and filterCampaignsList / sortCampaignsList in pages.js.
    =============================================================================== */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/useApp';
 import { useT, useI18n } from '../i18n';
 import api from '../services/api-client';
 import { useConfirm } from '../components/ConfirmModal';
 import { showToast } from '../services/notifications';
+import { getUser } from '../services/auth';
+import CampaignAssistant from '../components/campaigns/CampaignAssistant';
+import AutopilotSettings from '../components/AutopilotSettings';
+import Icon from '../components/Icon';
 
 export default function CampaignsList({ onNavigateCampaign }) {
   const { campaigns, projects, setCampaigns } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const t = useT();
   const { lang } = useI18n();
   const confirm = useConfirm();
   const en = lang === 'en';
+  const user = getUser();
+  // Non-admins get the campaign assistant only · no tab switcher, no campaign-list/autopilot
+  // management views (matches this app's existing "simplified UI for non-admins" principle
+  // elsewhere, e.g. Layout.jsx's simplified sidebar).
+  const isAdmin = !user?.teamRole || user.teamRole === 'admin';
+  // L'écran principal de Prospection est la création de campagne (assistant) ;
+  // la liste n'est qu'un historique accessible en second onglet. Les CTAs externes
+  // (Dashboard, onboarding, Deal Coach) passent state.openAssistant · redondant
+  // désormais mais conservé ; state.openHistory permet de cibler l'historique.
+  const [view, setView] = useState(location.state?.openHistory ? 'campaigns' : 'assistant');
   const [actionLoading, setActionLoading] = useState({});
 
-  // Arriver en bas de page (longue liste, ou CTA « Nouvelle campagne » venu
-  // d'une autre page) laissait le haut de la liste hors écran.
-  useEffect(() => { window.scrollTo(0, 0); }, []);
+  // Arriving scrolled down (long campaign list, or a « Nouvelle campagne » CTA from
+  // another page) left the Campagnes/Autopilot/Assistant tabs off-screen above.
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
 
-  const [filter, setFilter] = useState('active');
+  // Default "Tous" (hors archivées) : les campagnes créées par l'assistant naissent
+  // en status 'prep' · un défaut 'active' les rendait invisibles juste après création.
+  const [filter, setFilter] = useState('');
   const [sortByReply, setSortByReply] = useState(false);
   const [sortAsc, setSortAsc] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState({});
@@ -139,20 +156,11 @@ export default function CampaignsList({ onNavigateCampaign }) {
     setActionLoading(prev => ({ ...prev, [campaign.id]: null }));
   }, [setCampaigns, t, en]);
 
-  /* ── Empty state ── */
-  if (isEmpty) {
+  /* ── Non-admins: campaign assistant only, no tab switcher ── */
+  if (!isAdmin) {
     return (
       <div id="campaigns-list-view">
-        <div className="empty-state">
-          <div className="empty-state-icon">🎯</div>
-          <div className="empty-state-title">{t('campaigns.noCampaigns')}</div>
-          <div className="empty-state-desc">
-            {t('campaigns.noCampaignsDesc')}
-          </div>
-          <button className="btn btn-primary" onClick={() => navigate('/chat')}>
-            {t('campaigns.createFirst')}
-          </button>
-        </div>
+        <CampaignAssistant />
       </div>
     );
   }
@@ -170,6 +178,42 @@ export default function CampaignsList({ onNavigateCampaign }) {
 
   return (
     <div id="campaigns-list-view">
+      {/* View tabs */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
+        {[
+          { key: 'assistant', label: t('campaigns.tabCreate') },
+          { key: 'campaigns', label: t('campaigns.tabHistory') },
+          { key: 'autopilot', label: 'Autopilot' },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setView(tab.key)} style={{
+            padding: '10px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            color: view === tab.key ? 'var(--text-primary)' : 'var(--text-muted)',
+            background: 'none', border: 'none', borderBottom: view === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
+            transition: 'all 0.2s',
+          }}>
+            {tab.key === 'autopilot' && <Icon name="bot" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}{tab.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'autopilot' && <AutopilotSettings scope="prospection" />}
+
+      {view === 'assistant' && <CampaignAssistant />}
+
+      {view === 'campaigns' && (isEmpty ? (
+        <div className="empty-state">
+          <div className="empty-state-icon" style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <Icon name="target" size={36} strokeWidth={1.5} />
+          </div>
+          <div className="empty-state-title">{t('campaigns.noCampaigns')}</div>
+          <div className="empty-state-desc">
+            {t('campaigns.noCampaignsDesc')}
+          </div>
+          <button className="btn btn-primary" onClick={() => setView('assistant')}>
+            {t('campaigns.createFirst')}
+          </button>
+        </div>
+      ) : <>
       {/* Header bar */}
       <div
         style={{
@@ -379,6 +423,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
           </div>
         )}
       </div>
+      </>)}
     </div>
   );
 }
@@ -398,19 +443,23 @@ function CampaignRow({ campaign: c, onClick, onArchive, onDelete, loading, t }) 
         {t('campaigns.statusActive')}
       </span>
     ) : c.status === 'archived' ? (
-      <span className="status-badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>📦 {t('campaigns.statusArchived')}</span>
+      <span className="status-badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+        <Icon name="package" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.statusArchived')}
+      </span>
     ) : (
-      <span className="status-badge status-prep">⏳ {t('campaigns.statusPrep')}</span>
+      <span className="status-badge status-prep">
+        <Icon name="clock" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.statusPrep')}
+      </span>
     );
 
   let stat1Value, stat1Label, stat2Value, stat2Label;
   if (isPrep) {
-    stat1Value = '—';
-    stat1Label = '—';
-    stat2Value = '—';
-    stat2Label = '—';
+    stat1Value = ' ';
+    stat1Label = ' ';
+    stat2Value = ' ';
+    stat2Label = ' ';
   } else if (isLinkedin) {
-    stat1Value = '—';
+    stat1Value = ' ';
     stat1Label = t('campaigns.naLinkedin');
     stat2Value = (c.kpis?.replyRate ?? 0) + '%';
     stat2Label = t('campaigns.replyRate');
@@ -422,16 +471,16 @@ function CampaignRow({ campaign: c, onClick, onArchive, onDelete, loading, t }) 
   }
 
   const stat1Color =
-    stat1Value !== '—' && parseFloat(stat1Value) >= 50
+    stat1Value !== ' ' && parseFloat(stat1Value) >= 50
       ? 'var(--success)'
-      : stat1Value === '—'
+      : stat1Value === ' '
         ? 'var(--text-muted)'
         : 'var(--warning)';
 
   const stat2Color =
-    stat2Value !== '—' && parseFloat(stat2Value) >= 8
+    stat2Value !== ' ' && parseFloat(stat2Value) >= 8
       ? 'var(--blue)'
-      : stat2Value === '—'
+      : stat2Value === ' '
         ? 'var(--text-muted)'
         : 'var(--warning)';
 

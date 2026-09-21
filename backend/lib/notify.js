@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Notification Helper
+   BAKAL · Notification Helper
    Creates a persistent notification in the DB AND sends real-time via socket.
    =============================================================================== */
 

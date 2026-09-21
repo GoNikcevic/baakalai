@@ -97,6 +97,77 @@ async function getDeal(accessToken, dealId) {
   return hubspotFetch(accessToken, `/crm/v3/objects/deals/${dealId}`);
 }
 
+async function getDealStageLabels(accessToken) {
+  // dealstage renvoie l'id interne d'étape (ex. "appointmentscheduled"), pas le libellé
+  // que l'utilisateur voit · /crm/v3/pipelines/deals donne la correspondance, tous
+  // pipelines confondus (les ids d'étape sont uniques au portail).
+  const pipelines = await getDealPipelines(accessToken);
+  const map = new Map();
+  for (const p of pipelines) {
+    for (const s of p.stages) map.set(s.id, s.name);
+  }
+  return map;
+}
+
+/**
+ * Pipelines de deals et leurs étapes, avec l'ordre d'affichage.
+ *
+ * getDealStageLabels() n'en garde que la correspondance id → libellé, ce qui
+ * suffit à la synchro mais pas à dessiner un pipeline : il y faut l'ordre des
+ * étapes et leur regroupement. Les deux lisent le même endpoint.
+ */
+async function getDealPipelines(accessToken) {
+  const data = await hubspotFetch(accessToken, '/crm/v3/pipelines/deals');
+  return (data.results || []).map(p => ({
+    id: String(p.id),
+    name: p.label || String(p.id),
+    order: p.displayOrder ?? 0,
+    stages: (p.stages || []).map(s => ({
+      // Cet id est celui que la propriété `dealstage` porte sur chaque deal :
+      // c'est lui qui sert de clé de rapprochement avec crm_stage_id.
+      id: String(s.id),
+      name: s.label || String(s.id),
+      order: s.displayOrder ?? 0,
+    })),
+  }));
+}
+
+async function getDeals(accessToken, limit = 10000) {
+  // hs_is_closed / hs_is_closed_won are default calculated properties on every HubSpot portal · 
+  // the native won/lost signal, independent of the pipeline's (fully customizable) dealstage IDs.
+  // Paginé via le curseur `after` (pages de 100, le max de l'API v3) : le plafond
+  // de 100 sans pagination laissait les deals anciens des vrais portails sans
+  // mapping won/lost · donc invisibles comme clients.
+  const deals = [];
+  let after = null;
+  do {
+    const params = new URLSearchParams({
+      limit: String(Math.min(limit - deals.length, 100)),
+      associations: 'contacts',
+      properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate',
+    });
+    if (after) params.set('after', after);
+    const data = await hubspotFetch(accessToken, `/crm/v3/objects/deals?${params.toString()}`);
+    for (const d of data.results || []) {
+      const p = d.properties || {};
+      const isWon = p.hs_is_closed_won === 'true';
+      const isClosed = p.hs_is_closed === 'true';
+      deals.push({
+        id: d.id,
+        name: p.dealname || '',
+        stage: p.dealstage || '',
+        status: isWon ? 'won' : (isClosed ? 'lost' : 'open'),
+        value: p.amount ? parseFloat(p.amount) : null,
+        personId: d.associations?.contacts?.results?.[0]?.id || null,
+        closeDate: p.closedate || null,
+        updatedAt: p.hs_lastmodifieddate || null,
+      });
+    }
+    after = data.paging?.next?.after || null;
+  } while (after && deals.length < limit);
+  return deals;
+}
+
 // =============================================
 // Associations (link contact ↔ deal)
 // =============================================
@@ -112,6 +183,84 @@ async function associateContactToDeal(accessToken, contactId, dealId) {
 // =============================================
 // Notes (engagements)
 // =============================================
+
+/**
+ * Read a contact's engagements (logged emails + notes) for the
+ * response-analysis-agent. Same shape as pipedrive/odoo getActivities:
+ * { id, type, subject, note, dueDate }.
+ *
+ * Le contenu des emails loggés exige le scope `sales-email-read` (et la
+ * lecture des notes peut être refusée selon le portail) : chaque type
+ * d'objet dégrade en silence sur 403 au lieu de faire échouer l'analyse.
+ */
+async function getActivities(accessToken, contactId) {
+  const [emails, notes] = await Promise.all([
+    fetchContactEngagements(accessToken, contactId, 'emails',
+      ['hs_email_subject', 'hs_email_text', 'hs_email_direction', 'hs_timestamp']),
+    fetchContactEngagements(accessToken, contactId, 'notes',
+      ['hs_note_body', 'hs_timestamp']),
+  ]);
+
+  // Seuls les emails ENTRANTS comptent : HubSpot logge aussi nos propres
+  // envois (direction EMAIL/FORWARDED_EMAIL), qui ne sont pas des réponses.
+  const activities = [
+    ...emails
+      .filter(e => e.properties?.hs_email_direction === 'INCOMING_EMAIL')
+      .map(e => ({
+        id: e.id,
+        type: 'email_received',
+        subject: e.properties?.hs_email_subject || '',
+        note: stripHtml(e.properties?.hs_email_text || ''),
+        dueDate: e.properties?.hs_timestamp || null,
+      })),
+    ...notes.map(n => ({
+      id: n.id,
+      type: 'note',
+      subject: '',
+      note: stripHtml(n.properties?.hs_note_body || ''),
+      dueDate: n.properties?.hs_timestamp || null,
+    })),
+  ];
+
+  return activities
+    .sort((a, b) => new Date(b.dueDate || 0) - new Date(a.dueDate || 0))
+    .slice(0, 50);
+}
+
+async function fetchContactEngagements(accessToken, contactId, objectType, properties) {
+  try {
+    const assoc = await hubspotFetch(
+      accessToken,
+      `/crm/v4/objects/contacts/${contactId}/associations/${objectType}?limit=50`
+    );
+    const ids = (assoc?.results || []).map(r => r.toObjectId).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    const batch = await hubspotFetch(accessToken, `/crm/v3/objects/${objectType}/batch/read`, {
+      method: 'POST',
+      body: JSON.stringify({
+        inputs: ids.map(id => ({ id: String(id) })),
+        properties,
+      }),
+    });
+    return batch?.results || [];
+  } catch (err) {
+    if (err.status === 403) return []; // scope manquant sur ce type d'objet
+    throw err;
+  }
+}
+
+// hs_note_body (et parfois hs_email_text) arrivent en HTML.
+function stripHtml(html) {
+  return String(html)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 async function createNote(accessToken, body, associations = {}) {
   const payload = {
@@ -166,7 +315,7 @@ function mapOpportunityToContact(opportunity) {
  */
 function mapOpportunityToDeal(opportunity, campaign) {
   return {
-    dealname: `${opportunity.company || opportunity.name} — ${campaign?.name || 'Bakal'}`,
+    dealname: `${opportunity.company || opportunity.name}, ${campaign?.name || 'Bakal'}`,
     pipeline: 'default',
     dealstage: mapStatusToDealStage(opportunity.status),
     description: [
@@ -201,7 +350,7 @@ function formatPatternsAsNote(patterns) {
   const lines = patterns.map((p) =>
     `<li><strong>[${p.category}]</strong> ${p.pattern} <em>(${p.confidence})</em></li>`
   );
-  return `<h3>Bakal — Patterns haute confiance</h3><ul>${lines.join('')}</ul>`;
+  return `<h3>Bakal, Patterns haute confiance</h3><ul>${lines.join('')}</ul>`;
 }
 
 // =============================================
@@ -215,6 +364,7 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
     // Les trois dernières propriétés portent la récence commerciale. Sans elles,
     // aucun deal ne peut être détecté comme dormant : voir lib/crm-activity-date.js.
     let url = '/crm/v3/objects/contacts?limit=100&properties=email,firstname,lastname,jobtitle,company,hubspot_owner_id'
+      + ',country,city'
       + ',hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate';
     if (after) url += `&after=${after}`;
     const data = await hubspotFetch(accessToken, url);
@@ -227,6 +377,8 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
         job_title: c.properties?.jobtitle,
         org_name: c.properties?.company,
         owner_id: c.properties?.hubspot_owner_id,
+        country: c.properties?.country || null,
+        city: c.properties?.city || null,
         // Ce connecteur aplatit `properties` : sans cette ligne, les dates
         // demandées ci-dessus seraient récupérées puis jetées.
         lastActivityAt: extractActivityDate('hubspot', c),
@@ -293,11 +445,11 @@ async function listDealsForDiagnostic(accessToken, { maxDeals = 2000 } = {}) {
     if (err.status !== 403) throw err;
   }
 
-  // Fallback « — » : société associée mais nom illisible (scope manquant) —
+  // Fallback « · » : société associée mais nom illisible (scope manquant) · 
   // compte dans pctCompany sans afficher un nom bidon dans le top 3.
   return raw.map(({ companyId, ...d }) => ({
     ...d,
-    company: companyId ? (companyNames[companyId] || '—') : null,
+    company: companyId ? (companyNames[companyId] || ' ') : null,
   }));
 }
 
@@ -313,11 +465,15 @@ module.exports = {
   createDeal,
   updateDeal,
   getDeal,
+  getDeals,
+  getDealStageLabels,
+  getDealPipelines,
   listDealsForDiagnostic,
   // Associations
   associateContactToDeal,
-  // Notes
+  // Notes / engagements
   createNote,
+  getActivities,
   // Helpers
   mapOpportunityToContact,
   mapOpportunityToDeal,

@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — CRM Auto-Sync & Analysis
+   BAKAL · CRM Auto-Sync & Analysis
    Background task: pulls deals/contacts from the user's CRM (HubSpot, Salesforce,
    or Pipedrive), analyzes with Claude, and populates memory_patterns table.
    =============================================================================== */
@@ -12,7 +12,7 @@ const { extractActivityDate } = require('./crm-activity-date');
 
 /**
  * Sync deals from the user's CRM and analyze them with Claude.
- * Runs in background — emits socket progress events throughout.
+ * Runs in background · emits socket progress events throughout.
  *
  * @param {string} userId - The user's UUID
  * @returns {{ deals: number, patterns: number }}
@@ -21,7 +21,7 @@ async function syncCRM(userId) {
   try {
     notifyUser(userId, 'crm:sync', { status: 'starting', progress: 0 });
 
-    // Detect CRM provider — prefer user's active_crm_provider
+    // Detect CRM provider · prefer user's active_crm_provider
     let provider = null;
     let apiKey = null;
     const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
@@ -154,6 +154,26 @@ async function syncCRM(userId) {
       }));
     }
 
+    // Statuts de cycle de vie (won/lost, montants, stages) : sans cette étape,
+    // un premier « Analyser le CRM » importait les contacts mais laissait tous
+    // les statuts sur 'imported' jusqu'au cron crm-agent du lendemain 9h · 
+    // aucun client « won » visible (Clients à upseller vide) alors que le CRM
+    // en contient. resolveCrmForUser fournit les creds au format attendu par
+    // chaque provider ; on ne l'exécute que si elle résout le même provider.
+    if (['salesforce', 'hubspot', 'pipedrive', 'odoo'].includes(provider)) {
+      try {
+        const { resolveCrmForUser } = require('./crm-token');
+        const resolved = await resolveCrmForUser(userId);
+        if (resolved.provider === provider && resolved.creds) {
+          const { syncDealLifecycle } = require('./deal-lifecycle-sync');
+          const lifecycle = await syncDealLifecycle(userId, resolved.creds, provider);
+          console.log(`[crm-sync] Deal lifecycle: ${lifecycle.updated}/${lifecycle.processed} opportunities updated (${provider})`);
+        }
+      } catch (err) {
+        console.warn('[crm-sync] Deal lifecycle sync failed:', err.message);
+      }
+    }
+
     notifyUser(userId, 'crm:sync', {
       status: 'fetching',
       progress: 40,
@@ -207,11 +227,20 @@ Sois spécifique et actionnable.`;
     });
 
     // Save patterns
+    // Tenant (audit 02/09) : l'équipe si l'utilisateur en a une, sinon
+    // l'utilisateur · jamais les deux (règle DAO, migration 089). Les artefacts
+    // crm_sync restent purgés/régénérés par source, le scoping n'y change rien.
+    let tenant = { userId };
+    try {
+      const team = await db.teams.getByUser(userId);
+      if (team) tenant = { teamId: team.id };
+    } catch { /* résolution d'équipe indisponible : le pattern reste scopé user */ }
     let patternsCount = 0;
     if (result.parsed && result.parsed.patterns) {
       for (const p of result.parsed.patterns) {
         try {
           await db.memoryPatterns.create({
+            ...tenant,
             pattern: p.pattern,
             category: p.category || 'Cible',
             // source au niveau colonne (migration 068) : c'est elle qui permet
@@ -234,11 +263,11 @@ Sois spécifique et actionnable.`;
       }
     }
 
-    // Done — notify
+    // Done · notify
     notifyUser(userId, 'crm:sync', {
       status: 'done',
       progress: 100,
-      message: `Analysis complete — ${patternsCount} patterns identified from ${deals.length} deals (${provider})`,
+      message: `Analysis complete, ${patternsCount} patterns identified from ${deals.length} deals (${provider})`,
       patternsCount,
       dealsCount: deals.length,
       provider,

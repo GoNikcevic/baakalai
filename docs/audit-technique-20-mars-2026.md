@@ -1,4 +1,4 @@
-# Baakal — Audit Technique (20 mars 2026)
+# Baakal : Audit Technique (20 mars 2026)
 
 **Verdict : BETA-READY, PAS ENCORE PRODUCTION-READY**
 
@@ -124,19 +124,19 @@
 
 ## Plan de mise à niveau production
 
-### Phase 1 — Critique (avant beta payante)
+### Phase 1 : Critique (avant beta payante)
 1. S3 pour fichiers uploadés
 2. Retry avec backoff (Claude, Lemlist, CRM)
 3. Stripe billing + paywall
 4. A/B variants Lemlist
 
-### Phase 2 — Stabilité
+### Phase 2 : Stabilité
 5. Logging structuré (Winston + Sentry)
 6. Session revocation
 7. Memory pruning
 8. Job queue distribué
 
-### Phase 3 — Scale (>1000 users)
+### Phase 3 : Scale (>1000 users)
 9. Redis (cache + rate limiting distribué)
 10. Node.js clustering ou multiple instances
 11. CDN pour assets statiques
@@ -144,4 +144,4 @@
 
 ---
 
-*Audit réalisé le 20 mars 2026 — Claude Code (Opus 4.6)*
+*Audit réalisé le 20 mars 2026 : Claude Code (Opus 4.6)*

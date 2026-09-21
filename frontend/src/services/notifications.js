@@ -1,4 +1,4 @@
-/* Toast notification system — bridges imperative calls to React NotificationContext */
+/* Toast notification system · bridges imperative calls to React NotificationContext */
 
 let _reactShowToast = null;
 

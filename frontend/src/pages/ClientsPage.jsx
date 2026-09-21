@@ -1,16 +1,19 @@
 /* ===============================================================================
-   BAKAL — Clients Page
+   BAKAL · Clients Page
    Import contacts from CRM, view pipeline stages, manage client relationships.
    Click a client to open detail panel with timeline + emails + actions.
    =============================================================================== */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import api, { request, runChurnScoring, getChurnSummary } from '../services/api-client';
+import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
+import { contactSubline } from '../components/ContactSubline';
+import ProductLineTags from '../components/ProductLineTags';
+import Icon from '../components/Icon';
 
 const STAGE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
@@ -21,13 +24,82 @@ const STATUS_COLORS = {
   new: 'var(--text-muted)', imported: 'var(--blue)', interested: 'var(--accent)',
   meeting: 'var(--warning)', negotiation: 'var(--purple)', won: 'var(--success)', lost: 'var(--danger)',
 };
+
+// Only ever rendered when 2+ CRMs are actually connected · see crmProviderCounts.
+const CRM_DOT_COLORS = {
+  pipedrive: '#2A2AA0', hubspot: '#FF7A59', salesforce: '#00A1E0',
+  odoo: '#714B67', notion: '#37352F', airtable: '#F82B60',
+};
+// Plafond d'une page de liste. Au-delà, la fenêtre est annoncée à l'écran
+// (clients.listTruncated) plutôt que silencieusement tronquée.
+const LIST_LIMIT = 500;
+
+/** Seuil « à risque » du churn. Même valeur que le backend
+ *  (lib/churn-scoring.js, AT_RISK_THRESHOLD), qui sert au badge de la nav et à
+ *  la page Clients à risque : cette page comptait à 50 et annonçait donc un
+ *  autre nombre que le reste du produit pour la même question. */
+const AT_RISK_THRESHOLD = 60;
+
+/** Un client signé n'a pas de « pipeline » : ses segments sont le temps écoulé
+ *  depuis la signature et depuis le dernier échange. 90 jours de silence, c'est
+ *  un trimestre sans nouvelle, le moment où la relation commence à se perdre. */
+const CLIENT_SILENCE_DAYS = 90;
+const CLIENT_NEW_DAYS = 90;
+
+// Jours écoulés depuis une date. null quand la date est absente ou illisible :
+// « on ne sait pas » ne doit jamais se confondre avec « contacté aujourd'hui ».
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+}
+
+// Un deal muet depuis deux mois n'est pas « un peu en retard » : la couleur le
+// dit avant que le chiffre soit lu. Sans activité connue, gris et jamais rouge,
+// pour ne pas transformer une donnée manquante en alerte.
+function silenceColor(days) {
+  if (days == null) return 'var(--text-muted)';
+  if (days > 60) return 'var(--danger)';
+  if (days > 30) return 'var(--warning)';
+  return 'var(--success)';
+}
+
+// Rang de silence pour le tri. MAX_SAFE_INTEGER et non Infinity : deux contacts
+// sans activité donneraient Infinity - Infinity = NaN, et un comparateur qui
+// renvoie NaN rend le tri instable selon le moteur.
+function silenceRank(c) {
+  const d = daysSince(c.last_activity_at);
+  return d == null ? Number.MAX_SAFE_INTEGER : d;
+}
+
+function formatAmount(value, lang) {
+  return `${Math.round(value).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR')} €`;
+}
+
 function getStatusLabels(lang) {
   if (lang === 'en') return { new: 'New', imported: 'Imported', interested: 'Interested', meeting: 'Meeting', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
   return { new: 'Nouveau', imported: 'Import\u00e9', interested: 'Int\u00e9ress\u00e9', meeting: 'RDV', negotiation: 'N\u00e9go', won: 'Gagn\u00e9', lost: 'Perdu' };
 }
 
-export default function ClientsPage() {
-  const navigate = useNavigate();
+/**
+ * Vue globale des contacts CRM, cadrée sur une population.
+ *
+ * `scope` partitionne la table `opportunities`, qui mélange deals en cours et
+ * clients gagnés :
+ *   'deals'   → tout sauf gagné (importé, nouveau, intéressé, RDV, perdu)
+ *   'clients' → gagné uniquement
+ *   absent    → tout (aucune route ne l'utilise, gardé pour un usage direct)
+ *
+ * La partition est exhaustive : aucun contact ne devient inatteignable. Même
+ * composant pour les deux entrées de nav, sur le modèle de ReactivationQueuePage
+ * · une seule page, deux cadrages, plutôt que deux pages à maintenir.
+ *
+ * Un lien profond porteur de `highlight` court-circuite la portée : il désigne
+ * des contacts précis, et les masquer parce qu'ils sont dans l'autre population
+ * transformerait le lien en page vide.
+ */
+export default function ClientsPage({ scope }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -37,21 +109,37 @@ export default function ClientsPage() {
   const [stages, setStages] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [connectedCrm, setConnectedCrm] = useState(null);
-  const [churnSummary, setChurnSummary] = useState(null);
-  const [scoringChurn, setScoringChurn] = useState(false);
+  const [connectedProviders, setConnectedProviders] = useState([]);
   const [owners, setOwners] = useState([]);
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [crmFilter, setCrmFilter] = useState('all');
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkAction, setBulkAction] = useState(null);
+  const [truncated, setTruncated] = useState(false);
+  // Tri de la Vue globale Deals · « le plus long silence d'abord » répond à la
+  // question pour laquelle on ouvre la page (lesquels sont en train de mourir),
+  // le montant reste à un clic. Arbitrage Goran du 20/09.
+  const [sortBy, setSortBy] = useState('silence');
+  // Tuile de tête active (étape de pipeline sous Deals, segment client sous
+  // Clients). Les chiffres étaient affichés sans rien pouvoir en faire : on ne
+  // savait pas QUI se cachait derrière un compteur.
+  const [tileFilter, setTileFilter] = useState(null);
   const t = useT();
   const { lang } = useI18n();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightIds = useMemo(() => {
     const h = searchParams.get('highlight');
     return h ? new Set(h.split(',')) : null;
   }, [searchParams]);
+  // Set only when arriving from Data Quality's "Qualité des deals" strate · a deal (not yet a
+  // client) is never eligible for churn/upsell, so this drives a stripped-down, deal-only view
+  // instead of reusing every client-oriented option this page otherwise exposes.
+  const isDealQualityContext = searchParams.get('context') === 'deal_quality';
+  // Which specific issue the user clicked "Voir" on (e.g. missing_sector, missing_deal_value) · 
+  // the fix UI must match that one issue only, never a different field than what was flagged.
+  const dealQualityIssue = searchParams.get('issue');
   const STATUS_LABELS = getStatusLabels(lang);
   const user = getUser();
   const isAdmin = !user?.teamRole || user.teamRole === 'admin';
@@ -59,43 +147,44 @@ export default function ClientsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Parallel: providers + opportunities + churn + owners
-      const [providersData, oppsData, churnData, ownersData] = await Promise.all([
+      // Parallel: providers + opportunities + owners
+      const [providersData, oppsData, ownersData] = await Promise.all([
         request('/crm/providers').catch(() => ({ providers: [] })),
-        request('/dashboard/opportunities?limit=500').catch(() => ({ opportunities: [] })),
-        getChurnSummary().catch(() => null),
+        // sort=silence : la fenêtre reçue doit contenir les deals les plus
+        // silencieux, pas les plus récemment créés. Sans ce paramètre, un compte
+        // au-delà du plafond perdait précisément les deals endormis.
+        request(`/dashboard/opportunities?limit=${LIST_LIMIT}&sort=silence`).catch(() => ({ opportunities: [] })),
         request('/crm/team-owners').catch(() => ({ owners: [] })),
       ]);
 
       const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
-      const connectedProviders = (providersData.providers || []).filter(p => crmProviders.includes(p.provider) && p.connected);
+      const connected = (providersData.providers || []).filter(p => crmProviders.includes(p.provider) && p.connected);
       // Use active CRM from backend, fallback to first connected
-      const activeCrm = providersData.activeCrm || connectedProviders[0]?.provider || null;
+      const activeCrm = providersData.activeCrm || connected[0]?.provider || null;
       setConnectedCrm(activeCrm);
-      setClients(oppsData.opportunities || []);
-      if (churnData) setChurnSummary(churnData);
+      setConnectedProviders(connected);
+      const opps = oppsData.opportunities || [];
+      setClients(opps);
+      setTruncated(opps.length >= LIST_LIMIT);
       setOwners(ownersData.owners || []);
 
-      // Load pipeline stages (depends on active CRM)
-      if (activeCrm === 'pipedrive') {
-        const pipelinesData = await request('/crm/pipedrive/pipelines').catch(() => ({ pipelines: [] }));
-        if (pipelinesData.pipelines?.length > 0) {
-          const stagesData = await request(`/crm/pipedrive/stages/${pipelinesData.pipelines[0].id}`).catch(() => ({ stages: [] }));
-          setStages(stagesData.stages || []);
-        }
-      } else if (activeCrm === 'odoo') {
-        const stagesData = await request('/crm/odoo/stages').catch(() => ({ stages: [] }));
-        setStages(stagesData.stages || []);
-      }
-    } catch { /* ignore */ }
+      // Étapes du pipeline : une seule route pour tous les CRM. Le branchement
+      // par provider qui existait ici n'avait jamais été écrit pour HubSpot ni
+      // Salesforce · leurs étapes étaient collectées mais jamais affichées · 
+      // et il ne prenait que le premier pipeline de Pipedrive.
+      const stagesData = await request('/crm/stages').catch(() => ({ stages: [] }));
+      setStages(stagesData.stages || []);
+    } catch (err) {
+      // Surtout ne pas rester muet : un `catch {}` vide ici a masqué pendant onze
+      // jours une ReferenceError qui coupait le chargement juste avant les étapes
+      // de pipeline et les commerciaux, laissant la page à moitié remplie sans
+      // aucun signe visible. La page reste utilisable avec ce qui a été chargé.
+      console.error('[ClientsPage] loadData', err);
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  const crmLabel = connectedCrm
-    ? connectedCrm.charAt(0).toUpperCase() + connectedCrm.slice(1)
-    : 'CRM';
 
   const handleImport = useCallback(async () => {
     if (!connectedCrm) return;
@@ -103,23 +192,123 @@ export default function ClientsPage() {
     setImporting(true);
     setImportResult(null);
     try {
-      const result = await request(`/crm/import/${connectedCrm}`, { method: 'POST' });
-      setImportResult(result);
+      // Refresh every connected CRM, not just the active one · a user with
+      // both Pipedrive and Salesforce connected expects "Actualiser" to sync
+      // both, not silently skip whichever isn't marked active.
+      const providers = connectedProviders.length > 0 ? connectedProviders.map(p => p.provider) : [connectedCrm];
+      const results = await Promise.all(providers.map(p =>
+        request(`/crm/import/${p}`, { method: 'POST' }).catch(err => ({ error: err.message, provider: p }))
+      ));
+      const failed = results.filter(r => r.error);
+      // Un CRM en maintenance (502/503/504) mérite un message lisible, pas le corps brut de l'erreur
+      const prettify = (msg) => (/API 50[234]\b|maintenance/i.test(msg) ? t('clients.crmTransientError') : msg);
+      const aggregated = {
+        imported: results.reduce((sum, r) => sum + (r.imported || 0), 0),
+        skipped: results.reduce((sum, r) => sum + (r.skipped || 0), 0),
+        error: failed.length > 0 ? failed.map(f => `${f.provider}: ${prettify(f.error)}`).join(' · ') : null,
+      };
+      setImportResult(aggregated);
       await loadData();
       // Show diagnostic report on first import (new contacts imported + never seen before)
-      if (result.imported > 0 && !hadClientsBefore && localStorage.getItem('bakal_diagnostic_seen') !== 'true') {
+      if (aggregated.imported > 0 && !hadClientsBefore && localStorage.getItem('bakal_diagnostic_seen') !== 'true') {
         setShowDiagnostic(true);
       }
     } catch (err) {
       setImportResult({ error: err.message });
     }
     setImporting(false);
-  }, [loadData, connectedCrm, clients.length]);
+  }, [loadData, connectedCrm, connectedProviders, clients.length, t]);
 
+  const scopedClients = useMemo(() => {
+    if (scope === 'deals') return clients.filter(c => c.status !== 'won');
+    if (scope === 'clients') return clients.filter(c => c.status === 'won');
+    return clients;
+  }, [clients, scope]);
+
+  // ── Tuiles de tête ──────────────────────────────────────────────────────
+  //
+  // Sous Deals : les étapes du pipeline CRM, regroupées par pipeline (HubSpot
+  // et Pipedrive en exposent plusieurs, fondre « Closed Won » de deux
+  // pipelines dans une seule barre les rendrait indiscernables).
+  //
+  // Sous Clients : les étapes n'ont aucun sens (un client gagné n'est plus en
+  // « Qualification »), la page affichait pourtant la même barre. Remplacée
+  // par les segments qui valent pour un client déjà signé.
+  //
+  // Dans les deux cas, une tuile est un filtre : le chiffre se lit, puis se
+  // clique pour voir qui est derrière.
+  const tileGroups = useMemo(() => {
+    const matchStage = (stage) => (c) => (
+      c.crm_stage_id != null
+        ? String(c.crm_stage_id) === String(stage.id)
+        // Repli pour les contacts sans étape connue · `crm_stage` porte le
+        // libellé et `stage.id` l'identifiant natif, les comparer ne matchait
+        // jamais (compteur figé à 0 avant la migration 092).
+        : c.status === stage.name?.toLowerCase()
+    );
+
+    if (scope === 'clients') {
+      // Activité inconnue : ni actif ni silencieux. Les deux tuiles sont des
+      // filtres, pas une répartition, donc mieux vaut ne compter personne à
+      // tort que transformer une date absente en « contacté récemment ».
+      const silent = (c) => { const d = daysSince(c.last_activity_at); return d != null && d >= CLIENT_SILENCE_DAYS; };
+      const active = (c) => { const d = daysSince(c.last_activity_at); return d != null && d < CLIENT_SILENCE_DAYS; };
+      const segments = [
+        { key: 'seg_new', label: t('clients.segNew'), match: (c) => (daysSince(c.won_date) ?? Infinity) < CLIENT_NEW_DAYS },
+        { key: 'seg_active', label: t('clients.segActive'), match: active },
+        { key: 'seg_silent', label: t('clients.segSilent'), match: silent },
+        { key: 'seg_risk', label: t('clients.segRisk'), match: (c) => (c.churn_score || 0) >= AT_RISK_THRESHOLD },
+      ];
+      return [['', segments.map(s => ({ ...s, count: scopedClients.filter(s.match).length }))]];
+    }
+
+    const groups = new Map();
+    for (const stage of stages) {
+      const key = stage.pipelineName || '';
+      if (!groups.has(key)) groups.set(key, []);
+      const match = matchStage(stage);
+      groups.get(key).push({
+        key: `stage_${stage.id}`,
+        label: stage.name,
+        match,
+        // scopedClients et non clients : sous Deals, la barre comptait aussi
+        // les clients gagnés, donc un total qui ne correspondait à aucune
+        // ligne de la liste en dessous.
+        count: scopedClients.filter(match).length,
+      });
+    }
+    return [...groups.entries()];
+  }, [scope, stages, scopedClients, t]);
+
+  const activeTile = useMemo(
+    () => tileGroups.flatMap(([, tiles]) => tiles).find(x => x.key === tileFilter) || null,
+    [tileGroups, tileFilter]
+  );
+
+  // Passer de Deals à Clients garde le composant monté, mais les clés de
+  // tuiles ne se croisent pas (`stage_*` contre `seg_*`) : un filtre d'étape
+  // ne trouve plus sa tuile côté clients, donc `activeTile` retombe à null et
+  // rien n'est filtré. Aucun état à remettre à zéro à la main.
   const filtered = useMemo(() => clients.filter(c => {
-    // If highlight param is set, only show those contacts
-    if (highlightIds) return highlightIds.has(c.id);
-    if (filter === 'churn_risk' && (c.churn_score == null || c.churn_score < 50)) return false;
+    // If highlight param is set, only show those contacts · et, en contexte deal quality,
+    // seulement tant que le problème est ENCORE présent : un contact corrigé (secteur
+    // renseigné, valeur saisie…) sort de la liste immédiatement, sans attendre un re-scan.
+    // owner_not_mapped / zero_activity n'ont pas de re-test local fiable → URL seule.
+    if (highlightIds) {
+      if (!highlightIds.has(c.id)) return false;
+      if (isDealQualityContext) {
+        if (dealQualityIssue === 'missing_sector') return !c.data?.sector || c.data.sector === 'non_determine';
+        if (dealQualityIssue === 'missing_deal_value') return c.deal_value == null;
+        if (dealQualityIssue === 'missing_won_lost_date') {
+          return (c.status === 'won' && !c.won_date) || (c.status === 'lost' && !c.lost_date);
+        }
+      }
+      return true;
+    }
+    if (scope === 'deals' && c.status === 'won') return false;
+    if (scope === 'clients' && c.status !== 'won') return false;
+    if (activeTile && !activeTile.match(c)) return false;
+    if (filter === 'churn_risk' && (c.status !== 'won' || c.churn_score == null || c.churn_score < AT_RISK_THRESHOLD)) return false;
     else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
     if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
     if (crmFilter !== 'all' && c.crm_provider !== crmFilter) return false;
@@ -132,14 +321,33 @@ export default function ClientsPage() {
     return true;
   }).sort((a, b) => {
     if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
+    if (scope === 'deals') {
+      if (sortBy === 'value') return (b.deal_value || 0) - (a.deal_value || 0);
+      return silenceRank(b) - silenceRank(a);
+    }
     return 0;
-  }), [clients, filter, ownerFilter, crmFilter, search, highlightIds]);
+  }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue, sortBy, activeTile]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
-    for (const c of clients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
+    for (const c of scopedClients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
     return counts;
-  }, [clients]);
+  }, [scopedClients]);
+
+  // Agrégats de tête de la Vue globale Deals. Le montant total est annoncé avec
+  // le nombre de deals valorisés : sur les données réelles, la majorité des deals
+  // importés n'ont pas de montant, et afficher la somme seule laisserait croire
+  // que c'est tout le pipeline.
+  const dealStats = useMemo(() => {
+    if (scope !== 'deals') return null;
+    let dormant = 0, valued = 0, value = 0;
+    for (const c of scopedClients) {
+      const d = daysSince(c.last_activity_at);
+      if (d != null && d > 30) dormant++;
+      if (c.deal_value != null) { valued++; value += Number(c.deal_value) || 0; }
+    }
+    return { dormant, valued, value };
+  }, [scope, scopedClients]);
 
   const crmProviderCounts = useMemo(() => {
     const counts = {};
@@ -148,6 +356,15 @@ export default function ClientsPage() {
     }
     return counts;
   }, [clients]);
+
+  // Un seul CRM connecté : le badge provider ne distinguerait rien. Calculé ici et
+  // passé aux panneaux de détail, qui lisaient `crmProviderCounts` hors de portée.
+  const multiCrm = Object.keys(crmProviderCounts).length > 1;
+
+  // Les chips silence / étape / score n'enrichissent que la Vue globale Deals.
+  // Le cadrage Clients a déjà de quoi remplir ses lignes (churn, lignes produit)
+  // et n'est pas touché par ce lot.
+  const isDealsScope = scope === 'deals' && !isDealQualityContext;
 
   const toggleSelect = useCallback((id) => {
     setSelected(prev => {
@@ -196,32 +413,18 @@ export default function ClientsPage() {
     setBulkAction(null);
   }, [selected, loadData, t]);
 
-  const handleBulkMerge = useCallback(async () => {
-    if (selected.size < 2) return;
-    setBulkAction('merge');
-    try {
-      const ids = [...selected];
-      await request(`/crm/clean/${connectedCrm || 'notion'}`, {
-        method: 'POST',
-        body: JSON.stringify({ fixes: [{ type: 'manual_merge', action: 'merge', contactIds: ids }] }),
-      });
-      showToast({ type: 'success', title: t('common.success'), message: t('clients.merged') });
-      setSelected(new Set());
-      await loadData();
-    } catch (err) {
-      showToast({ type: 'error', title: t('common.error'), message: err.message });
-    }
-    setBulkAction(null);
-  }, [selected, connectedCrm, loadData, t]);
-
   const statusTabs = [
-    { key: 'all', label: t('clients.all'), count: clients.length },
+    { key: 'all', label: t('clients.all'), count: scopedClients.length },
     { key: 'imported', label: STATUS_LABELS.imported, count: statusCounts.imported || 0 },
     { key: 'new', label: STATUS_LABELS.new, count: statusCounts.new || 0 },
     { key: 'interested', label: STATUS_LABELS.interested, count: statusCounts.interested || 0 },
     { key: 'meeting', label: STATUS_LABELS.meeting, count: statusCounts.meeting || 0 },
-    { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
-    { key: 'churn_risk', label: t('clients.churnRisk'), count: clients.filter(c => c.churn_score >= 50).length },
+    // « Gagné » et « À risque » ne concernent que les clients : hors de portée
+    // côté deals, et redondant avec la portée elle-même côté clients.
+...(scope === 'deals' ? [] : [
+      { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
+      { key: 'churn_risk', label: t('clients.churnRisk'), count: scopedClients.filter(c => c.status === 'won' && c.churn_score >= 50).length },
+    ]),
   ].filter(tab => tab.key === 'all' || tab.count > 0);
 
   return (
@@ -232,7 +435,7 @@ export default function ClientsPage() {
       {highlightIds && (
         <div style={{ padding: '10px 16px', background: 'var(--accent-bg, #f3f0ff)', borderRadius: 8, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 13, color: 'var(--accent, #6E57FA)' }}>
-            {lang === 'en' ? `Showing ${filtered.length} contacts from CRM health scan` : `${filtered.length} contacts du scan CRM affich\u00e9s`}
+            {isDealQualityContext ? t('dataQuality.dealQuality.filteredFromDataQuality') : (lang === 'en' ? `Showing ${filtered.length} contacts from CRM health scan` : `${filtered.length} contacts du scan CRM affich\u00e9s`)}
           </span>
           <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => setSearchParams({})}>
             {lang === 'en' ? 'Show all' : 'Voir tout'}
@@ -241,31 +444,48 @@ export default function ClientsPage() {
       )}
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t('clients.title')}</h1>
+          {isDealQualityContext && (
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 12, padding: '4px 10px', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              onClick={() => navigate('/data-quality?tab=dealQuality')}
+            >
+              {'←'} {t('dataQuality.dealQuality.backToDataQuality')}
+            </button>
+          )}
+          <h1 className="page-title">
+            {isDealQualityContext ? t('dataQuality.dealQuality.contextTitle') : scope === 'deals' ? t('nav.sectionDeals') : t('clients.title')}
+          </h1>
           <div className="page-subtitle">
-            {t('clients.contactsInCrm', { count: clients.length })}
+            {isDealQualityContext
+              ? t('dataQuality.dealQuality.contextSubtitle', { count: filtered.length })
+              : scope === 'deals'
+                ? t('clients.dealsInCrm', { count: scopedClients.length })
+                : t('clients.contactsInCrm', { count: scopedClients.length })}
           </div>
         </div>
         {isAdmin && (connectedCrm ? (
-          <div style={{ display: 'flex', gap: 8 }}>
+          isDealQualityContext ? (
             <button
               className="btn btn-primary"
               style={{ fontSize: 12, padding: '8px 16px' }}
               onClick={handleImport}
               disabled={importing}
             >
-              {importing ? `\u23F3 ${t('clients.importing')}` : t('clients.importFrom', { crm: crmLabel })}
+              {importing && <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+              {importing ? t('clients.importing') : t('dataQuality.dealQuality.refreshData')}
             </button>
-            {clients.length > 0 && (
-              <button
-                className="btn btn-ghost"
-                style={{ fontSize: 12, padding: '8px 16px' }}
-                onClick={() => setShowDiagnostic(true)}
-              >
-                {'\uD83D\uDD0D'} Diagnostic
-              </button>
-            )}
-          </div>
+          ) : (
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 12, padding: '8px 16px' }}
+              onClick={handleImport}
+              disabled={importing}
+            >
+              <Icon name={importing ? 'clock' : 'refresh'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {importing ? t('clients.importing') : t('clients.refresh')}
+            </button>
+          )
         ) : (
           <button
             className="btn btn-outline"
@@ -294,105 +514,119 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {/* Churn risk summary */}
-      {churnSummary && churnSummary.scored > 0 && (
-        <>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-          {t('clients.churnRiskTitle')}
+      {/* Bandeau de tête Deals · ce que la liste dit une fois lue en entier,
+          dit d'emblée : combien dorment, et quel montant est réellement chiffré. */}
+      {!isDealQualityContext && dealStats && scopedClients.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          marginBottom: 16, fontSize: 12, color: 'var(--text-muted)',
+        }}>
+          <span style={{ color: dealStats.dormant > 0 ? 'var(--warning)' : 'var(--text-muted)', fontWeight: dealStats.dormant > 0 ? 600 : 400 }}>
+            {t('clients.dealsDormant', { count: dealStats.dormant })}
+          </span>
+          <span>·</span>
+          <span>
+            {dealStats.valued > 0
+              ? t('clients.dealsValued', { value: formatAmount(dealStats.value, lang), count: dealStats.valued })
+              : t('clients.dealsNoValue')}
+          </span>
+          <div style={{ flex: 1 }} />
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>{t('clients.sortLabel')}</span>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              style={{
+                padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 8,
+                background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 12,
+              }}
+            >
+              <option value="silence">{t('clients.sortSilence')}</option>
+              <option value="value">{t('clients.sortValue')}</option>
+            </select>
+          </label>
         </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          {[
-            { label: t('clients.critical'), count: churnSummary.critical, color: 'var(--danger)' },
-            { label: t('clients.high'), count: churnSummary.high, color: 'var(--warning)' },
-            { label: t('clients.medium'), count: churnSummary.medium, color: '#D97706' },
-            { label: t('clients.low'), count: churnSummary.low, color: 'var(--success)' },
-          ].map(b => (
-            <div key={b.label} style={{
-              flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderLeft: `3px solid ${b.color}`, borderRadius: 8, padding: '10px 14px',
-            }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: b.color }}>{b.count}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{b.label}</div>
-            </div>
-          ))}
-          <div style={{
-            flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-          }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{churnSummary.avgScore}<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>/100</span></div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('clients.avgScore')}</div>
-          </div>
-          <button
-            className="btn btn-outline"
-            style={{ fontSize: 11, padding: '8px 14px', alignSelf: 'center' }}
-            disabled={scoringChurn}
-            onClick={async () => {
-              setScoringChurn(true);
-              try {
-                await runChurnScoring();
-                const summary = await getChurnSummary();
-                setChurnSummary(summary);
-                await loadData();
-              } catch { showToast({ type: 'error', title: t('clients.error'), message: t('clients.churnScoringError') }); }
-              setScoringChurn(false);
-            }}
-          >
-            {scoringChurn ? t('clients.scoring') : t('clients.rescore')}
-          </button>
-        </div>
-        </>
       )}
 
-      {!churnSummary || churnSummary.scored === 0 ? (
+      {/* La fenêtre de liste est annoncée dès qu'elle est pleine · une liste
+          tronquée en silence se lit comme une liste complète. */}
+      {!isDealQualityContext && truncated && (
         <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10,
-          padding: '16px 20px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '8px 14px', marginBottom: 12, borderRadius: 8, fontSize: 12,
+          background: 'var(--bg-elevated)', border: '1px dashed var(--border)', color: 'var(--text-muted)',
         }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{t('clients.churnPrediction')}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {t('clients.churnPredictionDesc')}
-            </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            style={{ fontSize: 12, padding: '8px 16px' }}
-            disabled={scoringChurn}
-            onClick={async () => {
-              setScoringChurn(true);
-              try {
-                await runChurnScoring();
-                const summary = await getChurnSummary();
-                setChurnSummary(summary);
-                await loadData();
-              } catch { showToast({ type: 'error', title: t('clients.error'), message: t('clients.churnScoringError') }); }
-              setScoringChurn(false);
-            }}
-          >
-            {scoringChurn ? t('clients.scoring') : t('clients.runChurnScoring')}
-          </button>
+          {t('clients.listTruncated', { count: LIST_LIMIT })}
         </div>
-      ) : null}
+      )}
 
-      {/* Pipeline stages */}
-      {stages.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', padding: '4px 0' }}>
-          {stages.map((stage, i) => (
-            <div key={stage.id} style={{
-              flex: '1 0 120px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderTop: `3px solid ${STAGE_COLORS[i % STAGE_COLORS.length]}`, borderRadius: 10,
-              padding: '12px 14px', textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{stage.name}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: STAGE_COLORS[i % STAGE_COLORS.length] }}>
-                {clients.filter(c => c.crm_stage === stage.id || c.status === stage.name?.toLowerCase()).length}
+      {/* Tuiles de tête · étapes du pipeline sous Deals, segments clients sous
+          Clients. Chaque tuile filtre la liste : le chiffre se clique. */}
+      {!isDealQualityContext && tileGroups.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          {tileGroups.map(([groupName, tiles]) => (
+            <div key={groupName} style={{ marginBottom: 10 }}>
+              {/* Le titre du pipeline n'apparaît que s'il y a de quoi confondre
+                  deux étapes homonymes. */}
+              {tileGroups.length > 1 && (
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {groupName}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 0' }}>
+                {tiles.map((tile, i) => {
+                  const color = STAGE_COLORS[i % STAGE_COLORS.length];
+                  const isActive = tileFilter === tile.key;
+                  const empty = tile.count === 0;
+                  return (
+                    <button
+                      key={tile.key}
+                      type="button"
+                      onClick={() => setTileFilter(isActive ? null : tile.key)}
+                      // Une tuile vide n'a personne à montrer : la cliquer
+                      // afficherait une liste vide sans rien apprendre.
+                      disabled={empty}
+                      aria-pressed={isActive}
+                      title={empty ? undefined : t('clients.tileFilterHint', { label: tile.label })}
+                      style={{
+                        flex: '1 0 120px', background: isActive ? 'var(--bg-elevated)' : 'var(--bg-card)',
+                        border: `1px solid ${isActive ? color : 'var(--border)'}`,
+                        borderTop: `3px solid ${color}`, borderRadius: 10,
+                        padding: '12px 14px', textAlign: 'center',
+                        cursor: empty ? 'default' : 'pointer',
+                        opacity: empty ? 0.55 : 1,
+                        font: 'inherit', color: 'inherit',
+                        boxShadow: isActive ? `0 0 0 1px ${color}` : 'none',
+                        transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{tile.label}</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color }}>{tile.count}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
+
+          {activeTile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 12 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {t('clients.tileFiltered', { label: activeTile.label, count: filtered.length })}
+              </span>
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: '2px 10px' }}
+                onClick={() => setTileFilter(null)}
+              >
+                {t('clients.tileClear')}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Search + filter */}
+      {/* Search + filter · no effect while a highlight filter is active, so hidden in that case */}
+      {!isDealQualityContext && (
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
         <input
           type="text" placeholder={lang === 'en' ? 'Search...' : 'Rechercher...'} value={search}
@@ -417,7 +651,7 @@ export default function ClientsPage() {
             ))}
           </select>
         )}
-        {Object.keys(crmProviderCounts).length > 1 && (
+        {multiCrm && (
           <select
             value={crmFilter}
             onChange={e => setCrmFilter(e.target.value)}
@@ -445,9 +679,10 @@ export default function ClientsPage() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Bulk action bar */}
-      {selected.size > 0 && (
+      {!isDealQualityContext && selected.size > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', marginBottom: 12,
           background: 'rgba(110,87,250,0.06)', border: '1px solid rgba(110,87,250,0.15)',
@@ -471,12 +706,6 @@ export default function ClientsPage() {
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
-          {selected.size >= 2 && (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 12px' }}
-              disabled={!!bulkAction} onClick={handleBulkMerge}>
-              {bulkAction === 'merge' ? '...' : (lang === 'en' ? 'Merge' : 'Fusionner')}
-            </button>
-          )}
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 12px', color: 'var(--danger)' }}
             disabled={!!bulkAction} onClick={handleBulkDelete}>
             {bulkAction === 'delete' ? '...' : (lang === 'en' ? 'Delete' : 'Supprimer')}
@@ -499,15 +728,17 @@ export default function ClientsPage() {
               textAlign: 'center', padding: 50, background: 'var(--bg-card)',
               border: '1px solid var(--border)', borderRadius: 12,
             }}>
-              <div style={{ fontSize: 28, marginBottom: 12 }}>{'\uD83D\uDC65'}</div>
+              <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                <Icon name="users" size={28} strokeWidth={1.5} />
+              </div>
               <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
                 {clients.length === 0 ? t('clients.noClients') : t('clients.noResults')}
               </div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {/* Select all header */}
-              {!selectedClient && filtered.length > 0 && (
+              {/* Select all header · bulk actions don't apply to a focused deal-quality drill-down */}
+              {!isDealQualityContext && !selectedClient && filtered.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', fontSize: 11, color: 'var(--text-muted)' }}>
                   <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
                     onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
@@ -518,10 +749,44 @@ export default function ClientsPage() {
                 const color = STATUS_COLORS[c.status] || 'var(--text-muted)';
                 const isSelected = selectedClient?.id === c.id;
                 const isChecked = selected.has(c.id);
+                const churnColor = c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)';
+                const showCrmBadge = c.crm_provider && multiCrm;
+                const silenceDays = daysSince(c.last_activity_at);
+                const stageDays = daysSince(c.crm_stage_changed_at);
+
+                // Deal-quality drill-down keeps its own grid layout, built around whatever field
+                // was flagged, untouched here, only the plain browsing row below was restyled.
+                if (isDealQualityContext) {
+                  return (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div onClick={() => setSelectedClient(c)} style={{
+                        flex: 1, display: 'grid',
+                        gridTemplateColumns: selectedClient ? '2fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px' : '2fr 1.2fr 1fr'),
+                        padding: '10px 14px', background: isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
+                        border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                        borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{c.name || ' '}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.title || c.email || ''}</div>
+                        </div>
+                        {!selectedClient && <div style={{ color: 'var(--text-secondary)' }}>{c.company || ' '}</div>}
+                        <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, width: 'fit-content', justifySelf: selectedClient ? 'end' : 'start' }}>
+                          {STATUS_LABELS[c.status] || c.status || ' '}
+                        </span>
+                        {!selectedClient && owners.length > 1 && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {c.owner_email ? c.owner_email.split('@')[0] : ' '}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
-                  <div key={c.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                  }}>
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {!selectedClient && (
                       <input type="checkbox" checked={isChecked}
                         onChange={() => toggleSelect(c.id)}
@@ -529,53 +794,103 @@ export default function ClientsPage() {
                         style={{ cursor: 'pointer', flexShrink: 0 }} />
                     )}
                     <div onClick={() => setSelectedClient(c)} style={{
-                      flex: 1, display: 'grid',
-                      gridTemplateColumns: selectedClient ? '2fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px 80px' : '2fr 1.2fr 1fr 60px'),
+                      flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14,
                       padding: '10px 14px', background: isChecked ? 'rgba(110,87,250,0.06)' : isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
                       border: `1px solid ${isChecked ? 'rgba(110,87,250,0.2)' : isSelected ? 'var(--accent)' : 'var(--border)'}`,
-                      borderRadius: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer',
+                      borderRadius: 8, fontSize: 13, cursor: 'pointer',
                       transition: 'all 0.15s',
                     }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{c.name || '\u2014'}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.title || c.email || ''}</div>
-                      </div>
-                    {!selectedClient && <div style={{ color: 'var(--text-secondary)' }}>{c.company || '\u2014'}</div>}
-                    {!selectedClient && (
-                      <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, width: 'fit-content' }}>
-                        {STATUS_LABELS[c.status] || c.status || '\u2014'}
-                      </span>
-                    )}
-                    {!selectedClient && owners.length > 1 && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.owner_email ? c.owner_email.split('@')[0] : '\u2014'}
-                      </div>
-                    )}
-                    {selectedClient && (
-                      <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, width: 'fit-content', justifySelf: 'end' }}>
-                        {STATUS_LABELS[c.status] || c.status || '\u2014'}
-                      </span>
-                    )}
-                    {!selectedClient && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {c.churn_score != null ? (
-                          <>
-                            <div style={{
-                              width: 8, height: 8, borderRadius: '50%',
-                              background: c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)',
-                            }} />
-                            <span style={{
-                              fontSize: 12, fontWeight: 600,
-                              color: c.churn_score >= 76 ? 'var(--danger)' : c.churn_score >= 51 ? 'var(--warning)' : c.churn_score >= 26 ? '#D97706' : 'var(--success)',
-                            }}>
-                              {c.churn_score}<span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>/100</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600 }}>{c.name || ' '}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {/* Panneau ouvert, la ligne est étroite et la société est
+                              déjà répétée dans l'en-tête du panneau : la fonction
+                              seule est ce qui manque le plus à l'écran. */}
+                          {!selectedClient ? contactSubline(c) : (c.title || c.email || '')}
+                          {/* Étape CRM et relance prévue en seconde ligne, seulement
+                              quand elles existent : sur les données importées, la
+                              majorité des deals n'a pas d'étape rapatriée, et une
+                              colonne réservée aurait affiché des vides alignés. */}
+                          {isDealsScope && !selectedClient && stageDays != null && (
+                            <span> · {t('clients.inStageDays', { days: stageDays })}</span>
+                          )}
+                          {isDealsScope && !selectedClient && c.planned_followup_date && (
+                            <span style={{ color: 'var(--warning)' }}>
+                              {' · '}{t('clients.followupPlanned', {
+                                date: new Date(c.planned_followup_date).toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' }),
+                              })}
                             </span>
-                          </>
-                        ) : (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{'\u2014'}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {/* Le silence est la raison d'être de la page : premier chip,
+                            couleur avant chiffre. Il remplace la date de dernière
+                            activité que personne n'allait chercher dans le panneau. */}
+                        {isDealsScope && !selectedClient && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: silenceColor(silenceDays), flexShrink: 0 }} />
+                            <span style={{ color: silenceDays == null ? 'var(--text-muted)' : silenceColor(silenceDays) }}>
+                              {silenceDays == null
+                                ? t('clients.silenceNever')
+                                : t('clients.silenceDays', { days: silenceDays })}
+                            </span>
+                          </span>
+                        )}
+
+                        {isDealsScope && !selectedClient && c.crm_stage && (
+                          <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                            {c.crm_stage}
+                          </span>
+                        )}
+
+                        {isDealsScope && !selectedClient && c.score != null && (
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                            color: c.score >= 70 ? 'var(--success)' : c.score >= 40 ? 'var(--warning)' : 'var(--text-muted)',
+                          }}>
+                            {c.score}<span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>/100</span>
+                          </span>
+                        )}
+
+                        {!selectedClient && owners.length > 1 && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {c.owner_email ? c.owner_email.split('@')[0] : ' '}
+                          </span>
+                        )}
+
+                        {/* Churn risk is a retention concept, only meaningful once a deal has
+                            actually become a client, so it only ever replaces the deal-value
+                            pill for status === 'won'. */}
+                        {!selectedClient && c.status === 'won' && c.churn_score != null && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: 'var(--bg-elevated)' }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: churnColor, flexShrink: 0 }} />
+                            <span style={{ color: churnColor }}>{c.churn_score}<span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>/100</span></span>
+                          </span>
+                        )}
+                        {!selectedClient && c.status !== 'won' && c.deal_value != null && (
+                          <span style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                            {Math.round(c.deal_value).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR')} €
+                          </span>
+                        )}
+
+                        {!selectedClient && showCrmBadge && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '4px 10px', borderRadius: 7, border: '1px dashed var(--border)', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: CRM_DOT_COLORS[c.crm_provider] || 'var(--text-muted)', flexShrink: 0 }} />
+                            {c.crm_provider}
+                          </span>
+                        )}
+
+                        {/* Every row here is status === 'won' when scope is 'clients'  
+                            showing "Gagn\u00e9" on every single card is a constant, not
+                            information, so it's skipped entirely for that scope. */}
+                        {scope !== 'clients' && (
+                          <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: `${color}15`, color, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {STATUS_LABELS[c.status] || c.status || ' '}
+                          </span>
                         )}
                       </div>
-                    )}
                     </div>
                   </div>
                 );
@@ -586,16 +901,286 @@ export default function ClientsPage() {
 
         {/* Detail panel */}
         {selectedClient && (
-          <ClientDetailPanel client={selectedClient} onClose={() => setSelectedClient(null)} />
+          isDealQualityContext ? (
+            <DealDetailPanel
+              client={selectedClient}
+              issueType={dealQualityIssue}
+              multiCrm={multiCrm}
+              onClose={() => setSelectedClient(null)}
+              onFieldSaved={(id, patch) => {
+                setClients(prev => prev.map(c => c.id === id ? {...c,...patch } : c));
+                setSelectedClient(prev => (prev && prev.id === id) ? {...prev,...patch } : prev);
+              }}
+            />
+          ) : (
+            <ClientDetailPanel client={selectedClient} multiCrm={multiCrm} onClose={() => setSelectedClient(null)} />
+          )
         )}
       </div>
     </div>
   );
 }
 
+/* ═══ Deal Detail Panel (Data Quality → Qualité des deals context) ═══
+   A deal isn't a client yet · no churn, no product lines, no "send email" quick action.
+   Just the deal's own info plus a fix box for the ONE issue the user actually clicked into
+   (issueType) · never a different field than what was flagged (e.g. clicking "Valeur du deal
+   non renseignée" must never surface the sector field, and vice versa). */
+
+function SectorFixBox({ client, t, onSaved }) {
+  const currentSector = client.data?.sector && client.data.sector !== 'non_determine' ? client.data.sector : '';
+  const [value, setValue] = useState(currentSector);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const v = value.trim();
+    if (!v) return;
+    setSaving(true);
+    try {
+      const result = await request('/data-quality/enrich-field', {
+        method: 'POST',
+        body: JSON.stringify({ opportunityId: client.id, field: 'sector', value: v }),
+      });
+      const saved = result.sector;
+      if (saved === 'non_determine') {
+        showToast({ type: 'info', title: t('dataQuality.dealQuality.sectorSaveTitle'), message: t('dataQuality.dealQuality.sectorNotClassified') });
+        setValue('');
+      } else {
+        showToast({ type: 'success', title: t('dataQuality.dealQuality.sectorSaveTitle'), message: t('dataQuality.dealQuality.sectorSaved', { sector: saved }) });
+        setValue(saved);
+      }
+      onSaved?.(client.id, { data: {...(client.data || {}), sector: saved } });
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{t('dataQuality.dealQuality.sectorLabel')}</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder={t('dataQuality.dealQuality.sectorPlaceholder')}
+          style={{
+            flex: 1, padding: '8px 12px', border: '1px solid var(--border)',
+            borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13,
+          }}
+        />
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '8px 16px', whiteSpace: 'nowrap' }}
+          disabled={saving || !value.trim()}
+          onClick={handleSave}
+        >
+          {saving ? <Icon name="clock" size={12} /> : t('dataQuality.dealQuality.saveButton')}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+        {t('dataQuality.dealQuality.sectorLocalOnlyNote')}
+      </div>
+    </div>
+  );
+}
+
+function DealValueFixBox({ client, t, onSaved }) {
+  const [value, setValue] = useState(client.deal_value != null ? String(client.deal_value) : '');
+  const [saving, setSaving] = useState(false);
+  const numValue = parseFloat(value);
+  const isValid = value.trim() !== '' && !isNaN(numValue) && numValue >= 0;
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    setSaving(true);
+    try {
+      await request('/data-quality/enrich-field', {
+        method: 'POST',
+        body: JSON.stringify({ opportunityId: client.id, field: 'dealValue', value: numValue }),
+      });
+      showToast({
+        type: 'success', title: t('dataQuality.dealQuality.dealValueSaveTitle'),
+        message: t('dataQuality.dealQuality.dealValueSaved', { value: numValue.toLocaleString('fr-FR') }),
+      });
+      onSaved?.(client.id, { deal_value: numValue });
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{t('dataQuality.dealQuality.dealValueLabel')}</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder={t('dataQuality.dealQuality.dealValuePlaceholder')}
+          style={{
+            flex: 1, padding: '8px 12px', border: '1px solid var(--border)',
+            borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13,
+          }}
+        />
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '8px 16px', whiteSpace: 'nowrap' }}
+          disabled={saving || !isValid}
+          onClick={handleSave}
+        >
+          {saving ? <Icon name="clock" size={12} /> : t('dataQuality.dealQuality.saveButton')}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+        {t('dataQuality.dealQuality.dealValueLocalOnlyNote')}
+      </div>
+    </div>
+  );
+}
+
+/* Détail du lead score · même présentation que les facteurs churn (liste
+   facteur + poids). Les factors fins (persistés dans score_breakdown.factors
+   par le scoring quotidien) priment ; ils ne couvrent que Activité + Fit, la
+   composante Statut est donc ajoutée en ligne synthétique. Les enregistrements
+   scorés avant la persistance des factors retombent sur les 3 composantes. */
+function LeadScoreBreakdown({ client }) {
+  const t = useT();
+  let bd = client.score_breakdown;
+  if (typeof bd === 'string') { try { bd = JSON.parse(bd); } catch { bd = null; } }
+  if (client.score == null || !bd) return null;
+
+  const rows = [];
+  if (Array.isArray(bd.factors) && bd.factors.length > 0) {
+    // weight 0 possible (ex. recency posé même hors fenêtre) · ligne sans information
+    for (const f of bd.factors) {
+      if (f.weight > 0) rows.push({ label: f.detail || t(`clients.scoreSignal.${f.signal}`), weight: f.weight });
+    }
+    if (bd.status > 0) rows.push({ label: t('clients.scoreSignal.pipeline_status'), weight: bd.status });
+  } else {
+    if (bd.activity > 0) rows.push({ label: t('clients.scoreSignal.activity_component'), weight: bd.activity });
+    if (bd.fit > 0) rows.push({ label: t('clients.scoreSignal.fit_component'), weight: bd.fit });
+    if (bd.status > 0) rows.push({ label: t('clients.scoreSignal.pipeline_status'), weight: bd.status });
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <div style={{
+      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+        {t('clients.scoreBreakdownTitle')}
+      </div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
+          <span>{r.label}</span>
+          <span style={{ fontWeight: 600, color: r.weight >= 10 ? 'var(--success)' : 'var(--accent)' }}>
+            {r.weight >= 0 ? '+' : ''}{r.weight}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DealDetailPanel({ client, issueType, multiCrm, onClose, onFieldSaved }) {
+  const t = useT();
+  const { lang } = useI18n();
+  const STATUS_LABELS = getStatusLabels(lang);
+  const [timeline, setTimeline] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
+
+  useEffect(() => {
+    setTimelineLoading(true);
+    setTimelineExpanded(false);
+    request(`/crm/client/${client.id}/timeline`)
+.then(data => setTimeline(data.timeline || []))
+.catch(() => setTimeline([]))
+.finally(() => setTimelineLoading(false));
+  }, [client.id]);
+
+  const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
+
+  return (
+    <div style={{
+      flex: '0 0 44%', background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 12, padding: 20, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{client.name}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
+            {client.title && <span>{client.title}</span>}
+            {client.company && <span>{client.title ? ' @ ' : ''}{client.company}</span>}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{client.email}</div>
+        </div>
+        <button onClick={onClose} className="btn btn-ghost" style={{ fontSize: 14, padding: '4px 8px' }}>{'✕'}</button>
+      </div>
+
+      {/* Status + deal info badges */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, padding: '4px 14px', borderRadius: 8, background: `${color}15`, color, fontWeight: 600 }}>
+          {STATUS_LABELS[client.status] || client.status}
+        </span>
+        {client.score != null && (
+          <span style={{
+            fontSize: 12, padding: '4px 14px', borderRadius: 8,
+            background: 'var(--bg-elevated)', fontWeight: 700,
+            color: client.score >= 70 ? 'var(--success)' : client.score >= 40 ? 'var(--warning)' : 'var(--text-muted)',
+          }}>
+            Score : {client.score}/100
+          </span>
+        )}
+        {client.deal_value != null && (
+          <span style={{ fontSize: 12, padding: '4px 14px', borderRadius: 8, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontWeight: 600 }}>
+            {Math.round(client.deal_value).toLocaleString('fr-FR')} €
+          </span>
+        )}
+        {client.owner_email && (
+          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}>
+            {t('clients.owner')}: {client.owner_email.split('@')[0]}
+          </span>
+        )}
+        {client.crm_provider && multiCrm && (
+          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 8, background: 'var(--bg-elevated)', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+            {client.crm_provider}
+          </span>
+        )}
+      </div>
+
+      <LeadScoreBreakdown client={client} />
+
+      {/* Fix box, only the field matching the issue actually clicked into, never another one.
+          key={client.id} : sans elle React réutilise l'instance en changeant de client et le
+          useState initial ne se rejoue pas · l'input affichait le secteur du client précédent. */}
+      {issueType === 'missing_sector' && <SectorFixBox key={client.id} client={client} t={t} onSaved={onFieldSaved} />}
+      {issueType === 'missing_deal_value' && <DealValueFixBox key={client.id} client={client} t={t} onSaved={onFieldSaved} />}
+
+      {/* Timeline */}
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Timeline</div>
+      <UnifiedTimeline
+        timeline={timeline}
+        loading={timelineLoading}
+        expanded={timelineExpanded}
+        onToggleExpand={() => setTimelineExpanded(e => !e)}
+        lang={lang}
+        t={t}
+      />
+    </div>
+  );
+}
+
 /* ═══ Client Detail Panel ═══ */
 
-function ClientDetailPanel({ client, onClose }) {
+function ClientDetailPanel({ client, multiCrm, onClose }) {
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -611,13 +1196,13 @@ function ClientDetailPanel({ client, onClose }) {
     setTimelineLoading(true);
     setTimelineExpanded(false);
     request(`/crm/client/${client.id}`)
-      .then(data => setDetail(data))
-      .catch(() => setDetail(null))
-      .finally(() => setLoading(false));
+.then(data => setDetail(data))
+.catch(() => setDetail(null))
+.finally(() => setLoading(false));
     request(`/crm/client/${client.id}/timeline`)
-      .then(data => setTimeline(data.timeline || []))
-      .catch(() => setTimeline([]))
-      .finally(() => setTimelineLoading(false));
+.then(data => setTimeline(data.timeline || []))
+.catch(() => setTimeline([]))
+.finally(() => setTimelineLoading(false));
   }, [client.id]);
 
   const handleQuickEmail = async () => {
@@ -642,6 +1227,23 @@ function ClientDetailPanel({ client, onClose }) {
   };
 
   const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
+
+  // Deals show only CRM activity + Baakalai emails + the current follow-up report  
+  // campaign/prospecting activity is an Activation-tab concern, not the deal's own
+  // CRM-facing history. Clients (status === 'won') keep every source, unchanged.
+  const displayTimeline = useMemo(() => {
+    if (client.status === 'won') return timeline;
+    const filtered = timeline.filter(item => item.type === 'crm_activity' || item.type === 'email_sent');
+    if (client.planned_followup_date) {
+      filtered.unshift({
+        type: 'follow_up_planned',
+        date: client.planned_followup_date,
+        reason: client.planned_followup_reason,
+        id: 'follow-up',
+      });
+    }
+    return filtered;
+  }, [timeline, client.status, client.planned_followup_date, client.planned_followup_reason]);
 
   return (
     <div style={{
@@ -678,7 +1280,7 @@ function ClientDetailPanel({ client, onClose }) {
             Score : {client.score}/100
           </span>
         )}
-        {client.churn_score != null && (
+        {client.status === 'won' && client.churn_score != null && (
           <span style={{
             fontSize: 12, padding: '4px 14px', borderRadius: 8,
             background: client.churn_score >= 76 ? 'var(--danger-soft)' : client.churn_score >= 51 ? 'var(--warning-soft)' : client.churn_score >= 26 ? '#FEF3C7' : 'var(--success-soft)',
@@ -696,7 +1298,7 @@ function ClientDetailPanel({ client, onClose }) {
             {t('clients.owner')}: {client.owner_email.split('@')[0]}
           </span>
         )}
-        {client.crm_provider && (
+        {client.crm_provider && multiCrm && (
           <span style={{
             fontSize: 11, padding: '4px 10px', borderRadius: 8,
             background: 'var(--bg-elevated)', color: 'var(--text-muted)', textTransform: 'capitalize',
@@ -706,8 +1308,10 @@ function ClientDetailPanel({ client, onClose }) {
         )}
       </div>
 
-      {/* Churn factors */}
-      {client.churn_factors && client.churn_factors.length > 0 && (
+      <LeadScoreBreakdown client={client} />
+
+      {/* Churn factors · retention concept, won clients only */}
+      {client.status === 'won' && client.churn_factors && client.churn_factors.length > 0 && (
         <div style={{
           background: client.churn_score >= 50 ? 'rgba(220,38,38,0.04)' : 'var(--bg-elevated)',
           border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 16,
@@ -718,7 +1322,9 @@ function ClientDetailPanel({ client, onClose }) {
           {client.churn_factors.map((f, i) => (
             <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0', display: 'flex', justifyContent: 'space-between' }}>
               <span>{f.detail}</span>
-              <span style={{ fontWeight: 600, color: f.weight >= 15 ? 'var(--danger)' : 'var(--warning)' }}>+{f.weight}</span>
+              <span style={{ fontWeight: 600, color: f.weight < 0 ? 'var(--success)' : f.weight >= 15 ? 'var(--danger)' : 'var(--warning)' }}>
+                {f.weight >= 0 ? '+' : ''}{f.weight}
+              </span>
             </div>
           ))}
         </div>
@@ -732,7 +1338,12 @@ function ClientDetailPanel({ client, onClose }) {
           onClick={handleQuickEmail}
           disabled={sending || !client.email}
         >
-          {sending ? '\u23F3...' : `\u2709\uFE0F ${t('clients.sendEmail')}`}
+          {sending ? <Icon name="clock" size={12} /> : (
+            <>
+              <Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {t('clients.sendEmail')}
+            </>
+          )}
         </button>
         {client.linkedin_url && (
           <a href={client.linkedin_url} target="_blank" rel="noopener noreferrer"
@@ -740,27 +1351,6 @@ function ClientDetailPanel({ client, onClose }) {
             LinkedIn
           </a>
         )}
-      </div>
-
-      {/* Autopilot toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={client.autopilot_enabled !== false}
-            onChange={async (e) => {
-              try {
-                await request(`/crm/autopilot/contact/${client.id}`, {
-                  method: 'PATCH',
-                  body: JSON.stringify({ enabled: e.target.checked }),
-                });
-              } catch { /* ignore */ }
-            }}
-            style={{ cursor: 'pointer' }}
-          />
-          {'\uD83E\uDD16'} {lang === 'en' ? 'Autopilot' : 'Autopilot'}
-          <span title={t('clients.autopilotHelp')} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14, borderRadius: '50%', fontSize: 9, fontWeight: 700, cursor: 'help', background: 'var(--border)', color: 'var(--text-muted)', marginLeft: 4 }}>?</span>
-        </label>
       </div>
 
       {/* Product lines */}
@@ -773,7 +1363,7 @@ function ClientDetailPanel({ client, onClose }) {
           {/* Unified Timeline */}
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Timeline</div>
           <UnifiedTimeline
-            timeline={timeline}
+            timeline={displayTimeline}
             loading={timelineLoading}
             expanded={timelineExpanded}
             onToggleExpand={() => setTimelineExpanded(e => !e)}
@@ -797,6 +1387,12 @@ function formatRelativeDate(dateStr, lang) {
   const diffH = Math.floor(diffMs / 3600000);
   const diffD = Math.floor(diffMs / 86400000);
 
+  if (diffMs < 0) {
+    // Future date (e.g. a planned follow-up report), count forward, not back.
+    const futureD = Math.ceil(-diffMs / 86400000);
+    if (futureD < 1) return lang === 'en' ? 'today' : "aujourd'hui";
+    return lang === 'en' ? `in ${futureD}d` : `dans ${futureD}j`;
+  }
   if (diffMin < 1) return lang === 'en' ? 'just now' : 'maintenant';
   if (diffMin < 60) return lang === 'en' ? `${diffMin}m ago` : `il y a ${diffMin}m`;
   if (diffH < 24) return lang === 'en' ? `${diffH}h ago` : `il y a ${diffH}h`;
@@ -809,18 +1405,27 @@ function formatRelativeDate(dateStr, lang) {
 }
 
 const TIMELINE_CONFIG = {
-  email_sent: { icon: '\u2709\uFE0F', color: 'var(--success)', label: (e, lang) => e.subject || (lang === 'en' ? 'Email' : 'Email') },
-  campaign_activity: { icon: '\uD83D\uDCCA', color: 'var(--accent)', label: (e, lang) => `${e.event || ''} — ${e.campaign_name || ''}` },
-  crm_activity: { icon: '\uD83D\uDCCB', color: 'var(--blue)', label: (e) => e.subject || e.activity_type || 'Activity' },
+  email_sent: { icon: 'mail', color: 'var(--success)', label: (e, lang) => e.subject || (lang === 'en' ? 'Email' : 'Email') },
+  campaign_activity: { icon: 'chart', color: 'var(--accent)', label: (e, lang) => `${e.event || ''}, ${e.campaign_name || ''}` },
+  crm_activity: { icon: 'clipboard', color: 'var(--blue)', label: (e) => e.subject || e.activity_type || 'Activity' },
+  follow_up_planned: {
+    icon: 'calendar', color: 'var(--warning)',
+    label: (e, lang) => {
+      const d = new Date(e.date).toLocaleDateString(lang === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
+      return lang === 'en'
+        ? `Follow-up ${e.reason === 'manual' ? 'postponed' : 'planned'} for ${d}`
+        : `Relance ${e.reason === 'manual' ? 'report\u00e9e' : 'pr\u00e9vue'} au ${d}`;
+    },
+  },
 };
 
 function getTimelineIcon(item) {
   if (item.type === 'crm_activity') {
-    if (item.activity_type === 'call') return '\uD83D\uDCDE';
-    if (item.activity_type === 'meeting') return '\uD83D\uDCC5';
-    return '\uD83D\uDCCB';
+    if (item.activity_type === 'call') return 'phone';
+    if (item.activity_type === 'meeting') return 'calendar';
+    return 'clipboard';
   }
-  return TIMELINE_CONFIG[item.type]?.icon || '\u25CF';
+  return TIMELINE_CONFIG[item.type]?.icon || 'activity';
 }
 
 function getTimelineColor(item) {
@@ -891,7 +1496,7 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span>{icon}</span>
+                    <Icon name={icon} size={12} color={color} />
                     <span style={{
                       fontSize: 10, padding: '1px 6px', borderRadius: 4,
                       background: `${color}15`, color, fontWeight: 600,
@@ -907,7 +1512,7 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
                           : item.status}
                       </span>
                     )}
-                    {item.type === 'crm_activity' && item.done && <span style={{ fontSize: 10 }}>{'\u2705'}</span>}
+                    {item.type === 'crm_activity' && item.done && <span style={{ fontSize: 10 }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>}
                   </span>
                   <span style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{formatRelativeDate(item.date, lang)}</span>
                 </div>
@@ -932,107 +1537,6 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
             : (lang === 'en' ? `Show all ${timeline.length} activities` : `Voir les ${timeline.length} activit\u00e9s`)}
         </button>
       )}
-    </div>
-  );
-}
-
-/* ═══ Product Line Tags ═══ */
-
-function ProductLineTags({ clientId, lang }) {
-  const en = lang === 'en';
-  const [allLines, setAllLines] = useState([]);
-  const [assigned, setAssigned] = useState([]);
-  const [showPicker, setShowPicker] = useState(false);
-
-  useEffect(() => {
-    request('/crm/product-lines').then(d => {
-      setAllLines(d.productLines || []);
-    }).catch(() => {});
-    // Load assigned product lines for this client
-    request(`/crm/client/${clientId}/product-lines`).then(d => {
-      setAssigned(d.productLines || []);
-    }).catch(() => setAssigned([]));
-  }, [clientId]);
-
-  const handleAssign = async (plId) => {
-    try {
-      await request(`/crm/product-lines/${plId}/assign`, {
-        method: 'POST',
-        body: JSON.stringify({ opportunityIds: [clientId] }),
-      });
-      setAssigned(prev => [...prev, allLines.find(l => l.id === plId)].filter(Boolean));
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to assign product line' : 'Échec de l\'assignation' }); }
-  };
-
-  const handleRemove = async (plId) => {
-    try {
-      await request(`/crm/product-lines/${plId}/unassign`, {
-        method: 'POST',
-        body: JSON.stringify({ opportunityIds: [clientId] }),
-      });
-      setAssigned(prev => prev.filter(p => p.id !== plId));
-    } catch { showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to remove product line' : 'Échec de la suppression' }); }
-  };
-
-  if (allLines.length === 0) return null;
-
-  const assignedIds = new Set(assigned.map(a => a.id));
-  const available = allLines.filter(l => !assignedIds.has(l.id));
-
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
-        {en ? 'Product lines' : 'Lignes de produits'}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        {assigned.map(pl => (
-          <span key={pl.id} style={{
-            fontSize: 11, padding: '3px 10px', borderRadius: 12,
-            background: 'rgba(110,87,250,0.1)', color: 'var(--accent)',
-            fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            {pl.icon || '\uD83D\uDCE6'} {pl.name}
-            <button onClick={() => handleRemove(pl.id)} style={{
-              background: 'none', border: 'none', color: 'var(--text-muted)',
-              cursor: 'pointer', fontSize: 10, padding: 0, marginLeft: 2,
-            }}>{'\u2715'}</button>
-          </span>
-        ))}
-        {available.length > 0 && (
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowPicker(!showPicker)}
-              style={{
-                fontSize: 11, padding: '3px 10px', borderRadius: 12,
-                border: '1px dashed var(--border)', background: 'transparent',
-                color: 'var(--text-muted)', cursor: 'pointer',
-              }}
-            >
-              + {en ? 'Add' : 'Ajouter'}
-            </button>
-            {showPicker && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, zIndex: 10,
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 8, padding: 6, minWidth: 160, marginTop: 4,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              }}>
-                {available.map(pl => (
-                  <div key={pl.id} onClick={() => { handleAssign(pl.id); setShowPicker(false); }} style={{
-                    padding: '6px 10px', fontSize: 12, cursor: 'pointer',
-                    borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span>{pl.icon || '\uD83D\uDCE6'}</span> {pl.name}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

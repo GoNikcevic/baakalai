@@ -1,13 +1,13 @@
 /**
  * Team Routes
  *
- * POST /api/teams                  — Create a team (user becomes admin)
- * GET  /api/teams/me               — Get current user's team
- * GET  /api/teams/:id/members      — List team members
- * POST /api/teams/join/:code       — Join a team via invite link
- * PATCH /api/teams/:id/members/:userId — Update member role (admin only)
- * DELETE /api/teams/:id/members/:userId — Remove member (admin only)
- * POST /api/teams/:id/regenerate-invite — Generate new invite code (admin only)
+ * POST /api/teams · Create a team (user becomes admin)
+ * GET  /api/teams/me · Get current user's team
+ * GET  /api/teams/:id/members · List team members
+ * POST /api/teams/join/:code · Join a team via invite link
+ * PATCH /api/teams/:id/members/:userId · Update member role (admin only)
+ * DELETE /api/teams/:id/members/:userId · Remove member (admin only)
+ * POST /api/teams/:id/regenerate-invite · Generate new invite code (admin only)
  */
 
 const { Router } = require('express');
@@ -17,7 +17,7 @@ const router = Router();
 
 const VALID_ROLES = ['admin', 'prospection', 'activation', 'viewer'];
 
-// POST /api/teams — Create team
+// POST /api/teams · Create team
 router.post('/', async (req, res, next) => {
   try {
     // Check if user already has a team
@@ -39,7 +39,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// GET /api/teams/me — Get current user's team + members
+// GET /api/teams/me · Get current user's team + members
 router.get('/me', async (req, res, next) => {
   try {
     const team = await db.teams.getByUser(req.user.id);
@@ -69,7 +69,7 @@ router.get('/:id/members', async (req, res, next) => {
   }
 });
 
-// POST /api/teams/join/:code — Join via invite link
+// POST /api/teams/join/:code · Join via invite link
 router.post('/join/:code', async (req, res, next) => {
   try {
     // Check if user already has a team
@@ -80,7 +80,7 @@ router.post('/join/:code', async (req, res, next) => {
     if (!team) return res.status(404).json({ error: 'Code d\'invitation invalide' });
 
     // Jamais admin via le lien d'invitation : le lien est diffusable et
-    // n'expire pas \u2014 quiconque le poss\u00E8de pourrait sinon prendre le contr\u00F4le
+    // n'expire pas, quiconque le poss\u00E8de pourrait sinon prendre le contr\u00F4le
     // de l'\u00E9quipe en appelant l'API directement (la page, elle, ne propose
     // que 3 r\u00F4les). Seul un admin existant peut promouvoir, via PATCH members.
     const role = req.body.role || 'viewer';
@@ -101,7 +101,7 @@ router.post('/join/:code', async (req, res, next) => {
   }
 });
 
-// PATCH /api/teams/:id/members/:userId — Update role (admin only)
+// PATCH /api/teams/:id/members/:userId · Update role (admin only)
 router.patch('/:id/members/:userId', async (req, res, next) => {
   try {
     const team = await db.teams.getByUser(req.user.id);
@@ -123,7 +123,7 @@ router.patch('/:id/members/:userId', async (req, res, next) => {
   }
 });
 
-// DELETE /api/teams/:id/members/:userId — Remove member (admin only)
+// DELETE /api/teams/:id/members/:userId · Remove member (admin only)
 router.delete('/:id/members/:userId', async (req, res, next) => {
   try {
     const team = await db.teams.getByUser(req.user.id);
@@ -142,7 +142,7 @@ router.delete('/:id/members/:userId', async (req, res, next) => {
   }
 });
 
-// POST /api/teams/:id/regenerate-invite — New invite code (admin only)
+// POST /api/teams/:id/regenerate-invite · New invite code (admin only)
 router.post('/:id/regenerate-invite', async (req, res, next) => {
   try {
     const team = await db.teams.getByUser(req.user.id);

@@ -205,7 +205,7 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/documents/reparse — retry parsing for all docs with NULL parsed_text
+// POST /api/documents/reparse · retry parsing for all docs with NULL parsed_text
 router.post('/reparse', async (req, res, next) => {
   try {
     const all = await db.documents.listByUser(req.user.id);

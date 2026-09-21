@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 function getRoleConfig(lang) {
   const en = lang === 'en';
@@ -27,6 +28,10 @@ export default function TeamSettings() {
   const [creating, setCreating] = useState(false);
   const [teamName, setTeamName] = useState('');
   const [copied, setCopied] = useState(false);
+  // Les erreurs passaient par alert() : une modale bloquante, hors du style
+  // de l'app, et qui gèle la page tant qu'elle n'est pas fermée. Elles
+  // s'affichent maintenant dans la carte, comme partout ailleurs.
+  const [error, setError] = useState(null);
 
   const loadTeam = useCallback(async () => {
     try {
@@ -41,6 +46,7 @@ export default function TeamSettings() {
 
   const handleCreate = async () => {
     if (!teamName.trim()) return;
+    setError(null);
     setCreating(true);
     try {
       const data = await request('/teams', {
@@ -50,7 +56,7 @@ export default function TeamSettings() {
       setTeam(data.team);
       setMembers(data.members || []);
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
     setCreating(false);
   };
@@ -64,6 +70,7 @@ export default function TeamSettings() {
   };
 
   const handleRoleChange = async (userId, role) => {
+    setError(null);
     try {
       await request(`/teams/${team.id}/members/${userId}`, {
         method: 'PATCH',
@@ -71,26 +78,28 @@ export default function TeamSettings() {
       });
       loadTeam();
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
   const handleRemove = async (userId, name) => {
     if (!window.confirm(lang === 'en' ? `Remove ${name} from the team?` : `Retirer ${name} de l'\u00E9quipe ?`)) return;
+    setError(null);
     try {
       await request(`/teams/${team.id}/members/${userId}`, { method: 'DELETE' });
       loadTeam();
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
   const handleRegenInvite = async () => {
+    setError(null);
     try {
       const data = await request(`/teams/${team.id}/regenerate-invite`, { method: 'POST' });
       setTeam(prev => ({ ...prev, invite_code: data.inviteCode }));
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     }
   };
 
@@ -101,16 +110,24 @@ export default function TeamSettings() {
     return (
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title">{'\uD83D\uDC65'} {t('team.title')}</div>
+          <div className="card-title"><Icon name="users" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('team.title')}</div>
         </div>
         <div className="card-body">
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
             {t('team.createDesc')}
           </div>
+          {error && (
+            <div style={{
+              fontSize: 12, color: 'var(--danger, #B42318)', background: 'var(--danger-bg, #FEF2F2)',
+              borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+            }}>
+              {error}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               type="text"
-              placeholder="Nom de l'\u00E9quipe"
+              placeholder={t('team.teamName')}
               value={teamName}
               onChange={e => setTeamName(e.target.value)}
               className="form-input"
@@ -122,7 +139,7 @@ export default function TeamSettings() {
               onClick={handleCreate}
               disabled={creating || !teamName.trim()}
             >
-              {creating ? 'Cr\u00E9ation...' : 'Cr\u00E9er'}
+              {creating ? t('team.creating') : t('team.create')}
             </button>
           </div>
         </div>
@@ -138,7 +155,7 @@ export default function TeamSettings() {
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div className="card-title">{'\uD83D\uDC65'} {t('team.title')}: {team.name}</div>
+          <div className="card-title"><Icon name="users" size={14} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('team.title')}: {team.name}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
             {members.length}/{team.max_members || 5} {t('team.members')}
           </div>
@@ -146,6 +163,15 @@ export default function TeamSettings() {
       </div>
 
       <div className="card-body">
+        {error && (
+          <div style={{
+            fontSize: 12, color: 'var(--danger, #B42318)', background: 'var(--danger-bg, #FEF2F2)',
+            borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+          }}>
+            {error}
+          </div>
+        )}
+
         {/* Invite link */}
         <div style={{
           display: 'flex', gap: 8, alignItems: 'center',
@@ -162,14 +188,15 @@ export default function TeamSettings() {
             style={{ fontSize: 11, padding: '4px 12px' }}
             onClick={handleCopyInvite}
           >
-            {copied ? `\u2705 ${t('team.copied')}` : t('team.copy')}
+            {copied && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+            {copied ? t('team.copied') : t('team.copy')}
           </button>
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '4px 12px', color: 'var(--text-muted)' }}
             onClick={handleRegenInvite}
           >
-            {'\uD83D\uDD04'}
+            <Icon name="refresh" size={12} />
           </button>
         </div>
 
@@ -186,7 +213,7 @@ export default function TeamSettings() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>
                     {m.name}
-                    {isCreator && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>cr{'\u00E9'}ateur</span>}
+                    {isCreator && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>{t('team.creator')}</span>}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.email}</div>
                 </div>

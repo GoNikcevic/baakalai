@@ -1,7 +1,7 @@
 /* ===============================================================================
-   BAKAL — Socket.io Server
+   BAKAL, Socket.io Server
    Real-time communication layer: chat, notifications, live stats updates.
-   Authenticated via JWT — same tokens as the REST API.
+   Authenticated via JWT, same tokens as the REST API.
    =============================================================================== */
 
 const { Server } = require('socket.io');
@@ -33,7 +33,7 @@ function init(httpServer, allowedOrigins) {
     maxHttpBufferSize: 1e6, // 1MB
   });
 
-  // ── Auth middleware — validate JWT on connection ──
+  // ── Auth middleware · validate JWT on connection ──
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) {
@@ -124,7 +124,7 @@ function close() {
   }
 }
 
-// ── Emit helpers — called from routes/orchestrator ──
+// ── Emit helpers · called from routes/orchestrator ──
 
 function notifyUser(userId, event, data) {
   if (!io) return;

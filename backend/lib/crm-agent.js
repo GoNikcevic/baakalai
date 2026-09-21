@@ -1,5 +1,5 @@
 /**
- * CRM Agent — Unified intelligent agent for CRM management
+ * CRM Agent · Unified intelligent agent for CRM management
  *
  * Replaces separate cron jobs (sync, cleaning, nurture) with a single
  * intelligent agent that evaluates context and takes the right actions.
@@ -18,8 +18,7 @@
  */
 
 const db = require('../db');
-const { getUserKey } = require('../config');
-const { getUserCrmToken } = require('./crm-token');
+const { resolveCrmForUser } = require('./crm-token');
 const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
@@ -28,6 +27,7 @@ const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
 const { extractActivityDate } = require('./crm-activity-date');
 const { applyMappings } = require('./crm-field-mapper');
 const { matchContacts } = require('./trigger-matching');
+const { getStagnantDays } = require('./stagnation');
 const logger = require('./logger');
 
 const DAY_MS = 86400000;
@@ -36,12 +36,12 @@ const DAY_MS = 86400000;
  * Run the CRM agent for a user.
  * Returns a structured report of everything that was done.
  */
-// Concurrency lock — prevent duplicate runs for the same user
+// Concurrency lock · prevent duplicate runs for the same user
 const _running = new Set();
 
 async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
   if (_running.has(userId)) {
-    logger.warn('crm-agent', `Skipping — already running for user ${userId}`);
+    logger.warn('crm-agent', `Skipping, already running for user ${userId}`);
     return { skipped: true, reason: 'already running' };
   }
   _running.add(userId);
@@ -64,52 +64,12 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     if (team) teamId = team.id;
   } catch { /* solo user, no team */ }
 
-  // Detect connected CRM provider — use user's active CRM preference, fallback to first connected
-  let crmProvider = null;
-  let token = null;
-
-  // 1. Try user's explicitly chosen active CRM
-  try {
-    const userRow = await db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [userId]);
-    const activeCrm = userRow.rows[0]?.active_crm_provider;
-    if (activeCrm) {
-      token = await getUserCrmToken(userId, activeCrm);
-      if (token) crmProvider = activeCrm;
-    }
-  } catch { /* fallback below */ }
-
-  // 2. Fallback: try all providers if no active CRM set or its token is missing
-  if (!token) {
-    for (const p of ['pipedrive', 'hubspot', 'salesforce', 'odoo']) {
-      token = await getUserCrmToken(userId, p);
-      if (token) { crmProvider = p; break; }
-    }
-  }
-  if (!token) {
+  // Detect connected CRM provider · use user's active CRM preference, fallback to first connected
+  const { provider: crmProvider, creds: crmCreds } = await resolveCrmForUser(userId);
+  if (!crmProvider) {
     _running.delete(userId);
     report.errors.push('No CRM connected');
     return report;
-  }
-
-  // Salesforce needs instanceUrl + accessToken as credentials object
-  let crmCreds = token;
-  if (crmProvider === 'salesforce') {
-    const { decrypt } = require('../config/crypto');
-    const integration = await db.query(
-      `SELECT access_token, instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
-      [userId]
-    );
-    if (integration.rows[0]) {
-      if (!integration.rows[0].instance_url) {
-        _running.delete(userId);
-        report.errors.push('Salesforce instance URL not configured');
-        return report;
-      }
-      crmCreds = {
-        accessToken: typeof token === 'string' ? token : decrypt(integration.rows[0].access_token),
-        instanceUrl: integration.rows[0].instance_url,
-      };
-    }
   }
 
   // Notify user that agent is working
@@ -123,10 +83,10 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
     const _opps = await db.opportunities.listByUser(userId, 10000, 0);
 
     // ── Step 2: Quick Data Quality Check ──
-    await stepDataQuality(userId, token, report, _opps);
+    await stepDataQuality(userId, crmCreds, report, _opps);
 
     // ── Step 3: Nurture Evaluation ──
-    await stepNurture(userId, token, report, { teamId, crmProvider });
+    await stepNurture(userId, crmCreds, report, { teamId, crmProvider });
 
     // ── Step 3b: LinkedIn Response Sync ──
     try {
@@ -221,7 +181,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
           await createNotification(userId, {
             type: 'churn_alert',
             title: `${highChurnResult.rows.length} contact(s) at high churn risk`,
-            body: `${names}${extra} — churn score 70+. Review in Clients page.`,
+            body: `${names}${extra}, churn score 70+. Review in Clients page.`,
             metadata: {
               contactIds: highChurnResult.rows.map(c => c.id),
               count: highChurnResult.rows.length,
@@ -256,7 +216,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
         const payload = JSON.stringify(contacts.map(c => ({
           id: c.id,
           score: c.score,
-          breakdown: { ...c.breakdown, factors: c.factors },
+          breakdown: {...c.breakdown, factors: c.factors },
         })));
         const updated = await db.query(
           `UPDATE opportunities o
@@ -272,6 +232,29 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       }
     } catch (err) {
       report.errors.push(`Lead scoring: ${err.message}`);
+    }
+
+    // ── Step 5d: Hidden Revenue Score ──
+    // Placé après la synchro, le churn et le lead scoring : le score agrège ce
+    // que les étapes précédentes viennent de rafraîchir, il doit les lire à
+    // jour. L'horloge du calcul est gelée ici pour que le score soit
+    // reproductible (cf. lib/hidden-revenue/index.js).
+    try {
+      const { computeHiddenRevenue } = require('./hidden-revenue');
+      const hrs = await computeHiddenRevenue(userId, { snapshotAt: new Date() });
+      report.hiddenRevenue = {
+        hrs: hrs.hrs,
+        confidence: hrs.confidence,
+        expectedValue: hrs.expectedValue,
+        expectedLow: hrs.expectedLow,
+        expectedHigh: hrs.expectedHigh,
+        qualifiedValue: hrs.qualifiedValue,
+        opportunityCount: hrs.opportunityCount,
+        quantifiable: hrs.quantifiable,
+      };
+      logger.info('crm-agent', `Hidden revenue user ${userId}: HRS ${hrs.hrs}, ${hrs.opportunityCount} opportunités, ${hrs.expectedLow} à ${hrs.expectedHigh} EUR (confiance ${hrs.confidence})`);
+    } catch (err) {
+      report.errors.push(`Hidden revenue: ${err.message}`);
     }
 
     // ── Step 6: AI Analysis (if significant changes) ──
@@ -315,7 +298,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
   try {
     // If triggered by a webhook event, skip full sync (already handled by webhook route)
     if (event?.type && (event.type.startsWith('deal_') || event.type === 'person_updated')) {
-      logger.info('crm-agent', `Skipping full sync — webhook event: ${event.type}`);
+      logger.info('crm-agent', `Skipping full sync, webhook event: ${event.type}`);
       return;
     }
 
@@ -361,8 +344,35 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
       // de la fraîcheur du deal. Voir lib/crm-activity-date.js.
       const lastActivityAt = extractActivityDate(crmProvider, raw);
 
+      // Géo rapatriée du CRM (migration 093). Odoo renvoie country_id = [id, libellé] ;
+      // Pipedrive n'a pas d'adresse standard sur les personnes → reste null (fallback
+      // TLD email côté analytics).
+      const country = raw.country || (Array.isArray(raw.country_id) ? raw.country_id[1] : null) || null;
+      const city = raw.city || null;
+
+      // Field mappings CRM (lignes produit, statut, renouvellement) · factorisé pour
+      // s'appliquer aussi aux NOUVEAUX contacts : avant, seule la branche update les
+      // appliquait, donc un import frais n'avait jamais de ligne produit.
+      const applyFieldMappings = async (oppId, currentStatus) => {
+        try {
+          const mapped = await applyMappings(userId, crmProvider, raw);
+          for (const plId of mapped.productLineIds) {
+            await db.query(
+              `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+              [oppId, plId]
+            );
+          }
+          const fieldUpdates = {};
+          if (mapped.customFields.status && mapped.customFields.status !== currentStatus) fieldUpdates.status = mapped.customFields.status;
+          if (mapped.customFields.renewal_date) fieldUpdates.renewal_date = mapped.customFields.renewal_date;
+          if (Object.keys(fieldUpdates).length > 0) {
+            await db.opportunities.update(oppId, fieldUpdates);
+          }
+        } catch { /* mapping is optional */ }
+      };
+
       if (!existing) {
-        await db.opportunities.create({
+        const created = await db.opportunities.create({
           userId,
           name: raw.name || 'Unknown',
           email,
@@ -375,8 +385,11 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           ownerEmail,
           ownerId,
           lastActivityAt,
+          country,
+          city,
         });
         report.sync.imported++;
+        await applyFieldMappings(created.id, created.status);
       } else {
         // Update if CRM data is different
         const updates = {};
@@ -400,76 +413,22 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           if (ownerEmail) updates.owner_email = ownerEmail;
           if (ownerId) updates.owner_id = ownerId;
         }
+        if (country && country !== existing.country) updates.country = country;
+        if (city && city !== existing.city) updates.city = city;
 
         if (Object.keys(updates).length > 0) {
           await db.opportunities.update(existing.id, updates);
           report.sync.updated++;
         }
 
-        // Apply field mappings (product lines, etc.)
-        try {
-          const mapped = await applyMappings(userId, crmProvider, raw);
-          if (mapped.productLineIds.length > 0) {
-            for (const plId of mapped.productLineIds) {
-              await db.query(
-                `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-                [existing.id, plId]
-              );
-            }
-          }
-          const fieldUpdates = {};
-          if (mapped.customFields.status && mapped.customFields.status !== existing.status) fieldUpdates.status = mapped.customFields.status;
-          if (mapped.customFields.renewal_date) fieldUpdates.renewal_date = mapped.customFields.renewal_date;
-          if (Object.keys(fieldUpdates).length > 0) {
-            await db.opportunities.update(existing.id, fieldUpdates);
-          }
-        } catch { /* mapping is optional */ }
+        await applyFieldMappings(existing.id, existing.status);
       }
     }
-    // Sync deal values + lifecycle dates from CRM deals
-    try {
-      let deals = [];
-      if (crmProvider === 'pipedrive') deals = await pipedrive.getDeals(token, 500);
-      else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
-
-      for (const deal of deals) {
-        const personId = deal.personId ? String(deal.personId) : null;
-        if (!personId) continue;
-
-        const opp = await db.query(
-          `SELECT id, status, won_date, lost_date, deal_value FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
-          [userId, personId]
-        );
-        if (!opp.rows[0]) continue;
-        const o = opp.rows[0];
-
-        const updates = {};
-        if (deal.value && deal.value !== parseFloat(o.deal_value)) updates.deal_value = deal.value;
-        if (deal.status === 'won' && o.status !== 'won') { updates.status = 'won'; updates.won_date = new Date().toISOString(); }
-        if (deal.status === 'lost' && o.status !== 'lost') { updates.status = 'lost'; updates.lost_date = new Date().toISOString(); }
-
-        if (Object.keys(updates).length > 0) {
-          // Attribution: if deal moves to 'won' from lost/stagnant, check for reactivation email in last 90 days
-          if (updates.status === 'won' && ['lost', 'stagnant', 'imported', 'new'].includes(o.status)) {
-            const reactivationEmail = await db.query(
-              `SELECT id FROM nurture_emails
-               WHERE opportunity_id = $1 AND user_id = $2 AND status = 'sent'
-                 AND metadata->>'chain' = 'deal_reactivation'
-                 AND created_at > NOW() - INTERVAL '90 days'
-               ORDER BY created_at DESC LIMIT 1`,
-              [o.id, userId]
-            );
-            if (reactivationEmail.rows[0]) {
-              updates.reactivated_at = new Date().toISOString();
-              updates.reactivated_from_email_id = reactivationEmail.rows[0].id;
-              report.reactivations = (report.reactivations || 0) + 1;
-              logger.info('crm-agent', `Deal reactivated: ${o.id} (email ${reactivationEmail.rows[0].id})`);
-            }
-          }
-          await db.opportunities.update(o.id, updates);
-        }
-      }
-    } catch { /* deal sync is optional */ }
+    // Sync deal values + lifecycle dates (won/lost, montants, stages) · factorisé
+    // dans lib/deal-lifecycle-sync.js pour être partagé avec le sync manuel des
+    // Settings (lib/crm-sync.js). Best-effort : ne throw jamais.
+    const { syncDealLifecycle } = require('./deal-lifecycle-sync');
+    await syncDealLifecycle(userId, token, crmProvider, report);
   } catch (err) {
     report.errors.push(`Sync: ${err.message}`);
   }
@@ -521,19 +480,19 @@ function findDuplicates(opps) {
 
 // teamId et crmProvider doivent être passés explicitement : ils n'existent que
 // dans le scope de runAgent. Avant ce paramètre, chaque contact matché levait
-// « teamId is not defined », avalé par le catch par-contact — le cron
+// « teamId is not defined », avalé par le catch par-contact · le cron
 // n'a jamais pu générer un seul email de nurture.
 async function stepNurture(userId, token, report, { teamId = null, crmProvider = null } = {}) {
   try {
     // Expiration : un brouillon pending de plus de 14 jours est périmé.
     // L'annuler libère le contact (contrainte unique 067 : un seul pending
-    // par contact) — sans quoi la file saturée bloque toute génération.
+    // par contact) · sans quoi la file saturée bloque toute génération.
     //
     // Sauf si l'utilisateur n'a aucune boîte mail connectée : le brouillon
     // n'est alors pas « périmé », il est *inenvoyable*, et l'expirer punit
     // l'utilisateur pour une étape de configuration manquante. Constaté en
     // prod : 80 brouillons annulés en août, 80 régénérés derrière, aucun
-    // envoyé — une boucle qui consommait des tokens tous les 14 jours sans
+    // envoyé · une boucle qui consommait des tokens tous les 14 jours sans
     // qu'aucun email ne puisse partir. On gèle donc l'horloge tant que la
     // boîte manque ; la file repart intacte dès la connexion.
     const mailbox = await db.query(
@@ -549,7 +508,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
       );
       if (stuck.rows[0].n > 0) {
         report.nurture.blockedNoMailbox = stuck.rows[0].n;
-        logger.warn('crm-agent', `Nurture: ${stuck.rows[0].n} brouillons en attente mais aucune boîte mail connectée (user ${userId}) — expiration gelée`);
+        logger.warn('crm-agent', `Nurture: ${stuck.rows[0].n} brouillons en attente mais aucune boîte mail connectée (user ${userId}), expiration gelée`);
       }
     } else {
       const expired = await db.query(
@@ -575,7 +534,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
 
     // Get recently emailed contacts to avoid duplication. Inclut tout pending
     // restant quel que soit son âge : la contrainte unique 067 rejette l'INSERT
-    // pour ces contacts — sans ce filtre, chaque run brûlait ~10 générations
+    // pour ces contacts · sans ce filtre, chaque run brûlait ~10 générations
     // Claude puis échouait en silence (queued 0) dès que les brouillons
     // sortaient de la fenêtre de 7 jours en restant pending.
     const recentEmails = await db.query(
@@ -585,11 +544,15 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
     );
     const recentSet = new Set(recentEmails.rows.map(r => r.to_email?.toLowerCase()));
 
+    // Repli commun des triggers de dormance, identique à celui de la file de
+    // réactivation (cf. lib/stagnation.js).
+    const stagnantDays = await getStagnantDays(userId);
+
     for (const trigger of triggersResult.rows) {
-      // Logique de matching partagée avec la preview (routes/nurture.js) —
+      // Logique de matching partagée avec la preview (routes/nurture.js) · 
       // toute divergence faisait mentir la preview. null = type évaluable
       // uniquement en run manuel (newsletter_* via nurture-engine).
-      let matched = matchContacts(trigger, opps, now);
+      let matched = matchContacts(trigger, opps, now, { stagnantDays });
       if (matched === null) continue;
 
       // Filter already-emailed
@@ -630,7 +593,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
       for (let idx = 0; idx < Math.min(matched.length, 10); idx++) {
         const opp = matched[idx];
         try {
-          // Generate email(s) — A/B or single
+          // Generate email(s) · A/B or single
           const emailContent = await generateNurtureEmail(trigger, opp, { abTest: abEnabled && idx < 2, teamId });
 
           // Determine which variant to use (bandit allocation)
@@ -692,7 +655,7 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
 async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = null } = {}) {
   const template = trigger.email_template || {};
 
-  // Load relevant memory patterns — contextual (pgvector) or fallback (recency-based)
+  // Load relevant memory patterns · contextual (pgvector) or fallback (recency-based)
   let patternsContext = '';
   let patternIds = [];
   try {
@@ -701,11 +664,14 @@ async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = nul
     const { findRelevantPatterns, ENABLED: pgvEnabled } = require('./vector-store');
     if (pgvEnabled) {
       const context = `${trigger.trigger_type} ${opp.company || ''} ${opp.title || ''} ${(trigger.conditions?.sectors || []).join(' ')}`;
-      allPatterns = await findRelevantPatterns(context, 10);
+      // Tenant obligatoire : sans lui, la recherche pgvector piochait dans la
+      // mémoire de TOUS les clients (audit du 02/09). trigger.user_id est le
+      // propriétaire du trigger · même utilisateur que celui du run.
+      allPatterns = await findRelevantPatterns(context, 10, { teamId, userId: trigger.user_id });
     }
-    // Fallback to recency-based
+    // Fallback to recency-based · même scoping tenant que la recherche pgvector
     if (!allPatterns || allPatterns.length === 0) {
-      allPatterns = await db.memoryPatterns.listForPrompt(10, teamId);
+      allPatterns = await db.memoryPatterns.listForPrompt(10, teamId, trigger.user_id);
     }
     if (allPatterns.length > 0) {
       patternIds = allPatterns.map(p => p.id);
@@ -722,14 +688,14 @@ async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = nul
   if (effectiveness && effectiveness.total >= 3) {
     effectivenessContext = `\n\nEFFICACIT\u00C9 DE CE TRIGGER : ${effectiveness.successRate}% de r\u00E9ponses positives sur ${effectiveness.total} envois.`;
     if (effectiveness.successRate < 30) {
-      effectivenessContext += ` Le taux est faible \u2014 essaie un angle diff\u00E9rent.`;
+      effectivenessContext += ` Le taux est faible, essaie un angle diff\u00E9rent.`;
     } else if (effectiveness.successRate >= 60) {
-      effectivenessContext += ` Le taux est bon \u2014 garde un ton similaire.`;
+      effectivenessContext += ` Le taux est bon, garde un ton similaire.`;
     }
   }
 
   const contactCtx = `${opp.name} (${opp.title || ''}) chez ${opp.company || ''}`;
-  const triggerCtx = `${trigger.trigger_type} \u2014 ${trigger.name}`;
+  const triggerCtx = `${trigger.trigger_type}, ${trigger.name}`;
   const toneCtx = template.tone || 'professionnel mais chaleureux';
 
   if (abTest) {
@@ -752,7 +718,7 @@ Retourne un JSON : { "A": { "subject": "...", "body": "..." }, "B": { "subject":
         const match = (result.raw || '').match(/\{[\s\S]*"A"[\s\S]*"B"[\s\S]*\}/);
         if (match) parsed = JSON.parse(match[0]);
       }
-      if (parsed?.A?.subject && parsed?.B?.subject) return { ...parsed, patternIds };
+      if (parsed?.A?.subject && parsed?.B?.subject) return {...parsed, patternIds };
     } catch { /* fallback to single */ }
   }
 
@@ -767,13 +733,13 @@ Retourne un JSON : { "subject": "...", "body": "..." }`;
 
   try {
     const result = await claude.callClaude('Retourne uniquement du JSON valide.', prompt, 500);
-    if (result.parsed) return { ...result.parsed, patternIds };
+    if (result.parsed) return {...result.parsed, patternIds };
     const match = (result.raw || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
-    if (match) return { ...JSON.parse(match[0]), patternIds };
+    if (match) return {...JSON.parse(match[0]), patternIds };
   } catch { /* fallback below */ }
 
   return {
-    subject: `Suivi \u2014 ${opp.company || opp.name}`,
+    subject: `Suivi, ${opp.company || opp.name}`,
     body: `Bonjour ${(opp.name || '').split(' ')[0]},\n\nJe me permets de revenir vers vous.\n\nBien cordialement`,
     patternIds,
   };
@@ -818,8 +784,20 @@ async function stepAnalysis(userId, report, teamId = null) {
  * Only creates patterns when there's statistically meaningful signal.
  */
 async function generateCrmPatterns(userId, opps, teamId = null) {
-  // Wrap create to auto-inject teamId
-  const createPattern = (data) => db.memoryPatterns.create({ ...data, teamId });
+  // Wrap create to auto-inject the tenant. userId en repli quand l'utilisateur
+  // n'a pas d'équipe : sans lui, le pattern naissait orphelin (ni team_id ni
+  // user_id) et devenait invisible pour son propre créateur avec le DAO scopé.
+  // source au niveau colonne : c'est elle que lit la politique de partage du
+  // DAO (agrégats business jamais auto-partagés) · le data JSON garde le
+  // détail (crm_analysis / title_analysis / multitouch_analysis).
+  const createPattern = (data) => db.memoryPatterns.create({ source: 'crm_analysis',...data, teamId, userId: teamId ? null : userId });
+  // Les gardes anti-doublon doivent chercher dans la mémoire DU tenant.
+  // Historiquement list() sans tenant renvoyait les patterns de TOUS les
+  // clients : dès qu'un client avait son « taux de conversion CRM », plus
+  // aucun autre ne l'obtenait jamais. Avec le DAO scopé (audit 02/09), sans
+  // tenant on ne verrait plus que le pool global partagé · garde cassée dans
+  // l'autre sens (doublons quotidiens). D'où le tenant explicite ici.
+  const listExisting = (category) => db.memoryPatterns.list({ category, limit: 50, teamId, userId: teamId ? null : userId });
   const now = Date.now();
   const won = opps.filter(o => o.status === 'won');
   const lost = opps.filter(o => o.status === 'lost');
@@ -830,7 +808,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Pattern 1: Win rate
   if (won.length + lost.length >= 5) {
     const winRate = Math.round((won.length / (won.length + lost.length)) * 100);
-    const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+    const existing = await listExisting('Cible');
     const hasWinRate = existing.some(p => p.pattern.includes('taux de conversion CRM'));
     if (!hasWinRate) {
       await createPattern({
@@ -847,11 +825,11 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Pattern 2: Average deal velocity (time to won)
   if (won.length >= 3) {
     const velocities = won
-      .filter(o => o.created_at && o.updated_at)
-      .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
+.filter(o => o.created_at && o.updated_at)
+.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (velocities.length >= 3) {
       const avgDays = Math.round(velocities.reduce((s, v) => s + v, 0) / velocities.length);
-      const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+      const existing = await listExisting('Timing');
       const hasVelocity = existing.some(p => p.pattern.includes('cycle de vente moyen'));
       if (!hasVelocity) {
         await createPattern({
@@ -866,18 +844,18 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
   }
 
-  // Pattern 3: Stagnation threshold — at what point do deals die?
+  // Pattern 3: Stagnation threshold · at what point do deals die?
   if (lost.length >= 3) {
     const stagnation = lost
-      .filter(o => o.created_at && o.updated_at)
-      .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
+.filter(o => o.created_at && o.updated_at)
+.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (stagnation.length >= 3) {
       const avgStagnation = Math.round(stagnation.reduce((s, v) => s + v, 0) / stagnation.length);
-      const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+      const existing = await listExisting('Timing');
       const hasStagnation = existing.some(p => p.pattern.includes('deals perdus stagnent'));
       if (!hasStagnation) {
         await createPattern({
-          pattern: `Les deals perdus stagnent en moyenne ${avgStagnation} jours avant d'\u00EAtre clos \u2014 relancer avant ce seuil`,
+          pattern: `Les deals perdus stagnent en moyenne ${avgStagnation} jours avant d'\u00EAtre clos, relancer avant ce seuil`,
           category: 'Timing',
           data: JSON.stringify({ source: 'crm_analysis', avgStagnation, sampleSize: stagnation.length }),
           confidence: stagnation.length >= 10 ? 'Haute' : 'Moyenne',
@@ -898,7 +876,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
     const topSize = Object.entries(sizeGroups).sort((a, b) => b[1] - a[1])[0];
     if (topSize && topSize[1] >= 3) {
-      const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+      const existing = await listExisting('Cible');
       const hasSizePattern = existing.some(p => p.pattern.includes('taille d\'entreprise qui convertit'));
       if (!hasSizePattern) {
         await createPattern({
@@ -913,7 +891,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
   }
 
-  // Patterns 5-7 (timing, subject lines, email length) removed — now handled by
+  // Patterns 5-7 (timing, subject lines, email length) removed · now handled by
   // strategic agents: Timing Agent, Copy Optimizer (more thorough analysis + dedup)
 
   // Pattern 8: Best responding job title/function
@@ -928,11 +906,11 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     );
     if (responded.rows.length > 0) {
       const topTitle = responded.rows[0];
-      const existing = await db.memoryPatterns.list({ category: 'Cible', limit: 50 });
+      const existing = await listExisting('Cible');
       const hasTitle = existing.some(p => p.pattern.includes('fonction qui r\u00E9pond le mieux'));
       if (!hasTitle) {
         await createPattern({
-          pattern: `La fonction qui r\u00E9pond le mieux aux emails d'activation : ${topTitle.title} (${topTitle.count} r\u00E9ponses)`,
+          pattern: `La fonction qui r\u00E9pond le mieux aux emails automatiques : ${topTitle.title} (${topTitle.count} r\u00E9ponses)`,
           category: 'Cible',
           data: JSON.stringify({ source: 'title_analysis', title: topTitle.title, count: parseInt(topTitle.count, 10) }),
           confidence: parseInt(topTitle.count, 10) >= 10 ? 'Haute' : 'Moyenne',
@@ -956,7 +934,7 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       const withResponse = touchCounts.rows.filter(r => r.got_response);
       if (withResponse.length >= 3) {
         const avgTouches = Math.round(withResponse.reduce((s, r) => s + parseInt(r.touches, 10), 0) / withResponse.length * 10) / 10;
-        const existing = await db.memoryPatterns.list({ category: 'Timing', limit: 50 });
+        const existing = await listExisting('Timing');
         const hasTouch = existing.some(p => p.pattern.includes('touches avant r\u00E9ponse'));
         if (!hasTouch) {
           await createPattern({
@@ -983,7 +961,7 @@ async function runAllAgents() {
   for (const { user_id } of users.rows) {
     try {
       const report = await runAgent(user_id, { trigger: 'scheduled' });
-      results.push({ userId: user_id, ...report });
+      results.push({ userId: user_id,...report });
     } catch (err) {
       logger.error('crm-agent', `Agent failed for ${user_id}: ${err.message}`);
     }

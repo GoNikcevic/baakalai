@@ -23,7 +23,7 @@ const APPLY = process.argv.includes('--apply');
 async function main() {
   const lexicon = await anonymize.loadLexicon({ query: db.rawQuery || db.query });
   if (lexicon.size === 0) {
-    console.error('Lexique vide — la rédaction serait incomplète. Abandon.');
+    console.error('Lexique vide, la rédaction serait incomplète. Abandon.');
     process.exit(1);
   }
   console.log(`Lexique : ${lexicon.size} termes\n`);
@@ -79,7 +79,7 @@ async function main() {
   console.log(`Patterns modifies         : ${modifies}`);
   console.log(`Non partageables (résidu) : ${bloques} / ${rows.length}`);
   console.log(`Partage retiré            : ${departages}`);
-  console.log(APPLY ? '\nApplique.' : '\nSimulation — relancer avec --apply pour ecrire.');
+  console.log(APPLY ? '\nApplique.' : '\nSimulation, relancer avec --apply pour ecrire.');
 }
 
 main()

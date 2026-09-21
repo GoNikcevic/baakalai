@@ -16,7 +16,7 @@ Variable enrichie (IA déduit à partir de la base)
 Variable dérivée (IA combine les précédentes → icebreaker final)
 ```
 
-**Exemple concret — industrie brassicole :**
+**Exemple concret : industrie brassicole :**
 1. `{{beerName}}` (base) → le nom de la bière phare, scrapé du site web ou Untappd
 2. `{{microbioProblem}}` (enrichie) → le risque microbiologique probable, déduit par l'IA à partir du type de bière
 3. `{{brewerIcebreaker}}` (dérivée) → une accroche qui combine les deux, montrant une expertise crédible du métier
@@ -69,7 +69,7 @@ Pour chaque variable enrichie :
 
 ## Contraintes
 
-- Les variables doivent être **spécifiques à l'industrie** — un généraliste ne les proposerait pas
+- Les variables doivent être **spécifiques à l'industrie** : un généraliste ne les proposerait pas
 - L'icebreaker final doit **prouver une connaissance du métier**, pas juste du prospect
 - Chaque variable doit être **collectabe ou calculable** en pratique
 - La chaîne doit avoir une **logique claire** : base → enrichie → dérivée
@@ -183,8 +183,8 @@ Tu es un expert en optimisation de campagnes de prospection B2B.
 | Variable | Type | Source |
 |----------|------|--------|
 | `{{beerName}}` | Base | Site web, Untappd |
-| `{{microbioProblem}}` | Enrichie | IA — basé sur le style de bière |
-| `{{brewerIcebreaker}}` | Dérivée | IA — combine beerName + microbioProblem |
+| `{{microbioProblem}}` | Enrichie | IA : basé sur le style de bière |
+| `{{brewerIcebreaker}}` | Dérivée | IA : combine beerName + microbioProblem |
 
 **Raisonnement :** Le produit est le point d'entrée émotionnel. Le type de bière prédit les risques microbiologiques. Cette intelligence crée un icebreaker qui prouve une connaissance du métier, pas juste de l'entreprise.
 
@@ -192,8 +192,8 @@ Tu es un expert en optimisation de campagnes de prospection B2B.
 | Variable | Type | Source |
 |----------|------|--------|
 | `{{accountingSoftware}}` | Base | Offres d'emploi, LinkedIn |
-| `{{estimatedTimeLost}}` | Enrichie | IA — basé sur le logiciel + taille cabinet |
-| `{{dafIcebreaker}}` | Dérivée | IA — combine software + temps perdu |
+| `{{estimatedTimeLost}}` | Enrichie | IA : basé sur le logiciel + taille cabinet |
+| `{{dafIcebreaker}}` | Dérivée | IA : combine software + temps perdu |
 
 **Raisonnement :** Les DAF parlent en chiffres. Identifier l'outil et calculer le temps perdu crée un icebreaker chiffré qui parle leur langage.
 
@@ -202,7 +202,7 @@ Tu es un expert en optimisation de campagnes de prospection B2B.
 |----------|------|--------|
 | `{{qualiopiStatus}}` | Base | Base publique Qualiopi |
 | `{{catalogSize}}` | Base | Site web, MonCompteFormation |
-| `{{formationIcebreaker}}` | Dérivée | IA — combine statut + catalogue |
+| `{{formationIcebreaker}}` | Dérivée | IA : combine statut + catalogue |
 
 **Raisonnement :** Le nerf de la guerre est le remplissage des sessions. Qualiopi + taille catalogue révèle le positionnement et permet de toucher la problématique d'acquisition.
 

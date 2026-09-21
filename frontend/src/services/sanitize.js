@@ -1,5 +1,5 @@
 /**
- * HTML sanitizer using DOMPurify — allows only safe formatting tags.
+ * HTML sanitizer using DOMPurify · allows only safe formatting tags.
  */
 
 import DOMPurify from 'dompurify';

@@ -1,14 +1,15 @@
 /* ═══════════════════════════════════════════════════
-   A/B Test Tab — side-by-side diff + winner promotion
+   A/B Test Tab · side-by-side diff + winner promotion
    ═══════════════════════════════════════════════════ */
 
 import { useState, useMemo } from 'react';
 import api from '../../../services/api-client';
 import { sanitizeHtml } from '../../../services/sanitize';
 import { useI18n } from '../../../i18n';
+import Icon from '../../Icon';
 
 export default function ABTestTab({ campaign: c, setCampaigns }) {
-  const { lang } = useI18n(); const en = lang === 'en';
+  const { lang, t } = useI18n(); const en = lang === 'en';
   const [promoting, setPromoting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -23,7 +24,7 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
 
   const hasAB = abConfig && testedTouchpoints.length > 0;
 
-  // Compute aggregated stats — avant l'early return : un hook après un
+  // Compute aggregated stats · avant l'early return : un hook après un
   // return conditionnel change l'ordre des hooks entre rendus (crash React).
   const stats = useMemo(() => {
     let aReplyAvg = 0, bReplyAvg = 0, aOpenAvg = 0, bOpenAvg = 0, count = 0;
@@ -46,7 +47,9 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
   if (!hasAB) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: 42, marginBottom: 12 }}>🧬</div>
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+          <Icon name="flask" size={42} strokeWidth={1.5} />
+        </div>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
           {en ? 'No active A/B test on this campaign' : 'Aucun test A/B actif sur cette campagne'}
         </div>
@@ -113,7 +116,8 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
         }}
       >
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
-          {en ? 'A/B test in progress' : '🧬 Test A/B en cours'}
+          <Icon name="flask" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {en ? 'A/B test in progress' : 'Test A/B en cours'}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
           <strong>{en ? 'Hypothesis tested:' : 'Hypothèse testée :'}</strong> {abConfig.hypothesis || (en ? 'Not specified' : 'Non renseignée')}
@@ -137,7 +141,7 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
             ))}
           </div>
         )}
-        {abConfig.memory_used && abConfig.memory_used !== 'null' && (
+        {typeof abConfig.memory_used === 'string' && abConfig.memory_used && abConfig.memory_used !== 'null' && (
           <div
             style={{
               fontSize: 11,
@@ -146,9 +150,12 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
               padding: '8px 12px',
               borderRadius: 8,
               border: '1px dashed rgba(108, 92, 231, 0.25)',
+              lineHeight: 1.5,
+              overflowWrap: 'break-word',
             }}
           >
-            ✨ Basé sur la mémoire apprise : {abConfig.memory_used}
+            <Icon name="sparkles" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {t('memory.abBasedOn', { memory: abConfig.memory_used })}
           </div>
         )}
       </div>
@@ -192,13 +199,14 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
             marginBottom: 20,
           }}
         >
-          {en ? 'No performance data yet. Stats will arrive after the first Lemlist sends.' : '⏳ Pas encore de données de performance. Les stats arriveront après les premiers envois Lemlist.'}
+          <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {en ? 'No performance data yet. Stats will arrive after the first Lemlist sends.' : 'Pas encore de données de performance. Les stats arriveront après les premiers envois Lemlist.'}
         </div>
       )}
 
       {/* Per-touchpoint diff */}
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-        📝 Variantes par touchpoint
+        <Icon name="pen" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Variantes par touchpoint
       </div>
       {testedTouchpoints.map(tp => (
         <TouchpointDiff key={tp._backendId || tp.id} tp={tp} />
@@ -223,7 +231,7 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
             disabled={promoting}
             style={{ fontSize: 12, padding: '10px 18px' }}
           >
-            ❌ Garder A
+            <Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Garder A
           </button>
           <button
             className="btn btn-success"
@@ -231,7 +239,12 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
             disabled={promoting}
             style={{ fontSize: 12, padding: '10px 18px' }}
           >
-            {promoting ? 'Promotion...' : `✅ Promouvoir B${hasStats && winner === 'B' ? ` (+${improvement}%)` : ''}`}
+            {promoting ? 'Promotion...' : (
+              <>
+                <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {`Promouvoir B${hasStats && winner === 'B' ? ` (+${improvement}%)` : ''}`}
+              </>
+            )}
           </button>
         </div>
       )}
@@ -248,7 +261,7 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
             color: 'var(--success)',
           }}
         >
-          ✅ Variante {result.winner} promue. {result.patternRecorded && 'Pattern ajouté à la mémoire collective.'}
+          <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />Variante {result.winner} promue. {result.patternRecorded && 'Pattern ajouté à la mémoire collective.'}
         </div>
       )}
 
@@ -263,7 +276,7 @@ export default function ABTestTab({ campaign: c, setCampaigns }) {
             fontSize: 12,
           }}
         >
-          ⚠️ {error}
+          <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{error}
         </div>
       )}
     </div>
@@ -296,7 +309,8 @@ function StatsCard({ label, open, reply, isWinner, strategy }) {
             fontWeight: 700,
           }}
         >
-          {en ? 'LEADING' : '🏆 EN TÊTE'}
+          <Icon name="award" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {en ? 'LEADING' : 'EN TÊTE'}
         </span>
       )}
       <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 8 }}>
@@ -335,7 +349,7 @@ function TouchpointDiff({ tp }) {
       }}
     >
       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-        {tp.id} — {tp.label || tp.type}
+        {tp.id}, {tp.label || tp.type}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>

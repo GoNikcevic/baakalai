@@ -4,14 +4,14 @@
  * Coordinates all strategic agents and exposes them to the API/chat.
  *
  * Agents:
- * 1. Competitor Watch — competitive landscape analysis
- * 2. Timing Agent — optimal send windows
- * 3. Deal Coach — next best action for stagnant deals
- * 4. Upsell Detector — cross-sell/upsell opportunities
- * 5. Win/Loss Analyst — patterns from won vs lost deals
- * 6. Copy Optimizer — email copy analysis + improvement
- * 7. ICP Refiner — ideal customer profile refinement
- * 8. Sequence Analyzer — drop-off, optimal length, channel mix
+ * 1. Competitor Watch · competitive landscape analysis
+ * 2. Timing Agent · optimal send windows
+ * 3. Deal Coach · next best action for stagnant deals
+ * 4. Upsell Detector · cross-sell/upsell opportunities
+ * 5. Win/Loss Analyst · patterns from won vs lost deals
+ * 6. Copy Optimizer · email copy analysis + improvement
+ * 7. ICP Refiner · ideal customer profile refinement
+ * 8. Sequence Analyzer · drop-off, optimal length, channel mix
  *
  * Can run:
  * - All agents at once (weekly, Sunday after Memory Agent)
@@ -91,7 +91,7 @@ async function runOne(userId, agentKey) {
  * Un résultat partiel (quelques suggestions + quelques erreurs) ou vide
  * (journée sans deal stagnant) reste un résultat : on le persiste pour que
  * le dashboard n'ait pas à relancer l'agent. Seul l'échec total (que des
- * erreurs, aucun contenu) est écarté — le fallback pourra retenter.
+ * erreurs, aucun contenu) est écarté · le fallback pourra retenter.
  */
 function isTotalFailure(result) {
   if (!result || typeof result !== 'object') return true;

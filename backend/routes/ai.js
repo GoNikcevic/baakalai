@@ -92,6 +92,12 @@ router.post('/generate-sequence', async (req, res, next) => {
       return res.status(400).json({ error: 'Au moins sector ou position requis' });
     }
 
+    // Mémoire cross-campagne dans le prompt de génération · le masterPrompt
+    // demandait au modèle de citer la mémoire sans jamais la lui donner.
+    try {
+      params.memory = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
+    } catch { params.memory = []; }
+
     const result = isDryRun(req)
       ? dryRun.generateSequence(params)
       : await claude.generateSequence(params);
@@ -196,13 +202,14 @@ router.post('/analyze', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/regenerate — bounded memory loading
+// POST /api/ai/regenerate · bounded memory loading
 router.post('/regenerate', async (req, res, next) => {
   try {
     const { campaignId, diagnostic, originalMessages, clientParams, regenerationInstructions } = req.body;
 
-    // Bounded: only load relevant patterns (limit 30)
-    const memory = await db.memoryPatterns.list({ limit: 30 });
+    // Bounded: only load relevant patterns (limit 30), scoped to the tenant · 
+    // sans userId, le DAO ne renverrait plus que le pool global partagé.
+    const memory = await db.memoryPatterns.list({ limit: 30, userId: req.user.id });
 
     const result = isDryRun(req)
       ? dryRun.regenerateSequence({ diagnostic, originalMessages, memory, clientParams })
@@ -244,7 +251,8 @@ router.post('/run-refinement', async (req, res, next) => {
 
     const [sequence, memory] = await Promise.all([
       db.touchpoints.listByCampaign(campaignId),
-      db.memoryPatterns.list({ limit: 30 }),
+      // Scopé au tenant · sans userId, le DAO ne renvoie que le pool global.
+      db.memoryPatterns.list({ limit: 30, userId: req.user.id }),
     ]);
 
     const originalMessages = sequence.map(tp => ({
@@ -330,21 +338,33 @@ router.post('/generate-variables', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/consolidate-memory — bounded loading with JOINs
+// POST /api/ai/consolidate-memory · bounded loading with JOINs
 router.post('/consolidate-memory', async (req, res, next) => {
   try {
     // Use JOIN to load diagnostics with campaign info in a single query
     const allDiagnostics = await db.diagnostics.listByUserCampaigns(req.user.id, 100);
-    const existingMemory = await db.memoryPatterns.list({ limit: 200 });
+    const existingMemory = await db.memoryPatterns.list({ limit: 200, userId: req.user.id });
 
     const result = isDryRun(req)
       ? dryRun.consolidateMemory(allDiagnostics, existingMemory)
       : await claude.consolidateMemory(allDiagnostics, existingMemory);
 
+    // Tenant des patterns : les diagnostics consolidés ici sont ceux de
+    // l'appelant · le pattern appartient à son équipe si elle existe, sinon à
+    // lui (jamais les deux, règle DAO migration 089). Avant, ces créations
+    // étaient sans tenant : invisibles pour lui, curables par personne.
+    let tenant = { userId: req.user.id };
+    try {
+      const team = await db.teams.getByUser(req.user.id);
+      if (team) tenant = { teamId: team.id };
+    } catch { /* solo user */ }
+
     const saved = [];
     if (result.parsed?.patterns) {
       for (const pattern of result.parsed.patterns) {
-        const created = await db.memoryPatterns.create({
+        // replaceOrCreate : dédup au sein du tenant (l'endpoint est rejouable).
+        const created = await db.memoryPatterns.replaceOrCreate({
+          ...tenant,
           pattern: pattern.pattern,
           category: pattern.categorie,
           data: pattern.donnees,
@@ -352,6 +372,7 @@ router.post('/consolidate-memory', async (req, res, next) => {
           sectors: pattern.secteurs || [],
           targets: pattern.cibles || [],
         });
+        if (!created) continue; // pattern écarté récemment par l'utilisateur
         saved.push(created.id);
         notionSync.syncMemoryPattern(created.id).catch(console.error);
       }
@@ -378,9 +399,36 @@ router.post('/consolidate-memory', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/memory/:id/toggle-apply — toggle pattern applied status
+/**
+ * Contrôle de propriété pour la curation mémoire (audit 02/09 · avant ce
+ * check, n'importe quel utilisateur authentifié pouvait modifier/écarter les
+ * patterns de tous les tenants). Autorisé si :
+ * - le pattern appartient à l'utilisateur (user_id), ou
+ * - le pattern appartient à une équipe dont il est membre, ou
+ * - le pattern est sans tenant (legacy/global) ET l'utilisateur est admin
+ *   (même règle que le middleware requireAdmin : req.user.role === 'admin').
+ */
+async function canCuratePattern(pattern, user) {
+  if (pattern.user_id && pattern.user_id === user.id) return true;
+  if (pattern.team_id) {
+    const member = await db.query(
+      'SELECT 1 FROM team_members WHERE user_id = $1 AND team_id = $2 LIMIT 1',
+      [user.id, pattern.team_id]
+    );
+    if (member.rows.length > 0) return true;
+  }
+  if (!pattern.user_id && !pattern.team_id) return user.role === 'admin';
+  return false;
+}
+
+// POST /api/ai/memory/:id/toggle-apply · toggle pattern applied status
 router.post('/memory/:id/toggle-apply', async (req, res, next) => {
   try {
+    const pattern = await db.memoryPatterns.get(req.params.id);
+    if (!pattern) return res.status(404).json({ error: 'Pattern not found' });
+    if (!(await canCuratePattern(pattern, req.user))) {
+      return res.status(403).json({ error: 'This pattern belongs to another workspace (global patterns require admin role)' });
+    }
     const result = await db.query(
       `UPDATE memory_patterns SET applied = NOT COALESCE(applied, false) WHERE id = $1 RETURNING id, applied`,
       [req.params.id]
@@ -390,7 +438,7 @@ router.post('/memory/:id/toggle-apply', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/ai/memory/:id/toggle-share — toggle pattern shared (cross-team) status
+// POST /api/ai/memory/:id/toggle-share · toggle pattern shared (cross-team) status
 // Admin-only: publishing a pattern to the global pool exposes it to every tenant,
 // so this is a curation action on shared state, not a per-user preference.
 router.post('/memory/:id/toggle-share', requireAdmin, async (req, res, next) => {
@@ -404,7 +452,7 @@ router.post('/memory/:id/toggle-share', requireAdmin, async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-// GET /api/ai/memory/:id/story — pattern story: origin, usage, results
+// GET /api/ai/memory/:id/story · pattern story: origin, usage, results
 router.get('/memory/:id/story', async (req, res, next) => {
   try {
     const pattern = await db.memoryPatterns.get(req.params.id);
@@ -471,7 +519,7 @@ router.get('/memory/:id/story', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory/recommendations — proactive pattern recommendations for a context
+// GET /api/ai/memory/recommendations · proactive pattern recommendations for a context
 router.get('/memory/recommendations', async (req, res, next) => {
   try {
     const { sector, triggerType } = req.query;
@@ -502,10 +550,15 @@ router.get('/memory/recommendations', async (req, res, next) => {
   }
 });
 
-// DELETE /api/ai/memory/:id — soft-delete (dismiss) a memory pattern
+// DELETE /api/ai/memory/:id · soft-delete (dismiss) a memory pattern
 // Pattern won't be recreated by agents for 7 days
 router.delete('/memory/:id', async (req, res, next) => {
   try {
+    const pattern = await db.memoryPatterns.get(req.params.id);
+    if (!pattern) return res.status(404).json({ error: 'Pattern not found' });
+    if (!(await canCuratePattern(pattern, req.user))) {
+      return res.status(403).json({ error: 'This pattern belongs to another workspace (global patterns require admin role)' });
+    }
     await db.query(
       `UPDATE memory_patterns SET dismissed_at = now() WHERE id = $1`,
       [req.params.id]
@@ -516,20 +569,18 @@ router.delete('/memory/:id', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory — paginated
+// GET /api/ai/memory · paginated
 router.get('/memory', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
-    // Resolve team for pattern scoping
-    let teamId = null;
-    try {
-      const team = await db.teams.getByUser(req.user.id);
-      if (team) teamId = team.id;
-    } catch { /* solo user */ }
+    // Tenant via userId : le filtre DAO couvre les patterns de l'utilisateur,
+    // ceux de ses équipes (sous-requête team_members) et le pool global · plus
+    // besoin de résoudre teamId ici. count() reçoit le MÊME filtre pour que le
+    // total colle au tableau affiché (avant, il comptait tous les tenants).
     const [patterns, count] = await Promise.all([
-      db.memoryPatterns.list({ limit, offset, teamId }),
-      db.memoryPatterns.count(),
+      db.memoryPatterns.list({ limit, offset, userId: req.user.id }),
+      db.memoryPatterns.count({ userId: req.user.id }),
     ]);
     res.json({ patterns, count, limit, offset });
   } catch (err) {
@@ -537,7 +588,115 @@ router.get('/memory', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory/effectiveness — pattern ROI based on nurture email outcomes
+// POST /api/ai/memory/playbook · playbook commercial généré À LA DEMANDE depuis
+// la mémoire du tenant (jamais en cron : décision Goran 03/09, coût tokens).
+// Sources : patterns du tenant (pas le pool mutualisé · c'est SON playbook),
+// agrégats CRM (mêmes requêtes que le chat analytique), profil entreprise.
+router.post('/memory/playbook', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const lang = req.body?.lang === 'en' ? 'en' : 'fr';
+
+    const patterns = await db.query(
+      `SELECT pattern, category, confidence, COALESCE(confirmations, 0) AS confirmations, source
+       FROM memory_patterns
+       WHERE dismissed_at IS NULL
+         AND (user_id = $1 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $1))
+       ORDER BY (confidence = 'Haute') DESC, COALESCE(confirmations, 0) DESC,
+                COALESCE(last_confirmed_at, created_at) DESC
+       LIMIT 40`,
+      [userId]
+    );
+
+    if (patterns.rows.length === 0) {
+      return res.status(422).json({ error: 'no_patterns' });
+    }
+
+    // Maturité honnête : des patterns confirmés par des résultats réels
+    // (réponses, deals ressuscités) valent plus que des patterns d'import.
+    const confirmedCount = patterns.rows.filter(p => p.confirmations > 0).length;
+    const maturity = (confirmedCount >= 5 && patterns.rows.length >= 10) ? 'ok' : 'young';
+
+    const { buildAnalyticsContext } = require('./analytics');
+    const context = await buildAnalyticsContext(userId);
+
+    const [profile, userRow] = await Promise.all([
+      db.profiles.get(userId).catch(() => null),
+      db.query('SELECT name, company FROM users WHERE id = $1', [userId]),
+    ]);
+    const company = profile?.company || userRow.rows[0]?.company || '';
+
+    const patternsText = patterns.rows.map(p =>
+      `- [${p.category} | confiance ${p.confidence}${p.confirmations > 0 ? ` | ${p.confirmations} confirmation(s) réelle(s)` : ''}] ${p.pattern}`
+    ).join('\n');
+
+    const isEN = lang === 'en';
+    const systemPrompt = `Tu rédiges le playbook commercial d'une PME B2B à partir de sa mémoire baakalai (patterns appris) et de ses chiffres CRM réels. Le lecteur est un commercial ou un dirigeant qui veut savoir QUOI faire.
+
+Règles strictes :
+- Tout doit venir des patterns et des chiffres fournis. Aucun conseil générique de vente qui pourrait s'écrire sans ces données. Si une section manque de matière, dis-le en une phrase plutôt que de remplir.
+- Les patterns « confiance Haute » ou avec confirmations réelles portent le document ; les « Faible » vont uniquement en section « À tester ».
+- Format : markdown propre (titres ##, listes -), pas de tableau, pas d'emoji.
+- Concret et directif (« Relancez à J+X », « Priorisez le secteur Y ») avec le chiffre qui justifie à chaque fois.
+${maturity === 'young' ? `- IMPORTANT : la mémoire de ce compte est jeune (${confirmedCount} pattern(s) confirmé(s) par des résultats réels sur ${patterns.rows.length}). L'avertissement en tête du document doit le dire clairement : ce playbook s'affinera avec l'usage.` : ''}
+- Langue : ${isEN ? 'anglais' : 'français'}.
+
+Structure imposée :
+# ${isEN ? 'Sales playbook' : 'Playbook commercial'}${company ? `, ${company}` : ''}
+${maturity === 'young' ? `> ${isEN ? 'Note on maturity (young memory)' : 'Avertissement maturité (mémoire jeune)'}` : ''}
+## ${isEN ? '1. What works for you' : '1. Ce qui marche chez vous'}
+## ${isEN ? '2. Your reference numbers' : '2. Vos chiffres de référence'}
+## ${isEN ? '3. How to follow up' : '3. Comment relancer'}
+## ${isEN ? '4. Warning signals' : '4. Signaux d’alerte'}
+## ${isEN ? '5. To test next' : '5. À tester ensuite'}
+
+Retourne UNIQUEMENT le markdown du playbook, rien d'autre.`;
+
+    const userContent = `PATTERNS DU COMPTE (${patterns.rows.length}) :
+${patternsText}
+
+CHIFFRES CRM RÉELS :
+${JSON.stringify(context)}`;
+
+    const result = await claude.callClaude(systemPrompt, userContent, 3500, 'playbook_generation');
+    const markdown = (result.raw || '').trim();
+    if (!markdown) return res.status(502).json({ error: 'generation_failed' });
+
+    res.json({
+      markdown,
+      generatedAt: new Date().toISOString(),
+      patternsUsed: patterns.rows.length,
+      confirmedPatterns: confirmedCount,
+      maturity,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ai/memory/labels · résout des pattern_ids en libellés pour le bandeau
+// « patterns appliqués » des brouillons. Scopé : ne renvoie que les patterns
+// visibles par l'appelant (les siens, ceux de ses équipes, ou le pool partagé).
+router.post('/memory/labels', async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.json({ patterns: [] });
+    const result = await db.query(
+      `SELECT id, pattern, category, confidence, applied FROM memory_patterns
+       WHERE id = ANY($1) AND dismissed_at IS NULL
+         AND (user_id = $2
+              OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $2)
+              OR shared = true)
+       LIMIT 20`,
+      [ids.slice(0, 20), req.user.id]
+    );
+    res.json({ patterns: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/ai/memory/effectiveness · pattern ROI based on nurture email outcomes
 router.get('/memory/effectiveness', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -610,7 +769,7 @@ router.post('/deploy-to-lemlist', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/ab-select-winner — manually select A/B test winner
+// POST /api/ai/ab-select-winner · manually select A/B test winner
 router.post('/ab-select-winner', async (req, res, next) => {
   try {
     const { campaignId, winner } = req.body;
@@ -632,7 +791,7 @@ router.post('/ab-select-winner', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/ab-status/:campaignId — get current A/B test status
+// GET /api/ai/ab-status/:campaignId · get current A/B test status
 router.get('/ab-status/:campaignId', async (req, res, next) => {
   try {
     const campaignId = req.params.campaignId;
@@ -689,7 +848,7 @@ router.post('/deploy-to-outreach', async (req, res, next) => {
 router.post('/score-leads', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { scoreOpportunities } = require('../lib/contact-scoring');
+    const { scoreOpportunities, buildSectorContext } = require('../lib/contact-scoring');
 
     const [opps, profile] = await Promise.all([
       db.opportunities.listByUser(userId, 100, 0),
@@ -707,7 +866,9 @@ router.post('/score-leads', async (req, res, next) => {
       try { campaignMap[cid] = await db.campaigns.get(cid); } catch {}
     }
 
-    const scored = scoreOpportunities(opps, profile, campaignMap);
+    // Match sectoriel ICP normalisé (cache DB · coûteux uniquement au 1er passage)
+    const sectorCtx = await buildSectorContext(profile, opps).catch(() => null);
+    const scored = scoreOpportunities(opps, profile, campaignMap, sectorCtx);
 
     // Persist scores
     for (const opp of scored) {
@@ -721,7 +882,7 @@ router.post('/score-leads', async (req, res, next) => {
 });
 
 // POST /api/ai/export-scores-crm
-// { dryRun: true } calcule tout et n'écrit rien — à utiliser pour vérifier ce
+// { dryRun: true } calcule tout et n'écrit rien · à utiliser pour vérifier ce
 // qui partirait avant d'écrire dans le CRM d'un client. Une écriture sortante
 // ne s'annule pas d'un clic.
 router.post('/export-scores-crm', async (req, res, next) => {
@@ -816,7 +977,7 @@ router.post('/rollback/:versionId', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/prospect-sources — list configured outreach tools with search capability
+// GET /api/ai/prospect-sources · list configured outreach tools with search capability
 router.get('/prospect-sources', async (req, res, next) => {
   try {
     const { listUserSources } = require('../lib/prospect-sources');
@@ -827,7 +988,39 @@ router.get('/prospect-sources', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/ab-categories — return the closed set of A/B test categories
+// GET /api/ai/reveal-options · which email-reveal paths this user can use.
+// 'lemlist' = ses propres crédits ; 'baakal' = clé centrale DropContact,
+// option payante opt-in (le prix affiché ici est celui que la route
+// reveal-emails exigera de confirmer avant toute consommation).
+router.get('/reveal-options', async (req, res, next) => {
+  try {
+    const { config, getValidatedIntegrations } = require('../config');
+    const connected = await getValidatedIntegrations(req.user.id, ['lemlist']);
+
+    let baakal = { available: false };
+    if (config.reveal.dropcontactKey) {
+      const used = await db.query(
+        `SELECT COALESCE(SUM(submitted), 0) AS submitted, COALESCE(SUM(amount_cents), 0) AS amount_cents
+         FROM reveal_usage
+         WHERE user_id = $1 AND created_at >= date_trunc('month', now())`,
+        [req.user.id]
+      );
+      baakal = {
+        available: true,
+        unitPriceCents: config.reveal.unitPriceCents,
+        monthlyCap: config.reveal.monthlyCap,
+        usedThisMonth: parseInt(used.rows[0].submitted, 10),
+        amountThisMonthCents: parseInt(used.rows[0].amount_cents, 10),
+      };
+    }
+
+    res.json({ lemlist: { available: connected.includes('lemlist') }, baakal });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/ai/ab-categories · return the closed set of A/B test categories
 router.get('/ab-categories', async (req, res, next) => {
   try {
     const { AB_CATEGORIES } = require('../lib/ab-memory');
@@ -837,20 +1030,20 @@ router.get('/ab-categories', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/ab-recommendations — get recommendations for a segment
+// POST /api/ai/ab-recommendations · get recommendations for a segment
 // Body: { sectors: [], targets: [], size: '' }
 router.post('/ab-recommendations', async (req, res, next) => {
   try {
     const { getAllRecommendations } = require('../lib/ab-memory');
     const segment = req.body || {};
-    const recommendations = await getAllRecommendations(segment);
+    const recommendations = await getAllRecommendations(segment, req.user.id);
     res.json({ recommendations });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/ai/ab-record-winner — record the winner of an A/B test
+// POST /api/ai/ab-record-winner · record the winner of an A/B test
 // Body: { campaignId, winner: 'A'|'B' }
 router.post('/ab-record-winner', async (req, res, next) => {
   try {
@@ -897,6 +1090,7 @@ router.post('/ab-record-winner', async (req, res, next) => {
         if (!aStrat || !bStrat) continue;
 
         await recordABPattern({
+          userId: req.user.id,
           segment: {
             sectors: campaign.sector ? [campaign.sector] : [],
             targets: campaign.position ? [campaign.position] : [],
@@ -922,7 +1116,7 @@ router.post('/ab-record-winner', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/lemlist-credits — return user's Lemlist credit balance
+// GET /api/ai/lemlist-credits · return user's Lemlist credit balance
 router.get('/lemlist-credits', async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
@@ -941,7 +1135,7 @@ router.get('/lemlist-credits', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/lemlist-senders — return available senders (email + LinkedIn accounts)
+// GET /api/ai/lemlist-senders · return available senders (email + LinkedIn accounts)
 router.get('/lemlist-senders', async (req, res, next) => {
   try {
     const { getUserKey } = require('../config');
@@ -951,13 +1145,13 @@ router.get('/lemlist-senders', async (req, res, next) => {
 
     const raw = await getTeamSenders(apiKey);
 
-    // Normalize the response — Lemlist returns team members with their sender info
+    // Normalize the response · Lemlist returns team members with their sender info
     const senders = (Array.isArray(raw) ? raw : [raw]).map(member => ({
       id: member._id || member.id,
       name: member.name || member.firstName || '',
       email: member.email || '',
       picture: member.picture || null,
-      // Connected channels vary by response shape — extract what's available
+      // Connected channels vary by response shape · extract what's available
       linkedinConnected: !!(member.linkedin || member.linkedinConnected || member.channels?.linkedin),
       calendarConnected: !!(member.calendar || member.calendarConnected),
     })).filter(s => s.id && s.email);
@@ -980,14 +1174,112 @@ function pruneOldRevealJobs() {
   }
 }
 
+// Reveal via la clé centrale DropContact de baakalai · option payante, opt-in.
+// Jamais de consommation sans confirmCharge: true dans le body : c'est le
+// verrou serveur derrière la modal d'avertissement du frontend.
+async function startCentralReveal(req, res, leads, { confirmCharge, campaignId }) {
+  const { config } = require('../config');
+  const { unitPriceCents, monthlyCap, dropcontactKey } = config.reveal;
+
+  if (!dropcontactKey) {
+    return res.status(400).json({
+      error: "La recherche d'emails via baakalai n'est pas disponible sur cet environnement.",
+      code: 'NOT_AVAILABLE',
+    });
+  }
+  if (confirmCharge !== true) {
+    return res.status(400).json({
+      error: 'Confirmation du coût requise avant de lancer la recherche.',
+      code: 'CONFIRM_REQUIRED',
+      unitPriceCents,
+      maxAmountCents: leads.length * unitPriceCents,
+    });
+  }
+  if (leads.length > 100) {
+    return res.status(400).json({ error: 'Max 100 leads par lot' });
+  }
+
+  const used = await db.query(
+    `SELECT COALESCE(SUM(submitted), 0) AS submitted
+     FROM reveal_usage
+     WHERE user_id = $1 AND created_at >= date_trunc('month', now())`,
+    [req.user.id]
+  );
+  const submittedThisMonth = parseInt(used.rows[0].submitted, 10);
+  if (submittedThisMonth + leads.length > monthlyCap) {
+    return res.status(400).json({
+      error: `Plafond mensuel de recherche atteint (${monthlyCap} contacts/mois).`,
+      code: 'MONTHLY_CAP',
+      usedThisMonth: submittedThisMonth,
+      monthlyCap,
+    });
+  }
+
+  const { submitBatch, buildEnrichInput } = require('../api/dropcontact');
+  const preErrors = {};
+  const inputs = [];
+  const inputLeadIds = [];
+  for (const l of leads) {
+    const input = buildEnrichInput(l);
+    if (input) {
+      inputs.push(input);
+      inputLeadIds.push(l.id);
+    } else {
+      preErrors[l.id] = {
+        status: 'error',
+        email: null,
+        error: 'MISSING_INPUTS: prénom + nom + entreprise requis pour la recherche',
+      };
+    }
+  }
+  if (inputs.length === 0) {
+    return res.status(400).json({ error: 'Aucun lead exploitable : prénom + nom + entreprise requis.' });
+  }
+
+  let requestId;
+  try {
+    requestId = await submitBatch(dropcontactKey, inputs);
+  } catch (err) {
+    logger.error('reveal', `DropContact submit failed: ${err.message}`);
+    return res.status(502).json({ error: `Recherche indisponible : ${err.message}` });
+  }
+
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  _revealJobs.set(jobId, {
+    userId: req.user.id,
+    provider: 'baakal',
+    requestId,
+    leads,
+    inputLeadIds,
+    campaignId: campaignId || null,
+    unitPriceCents,
+    usageRecorded: false,
+    done: false,
+    createdAt: Date.now(),
+    results: preErrors,
+  });
+
+  res.json({
+    jobId,
+    total: leads.length,
+    dispatched: inputs.length,
+    errors: Object.keys(preErrors).length,
+    unitPriceCents,
+  });
+}
+
 // POST /api/ai/reveal-emails
-// Body: { source, leads: [{id, firstName, lastName, company, linkedinUrl}] }
+// Body: { source, leads: [{id, firstName, lastName, company, linkedinUrl}],
+//         confirmCharge?, campaignId? } · confirmCharge requis pour source 'baakal'
 router.post('/reveal-emails', async (req, res, next) => {
   try {
     pruneOldRevealJobs();
-    const { source, leads } = req.body;
+    const { source, leads, confirmCharge, campaignId } = req.body;
     if (!Array.isArray(leads) || leads.length === 0) {
       return res.status(400).json({ error: 'leads array required' });
+    }
+    if (source === 'baakal') {
+      return await startCentralReveal(req, res, leads, { confirmCharge, campaignId });
     }
     if (source && source !== 'lemlist') {
       return res.status(400).json({ error: `Reveal not yet supported for source: ${source}` });
@@ -1081,12 +1373,90 @@ router.post('/reveal-emails', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/reveal-emails/:jobId — poll enrichment results
+// Sonde un job DropContact central. À la complétion : résultats figés sur le
+// job, puis enregistrement de l'usage UNE seule fois · facturé uniquement sur
+// les emails trouvés ET vérifiés (les not_found et les risky sont gratuits).
+async function pollCentralReveal(req, res, job) {
+  const { config } = require('../config');
+  const { fetchBatch, parseBatchEntry } = require('../api/dropcontact');
+
+  if (!job.done) {
+    try {
+      const batch = await fetchBatch(config.reveal.dropcontactKey, job.requestId);
+      if (!batch.pending) {
+        batch.entries.forEach((entry, i) => {
+          const leadId = job.inputLeadIds[i];
+          if (!leadId) return;
+          const parsed = parseBatchEntry(entry);
+          if (parsed.email && parsed.verified) {
+            job.results[leadId] = { status: 'verified', email: parsed.email };
+          } else if (parsed.email) {
+            job.results[leadId] = { status: 'risky', email: parsed.email };
+          } else {
+            job.results[leadId] = { status: 'not_found', email: null };
+          }
+        });
+        for (const id of job.inputLeadIds) {
+          if (!job.results[id]) job.results[id] = { status: 'error', email: null };
+        }
+        job.done = true;
+      }
+    } catch (err) {
+      logger.error('reveal', `DropContact poll failed: ${err.message}`);
+      for (const id of job.inputLeadIds) {
+        if (!job.results[id]) job.results[id] = { status: 'error', email: null, error: err.message };
+      }
+      job.done = true;
+    }
+
+    if (job.done && !job.usageRecorded) {
+      job.usageRecorded = true;
+      const found = Object.values(job.results).filter(r => r.status === 'verified').length;
+      job.billing = {
+        found,
+        unitPriceCents: job.unitPriceCents,
+        amountCents: found * job.unitPriceCents,
+      };
+      // Enregistré même à 0 trouvé : le plafond mensuel compte les soumissions
+      // (c'est la dépense DropContact réelle), pas seulement les succès.
+      try {
+        await db.query(
+          `INSERT INTO reveal_usage (user_id, campaign_id, provider, submitted, found, unit_price_cents, amount_cents)
+           VALUES ($1, $2, 'dropcontact', $3, $4, $5, $6)`,
+          [job.userId, job.campaignId, job.inputLeadIds.length, found, job.unitPriceCents, found * job.unitPriceCents]
+        );
+      } catch (err) {
+        logger.error('reveal', `Failed to record reveal usage: ${err.message}`);
+      }
+    }
+  }
+
+  const total = job.leads.length;
+  const done = job.done ? total : Object.keys(job.results).length;
+  res.json({
+    jobId: req.params.jobId,
+    status: job.done ? 'done' : 'pending',
+    done,
+    total,
+    billing: job.billing || null,
+    results: job.leads.map(l => ({
+      id: l.id,
+      name: l.name,
+      ...(job.results[l.id] || { status: 'pending', email: null }),
+    })),
+  });
+}
+
+// GET /api/ai/reveal-emails/:jobId · poll enrichment results
 router.get('/reveal-emails/:jobId', async (req, res, next) => {
   try {
     const job = _revealJobs.get(req.params.jobId);
     if (!job) return res.status(404).json({ error: 'Job not found or expired' });
     if (job.userId !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+
+    if (job.provider === 'baakal') {
+      return await pollCentralReveal(req, res, job);
+    }
 
     const { getUserKey } = require('../config');
     const { getEnrichmentResult } = require('../api/lemlist');
@@ -1137,7 +1507,7 @@ router.get('/reveal-emails/:jobId', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/search-prospects — search contacts via chosen provider (default: apollo)
+// POST /api/ai/search-prospects · search contacts via chosen provider (default: apollo)
 router.post('/search-prospects', async (req, res, next) => {
   try {
     const { searchProspects, listSearchableSources } = require('../lib/prospect-sources');
@@ -1155,7 +1525,7 @@ router.post('/search-prospects', async (req, res, next) => {
       }
       if (searchable.length > 1) {
         return res.status(400).json({
-          error: 'Plusieurs outils disponibles — précise lequel utiliser.',
+          error: 'Plusieurs outils disponibles, précise lequel utiliser.',
           code: 'MULTIPLE_SOURCES',
           sources: searchable.map(s => ({ provider: s.provider, name: s.name })),
         });
@@ -1177,7 +1547,7 @@ router.post('/search-prospects', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/web-search-prospects — deep web search for contacts at specific companies
+// POST /api/ai/web-search-prospects · deep web search for contacts at specific companies
 router.post('/web-search-prospects', async (req, res, next) => {
   try {
     const { companies, titles, location, limit } = req.body;
@@ -1207,7 +1577,7 @@ router.post('/web-search-prospects', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/enrich-contact — enrich a single contact by email
+// POST /api/ai/enrich-contact · enrich a single contact by email
 router.post('/enrich-contact', async (req, res, next) => {
   try {
     const { email } = req.body;
@@ -1220,7 +1590,7 @@ router.post('/enrich-contact', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/enrich-campaign — enrich all prospects with personalized icebreakers
+// POST /api/ai/enrich-campaign · enrich all prospects with personalized icebreakers
 router.post('/enrich-campaign', async (req, res, next) => {
   try {
     const { campaignId } = req.body;
@@ -1244,7 +1614,7 @@ router.post('/enrich-campaign', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/weekly-report/preview — generate and return the report HTML without sending
+// GET /api/ai/weekly-report/preview · generate and return the report HTML without sending
 router.get('/weekly-report/preview', async (req, res, next) => {
   try {
     const { buildUserReport } = require('../orchestrator/jobs/weekly-report');
@@ -1257,7 +1627,7 @@ router.get('/weekly-report/preview', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/weekly-report/send — manually trigger for the current user
+// POST /api/ai/weekly-report/send · manually trigger for the current user
 router.post('/weekly-report/send', async (req, res, next) => {
   try {
     const { buildUserReport } = require('../orchestrator/jobs/weekly-report');
@@ -1272,7 +1642,7 @@ router.post('/weekly-report/send', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/memory-search — semantic vector search in memory patterns
+// GET /api/ai/memory-search · semantic vector search in memory patterns
 router.get('/memory-search', async (req, res, next) => {
   try {
     const q = req.query.q;
@@ -1286,7 +1656,7 @@ router.get('/memory-search', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/deliverability-check — run deliverability check for the current user
+// GET /api/ai/deliverability-check · run deliverability check for the current user
 router.get('/deliverability-check', async (req, res, next) => {
   try {
     const { checkDeliverability } = require('../lib/deliverability-agent');
@@ -1297,7 +1667,7 @@ router.get('/deliverability-check', async (req, res, next) => {
   }
 });
 
-// GET /api/ai/icp-analysis — returns the user's ICP analysis (cached or fresh)
+// GET /api/ai/icp-analysis · returns the user's ICP analysis (cached or fresh)
 router.get('/icp-analysis', async (req, res, next) => {
   try {
     const result = await icpAgent.getICPAnalysis(req.user.id);
@@ -1307,7 +1677,7 @@ router.get('/icp-analysis', async (req, res, next) => {
   }
 });
 
-// POST /api/ai/icp-analysis/refresh — force recompute
+// POST /api/ai/icp-analysis/refresh · force recompute
 router.post('/icp-analysis/refresh', async (req, res, next) => {
   try {
     const result = await icpAgent.analyzeICP(req.user.id);

@@ -16,7 +16,7 @@ async function pdFetch(apiToken, endpoint, options = {}) {
   // Deux modes d'auth (lib/crm-token.js) :
   // - string : clé API classique → api.pipedrive.com + ?api_token=
   // - objet { oauth, accessToken, apiDomain } : OAuth → Bearer sur le domaine
-  //   de la société ({api_domain}/api/v1) — api.pipedrive.com refuse les
+  //   de la société ({api_domain}/api/v1) · api.pipedrive.com refuse les
   //   tokens OAuth.
   const isOauth = typeof apiToken === 'object';
   return withRetry(async () => {
@@ -85,6 +85,17 @@ async function searchPersonByEmail(apiToken, email) {
   return items[0]?.item || items[0] || null;
 }
 
+// 404 = supprimé côté Pipedrive ; toute autre erreur remonte · un token
+// invalide ne doit pas passer pour « la personne n'existe plus ».
+async function getPerson(apiToken, personId) {
+  try {
+    return await pdFetch(apiToken, `/persons/${personId}`);
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
 async function updatePerson(apiToken, personId, data) {
   const body = {};
   if (data.name) body.name = data.name;
@@ -107,6 +118,20 @@ async function deletePerson(apiToken, personId) {
  * Returns { person, action: 'created' | 'updated' }
  */
 async function upsertPerson(apiToken, data) {
+  // L'ID connu (data.personId, posé par un push ou un import précédent) prime
+  // sur l'email : sans lui, une personne sans email ou dont l'email a divergé
+  // était recréée à chaque re-push. active_flag=false = supprimée dans
+  // Pipedrive (soft delete) : on repasse alors par le matching email/création.
+  if (data.personId) {
+    const id = parseInt(data.personId, 10);
+    if (Number.isInteger(id)) {
+      const existing = await getPerson(apiToken, id);
+      if (existing && existing.active_flag !== false) {
+        const updated = await updatePerson(apiToken, id, data);
+        return { person: updated, action: 'updated' };
+      }
+    }
+  }
   if (data.email) {
     const existing = await searchPersonByEmail(apiToken, data.email);
     if (existing) {
@@ -129,7 +154,7 @@ async function listAllPersons(apiToken, { limit = 500 } = {}) {
     const data = await pdFetch(apiToken, `/persons?start=${start}&limit=${limit}`);
     if (!data || !Array.isArray(data)) break;
     all.push(...data);
-    // Check for more pages — pdFetch returns json.data, but we need additional_data
+    // Check for more pages · pdFetch returns json.data, but we need additional_data
     // which is at json level. Workaround: if we got exactly `limit` results, there might be more.
     if (data.length < limit) break;
     start += limit;
@@ -202,6 +227,19 @@ async function createDeal(apiToken, data) {
   });
 }
 
+// status 'deleted' = corbeille Pipedrive : traité comme absent pour qu'un
+// re-push recrée un deal vivant plutôt que de pointer un fantôme.
+async function getDeal(apiToken, dealId) {
+  try {
+    const deal = await pdFetch(apiToken, `/deals/${dealId}`);
+    if (!deal || deal.status === 'deleted') return null;
+    return deal;
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
 async function updateDeal(apiToken, dealId, data) {
   return pdFetch(apiToken, `/deals/${dealId}`, {
     method: 'PUT',
@@ -212,7 +250,7 @@ async function updateDeal(apiToken, dealId, data) {
   });
 }
 
-// Diagnostic public : liste paginée avec les champs d'activité — getDeals()
+// Diagnostic public : liste paginée avec les champs d'activité · getDeals()
 // ne remonte ni last_activity_date ni org_name et ne pagine pas.
 async function listDealsForDiagnostic(apiToken, { maxDeals = 2000 } = {}) {
   const deals = [];
@@ -249,6 +287,12 @@ async function getDeals(apiToken, limit = 100) {
     personId: d.person_id?.value || d.person_id,
     createdAt: d.add_time,
     updatedAt: d.update_time || d.add_time,
+    nextActivityDate: d.next_activity_date || null,
+    // close_time is Pipedrive's generic "when this deal closed" timestamp (set for both won
+    // and lost); won_time/lost_time are narrower fallbacks if it's ever absent.
+    closeDate: d.close_time || d.won_time || d.lost_time || null,
+    // Champ natif Pipedrive, seul provider à l'exposer de façon standard.
+    lostReason: d.lost_reason || null,
   }));
 }
 
@@ -294,6 +338,7 @@ module.exports = {
   createPerson,
   searchPersons,
   searchPersonByEmail,
+  getPerson,
   updatePerson,
   deletePerson,
   upsertPerson,
@@ -303,6 +348,7 @@ module.exports = {
   getPersonFields,
   getActivities,
   createDeal,
+  getDeal,
   updateDeal,
   getDeals,
   listDealsForDiagnostic,

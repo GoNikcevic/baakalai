@@ -1,10 +1,10 @@
 /**
- * Extension API — Lightweight endpoints for the Chrome extension.
+ * Extension API · Lightweight endpoints for the Chrome extension.
  *
- * GET  /api/ext/contact?linkedin=...  — Get contact by LinkedIn URL (with notes, campaigns, patterns)
- * POST /api/ext/contact/:id/note      — Add a note to a contact
- * POST /api/ext/contact/enrich        — Create/update contact with enriched profile data
- * POST /api/ext/quick-email           — Send quick email to a contact
+ * GET  /api/ext/contact?linkedin=... · Get contact by LinkedIn URL (with notes, campaigns, patterns)
+ * POST /api/ext/contact/:id/note · Add a note to a contact
+ * POST /api/ext/contact/enrich · Create/update contact with enriched profile data
+ * POST /api/ext/quick-email · Send quick email to a contact
  */
 
 const { Router } = require('express');
@@ -13,7 +13,7 @@ const logger = require('../lib/logger');
 
 const router = Router();
 
-// GET /api/ext/contact?linkedin=<url> — Full contact card for extension overlay
+// GET /api/ext/contact?linkedin=<url> · Full contact card for extension overlay
 router.get('/contact', async (req, res, next) => {
   try {
     const { linkedin } = req.query;
@@ -88,7 +88,7 @@ router.get('/contact', async (req, res, next) => {
   }
 });
 
-// POST /api/ext/contact/:id/note — Add a CRM note
+// POST /api/ext/contact/:id/note · Add a CRM note
 router.post('/contact/:id/note', async (req, res, next) => {
   try {
     const { text } = req.body;
@@ -119,7 +119,7 @@ router.post('/contact/:id/note', async (req, res, next) => {
   }
 });
 
-// POST /api/ext/contact/enrich — Create or update contact with enriched LinkedIn data
+// POST /api/ext/contact/enrich · Create or update contact with enriched LinkedIn data
 router.post('/contact/enrich', async (req, res, next) => {
   try {
     const { name, title, company, companySize, email, phone, sector, linkedinUrl, location } = req.body;
@@ -177,7 +177,7 @@ router.post('/contact/enrich', async (req, res, next) => {
   }
 });
 
-// POST /api/ext/quick-email — Generate + send a quick email to a contact
+// POST /api/ext/quick-email · Generate + send a quick email to a contact
 router.post('/quick-email', async (req, res, next) => {
   try {
     const { contactId, subject, body } = req.body;
@@ -193,7 +193,7 @@ router.post('/quick-email', async (req, res, next) => {
       opportunityId: opp.id,
       to: opp.email,
       toName: opp.name,
-      subject: subject || `Suivi — ${opp.company || opp.name}`,
+      subject: subject || `Suivi, ${opp.company || opp.name}`,
       body: body || `Bonjour ${(opp.name || '').split(' ')[0]},\n\nJe me permets de revenir vers vous.\n\nBien cordialement`,
     });
 

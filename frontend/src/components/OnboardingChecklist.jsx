@@ -1,7 +1,9 @@
 /* ===============================================================================
-   BAKAL — Onboarding Checklist Component
+   BAKAL · Onboarding Checklist Component
    Shows a progress card on the dashboard for new users (beta testers).
-   6-step guided tour to first campaign launch in <30 min.
+   4-step guided tour covering CRM connection + import + email · the two
+   mandatory prerequisites, nothing about campaigns (that's a downstream step,
+   not a first-run blocker).
    Complements the OnboardingWizard (wizard = initial setup, checklist = ongoing guide).
    =============================================================================== */
 
@@ -11,22 +13,21 @@ import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
 
-// Ordre CRM-first : l'import des deals suit immédiatement la connexion CRM —
+// Ordre CRM-first : l'import des deals suit immédiatement la connexion CRM · 
 // c'est lui qui produit le « wow » (deals dormants). L'email n'est nécessaire
 // que pour agir ensuite.
 const STEP_CONFIG = [
   { key: 'accountCreated', route: null },
   { key: 'crmConnected', route: '/settings' },
-  { key: 'contactsImported', route: '/clients' },
+  // Les contacts fraîchement importés sont des deals en cours, pas des clients gagnés.
+  { key: 'contactsImported', route: '/deals' },
   { key: 'emailConnected', route: '/settings' },
-  { key: 'firstCampaign', route: '/chat' },
-  { key: 'firstLaunch', route: '/campaigns' },
 ];
 
 export default function OnboardingChecklist() {
   const t = useT();
   const navigate = useNavigate();
-  const { campaigns, opportunities } = useApp();
+  const { opportunities } = useApp();
 
   const [keys, setKeys] = useState(null);
   const [emailAccounts, setEmailAccounts] = useState(null);
@@ -68,16 +69,15 @@ export default function OnboardingChecklist() {
     return () => { cancelled = true; };
   }, []);
 
-  const campaignsList = useMemo(() => Object.values(campaigns || {}), [campaigns]);
   const contactsList = useMemo(() => Object.values(opportunities || {}), [opportunities]);
 
   const steps = useMemo(() => {
     if (loading) return null;
 
-    // 1. Account created — always true if they see this
+    // 1. Account created · always true if they see this
     const accountCreated = true;
 
-    // 2. CRM connected — any of Pipedrive/HubSpot/Salesforce/Odoo configured
+    // 2. CRM connected · any of Pipedrive/HubSpot/Salesforce/Odoo configured
     const crmConnected = !!(keys && (
       (keys.pipedriveKey && keys.pipedriveKey.configured) ||
       (keys.hubspotKey && keys.hubspotKey.configured) ||
@@ -88,23 +88,17 @@ export default function OnboardingChecklist() {
       (keys.folkKey && keys.folkKey.configured)
     ));
 
-    // 3. Email connected — any email account (SMTP/OAuth)
+    // 3. Email connected · any email account (SMTP/OAuth)
     const emailConnected = !!(emailAccounts && emailAccounts.length > 0);
 
-    // 4. Contacts imported — at least one contact/opportunity exists
+    // 4. Contacts imported · at least one contact/opportunity exists
     const contactsImported = contactsList.length > 0;
-
-    // 5. First campaign created
-    const firstCampaign = campaignsList.length > 0;
-
-    // 6. First campaign launched
-    const firstLaunch = campaignsList.some(c => c.status === 'active');
 
     return STEP_CONFIG.map((cfg, i) => ({
       ...cfg,
-      done: [accountCreated, crmConnected, contactsImported, emailConnected, firstCampaign, firstLaunch][i],
+      done: [accountCreated, crmConnected, contactsImported, emailConnected][i],
     }));
-  }, [loading, keys, emailAccounts, contactsList, campaignsList]);
+  }, [loading, keys, emailAccounts, contactsList]);
 
   if (loading || !steps || dismissed) return null;
   const doneCount = steps.filter(s => s.done).length;
@@ -114,7 +108,7 @@ export default function OnboardingChecklist() {
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, var(--blue-bg, #eff6ff) 0%, var(--purple-bg, #f5f3ff) 100%)',
+      background: 'linear-gradient(135deg, var(--blue-bg) 0%, var(--purple-bg) 100%)',
       border: '1px solid rgba(59, 130, 246, 0.15)',
       borderRadius: 12,
       padding: '20px 24px',
@@ -198,7 +192,7 @@ export default function OnboardingChecklist() {
                 fontWeight: isNext ? 600 : 400,
                 transition: 'background 0.2s',
               }}
-              onClick={() => { if (!step.done && step.route) navigate(step.route); }}
+              onClick={() => { if (!step.done && step.route) navigate(step.route, step.state ? { state: step.state } : undefined); }}
             >
               <span style={{
                 width: 20, height: 20, borderRadius: 6,
@@ -219,18 +213,6 @@ export default function OnboardingChecklist() {
           );
         })}
       </div>
-
-      {/* CTA */}
-      <button
-        className="btn btn-primary"
-        style={{ fontSize: 13, padding: '8px 18px', width: 'fit-content' }}
-        onClick={() => {
-          const nextStep = steps.find(s => !s.done && s.route);
-          navigate(nextStep ? nextStep.route : '/chat');
-        }}
-      >
-        {t('onboarding.continueChat')}
-      </button>
     </div>
   );
 }

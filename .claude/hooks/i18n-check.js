@@ -46,26 +46,26 @@ process.stdin.on('end', () => {
       // ─── 3. getUserKey for CRM providers (must use getUserCrmToken) ───
       if (isBackend && !f.includes('config/index.js') && !f.includes('crm-token.js')) {
         if (/getUserKey\s*\(.*(?:salesforce|hubspot|pipedrive|odoo|notion|airtable)/i.test(line)) {
-          hits.push(`  L${i+1} [CRM-auth]: getUserKey for CRM provider — use getUserCrmToken instead`);
+          hits.push(`  L${i+1} [CRM-auth]: getUserKey for CRM provider, use getUserCrmToken instead`);
         }
         if (/getUserKey\s*\(\s*\w+\s*,\s*(?:p|provider)\s*\)/.test(line)) {
-          hits.push(`  L${i+1} [CRM-auth]: getUserKey with provider var — use getUserCrmToken instead`);
+          hits.push(`  L${i+1} [CRM-auth]: getUserKey with provider var, use getUserCrmToken instead`);
         }
       }
 
       // ─── 4. login.salesforce.com for API calls ───
       if (isBackend && /login\.salesforce\.com\/services\/data/.test(line)) {
-        hits.push(`  L${i+1} [CRM-salesforce]: login.salesforce.com for API calls — must use instance_url`);
+        hits.push(`  L${i+1} [CRM-salesforce]: login.salesforce.com for API calls, must use instance_url`);
       }
 
       // ─── 5. Hardcoded pipedrive fallback ───
       if (/\|\|\s*['"`]pipedrive['"`]/.test(line)) {
-        hits.push(`  L${i+1} [CRM-fallback]: hardcoded pipedrive fallback — detect provider from user data`);
+        hits.push(`  L${i+1} [CRM-fallback]: hardcoded pipedrive fallback, detect provider from user data`);
       }
 
       // ─── 6. Double /api in request() ───
       if (isFrontend && /request\s*\(\s*['"`]\/api\//.test(line)) {
-        hits.push(`  L${i+1} [security]: double /api — request() already prepends /api`);
+        hits.push(`  L${i+1} [security]: double /api, request() already prepends /api`);
       }
 
       // ─── 7. res.ok on request() result ───
@@ -74,14 +74,14 @@ process.stdin.on('end', () => {
         if (varMatch) {
           const ahead = lines.slice(i, i + 5).join('\n');
           if (new RegExp(`${varMatch[2]}\\.ok\\b`).test(ahead)) {
-            hits.push(`  L${i+1} [security]: res.ok on request() result — request() returns parsed JSON, not Response`);
+            hits.push(`  L${i+1} [security]: res.ok on request() result, request() returns parsed JSON, not Response`);
           }
         }
       }
 
       // ─── 8. window.location.href in frontend ───
       if (isFrontend && /window\.location\.href\s*=/.test(line)) {
-        hits.push(`  L${i+1} [ux]: window.location.href — use navigate() for SPA routing`);
+        hits.push(`  L${i+1} [ux]: window.location.href, use navigate() for SPA routing`);
       }
 
       // ─── 9. Variable shadowing t() ───
@@ -89,14 +89,14 @@ process.stdin.on('end', () => {
         if (/\.map\s*\(\s*t\s*=>/.test(line) || /\.map\s*\(\s*\(\s*t\s*[,)]/.test(line)) {
           const usesT = lines.some(l => /useT\s*\(\s*\)/.test(l));
           if (usesT) {
-            hits.push(`  L${i+1} [scope]: .map(t =>) shadows t() i18n function — rename the variable`);
+            hits.push(`  L${i+1} [scope]: .map(t =>) shadows t() i18n function, rename the variable`);
           }
         }
       }
 
       // ─── 10. Hardcoded fr-FR locale ───
       if (isFrontend && /['"`]fr-FR['"`]/.test(line)) {
-        hits.push(`  L${i+1} [i18n]: hardcoded fr-FR locale — use user language setting`);
+        hits.push(`  L${i+1} [i18n]: hardcoded fr-FR locale, use user language setting`);
       }
 
       // ─── 11. Incomplete CRM provider list ───
@@ -107,7 +107,7 @@ process.stdin.on('end', () => {
           const found = ALL.filter(p => arrayMatch[0].includes(p));
           if (found.length >= 2 && found.length < ALL.length) {
             const missing = ALL.filter(p => !found.includes(p));
-            hits.push(`  L${i+1} [CRM-providers]: incomplete provider list — missing: ${missing.join(', ')}`);
+            hits.push(`  L${i+1} [CRM-providers]: incomplete provider list, missing: ${missing.join(', ')}`);
           }
         }
       }

@@ -216,6 +216,8 @@ const campaigns = {
       batch_size: 'batch_size', batchSize: 'batch_size',
       current_batch: 'current_batch', currentBatch: 'current_batch',
       total_batches: 'total_batches', totalBatches: 'total_batches',
+      send_channel: 'send_channel', sendChannel: 'send_channel',
+      email_account_id: 'email_account_id', emailAccountId: 'email_account_id',
     };
 
     const seen = new Set();
@@ -258,7 +260,7 @@ const touchpoints = {
   },
 
   async create(campaignId, data) {
-    // Normalize type — Claude or upstream callers may emit camelCase, shorthand,
+    // Normalize type · Claude or upstream callers may emit camelCase, shorthand,
     // or legacy generic "linkedin". Coerce everything to one of the 5 valid CHECK values.
     const ALLOWED_TYPES = ['email', 'linkedin', 'linkedin_visit', 'linkedin_invite', 'linkedin_message'];
     const rawType = String(data.type || '').trim();
@@ -286,15 +288,18 @@ const touchpoints = {
     } else if (ALLOWED_TYPES.includes(normalized)) {
       type = normalized;
     } else {
-      console.warn(`[touchpoints] Unknown type "${rawType}" for step "${data.step}" — defaulting to email`);
+      console.warn(`[touchpoints] Unknown type "${rawType}" for step "${data.step}", defaulting to email`);
       type = 'email';
     }
 
     // Enforce 300-char limit on connection invites + null subject
-    let body = data.body || '';
-    let subject = data.subject || null;
-    let bodyB = data.bodyB || data.body_b || null;
-    let subjectB = data.subjectB || data.subject_b || null;
+    // Règle produit : la copy de séquence ne contient jamais de tiret
+    // cadratin (marqueur IA) · filet appliqué à l'écriture (lib/human-style).
+    const { humanize } = require('../lib/human-style');
+    let body = humanize(data.body) || '';
+    let subject = humanize(data.subject) || null;
+    let bodyB = humanize(data.bodyB || data.body_b) || null;
+    let subjectB = humanize(data.subjectB || data.subject_b) || null;
     let maxChars = data.maxChars || null;
 
     if (type === 'linkedin_invite') {
@@ -321,13 +326,16 @@ const touchpoints = {
     }
 
     const result = await query(`
-      INSERT INTO touchpoints (campaign_id, step, type, label, sub_type, timing,
+      INSERT INTO touchpoints (campaign_id, enrollment_id, step, type, label, sub_type, timing,
         subject, body, subject_b, body_b, max_chars, sort_order,
         parent_step_id, condition_type, condition_value, branch_label, is_root)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
-      campaignId,
+      campaignId || null,
+      // Conteneur alternatif : workflow de relance d'un contact CRM
+      // (migration 103) · exactement un des deux doit être posé.
+      data.enrollmentId || null,
       data.step,
       type,
       data.label || null,
@@ -377,11 +385,14 @@ const touchpoints = {
       accept_rate_b: 'accept_rate_b', acceptRateB: 'accept_rate_b',
     };
     const seen = new Set();
+    // Même filet anti-tiret cadratin que create() sur la copy (lib/human-style).
+    const { humanize } = require('../lib/human-style');
+    const TEXT_COLS = new Set(['subject', 'body', 'subject_b', 'body_b']);
     for (const [inputKey, col] of Object.entries(mapping)) {
       if (data[inputKey] !== undefined && !seen.has(col)) {
         seen.add(col);
         sets.push(`${col} = $${i++}`);
-        values.push(data[inputKey]);
+        values.push(TEXT_COLS.has(col) ? humanize(data[inputKey]) : data[inputKey]);
       }
     }
     if (sets.length === 0) return null;
@@ -409,6 +420,83 @@ const touchpoints = {
   async deleteByCampaign(campaignId) {
     const result = await query('DELETE FROM touchpoints WHERE campaign_id = $1', [campaignId]);
     return { changes: result.rowCount };
+  },
+
+  async listByEnrollment(enrollmentId) {
+    const result = await query(
+      'SELECT * FROM touchpoints WHERE enrollment_id = $1 ORDER BY sort_order',
+      [enrollmentId]
+    );
+    return result.rows;
+  },
+
+  async deleteByEnrollment(enrollmentId) {
+    const result = await query('DELETE FROM touchpoints WHERE enrollment_id = $1', [enrollmentId]);
+    return { changes: result.rowCount };
+  },
+
+  // Suppression unitaire · la réconciliation de séquence (PUT /:id/sequence)
+  // ne retire que les steps réellement supprimés par l'utilisateur ; le
+  // journal campaign_sends survit en ON DELETE SET NULL (migration 103).
+  async remove(id) {
+    const result = await query('DELETE FROM touchpoints WHERE id = $1', [id]);
+    return { changes: result.rowCount };
+  },
+};
+
+// =============================================
+// Sequence enrollments · workflows de relance CRM (migration 103)
+// =============================================
+
+const sequenceEnrollments = {
+  async create({ userId, opportunityId, goal, rationale, createdBy }) {
+    const result = await query(
+      `INSERT INTO sequence_enrollments (user_id, opportunity_id, goal, rationale, created_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [userId, opportunityId, goal, rationale || null, createdBy || 'agent']
+    );
+    return result.rows[0];
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM sequence_enrollments WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  async listByUser(userId, { status, opportunityId } = {}) {
+    const conds = ['e.user_id = $1'];
+    const values = [userId];
+    if (status) { values.push(status); conds.push(`e.status = $${values.length}`); }
+    if (opportunityId) { values.push(opportunityId); conds.push(`e.opportunity_id = $${values.length}`); }
+    // Le contact est joint ici : sans son nom, une liste de workflows n'est
+    // qu'une colonne d'identifiants (l'écran Automatisation en affiche une).
+    const result = await query(
+      `SELECT e.*, o.name AS contact_name, o.company AS contact_company
+         FROM sequence_enrollments e
+         LEFT JOIN opportunities o ON o.id = e.opportunity_id
+        WHERE ${conds.join(' AND ')}
+        ORDER BY e.created_at DESC`,
+      values
+    );
+    return result.rows;
+  },
+
+  async setStatus(id, status, { stopReason } = {}) {
+    const stamps = {
+      active: 'approved_at = COALESCE(approved_at, now()), started_at = COALESCE(started_at, now())',
+      completed: 'completed_at = now()',
+      stopped: 'stopped_at = now()',
+    };
+    const extra = stamps[status] ? `, ${stamps[status]}` : '';
+    const result = await query(
+      `UPDATE sequence_enrollments
+       SET status = $1, stop_reason = COALESCE($2, stop_reason), updated_at = now()${extra}
+       WHERE id = $3
+       RETURNING *`,
+      [status, stopReason || null, id]
+    );
+    return result.rows[0] || null;
   },
 };
 
@@ -585,24 +673,41 @@ const versions = {
  *
  * Placé ici, dans le DAO, et non chez les appelants : la migration 013
  * déclarait déjà l'anonymisation « by convention », et la convention n'a pas
- * tenu — des noms de clients (LVMH, Qonto, Sanofi…) se sont retrouvés en base.
+ * tenu · des noms de clients (LVMH, Qonto, Sanofi…) se sont retrouvés en base.
  * Un point de passage obligé est la seule forme d'anonymisation qui survive à
  * l'ajout d'un nouvel agent.
  *
  * Règles :
  * - la rédaction ne peut jamais faire échouer une écriture (un pattern rédigé
  *   partiellement vaut mieux qu'un agent qui plante) ;
- * - politique de partage (décision produit 2026-08-04) : `shared` est accordé
- *   automatiquement dès que la rédaction est complète — lexique réellement
- *   chargé ET aucun résidu détecté sur le texte du pattern. Le mérite
- *   (confiance Haute) n'entre pas ici : il est filtré à la lecture par
- *   `listForPrompt`, ce qui laisse un pattern monter en confiance après coup
- *   sans réécriture. L'accord n'a lieu que si l'appel porte le texte du
- *   pattern (`data.pattern` présent) : sur une mise à jour partielle, la garde
- *   n'a pas vu le vrai texte et ne peut rien promettre. Un `shared: false`
- *   explicite de l'appelant est respecté ; l'inverse (`shared: true` non sûr)
- *   est toujours retiré.
+ * - politique de partage (décision produit 2026-08-04, révisée 2026-09-14) :
+ *   `shared` est accordé automatiquement dès que la rédaction est complète · 
+ *   lexique réellement chargé ET aucun résidu détecté sur le texte du pattern
+ * · SAUF pour les sources d'agrégats business (NEVER_AUTO_SHARE_SOURCES
+ *   ci-dessous). Le mérite (confiance Haute) n'entre pas ici : il est filtré
+ *   à la lecture par `listForPrompt`, ce qui laisse un pattern monter en
+ *   confiance après coup sans réécriture. L'accord n'a lieu que si l'appel
+ *   porte le texte du pattern (`data.pattern` présent) : sur une mise à jour
+ *   partielle, la garde n'a pas vu le vrai texte et ne peut rien promettre.
+ *   Un `shared: false` explicite de l'appelant est respecté ; l'inverse
+ *   (`shared: true` non sûr) est toujours retiré.
  */
+
+/**
+ * Sources jamais partagées automatiquement (révision du 2026-09-14, migration
+ * 100 pour le stock) : ces patterns sont des agrégats business d'UN tenant · 
+ * « taux de conversion CRM : 34 % », taux de réponse, calibration de forecast.
+ * Anonymes au sens entités, mais ce sont les chiffres d'un client : ils
+ * restent scopés tenant. Le pool global reste ouvert aux apprentissages
+ * généralisables (timing, copy, verdicts A/B, consolidation, registres).
+ * L'admin peut toujours partager à la main via toggle-share (update sans
+ * texte de pattern → cette garde ne s'applique pas).
+ */
+const NEVER_AUTO_SHARE_SOURCES = new Set([
+  'crm_sync', 'crm_analysis',
+  'response_analysis_email', 'response_analysis_linkedin', 'response_analysis_global',
+  'churn_feedback', 'reactivation_outcomes', 'forecast_calibration',
+]);
 async function anonymizeBeforeWrite(data, op) {
   if (!data || typeof data !== 'object') return data;
   if (data.pattern === undefined && data.data === undefined) return data;
@@ -622,8 +727,10 @@ async function anonymizeBeforeWrite(data, op) {
     // Retrait : un partage demandé mais non sûr est toujours refusé.
     if (out.shared === true && !result.safeToShare) out.shared = false;
     // Accord : rédaction complète + texte du pattern présent + pas de refus
-    // explicite de l'appelant → le pattern rejoint le pool global.
-    if (out.shared === undefined && data.pattern !== undefined && result.safeToShare) {
+    // explicite de l'appelant + source hors agrégats business → le pattern
+    // rejoint le pool global.
+    if (out.shared === undefined && data.pattern !== undefined && result.safeToShare
+        && !NEVER_AUTO_SHARE_SOURCES.has(data.source)) {
       out.shared = true;
     }
 
@@ -663,9 +770,15 @@ const memoryPatterns = {
       conditions.push(`(team_id = $${i++} OR (shared = true AND confidence = 'Haute'))`);
       params.push(filter.teamId);
     } else if (filter.userId) {
-      // Solo user: show only patterns they created or shared best practices
-      conditions.push(`(team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i++}) OR (shared = true AND confidence = 'Haute'))`);
+      // Solo/own patterns (user_id, migration 089) + patterns de ses équipes + pool partagé
+      conditions.push(`(user_id = $${i} OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i}) OR (shared = true AND confidence = 'Haute'))`);
       params.push(filter.userId);
+      i++;
+    } else {
+      // Sans tenant : UNIQUEMENT le pool global anonymisé. L'ancien comportement
+      // (aucun filtre → patterns de tous les tenants) fuitait la mémoire privée
+      // de chaque client vers les prompts des autres (audit du 02/09).
+      conditions.push(`shared = true AND confidence = 'Haute'`);
     }
     if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY date_discovered DESC';
@@ -682,8 +795,10 @@ const memoryPatterns = {
   },
 
   async count(filter = {}) {
+    // Mêmes conditions que list() (dismissed + tenant) · l'ancienne version comptait
+    // tout, dismissés et autres tenants inclus, et divergeait du tableau affiché.
     let sql = 'SELECT COUNT(*) as total FROM memory_patterns';
-    const conditions = [];
+    const conditions = ['dismissed_at IS NULL'];
     const params = [];
     let i = 1;
     if (filter.category) {
@@ -694,7 +809,17 @@ const memoryPatterns = {
       conditions.push(`confidence = $${i++}`);
       params.push(filter.confidence);
     }
-    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    if (filter.teamId) {
+      conditions.push(`(team_id = $${i++} OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.teamId);
+    } else if (filter.userId) {
+      conditions.push(`(user_id = $${i} OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $${i}) OR (shared = true AND confidence = 'Haute'))`);
+      params.push(filter.userId);
+      i++;
+    } else {
+      conditions.push(`shared = true AND confidence = 'Haute'`);
+    }
+    sql += ' WHERE ' + conditions.join(' AND ');
     const result = await query(sql, params);
     return parseInt(result.rows[0].total, 10);
   },
@@ -715,8 +840,8 @@ const memoryPatterns = {
 
     const result = await query(`
       INSERT INTO memory_patterns (pattern, category, data, confidence, confidence_score, date_discovered, sectors, targets,
-        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source, shared)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ab_category, custom_category, source_test_id, sample_size, improvement_pct, confirmations, team_id, source, shared, user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `, [
       data.pattern,
@@ -741,6 +866,8 @@ const memoryPatterns = {
       // structurellement jamais se remplir. La valeur transmise est deja
       // passee par anonymizeBeforeWrite, qui ne sait que la retirer.
       data.shared === true,
+      // Tenant solo (migration 089) · un pattern naît scopé à son propriétaire.
+      data.userId || data.user_id || null,
     ]);
     return result.rows[0];
   },
@@ -762,7 +889,9 @@ const memoryPatterns = {
       sample_size: 'sample_size', sampleSize: 'sample_size',
       improvement_pct: 'improvement_pct', improvementPct: 'improvement_pct',
       confirmations: 'confirmations',
+      last_confirmed_at: 'last_confirmed_at', lastConfirmedAt: 'last_confirmed_at',
       team_id: 'team_id', teamId: 'team_id',
+      user_id: 'user_id', userId: 'user_id',
       shared: 'shared',
       source: 'source',
     };
@@ -804,7 +933,7 @@ const memoryPatterns = {
       teamFilter = `AND (team_id = $2 OR (shared = true AND confidence = 'Haute'))`;
       params.push(teamId);
     } else if (userId) {
-      teamFilter = `AND (team_id IN (SELECT team_id FROM team_members WHERE user_id = $2) OR (shared = true AND confidence = 'Haute'))`;
+      teamFilter = `AND (user_id = $2 OR team_id IN (SELECT team_id FROM team_members WHERE user_id = $2) OR (shared = true AND confidence = 'Haute'))`;
       params.push(userId);
     } else {
       teamFilter = `AND shared = true AND confidence = 'Haute'`;
@@ -825,15 +954,38 @@ const memoryPatterns = {
    * or create a new one. Prevents pattern explosion from repeated agent runs.
    */
   async replaceOrCreate(data) {
-    // Check if a similar pattern was dismissed within the last 7 days — respect user's choice
+    // Scoping tenant (audit 02/09) : toutes les recherches de doublon/dismissed de
+    // cette fonction sont restreintes au tenant du pattern. Avant, un pattern
+    // écarté par UN client bloquait sa re-création chez TOUS, et un update de
+    // dédup pouvait écraser le pattern d'un autre tenant. Sans tenant fourni
+    // (écrivain legacy), on ne matche que les lignes elles-mêmes sans tenant.
+    const tenantTeam = data.teamId || data.team_id || null;
+    const tenantUser = data.userId || data.user_id || null;
+    const tenantClause = (offset) => tenantTeam ? { sql: `AND team_id = $${offset}`, params: [tenantTeam] }
+      : tenantUser ? { sql: `AND user_id = $${offset}`, params: [tenantUser] }
+      : { sql: 'AND team_id IS NULL AND user_id IS NULL', params: [] };
+
+    // Check if a similar pattern was dismissed within the last 7 days · respect user's choice
     const prefix = (data.pattern || '').slice(0, 30);
     if (prefix.length >= 10) {
+      const tc = tenantClause(3);
       const dismissed = await query(
-        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at > now() - interval '7 days' LIMIT 1`,
-        [data.category, prefix + '%']
+        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at > now() - interval '7 days' ${tc.sql} LIMIT 1`,
+        [data.category, prefix + '%', ...tc.params]
       );
       if (dismissed.rows[0]) return null; // User dismissed this recently, don't recreate
     }
+
+    // Une ré-observation par un agent EST une confirmation : sans ce bump, un
+    // pattern reconfirmé chaque semaine restait à confirmations=1 avec
+    // last_confirmed_at NULL · décoté à 60 j et jamais promouvable (audit 02/09).
+    const confirmAndUpdate = async (id) => {
+      await query(
+        `UPDATE memory_patterns SET confirmations = COALESCE(confirmations, 0) + 1, last_confirmed_at = now() WHERE id = $1`,
+        [id]
+      );
+      return (await this.update(id, data)) || (await this.get(id));
+    };
 
     // Exclusion mutuelle entre agents concurrents écrivant la même catégorie
     // (Timing Agent + Copy Optimizer, par exemple).
@@ -842,7 +994,7 @@ const memoryPatterns = {
     // en mode transaction : les advisory locks appartiennent à la session
     // serveur, que le pooler ne garantit pas stable d'une requête à l'autre.
     // Le lock se pose sur une connexion, l'unlock part sur une autre et
-    // échoue — le verrou reste alors détenu par une connexion `idle` du
+    // échoue · le verrou reste alors détenu par une connexion `idle` du
     // pooler. Comme pg_advisory_lock est BLOQUANT, l'appel suivant attend
     // indéfiniment : mesuré ici même, une écriture de pattern a bloqué plus de
     // deux minutes avant d'être tuée. Sur un cron, cela fige la tâche.
@@ -856,21 +1008,23 @@ const memoryPatterns = {
       releaseLock = await acquire(lockName, { ttlSeconds: 60 });
 
       // Try to find existing active pattern with same category and content
+      const tcExact = tenantClause(3);
       const existing = await query(
-        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL LIMIT 1`,
-        [data.category, data.pattern]
+        `SELECT id FROM memory_patterns WHERE category = $1 AND pattern = $2 AND dismissed_at IS NULL ${tcExact.sql} LIMIT 1`,
+        [data.category, data.pattern, ...tcExact.params]
       );
       if (existing.rows[0]) {
-        return await this.update(existing.rows[0].id, data);
+        return await confirmAndUpdate(existing.rows[0].id);
       }
       // Also check by partial match (text prefix)
       if (prefix.length >= 10) {
+        const tcPartial = tenantClause(3);
         const partial = await query(
-          `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL LIMIT 1`,
-          [data.category, prefix + '%']
+          `SELECT id FROM memory_patterns WHERE category = $1 AND pattern LIKE $2 AND dismissed_at IS NULL ${tcPartial.sql} LIMIT 1`,
+          [data.category, prefix + '%', ...tcPartial.params]
         );
         if (partial.rows[0]) {
-          return await this.update(partial.rows[0].id, data);
+          return await confirmAndUpdate(partial.rows[0].id);
         }
       }
 
@@ -884,9 +1038,15 @@ const memoryPatterns = {
           const similar = await findSimilarPattern(data.pattern, 0.85);
           precomputedEmbedding = similar?.embedding || null;
           if (similar?.sourceId) {
-            const active = await query('SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL', [similar.sourceId]);
+            // Le match vectoriel est global · on ne fusionne que si la ligne
+            // appartient au MÊME tenant, sinon on crée (pas d'écrasement croisé).
+            const tcVec = tenantClause(2);
+            const active = await query(
+              `SELECT id FROM memory_patterns WHERE id = $1 AND dismissed_at IS NULL ${tcVec.sql}`,
+              [similar.sourceId, ...tcVec.params]
+            );
             if (active.rows[0]) {
-              const updated = await this.update(active.rows[0].id, data);
+              const updated = await confirmAndUpdate(active.rows[0].id);
               await upsertPatternEmbedding(active.rows[0].id, data.pattern, null, precomputedEmbedding);
               return updated;
             }
@@ -905,7 +1065,7 @@ const memoryPatterns = {
 
       return created;
     } finally {
-      // Libération unique, quel que soit le chemin de sortie — la version
+      // Libération unique, quel que soit le chemin de sortie · la version
       // précédente répétait l'unlock devant chaque `return`, et en avait
       // forcément oublié un le jour où l'on ajouterait une branche.
       await releaseLock();
@@ -933,12 +1093,15 @@ const memoryPatterns = {
        RETURNING id`
     );
 
-    // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days
+    // Promote: Faible → Moyenne if confirmations >= 3 and confirmed in last 30 days.
+    // COALESCE sur date_discovered : sans lui, tout pattern jamais « confirmé par
+    // réponse » (last_confirmed_at NULL, cas de 100 % des créations d'agents)
+    // était à jamais impromouvable · la promotion était un chemin mort (audit 02/09).
     const promoteToMoyenne = await query(
       `UPDATE memory_patterns SET confidence = 'Moyenne', confidence_score = 0.60
        WHERE confidence = 'Faible' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 3
-         AND last_confirmed_at > now() - interval '30 days'
+         AND COALESCE(last_confirmed_at, date_discovered) > now() - interval '30 days'
        RETURNING id`
     );
     // Promote: Moyenne → Haute if confirmations >= 8 and confirmed in last 30 days
@@ -946,7 +1109,7 @@ const memoryPatterns = {
       `UPDATE memory_patterns SET confidence = 'Haute', confidence_score = 0.90
        WHERE confidence = 'Moyenne' AND dismissed_at IS NULL
          AND COALESCE(confirmations, 0) >= 8
-         AND last_confirmed_at > now() - interval '30 days'
+         AND COALESCE(last_confirmed_at, date_discovered) > now() - interval '30 days'
        RETURNING id`
     );
 
@@ -1034,8 +1197,18 @@ async function dashboardKpis(userId) {
 // =============================================
 
 const chatThreads = {
-  async list(userId, limit = 50) {
+  // assistantType filters to one of the two independent assistants ('general' | 'campaign')
+  // sharing this table · omit it to list across both (used nowhere today, kept for flexibility
+  // matching the unfiltered no-userId branch below).
+  async list(userId, { assistantType, limit = 50 } = {}) {
     if (userId) {
+      if (assistantType) {
+        const result = await query(
+          'SELECT * FROM chat_threads WHERE user_id = $1 AND assistant_type = $2 ORDER BY updated_at DESC LIMIT $3',
+          [userId, assistantType, limit]
+        );
+        return result.rows;
+      }
       const result = await query(
         'SELECT * FROM chat_threads WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2',
         [userId, limit]
@@ -1051,16 +1224,22 @@ const chatThreads = {
     return result.rows[0] || null;
   },
 
-  async create(title, userId) {
+  async create(title, userId, assistantType = 'campaign') {
     const result = await query(
-      'INSERT INTO chat_threads (title, user_id) VALUES ($1, $2) RETURNING *',
-      [title || 'Nouvelle conversation', userId || null]
+      'INSERT INTO chat_threads (title, user_id, assistant_type) VALUES ($1, $2, $3) RETURNING *',
+      [title || 'Nouvelle conversation', userId || null, assistantType]
     );
     return result.rows[0];
   },
 
   async updateTitle(id, title) {
     await query('UPDATE chat_threads SET title = $1, updated_at = now() WHERE id = $2', [title, id]);
+  },
+
+  // Renommage manuel : le titre change, pas la place de la conversation dans la
+  // liste (triée sur updated_at) ni la date affichée à côté.
+  async rename(id, title) {
+    await query('UPDATE chat_threads SET title = $1 WHERE id = $2', [title, id]);
   },
 
   async touch(id) {
@@ -1264,7 +1443,7 @@ const profiles = {
         'value_prop', 'social_proof', 'pain_points', 'objections',
         'persona_primary', 'persona_secondary', 'target_sectors',
         'target_size', 'target_zones', 'default_tone', 'default_formality',
-        'avoid_words', 'signature_phrases',
+        'avoid_words', 'signature_phrases', 'job_role',
       ];
       for (const f of fields) {
         if (data[f] !== undefined) {
@@ -1281,8 +1460,8 @@ const profiles = {
         INSERT INTO user_profiles (user_id, company, sector, website, team_size, description,
           value_prop, social_proof, pain_points, objections, persona_primary, persona_secondary,
           target_sectors, target_size, target_zones, default_tone, default_formality,
-          avoid_words, signature_phrases)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          avoid_words, signature_phrases, job_role)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       `, [
         userId, data.company || null, data.sector || null, data.website || null,
         data.team_size || null, data.description || null, data.value_prop || null,
@@ -1291,6 +1470,11 @@ const profiles = {
         data.target_sectors || null, data.target_size || null, data.target_zones || null,
         data.default_tone || 'Pro décontracté', data.default_formality || 'Vous',
         data.avoid_words || null, data.signature_phrases || null,
+        // job_role · à ajouter ici ET dans la liste `fields` de la branche
+        // UPDATE ci-dessus. Cette fonction refiltre les colonnes une seconde
+        // fois après la liste blanche de routes/profile.js : une colonne
+        // oubliée dans l'une des deux branches est perdue sans erreur.
+        data.job_role || null,
       ]);
     }
     return this.get(userId);
@@ -1451,9 +1635,13 @@ const customVariables = {
 // =============================================
 
 const opportunities = {
-  async listByUser(userId, limit = 20, offset = 0) {
+  // `orderBy` est concaténé dans le SQL : liste blanche obligatoire, jamais la
+  // valeur brute d'un appelant. Toute autre valeur retombe sur le tri par défaut.
+  async listByUser(userId, limit = 20, offset = 0, orderBy = 'created_at DESC') {
+    const ORDER_WHITELIST = ['created_at DESC', 'last_activity_at ASC NULLS FIRST'];
+    const order = ORDER_WHITELIST.includes(orderBy) ? orderBy : ORDER_WHITELIST[0];
     const result = await query(
-      'SELECT * FROM opportunities WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      `SELECT * FROM opportunities WHERE user_id = $1 ORDER BY ${order} LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
     );
     return result.rows;
@@ -1474,8 +1662,8 @@ const opportunities = {
 
   async create(data) {
     const result = await query(`
-      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date, country, city)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
       RETURNING *
     `, [
       data.userId || null,
@@ -1505,6 +1693,8 @@ const opportunities = {
       data.dealValue ?? data.deal_value ?? null,
       data.wonDate || data.won_date || null,
       data.lostDate || data.lost_date || null,
+      data.country || null,
+      data.city || null,
     ]);
     return result.rows[0];
   },
@@ -1536,8 +1726,16 @@ const opportunities = {
       lost_date: 'lost_date', lostDate: 'lost_date',
       renewal_date: 'renewal_date', renewalDate: 'renewal_date',
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
+      planned_followup_date: 'planned_followup_date', plannedFollowupDate: 'planned_followup_date',
+      planned_followup_reason: 'planned_followup_reason', plannedFollowupReason: 'planned_followup_reason',
+      crm_stage: 'crm_stage', crmStage: 'crm_stage',
+      crm_stage_id: 'crm_stage_id', crmStageId: 'crm_stage_id',
+      crm_stage_changed_at: 'crm_stage_changed_at', crmStageChangedAt: 'crm_stage_changed_at',
+      country: 'country', city: 'city',
       reactivated_at: 'reactivated_at', reactivatedAt: 'reactivated_at',
       reactivated_from_email_id: 'reactivated_from_email_id', reactivatedFromEmailId: 'reactivated_from_email_id',
+      lost_reason: 'lost_reason', lostReason: 'lost_reason',
+      lost_reason_source: 'lost_reason_source', lostReasonSource: 'lost_reason_source',
       data: 'data',
     };
     const jsonbCols = new Set(['personalization', 'churn_factors']);
@@ -1587,6 +1785,23 @@ const opportunities = {
       [userId, email]
     );
     return result.rows[0] || null;
+  },
+
+  // Fuzzy name/email/company search for the general assistant's lookup_client action · prefix
+  // matches on name ranked first (most likely intent when a user just types a name), everything
+  // else after. escapeLike prevents a literal % or _ in the query from acting as a wildcard.
+  async search(userId, q, limit = 8) {
+    if (!q || !q.trim()) return [];
+    const escapeLike = (s) => s.replace(/[%_\\]/g, (c) => `\\${c}`);
+    const term = escapeLike(q.trim());
+    const result = await query(
+      `SELECT *, (name ILIKE $2) AS name_prefix_match FROM opportunities
+       WHERE user_id = $1 AND (name ILIKE $3 OR email ILIKE $3 OR company ILIKE $3)
+       ORDER BY name_prefix_match DESC, updated_at DESC
+       LIMIT $4`,
+      [userId, `${term}%`, `%${term}%`, limit]
+    );
+    return result.rows;
   },
 
   async findByLinkedinUrl(userId, linkedinUrl) {
@@ -1775,7 +1990,7 @@ async function rawQuery(text, params) {
 /**
  * Acquire a dedicated client from the pool.
  *
- * Required for anything session-scoped — advisory locks in particular.
+ * Required for anything session-scoped · advisory locks in particular.
  * `rawQuery` goes through `pool.query()`, which may hand out a different
  * connection on every call: locking on one and unlocking on another leaks the
  * lock until that connection is recycled. Callers MUST release the client.
@@ -2111,6 +2326,7 @@ module.exports = {
   healthCheck,
   campaigns,
   touchpoints,
+  sequenceEnrollments,
   diagnostics,
   versions,
   memoryPatterns,

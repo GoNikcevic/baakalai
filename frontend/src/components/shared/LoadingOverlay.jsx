@@ -6,10 +6,10 @@
 import { useEffect, useState } from 'react';
 
 /**
- * @param {boolean} show        — whether to display the overlay
- * @param {string}  title       — main headline (e.g. "Déploiement vers Lemlist…")
- * @param {string[]} steps      — optional cycling sub-messages (e.g. ["Création de la campagne", "Push des séquences"])
- * @param {number}  stepInterval — ms between step cycling (default 1800)
+ * @param {boolean} show · whether to display the overlay
+ * @param {string}  title · main headline (e.g. "Déploiement vers Lemlist…")
+ * @param {string[]} steps · optional cycling sub-messages (e.g. ["Création de la campagne", "Push des séquences"])
+ * @param {number}  stepInterval · ms between step cycling (default 1800)
  */
 export default function LoadingOverlay({ show, title, steps = [], stepInterval = 1800 }) {
   const [stepIdx, setStepIdx] = useState(0);

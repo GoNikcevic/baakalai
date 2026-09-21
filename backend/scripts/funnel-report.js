@@ -1,5 +1,5 @@
 /**
- * Funnel d'activation — lecture de product_events (migration 071).
+ * Funnel d'activation · lecture de product_events (migration 071).
  *
  * Usage : railway run node scripts/funnel-report.js [semaines]
  * (défaut : 4 dernières semaines)
@@ -52,7 +52,7 @@ async function main() {
     const frictions = FRICTION
       .filter(e => events[e])
       .map(e => `${e}: ${events[e].events}`);
-    if (frictions.length) console.log(`  friction — ${frictions.join(', ')}`);
+    if (frictions.length) console.log(`  friction, ${frictions.join(', ')}`);
   }
   console.log('');
 }

@@ -1,5 +1,5 @@
 /**
- * Diagnostic CRM public — lead magnet sans compte.
+ * Diagnostic CRM public · lead magnet sans compte.
  *
  * POST /api/public/diagnostic      { provider, apiToken, lang } → { id, report }
  * GET  /api/public/diagnostic/:id  → { report (anonymisé), lang, createdAt }
@@ -32,70 +32,73 @@ const { publicDiagLimiter } = require('../middleware/rate-limit');
 
 const router = express.Router();
 
-const DAY_MS = 86400000;
-const DORMANT_DAYS = 30;
-// Benchmark marché : 20-40 % des pipelines audités sont dormants (sources
-// citées sur la page). Projection : taux de réactivation prudent de 10 %.
-const BENCHMARK = { low: 20, high: 40 };
-const REACTIVATION_RATE = 0.10;
+/** Nombre d'opportunités nommées offertes avant le mur. Le reste est compté,
+ *  jamais détaillé : l'audit prouve la valeur, le produit la localise. */
+const FREE_TOP_COUNT = 3;
 
-function computeReport(deals) {
-  const now = Date.now();
-  const open = deals.filter(d => d.status === 'open');
-  const lastTouch = d => new Date(d.lastActivity || d.addTime).getTime();
-  const isDormant = d => (now - lastTouch(d)) / DAY_MS >= DORMANT_DAYS;
+/**
+ * Rapport public · le Hidden Revenue Score calculé sur une lecture directe du
+ * CRM, puis réduit à ce que l'audit a le droit de montrer.
+ *
+ * Le score vient du moteur du produit (lib/hidden-revenue), pas d'un calcul
+ * maison : l'audit et l'application doivent annoncer le même chiffre pour le
+ * même CRM. Un écart entre la page qui convainc et le produit qu'on découvre
+ * juste après serait la pire chose à faire à ce moment précis.
+ */
+function computeReport(deals, { snapshotAt = new Date() } = {}) {
+  const { computeFromDeals } = require('../lib/hidden-revenue/from-deals');
+  const r = computeFromDeals(deals, { snapshotAt });
 
-  const dormant = open.filter(d => isDormant(d) && d.value > 0);
-  const dormantNoValue = open.filter(d => isDormant(d) && !(d.value > 0));
-  const openValue = open.reduce((s, d) => s + (d.value > 0 ? d.value : 0), 0);
-  const dormantValue = dormant.reduce((s, d) => s + d.value, 0);
+  const top = r.candidates.slice(0, FREE_TOP_COUNT).map(c => ({
+    name: c.name,
+    company: c.company,
+    expectedValue: c.expectedValue,
+    qualifiedValue: c.qualifiedValue,
+    valueEstimated: c.valueEstimated,
+    daysInactive: c.daysQuiet,
+    dimension: c.dimension,
+    reasonCodes: c.reasonCodes,
+    recommendedAction: c.recommendedAction,
+  }));
 
-  // Même tri que le reading-summary interne : valeur × ancienneté.
-  const top = dormant
-    .map(d => ({ ...d, daysInactive: Math.floor((now - lastTouch(d)) / DAY_MS) }))
-    .sort((a, b) => b.value * Math.max(1, b.daysInactive) - a.value * Math.max(1, a.daysInactive))
-    .slice(0, 3)
-    .map(d => ({ name: d.name, company: d.company, dealValue: d.value, daysInactive: d.daysInactive }));
-
-  // Score de santé CRM /100 — « l'audit qu'un RevOps ferait » : complétude
-  // des trois champs qui conditionnent l'exploitabilité de la base. Donne de
-  // la valeur même aux CRM jeunes, là où le volet réactivation est maigre.
-  const n = deals.length;
-  const pct = (count) => (n > 0 ? Math.round((count / n) * 100) : 0);
-  const pctValue = pct(deals.filter(d => d.value > 0).length);
-  const pctActivity = pct(deals.filter(d => d.lastActivity).length);
-  const pctCompany = pct(deals.filter(d => d.company && String(d.company).trim()).length);
-  const healthScore = n > 0
-    ? Math.round(0.40 * pctValue + 0.35 * pctActivity + 0.25 * pctCompany)
-    : null;
+  // Sous-scores seuls, sans les montants par dimension : ceux-ci formeraient
+  // une carte du trésor assez précise pour se passer du produit.
+  const dimensions = {};
+  for (const [key, d] of Object.entries(r.dimensions)) {
+    dimensions[key] = d.evaluated
+      ? { evaluated: true, subScore: d.subScore, count: d.count }
+      : { evaluated: false };
+  }
 
   return {
-    totalDeals: deals.length,
-    openDeals: open.length,
-    openValue,
-    dormant: {
-      count: dormant.length,
-      value: dormantValue,
-      noValueCount: dormantNoValue.length,
-      sharePct: openValue > 0 ? Math.round((dormantValue / openValue) * 100) : null,
-      top,
+    scoreVersion: r.scoreVersion,
+    snapshotAt: r.snapshotAt,
+    hrs: r.hrs,
+    scoreBand: r.scoreBand,
+    confidence: r.confidence,
+    confidenceBand: r.confidenceBand,
+    quantifiable: r.quantifiable,
+    expectedValue: r.expectedValue,
+    expectedLow: r.expectedLow,
+    expectedHigh: r.expectedHigh,
+    qualifiedValue: r.qualifiedValue,
+    opportunityCount: r.opportunityCount,
+    lockedCount: Math.max(0, r.opportunityCount - top.length),
+    dimensions,
+    top,
+    context: {
+      dealsRead: r.context.dealsRead,
+      stagnantDays: r.context.stagnantDays,
+      winRate: r.context.winRate,
+      historyMonths: r.context.historyMonths,
+      countWithoutValue: r.context.countWithoutValue,
+      countEstimatedValue: r.context.countEstimatedValue,
+      truncated: r.context.truncated,
     },
-    dataGaps: {
-      missingValue: deals.filter(d => !(d.value > 0)).length,
-    },
-    health: healthScore == null ? null : {
-      score: healthScore,
-      pctValue,
-      pctActivity,
-      pctCompany,
-    },
-    benchmark: BENCHMARK,
-    projection: { rate: REACTIVATION_RATE, value: Math.round(dormantValue * REACTIVATION_RATE) },
-    dormantDays: DORMANT_DAYS,
   };
 }
 
-// GET /oauth/:provider/start — diagnostic sans compte via le bouton OAuth.
+// GET /oauth/:provider/start · diagnostic sans compte via le bouton OAuth.
 // Réutilise le callback produit (/api/crm/:provider/callback, seul redirect
 // enregistré chez les fournisseurs) avec un state marqué diagnostic:true.
 // Salesforce passe par l'app centrale Baakalai (org DE) et le scope api
@@ -140,7 +143,7 @@ router.get('/oauth/:provider(hubspot|pipedrive|salesforce)/start', publicDiagLim
 });
 
 // Appelé par le callback OAuth (routes/crm.js) pour un state diagnostic :
-// une seule lecture avec le token, puis il est jeté — seul le rapport reste.
+// une seule lecture avec le token, puis il est jeté · seul le rapport reste.
 // owner_key distingue la vue propriétaire (redirect ?r=&k=) de la vue
 // partagée anonymisée.
 async function runOauthDiagnostic(provider, tokens, lang) {
@@ -162,9 +165,11 @@ async function runOauthDiagnostic(provider, tokens, lang) {
   track(null, 'diagnostic_public_done', {
     provider,
     oauth: true,
-    deals: report.totalDeals,
-    dormant: report.dormant.count,
-    noValue: report.dormant.noValueCount,
+    deals: report.context.dealsRead,
+    opportunities: report.opportunityCount,
+    hrs: report.hrs,
+    confidence: report.confidence,
+    expected: report.expectedValue,
   });
   return { id: saved.rows[0].id, ownerKey: saved.rows[0].owner_key };
 }
@@ -194,9 +199,11 @@ router.post('/', publicDiagLimiter, async (req, res, next) => {
 
     track(null, 'diagnostic_public_done', {
       provider,
-      deals: report.totalDeals,
-      dormant: report.dormant.count,
-      noValue: report.dormant.noValueCount,
+      deals: report.context.dealsRead,
+      opportunities: report.opportunityCount,
+      hrs: report.hrs,
+      confidence: report.confidence,
+      expected: report.expectedValue,
     });
 
     res.json({ id: saved.rows[0].id, report });
@@ -221,11 +228,20 @@ router.get('/:id', async (req, res, next) => {
     const report = r.rows[0].report;
     const isOwner = typeof req.query.k === 'string' && req.query.k === r.rows[0].owner_key;
     if (!isOwner) {
-      report.dormant.top = (report.dormant.top || []).map(d => ({
-        dealValue: d.dealValue,
+      report.top = (report.top || []).map(d => ({
+        expectedValue: d.expectedValue,
         daysInactive: d.daysInactive,
+        dimension: d.dimension,
+        reasonCodes: d.reasonCodes,
       }));
       track(null, 'diagnostic_public_shared_view', null);
+    }
+
+    // Rapport d'avant le moteur de score : il n'a aucun des champs que la page
+    // affiche désormais. Plutôt que de faire cohabiter deux rendus, on le
+    // signale et on invite à relancer, l'analyse ne coûte qu'un clic.
+    if (!report.scoreVersion) {
+      return res.json({ legacy: true, lang: r.rows[0].lang, createdAt: r.rows[0].created_at, isOwner });
     }
 
     res.json({ report, lang: r.rows[0].lang, createdAt: r.rows[0].created_at, isOwner });

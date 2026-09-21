@@ -1,5 +1,5 @@
 /**
- * Lifecycle Emails — Automated email sequences for user onboarding and retention.
+ * Lifecycle Emails · Automated email sequences for user onboarding and retention.
  *
  * Sequences:
  * 1. Onboarding (post-signup): welcome → setup guide → first campaign → tips
@@ -12,6 +12,7 @@
 const db = require('../db');
 const { sendEmail } = require('./email');
 const logger = require('./logger');
+const { getStagnantDays } = require('./stagnation');
 
 const APP_URL = process.env.APP_URL || 'https://app.baakal.ai';
 const DAY_MS = 86400000;
@@ -30,13 +31,13 @@ const ONBOARDING_SEQUENCE = [
         </div>
         <h2 style="font-size: 20px; margin-bottom: 12px;">Bienvenue ${user.name?.split(' ')[0] || ''} !</h2>
         <p style="color: #71717a; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">
-          Tu as rejoint baakalai — l'outil qui orchestre ta prospection et ton CRM avec l'IA.
+          Tu as rejoint baakalai, l'outil qui orchestre ta prospection et ton CRM avec l'IA.
           Chaque email envoyé, chaque réponse analysée rend le système plus intelligent.
         </p>
         <p style="font-size: 14px; font-weight: 600; margin-bottom: 16px;">Pour démarrer en 3 étapes :</p>
         <ol style="color: #71717a; font-size: 14px; line-height: 2; padding-left: 20px; margin-bottom: 24px;">
           <li>Connecte ton CRM (Pipedrive, HubSpot, Odoo...)</li>
-          <li>Configure ton premier trigger d'activation</li>
+          <li>Configure ton premier trigger d'automatisation</li>
           <li>Lance ta première campagne via le chat IA</li>
         </ol>
         <a href="${APP_URL}/chat" style="display: inline-block; background: #6E57FA; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
@@ -54,7 +55,7 @@ const ONBOARDING_SEQUENCE = [
         <h2 style="font-size: 20px; margin-bottom: 12px;">Connecte ton CRM</h2>
         <p style="color: #71717a; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">
           ${user.name?.split(' ')[0] || 'Salut'}, baakalai fonctionne mieux quand il est connecté à ton CRM.
-          Pipedrive, HubSpot, Salesforce, Odoo — tout se fait en un clic depuis les paramètres.
+          Pipedrive, HubSpot, Salesforce, Odoo, tout se fait en un clic depuis les paramètres.
         </p>
         <p style="color: #71717a; font-size: 14px; line-height: 1.7; margin-bottom: 24px;">
           Une fois connecté, l'IA détecte automatiquement les deals stagnants,
@@ -94,9 +95,9 @@ const ONBOARDING_SEQUENCE = [
       <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
         <h2 style="font-size: 20px; margin-bottom: 12px;">3 astuces pro</h2>
         <ol style="color: #71717a; font-size: 14px; line-height: 2.2; padding-left: 20px; margin-bottom: 24px;">
-          <li><strong>Active le A/B testing</strong> sur tes triggers — baakalai teste automatiquement 2 variantes et garde la meilleure.</li>
-          <li><strong>Consulte la Mémoire IA</strong> — elle apprend de chaque campagne et chaque réponse. Approuve les patterns qui te parlent.</li>
-          <li><strong>Installe l'extension Chrome</strong> — ajoute des contacts depuis LinkedIn et vois leur statut CRM en direct.</li>
+          <li><strong>Active le A/B testing</strong> sur tes triggers, baakalai teste automatiquement 2 variantes et garde la meilleure.</li>
+          <li><strong>Consulte la Mémoire IA</strong>, elle apprend de chaque campagne et chaque réponse. Approuve les patterns qui te parlent.</li>
+          <li><strong>Installe l'extension Chrome</strong>, ajoute des contacts depuis LinkedIn et vois leur statut CRM en direct.</li>
         </ol>
         <a href="${APP_URL}/memory" style="display: inline-block; background: #6E57FA; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
           Voir la Mémoire IA →
@@ -160,7 +161,7 @@ const RETENTION_SEQUENCE = [
         <p style="color: #71717a; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">
           Ça fait un mois qu'on ne t'a pas vu sur baakalai.
           Si quelque chose ne marche pas ou si tu as besoin d'aide pour configurer l'outil,
-          réponds directement à cet email — Goran te répondra personnellement.
+          réponds directement à cet email, Goran te répondra personnellement.
         </p>
         <p style="color: #71717a; font-size: 14px; line-height: 1.7; margin-bottom: 24px;">
           Si baakalai ne correspond pas à tes besoins actuels, pas de souci.
@@ -189,6 +190,11 @@ async function processOnboarding() {
       const sentEmails = userData._onboarding_sent || [];
       const daysSinceSignup = Math.floor((Date.now() - new Date(user.created_at).getTime()) / DAY_MS);
 
+      // Opt-out RGPD : catégorie tips (lib/email-prefs.js, migration 101) · 
+      // couvre l'onboarding ET la rétention, désinscriptible en un clic.
+      const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('./email-prefs');
+      if (!(await isEmailEnabled(user.id, 'tips'))) { report.skipped = (report.skipped || 0) + 1; continue; }
+
       for (const step of ONBOARDING_SEQUENCE) {
         if (sentEmails.includes(step.key)) continue;
         if (daysSinceSignup < step.delay) continue;
@@ -209,7 +215,8 @@ async function processOnboarding() {
           await sendEmail({
             to: user.email,
             subject: step.subject,
-            html: step.html(user),
+            html: step.html(user) + emailFooter(user.id, 'tips'),
+            headers: unsubscribeHeaders(user.id, 'tips'),
           });
 
           sentEmails.push(step.key);
@@ -242,7 +249,7 @@ async function processRetention() {
 
   try {
     // chat_messages ne porte pas user_id : l'activité passe par chat_threads.
-    // (La version précédente jetait une erreur SQL à chaque run — la retention
+    // (La version précédente jetait une erreur SQL à chaque run · la retention
     // n'a donc jamais envoyé un seul email.)
     const users = await db.query(
       `SELECT u.id, u.name, u.email, u.data,
@@ -256,10 +263,15 @@ async function processRetention() {
        WHERE u.created_at < now() - interval '14 days'`
     );
 
+    const { isEmailEnabled, emailFooter, unsubscribeHeaders } = require('./email-prefs');
     for (const user of users.rows) {
       let daysInactive = Math.floor(parseFloat(user.days_inactive) || 0);
       const userData = (typeof user.data === 'string' ? JSON.parse(user.data) : user.data) || {};
       const sentRetention = userData._retention_sent || [];
+
+      // Opt-out RGPD : la rétention est la séquence la plus « marketing » du
+      // produit · même catégorie tips que l'onboarding (décision Goran 15/09).
+      if (!(await isEmailEnabled(user.id, 'tips'))) { report.skipped++; continue; }
 
       // Plancher d'inactivité : posé au rallumage de l'orchestrateur
       // (2026-08-04) sur les comptes existants, pour que la reprise ne
@@ -272,7 +284,7 @@ async function processRetention() {
         if (Number.isFinite(floorDays)) daysInactive = Math.min(daysInactive, Math.max(0, floorDays));
       }
 
-      // Palier le plus profond applicable — jamais plusieurs à la fois. Un
+      // Palier le plus profond applicable · jamais plusieurs à la fois. Un
       // utilisateur inactif 35 jours reçoit le « personal check-in », pas les
       // trois relances de l'échelle dans la même minute.
       const applicable = RETENTION_SEQUENCE.filter(s => daysInactive >= s.inactiveDays);
@@ -283,10 +295,21 @@ async function processRetention() {
         // Gather stats for the re-engagement email
         let stats = {};
         if (step.key === 'reengagement') {
+          // « Tu as N deals stagnants qui t'attendent » doit annoncer le même N
+          // que l'app : même seuil (lib/stagnation.js, réglable) et même date de
+          // référence (COALESCE(last_activity_at, created_at) · jamais
+          // updated_at, réécrit en masse par chaque import). Un 14 en dur sur
+          // updated_at faisait de cet email une sixième version du chiffre.
+          const stagnantDays = await getStagnantDays(user.id);
           const [patterns, pending, stagnant] = await Promise.all([
             db.query('SELECT COUNT(*) AS c FROM memory_patterns WHERE date_discovered > now() - interval \'7 days\''),
             db.query('SELECT COUNT(*) AS c FROM nurture_emails WHERE user_id = $1 AND status = \'pending\'', [user.id]),
-            db.query('SELECT COUNT(*) AS c FROM opportunities WHERE user_id = $1 AND status = \'open\' AND updated_at < now() - interval \'14 days\'', [user.id]),
+            db.query(
+              `SELECT COUNT(*) AS c FROM opportunities
+                WHERE user_id = $1 AND status = 'open'
+                  AND COALESCE(last_activity_at, created_at) < now() - ($2::int * INTERVAL '1 day')`,
+              [user.id, stagnantDays]
+            ),
           ]);
           stats = {
             newPatterns: parseInt(patterns.rows[0]?.c || 0),
@@ -298,7 +321,8 @@ async function processRetention() {
         await sendEmail({
           to: user.email,
           subject: step.subject,
-          html: step.html(user, stats),
+          html: step.html(user, stats) + emailFooter(user.id, 'tips'),
+          headers: unsubscribeHeaders(user.id, 'tips'),
         });
 
         // Les paliers moins profonds sont marqués aussi : une fois le

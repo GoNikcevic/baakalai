@@ -14,6 +14,9 @@ vi.mock('../../services/auth', () => ({
 
 // Mock api-client
 vi.mock('../../services/api-client', () => ({
+  // Les composants passent par request() pour les appels non typés ;
+  // sans cette entrée, vitest rejette tout accès à l'export absent.
+  request: vi.fn().mockResolvedValue({}),
   default: {
     checkHealth: vi.fn().mockResolvedValue(null),
   },
@@ -84,8 +87,10 @@ vi.mock('../../context/useApp', () => ({
 }));
 
 function renderList(props = {}) {
+  // L'écran par défaut de /campaigns est désormais l'assistant de création ;
+  // ces tests portent sur la liste (onglet Historique), ciblée via openHistory.
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[{ pathname: '/campaigns', state: { openHistory: true } }]}>
       <CampaignsList onNavigateCampaign={vi.fn()} {...props} />
     </MemoryRouter>
   );
@@ -209,11 +214,11 @@ describe('CampaignsList', () => {
   });
 });
 
-describe('CampaignsList — filtered empty', () => {
+describe('CampaignsList, filtered empty', () => {
   it('shows no-result message when filter matches nothing', () => {
     renderList();
 
-    // Apply "En préparation" filter, then "Active" — toggle quickly
+    // Apply "En préparation" filter, then "Active" · toggle quickly
     fireEvent.click(screen.getByRole('button', { name: 'En préparation' }));
 
     // Prep campaigns should show, active ones hidden from rows

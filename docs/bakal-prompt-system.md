@@ -1,4 +1,4 @@
-# Bakal — Systeme de Prompts pour la Generation de Copy
+# Bakal : Systeme de Prompts pour la Generation de Copy
 
 > **Version :** 1.0
 > **Source :** `backend/api/prompts.js`
@@ -488,7 +488,7 @@ Variable derivee finale (icebreaker)
       "label": "Icebreaker sectoriel",
       "type": "derived",
       "desc": "Accroche finale",
-      "source": { "icon": "brain", "label": "IA — combine les variables" },
+      "source": { "icon": "brain", "label": "IA : combine les variables" },
       "dependsOn": ["variableName", "painEstimate"],
       "derivationHint": null,
       "formula": {

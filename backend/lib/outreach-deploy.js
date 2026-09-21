@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Outreach Deploy
+   BAKAL · Outreach Deploy
    Creates campaigns on Apollo, Instantly, and Smartlead from Baakal-generated
    sequences. Maps Lemlist variables to each provider's format.
    =============================================================================== */
@@ -64,7 +64,7 @@ function extractDays(timing) {
 }
 
 // ---------------------------------------------------------------------------
-// Apollo — Create campaign with emailer_steps in a single call
+// Apollo · Create campaign with emailer_steps in a single call
 // ---------------------------------------------------------------------------
 
 async function deployToApollo(apiKey, campaignName, steps) {
@@ -97,7 +97,7 @@ async function deployToApollo(apiKey, campaignName, steps) {
 }
 
 // ---------------------------------------------------------------------------
-// Instantly — Create campaign, then add steps one by one
+// Instantly · Create campaign, then add steps one by one
 // ---------------------------------------------------------------------------
 
 async function deployToInstantly(apiKey, campaignName, steps) {
@@ -146,7 +146,7 @@ async function deployToInstantly(apiKey, campaignName, steps) {
 }
 
 // ---------------------------------------------------------------------------
-// Smartlead — Create campaign, then save all sequences in one call
+// Smartlead · Create campaign, then save all sequences in one call
 // ---------------------------------------------------------------------------
 
 async function deployToSmartlead(apiKey, campaignName, steps) {
@@ -200,17 +200,17 @@ async function deployToSmartlead(apiKey, campaignName, steps) {
  * Deploy a Baakal-generated sequence to an outreach tool as a new campaign.
  *
  * @param {string} userId
- * @param {string} provider — 'apollo' | 'instantly' | 'smartlead'
+ * @param {string} provider · 'apollo' | 'instantly' | 'smartlead'
  * @param {string} campaignName
- * @param {Array} touchpoints — array of { step, type, subject, body, timing }
+ * @param {Array} touchpoints · array of { step, type, subject, body, timing }
  * @returns {{ success: boolean, campaignId: string, provider: string }}
  */
 async function deployToOutreach(userId, provider, campaignName, touchpoints) {
   const apiKey = await getUserKey(userId, provider);
   if (!apiKey) throw new Error(`No ${provider} API key configured`);
 
-  // Map variables and build steps — only email steps
-  // Outreach tools expect HTML body — convert \n to <br> for proper paragraph rendering
+  // Map variables and build steps · only email steps
+  // Outreach tools expect HTML body · convert \n to <br> for proper paragraph rendering
   const steps = touchpoints
     .filter((tp) => tp.type === 'email')
     .map((tp) => ({

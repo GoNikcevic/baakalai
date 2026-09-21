@@ -4,7 +4,7 @@ const { callClaude } = require('../api/claude');
 
 const router = Router();
 
-// GET /api/profile — Return current user's profile
+// GET /api/profile · Return current user's profile
 router.get('/', async (req, res, next) => {
   try {
     const profile = await db.profiles.get(req.user.id);
@@ -14,7 +14,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// POST /api/profile — Create or update profile
+// POST /api/profile · Create or update profile
 router.post('/', async (req, res, next) => {
   try {
     const data = {};
@@ -24,6 +24,11 @@ router.post('/', async (req, res, next) => {
       'persona_primary', 'persona_secondary', 'target_sectors',
       'target_size', 'target_zones', 'default_tone', 'default_formality',
       'avoid_words', 'signature_phrases',
+      // Poste de l'utilisateur · seul critère ICP non déductible du CRM,
+      // demandé à l'onboarding. Les critères déduits (icp_*) ne sont PAS
+      // dans cette liste : ils sont calculés côté serveur par
+      // lib/icp-signals.js et ne doivent jamais être posés par le client.
+      'job_role',
     ];
 
     for (const key of allowed) {
@@ -39,7 +44,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// POST /api/profile/auto-fill — Extract profile fields from uploaded documents via Claude
+// POST /api/profile/auto-fill · Extract profile fields from uploaded documents via Claude
 router.post('/auto-fill', async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -55,7 +60,7 @@ router.post('/auto-fill', async (req, res, next) => {
     if (!parsedDocs || parsedDocs.length === 0) {
       const names = allUserDocs.map(d => d.original_name).join(', ');
       return res.status(400).json({
-        error: `Vos documents (${names}) n'ont pas pu être analysés. Le parsing a échoué — essayez de re-uploader en PDF ou TXT.`,
+        error: `Vos documents (${names}) n'ont pas pu être analysés. Le parsing a échoué, essayez de re-uploader en PDF ou TXT.`,
       });
     }
 
@@ -80,21 +85,21 @@ router.post('/auto-fill', async (req, res, next) => {
       `Tu es un consultant senior en business development B2B avec 15 ans d'expérience en stratégie outbound. Tu analyses les documents d'une entreprise pour construire le profil de prospection le plus percutant possible.
 
 Ton approche :
-1. ANALYSE EN PROFONDEUR les documents — ne te contente pas de résumer, COMPRENDS le business model, le positionnement, et les avantages compétitifs
-2. IDENTIFIE les pain points des CLIENTS de cette entreprise (pas de l'entreprise elle-même) — pourquoi un prospect aurait besoin de leurs services
-3. FORMULE la proposition de valeur comme un pitch de 2 phrases qui donne envie d'en savoir plus — pas une description Wikipedia
+1. ANALYSE EN PROFONDEUR les documents, ne te contente pas de résumer, COMPRENDS le business model, le positionnement, et les avantages compétitifs
+2. IDENTIFIE les pain points des CLIENTS de cette entreprise (pas de l'entreprise elle-même), pourquoi un prospect aurait besoin de leurs services
+3. FORMULE la proposition de valeur comme un pitch de 2 phrases qui donne envie d'en savoir plus, pas une description Wikipedia
 4. ANTICIPE les objections qu'un prospect pourrait avoir (prix, alternatives, timing, changement de process)
 5. DÉFINIS les personas avec leur titre exact, leurs responsabilités, et surtout leurs FRUSTRATIONS quotidiennes que l'entreprise peut résoudre
-6. RECOMMANDE les secteurs et tailles d'entreprise où l'offre aura le plus d'impact — sois spécifique, pas générique
+6. RECOMMANDE les secteurs et tailles d'entreprise où l'offre aura le plus d'impact, sois spécifique, pas générique
 
-Retourne un JSON. Sois précis, actionnable, et opinionné — comme un consultant qui facture 500€/h :
+Retourne un JSON. Sois précis, actionnable, et opinionné, comme un consultant qui facture 500€/h :
 
 {
   "company": "Nom exact de l'entreprise",
   "sector": "Secteur principal (ex: Biotech / Diagnostics, pas juste 'Santé')",
   "description": "Description business percutante (2-3 phrases, pas corporate)",
   "value_prop": "Proposition de valeur formulée comme un pitch de vente (2 phrases max, chiffrée si possible)",
-  "social_proof": "Clients notables, partenariats, certifications, prix — tout ce qui crédibilise",
+  "social_proof": "Clients notables, partenariats, certifications, prix, tout ce qui crédibilise",
   "pain_points": "Les 3-4 frustrations principales des PROSPECTS cibles que l'entreprise résout",
   "objections": "Les 3-4 objections qu'un prospect pourrait avoir et comment les contrer",
   "persona_primary": "Titre exact + responsabilités + frustration #1 que l'entreprise résout",

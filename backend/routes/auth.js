@@ -50,7 +50,7 @@ setInterval(() => {
   }
 }, 60000).unref();
 
-// HTTPS helpers — bypass Railway proxy cert issues
+// HTTPS helpers · bypass Railway proxy cert issues
 function httpsPost(url, body) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -438,7 +438,7 @@ router.get('/google/callback', async (req, res) => {
       // Mark as verified immediately + clear password for OAuth-only user
       await db.query('UPDATE users SET email_verified = true, password_hash = NULL WHERE id = $1', [dbUser.id]);
     } else {
-      // Existing user — mark as verified if not already
+      // Existing user · mark as verified if not already
       if (!dbUser.email_verified) {
         await db.query('UPDATE users SET email_verified = true WHERE id = $1', [dbUser.id]);
       }
@@ -466,7 +466,7 @@ router.get('/google/callback', async (req, res) => {
   }
 });
 
-// DELETE /api/auth/account — Delete user account and all associated data (GDPR/CCPA right to erasure)
+// DELETE /api/auth/account · Delete user account and all associated data (GDPR/CCPA right to erasure)
 router.delete('/account', requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -482,7 +482,7 @@ router.delete('/account', requireAuth, async (req, res, next) => {
       if (!valid) return res.status(403).json({ error: 'Invalid password' });
     }
 
-    // Check if user is a team admin — must transfer or disband first
+    // Check if user is a team admin · must transfer or disband first
     try {
       const team = await db.teams.getByUser(userId);
       if (team && team.role === 'admin') {
@@ -496,7 +496,7 @@ router.delete('/account', requireAuth, async (req, res, next) => {
           });
         }
       }
-    } catch { /* no team — ok */ }
+    } catch { /* no team, ok */ }
 
     // Cascade delete all user data (order matters for FK constraints)
     // Most tables have ON DELETE CASCADE from users(id), but we explicitly clean up
@@ -525,7 +525,7 @@ router.delete('/account', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/auth/onboarding-complete — Mark onboarding as done
+// POST /api/auth/onboarding-complete · Mark onboarding as done
 router.post('/onboarding-complete', requireAuth, async (req, res, next) => {
   try {
     await db.query('UPDATE users SET onboarding_complete = true WHERE id = $1', [req.user.id]);
@@ -536,7 +536,7 @@ router.post('/onboarding-complete', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/auth/onboarding-reset — Allow user to re-run onboarding wizard
+// POST /api/auth/onboarding-reset · Allow user to re-run onboarding wizard
 router.post('/onboarding-reset', requireAuth, async (req, res, next) => {
   try {
     await db.query('UPDATE users SET onboarding_complete = false WHERE id = $1', [req.user.id]);
@@ -546,7 +546,7 @@ router.post('/onboarding-reset', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/auth/exchange-code — Exchange one-time auth code for tokens
+// POST /api/auth/exchange-code · Exchange one-time auth code for tokens
 router.post('/exchange-code', async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: 'Code required' });

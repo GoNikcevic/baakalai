@@ -16,6 +16,15 @@ const logger = require('../logger');
 async function run(userId) {
   const report = { insights: 0, recommendations: [], errors: [] };
 
+  // Tenant des patterns (audit 02/09) : l'équipe si l'utilisateur en a une,
+  // sinon l'utilisateur · jamais les deux (règle DAO, migration 089).
+  // Résolu une seule fois par run, réutilisé pour chaque écriture.
+  let tenant = { userId };
+  try {
+    const team = await db.teams.getByUser(userId);
+    if (team) tenant = { teamId: team.id };
+  } catch { /* résolution d'équipe indisponible : le pattern reste scopé user */ }
+
   try {
     // Load sent emails with timestamps and outcomes
     const emails = await db.query(`
@@ -60,6 +69,7 @@ async function run(userId) {
       report.recommendations.push(insight);
 
       await db.memoryPatterns.replaceOrCreate({
+        ...tenant,
         pattern: insight,
         category: 'S\u00e9quence',
         data: JSON.stringify({ byDay, bestDay: dayNames[bestDay], bestRate: Math.round(bestRate * 100) }),
@@ -102,7 +112,7 @@ async function run(userId) {
 
       if (delays.length > 0) {
         const avgDelay = Math.round(delays.reduce((a, b) => a + b, 0) / delays.length);
-        const insight = `D\u00e9lai moyen de r\u00e9ponse : ${avgDelay} jour(s) — adapter le timing des relances en cons\u00e9quence`;
+        const insight = `D\u00e9lai moyen de r\u00e9ponse : ${avgDelay} jour(s), adapter le timing des relances en cons\u00e9quence`;
         report.recommendations.push(insight);
         report.insights++;
       }
@@ -149,6 +159,7 @@ async function run(userId) {
           report.recommendations.push(dayInsight);
 
           await db.memoryPatterns.replaceOrCreate({
+            ...tenant,
             pattern: dayInsight,
             category: 'S\u00e9quence',
             source: 'timing_agent_linkedin',

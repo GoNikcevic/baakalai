@@ -1,5 +1,5 @@
 /**
- * Billing — plans, entitlements, client Stripe.
+ * Billing · plans, entitlements, client Stripe.
  *
  * Tout est inerte tant que STRIPE_SECRET_KEY n'est pas posée (pattern 501,
  * comme les OAuth CRM avant la création des apps). Les price IDs Stripe se
@@ -18,7 +18,7 @@ const PLANS = {
 // Ordre pour requirePlan() : chaque palier inclut les précédents.
 const PLAN_ORDER = ['trial', 'starter', 'growth', 'scale'];
 
-// Ce que chaque palier débloque. Valeurs par défaut raisonnables — l'arbitrage
+// Ce que chaque palier débloque. Valeurs par défaut raisonnables · l'arbitrage
 // produit définitif (L2/L3/L4) pourra les ajuster sans toucher au reste.
 const ENTITLEMENTS = {
   trial: { maxContacts: 500, teamMembers: 1, chainsAutonomous: false },

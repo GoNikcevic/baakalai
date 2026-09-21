@@ -1,30 +1,18 @@
 /* ═══════════════════════════════════════════════════
-   Email Account Settings — Connect SMTP for nurture emails
+   Email Account Settings · Connect SMTP for nurture emails
    ═══════════════════════════════════════════════════ */
 
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
+/* Gmail et Outlook passent par OAuth uniquement : les app passwords Google sont
+   souvent indisponibles (2FA/politique Workspace) et Microsoft a coupé l'auth
+   basique SMTP. Le SMTP manuel reste pour les autres fournisseurs. */
 function getPresets(lang) {
   const en = lang === 'en';
   return [
-    {
-      label: 'Gmail', host: 'smtp.gmail.com', port: 587,
-      help: en ? 'App password required (not your regular Gmail password)' : 'Mot de passe d\'application requis (pas votre mot de passe Gmail habituel)',
-      steps: en
-        ? ['Go to myaccount.google.com/apppasswords', 'Sign in with your Google account', 'Select "Other" and name it "baakalai"', 'Copy the 16-character password and paste it below']
-        : ['Allez sur myaccount.google.com/apppasswords', 'Connectez-vous avec votre compte Google', 'S\u00E9lectionnez "Autre" et nommez-le "baakalai"', 'Copiez le mot de passe g\u00E9n\u00E9r\u00E9 et collez-le ci-dessous'],
-      note: en ? '2-factor authentication must be enabled on your Google account.' : 'La double authentification doit \u00EAtre activ\u00E9e sur votre compte Google.',
-    },
-    {
-      label: 'Outlook / O365', host: 'smtp.office365.com', port: 587,
-      help: en ? 'Use your Microsoft password or an app password' : 'Utilisez votre mot de passe Microsoft ou un mot de passe d\'application',
-      steps: en
-        ? ['Use your full Outlook/Microsoft email', 'If 2FA enabled: create an app password at account.microsoft.com', 'Otherwise: use your regular password']
-        : ['Utilisez votre email Outlook/Microsoft complet', 'Si la double auth est activ\u00E9e : cr\u00E9ez un mot de passe d\'app sur account.microsoft.com', 'Sinon : utilisez votre mot de passe habituel'],
-      note: null,
-    },
     {
       label: 'OVH', host: 'ssl0.ovh.net', port: 587,
       help: en ? 'Password for your OVH mailbox' : 'Mot de passe de votre boite email OVH',
@@ -60,7 +48,7 @@ export default function EmailAccountSettings() {
 
   const [form, setForm] = useState({
     emailAddress: '',
-    smtpHost: 'smtp.gmail.com',
+    smtpHost: 'ssl0.ovh.net',
     smtpPort: 587,
     smtpUser: '',
     smtpPass: '',
@@ -100,6 +88,14 @@ export default function EmailAccountSettings() {
     }
   };
 
+  const oauthProviderFor = (email) => {
+    const e = (email || '').toLowerCase();
+    if (/@(gmail|googlemail)\./.test(e)) return 'gmail';
+    if (/@(outlook|hotmail|live|msn)\./.test(e)) return 'microsoft';
+    return null;
+  };
+  const oauthHint = oauthProviderFor(form.emailAddress);
+
   const handlePreset = (idx) => {
     setSelectedPreset(idx);
     const p = PRESETS[idx];
@@ -122,7 +118,7 @@ export default function EmailAccountSettings() {
         }),
       });
       setShowForm(false);
-      setForm({ emailAddress: '', smtpHost: 'smtp.gmail.com', smtpPort: 587, smtpUser: '', smtpPass: '' });
+      setForm({ emailAddress: '', smtpHost: 'ssl0.ovh.net', smtpPort: 587, smtpUser: '', smtpPass: '' });
       await loadAccounts();
     } catch (err) {
       setTestResult({ success: false, error: err.message });
@@ -151,6 +147,52 @@ export default function EmailAccountSettings() {
       await request(`/nurture/email-accounts/${id}`, { method: 'DELETE' });
       await loadAccounts();
     } catch { /* ignore */ }
+  };
+
+  /* ─── Signature par compte (migration 102) ─── */
+  const [sigOpenId, setSigOpenId] = useState(null);
+  const [sigText, setSigText] = useState('');
+  const [sigImage, setSigImage] = useState(null);
+  const [sigSaving, setSigSaving] = useState(false);
+  const [sigStatus, setSigStatus] = useState(null);
+
+  const openSignature = (acc) => {
+    if (sigOpenId === acc.id) { setSigOpenId(null); return; }
+    setSigOpenId(acc.id);
+    setSigText(acc.signature_text || '');
+    setSigImage(acc.signature_image || null);
+    setSigStatus(null);
+  };
+
+  const handleSigImageUpload = (file) => {
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) {
+      setSigStatus({ success: false, message: t('emailAccount.signatureBadType') });
+      return;
+    }
+    if (file.size > 300 * 1024) {
+      setSigStatus({ success: false, message: t('emailAccount.signatureTooBig') });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => { setSigImage(reader.result); setSigStatus(null); };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSigSave = async (accountId) => {
+    setSigSaving(true);
+    setSigStatus(null);
+    try {
+      await request(`/nurture/email-accounts/${accountId}/signature`, {
+        method: 'PATCH',
+        body: JSON.stringify({ signatureText: sigText || null, signatureImage: sigImage || null }),
+      });
+      setSigStatus({ success: true, message: t('emailAccount.signatureSaved') });
+      await loadAccounts();
+    } catch (err) {
+      setSigStatus({ success: false, message: err.message });
+    }
+    setSigSaving(false);
   };
 
   return (
@@ -222,7 +264,7 @@ export default function EmailAccountSettings() {
               </button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
-              {lang === 'en' ? 'or configure SMTP manually below' : 'ou configurer SMTP manuellement ci-dessous'}
+              {lang === 'en' ? 'Other provider (OVH, Zoho…)? Configure SMTP manually below' : 'Autre fournisseur (OVH, Zoho…) ? Configurez le SMTP manuellement ci-dessous'}
             </div>
           </div>
         )}
@@ -232,44 +274,103 @@ export default function EmailAccountSettings() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: showForm ? 16 : 0 }}>
             {accounts.map(acc => (
               <div key={acc.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 14px', borderRadius: 8,
+                borderRadius: 8,
                 border: `1px solid ${acc.status === 'active' ? 'var(--success)' : 'var(--warning)'}`,
                 background: acc.status === 'active' ? 'rgba(0,214,143,0.04)' : 'rgba(255,170,0,0.04)',
               }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{acc.email_address}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {acc.provider === 'gmail' ? 'Gmail OAuth' : acc.provider === 'microsoft' ? 'Microsoft OAuth' : `${acc.smtp_host}:${acc.smtp_port}`}
-                    {' \u00B7 '}{acc.status === 'active' ? `\u2705 ${t('emailAccount.active')}` : `\u26A0\uFE0F ${t('emailAccount.expired')}`}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{acc.email_address}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {acc.provider === 'gmail' ? 'Gmail OAuth' : acc.provider === 'microsoft' ? 'Microsoft OAuth' : `${acc.smtp_host}:${acc.smtp_port}`}
+                      {' \u00B7 '}<Icon name={acc.status === 'active' ? 'checkCircle' : 'alert'} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                      {acc.status === 'active' ? t('emailAccount.active') : t('emailAccount.expired')}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {acc.status === 'expired' && (acc.provider === 'gmail' || acc.provider === 'microsoft') && (
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 10, padding: '4px 10px' }}
+                        onClick={() => handleOAuthConnect(acc.provider)}
+                      >
+                        {lang === 'en' ? 'Reconnect' : 'Reconnecter'}
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 10, padding: '4px 10px', fontWeight: (acc.signature_text || acc.signature_image) ? 600 : 400 }}
+                      onClick={() => openSignature(acc)}
+                    >
+                      {t('emailAccount.signature')}{(acc.signature_text || acc.signature_image) ? ' \u2713' : ''}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 10, padding: '4px 10px' }}
+                      onClick={() => handleTest(acc.id)}
+                      disabled={testing}
+                    >
+                      {testing ? '...' : t('emailAccount.test')}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 10, padding: '4px 10px', color: 'var(--danger)' }}
+                      onClick={() => handleDelete(acc.id)}
+                    >
+                      {t('emailAccount.delete')}
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {acc.status === 'expired' && (acc.provider === 'gmail' || acc.provider === 'microsoft') && (
-                    <button
-                      className="btn btn-primary"
-                      style={{ fontSize: 10, padding: '4px 10px' }}
-                      onClick={() => handleOAuthConnect(acc.provider)}
-                    >
-                      {lang === 'en' ? 'Reconnect' : 'Reconnecter'}
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 10, padding: '4px 10px' }}
-                    onClick={() => handleTest(acc.id)}
-                    disabled={testing}
-                  >
-                    {testing ? '...' : t('emailAccount.test')}
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: 10, padding: '4px 10px', color: 'var(--danger)' }}
-                    onClick={() => handleDelete(acc.id)}
-                  >
-                    {t('emailAccount.delete')}
-                  </button>
-                </div>
+
+                {sigOpenId === acc.id && (
+                  <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      {t('emailAccount.signatureHint')}
+                    </div>
+                    <textarea
+                      className="form-input"
+                      rows={4}
+                      placeholder={t('emailAccount.signatureTextPlaceholder')}
+                      value={sigText}
+                      onChange={e => setSigText(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 12px', resize: 'vertical', fontFamily: 'inherit' }}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                      {sigImage ? (
+                        <>
+                          <img src={sigImage} alt="" style={{ maxWidth: 160, maxHeight: 60, borderRadius: 4, border: '1px solid var(--border)' }} />
+                          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }} onClick={() => setSigImage(null)}>
+                            {t('emailAccount.signatureRemoveImage')}
+                          </button>
+                        </>
+                      ) : (
+                        <label className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px', cursor: 'pointer' }}>
+                          {t('emailAccount.signatureUpload')}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/gif,image/webp"
+                            style={{ display: 'none' }}
+                            onChange={e => { handleSigImageUpload(e.target.files?.[0]); e.target.value = ''; }}
+                          />
+                        </label>
+                      )}
+                      <div style={{ flex: 1 }} />
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 11, padding: '5px 14px' }}
+                        onClick={() => handleSigSave(acc.id)}
+                        disabled={sigSaving}
+                      >
+                        {sigSaving ? t('emailAccount.saving') : t('emailAccount.save')}
+                      </button>
+                    </div>
+                    {sigStatus && (
+                      <div style={{ fontSize: 11, marginTop: 8, color: sigStatus.success ? 'var(--success)' : 'var(--danger)' }}>
+                        {sigStatus.message}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -282,7 +383,8 @@ export default function EmailAccountSettings() {
             background: testResult.success ? 'rgba(0,214,143,0.1)' : 'rgba(255,107,107,0.1)',
             color: testResult.success ? 'var(--success)' : 'var(--danger)',
           }}>
-            {testResult.success ? '\u2705 Connexion r\u00E9ussie' : `\u274C ${testResult.error}`}
+            <Icon name={testResult.success ? 'checkCircle' : 'close'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {testResult.success ? 'Connexion r\u00E9ussie' : testResult.error}
           </div>
         )}
 
@@ -325,7 +427,7 @@ export default function EmailAccountSettings() {
               </ol>
               {PRESETS[selectedPreset].note && (
                 <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 8 }}>
-                  {'\u26A0\uFE0F'} {PRESETS[selectedPreset].note}
+                  <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{PRESETS[selectedPreset].note}
                 </div>
               )}
             </div>
@@ -340,6 +442,28 @@ export default function EmailAccountSettings() {
                 className="form-input"
                 style={{ fontSize: 13, padding: '8px 12px' }}
               />
+              {oauthHint && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                  padding: '8px 12px', borderRadius: 8, fontSize: 12,
+                  background: 'rgba(255,170,0,0.08)', color: 'var(--warning)',
+                }}>
+                  <span>
+                    <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {lang === 'en'
+                      ? `For ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, use the one-click connection, no password needed.`
+                      : `Pour ${oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}, utilisez la connexion en un clic, aucun mot de passe nécessaire.`}
+                  </span>
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                    onClick={() => handleOAuthConnect(oauthHint)}
+                    disabled={!!connectingOAuth}
+                  >
+                    {connectingOAuth ? '...' : (lang === 'en' ? 'Connect' : 'Connecter')} {oauthHint === 'gmail' ? 'Gmail' : 'Outlook'}
+                  </button>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   type="text"
@@ -360,7 +484,7 @@ export default function EmailAccountSettings() {
               </div>
               <input
                 type="password"
-                placeholder="Mot de passe ou mot de passe d'application"
+                placeholder={lang === 'en' ? 'Mailbox password' : 'Mot de passe de la boite email'}
                 value={form.smtpPass}
                 onChange={e => setForm(p => ({ ...p, smtpPass: e.target.value }))}
                 className="form-input"

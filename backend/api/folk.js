@@ -52,6 +52,18 @@ async function searchPeople(apiKey, query) {
   return folkFetch(apiKey, `/people?search=${encodeURIComponent(query)}&limit=10`);
 }
 
+// 404 = supprimé côté Folk ; toute autre erreur remonte · une clé invalide ne
+// doit pas passer pour « le contact n'existe plus » et déclencher une recréation.
+async function personExists(apiKey, personId) {
+  try {
+    await folkFetch(apiKey, `/people/${encodeURIComponent(personId)}`);
+    return true;
+  } catch (err) {
+    if (err.status === 404) return false;
+    throw err;
+  }
+}
+
 // ── Companies ──
 
 async function createCompany(apiKey, data) {
@@ -94,6 +106,7 @@ function mapOpportunityToPerson(opp) {
 module.exports = {
   createPerson,
   searchPeople,
+  personExists,
   createCompany,
   createNote,
   mapOpportunityToPerson,

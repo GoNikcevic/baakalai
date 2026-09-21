@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Profile Page (React)
+   BAKAL · Profile Page (React)
    Ported from app/pages.js (saveProfile, loadProfile, populateProfileForm).
    Company info, value prop, personas, targets, communication style.
    =============================================================================== */
@@ -9,6 +9,7 @@ import { useApp } from '../context/useApp';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useI18n } from '../i18n';
+import Icon from '../components/Icon';
 
 /* ─── Default empty profile ─── */
 
@@ -58,7 +59,7 @@ export default function ProfilePage() {
   /* ─── Load uploaded documents ─── */
   useEffect(() => {
     request('/documents').then(data => {
-      // Filter out chat_attachment docs — they belong to chat context, not profile
+      // Filter out chat_attachment docs · they belong to chat context, not profile
       if (data && data.documents) setUploadedDocs(data.documents.filter(d => d.doc_type !== 'chat_attachment'));
     }).catch(() => {});
   }, []);
@@ -243,7 +244,7 @@ export default function ProfilePage() {
             }
           } else {
             const details = (reparseData.results || [])
-              .map(r => `• ${r.name}: ${r.status}${r.message ? ' (' + r.message + ')' : ''}${r.chars ? ' — ' + r.chars + ' chars' : ''}`)
+.map(r => `• ${r.name}: ${r.status}${r.message ? ' (' + r.message + ')' : ''}${r.chars ? ', ' + r.chars + ' chars' : ''}`)
               .join('\n');
             showToast({ type: 'error', title: en ? 'Reparse failed' : 'Reparse échoué', message: details.slice(0, 200) });
           }
@@ -307,7 +308,7 @@ export default function ProfilePage() {
           value={profile[field] || ''}
           onChange={(e) => handleChange(field, e.target.value)}
         >
-          <option value="">{en ? '-- Select --' : '-- Sélectionner --'}</option>
+          <option value="">{en ? '-- Select --' : 'Sélectionner…'}</option>
           {options.map(opt => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
@@ -337,7 +338,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Product Lines / Projects — wraps all profile sections */}
+      {/* Product Lines · wraps all profile sections */}
       <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect}
         docProps={{ files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize }} />
 
@@ -415,7 +416,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
         await request(`/crm/product-lines/${activeTab}`, { method: 'PATCH', body: JSON.stringify(form) });
         await load();
       }
-    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: 'Failed to save project' })); }
+    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to save product' : 'Échec de la sauvegarde du produit' })); }
     setSaving(false);
   };
 
@@ -426,7 +427,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
       const remaining = lines.filter(l => l.id !== id);
       setLines(remaining);
       setActiveTab(remaining.length > 0 ? remaining[0].id : null);
-    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: 'Failed to delete project' })); }
+    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to delete product' : 'Échec de la suppression du produit' })); }
   };
 
   if (loading) return null;
@@ -443,26 +444,29 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
 
   return (
     <>
-      {/* Project tabs */}
+      {/* Product tabs */}
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: -1 }}>
         {lines.map(pl => (
           <button key={pl.id} onClick={() => setActiveTab(pl.id)} style={tabStyle(activeTab === pl.id, false)}>
-            {pl.icon || '📦'} {pl.name}
+            {pl.icon
+              ? <span style={{ marginRight: 6 }}>{pl.icon}</span>
+              : <Icon name="package" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+            {pl.name}
           </button>
         ))}
         <button onClick={() => setActiveTab('new')} style={tabStyle(activeTab === 'new', true)}>
-          + {en ? 'New project' : 'Nouveau projet'}
+          + {en ? 'New product' : 'Nouveau produit'}
         </button>
       </div>
 
-      {/* Active project content */}
+      {/* Active product content */}
       {activeTab && (
         <div className="card" style={{ marginBottom: 16, borderTopLeftRadius: 0 }}>
           <div className="card-body" style={{ paddingTop: 20 }}>
 
-            {/* Project identity */}
+            {/* Product identity */}
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {en ? 'Project identity' : 'Identit\u00e9 du projet'}
+              {en ? 'Product identity' : 'Identit\u00e9 du produit'}
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <div className="form-group" style={{ width: 70 }}>
@@ -471,7 +475,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                   style={{ fontSize: 18, textAlign: 'center', padding: '6px' }} maxLength={2} placeholder="📦" />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">{en ? 'Project name' : 'Nom du projet'}</label>
+                <label className="form-label">{en ? 'Product name' : 'Nom du produit'}</label>
                 <input className="form-input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                   placeholder={en ? 'e.g., Cybersecurity Solutions' : 'ex: Solutions Cybers\u00e9curit\u00e9'} />
               </div>
@@ -511,7 +515,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                 placeholder={en ? 'e.g., Finance, Healthcare, Telecom' : 'ex: Finance, Sant\u00e9, T\u00e9l\u00e9com'} />
             </div>
 
-            {/* Global profile fields (shared across projects) */}
+            {/* Global profile fields (shared across products) */}
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {en ? 'Company info (shared)' : 'Informations entreprise (partag\u00e9es)'}
             </div>
@@ -520,6 +524,16 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
               {renderInput(en ? 'Industry' : 'Secteur d\'activit\u00e9', 'sector', { placeholder: 'Ex: Formation professionnelle' })}
               {renderInput(en ? 'Website' : 'Site web', 'website', { type: 'url', placeholder: 'https://...' })}
               {renderSelect(en ? 'Team size' : 'Taille d\'\u00e9quipe', 'team_size', ['1-5', '6-10', '11-25', '26-50', '51-100', '100+'])}
+            </div>
+            <div style={{ marginTop: 8 }}>
+              {renderInput(en ? 'ICP target sectors (shared)' : 'Secteurs cibles ICP (partag\u00e9s)', 'target_sectors', {
+                placeholder: en ? 'e.g., Finance, Healthcare, Telecom' : 'ex: Finance, Sant\u00e9, T\u00e9l\u00e9com',
+              })}
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                {en
+                  ? 'Weights the contact score: an account in one of these sectors gets a fit bonus.'
+                  : 'Pond\u00e8re le score des contacts : un compte dans l\'un de ces secteurs re\u00e7oit un bonus de fit.'}
+              </div>
             </div>
 
             <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -583,7 +597,12 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                   <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {uploadedDocs.map((doc, i) => (
                       <div key={doc.id || i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', background: 'var(--bg-elevated)', borderRadius: 5, fontSize: 12 }}>
-                        <span style={{ fontSize: 13 }}>{doc.mime_type?.includes('pdf') ? '📄' : doc.mime_type?.includes('sheet') || doc.mime_type?.includes('excel') ? '📊' : '📎'}</span>
+                        <Icon
+                          name={doc.mime_type?.includes('pdf') ? 'file'
+                            : doc.mime_type?.includes('sheet') || doc.mime_type?.includes('excel') ? 'chart'
+                            : 'paperclip'}
+                          size={13}
+                        />
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.original_name}</span>
                         <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
                         <button onClick={async () => { try { await request('/documents/' + doc.id, { method: 'DELETE' }); setUploadedDocs(prev => prev.filter(d => d.id !== doc.id)); } catch {} }}
@@ -604,13 +623,13 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                 {activeTab !== 'new' && (
                   <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--danger)' }}
                     onClick={() => handleDelete(activeTab, form.name)}>
-                    {en ? 'Delete project' : 'Supprimer le projet'}
+                    {en ? 'Delete product' : 'Supprimer le produit'}
                   </button>
                 )}
               </div>
               <button className="btn btn-primary" style={{ fontSize: 12, padding: '8px 20px' }}
                 onClick={handleSave} disabled={saving || !form.name.trim()}>
-                {saving ? '...' : activeTab === 'new' ? (en ? 'Create project' : 'Cr\u00e9er le projet') : (en ? 'Save project' : 'Sauvegarder le projet')}
+                {saving ? '...' : activeTab === 'new' ? (en ? 'Create product' : 'Cr\u00e9er le produit') : (en ? 'Save product' : 'Sauvegarder le produit')}
               </button>
             </div>
           </div>
@@ -620,7 +639,7 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
       {/* Empty state */}
       {lines.length === 0 && activeTab !== 'new' && (
         <div className="card" style={{ marginBottom: 16, textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
-          {en ? 'No projects yet. Click "+ New project" to get started.' : 'Aucun projet. Cliquez sur "+ Nouveau projet" pour commencer.'}
+          {en ? 'No products yet. Click "+ New product" to get started.' : 'Aucun produit. Cliquez sur "+ Nouveau produit" pour commencer.'}
         </div>
       )}
     </>

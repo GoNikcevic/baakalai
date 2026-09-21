@@ -1,15 +1,12 @@
 /**
  * CRM Analytics Routes
  *
- * GET /api/analytics/pipeline      — Pipeline stage breakdown + conversion rates
- * GET /api/analytics/attribution   — Revenue attribution per campaign
- * GET /api/analytics/scoring       — Lead scoring dashboard
- * GET /api/analytics/trends        — Weekly KPI trend data
- * GET /api/analytics/channels      — Channel performance comparison
- * GET /api/analytics/health        — CRM health score + alerts
- * GET /api/analytics/renewals      — Renewal pipeline (overdue / 30 / 60 / 90 day windows)
- * GET /api/analytics/segments      — Smart segments (auto-grouping of contacts)
- * GET /api/analytics/engagement    — Engagement scoring (0-100 per contact)
+ * GET /api/analytics/pipeline · Pipeline stage breakdown + conversion rates
+ * GET /api/analytics/attribution · Revenue attribution per campaign
+ * GET /api/analytics/trends · Weekly KPI trend data
+ * GET /api/analytics/channels · Channel performance comparison
+ * GET /api/analytics/health · CRM health score + alerts
+ * GET /api/analytics/engagement · Engagement scoring (0-100 per contact)
  */
 
 const { Router } = require('express');
@@ -53,6 +50,187 @@ function canonicalStage(status) {
   return mapping[s] || 'new';
 }
 
+// ── Filtres transverses produit / secteur (barre de filtres Analytics) ──
+// Les routes de cette page agrègent déjà en mémoire sur listByUser : on filtre
+// donc en JS après chargement · zéro changement de comportement sans filtre.
+// `productLine` = UUID de product_lines. `sector` = secteur normalisé
+// (lib/sector-classifier.js) · ne couvre que les textes bruts déjà classifiés
+// en cache (sector_normalization_cache), jamais de classification à la volée
+// ici : coûteux (appel Claude) et hors-sujet pour un simple filtre d'écran.
+
+// Valeur spéciale des deux filtres : deals sans ligne produit / sans secteur
+// déterminé · sinon invisibles dans les deux dropdowns (ils n'apparaissent dans
+// aucune option nommée puisqu'ils n'ont justement rien d'assigné).
+const UNASSIGNED = '__unassigned__';
+
+async function resolveAnalyticsFilters(userId, query) {
+  const productLine = String(query?.productLine || '').trim();
+  const sector = String(query?.sector || '').trim();
+  let productOppIds = null;
+  if (productLine === UNASSIGNED) {
+    const r = await db.query(
+      `SELECT o.id FROM opportunities o
+       LEFT JOIN opportunity_product_lines opl ON opl.opportunity_id = o.id
+       WHERE o.user_id = $1 AND opl.opportunity_id IS NULL`,
+      [userId]
+    );
+    productOppIds = new Set(r.rows.map(x => x.id));
+  } else if (productLine) {
+    const r = await db.query(
+      `SELECT opl.opportunity_id FROM opportunity_product_lines opl
+       JOIN opportunities o ON o.id = opl.opportunity_id
+       WHERE opl.product_line_id = $1 AND o.user_id = $2`,
+      [productLine, userId]
+    );
+    productOppIds = new Set(r.rows.map(x => x.opportunity_id));
+  }
+  let sectorOppIds = null;
+  if (sector === UNASSIGNED) {
+    const r = await db.query(
+      `SELECT o.id FROM opportunities o
+       WHERE o.user_id = $1
+         AND o.id NOT IN (
+           SELECT o2.id FROM opportunities o2
+           JOIN sector_normalization_cache snc
+             ON lower(snc.raw_text) = lower(o2.data->>'sector') AND snc.scope = 'client_industry'
+           WHERE o2.user_id = $1 AND snc.normalized_sector != 'non_determine'
+         )`,
+      [userId]
+    );
+    sectorOppIds = new Set(r.rows.map(x => x.id));
+  } else if (sector) {
+    const r = await db.query(
+      `SELECT o.id FROM opportunities o
+       JOIN sector_normalization_cache snc
+         ON lower(snc.raw_text) = lower(o.data->>'sector') AND snc.scope = 'client_industry'
+       WHERE o.user_id = $1 AND snc.normalized_sector = $2`,
+      [userId, sector]
+    );
+    sectorOppIds = new Set(r.rows.map(x => x.id));
+  }
+  // Période : filtre sur created_at (date d'entrée du deal dans le pipeline),
+  // même convention que les cohortes de création et le flux mensuel.
+  const from = String(query?.from || '').trim();
+  const to = String(query?.to || '').trim();
+  return { productLine, productOppIds, sector, sectorOppIds, from, to, active: !!(productLine || sector || from || to) };
+}
+
+function applyAnalyticsFilters(opps, filters) {
+  if (!filters?.active) return opps;
+  let list = opps;
+  if (filters.productOppIds) list = list.filter(o => filters.productOppIds.has(o.id));
+  if (filters.sectorOppIds) list = list.filter(o => filters.sectorOppIds.has(o.id));
+  if (filters.from) {
+    const fromTs = new Date(filters.from).getTime();
+    if (!isNaN(fromTs)) list = list.filter(o => o.created_at && new Date(o.created_at).getTime() >= fromTs);
+  }
+  if (filters.to) {
+    // Inclusif de toute la journée "to" (fin de journée, pas minuit).
+    const toTs = new Date(filters.to).getTime() + 24 * 60 * 60 * 1000 - 1;
+    if (!isNaN(toTs)) list = list.filter(o => o.created_at && new Date(o.created_at).getTime() <= toTs);
+  }
+  return list;
+}
+
+async function listFilteredOpportunities(userId, query) {
+  const opps = await db.opportunities.listByUser(userId, 10000, 0);
+  return applyAnalyticsFilters(opps, await resolveAnalyticsFilters(userId, query));
+}
+
+// Pour les routes en SQL pur (/stages) : liste d'IDs autorisés, ou null
+// si aucun filtre · à passer en $n::uuid[] avec `($n::uuid[] IS NULL OR id = ANY($n))`.
+async function filteredOppIds(userId, query) {
+  const filters = await resolveAnalyticsFilters(userId, query);
+  if (!filters.active) return null;
+  const opps = await db.opportunities.listByUser(userId, 10000, 0);
+  return applyAnalyticsFilters(opps, filters).map(o => o.id);
+}
+
+// =============================================
+// GET /api/analytics/sectors · options du filtre « secteur »
+// =============================================
+// Ne renvoie que les secteurs déjà classifiés (sector_normalization_cache) · 
+// alimenté au fil de l'eau par le scoring de churn/contact (lib/sector-classifier.js).
+// Aucune classification à la volée ici.
+
+router.get('/sectors', async (req, res, next) => {
+  try {
+    const r = await db.query(
+      `SELECT snc.normalized_sector AS sector, COUNT(*)::int AS count
+       FROM opportunities o
+       JOIN sector_normalization_cache snc
+         ON lower(snc.raw_text) = lower(o.data->>'sector') AND snc.scope = 'client_industry'
+       WHERE o.user_id = $1 AND snc.normalized_sector != 'non_determine'
+       GROUP BY snc.normalized_sector
+       ORDER BY count DESC`,
+      [req.user.id]
+    );
+
+    // Secteur non déterminé : brut vide, classifié "non_determine", ou jamais
+    // encore classifié · tout ce qui n'apparaît pas ci-dessus.
+    const unassigned = await db.query(
+      `SELECT COUNT(*)::int AS count FROM opportunities o
+       WHERE o.user_id = $1
+         AND o.id NOT IN (
+           SELECT o2.id FROM opportunities o2
+           JOIN sector_normalization_cache snc
+             ON lower(snc.raw_text) = lower(o2.data->>'sector') AND snc.scope = 'client_industry'
+           WHERE o2.user_id = $1 AND snc.normalized_sector != 'non_determine'
+         )`,
+      [req.user.id]
+    );
+
+    const sectors = r.rows;
+    if (unassigned.rows[0].count > 0) {
+      sectors.push({ sector: UNASSIGNED, count: unassigned.rows[0].count });
+    }
+    res.json({ sectors });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/product-lines · options du filtre « ligne produit »
+// =============================================
+// Comptages scopés sur le tenant (req.user.id), contrairement à /crm/product-lines
+// qui compte par team_id · nécessaire pour rester cohérent avec le reste des
+// filtres Analytics, tous scopés utilisateur.
+
+router.get('/product-lines', async (req, res, next) => {
+  try {
+    // LEFT JOIN : une ligne produit sans deal assigné doit rester visible
+    // (count 0), pas disparaître · le FILTER ne compte que les deals du
+    // user courant parmi celles visibles à son équipe.
+    const r = await db.query(
+      `SELECT pl.id, pl.name, pl.icon,
+              COUNT(opl.opportunity_id) FILTER (WHERE o.user_id = $1)::int AS count
+       FROM product_lines pl
+       LEFT JOIN opportunity_product_lines opl ON opl.product_line_id = pl.id
+       LEFT JOIN opportunities o ON o.id = opl.opportunity_id
+       WHERE pl.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)
+       GROUP BY pl.id, pl.name, pl.icon
+       ORDER BY count DESC`,
+      [req.user.id]
+    );
+
+    const unassigned = await db.query(
+      `SELECT COUNT(*)::int AS count FROM opportunities o
+       LEFT JOIN opportunity_product_lines opl ON opl.opportunity_id = o.id
+       WHERE o.user_id = $1 AND opl.opportunity_id IS NULL`,
+      [req.user.id]
+    );
+
+    const productLines = r.rows;
+    if (unassigned.rows[0].count > 0) {
+      productLines.push({ id: UNASSIGNED, name: null, icon: null, count: unassigned.rows[0].count });
+    }
+    res.json({ productLines });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // =============================================
 // GET /api/analytics/pipeline
 // =============================================
@@ -60,7 +238,9 @@ function canonicalStage(status) {
 router.get('/pipeline', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const rawOpportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const filters = await resolveAnalyticsFilters(userId, req.query);
+    const opportunities = applyAnalyticsFilters(rawOpportunities, filters);
     const total = opportunities.length;
 
     // Count per stage
@@ -97,59 +277,128 @@ router.get('/pipeline', async (req, res, next) => {
       });
     }
 
-    // Avg time in stage (days since created_at / updated_at)
-    const now = Date.now();
-    const stageTimes = {};
-    const stageCounts = {};
-    for (const opp of opportunities) {
+    // ── Flux mensuel : créés / gagnés / perdus / solde net, 12 derniers mois ──
+    // Un même mois peut compter un deal créé ET gagné (dates différentes) : les
+    // trois compteurs sont indépendants, dérivés chacun de sa propre colonne date.
+    const monthKey = (d) => {
+      const dt = new Date(d);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+    };
+    const refNow = new Date();
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+      months.push(monthKey(new Date(refNow.getFullYear(), refNow.getMonth() - i, 1)));
+    }
+    // Le flux mensuel et les cohortes sont une vue historique sur 12 mois glissants :
+    // leur appliquer le filtre de période (créé après telle date) viderait à tort la
+    // plupart des mois · un deal créé avant la fenêtre mais gagné/perdu dedans en
+    // disparaîtrait complètement. Seuls produit/secteur s'y appliquent ; la période
+    // n'alimente que le total net affiché à droite du titre (calculé plus bas).
+    const historyOpportunities = applyAnalyticsFilters(rawOpportunities, { ...filters, from: '', to: '' });
+    const flowMap = Object.fromEntries(months.map(m => [m, { period: m, created: 0, won: 0, lost: 0 }]));
+    const cohortMap = Object.fromEntries(months.map(m => [m, { period: m, created: 0, won: 0, lost: 0, open: 0 }]));
+    for (const opp of historyOpportunities) {
       const stage = canonicalStage(opp.status);
-      const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : now;
-      const createdAt = opp.created_at ? new Date(opp.created_at).getTime() : now;
-      const daysInStage = (now - updatedAt) / (1000 * 60 * 60 * 24);
-      stageTimes[stage] = (stageTimes[stage] || 0) + daysInStage;
-      stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+      if (opp.created_at) {
+        const k = monthKey(opp.created_at);
+        if (flowMap[k]) flowMap[k].created++;
+        if (cohortMap[k]) {
+          cohortMap[k].created++;
+          if (stage === 'won') cohortMap[k].won++;
+          else if (stage === 'lost') cohortMap[k].lost++;
+          else cohortMap[k].open++;
+        }
+      }
+      if (opp.won_date) {
+        const k = monthKey(opp.won_date);
+        if (flowMap[k]) flowMap[k].won++;
+      }
+      if (opp.lost_date) {
+        const k = monthKey(opp.lost_date);
+        if (flowMap[k]) flowMap[k].lost++;
+      }
     }
-    const avgTimeInStage = {};
-    for (const def of STAGE_DEFS) {
-      avgTimeInStage[def.stage] = stageCounts[def.stage]
-        ? Math.round((stageTimes[def.stage] / stageCounts[def.stage]) * 10) / 10
-        : 0;
+    const flow = months.map(m => {
+      const f = flowMap[m];
+      return { ...f, net: f.created - f.won - f.lost };
+    });
+    // Total net affiché à droite du titre : contrairement aux barres, il reflète
+    // la période sélectionnée. Recalculé indépendamment sur les 3 dates (créé/
+    // gagné/perdu) plutôt qu'en filtrant sur created_at seul, qui exclurait à tort
+    // les deals gagnés/perdus dans la période mais créés avant.
+    let flowNetTotal;
+    if (filters.from || filters.to) {
+      const inRange = (dateStr) => {
+        if (!dateStr) return false;
+        const ts = new Date(dateStr).getTime();
+        if (filters.from) {
+          const fromTs = new Date(filters.from).getTime();
+          if (!isNaN(fromTs) && ts < fromTs) return false;
+        }
+        if (filters.to) {
+          const toTs = new Date(filters.to).getTime() + 24 * 60 * 60 * 1000 - 1;
+          if (!isNaN(toTs) && ts > toTs) return false;
+        }
+        return true;
+      };
+      let created = 0, won = 0, lost = 0;
+      for (const o of historyOpportunities) {
+        if (inRange(o.created_at)) created++;
+        if (inRange(o.won_date)) won++;
+        if (inRange(o.lost_date)) lost++;
+      }
+      flowNetTotal = created - won - lost;
+    } else {
+      flowNetTotal = flow.reduce((sum, f) => sum + f.net, 0);
     }
-
-    // ── Period comparison: current 30d vs previous 30d ──
-    const now30 = now - 30 * 24 * 60 * 60 * 1000;
-    const now60 = now - 60 * 24 * 60 * 60 * 1000;
-
-    const currentOpps = opportunities.filter(o => {
-      const ca = o.created_at ? new Date(o.created_at).getTime() : 0;
-      return ca >= now30;
-    });
-    const previousOpps = opportunities.filter(o => {
-      const ca = o.created_at ? new Date(o.created_at).getTime() : 0;
-      return ca >= now60 && ca < now30;
+    // Cohortes de création : issue ACTUELLE des deals créés ce mois-là (pas leur
+    // date de clôture) · répond à « les deals créés en mars, où en sont-ils aujourd'hui ? »
+    const cohorts = months.map(m => {
+      const c = cohortMap[m];
+      const closed = c.won + c.lost;
+      return { ...c, winRate: closed > 0 ? Math.round((c.won / closed) * 100) : null };
     });
 
-    const curTotal = currentOpps.length;
-    const curWon = currentOpps.filter(o => canonicalStage(o.status) === 'won').length;
-    const curLost = currentOpps.filter(o => canonicalStage(o.status) === 'lost').length;
-    const curWinRate = (curWon + curLost) > 0 ? Math.round((curWon / (curWon + curLost)) * 100) : 0;
-
-    const prevTotal = previousOpps.length;
-    const prevWon = previousOpps.filter(o => canonicalStage(o.status) === 'won').length;
-    const prevLost = previousOpps.filter(o => canonicalStage(o.status) === 'lost').length;
-    const prevWinRate = (prevWon + prevLost) > 0 ? Math.round((prevWon / (prevWon + prevLost)) * 100) : 0;
-
-    const comparison = {
-      current: { total: curTotal, won: curWon, lost: curLost, winRate: curWinRate },
-      previous: { total: prevTotal, won: prevWon, lost: prevLost, winRate: prevWinRate },
-      changes: {
-        total: curTotal - prevTotal,
-        won: curWon - prevWon,
-        winRate: curWinRate - prevWinRate,
-      },
+    // ── Taille des deals ouverts : distribution + concentration ──
+    const openDeals = opportunities.filter(o => {
+      const s = canonicalStage(o.status);
+      return s !== 'won' && s !== 'lost' && Number(o.deal_value) > 0;
+    });
+    const SIZE_BUCKETS = [
+      { label: '< 1k€', max: 1000 },
+      { label: '1k 5k€', max: 5000 },
+      { label: '5k 20k€', max: 20000 },
+      { label: '20k 50k€', max: 50000 },
+      { label: '> 50k€', max: Infinity },
+    ];
+    const sizeDistribution = SIZE_BUCKETS.map(b => ({ label: b.label, count: 0 }));
+    for (const o of openDeals) {
+      const v = Number(o.deal_value);
+      const idx = SIZE_BUCKETS.findIndex(b => v < b.max);
+      sizeDistribution[idx === -1 ? SIZE_BUCKETS.length - 1 : idx].count++;
+    }
+    const totalOpenValue = openDeals.reduce((sum, o) => sum + Number(o.deal_value), 0);
+    const top5Value = [...openDeals]
+      .sort((a, b) => Number(b.deal_value) - Number(a.deal_value))
+      .slice(0, 5)
+      .reduce((sum, o) => sum + Number(o.deal_value), 0);
+    const dealSize = {
+      distribution: sizeDistribution,
+      totalOpenValue: Math.round(totalOpenValue),
+      top5Value: Math.round(top5Value),
+      top5Pct: totalOpenValue > 0 ? Math.round((top5Value / totalOpenValue) * 100) : 0,
     };
 
-    res.json({ stages, conversions, total, avgTimeInStage, comparison });
+    // Gagnés/perdus sur les 30 derniers jours · distinct des comptages "stages"
+    // qui sont all-time. La date qui compte est celle de clôture (won_date /
+    // lost_date), pas la date de création.
+    const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const outcomes30d = {
+      won: opportunities.filter(o => o.won_date && new Date(o.won_date).getTime() >= cutoff30).length,
+      lost: opportunities.filter(o => o.lost_date && new Date(o.lost_date).getTime() >= cutoff30).length,
+    };
+
+    res.json({ stages, conversions, total, flow, flowNetTotal, cohorts, dealSize, outcomes30d });
   } catch (err) {
     next(err);
   }
@@ -162,49 +411,83 @@ router.get('/pipeline', async (req, res, next) => {
 router.get('/attribution', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const [allCampaigns, allOpportunities, touchAgg, touchedDeals] = await Promise.all([
+    const [allCampaigns, allOpportunities, oppIds] = await Promise.all([
       db.campaigns.list({ userId }),
-      db.opportunities.listByUser(userId, 10000, 0),
-      // Attribution deals touchés/non touchés : un deal est « touché » dès
-      // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé.
-      // Périmètre plus large que /crm/reactivation-stats (chains seules).
+      listFilteredOpportunities(userId, req.query),
+      filteredOppIds(userId, req.query),
+    ]);
+    // Attribution deals touchés/non touchés : un deal est « touché » dès
+    // qu'un email baakalai (nurture OU chain) lui a été réellement envoyé,
+    // OU qu'un workflow de relance (enrollment, migration 103) a exécuté au
+    // moins un step (email ou LinkedIn) pour lui.
+    // Périmètre plus large que /crm/reactivation-stats (chains seules).
+    // oppIds respecte les filtres produit/secteur/période (null = aucun filtre actif).
+    const [touchAgg, touchedDeals] = await Promise.all([
       db.query(`
-        WITH touch AS (
+        WITH wf AS (
+          SELECT se.opportunity_id,
+                 COUNT(cs.id) AS wf_actions,
+                 BOOL_OR(se.stop_reason = 'replied') AS wf_replied
+          FROM sequence_enrollments se
+          JOIN campaign_sends cs ON cs.enrollment_id = se.id AND cs.status = 'sent'
+          WHERE se.user_id = $1
+          GROUP BY se.opportunity_id
+        ),
+        touch AS (
           SELECT o.id, o.deal_value, o.status, o.reactivated_at,
                  COUNT(ne.id) AS emails_sent,
-                 BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+                 COALESCE(MAX(wf.wf_actions), 0) AS wf_actions,
+                 (COALESCE(BOOL_OR(ne.replied_at IS NOT NULL), false)
+                  OR COALESCE(BOOL_OR(wf.wf_replied), false)) AS replied
           FROM opportunities o
           LEFT JOIN nurture_emails ne
             ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
-          WHERE o.user_id = $1
+          LEFT JOIN wf ON wf.opportunity_id = o.id
+          WHERE o.user_id = $1 AND ($2::uuid[] IS NULL OR o.id = ANY($2))
           GROUP BY o.id
         )
         SELECT
-          COUNT(*) FILTER (WHERE emails_sent > 0) AS touched_count,
-          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0), 0) AS touched_value,
-          COUNT(*) FILTER (WHERE emails_sent = 0) AS untouched_count,
-          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent = 0), 0) AS untouched_value,
-          COUNT(*) FILTER (WHERE emails_sent > 0 AND status = 'won') AS touched_won,
-          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent > 0 AND status = 'won'), 0) AS touched_won_value,
-          COUNT(*) FILTER (WHERE emails_sent = 0 AND status = 'won') AS untouched_won,
-          COUNT(*) FILTER (WHERE emails_sent > 0 AND replied) AS touched_replied,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions > 0) AS touched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent + wf_actions > 0), 0) AS touched_value,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions = 0) AS untouched_count,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent + wf_actions = 0), 0) AS untouched_value,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions > 0 AND status = 'won') AS touched_won,
+          COALESCE(SUM(deal_value) FILTER (WHERE emails_sent + wf_actions > 0 AND status = 'won'), 0) AS touched_won_value,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions = 0 AND status = 'won') AS untouched_won,
+          COUNT(*) FILTER (WHERE emails_sent + wf_actions > 0 AND replied) AS touched_replied,
+          COUNT(*) FILTER (WHERE wf_actions > 0) AS workflow_touched_count,
+          COUNT(*) FILTER (WHERE wf_actions > 0 AND replied) AS workflow_replied_count,
           COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL) AS reactivated_count,
           COALESCE(SUM(deal_value) FILTER (WHERE reactivated_at IS NOT NULL), 0) AS reactivated_value
         FROM touch
-      `, [userId]),
+      `, [userId, oppIds]),
       db.query(`
+        WITH wf AS (
+          SELECT se.opportunity_id,
+                 COUNT(cs.id) AS wf_actions,
+                 MAX(cs.sent_at) AS wf_last_at,
+                 BOOL_OR(se.stop_reason = 'replied') AS wf_replied
+          FROM sequence_enrollments se
+          JOIN campaign_sends cs ON cs.enrollment_id = se.id AND cs.status = 'sent'
+          WHERE se.user_id = $1
+          GROUP BY se.opportunity_id
+        )
         SELECT o.name, o.company, o.deal_value, o.status, o.reactivated_at,
                COUNT(ne.id) AS emails_sent,
-               MAX(ne.sent_at) AS last_touch_at,
-               BOOL_OR(ne.replied_at IS NOT NULL) AS replied
+               COALESCE(MAX(wf.wf_actions), 0) AS wf_actions,
+               GREATEST(MAX(ne.sent_at), MAX(wf.wf_last_at)) AS last_touch_at,
+               (COALESCE(BOOL_OR(ne.replied_at IS NOT NULL), false)
+                OR COALESCE(BOOL_OR(wf.wf_replied), false)) AS replied
         FROM opportunities o
-        JOIN nurture_emails ne
+        LEFT JOIN nurture_emails ne
           ON ne.opportunity_id = o.id AND ne.user_id = o.user_id AND ne.status = 'sent'
-        WHERE o.user_id = $1
+        LEFT JOIN wf ON wf.opportunity_id = o.id
+        WHERE o.user_id = $1 AND ($2::uuid[] IS NULL OR o.id = ANY($2))
         GROUP BY o.id, o.name, o.company, o.deal_value, o.status, o.reactivated_at
-        ORDER BY MAX(ne.sent_at) DESC
+        HAVING COUNT(ne.id) + COALESCE(MAX(wf.wf_actions), 0) > 0
+        ORDER BY GREATEST(MAX(ne.sent_at), MAX(wf.wf_last_at)) DESC
         LIMIT 50
-      `, [userId]),
+      `, [userId, oppIds]),
     ]);
 
     // Group opportunities by campaign_id
@@ -271,12 +554,21 @@ router.get('/attribution', async (req, res, next) => {
         won: parseInt(ta.untouched_won),
       },
       reactivated: { count: parseInt(ta.reactivated_count), value: num(ta.reactivated_value) },
+      // Deals touchés par un workflow de relance (sous-ensemble de touched) · 
+      // permet de mesurer cadence multicanal vs one-shot.
+      workflow: {
+        count: parseInt(ta.workflow_touched_count),
+        replied: parseInt(ta.workflow_replied_count),
+        replyRate: ta.workflow_touched_count > 0
+          ? Math.round((ta.workflow_replied_count / ta.workflow_touched_count) * 100) : 0,
+      },
       deals: touchedDeals.rows.map(d => ({
         name: d.name,
         company: d.company,
         dealValue: num(d.deal_value),
         status: d.status,
         emailsSent: parseInt(d.emails_sent),
+        workflowActions: parseInt(d.wf_actions),
         lastTouchAt: d.last_touch_at,
         replied: d.replied,
         reactivatedAt: d.reactivated_at,
@@ -290,24 +582,6 @@ router.get('/attribution', async (req, res, next) => {
 });
 
 // =============================================
-// GET /api/analytics/scoring
-// =============================================
-
-router.get('/scoring', async (req, res, next) => {
-  try {
-    const result = await scoreAllContacts(req.user.id);
-
-    res.json({
-      leads: result.contacts.slice(0, 200),
-      distribution: result.distribution,
-      avgScore: result.avgScore,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// =============================================
 // GET /api/analytics/trends
 // =============================================
 
@@ -315,7 +589,7 @@ router.get('/trends', async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // Date range filtering — defaults to last 90 days
+    // Date range filtering · defaults to last 90 days
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const defaultTo = now.toISOString().split('T')[0];
@@ -451,7 +725,7 @@ router.get('/health', async (req, res, next) => {
   try {
     const userId = req.user.id;
     const [opportunities, allCampaigns, profile] = await Promise.all([
-      db.opportunities.listByUser(userId, 10000, 0),
+      listFilteredOpportunities(userId, req.query),
       db.campaigns.list({ userId }),
       db.profiles.get(userId),
     ]);
@@ -604,11 +878,11 @@ router.get('/health', async (req, res, next) => {
 router.get('/forecast', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const allOpportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const allOpportunities = await listFilteredOpportunities(userId, req.query);
     const now = Date.now();
     const DAY_MS = 1000 * 60 * 60 * 24;
 
-    // Date range filtering — defaults to last 90 days
+    // Date range filtering · defaults to last 90 days
     const defaultFrom = new Date(now - 90 * DAY_MS).toISOString().split('T')[0];
     const defaultTo = new Date(now).toISOString().split('T')[0];
     const fromDate = req.query.from || defaultFrom;
@@ -650,7 +924,7 @@ router.get('/forecast', async (req, res, next) => {
     stageProbability['won'] = 1;
     stageProbability['lost'] = 0;
 
-    // ── Pipeline deals — weighted forecast ──
+    // ── Pipeline deals · weighted forecast ──
     const pipelineDeals = opportunities.filter(o => {
       const s = canonicalStage(o.status);
       return s !== 'won' && s !== 'lost' && o.deal_value;
@@ -707,11 +981,23 @@ router.get('/forecast', async (req, res, next) => {
     const atRiskRevenue = wonDeals.filter(o => (o.churn_score || 0) >= 50).reduce((sum, o) => sum + Number(o.deal_value || 0), 0);
     const totalWonRevenue = wonDeals.reduce((sum, o) => sum + Number(o.deal_value || 0), 0);
 
+    // Forecast intelligent : probabilité PAR DEAL calibrée sur l'historique
+    // réel du tenant (cycle appris, activité, lead score, calibration) · 
+    // best-effort, l'ancien forecast par stage reste le repli d'affichage.
+    let memoryForecast = null;
+    try {
+      const { computeForecast } = require('../lib/forecast-engine');
+      memoryForecast = await computeForecast(userId);
+    } catch (err) {
+      require('../lib/logger').warn('analytics', `memoryForecast failed: ${err.message}`);
+    }
+
     res.json({
       revenueHistory,
       pipeline: { byStage: pipelineByStage, totalValue: totalPipeline, weightedForecast: totalWeighted },
       salesCycle: { avgDays: avgSalesCycle, closedDeals: closedDeals.length },
       projectedDeals,
+      memoryForecast,
       retention: {
         totalWonRevenue: Math.round(totalWonRevenue),
         atRiskRevenue: Math.round(atRiskRevenue),
@@ -722,202 +1008,6 @@ router.get('/forecast', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// =============================================
-// GET /api/analytics/renewals
-// =============================================
-
-router.get('/renewals', async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
-    const now = new Date();
-    const DAY_MS = 1000 * 60 * 60 * 24;
-
-    // Compute renewal date for each opportunity
-    // Priority: renewal_date > close_date > (won_date + 365) > (updated_at + 365)
-    const withRenewal = opportunities
-      .filter(o => canonicalStage(o.status) !== 'lost')
-      .map(o => {
-        let renewalDate = null;
-        if (o.renewal_date) {
-          renewalDate = new Date(o.renewal_date);
-        } else if (o.close_date) {
-          renewalDate = new Date(o.close_date);
-        } else if (o.won_date) {
-          renewalDate = new Date(new Date(o.won_date).getTime() + 365 * DAY_MS);
-        } else if (o.updated_at) {
-          renewalDate = new Date(new Date(o.updated_at).getTime() + 365 * DAY_MS);
-        }
-        if (!renewalDate || isNaN(renewalDate.getTime())) return null;
-
-        const daysUntil = Math.round((renewalDate.getTime() - now.getTime()) / DAY_MS);
-        return {
-          id: o.id,
-          name: o.name,
-          email: o.email,
-          company: o.company,
-          renewal_date: renewalDate.toISOString().split('T')[0],
-          deal_value: Number(o.deal_value || 0),
-          days_until: daysUntil,
-        };
-      })
-      .filter(Boolean);
-
-    // Group by renewal window
-    const overdue = { count: 0, contacts: [] };
-    const next30 = { count: 0, contacts: [] };
-    const next60 = { count: 0, contacts: [] };
-    const next90 = { count: 0, contacts: [] };
-    const later = { count: 0 };
-
-    for (const c of withRenewal) {
-      if (c.days_until < 0) {
-        overdue.count++;
-        overdue.contacts.push(c);
-      } else if (c.days_until <= 30) {
-        next30.count++;
-        next30.contacts.push(c);
-      } else if (c.days_until <= 60) {
-        next60.count++;
-        next60.contacts.push(c);
-      } else if (c.days_until <= 90) {
-        next90.count++;
-        next90.contacts.push(c);
-      } else {
-        later.count++;
-      }
-    }
-
-    // Sort contacts by renewal date (soonest first)
-    overdue.contacts.sort((a, b) => a.days_until - b.days_until);
-    next30.contacts.sort((a, b) => a.days_until - b.days_until);
-    next60.contacts.sort((a, b) => a.days_until - b.days_until);
-    next90.contacts.sort((a, b) => a.days_until - b.days_until);
-
-    res.json({ total: withRenewal.length, overdue, next30, next60, next90, later });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// =============================================
-// GET /api/analytics/segments
-// =============================================
-
-router.get('/segments', async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
-    const now = Date.now();
-    const DAY_MS = 1000 * 60 * 60 * 24;
-    const DAYS_30 = 30 * DAY_MS;
-    const DAYS_90 = 90 * DAY_MS;
-
-    // Compute average deal value for Champions threshold
-    const dealsWithValue = opportunities.filter(o => o.deal_value > 0);
-    const avgDealValue = dealsWithValue.length > 0
-      ? dealsWithValue.reduce((sum, o) => sum + Number(o.deal_value), 0) / dealsWithValue.length
-      : 0;
-
-    // Classify each opportunity into a segment
-    const segments = {
-      champions: { contacts: [], totalValue: 0 },
-      active: { contacts: [], totalValue: 0 },
-      new: { contacts: [] },
-      at_risk: { contacts: [], totalChurnScore: 0 },
-      dormant: { contacts: [], totalDaysSince: 0 },
-    };
-
-    for (const opp of opportunities) {
-      const stage = canonicalStage(opp.status);
-      const updatedAt = opp.updated_at ? new Date(opp.updated_at).getTime() : 0;
-      const createdAt = opp.created_at ? new Date(opp.created_at).getTime() : now;
-      const daysSinceActivity = (now - updatedAt) / DAY_MS;
-      const churnScore = opp.churn_score || 0;
-      const dealValue = Number(opp.deal_value || 0);
-
-      const contact = {
-        id: opp.id,
-        name: opp.name,
-        email: opp.email,
-        company: opp.company,
-        churn_score: churnScore,
-        deal_value: dealValue,
-        last_activity: opp.updated_at || opp.created_at || null,
-      };
-
-      // Champions: won + above-avg deal value + low churn
-      if (stage === 'won' && dealValue > avgDealValue && churnScore < 30) {
-        segments.champions.contacts.push(contact);
-        segments.champions.totalValue += dealValue;
-      }
-      // New: created in last 30 days
-      else if ((now - createdAt) < DAYS_30) {
-        segments.new.contacts.push(contact);
-      }
-      // Dormant: no activity in 90+ days
-      else if ((now - updatedAt) >= DAYS_90) {
-        segments.dormant.contacts.push(contact);
-        segments.dormant.totalDaysSince += daysSinceActivity;
-      }
-      // At-risk: high churn OR inactive 30-90 days and not won
-      else if (churnScore >= 50 || ((now - updatedAt) >= DAYS_30 && stage !== 'won')) {
-        segments.at_risk.contacts.push(contact);
-        segments.at_risk.totalChurnScore += churnScore;
-      }
-      // Active: recent activity + positive status
-      else if ((now - updatedAt) < DAYS_30 && (stage === 'won' || stage === 'interested' || stage === 'meeting')) {
-        segments.active.contacts.push(contact);
-        segments.active.totalValue += dealValue;
-      }
-      // Fallback: if none of the above matched, put in active
-      else {
-        segments.active.contacts.push(contact);
-        segments.active.totalValue += dealValue;
-      }
-    }
-
-    const result = [
-      {
-        key: 'champions',
-        count: segments.champions.contacts.length,
-        totalValue: Math.round(segments.champions.totalValue),
-        contacts: segments.champions.contacts.slice(0, 10),
-      },
-      {
-        key: 'active',
-        count: segments.active.contacts.length,
-        totalValue: Math.round(segments.active.totalValue),
-        contacts: segments.active.contacts.slice(0, 10),
-      },
-      {
-        key: 'new',
-        count: segments.new.contacts.length,
-        contacts: segments.new.contacts.slice(0, 10),
-      },
-      {
-        key: 'at_risk',
-        count: segments.at_risk.contacts.length,
-        avgChurnScore: segments.at_risk.contacts.length > 0
-          ? Math.round(segments.at_risk.totalChurnScore / segments.at_risk.contacts.length)
-          : 0,
-        contacts: segments.at_risk.contacts.slice(0, 10),
-      },
-      {
-        key: 'dormant',
-        count: segments.dormant.contacts.length,
-        daysSinceActivity: segments.dormant.contacts.length > 0
-          ? Math.round(segments.dormant.totalDaysSince / segments.dormant.contacts.length)
-          : 0,
-        contacts: segments.dormant.contacts.slice(0, 10),
-      },
-    ];
-
-    res.json({ segments: result, total: opportunities.length });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // =============================================
 // GET /api/analytics/engagement
@@ -938,7 +1028,7 @@ router.get('/engagement', async (req, res, next) => {
   }
 });
 
-// GET /api/analytics/engagement/csv — now uses unified contact scoring
+// GET /api/analytics/engagement/csv · now uses unified contact scoring
 router.get('/engagement/csv', async (req, res, next) => {
   try {
     const result = await scoreAllContacts(req.user.id);
@@ -971,7 +1061,7 @@ function sendCsv(res, filename, headers, rows) {
 router.get('/pipeline/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const total = opportunities.length;
     const counts = {}; const stageTimes = {}; const stageCounts2 = {};
     for (const def of STAGE_DEFS) counts[def.stage] = 0;
@@ -997,7 +1087,7 @@ router.get('/pipeline/csv', async (req, res, next) => {
 router.get('/attribution/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const [allCampaigns, allOpps] = await Promise.all([db.campaigns.list({ userId }), db.opportunities.listByUser(userId, 10000, 0)]);
+    const [allCampaigns, allOpps] = await Promise.all([db.campaigns.list({ userId }), listFilteredOpportunities(userId, req.query)]);
     const oppByCampaign = {};
     for (const opp of allOpps) { const cid = opp.campaign_id || '__none__'; if (!oppByCampaign[cid]) oppByCampaign[cid] = []; oppByCampaign[cid].push(opp); }
     const headers = ['Campaign', 'Channel', 'Prospects', 'Interested', 'Meetings', 'Conversion %'];
@@ -1009,16 +1099,6 @@ router.get('/attribution/csv', async (req, res, next) => {
       return [c.name, c.channel || 'email', prospects, interested, meetings, prospects > 0 ? ((meetings / prospects) * 100).toFixed(1) + '%' : '0%'];
     });
     sendCsv(res, 'baakal-attribution.csv', headers, rows);
-  } catch (err) { next(err); }
-});
-
-// GET /api/analytics/scoring/csv
-router.get('/scoring/csv', async (req, res, next) => {
-  try {
-    const result = await scoreAllContacts(req.user.id);
-    const headers = ['Score', 'Name', 'Company', 'Title', 'Status', 'Campaign', 'Activity', 'Fit', 'Last Activity'];
-    const rows = result.contacts.map(c => [c.score, c.name, c.company, c.title, c.status, c.campaign || '', c.breakdown?.activity || 0, c.breakdown?.fit || 0, c.lastActivity || '']);
-    sendCsv(res, 'baakal-contact-score.csv', headers, rows);
   } catch (err) { next(err); }
 });
 
@@ -1063,7 +1143,7 @@ router.get('/channels/csv', async (req, res, next) => {
 router.get('/health/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const now = Date.now(); const DAY_MS = 86400000;
     const activeOpps = opportunities.filter(o => { const s = canonicalStage(o.status); return s !== 'won' && s !== 'lost'; });
     const stale = activeOpps.filter(o => { const u = o.updated_at ? new Date(o.updated_at).getTime() : 0; return (now - u) > 7 * DAY_MS; });
@@ -1083,7 +1163,7 @@ router.get('/health/csv', async (req, res, next) => {
 router.get('/forecast/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const counts = {}; for (const opp of opportunities) counts[canonicalStage(opp.status)] = (counts[canonicalStage(opp.status)] || 0) + 1;
     const wonCount = counts['won'] || 0;
     const funnelStages = ['new', 'interested', 'meeting', 'negotiation', 'won'];
@@ -1103,7 +1183,7 @@ router.get('/forecast/csv', async (req, res, next) => {
 router.get('/renewals/csv', async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const opportunities = await db.opportunities.listByUser(userId, 10000, 0);
+    const opportunities = await listFilteredOpportunities(userId, req.query);
     const now = new Date();
     const DAY_MS = 86400000;
     const rows = opportunities
@@ -1125,4 +1205,506 @@ router.get('/renewals/csv', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// =============================================
+// GET /api/analytics/stages · étapes de pipeline CRM réelles (migration 092)
+// =============================================
+// Contrairement à /pipeline (statuts canoniques dérivés de `status`), ici ce
+// sont les étapes telles que l'utilisateur les a nommées dans SON CRM,
+// rapatriées par le delta sync. L'historique des transitions ne démarre qu'à
+// l'installation du tracking · le front doit l'afficher honnêtement.
+
+router.get('/stages', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    // null = pas de filtre actif (le prédicat $2::uuid[] IS NULL court-circuite)
+    const oppIds = await filteredOppIds(userId, req.query);
+
+    const dist = await db.query(
+      `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
+       FROM opportunities
+       WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won', 'lost')
+         AND ($2::uuid[] IS NULL OR id = ANY($2))
+       GROUP BY crm_stage`,
+      [userId, oppIds]
+    );
+
+    if (dist.rows.length === 0) {
+      const any = await db.query(
+        `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_stage IS NOT NULL LIMIT 1`,
+        [userId]
+      );
+      if (!any.rows[0]) return res.json({ available: false });
+    }
+
+    // Ordre naturel du pipeline quand le CRM le fournit (Pipedrive/HubSpot) ;
+    // sinon tri par volume décroissant.
+    let order = null;
+    try {
+      const { resolveCrmForUser } = require('../lib/crm-token');
+      const { getStageLabelMap } = require('../lib/stage-tracking');
+      const { provider, creds } = await resolveCrmForUser(userId);
+      const map = provider ? await getStageLabelMap(provider, creds) : null;
+      if (map && map.size > 0) order = [...map.values()];
+    } catch { /* best-effort */ }
+
+    const stages = dist.rows.sort((a, b) => {
+      if (order) {
+        const ia = order.indexOf(a.stage);
+        const ib = order.indexOf(b.stage);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      }
+      return b.count - a.count;
+    });
+
+    // Où meurent les deals : l'étape d'origine de la DERNIÈRE transition d'un
+    // deal perdu (from_stage) · pas son étape courante, qui est souvent une
+    // étape terminale type « Closed lost » sans valeur diagnostique.
+    const lost = await db.query(
+      `SELECT COALESCE(h.from_stage, o.crm_stage) AS stage, COUNT(*)::int AS count
+       FROM opportunities o
+       LEFT JOIN LATERAL (
+         SELECT from_stage FROM opportunity_stage_history h
+         WHERE h.opportunity_id = o.id AND h.from_stage IS NOT NULL
+         ORDER BY h.changed_at DESC LIMIT 1
+       ) h ON true
+       WHERE o.user_id = $1 AND o.status = 'lost' AND COALESCE(h.from_stage, o.crm_stage) IS NOT NULL
+         AND ($2::uuid[] IS NULL OR o.id = ANY($2))
+       GROUP BY 1 ORDER BY count DESC LIMIT 12`,
+      [userId, oppIds]
+    );
+
+    const transitions = await db.query(
+      `SELECT from_stage AS "from", to_stage AS "to", COUNT(*)::int AS count
+       FROM opportunity_stage_history
+       WHERE user_id = $1 AND from_stage IS NOT NULL
+         AND ($2::uuid[] IS NULL OR opportunity_id = ANY($2))
+       GROUP BY from_stage, to_stage ORDER BY count DESC LIMIT 15`,
+      [userId, oppIds]
+    );
+
+    const since = await db.query(
+      `SELECT MIN(changed_at) AS since FROM opportunity_stage_history WHERE user_id = $1`,
+      [userId]
+    );
+
+    // Temps moyen passé par étape : uniquement les séjours TERMINÉS (une
+    // transition suivante existe) · un deal encore dans son étape actuelle
+    // n'a pas de durée finale connue, l'inclure biaiserait la moyenne vers le bas.
+    const avgDays = await db.query(
+      `WITH ordered AS (
+         SELECT to_stage, changed_at,
+                LEAD(changed_at) OVER (PARTITION BY opportunity_id ORDER BY changed_at) AS next_changed_at
+         FROM opportunity_stage_history
+         WHERE user_id = $1
+           AND ($2::uuid[] IS NULL OR opportunity_id = ANY($2))
+       )
+       SELECT to_stage AS stage,
+              ROUND(AVG(EXTRACT(EPOCH FROM (next_changed_at - changed_at)) / 86400)::numeric, 1) AS avg_days,
+              COUNT(*)::int AS completed_stints
+       FROM ordered
+       WHERE next_changed_at IS NOT NULL
+       GROUP BY to_stage
+       ORDER BY avg_days DESC NULLS LAST`,
+      [userId, oppIds]
+    );
+
+    res.json({
+      available: true,
+      stages,
+      lostByStage: lost.rows,
+      transitions: transitions.rows,
+      avgDaysByStage: avgDays.rows,
+      historySince: since.rows[0]?.since || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/lost-reasons · pourquoi les deals sont perdus
+// =============================================
+// lost_reason (migration 095) vient soit du CRM (Pipedrive, natif), soit d'une
+// saisie manuelle dans baakalai. Les deals perdus sans raison encore connue
+// sont remontés à part pour que l'utilisateur puisse les taguer (PATCH
+// /api/crm/opportunities/:id/lost-reason).
+
+router.get('/lost-reasons', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const opportunities = await listFilteredOpportunities(userId, req.query);
+    const lost = opportunities.filter(o => canonicalStage(o.status) === 'lost');
+
+    const distMap = {};
+    let untaggedValue = 0;
+    for (const o of lost) {
+      if (!o.lost_reason) {
+        untaggedValue += Number(o.deal_value || 0);
+        continue;
+      }
+      if (!distMap[o.lost_reason]) distMap[o.lost_reason] = { reason: o.lost_reason, count: 0, value: 0 };
+      distMap[o.lost_reason].count++;
+      distMap[o.lost_reason].value += Number(o.deal_value || 0);
+    }
+    const distribution = Object.values(distMap)
+      .map(d => ({ ...d, value: Math.round(d.value) }))
+      .sort((a, b) => b.count - a.count);
+
+    const allUntagged = lost
+      .filter(o => !o.lost_reason)
+      .sort((a, b) => new Date(b.lost_date || b.updated_at) - new Date(a.lost_date || a.updated_at));
+    const untagged = allUntagged.slice(0, 50).map(o => ({
+      id: o.id, name: o.name, company: o.company,
+      dealValue: Number(o.deal_value || 0), lostDate: o.lost_date,
+    }));
+
+    res.json({
+      totalLost: lost.length,
+      taggedCount: lost.length - allUntagged.length,
+      untaggedCount: allUntagged.length,
+      untaggedValue: Math.round(untaggedValue),
+      distribution,
+      untagged,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/upsell-performance · performance de la détection upsell
+// =============================================
+// Vue d'ensemble du portefeuille entier, non filtrée par produit/secteur/
+// période (même granularité que trends/channels/membership) · cohérent avec
+// GET /api/crm/upsell/summary, déjà non filtré.
+
+router.get('/upsell-performance', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const upsellDetector = require('../lib/agents/upsell-detector');
+    const detected = await upsellDetector.run(userId);
+    const candidates = detected.opportunities || [];
+
+    const avgScore = candidates.length > 0
+      ? Math.round(candidates.reduce((sum, c) => sum + c.score, 0) / candidates.length)
+      : 0;
+
+    const crossSellCounts = {};
+    for (const c of candidates) {
+      for (const p of c.crossSellProducts || []) {
+        crossSellCounts[p] = (crossSellCounts[p] || 0) + 1;
+      }
+    }
+    const crossSellBreakdown = Object.entries(crossSellCounts)
+      .map(([product, count]) => ({ product, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const emailStats = await db.query(
+      `SELECT COUNT(*) FILTER (WHERE status = 'sent') AS sent,
+              COUNT(*) FILTER (WHERE status = 'sent' AND replied_at IS NOT NULL) AS replied,
+              COUNT(DISTINCT opportunity_id) FILTER (WHERE status = 'sent') AS emailed_opps
+       FROM nurture_emails
+       WHERE user_id = $1 AND metadata->>'chain' = 'auto_upsell'`,
+      [userId]
+    );
+    const sent = parseInt(emailStats.rows[0].sent, 10) || 0;
+    const replied = parseInt(emailStats.rows[0].replied, 10) || 0;
+    const emailedOpps = parseInt(emailStats.rows[0].emailed_opps, 10) || 0;
+
+    // Conversion : ligne produit ajoutée après le dernier email d'upsell envoyé
+    // sur ce même deal · corrélation temporelle (pas de FK directe entre l'email
+    // et l'assignation), added_at posé par migration 098.
+    const conversions = await db.query(
+      `SELECT DISTINCT o.id, o.deal_value
+       FROM opportunities o
+       JOIN opportunity_product_lines opl ON opl.opportunity_id = o.id AND opl.added_at IS NOT NULL
+       JOIN LATERAL (
+         SELECT MAX(sent_at) AS last_sent
+         FROM nurture_emails
+         WHERE opportunity_id = o.id AND metadata->>'chain' = 'auto_upsell' AND status = 'sent'
+       ) ne ON true
+       WHERE o.user_id = $1 AND ne.last_sent IS NOT NULL AND opl.added_at > ne.last_sent`,
+      [userId]
+    );
+    const convertedCount = conversions.rows.length;
+    const convertedRevenue = conversions.rows.reduce((sum, r) => sum + Number(r.deal_value || 0), 0);
+
+    res.json({
+      candidatesCount: candidates.length,
+      avgScore,
+      crossSellBreakdown,
+      emailsSent: sent,
+      emailsReplied: replied,
+      replyRate: sent > 0 ? Math.round((replied / sent) * 100) : 0,
+      emailedOpportunities: emailedOpps,
+      convertedCount,
+      convertedRevenue: Math.round(convertedRevenue),
+      conversionRate: emailedOpps > 0 ? Math.round((convertedCount / emailedOpps) * 100) : 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/churn-risk-performance · performance de la détection churn
+// =============================================
+// Vue d'ensemble du portefeuille entier (clients gagnés uniquement), non
+// filtrée par produit/secteur/période · cohérent avec /api/crm/churn/summary.
+
+router.get('/churn-risk-performance', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { AT_RISK_THRESHOLD } = require('../lib/churn-scoring');
+
+    const oppsResult = await db.query(
+      `SELECT id, name, company, deal_value, churn_score, churn_factors
+       FROM opportunities WHERE user_id = $1 AND status = 'won' AND churn_score IS NOT NULL`,
+      [userId]
+    );
+    const opps = oppsResult.rows;
+
+    const distribution = { critical: 0, high: 0, medium: 0, low: 0 };
+    let atRiskCount = 0, atRiskRevenue = 0, safeRevenue = 0, totalRevenue = 0;
+    const factorCounts = {};
+    for (const o of opps) {
+      const v = Number(o.deal_value || 0);
+      totalRevenue += v;
+      if (o.churn_score >= 76) distribution.critical++;
+      else if (o.churn_score >= 51) distribution.high++;
+      else if (o.churn_score >= 26) distribution.medium++;
+      else distribution.low++;
+
+      if (o.churn_score >= AT_RISK_THRESHOLD) {
+        atRiskCount++;
+        atRiskRevenue += v;
+        for (const f of (Array.isArray(o.churn_factors) ? o.churn_factors : [])) {
+          if (!f?.signal) continue;
+          factorCounts[f.signal] = (factorCounts[f.signal] || 0) + 1;
+        }
+      } else {
+        safeRevenue += v;
+      }
+    }
+    const topFactors = Object.entries(factorCounts)
+      .map(([signal, count]) => ({ signal, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const noRecentActivity = await db.query(
+      `SELECT o.id, o.name, o.company, o.churn_score, o.deal_value
+       FROM opportunities o
+       WHERE o.user_id = $1 AND o.status = 'won' AND o.churn_score >= $2
+         AND NOT EXISTS (
+           SELECT 1 FROM nurture_emails ne WHERE ne.opportunity_id = o.id AND ne.created_at > now() - interval '30 days'
+         )
+       ORDER BY o.churn_score DESC LIMIT 20`,
+      [userId, AT_RISK_THRESHOLD]
+    );
+
+    // Sauvés vs perdus · nécessite un historique constitué depuis ~45j minimum
+    // (churn_score_history démarre vide, migration 098) : sans ça, on ne peut
+    // pas savoir qui était à risque il y a 45-75 jours.
+    const historyRange = await db.query(
+      `SELECT MIN(scored_at) AS since FROM churn_score_history WHERE user_id = $1`,
+      [userId]
+    );
+    const historySince = historyRange.rows[0].since;
+    const enoughHistory = !!historySince && (Date.now() - new Date(historySince).getTime()) >= 45 * 24 * 60 * 60 * 1000;
+
+    let savedVsChurned = null;
+    if (enoughHistory) {
+      const result = await db.query(
+        `WITH past_at_risk AS (
+           SELECT DISTINCT ON (opportunity_id) opportunity_id, score AS past_score
+           FROM churn_score_history
+           WHERE user_id = $1 AND scored_at BETWEEN now() - interval '75 days' AND now() - interval '45 days'
+           ORDER BY opportunity_id, scored_at DESC
+         )
+         SELECT
+           COUNT(*) FILTER (WHERE o.status = 'lost') AS churned,
+           COUNT(*) FILTER (WHERE o.status = 'won' AND o.churn_score < $2) AS saved,
+           COUNT(*) FILTER (WHERE o.status = 'won' AND o.churn_score >= $2) AS still_at_risk
+         FROM past_at_risk par
+         JOIN opportunities o ON o.id = par.opportunity_id
+         WHERE par.past_score >= $2`,
+        [userId, AT_RISK_THRESHOLD]
+      );
+      const row = result.rows[0];
+      savedVsChurned = {
+        churned: parseInt(row.churned, 10) || 0,
+        saved: parseInt(row.saved, 10) || 0,
+        stillAtRisk: parseInt(row.still_at_risk, 10) || 0,
+      };
+    }
+
+    res.json({
+      distribution,
+      atRiskCount,
+      atRiskRevenue: Math.round(atRiskRevenue),
+      safeRevenue: Math.round(safeRevenue),
+      totalRevenue: Math.round(totalRevenue),
+      topFactors,
+      noRecentActivity: noRecentActivity.rows.map(r => ({
+        id: r.id, name: r.name, company: r.company,
+        churnScore: r.churn_score, dealValue: Number(r.deal_value || 0),
+      })),
+      savedVsChurned,
+      historySince,
+      enoughHistory,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// GET /api/analytics/geography · répartition géographique du portefeuille
+// =============================================
+// Pays = colonne CRM (migration 093) normalisée en ISO-2, sinon TLD de l'email.
+// Les TLD génériques (.com, .io) ne donnent rien : la part « non déterminé »
+// est retournée telle quelle · le front doit l'afficher honnêtement.
+
+router.get('/geography', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { resolveCountry } = require('../lib/geo');
+    const opportunities = await listFilteredOpportunities(userId, req.query);
+
+    const byCountry = new Map();
+    let undetermined = 0;
+    let fromCrm = 0;
+
+    for (const opp of opportunities) {
+      const resolved = resolveCountry(opp);
+      if (!resolved) { undetermined++; continue; }
+      if (resolved.source === 'crm') fromCrm++;
+
+      let row = byCountry.get(resolved.code);
+      if (!row) {
+        row = { code: resolved.code, contacts: 0, clients: 0, openDeals: 0, openValue: 0, wonValue: 0 };
+        byCountry.set(resolved.code, row);
+      }
+      row.contacts++;
+      const stage = canonicalStage(opp.status);
+      const value = parseFloat(opp.deal_value) || 0;
+      if (stage === 'won') {
+        row.clients++;
+        row.wonValue += value;
+      } else if (stage !== 'lost' && value > 0) {
+        row.openDeals++;
+        row.openValue += value;
+      }
+    }
+
+    const countries = [...byCountry.values()]
+      .map(r => ({ ...r, openValue: Math.round(r.openValue), wonValue: Math.round(r.wonValue) }))
+      .sort((a, b) => b.contacts - a.contacts);
+
+    const total = opportunities.length;
+    res.json({
+      countries,
+      total,
+      undetermined,
+      // Part des pays issus du CRM (vs déduits du TLD email) · indicateur de fiabilité
+      crmCoverage: total > 0 ? Math.round((fromCrm / total) * 100) : 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================
+// buildAnalyticsContext · agrégats CRM pour l'Assistant (routes/ai.js)
+// =============================================
+// Paquet d'agrégats SQL calculés à la volée : les réponses de l'Assistant ne
+// peuvent citer que ce que la base contient vraiment.
+
+async function buildAnalyticsContext(userId, filterQuery = null) {
+  const ctx = {};
+
+  // Restriction produit éventuelle. Quand un filtre est actif, les blocs
+  // globaux (emails d'activation, forecast, patterns) sont omis : ils ne sont
+  // pas filtrables et mélangeraient des périmètres · Claude citerait des
+  // chiffres « globaux » comme s'ils étaient filtrés.
+  let oppIds = null;
+  if (filterQuery) {
+    const filters = await resolveAnalyticsFilters(userId, filterQuery);
+    if (filters.active) {
+      const opps = await db.opportunities.listByUser(userId, 10000, 0);
+      oppIds = applyAnalyticsFilters(opps, filters).map(o => o.id);
+      ctx.filters_applied = {};
+      if (filters.productLine) {
+        try {
+          const pl = await db.query('SELECT name FROM product_lines WHERE id = $1', [filters.productLine]);
+          ctx.filters_applied.product_line = pl.rows[0]?.name || filters.productLine;
+        } catch { ctx.filters_applied.product_line = filters.productLine; }
+      }
+    }
+  }
+
+  const totals = await db.query(
+    `SELECT
+       COUNT(*)::int AS contacts,
+       COUNT(*) FILTER (WHERE status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals,
+       COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won','lost')), 0)::float AS open_value,
+       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '365 days')::int AS won_365d,
+       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '365 days')::int AS lost_365d,
+       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '90 days')::int AS won_90d,
+       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '90 days')::int AS lost_90d,
+       COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL)::int AS deals_reactivated,
+       ROUND(AVG(EXTRACT(EPOCH FROM (won_date - created_at)) / 86400)
+         FILTER (WHERE status = 'won' AND won_date > created_at))::int AS avg_cycle_days,
+       COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS clients_at_churn_risk,
+       COUNT(*) FILTER (WHERE last_activity_at < now() - interval '30 days'
+         AND status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals_quiet_30d
+     FROM opportunities WHERE user_id = $1 AND ($2::uuid[] IS NULL OR id = ANY($2))`,
+    [userId, oppIds]
+  );
+  ctx.totals = totals.rows[0];
+  const w = ctx.totals.won_365d, l = ctx.totals.lost_365d;
+  ctx.totals.win_rate_365d = (w + l) > 0 ? Math.round((w / (w + l)) * 100) : null;
+
+  const stages = await db.query(
+    `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
+     FROM opportunities
+     WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won','lost')
+       AND ($2::uuid[] IS NULL OR id = ANY($2))
+     GROUP BY crm_stage ORDER BY count DESC LIMIT 15`,
+    [userId, oppIds]
+  );
+  if (stages.rows.length > 0) ctx.open_deals_by_crm_stage = stages.rows;
+
+  if (oppIds !== null) return ctx;
+
+  const emails = await db.query(
+    `SELECT COUNT(*) FILTER (WHERE status = 'sent' AND created_at > now() - interval '30 days')::int AS sent_30d,
+            COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_approval
+     FROM nurture_emails WHERE user_id = $1`,
+    [userId]
+  );
+  ctx.activation_emails = emails.rows[0];
+
+  try {
+    const { computeForecast } = require('../lib/forecast-engine');
+    const f = await computeForecast(userId);
+    ctx.forecast = { scenarios: f.scenarios, counts: f.counts, context: f.context };
+  } catch { /* forecast optionnel */ }
+
+  try {
+    let teamId = null;
+    const team = await db.teams.getByUser(userId);
+    if (team) teamId = team.id;
+    const patterns = await db.memoryPatterns.listForPrompt(5, teamId, userId);
+    if (patterns.length > 0) {
+      ctx.learned_patterns = patterns.map(p => p.pattern).filter(Boolean);
+    }
+  } catch { /* mémoire optionnelle */ }
+
+  return ctx;
+}
+
 module.exports = router;
+// Réutilisé par le playbook à la demande (routes/ai.js) · mêmes agrégats,
+// même garantie : rien qui ne vienne pas de la base.
+module.exports.buildAnalyticsContext = buildAnalyticsContext;

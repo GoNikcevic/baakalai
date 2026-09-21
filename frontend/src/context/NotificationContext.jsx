@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Notification Context (React)
+   BAKAL · Notification Context (React)
    Provides toast notifications via React context, replacing DOM-based system.
    =============================================================================== */
 

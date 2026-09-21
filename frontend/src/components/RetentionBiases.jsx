@@ -1,8 +1,8 @@
 /* ===============================================================================
-   BAKAL — Retention Biases (React)
+   BAKAL · Retention Biases (React)
    Implements cognitive biases: progress bias (endowed progress), sunk cost
    visualization, and social proof benchmarking.
-   All data is truthful — never fabricate progress.
+   All data is truthful · never fabricate progress.
    =============================================================================== */
 
 import { useMemo } from 'react';

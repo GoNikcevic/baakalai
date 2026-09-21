@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Campaign Detail Page (React)
+   BAKAL · Campaign Detail Page (React)
    Single tabbed page for campaign settings, copy, prospects, performance, history.
    =============================================================================== */
 

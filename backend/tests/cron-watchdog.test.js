@@ -1,5 +1,5 @@
 /**
- * Dead-man's switch des crons — logique pure de détection.
+ * Dead-man's switch des crons · logique pure de détection.
  * Contexte : les crons ont été éteints ~3 mois (variable Railway avec espace)
  * sans aucun signal. findStaleJobs est la détection de cette absence.
  */
@@ -54,6 +54,6 @@ test('tolere les dates invalides et les entrees nulles', () => {
     findStaleJobs([{ job: 'crm-agent', last_started: 'pas une date' }], NOW), []);
 });
 
-test('le catalogue couvre les 8 jobs de l orchestrateur', () => {
-  assert.strictEqual(Object.keys(EXPECTED_JOBS).length, 8);
+test('le catalogue couvre les 10 jobs de l orchestrateur', () => {
+  assert.strictEqual(Object.keys(EXPECTED_JOBS).length, 10);
 });

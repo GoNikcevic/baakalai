@@ -5,14 +5,15 @@
 import { StepStat } from './shared';
 import { sanitizeHtml } from '../../services/sanitize';
 import { useI18n } from '../../i18n';
+import Icon from '../Icon';
 
 const TYPE_META = {
-  email: { label: 'Email', color: 'var(--blue)', icon: '📧' },
-  linkedin_visit: { label: 'Visite profil', labelEn: 'Profile visit', color: 'var(--purple)', icon: '👁️' },
-  linkedin_invite: { label: 'Note connexion', labelEn: 'Connection note', color: 'var(--purple)', icon: '🤝' },
-  linkedin_message: { label: 'Message LinkedIn', labelEn: 'LinkedIn message', color: 'var(--purple)', icon: '💬' },
+  email: { label: 'Email', color: 'var(--blue)', icon: 'mail' },
+  linkedin_visit: { label: 'Visite profil', labelEn: 'Profile visit', color: 'var(--purple)', icon: 'eye' },
+  linkedin_invite: { label: 'Note connexion', labelEn: 'Connection note', color: 'var(--purple)', icon: 'handshake' },
+  linkedin_message: { label: 'Message LinkedIn', labelEn: 'LinkedIn message', color: 'var(--purple)', icon: 'message' },
   // Legacy fallback
-  linkedin: { label: 'LinkedIn', color: 'var(--purple)', icon: '💬' },
+  linkedin: { label: 'LinkedIn', color: 'var(--purple)', icon: 'message' },
 };
 
 export default function SequenceStep({ step: s, faded, depth = 0 }) {
@@ -21,7 +22,7 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
 
   const meta = TYPE_META[s.type] || TYPE_META.email;
   const metaLabel = en && meta.labelEn ? meta.labelEn : meta.label;
-  const typeLabel = `${meta.icon} ${metaLabel}${s.subType ? ' — ' + s.subType : ''}`;
+  const typeLabel = `${meta.icon} ${metaLabel}${s.subType ? ', ' + s.subType : ''}`;
   const isLinkedinInvite = s.type === 'linkedin_invite';
   const isLinkedinVisit = s.type === 'linkedin_visit';
   const charCount = (s.body || '').length;
@@ -31,9 +32,9 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
   if (!hasStats) {
     statsContent = (
       <>
-        <StepStat value="—" label="Pas encore lance" color="var(--text-muted)" />
-        <StepStat value="—" label="" color="var(--text-muted)" />
-        <StepStat value="—" label="" color="var(--text-muted)" />
+        <StepStat value=" " label="Pas encore lance" color="var(--text-muted)" />
+        <StepStat value=" " label="" color="var(--text-muted)" />
+        <StepStat value=" " label="" color="var(--text-muted)" />
       </>
     );
   } else if (s.type === 'linkedin' && s.stats.accept !== undefined) {
@@ -45,7 +46,7 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
           color="var(--success)"
           pct={s.stats.accept}
         />
-        <StepStat value="—" label="—" color="var(--text-muted)" />
+        <StepStat value=" " label=" " color="var(--text-muted)" />
         <StepStat
           value="0%"
           label="Ignore"
@@ -65,8 +66,8 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
           pct={s.stats.reply * 10}
         />
         <StepStat
-          value={s.stats.interested || '—'}
-          label={s.stats.interested ? 'Interesses' : '—'}
+          value={s.stats.interested || ' '}
+          label={s.stats.interested ? 'Interesses' : ' '}
           color="var(--warning)"
         />
         <StepStat
@@ -152,7 +153,7 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
           <div
             style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}
           >
-            Visite automatique du profil — pas de message
+            Visite automatique du profil, pas de message
           </div>
         ) : (
           <div
@@ -169,7 +170,13 @@ export default function SequenceStep({ step: s, faded, depth = 0 }) {
               color: charLimitExceeded ? 'var(--danger)' : charCount > 250 ? 'var(--warning)' : 'var(--text-muted)',
             }}
           >
-            {charCount}/300 caractères {charLimitExceeded && '⚠️ DÉPASSE LA LIMITE'}
+            {charCount}/300 caractères
+            {charLimitExceeded && (
+              <>
+                <Icon name="alert" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', margin: '0 4px' }} />
+                DÉPASSE LA LIMITE
+              </>
+            )}
           </div>
         )}
       </div>

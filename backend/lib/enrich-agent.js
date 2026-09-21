@@ -1,5 +1,5 @@
 /**
- * Enrich Agent v2 — Smart enrichment for existing contacts
+ * Enrich Agent v2 · Smart enrichment for existing contacts
  *
  * 5 strategies layered for maximum hit rate:
  *
@@ -184,7 +184,7 @@ async function findValidEmail(candidates, domain) {
       const result = await smtpVerify(email, mxHost);
       if (result === 'valid') return email;
       if (result === 'invalid') continue;
-      // 'unknown' — server doesn't tell us, stop trying (catch-all or greylisting)
+      // 'unknown' · server doesn't tell us, stop trying (catch-all or greylisting)
       return null;
     } catch { continue; }
   }
@@ -240,7 +240,7 @@ async function findCompanyFromWeb(name, title) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Main enrichment logic — orchestrates all 5 strategies
+// Main enrichment logic · orchestrates all 5 strategies
 // ═══════════════════════════════════════════════════════════════
 
 async function enrichOne(contact) {
@@ -256,7 +256,7 @@ async function enrichOne(contact) {
   let foundLinkedin = null;
   let foundDomain = null;
 
-  // ── STRATEGY 3: Cascade — find company first if missing ──
+  // ── STRATEGY 3: Cascade · find company first if missing ──
   if (needsCompany) {
     const companyInfo = await findCompanyFromWeb(name, contact.title);
     if (companyInfo) {
@@ -271,7 +271,7 @@ async function enrichOne(contact) {
     foundDomain = await findCompanyDomain(foundCompany);
   }
 
-  // ── STRATEGY 2: Pattern memory — instant if known ──
+  // ── STRATEGY 2: Pattern memory · instant if known ──
   if (needsEmail && foundDomain) {
     const knownPattern = await getKnownPattern(foundDomain);
     if (knownPattern) {

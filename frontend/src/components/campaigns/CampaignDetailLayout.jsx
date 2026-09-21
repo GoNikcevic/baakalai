@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Campaign Detail Layout — Tabbed view
+   Campaign Detail Layout · Tabbed view
    Single page per campaign with Settings / Copy / Prospects /
    Performance / History tabs.
    ═══════════════════════════════════════════════════ */
@@ -16,6 +16,8 @@ import RepliesTab from './tabs/RepliesTab';
 import OptimizeCampaignModal from './OptimizeCampaignModal';
 import LoadingOverlay from '../shared/LoadingOverlay';
 import { useT } from '../../i18n';
+import Icon from '../Icon';
+import { showToast } from '../../services/notifications';
 
 export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns }) {
   const t = useT();
@@ -38,6 +40,11 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
   // Lemlist senders
   const [senders, setSenders] = useState([]);
   const [selectedSender, setSelectedSender] = useState(null);
+  // Canal d'envoi au lancement : Lemlist si configuré, sinon natif (boîte
+  // email de l'utilisateur + LinkedIn) · le natif rend le lancement possible
+  // sans aucun compte Lemlist, sur des volumes réduits.
+  const [lemlistConfigured, setLemlistConfigured] = useState(false);
+  const [sendChannel, setSendChannel] = useState('native');
 
   const LEMLIST_LAUNCH_STEPS = [
     t('campaigns.launchStepCreate'),
@@ -46,10 +53,18 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
     t('campaigns.launchStepActivate'),
   ];
 
+  const NATIVE_LAUNCH_STEPS = [
+    t('campaigns.nativeLaunchStepValidate'),
+    t('campaigns.nativeLaunchStepFirstSends'),
+  ];
+
   useEffect(() => {
     if (isPrep) {
       api.getLemlistSenders()
         .then(data => {
+          const configured = !!data.configured;
+          setLemlistConfigured(configured);
+          setSendChannel(configured ? 'lemlist' : 'native');
           if (data.senders && data.senders.length > 0) {
             setSenders(data.senders);
             setSelectedSender(data.senders[0].id);
@@ -62,19 +77,19 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
   // Show A/B tab if campaign has an active test config
   const hasABTest = !!c.abConfig;
 
-  // Tab definitions — show conditionally based on status
+  // Tab definitions · show conditionally based on status
   const tabs = [
-    { key: 'settings', label: t('campaigns.settings'), icon: '\u2699\uFE0F' },
-    { key: 'copy', label: t('campaigns.copy'), icon: '\u2709\uFE0F' },
-    { key: 'prospects', label: t('campaigns.prospects'), icon: '\uD83D\uDC65' },
+    { key: 'settings', label: t('campaigns.settings'), icon: 'settings' },
+    { key: 'copy', label: t('campaigns.copy'), icon: 'mail' },
+    { key: 'prospects', label: t('campaigns.prospects'), icon: 'users' },
     ...(isActive
-      ? [{ key: 'replies', label: t('campaigns.replies'), icon: '\uD83D\uDCEC' }]
+      ? [{ key: 'replies', label: t('campaigns.replies'), icon: 'inbox' }]
       : []),
-    ...(hasABTest ? [{ key: 'abtest', label: t('campaigns.abTest'), icon: '\uD83E\uDDEC' }] : []),
+    ...(hasABTest ? [{ key: 'abtest', label: t('campaigns.abTest'), icon: 'flask' }] : []),
     ...(isActive
       ? [
-          { key: 'performance', label: t('campaigns.performance'), icon: '\uD83D\uDCCA' },
-          { key: 'history', label: t('campaigns.history'), icon: '\uD83D\uDCDC' },
+          { key: 'performance', label: t('campaigns.performance'), icon: 'chart' },
+          { key: 'history', label: t('campaigns.history'), icon: 'file' },
         ]
       : []),
   ];
@@ -91,7 +106,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
       });
     } catch (err) {
       console.error('Failed to archive campaign:', err);
-      window.alert(t('campaigns.archiveFailed', { error: err.message || 'erreur inconnue' }));
+      showToast({ type: 'error', title: t('campaigns.archive'), message: t('campaigns.archiveFailed', { error: err.message || '?' }) });
       setArchiving(false);
       return;
     }
@@ -112,6 +127,42 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
         title: t('campaigns.launchMissingSequence'),
         desc: t('campaigns.launchMissingSequenceDesc'),
       });
+      return;
+    }
+
+    // Lancement natif : pas de mode batch (le plafond journalier du moteur
+    // étale déjà les envois), une seule requête.
+    if (sendChannel === 'native' && !c.batch_mode) {
+      setLaunching(true);
+      setLaunchAlert(null);
+      try {
+        const result = await api.launchCampaignNative(c._backendId || c.id);
+        setCampaigns((prev) => ({
+          ...prev,
+          [c.id]: {
+            ...prev[c.id],
+            status: 'active',
+            send_channel: 'native',
+            iteration: 1,
+            kpis: { ...prev[c.id].kpis, contacts: result.campaign?.nb_prospects || prev[c.id].kpis?.contacts || 0 },
+          },
+        }));
+        setLaunchAlert({
+          type: 'success',
+          title: t('campaigns.nativeLaunched'),
+          desc: t('campaigns.nativeLaunchedDesc', {
+            sent: result.firstRun?.emailsSent || 0,
+            linkedin: result.firstRun?.linkedinActions || 0,
+          }),
+        });
+      } catch (err) {
+        setLaunchAlert({
+          type: 'error',
+          title: t('campaigns.launchFailed'),
+          desc: err.message || t('campaigns.launchFailedDesc'),
+        });
+      }
+      setLaunching(false);
       return;
     }
 
@@ -145,16 +196,16 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
       const stepsTotal = (result.sequenceSteps || []).length;
       const baseDesc = `${result.leads?.pushed || 0} prospects · ${stepsOk}/${stepsTotal} steps`;
       const statusLine = result.started
-        ? ` · \u2705 ${t('campaigns.started')}`
+        ? ` · ${t('campaigns.started')}`
         : result.startError
-          ? ` · \u26A0\uFE0F ${t('campaigns.startFailed', { error: result.startError })}`
-          : ` · \u2139\uFE0F ${t('campaigns.inDraft')}`;
+          ? ` · ${t('campaigns.startFailed', { error: result.startError })}`
+          : ` · ${t('campaigns.inDraft')}`;
       const batchLine = result.batch
-        ? ` · \uD83D\uDCE6 Batch ${result.batch.batch}/${result.batch.totalBatches} (${result.batch.remaining} remaining)`
+        ? ` · Batch ${result.batch.batch}/${result.batch.totalBatches} (${result.batch.remaining} remaining)`
         : '';
       setLaunchAlert({
         type: 'success',
-        title: result.batch ? `\uD83D\uDE80 ${t('campaigns.batchDeployed', { batch: result.batch.batch })}` : `\uD83D\uDE80 ${t('campaigns.deployed')}`,
+        title: result.batch ? t('campaigns.batchDeployed', { batch: result.batch.batch }) : t('campaigns.deployed'),
         desc: baseDesc + statusLine + batchLine,
       });
     } catch (err) {
@@ -230,7 +281,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
                   handleLaunch({ ...pendingLaunchOptions, batchMode: true, confirmed: true });
                 }}
               >
-                <span style={{ fontSize: 18 }}>📦</span>
+                <Icon name="package" size={18} />
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 600 }}>{t('campaigns.batchModeBtn') || 'Mode batch (recommandé)'}</div>
                   <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
@@ -247,7 +298,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
                   handleLaunch({ ...pendingLaunchOptions, batchMode: false, confirmed: true });
                 }}
               >
-                <span style={{ fontSize: 18 }}>🚀</span>
+                <Icon name="rocket" size={18} />
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontWeight: 600 }}>{t('campaigns.sendAllBtn') || 'Tout envoyer'}</div>
                   <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
@@ -271,8 +322,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
 
       <LoadingOverlay
         show={launching}
-        title={`\uD83D\uDE80 ${t('campaigns.deployToLemlist')}`}
-        steps={LEMLIST_LAUNCH_STEPS}
+        title={sendChannel === 'native' ? t('campaigns.nativeLaunching') : t('campaigns.deployToLemlist')}
+        steps={sendChannel === 'native' ? NATIVE_LAUNCH_STEPS : LEMLIST_LAUNCH_STEPS}
       />
 
       {/* Back button */}
@@ -290,7 +341,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             ))}
             {isPrep && (
               <span className="campaign-tag" style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
-                {'\u23F3'} {t('campaigns.prep')}
+                <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.prep')}
               </span>
             )}
             {isActive && (
@@ -300,7 +351,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             )}
             {isArchived && (
               <span className="campaign-tag" style={{ borderColor: 'var(--text-muted)', color: 'var(--text-muted)' }}>
-                {'\uD83D\uDCE6'} {t('campaigns.statusArchived')}
+                <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {t('campaigns.statusArchived')}
               </span>
             )}
           </div>
@@ -313,7 +365,12 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               onClick={handleArchive}
               disabled={archiving}
             >
-              {archiving ? '...' : `\uD83D\uDCE6 ${t('campaigns.archive')}`}
+              {archiving ? '...' : (
+                <>
+                  <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                  {t('campaigns.archive')}
+                </>
+              )}
             </button>
           )}
           {isActive && (
@@ -323,7 +380,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
                 style={{ fontSize: '12px', padding: '8px 14px' }}
                 onClick={() => setShowOptimize(true)}
               >
-                {'\uD83D\uDD04'} {t('campaigns.optimizeCampaign')}
+                <Icon name="refresh" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                {t('campaigns.optimizeCampaign')}
               </button>
               <button
                 onClick={() => setShowHelp(prev => !prev)}
@@ -358,7 +416,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               onClick={handleEnrichProspects}
               disabled={enriching}
             >
-              {enriching ? `\u23F3 ${t('campaigns.enriching')}` : `\u2728 ${t('campaigns.enrichProspects')}`}
+              <Icon name={enriching ? 'clock' : 'sparkles'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {enriching ? t('campaigns.enriching') : t('campaigns.enrichProspects')}
             </button>
           )}
           {isPrep && (
@@ -368,10 +427,11 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               onClick={handleLaunch}
               disabled={launching}
             >
-              {launching ? `\u23F3 ${t('campaigns.launching')}` : `\uD83D\uDE80 ${t('campaigns.launch')}`}
+              <Icon name={launching ? 'clock' : 'rocket'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {launching ? t('campaigns.launching') : t('campaigns.launch')}
             </button>
           )}
-          {isActive && c.batch_mode && c.current_batch < c.total_batches && (
+          {isActive && c.send_channel !== 'native' && c.batch_mode && c.current_batch < c.total_batches && (
             <button
               className="btn btn-success"
               style={{ fontSize: '12px', padding: '8px 14px' }}
@@ -379,11 +439,45 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               disabled={launching}
             >
               {launching
-                ? `\u23F3 ${t('campaigns.deploying')}`
-                : `\uD83D\uDCE6 ${t('campaigns.launchBatch', { current: (c.current_batch || 0) + 1, total: c.total_batches })}`}
+                ? t('campaigns.deploying')
+                : (
+                  <>
+                    <Icon name="package" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {t('campaigns.launchBatch', { current: (c.current_batch || 0) + 1, total: c.total_batches })}
+                  </>
+                )}
             </button>
           )}
-          {isPrep && senders.length > 1 && (
+          {isPrep && lemlistConfigured && (
+            <select
+              value={sendChannel}
+              onChange={e => setSendChannel(e.target.value)}
+              style={{
+                fontSize: 11,
+                padding: '6px 10px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+              title={t('campaigns.channelTitle')}
+            >
+              <option value="lemlist">{t('campaigns.channelLemlist')}</option>
+              <option value="native">{t('campaigns.channelNative')}</option>
+            </select>
+          )}
+          {isPrep && !lemlistConfigured && (
+            <span
+              className="campaign-tag"
+              style={{ fontSize: 11 }}
+              title={t('campaigns.channelNativeHint')}
+            >
+              <Icon name="mail" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+              {t('campaigns.channelNative')}
+            </span>
+          )}
+          {isPrep && sendChannel === 'lemlist' && senders.length > 1 && (
             <select
               value={selectedSender || ''}
               onChange={e => setSelectedSender(e.target.value)}
@@ -424,7 +518,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             gap: 12,
           }}
         >
-          <span style={{ fontSize: 18 }}>{'\u2705'}</span>
+          <span style={{ fontSize: 18 }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>{optimizeBanner.title}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -457,7 +551,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             gap: 12,
           }}
         >
-          <span style={{ fontSize: 18 }}>{enrichBanner.type === 'error' ? '\u26A0\uFE0F' : '\u2728'}</span>
+          <Icon name={enrichBanner.type === 'error' ? 'alert' : 'sparkles'} size={18} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>{enrichBanner.title}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
@@ -519,7 +613,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
           }}
         >
           <span style={{ fontSize: '18px' }}>
-            {launchAlert.type === 'error' ? '\u26A0\uFE0F' : launchAlert.type === 'success' ? '\u2705' : '\u23F3'}
+            <Icon name={launchAlert.type === 'error' ? 'alert' : launchAlert.type === 'success' ? 'checkCircle' : 'clock'} size={14} />
           </span>
           <div style={{ flex: 1 }}>
             <div
@@ -541,6 +635,11 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             {'\u2715'}
           </button>
         </div>
+      )}
+
+      {/* Avancement de l'envoi natif */}
+      {isActive && c.send_channel === 'native' && (
+        <NativeStatusBar campaign={c} t={t} />
       )}
 
       {/* Tab navigation */}
@@ -569,7 +668,8 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               transition: 'all 0.2s',
             }}
           >
-            {tb.icon} {tb.label}
+            <Icon name={tb.icon} size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {tb.label}
           </button>
         ))}
       </div>
@@ -584,6 +684,83 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
         {activeTab === 'performance' && <PerformanceTab campaign={c} />}
         {activeTab === 'history' && <HistoryTab campaign={c} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Avancement d'une campagne en envoi natif : steps envoyés, plafond du jour,
+ * séquences stoppées (réponses, bounces, stops manuels) + « Traiter maintenant »
+ * pour ne pas attendre le passage horaire du moteur.
+ */
+function NativeStatusBar({ campaign, t }) {
+  const [status, setStatus] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const load = () => {
+    api.getNativeStatus(campaign._backendId || campaign.id)
+      .then(setStatus)
+      .catch(() => {});
+  };
+  useEffect(load, [campaign.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    try {
+      await api.runNativeCampaign(campaign._backendId || campaign.id);
+      load();
+    } catch { /* le bandeau reste sur les derniers chiffres connus */ }
+    setRunning(false);
+  };
+
+  if (!status) return null;
+
+  const count = (pred) => status.sends.filter(pred).reduce((sum, s) => sum + s.count, 0);
+  const emailsSent = count(s => s.channel === 'email' && s.status === 'sent');
+  const linkedinSent = count(s => s.channel !== 'email' && s.status === 'sent');
+  const stoppedTotal = status.stopped.reduce((sum, s) => sum + s.count, 0);
+
+  const items = [
+    { label: t('campaigns.nativeEmailsSent'), value: emailsSent },
+    ...(linkedinSent > 0 ? [{ label: t('campaigns.nativeLinkedinActions'), value: linkedinSent }] : []),
+    { label: t('campaigns.nativeReplies'), value: status.replies },
+    ...(stoppedTotal > 0 ? [{ label: t('campaigns.nativeStopped'), value: stoppedTotal }] : []),
+    { label: t('campaigns.nativeDailyCap'), value: `${status.sentToday}/${status.dailyCap}` },
+  ];
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20,
+        flexWrap: 'wrap',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        padding: '12px 16px',
+        marginTop: 16,
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Icon name="mail" size={13} />
+        {t('campaigns.nativeChannelLabel')}
+      </span>
+      {items.map((item, i) => (
+        <span key={i} style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {item.label}{' '}
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.value}</span>
+        </span>
+      ))}
+      <button
+        className="btn btn-ghost"
+        style={{ fontSize: 11, padding: '5px 12px', marginLeft: 'auto' }}
+        onClick={handleRunNow}
+        disabled={running}
+      >
+        <Icon name={running ? 'clock' : 'refresh'} size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+        {running ? t('campaigns.nativeRunning') : t('campaigns.nativeRunNow')}
+      </button>
     </div>
   );
 }

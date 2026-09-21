@@ -1,5 +1,5 @@
 /**
- * Confirm Modal — replaces window.confirm() with a styled modal.
+ * Confirm Modal · replaces window.confirm() with a styled modal.
  * Usage: const confirm = useConfirm();
  *        if (await confirm('Delete this item?')) { ... }
  */

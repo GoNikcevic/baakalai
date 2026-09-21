@@ -1,5 +1,5 @@
 /**
- * Signal Agent — Detect buying signals and build prospect lists
+ * Signal Agent · Detect buying signals and build prospect lists
  *
  * Monitors multiple sources for signals that indicate a prospect is ready to buy:
  * - Funding / investment rounds
@@ -22,7 +22,7 @@ const logger = require('../logger');
 const { safeParseClaudeArray } = require('../utils/safe-json-parse');
 
 // Notification persistée (cloche + socket) : le cron tourne à 8h, l'utilisateur
-// n'est en général pas connecté — un événement socket seul serait perdu.
+// n'est en général pas connecté · un événement socket seul serait perdu.
 async function notifyNewSignals(userId, count) {
   try {
     const { createNotification } = require('../notify');
@@ -91,10 +91,109 @@ const SIGNAL_QUERIES = {
 };
 
 /**
+ * Détail du relevance_score tel que généré par l'extraction LLM · nettoyé
+ * avant insertion (le modèle peut renvoyer n'importe quoi). Retourne une
+ * chaîne JSON prête pour la colonne JSONB, ou null si rien d'exploitable :
+ * node-pg sérialise les tableaux JS en littéral Postgres, pas en JSON.
+ */
+function serializeRelevanceFactors(raw) {
+  if (!Array.isArray(raw)) return null;
+  const clean = raw
+    .filter(f => f && typeof f.label === 'string' && f.label.trim() && Number.isFinite(Number(f.weight)))
+    .slice(0, 5)
+    .map(f => ({ label: f.label.trim().slice(0, 120), weight: Math.round(Number(f.weight)) }));
+  return clean.length > 0 ? JSON.stringify(clean) : null;
+}
+
+/**
+ * Scanne UNE configuration : l'unité de travail que le scheduler continu
+ * (lib/signal-scheduler.js) pilote individuellement. `recentSet` (dédup titre
+ * 7 jours) est fourni par l'appelant pour être partagé entre configs.
+ * Retourne { detected, queriesUsed } · queriesUsed = requêtes Brave réelles,
+ * comptées pour le budget quotidien du scheduler.
+ */
+async function scanConfig(userId, config, recentSet) {
+  let detected = 0;
+  let queriesUsed = 0;
+  const signalTypes = config.signal_types || ['funding', 'hiring', 'news'];
+
+  for (const signalType of signalTypes) {
+    const queryBuilder = SIGNAL_QUERIES[signalType];
+    if (!queryBuilder) continue;
+
+    const searchQuery = queryBuilder(config);
+    if (!searchQuery) continue;
+
+    // Search via Brave Search
+    queriesUsed++;
+    const results = await searchBrave(searchQuery);
+    if (!results || results.length === 0) continue;
+
+    // Use Claude to extract structured signals from search results
+    const signals = await extractSignals(results, signalType, config);
+
+    for (const signal of signals) {
+      // Dedup
+      const key = `${signal.title}::${signal.companyName}`.toLowerCase();
+      if (recentSet.has(key)) continue;
+      recentSet.add(key);
+
+      // Try to enrich with email via Apollo
+      let enriched = {};
+      if (signal.companyName) {
+        try {
+          enriched = await enrichContact(signal, userId);
+        } catch { /* enrichment is optional */ }
+      }
+
+      // Insert signal
+      try {
+        await db.query(`
+          INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
+            company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score, relevance_factors)
+          VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13, $14)
+        `, [
+          userId, config.id, signalType,
+          signal.title, signal.description, signal.sourceUrl,
+          signal.companyName, enriched.domain || signal.companyDomain || null,
+          enriched.contactName || signal.contactName || null,
+          enriched.contactTitle || signal.contactTitle || null,
+          enriched.email || null,
+          enriched.linkedinUrl || null,
+          signal.relevance || 50,
+          serializeRelevanceFactors(signal.relevanceFactors),
+        ]);
+        detected++;
+      } catch (insertErr) {
+        logger.warn('signal-agent', `Insert failed for "${signal.title}": ${insertErr.message}`);
+      }
+    }
+  }
+
+  await db.query(`UPDATE signal_configs SET last_run = now() WHERE id = $1`, [config.id]);
+  return { detected, queriesUsed };
+}
+
+/**
+ * Charge le recentSet de dédup des scans de configs (titres, 7 jours).
+ */
+async function loadConfigRecentSet(userId) {
+  const recent = await db.query(
+    `SELECT title, company_name FROM signals WHERE user_id = $1 AND detected_at > now() - interval '7 days'`,
+    [userId]
+  );
+  return new Set(recent.rows.map(r => `${r.title}::${r.company_name}`.toLowerCase()));
+}
+
+/**
  * Run the signal agent for a user.
  */
 async function run(userId) {
-  const report = { detected: 0, configs: 0, errors: [] };
+  // `queries` : nombre de recherches Brave réellement lancées. Le scan manuel
+  // s'en sert pour débiter le budget quotidien partagé avec le scheduler
+  // (lib/signal-scheduler.js), sinon un clic pouvait consommer le quota sans
+  // que rien ne le compte.
+  const report = { detected: 0, configs: 0, queries: 0, errors: [] };
 
   try {
     // Load user's signal configs
@@ -115,61 +214,9 @@ async function run(userId) {
 
     for (const config of configs.rows) {
       try {
-        const signalTypes = config.signal_types || ['funding', 'hiring', 'news'];
-
-        for (const signalType of signalTypes) {
-          const queryBuilder = SIGNAL_QUERIES[signalType];
-          if (!queryBuilder) continue;
-
-          const searchQuery = queryBuilder(config);
-          if (!searchQuery) continue;
-
-          // Search via Brave Search
-          const results = await searchBrave(searchQuery);
-          if (!results || results.length === 0) continue;
-
-          // Use Claude to extract structured signals from search results
-          const signals = await extractSignals(results, signalType, config);
-
-          for (const signal of signals) {
-            // Dedup
-            const key = `${signal.title}::${signal.companyName}`.toLowerCase();
-            if (recentSet.has(key)) continue;
-            recentSet.add(key);
-
-            // Try to enrich with email via Apollo
-            let enriched = {};
-            if (signal.companyName) {
-              try {
-                enriched = await enrichContact(signal, userId);
-              } catch { /* enrichment is optional */ }
-            }
-
-            // Insert signal
-            try {
-              await db.query(`
-                INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
-                  company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score)
-                VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13)
-              `, [
-                userId, config.id, signalType,
-                signal.title, signal.description, signal.sourceUrl,
-                signal.companyName, enriched.domain || signal.companyDomain || null,
-                enriched.contactName || signal.contactName || null,
-                enriched.contactTitle || signal.contactTitle || null,
-                enriched.email || null,
-                enriched.linkedinUrl || null,
-                signal.relevance || 50,
-              ]);
-              report.detected++;
-            } catch (insertErr) {
-              logger.warn('signal-agent', `Insert failed for "${signal.title}": ${insertErr.message}`);
-            }
-          }
-        }
-
-        // Update last_run
-        await db.query(`UPDATE signal_configs SET last_run = now() WHERE id = $1`, [config.id]);
+        const { detected, queriesUsed } = await scanConfig(userId, config, recentSet);
+        report.detected += detected;
+        report.queries += queriesUsed || 0;
       } catch (err) {
         report.errors.push(`Config ${config.name}: ${err.message}`);
         logger.warn('signal-agent', `Config ${config.name} failed: ${err.message}`);
@@ -200,7 +247,7 @@ async function run(userId) {
         [userId]
       );
       if (hasOutreach.rows.length === 0) {
-        // No outreach tool — auto-add top signals to CRM
+        // No outreach tool · auto-add top signals to CRM
         const topSignals = await db.query(
           `SELECT id, contact_name, contact_email, contact_title, company_name, contact_linkedin
            FROM signals WHERE user_id = $1 AND status = 'new' AND relevance_score >= 75 AND contact_email IS NOT NULL
@@ -229,7 +276,7 @@ async function run(userId) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CRM Watch — signaux recentrés sur les comptes du CRM (P4, 23/08)
+// CRM Watch · signaux recentrés sur les comptes du CRM (P4, 23/08)
 // ═══════════════════════════════════════════════════════════════
 //
 // Au lieu de prospecter de nouvelles sociétés par secteur/mots-clés, on
@@ -249,11 +296,85 @@ function companyDayBucket(company) {
   return h % 7;
 }
 
-async function runCrmWatch(userId) {
+/**
+ * Scanne UNE société du CRM : unité de travail du scheduler continu.
+ * Retourne { detected, queriesUsed } (1 requête Brave par société).
+ */
+async function scanCompanyAccount(userId, acct, recentSet) {
+  let detected = 0;
+  const query = `"${acct.company}" ("levée de fonds" OR financement OR recrute OR recrutement OR funding OR raises OR hiring OR expansion OR acquisition OR partenariat OR partnership OR lancement OR launch OR nomination OR "new CEO")`;
+  const results = await searchBrave(query);
+  if (results && results.length > 0) {
+    const signals = await extractCrmSignals(results, acct);
+    for (const signal of signals) {
+      const key = `${acct.company}::${signal.signalType}`.toLowerCase();
+      if (recentSet.has(key)) continue;
+      recentSet.add(key);
+
+      try {
+        await db.query(`
+          INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
+            company_name, contact_name, contact_title, contact_email, relevance_score, relevance_factors, opportunity_id)
+          VALUES ($1, NULL, $2, $3, $4, $5, 'crm_watch', $6, $7, $8, $9, $10, $11, $12)
+        `, [
+          userId, signal.signalType, signal.title, signal.description, signal.sourceUrl,
+          acct.company, acct.contact_name || null, acct.contact_title || null,
+          acct.contact_email || null, signal.relevance || 50,
+          serializeRelevanceFactors(signal.relevanceFactors), acct.opportunity_id,
+        ]);
+        detected++;
+      } catch (insertErr) {
+        logger.warn('signal-agent', `crm-watch insert failed for "${signal.title}": ${insertErr.message}`);
+      }
+    }
+  }
+  return { detected, queriesUsed: 1 };
+}
+
+/**
+ * Charge le recentSet de dédup crm-watch ((société, type), 14 jours).
+ */
+async function loadCrmWatchRecentSet(userId) {
+  const recent = await db.query(
+    `SELECT DISTINCT company_name, signal_type FROM signals
+     WHERE user_id = $1 AND detected_at > now() - interval '14 days'`,
+    [userId]
+  );
+  return new Set(recent.rows.map(r => `${r.company_name}::${r.signal_type}`.toLowerCase()));
+}
+
+/**
+ * Meilleure opportunité par société (celle qui portera le rattachement du
+ * signal) · extrait de runCrmWatch pour que le scheduler cible UNE société.
+ */
+async function loadCompanyAccount(userId, companyName) {
+  const r = await db.query(
+    `SELECT DISTINCT ON (company)
+       company, id AS opportunity_id, name AS contact_name, email AS contact_email,
+       title AS contact_title, status, deal_value,
+       (EXTRACT(EPOCH FROM (now() - COALESCE(last_activity_at, created_at))) / 86400)::int AS days_dormant
+     FROM opportunities
+     WHERE user_id = $1 AND lower(company) = lower($2) AND status <> 'lost'
+     ORDER BY company, (status = 'won') ASC, deal_value DESC NULLS LAST
+     LIMIT 1`,
+    [userId, companyName]
+  );
+  return r.rows[0] || null;
+}
+
+/**
+ * Surveillance des comptes du CRM.
+ *
+ * `ignoreDayBucket` : la rotation hebdomadaire par société existe pour étaler
+ * le quota Brave sur la semaine. Elle a du sens pour le cron, pas pour
+ * quelqu'un qui vient de cliquer sur « Scanner » : le lancement manuel prend
+ * donc les sociétés les plus utiles du moment, avec son propre plafond.
+ */
+async function runCrmWatch(userId, { ignoreDayBucket = false, limit = CRM_WATCH_MAX_PER_DAY } = {}) {
   const report = { detected: 0, companiesScanned: 0, errors: [] };
 
   try {
-    // Meilleure opportunité par société (ouverte avant won, puis valeur) —
+    // Meilleure opportunité par société (ouverte avant won, puis valeur) · 
     // c'est elle qui porte le contact et recevra le rattachement du signal.
     const companies = await db.query(
       `SELECT DISTINCT ON (company)
@@ -267,14 +388,7 @@ async function runCrmWatch(userId) {
     );
     if (companies.rows.length === 0) return report;
 
-    const today = new Date().getUTCDay();
-    const toScan = companies.rows
-      .filter(c => companyDayBucket(c.company.toLowerCase()) === today)
-      .sort((a, b) => (b.deal_value || 0) - (a.deal_value || 0))
-      .slice(0, CRM_WATCH_MAX_PER_DAY);
-    if (toScan.length === 0) return report;
-
-    // Dédup par (société, type) sur 14 jours — la dédup par titre laissait
+    // Dédup par (société, type) sur 14 jours · la dédup par titre laissait
     // passer la même actu reformulée (Vivodyne 2×, Absolute 2×).
     const recent = await db.query(
       `SELECT DISTINCT company_name, signal_type FROM signals
@@ -283,34 +397,30 @@ async function runCrmWatch(userId) {
     );
     const recentSet = new Set(recent.rows.map(r => `${r.company_name}::${r.signal_type}`.toLowerCase()));
 
+    let toScan;
+    if (ignoreDayBucket) {
+      // Lancement manuel : d'abord les sociétés sur lesquelles on n'a rien vu
+      // depuis 14 jours (les autres re-sortiraient les mêmes signaux, la dédup
+      // les jetterait, et la requête Brave serait payée pour rien).
+      const seen = new Set([...recentSet].map(k => k.split('::')[0]));
+      const fresh = companies.rows.filter(c => !seen.has(c.company.toLowerCase()));
+      toScan = (fresh.length > 0 ? fresh : companies.rows)
+        .sort((a, b) => (b.deal_value || 0) - (a.deal_value || 0))
+        .slice(0, limit);
+    } else {
+      const today = new Date().getUTCDay();
+      toScan = companies.rows
+        .filter(c => companyDayBucket(c.company.toLowerCase()) === today)
+        .sort((a, b) => (b.deal_value || 0) - (a.deal_value || 0))
+        .slice(0, limit);
+    }
+    if (toScan.length === 0) return report;
+
     for (const acct of toScan) {
       try {
-        const query = `"${acct.company}" ("levée de fonds" OR financement OR recrute OR recrutement OR funding OR raises OR hiring OR expansion OR acquisition OR partenariat OR partnership OR lancement OR launch OR nomination OR "new CEO")`;
-        const results = await searchBrave(query);
+        const { detected } = await scanCompanyAccount(userId, acct, recentSet);
         report.companiesScanned++;
-        if (!results || results.length === 0) continue;
-
-        const signals = await extractCrmSignals(results, acct);
-        for (const signal of signals) {
-          const key = `${acct.company}::${signal.signalType}`.toLowerCase();
-          if (recentSet.has(key)) continue;
-          recentSet.add(key);
-
-          try {
-            await db.query(`
-              INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
-                company_name, contact_name, contact_title, contact_email, relevance_score, opportunity_id)
-              VALUES ($1, NULL, $2, $3, $4, $5, 'crm_watch', $6, $7, $8, $9, $10, $11)
-            `, [
-              userId, signal.signalType, signal.title, signal.description, signal.sourceUrl,
-              acct.company, acct.contact_name || null, acct.contact_title || null,
-              acct.contact_email || null, signal.relevance || 50, acct.opportunity_id,
-            ]);
-            report.detected++;
-          } catch (insertErr) {
-            logger.warn('signal-agent', `crm-watch insert failed for "${signal.title}": ${insertErr.message}`);
-          }
-        }
+        report.detected += detected;
       } catch (err) {
         report.errors.push(`${acct.company}: ${err.message}`);
       }
@@ -330,7 +440,7 @@ async function runCrmWatch(userId) {
 
 /**
  * Extraction Claude pour le CRM watch : les résultats concernent une société
- * précise du CRM — la pertinence mesure « à quel point c'est une bonne raison
+ * précise du CRM · la pertinence mesure « à quel point c'est une bonne raison
  * de relancer ce compte maintenant », pas un score de prospection.
  */
 async function extractCrmSignals(results, acct) {
@@ -351,9 +461,10 @@ For each RELEVANT result about "${acct.company}", extract:
 - description: 1-2 sentences on why this is a good reason to re-engage, given the CRM context
 - signalType: one of ${VALID_SIGNAL_TYPES.join('|')}
 - sourceUrl: the URL
-- relevance: 0-100 — how strong a reason to re-engage this account now
+- relevance: 0-100, how strong a reason to re-engage this account now
+- relevanceFactors: 2-4 items breaking the relevance score down, [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
 
-Return JSON array: [{ title, description, signalType, sourceUrl, relevance }]
+Return JSON array: [{ title, description, signalType, sourceUrl, relevance, relevanceFactors }]
 Return [] if nothing is clearly about this company.`;
 
   try {
@@ -379,7 +490,7 @@ async function searchBrave(query) {
   // sans aucune erreur.
   const apiKey = process.env.BRAVE_API_KEY || process.env.BRAVE_SEARCH_API_KEY;
   if (!apiKey) {
-    logger.warn('signal-agent', 'BRAVE_API_KEY/BRAVE_SEARCH_API_KEY absente — scan de signaux impossible');
+    logger.warn('signal-agent', 'BRAVE_API_KEY/BRAVE_SEARCH_API_KEY absente, scan de signaux impossible');
     return [];
   }
 
@@ -423,8 +534,9 @@ For each RELEVANT result (skip irrelevant ones), extract:
 - contactTitle: their role (if any)
 - sourceUrl: the URL
 - relevance: 0-100 score based on how strong this buying signal is
+- relevanceFactors: 2-4 items breaking the relevance score down, [{ label, weight }], label = short phrase in the same language as the description, weight = integer points; weights must roughly sum to relevance
 
-Return JSON array: [{ title, description, companyName, companyDomain, contactName, contactTitle, sourceUrl, relevance }]
+Return JSON array: [{ title, description, companyName, companyDomain, contactName, contactTitle, sourceUrl, relevance, relevanceFactors }]
 Return empty array [] if nothing is relevant.`;
 
   try {
@@ -452,7 +564,7 @@ async function enrichContact(signal, userId) {
     // Use user's Apollo key (not a shared key)
     const { getUserKey } = require('../../config');
     const apiKey = userId ? await getUserKey(userId, 'apollo') : null;
-    if (!apiKey) return {}; // No Apollo connected — skip enrichment
+    if (!apiKey) return {}; // No Apollo connected, skip enrichment
 
     const res = await fetch('https://api.apollo.io/v1/mixed_people/search', {
       method: 'POST',
@@ -481,4 +593,8 @@ async function enrichContact(signal, userId) {
   }
 }
 
-module.exports = { run, runCrmWatch };
+module.exports = {
+  run, runCrmWatch,
+  // Unités fines pour le scheduler continu (lib/signal-scheduler.js)
+  scanConfig, scanCompanyAccount, loadConfigRecentSet, loadCrmWatchRecentSet, loadCompanyAccount,
+};

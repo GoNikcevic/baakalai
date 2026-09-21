@@ -3,7 +3,7 @@ const db = require('../db');
 
 const router = Router();
 
-// GET /api/variables — list user's custom variables
+// GET /api/variables · list user's custom variables
 router.get('/', async (req, res, next) => {
   try {
     const variables = await db.customVariables.listByUser(req.user.id);
@@ -13,7 +13,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// POST /api/variables — create a custom variable
+// POST /api/variables · create a custom variable
 router.post('/', async (req, res, next) => {
   try {
     const { key, label, category, syncMode, defaultValue } = req.body;
@@ -37,7 +37,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// DELETE /api/variables/:id — delete a custom variable
+// DELETE /api/variables/:id · delete a custom variable
 router.delete('/:id', async (req, res, next) => {
   try {
     const result = await db.customVariables.delete(req.params.id, req.user.id);

@@ -1,5 +1,5 @@
 /**
- * Priorities — agrégation « À traiter aujourd'hui ».
+ * Priorities · agrégation « À traiter aujourd'hui ».
  *
  * Source partagée entre la route GET /api/priorities/today (dashboard) et le
  * digest email hebdo (orchestrator/jobs/crm-digest.js). Chaque source est
@@ -12,6 +12,7 @@
  * | Upsell (Upsell Detector)      | 20 + 0.7×score brut (plafonné à 88)       |
  * | Risque churn (client won)     | churn_score tel quel (seuil d'entrée 60)  |
  * | Signal externe (status new)   | 0.8×relevance_score (seuil d'entrée 60)   |
+ * | Violation SLA (opt-in admin)  | 70 + 2×jours de retard (plafonné à 90)   |
  *
  * Logique du barème : un email déjà rédigé qui n'attend qu'un clic vaut plus
  * que fouiller un signal externe incertain, mais moins qu'un deal urgent ; le
@@ -19,11 +20,11 @@
  * externes sont décotés de 20 % car non vérifiés.
  *
  * Dédup : un même contact (email, sinon nom+société) peut sortir de plusieurs
- * sources — on garde l'item au score le plus haut et on liste les autres
+ * sources · on garde l'item au score le plus haut et on liste les autres
  * sources dans `alsoFlaggedBy`.
  *
  * Les items Deal Coach / Upsell viennent du dernier run persisté dans
- * strategic_results (cron 9h30, migration 073) — fenêtre 7 jours, generatedAt
+ * strategic_results (cron 9h30, migration 073) · fenêtre 7 jours, generatedAt
  * permet d'afficher l'âge.
  */
 
@@ -115,13 +116,14 @@ async function buildTodayList(userId) {
     }
   }
 
-  // 4. Clients à risque de churn (échelle native 0-100, seuil 60)
+  // 4. Clients à risque de churn (échelle native 0-100, seuil partagé)
+  const { AT_RISK_THRESHOLD } = require('./churn-scoring');
   const churn = await db.query(
     `SELECT id, name, company, email, churn_score, deal_value
      FROM opportunities
-     WHERE user_id = $1 AND status = 'won' AND churn_score >= 60
+     WHERE user_id = $1 AND status = 'won' AND churn_score >= $2
      ORDER BY churn_score DESC LIMIT 10`,
-    [userId]
+    [userId, AT_RISK_THRESHOLD]
   );
   for (const c of churn.rows) {
     items.push({
@@ -159,6 +161,25 @@ async function buildTodayList(userId) {
       sourceUrl: s.source_url || null,
     });
   }
+  // 6. Violations SLA (seuils admin, opt-in · lib/sla.js, SQL pur sans IA).
+  // Un SLA est une promesse explicite de l'admin : sa violation prime sur les
+  // suggestions heuristiques (base 70) et grimpe avec le retard, sans jamais
+  // écraser un churn critique (plafond 90).
+  const { findSlaBreaches } = require('./sla');
+  const slaBreaches = await findSlaBreaches(userId);
+  for (const b of slaBreaches) {
+    items.push({
+      type: 'sla_breach',
+      score: Math.min(90, 70 + 2 * b.days),
+      contactName: b.name,
+      contactEmail: b.email,
+      company: b.company,
+      dealValue: b.dealValue,
+      opportunityId: b.id,
+      slaKind: b.kind,
+      daysOverdue: b.days,
+    });
+  }
 
   // Dédup par contact : garde le score max, trace les autres sources
   const byContact = new Map();
@@ -186,6 +207,7 @@ async function buildTodayList(userId) {
       upsell: upsell?.result?.opportunities?.length || 0,
       churnRisks: churn.rows.length,
       signals: signals.rows.length,
+      slaBreaches: slaBreaches.length,
       total: deduped.length,
     },
     pendingEmailIds: pending.rows.map((e) => e.id),

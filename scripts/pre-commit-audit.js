@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Pre-commit hook — checks ONLY staged files for anti-patterns.
+ * Pre-commit hook : checks ONLY staged files for anti-patterns.
  * Fast: only scans files being committed, not the whole codebase.
  *
- * Install: ln -sf ../../scripts/pre-commit-audit.js .git/hooks/pre-commit
+ * Install: ln -sf../../scripts/pre-commit-audit.js.git/hooks/pre-commit
  * Or: add to package.json scripts + husky/simple-git-hooks
  *
  * Categories:
@@ -23,9 +23,9 @@ const EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
 let stagedFiles;
 try {
   stagedFiles = execSync('git diff --cached --name-only --diff-filter=ACM', { encoding: 'utf8' })
-    .split('\n')
-    .filter(f => f && EXTENSIONS.includes(path.extname(f)))
-    .filter(f => !f.includes('node_modules'));
+.split('\n')
+.filter(f => f && EXTENSIONS.includes(path.extname(f)))
+.filter(f => !f.includes('node_modules'));
 } catch {
   process.exit(0);
 }
@@ -33,7 +33,7 @@ try {
 if (stagedFiles.length === 0) process.exit(0);
 
 // ═══════════════════════════════════════════════════
-// All patterns — each returns array of line numbers
+// All patterns : each returns array of line numbers
 // ═══════════════════════════════════════════════════
 
 const PATTERNS = [
@@ -199,7 +199,7 @@ const PATTERNS = [
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue;
-        // Detect provider arrays/lists: ['pipedrive', 'hubspot', ...]
+        // Detect provider arrays/lists: ['pipedrive', 'hubspot',...]
         const arrayMatch = line.match(/\[\s*['"](?:pipedrive|hubspot|salesforce|odoo|notion|airtable)['"](?:\s*,\s*['"](?:\w+)['"])*\s*\]/);
         if (arrayMatch) {
           const found = ALL_PROVIDERS.filter(p => arrayMatch[0].includes(p));
@@ -291,7 +291,7 @@ const PATTERNS = [
   // ─── 5. SCOPE & VARIABLE SAFETY ─────────────────
 
   {
-    name: 'Variable shadowing t() i18n function in .map(t => ...)',
+    name: 'Variable shadowing t() i18n function in.map(t =>...)',
     test(lines, filePath) {
       if (!filePath.includes('frontend/src/')) return [];
       const issues = [];
@@ -310,7 +310,7 @@ const PATTERNS = [
   // ─── 6. CURRENCY & LOCALE ───────────────────────
 
   {
-    name: 'Hardcoded currency symbol ($ or EUR) — should be configurable',
+    name: 'Hardcoded currency symbol ($ or EUR), should be configurable',
     test(lines, filePath) {
       if (!filePath.includes('frontend/src/pages/CRM') && !filePath.includes('frontend/src/pages/Analytics')) return [];
       const issues = [];
@@ -348,7 +348,7 @@ for (const file of stagedFiles) {
         hasErrors = true;
       }
       for (const line of issueLines) {
-        console.log(`  ${file}:${line} \u2014 ${pat.name}`);
+        console.log(`  ${file}:${line}, ${pat.name}`);
         console.log(`    ${lines[line - 1]?.trim().slice(0, 100)}`);
       }
     }

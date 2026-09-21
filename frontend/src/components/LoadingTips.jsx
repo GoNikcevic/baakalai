@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Loading Tips Component
+   BAKAL · Loading Tips Component
    Animated rotating tips shown during long-running operations.
    =============================================================================== */
 
@@ -9,21 +9,21 @@ import { useI18n } from '../i18n';
 const TIPS = {
   en: [
     'Ask the AI to "analyze my CRM health" to get a full diagnostic.',
-    'Connect your email (Gmail/Outlook) to send activation emails directly.',
-    'Set up triggers in Activation to auto-follow-up stagnant deals.',
-    'The AI learns from every campaign — the more you use it, the smarter it gets.',
+    'Connect your email (Gmail/Outlook) to send automated emails directly.',
+    'Set up triggers in Automation to auto-follow-up stagnant leads.',
+    'The AI learns from every campaign, the more you use it, the smarter it gets.',
     'Use the Renewals tab in Analytics to track upcoming expirations.',
     'Churn alerts notify you when a contact becomes high-risk.',
     'Export any analytics view to CSV with the export button.',
-    'Your CRM data is synced automatically — no manual refresh needed.',
+    'Your CRM data is synced automatically, no manual refresh needed.',
     'Create campaigns from chat: just describe your target audience.',
     'The Memory page shows patterns the AI discovered from your data.',
   ],
   fr: [
     'Demandez a l\'IA "analyse la sante de mon CRM" pour un diagnostic complet.',
-    'Connectez votre email (Gmail/Outlook) pour envoyer des emails d\'activation.',
-    'Configurez des triggers dans Activation pour relancer les deals stagnants.',
-    'L\'IA apprend de chaque campagne — plus vous l\'utilisez, plus elle est efficace.',
+    'Connectez votre email (Gmail/Outlook) pour envoyer des emails automatiques.',
+    'Configurez des triggers dans Automatisations pour relancer les leads stagnants.',
+    'L\'IA apprend de chaque campagne, plus vous l\'utilisez, plus elle est efficace.',
     'Utilisez l\'onglet Renouvellements dans Analytics pour suivre les expirations.',
     'Les alertes churn vous notifient quand un contact devient a risque.',
     'Exportez n\'importe quelle vue analytics en CSV avec le bouton export.',

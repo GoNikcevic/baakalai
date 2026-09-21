@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api, { request, fetchDashboard, fetchAllCampaigns } from '../services/api-client';
 import { useApp } from '../context/useApp';
 import { useT } from '../i18n';
+import Icon from './Icon';
 
 export default function DeliverabilityCard() {
   const t = useT();
@@ -84,7 +85,12 @@ export default function DeliverabilityCard() {
             color: 'var(--text-muted)',
           }}
         >
-          {refreshing ? '\u23F3 Sync...' : '\uD83D\uDD04 Rafra\u00eechir'}
+          {refreshing ? t('dashboard.refreshing') : (
+            <>
+              <Icon name="refresh" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
+              {t('dashboard.refresh')}
+            </>
+          )}
         </button>
       </div>
 
@@ -125,7 +131,12 @@ export default function DeliverabilityCard() {
               lineHeight: 1.5,
             }}>
               <div style={{ fontWeight: 600, color: alert.severity === 'critical' ? 'var(--danger, #dc2626)' : 'var(--warning, #d97706)' }}>
-                {alert.severity === 'critical' ? '🔴' : '🟡'} {alert.message}
+                <Icon
+                  name="alert"
+                  size={12}
+                  style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }}
+                />
+                {alert.message}
               </div>
               {alert.recommendation && (
                 <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
@@ -138,8 +149,9 @@ export default function DeliverabilityCard() {
       )}
 
       {data.alerts?.length === 0 && (
-        <div style={{ fontSize: 12, color: 'var(--success, #16a34a)' }}>
-          ✅ {t('deliverability.allGood') || 'No issues detected'}
+        <div style={{ fontSize: 12, color: 'var(--success, #16a34a)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="checkCircle" size={13} />
+          <span>{t('deliverability.allGood') || 'No issues detected'}</span>
         </div>
       )}
     </div>

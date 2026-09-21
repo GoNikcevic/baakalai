@@ -8,7 +8,7 @@
  * et par le trigger `trg_opportunities_updated_at`. Mesuré en production :
  * 376 opportunités pour seulement 3 minutes distinctes de `updated_at`.
  *
- * Conséquence en cascade — tout ce qui repose sur la récence était mort :
+ * Conséquence en cascade · tout ce qui repose sur la récence était mort :
  *   • /dashboard/activation renvoyait 0 deal stagnant sur 373 opportunités,
  *     donc QuickWinCard ne s'affichait jamais ;
  *   • churn-scoring donnait 286 scores à 0 et aucun au-dessus de 40, le critère
@@ -26,11 +26,11 @@
  *
  * DISPONIBILITÉ PAR CONNECTEUR (audit du 2026-07-29)
  * --------------------------------------------------
- *   pipedrive  — `update_time` / `last_activity_date`, renvoyés par défaut
- *   odoo       — `write_date`, déjà demandé
- *   hubspot    — nécessitait d'ajouter les propriétés à la requête
- *   salesforce — nécessitait d'ajouter les champs au SOQL
- *   folk / airtable / notion — pas de date d'activité exposée simplement ;
+ *   pipedrive · `update_time` / `last_activity_date`, renvoyés par défaut
+ *   odoo · `write_date`, déjà demandé
+ *   hubspot · nécessitait d'ajouter les propriétés à la requête
+ *   salesforce · nécessitait d'ajouter les champs au SOQL
+ *   folk / airtable / notion · pas de date d'activité exposée simplement ;
  *                on retombe sur null, et les consommateurs utilisent created_at.
  */
 

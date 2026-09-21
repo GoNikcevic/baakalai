@@ -180,6 +180,46 @@ async function getDefaultAccount(userId) {
   return result.rows[0] || null;
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Ajoute la signature du compte au mailOptions (texte + version HTML + image
+ * inline CID). No-op si le compte n'a pas de signature · l'email reste texte
+ * seul, comportement historique.
+ */
+function applySignature(mailOptions, account, body) {
+  const sigText = (account.signature_text || '').trim();
+  const sigImage = account.signature_image || null;
+  if (!sigText && !sigImage) return;
+
+  // Séparateur "-- " : convention de signature reconnue par les clients mail.
+  mailOptions.text = body + '\n\n-- \n' + (sigText || '');
+
+  const imageMatch = sigImage ? sigImage.match(/^data:(image\/(?:png|jpe?g|gif|webp));base64,([A-Za-z0-9+/=]+)$/) : null;
+  const parts = [];
+  if (sigText) parts.push(escapeHtml(sigText).replace(/\n/g, '<br>'));
+  if (imageMatch) parts.push('<img src="cid:baakal-signature" alt="" style="max-width:220px;height:auto;display:block;margin-top:8px;">');
+
+  mailOptions.html =
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#111;">` +
+    `${escapeHtml(body).replace(/\n/g, '<br>')}<br><br>` +
+    `<span style="color:#666;">-- </span><br>${parts.join('<br>')}</div>`;
+
+  if (imageMatch) {
+    mailOptions.attachments = [
+      ...(mailOptions.attachments || []),
+      {
+        cid: 'baakal-signature',
+        filename: `signature.${imageMatch[1].split('/')[1].replace('jpeg', 'jpg')}`,
+        content: Buffer.from(imageMatch[2], 'base64'),
+        contentType: imageMatch[1],
+      },
+    ];
+  }
+}
+
 /**
  * Send a personal email via user's own email account.
  *
@@ -192,6 +232,14 @@ async function getDefaultAccount(userId) {
  * @returns {{ success, messageId, error, code }}
  */
 async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo }) {
+  // Règle produit : aucun contenu généré ne part avec un tiret cadratin
+  // (marqueur IA). Appliqué ici, au transport, pour couvrir tous les
+  // appelants ; la signature du compte (texte de l'utilisateur) est ajoutée
+  // après et n'est jamais réécrite.
+  const { humanize } = require('./human-style');
+  subject = humanize(subject);
+  body = humanize(body);
+
   let account = await getDefaultAccount(userId);
   if (!account) {
     return {
@@ -218,9 +266,15 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
     to: toName ? `${toName} <${to}>` : to,
     subject,
     text: body,
-    // No HTML — looks like a real personal email
+    // Sans signature : texte seul · looks like a real personal email.
     replyTo: replyTo || account.email_address,
   };
+
+  // Signature du compte (migration 102) : dès qu'elle existe, on passe en
+  // multipart texte+HTML · le format des vrais emails composés dans Gmail,
+  // donc toujours « personnel ». L'image part en pièce inline CID (comme les
+  // signatures Outlook) : pas d'hébergement externe, pas d'URL de tracking.
+  applySignature(mailOptions, account, body);
 
   try {
     const info = await transport.sendMail(mailOptions);
@@ -237,9 +291,19 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
       );
       _transportCache.delete(account.id);
       // Le compte vient de passer 'expired' : getDefaultAccount ne le renverra
-      // plus, l'utilisateur doit reconnecter — c'est la même action corrective
+      // plus, l'utilisateur doit reconnecter · c'est la même action corrective
       // que l'absence de compte, d'où le même code.
       return { success: false, code: 'no_email_account', error: err.message };
+    }
+
+    // Rejet DÉFINITIF du destinataire (5xx « user unknown ») ≠ erreur transitoire :
+    // l'adresse n'existe plus · la personne a probablement quitté la société.
+    // Code distinct pour que l'appelant tamponne le contact (data quality + churn).
+    const permanentCodes = [550, 551, 553];
+    const bounceText = /user unknown|no such user|does not exist|recipient .*(rejected|not found)|mailbox (unavailable|not found|does not exist)|address rejected|invalid recipient/i;
+    if (permanentCodes.includes(err.responseCode)
+      || (err.responseCode >= 500 && bounceText.test(err.message || ''))) {
+      return { success: false, code: 'recipient_bounced', error: err.message };
     }
 
     return { success: false, code: 'smtp_error', error: err.message };
@@ -251,7 +315,7 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
  *
  * existingEmailId : id d'une ligne nurture_emails déjà en file (status
  * 'pending'). Dans ce cas on met à jour cette ligne au lieu d'en insérer une
- * nouvelle — sinon l'approbation créait un doublon et l'original restait
+ * nouvelle · sinon l'approbation créait un doublon et l'original restait
  * bloqué en 'pending' pour toujours.
  */
 async function sendNurtureEmail(userId, {
@@ -260,7 +324,12 @@ async function sendNurtureEmail(userId, {
   // 1. Create the email record as pending (or reuse the queued one)
   let nurture;
   if (existingEmailId) {
-    nurture = { id: existingEmailId };
+    const existing = await db.query(
+      `SELECT * FROM nurture_emails WHERE id = $1 AND user_id = $2`,
+      [existingEmailId, userId]
+    );
+    nurture = existing.rows[0];
+    if (!nurture) throw new Error(`nurture_emails row ${existingEmailId} not found`);
   } else {
     const emailRecord = await db.query(`
       INSERT INTO nurture_emails (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, team_campaign_id, pattern_ids)
@@ -279,6 +348,15 @@ async function sendNurtureEmail(userId, {
       `UPDATE nurture_emails SET status = 'sent', sent_at = now() WHERE id = $1`,
       [nurture.id]
     );
+
+    // L'envoi passe : si l'adresse était marquée bouncée, elle re-marche.
+    if (opportunityId) {
+      await db.query(
+        `UPDATE opportunities SET email_bounced_at = NULL, email_bounce_reason = NULL
+         WHERE id = $1 AND email_bounced_at IS NOT NULL`,
+        [opportunityId]
+      ).catch(() => {});
+    }
 
     // 4. Log in Pipedrive as activity/note
     if (crmProvider === 'pipedrive') {
@@ -302,7 +380,7 @@ async function sendNurtureEmail(userId, {
   } else if (result.code === 'no_email_account') {
     // Aucune boîte mail connectée : rien ne cloche avec CET email, c'est le
     // compte qui n'est pas configuré. Le passer en 'failed' le sortirait de la
-    // file — or la contrainte unique 067 (un seul pending par contact) libère
+    // file · or la contrainte unique 067 (un seul pending par contact) libère
     // alors le contact, et le cron du lendemain regénère un brouillon tout
     // aussi inenvoyable, à nouveau facturé en tokens. On laisse donc la ligne
     // en 'pending' : on enregistre juste la raison, la file est préservée et
@@ -316,6 +394,33 @@ async function sendNurtureEmail(userId, {
       `UPDATE nurture_emails SET status = 'failed', error = $1 WHERE id = $2`,
       [result.error, nurture.id]
     );
+
+    // Bounce définitif : tamponner le contact · lu par le scan data quality
+    // (issue email_bounced) et par le scoring churn (contact probablement parti).
+    if (result.code === 'recipient_bounced') {
+      if (opportunityId) {
+        await db.query(
+          `UPDATE opportunities SET email_bounced_at = now(), email_bounce_reason = $1 WHERE id = $2`,
+          [(result.error || '').slice(0, 500), opportunityId]
+        ).catch(() => {});
+      }
+
+      // Pénalité mémoire : un bounce n'est PAS un échec du copy (le contenu
+      // n'a jamais été lu), mais laisser l'envoi compter comme neutre-positif
+      // fausserait la boucle · les patterns de cet email seraient crédités
+      // d'un « envoi » vers une adresse morte. On décrémente donc d'un cran,
+      // plancher à 0. Best-effort : la pénalité ne doit jamais faire échouer
+      // le traitement du bounce lui-même.
+      const bouncedPatternIds = nurture.pattern_ids || [];
+      if (bouncedPatternIds.length > 0) {
+        await db.query(
+          `UPDATE memory_patterns
+           SET confirmations = GREATEST(COALESCE(confirmations, 1) - 1, 0)
+           WHERE id = ANY($1)`,
+          [bouncedPatternIds]
+        ).catch((err) => logger.warn('email-outbound', `Pattern bounce penalty failed: ${err.message}`));
+      }
+    }
   }
 
   return { ...result, emailId: nurture.id };
@@ -340,4 +445,8 @@ module.exports = {
   sendNurtureEmail,
   testEmailAccount,
   getDefaultAccount,
+  // Consommés par le moteur natif de prospection (lecture Gmail API pour la
+  // détection de réponses · même token OAuth que l'envoi, scope mail.google.com).
+  refreshTokenIfNeeded,
+  decryptAccount,
 };

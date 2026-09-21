@@ -27,14 +27,23 @@ const db = require('../db');
 const claude = require('../api/claude');
 const { sendNurtureEmail } = require('./email-outbound');
 const logger = require('./logger');
+const { populationOf } = require('./crm-scope');
+const { outcomeOf, instructionFor } = require('./reply-intents');
 
+// Garde-fou des conversations qui ne concluent pas. Les deux issues nettes ont
+// leur propre sortie, sur l'intention détectée et non sur un compteur : une
+// demande de RDV déclenche une proposition de créneaux puis l'arrêt, un refus
+// coupe l'autopilot sur le contact. MAX_TURNS ne sert qu'au troisième cas · 
+// l'interlocuteur enchaîne les questions sans jamais dire oui ni non. Sans
+// cette borne, l'IA discuterait indéfiniment ; au-delà, elle rend la main.
 const MAX_TURNS = 5;
 const MIN_DELAY_MS = 2 * 60 * 60 * 1000;  // 2 hours
 const MAX_DELAY_MS = 4 * 60 * 60 * 1000;  // 4 hours
+const DAY_MS = 24 * 60 * 60 * 1000;
+const NOT_NOW_FOLLOWUP_DAYS = 21; // matches the "in a few weeks" wording used in the auto-reply
 
-// Intents that stop the autopilot
-const STOP_INTENTS = ['not_interested', 'unsubscribe'];
-const SUCCESS_INTENTS = ['meeting_request'];
+// Les issues de chaque intention sont déclarées une seule fois, dans
+// lib/reply-intents.js · la même source que l'énumération du prompt d'analyse.
 
 /**
  * Process a new reply and decide whether to auto-respond.
@@ -51,32 +60,45 @@ async function processReply(userId, opts) {
     return { action: 'skipped', reason: 'Missing opportunityId or email' };
   }
 
-  // Check if autopilot is enabled for this user
-  const settings = await getAutopilotSettings(userId);
-  if (!settings.enabled) {
-    return { action: 'skipped', reason: 'Autopilot disabled' };
+  // Le contact est chargé avant les réglages : c'est lui qui dit de quelle
+  // population relève la conversation, donc quel interrupteur consulter.
+  const opp = await db.query(
+    'SELECT autopilot_enabled, status, campaign_id FROM opportunities WHERE id = $1 AND user_id = $2',
+    [opportunityId, userId]
+  );
+  if (!opp.rows[0]) {
+    return { action: 'skipped', reason: 'Unknown opportunity' };
   }
-
-  // Check if this opportunity has autopilot disabled
-  const opp = await db.query('SELECT autopilot_enabled, status FROM opportunities WHERE id = $1 AND user_id = $2', [opportunityId, userId]);
-  if (!opp.rows[0] || opp.rows[0].autopilot_enabled === false) {
+  if (opp.rows[0].autopilot_enabled === false) {
     return { action: 'skipped', reason: 'Autopilot disabled for this contact' };
   }
 
+  const population = populationOf(opp.rows[0]);
+  const settings = await getAutopilotSettings(userId);
+  if (!settings[population]) {
+    return { action: 'skipped', reason: `Autopilot disabled for ${population}` };
+  }
+
   // Stop conditions
-  if (STOP_INTENTS.includes(intent)) {
-    await db.opportunities.update(opportunityId, { status: intent === 'unsubscribe' ? 'lost' : 'lost', autopilot_enabled: false });
+  if (outcomeOf(intent) === 'stop') {
+    // A negative reply is a reasonable signal to mark a not-yet-won deal as lost, but it's an
+    // inferred signal (sentiment on one email), not authoritative · it must never downgrade an
+    // already-won client's status. Only the CRM's own native status is authoritative for that
+    // (see crm-agent.js's deal sync). Stopping autopilot is always correct either way.
+    const updates = { autopilot_enabled: false };
+    if (opp.rows[0].status !== 'won') updates.status = 'lost';
+    await db.opportunities.update(opportunityId, updates);
     await logConversation(userId, opportunityId, email, 'stop', { intent, reason: 'Negative intent detected' });
     return { action: 'stopped', reason: `Intent: ${intent}` };
   }
 
-  // Success — meeting request detected
-  if (SUCCESS_INTENTS.includes(intent)) {
+  // Success · meeting request detected
+  if (outcomeOf(intent) === 'success') {
     // Generate meeting proposal reply
     const reply = await generateReply(userId, {
       contactName, company, email, replyContent, intent, channel,
       conversationHistory: await getConversationHistory(userId, email),
-      instruction: 'The prospect wants a meeting. Propose 2-3 specific time slots this week or next week. Be enthusiastic but professional.',
+      instruction: instructionFor(intent),
     });
 
     await scheduleReply(userId, opportunityId, email, contactName, reply, channel);
@@ -92,25 +114,22 @@ async function processReply(userId, opts) {
     return { action: 'handoff', reason: `Max turns reached (${MAX_TURNS})` };
   }
 
-  // Generate contextual reply based on intent
-  let instruction;
-  switch (intent) {
-    case 'interested':
-      instruction = 'The prospect is interested. Ask a qualifying question about their needs/timeline, and subtly steer toward a meeting. Do NOT propose a meeting yet if this is turn 1-2.';
-      break;
-    case 'question':
-      instruction = 'The prospect has a question. Answer it concisely and professionally based on context. Then ask a follow-up question to keep the conversation going.';
-      break;
-    case 'not_now':
-      instruction = 'The prospect says not now. Acknowledge respectfully, offer to follow up in a few weeks, and ask when would be a better time.';
-      break;
-    default:
-      instruction = 'Continue the conversation naturally. Be helpful and professional. Try to understand their needs and move toward a meeting.';
+  // L'instruction vient de la déclaration de l'intention ; une valeur inconnue
+  // retombe sur le repli, qui poursuit l'échange sans rien conclure.
+  let instruction = instructionFor(intent);
+
+  if (intent === 'not_now') {
+    // La réponse promet « dans quelques semaines » · on le planifie vraiment,
+    // au lieu d'envoyer une politesse sans effet sur la file de réactivation.
+    await db.opportunities.update(opportunityId, {
+      planned_followup_date: new Date(Date.now() + NOT_NOW_FOLLOWUP_DAYS * DAY_MS).toISOString(),
+      planned_followup_reason: 'not_now',
+    });
   }
 
   // If we're at turn 3+, push toward meeting
   if (turnCount >= 3 && intent !== 'not_now') {
-    instruction += ' We have been exchanging for a while — propose a quick 15-minute call to discuss further.';
+    instruction += ' We have been exchanging for a while, propose a quick 15-minute call to discuss further.';
   }
 
   const reply = await generateReply(userId, {
@@ -136,12 +155,17 @@ async function generateReply(userId, opts) {
   const userName = user.rows[0]?.name || 'Moi';
   const userCompany = user.rows[0]?.company || '';
 
-  // Load relevant memory patterns
-  const patterns = await db.query(
-    `SELECT pattern FROM memory_patterns WHERE user_id = $1 AND confidence IN ('Haute', 'Moyenne') ORDER BY confirmations DESC LIMIT 5`,
-    [userId]
-  );
-  const patternCtx = patterns.rows.map(p => `- ${p.pattern}`).join('\n');
+  // Load relevant memory patterns, scoped to the tenant (user + ses équipes +
+  // pool global partagé). L'ancienne requête `WHERE user_id = $1` levait
+  // systématiquement avant la migration 089 (colonne inexistante) : ce contexte
+  // n'était jamais injecté dans le prompt.
+  let patternCtx = '';
+  try {
+    const patterns = await db.memoryPatterns.listForPrompt(5, null, userId);
+    patternCtx = patterns.map(p => `- ${p.pattern}`).join('\n');
+  } catch (err) {
+    logger.warn('autopilot', `Memory patterns unavailable: ${err.message}`);
+  }
 
   const historyText = (conversationHistory || [])
     .slice(-6) // last 6 messages for context
@@ -171,6 +195,7 @@ RÈGLES :
 - Tutoyer si le prospect tutoie, sinon vouvoyer
 - ${channel === 'linkedin' ? 'Format message LinkedIn (pas de subject)' : 'Format email avec subject et body'}
 - Langue : détecter la langue du prospect et répondre dans la même langue
+${require('./human-style').HUMAN_STYLE_RULES_FR}
 
 ${channel === 'linkedin'
     ? 'Retourne un JSON : { "message": "..." }'
@@ -183,11 +208,12 @@ ${channel === 'linkedin'
     'conversation_autopilot'
   );
 
-  if (result.parsed) return result.parsed;
+  const { humanizeFields } = require('./human-style');
+  if (result.parsed) return humanizeFields(result.parsed, ['subject', 'body', 'message']);
 
   const match = (result.raw || '').match(/\{[\s\S]*(?:"message"|"subject")[\s\S]*\}/);
   if (match) {
-    try { return JSON.parse(match[0]); } catch { /* fallthrough */ }
+    try { return humanizeFields(JSON.parse(match[0]), ['subject', 'body', 'message']); } catch { /* fallthrough */ }
   }
 
   // Fallback
@@ -218,18 +244,38 @@ async function scheduleReply(userId, opportunityId, toEmail, toName, reply, chan
  */
 async function sendScheduledReplies() {
   const pending = await db.query(`
-    SELECT aq.*, u.name as user_name
+    SELECT aq.*, u.name as user_name, o.campaign_id
     FROM autopilot_queue aq
     JOIN users u ON u.id = aq.user_id
+    LEFT JOIN opportunities o ON o.id = aq.opportunity_id
     WHERE aq.status = 'pending' AND aq.scheduled_at <= now()
     ORDER BY aq.scheduled_at
     LIMIT 20
     FOR UPDATE OF aq SKIP LOCKED
   `);
 
+  // Une réponse reste 2 à 4h en file avant de partir. Sans cette vérification,
+  // couper l'autopilot ne stoppait pas ce qui était déjà planifié : un
+  // utilisateur qui l'éteint parce qu'il ne veut plus que l'IA parle à ses
+  // clients voyait quand même partir les réponses des heures suivantes.
+  // Le réglage est relu au moment d'envoyer, pas au moment de planifier.
+  const settingsByUser = new Map();
+  const scopeAllows = async (item) => {
+    if (!settingsByUser.has(item.user_id)) {
+      settingsByUser.set(item.user_id, await getAutopilotSettings(item.user_id));
+    }
+    return !!settingsByUser.get(item.user_id)[populationOf(item)];
+  };
+
   let sent = 0;
   for (const item of pending.rows) {
     try {
+      if (!await scopeAllows(item)) {
+        await db.query(`UPDATE autopilot_queue SET status = 'cancelled' WHERE id = $1`, [item.id]);
+        logger.info('autopilot', `reply ${item.id} annulée, portée ${populationOf(item)} désactivée entre-temps`);
+        continue;
+      }
+
       const content = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
 
       if (item.channel === 'linkedin') {
@@ -340,10 +386,17 @@ async function getAutopilotSettings(userId) {
     [userId]
   );
   const settings = result.rows[0]?.settings || {};
+
+  // Bascule depuis l'ancien interrupteur unique `autopilot_enabled`, qui
+  // commandait les deux populations à la fois. Un « oui » historique portait
+  // sur la prospection · c'est le seul cas que l'UI décrivait · et ne doit
+  // surtout pas se transformer en autorisation de répondre tout seul dans une
+  // conversation client en cours. En cas de doute, la portée CRM reste fermée.
+  const legacy = settings.autopilot_enabled ?? false;
+
   return {
-    enabled: settings.autopilot_enabled ?? false,
-    maxTurns: settings.autopilot_max_turns ?? MAX_TURNS,
-    channels: settings.autopilot_channels ?? ['email', 'linkedin'],
+    prospection: settings.autopilot_prospection_enabled ?? legacy,
+    crm: settings.autopilot_crm_enabled ?? false,
   };
 }
 

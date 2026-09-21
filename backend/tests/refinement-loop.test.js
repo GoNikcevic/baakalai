@@ -44,7 +44,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 1: Generate Sequence ──
 
-  describe('Step 1 — Generate Sequence', () => {
+  describe('Step 1, Generate Sequence', () => {
     it('generates a full sequence via dry-run', async () => {
       const res = await request('POST', '/api/ai/generate-sequence?dry_run=true', {
         token,
@@ -79,7 +79,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 2: Analyze Campaign ──
 
-  describe('Step 2 — Analyze Campaign', () => {
+  describe('Step 2, Analyze Campaign', () => {
     let diagnosticId;
 
     it('analyzes campaign performance', async () => {
@@ -116,7 +116,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 3: Regenerate Sequence ──
 
-  describe('Step 3 — Regenerate Sequence', () => {
+  describe('Step 3, Regenerate Sequence', () => {
     it('regenerates underperforming messages', async () => {
       const res = await request('POST', '/api/ai/regenerate?dry_run=true', {
         token,
@@ -162,7 +162,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 4: Full Refinement Loop (Analyze → Regenerate → Track) ──
 
-  describe('Step 4 — Full Refinement Loop', () => {
+  describe('Step 4, Full Refinement Loop', () => {
     it('runs the complete loop in one call', async () => {
       const res = await request('POST', '/api/ai/run-refinement?dry_run=true', {
         token,
@@ -218,7 +218,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 5: Memory Consolidation ──
 
-  describe('Step 5 — Memory Consolidation', () => {
+  describe('Step 5, Memory Consolidation', () => {
     it('consolidates cross-campaign patterns', async () => {
       const res = await request('POST', '/api/ai/consolidate-memory?dry_run=true', { token });
       assert.equal(res.status, 200);
@@ -241,7 +241,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 6: Generate Single Touchpoint ──
 
-  describe('Step 6 — Generate Single Touchpoint', () => {
+  describe('Step 6, Generate Single Touchpoint', () => {
     it('generates an email initial touchpoint', async () => {
       const res = await request('POST', '/api/ai/generate-touchpoint?dry_run=true', {
         token,
@@ -284,7 +284,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 7: Variable Chain Generator ──
 
-  describe('Step 7 — Variable Chain Generator', () => {
+  describe('Step 7, Variable Chain Generator', () => {
     it('generates a variable chain', async () => {
       const res = await request('POST', '/api/ai/generate-variables?dry_run=true', {
         token,
@@ -315,7 +315,7 @@ describe('Refinement Loop E2E (dry-run)', () => {
 
   // ── Step 8: Full Pipeline Integration ──
 
-  describe('Step 8 — Full Pipeline Integration', () => {
+  describe('Step 8, Full Pipeline Integration', () => {
     it('runs the complete pipeline: create → generate → analyze → regenerate → consolidate', async () => {
       // 1. Create a fresh campaign
       const create = await request('POST', '/api/campaigns', {

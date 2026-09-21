@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Socket.io Client Service
+   BAKAL · Socket.io Client Service
    Manages a single shared Socket.io connection, authenticated via JWT.
    Auto-reconnects on token refresh.
    =============================================================================== */

@@ -108,7 +108,7 @@ ${searchSummary}`;
     const { parsed } = await claude.callClaude(systemPrompt, userContent, 300, 'personalization_icebreaker');
 
     if (!parsed) {
-      logger.warn('personalization', 'Reponse non parsable — icebreaker vide', { prospect: name, company });
+      logger.warn('personalization', 'Reponse non parsable, icebreaker vide', { prospect: name, company });
     }
 
     return {

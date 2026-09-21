@@ -7,7 +7,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 /**
  * Derive a 32-byte encryption key from the server secret.
- * In production, ENCRYPTION_SECRET must be set — the server will crash otherwise.
+ * In production, ENCRYPTION_SECRET must be set · the server will crash otherwise.
  * In dev, a fallback is used with a warning.
  */
 function getEncryptionKey() {
@@ -16,7 +16,7 @@ function getEncryptionKey() {
     if (IS_PRODUCTION) {
       throw new Error('ENCRYPTION_SECRET is required in production. Set it in your .env file.');
     }
-    console.warn('⚠️  ENCRYPTION_SECRET not set — using insecure fallback. Set it in .env for production.');
+    console.warn('⚠️  ENCRYPTION_SECRET not set, using insecure fallback. Set it in.env for production.');
     const fallback = 'bakal-default-key-change-me-in-production';
     return crypto.scryptSync(fallback, 'bakal-dev-salt', 32);
   }

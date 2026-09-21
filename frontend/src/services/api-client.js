@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   BAKAL — API Client (ES Module)
+   BAKAL · API Client (ES Module)
    Connects the frontend to the Express backend via Vite proxy.
    Transforms backend snake_case → frontend camelCase data shapes.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -12,7 +12,7 @@ const BASE = '/api';
 
 export async function request(path, opts = {}) {
   const url = BASE + path;
-  const headers = { 'Content-Type': 'application/json', ...opts.headers };
+  const headers = { 'Content-Type': 'application/json',...opts.headers };
 
   // Attach JWT token if available
   const token = getToken();
@@ -20,18 +20,18 @@ export async function request(path, opts = {}) {
     headers['Authorization'] = 'Bearer ' + token;
   }
 
-  let res = await fetch(url, { headers, ...opts });
+  let res = await fetch(url, { headers,...opts });
 
-  // Handle 401 — try refreshing the access token before giving up
+  // Handle 401 · try refreshing the access token before giving up
   if (res.status === 401) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       // Retry the original request with the new token
       headers['Authorization'] = 'Bearer ' + newToken;
-      res = await fetch(url, { headers, ...opts });
+      res = await fetch(url, { headers,...opts });
     }
 
-    // Still 401 after refresh — session is dead
+    // Still 401 after refresh · session is dead
     if (res.status === 401) {
       clearSession();
       throw Object.assign(new Error('Session expired'), { status: 401 });
@@ -54,7 +54,7 @@ export async function request(path, opts = {}) {
 // l'analytics. Le backend valide le nom ([a-z0-9_]) et borne les metadata.
 export function trackEvent(event, metadata = null) {
   request('/events', { method: 'POST', body: JSON.stringify({ event, metadata }) })
-    .catch(() => {});
+.catch(() => {});
 }
 
 /* ─── Channel helpers ─── */
@@ -69,7 +69,7 @@ const resultTextMap = {
   testing:  '⏳ En cours',
   improved: '▲ Amélioré',
   degraded: '▼ Dégradé',
-  neutral:  '— Neutre',
+  neutral:  ' Neutre',
 };
 
 /* ─── Transform: backend campaign row → frontend BAKAL campaign shape ─── */
@@ -104,6 +104,13 @@ export function transformCampaign(c, sequence, diagnostics, history) {
     iteration: c.iteration || 0,
     startDate: c.start_date || '',
     lemlistRef: c.lemlist_id || null,
+    send_channel: c.send_channel || null,
+    nb_prospects: c.nb_prospects || 0,
+    // Champs batch · sans eux le bouton « Lancer batch suivant » ne peut
+    // jamais s'afficher (CampaignDetailLayout les lit directement).
+    batch_mode: c.batch_mode || false,
+    current_batch: c.current_batch || 0,
+    total_batches: c.total_batches || 0,
     nextAction: null,
     kpis: {
       contacts: c.nb_prospects || 0,
@@ -122,7 +129,7 @@ export function transformCampaign(c, sequence, diagnostics, history) {
     prepChecklist: c.status === 'prep' ? buildDefaultChecklist(c) : undefined,
     info: {
       period: c.start_date || '',
-      createdDate: c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
+      createdDate: c.created_at ? new Date(c.created_at).toLocaleDateString((localStorage.getItem('baakalai_lang') || 'fr') === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '',
       copyDesc: [c.tone, c.formality, c.angle, 'FR'].filter(Boolean).join(' · '),
       channelsDesc: ch.label,
       launchEstimate: c.status === 'prep' ? 'Non planifié' : '',
@@ -190,7 +197,7 @@ export function transformVersion(v) {
 
 export function buildDefaultChecklist() {
   return [
-    { icon: '✅', title: 'Paramètres de campagne configurés', desc: 'Cible, canal, angle, ton — tout est défini', status: 'Fait', statusColor: 'success', done: true },
+    { icon: '✅', title: 'Paramètres de campagne configurés', desc: 'Cible, canal, angle, ton, tout est défini', status: 'Fait', statusColor: 'success', done: true },
     { icon: '⬜', title: 'Séquences à générer par Baakalai', desc: 'En attente de génération IA', status: 'À faire', statusColor: 'text-muted', done: false },
     { icon: '⬜', title: 'Liste de prospects à importer', desc: 'Import Lemlist en attente', status: 'À faire', statusColor: 'text-muted', done: false },
     { icon: '⬜', title: 'Validation par le client', desc: 'Après génération des séquences', status: 'À faire', statusColor: 'text-muted', done: false },
@@ -261,8 +268,8 @@ export function transformReport(r) {
     scoreLabel: r.score_label || scoreEmojiMap[r.score] || r.score,
     metrics: {
       contacts: r.contacts || 0,
-      openRate: r.open_rate != null ? r.open_rate + '%' : '—',
-      replyRate: r.reply_rate != null ? r.reply_rate + '%' : '—',
+      openRate: r.open_rate != null ? r.open_rate + '%' : ' ',
+      replyRate: r.reply_rate != null ? r.reply_rate + '%' : ' ',
       interested: r.interested || 0,
       meetings: r.meetings || 0,
     },
@@ -297,6 +304,8 @@ export function transformOpportunity(o) {
     timing: o.timing || '',
     score: o.score ?? null,
     scoreBreakdown: o.score_breakdown || o.scoreBreakdown || null,
+    churnScore: o.churn_score ?? o.churnScore ?? null,
+    dealValue: o.deal_value ?? o.dealValue ?? null,
   };
 }
 
@@ -320,12 +329,12 @@ export function patternsToRecommendations(patterns, lang = null) {
     Faible: 'blue',
   };
   const labelMap = userLang === 'en' ? {
-    Haute: '\u2705 Apply \u2014 High impact',
-    Moyenne: '\uD83D\uDCA1 Test \u2014 Opportunity',
+    Haute: '\u2705 Apply, High impact',
+    Moyenne: '\uD83D\uDCA1 Test, Opportunity',
     Faible: '\uD83D\uDCCA Insight',
   } : {
-    Haute: '\u2705 Appliquer \u2014 Impact fort',
-    Moyenne: '\uD83D\uDCA1 Tester \u2014 Opportunit\u00e9',
+    Haute: '\u2705 Appliquer, Impact fort',
+    Moyenne: '\uD83D\uDCA1 Tester, Opportunit\u00e9',
     Faible: '\uD83D\uDCCA Insight',
   };
 
@@ -402,11 +411,11 @@ export async function fetchDashboard() {
 
   return {
     contacts: { value: kpis.total_contacts || 0, trend: kpis.active_campaigns ? kpis.active_campaigns + ' campagne(s)' : '', direction: 'up' },
-    openRate: { value: openRate ? openRate + '%' : '—', trend: openRate >= 50 ? '✓ Au-dessus du benchmark' : openRate ? '↗ Objectif : 50%' : '', direction: openRate >= 50 ? 'up' : 'flat' },
-    replyRate: { value: replyRate ? replyRate + '%' : '—', trend: replyRate >= 5 ? '✓ Au-dessus du benchmark' : replyRate ? '↗ Objectif : 5%' : '', direction: replyRate >= 5 ? 'up' : 'flat' },
+    openRate: { value: openRate ? openRate + '%' : ' ', trend: openRate >= 50 ? '✓ Au-dessus du benchmark' : openRate ? '↗ Objectif : 50%' : '', direction: openRate >= 50 ? 'up' : 'flat' },
+    replyRate: { value: replyRate ? replyRate + '%' : ' ', trend: replyRate >= 5 ? '✓ Au-dessus du benchmark' : replyRate ? '↗ Objectif : 5%' : '', direction: replyRate >= 5 ? 'up' : 'flat' },
     interested: { value: kpis.total_interested || 0, trend: '', direction: 'up' },
     meetings: { value: kpis.total_meetings || 0, trend: '', direction: 'up' },
-    stops: { value: '—', trend: '', direction: 'up' },
+    stops: { value: ' ', trend: '', direction: 'up' },
   };
 }
 
@@ -476,7 +485,7 @@ export async function generateTouchpoint(type, params, dryRun = false) {
   const qs = dryRun ? '?dry_run=true' : '';
   return request('/ai/generate-touchpoint' + qs, {
     method: 'POST',
-    body: JSON.stringify({ type, ...params }),
+    body: JSON.stringify({ type,...params }),
   });
 }
 
@@ -548,8 +557,8 @@ export async function getChurnSummary() {
 export function downloadScoresCSV() {
   const token = getToken();
   fetch(BASE + '/ai/export-scores-csv', { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = 'bakal-scores.csv';
@@ -561,8 +570,8 @@ export function downloadScoresCSV() {
 export function downloadAnalyticsCSV(tab) {
   const token = getToken();
   fetch(BASE + '/analytics/' + tab + '/csv', { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `baakal-${tab}-${new Date().toISOString().split('T')[0]}.csv`;
@@ -667,8 +676,8 @@ export function exportCampaignsCsv() {
   const link = document.createElement('a');
   // Use fetch to include auth header, then trigger download
   fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       link.href = URL.createObjectURL(blob);
       link.download = 'bakal-campagnes.csv';
       link.click();
@@ -681,8 +690,8 @@ export function exportCampaignCsv(campaignId) {
   const token = getToken();
   const url = BASE + '/export/campaigns/' + campaignId + '/csv';
   fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.blob())
-    .then(blob => {
+.then(r => r.blob())
+.then(blob => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = 'bakal-campagne-' + campaignId + '.csv';
@@ -696,8 +705,8 @@ export function exportReportPdf() {
   const token = getToken();
   const url = BASE + '/export/report/pdf';
   fetch(url, { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.text())
-    .then(html => {
+.then(r => r.text())
+.then(html => {
       const w = window.open('', '_blank');
       w.document.write(html);
       w.document.close();
@@ -707,7 +716,7 @@ export function exportReportPdf() {
 /** Upload files (multipart/form-data)
  *  @param {File[]} files
  *  @param {object} [options]
- *  @param {string} [options.source] — 'chat' tags files as chat_attachment (excluded from profile docs)
+ *  @param {string} [options.source] · 'chat' tags files as chat_attachment (excluded from profile docs)
  */
 export async function uploadFiles(files, options = {}) {
   const formData = new FormData();
@@ -727,7 +736,7 @@ export async function uploadFiles(files, options = {}) {
   const headers = {};
   const token = getToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  // Do NOT set Content-Type — browser sets multipart boundary automatically
+  // Do NOT set Content-Type · browser sets multipart boundary automatically
 
   const res = await fetch(url, { method: 'POST', headers, body: formData });
 
@@ -790,16 +799,35 @@ export async function launchCampaignToSalesforce(campaignId, options = {}) {
   });
 }
 
+/** Lancement natif · envoi depuis la boîte email connectée + LinkedIn, sans Lemlist */
+export async function launchCampaignNative(campaignId) {
+  return request(`/campaigns/${campaignId}/launch-native`, { method: 'POST' });
+}
+
+export async function runNativeCampaign(campaignId) {
+  return request(`/campaigns/${campaignId}/native-run`, { method: 'POST' });
+}
+
+export async function getNativeStatus(campaignId) {
+  return request(`/campaigns/${campaignId}/native-status`);
+}
+
 /** Get Lemlist credit balance */
 export async function getLemlistCredits() {
   return request('/ai/lemlist-credits');
 }
 
-/** Start email reveal enrichment for a batch of leads. Returns { jobId, total, dispatched } */
-export async function revealEmails(source, leads) {
+/** Which email-reveal paths are available (own Lemlist credits vs paid baakalai option) */
+export async function getRevealOptions() {
+  return request('/ai/reveal-options');
+}
+
+/** Start email reveal enrichment for a batch of leads. Returns { jobId, total, dispatched }.
+ * Source 'baakal' (clé centrale, payant) exige opts.confirmCharge: true. */
+export async function revealEmails(source, leads, opts = {}) {
   return request('/ai/reveal-emails', {
     method: 'POST',
-    body: JSON.stringify({ source, leads }),
+    body: JSON.stringify({ source, leads,...opts }),
   });
 }
 
@@ -967,11 +995,15 @@ const BakalAPI = {
   listCampaignProspects,
   launchCampaignToLemlist,
   launchCampaignToSalesforce,
+  launchCampaignNative,
+  runNativeCampaign,
+  getNativeStatus,
   getLemlistCredits,
   revealEmails,
   webSearchProspects,
   getLemlistSenders,
   pollRevealEmails,
+  getRevealOptions,
   getABCategories,
   getABRecommendations,
   recordABWinner,

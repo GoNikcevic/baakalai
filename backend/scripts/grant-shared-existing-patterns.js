@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Ouverture du pool global : accorde `shared = true` aux patterns existants
- * dont la rédaction est complète (politique du 2026-08-04 — voir
+ * dont la rédaction est complète (politique du 2026-08-04 · voir
  * anonymizeBeforeWrite dans db/index.js). Les écritures futures sont couvertes
  * par le DAO ; ce script traite le stock écrit avant la mise en place.
  *
@@ -25,7 +25,7 @@ const APPLY = process.argv.includes('--apply');
 async function main() {
   const lexicon = await anonymize.loadLexicon({ query: db.rawQuery || db.query });
   if (lexicon.size === 0) {
-    console.error('Lexique vide — impossible de juger le partage. Abandon.');
+    console.error('Lexique vide, impossible de juger le partage. Abandon.');
     process.exit(1);
   }
   console.log(`Lexique : ${lexicon.size} termes\n`);
@@ -78,7 +78,7 @@ async function main() {
   console.log(`Partage accordé           : ${accordes} / ${rows.length}`);
   console.log(`Rédaction complétée       : ${redigues}`);
   console.log(`Non partageables (résidu) : ${bloques} / ${rows.length}`);
-  console.log(APPLY ? '\nApplique.' : '\nSimulation — relancer avec --apply pour ecrire.');
+  console.log(APPLY ? '\nApplique.' : '\nSimulation, relancer avec --apply pour ecrire.');
 }
 
 main()

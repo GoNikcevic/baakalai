@@ -20,7 +20,7 @@ describe('AuthGate', () => {
   it('renders the login form by default', () => {
     render(<AuthGate onAuth={mockOnAuth} />);
 
-    expect(screen.getByText('Plateforme de prospection intelligente')).toBeInTheDocument();
+    expect(screen.getByText('Le système IA qui exploite ton CRM')).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(screen.getByLabelText('Mot de passe')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Se connecter' })).toBeInTheDocument();
@@ -66,7 +66,8 @@ describe('AuthGate', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
 
     await waitFor(() => {
-      expect(login).toHaveBeenCalledWith('test@test.com', 'password123');
+      // login() reçoit désormais un troisième argument : « se souvenir de moi ».
+      expect(login).toHaveBeenCalledWith('test@test.com', 'password123', expect.any(Boolean));
       expect(mockOnAuth).toHaveBeenCalledWith(fakeUser);
     });
   });
@@ -87,8 +88,11 @@ describe('AuthGate', () => {
 
     await waitFor(() => {
       expect(register).toHaveBeenCalledWith('Goran', 'goran@test.com', 'password123', 'Stanko');
-      expect(mockOnAuth).toHaveBeenCalledWith(fakeUser);
     });
+
+    // L'inscription ne connecte plus directement : elle affiche l'écran de
+    // vérification par email. onAuth ne doit donc pas être appelé ici.
+    expect(mockOnAuth).not.toHaveBeenCalled();
   });
 
   it('displays error message on login failure', async () => {

@@ -1,31 +1,35 @@
 /**
- * Nurture Routes — Email accounts, triggers, and nurture email management
+ * Nurture Routes · Email accounts, triggers, and nurture email management
  *
- * POST /api/nurture/email-accounts       — Add SMTP email account
- * GET  /api/nurture/email-accounts       — List email accounts
- * POST /api/nurture/email-accounts/test  — Test email connection
- * DELETE /api/nurture/email-accounts/:id — Remove email account
+ * POST /api/nurture/email-accounts · Add SMTP email account
+ * GET  /api/nurture/email-accounts · List email accounts
+ * POST /api/nurture/email-accounts/test · Test email connection
+ * DELETE /api/nurture/email-accounts/:id · Remove email account
  *
- * POST /api/nurture/triggers             — Create a nurture trigger
- * GET  /api/nurture/triggers             — List triggers
- * PATCH /api/nurture/triggers/:id        — Update trigger
- * DELETE /api/nurture/triggers/:id       — Delete trigger
- * POST /api/nurture/triggers/:id/run     — Manually run a trigger
+ * POST /api/nurture/triggers · Create a nurture trigger
+ * POST /api/nurture/triggers/match-counts · How many contacts a rule would hit
+ * GET  /api/nurture/triggers · List triggers
+ * PATCH /api/nurture/triggers/:id · Update trigger
+ * DELETE /api/nurture/triggers/:id · Delete trigger
+ * POST /api/nurture/triggers/:id/run · Manually run a trigger
  *
- * GET  /api/nurture/emails               — List nurture emails (pending/sent)
- * POST /api/nurture/emails/:id/approve   — Approve a pending email
- * POST /api/nurture/emails/:id/cancel    — Cancel a pending email
- * POST /api/nurture/run                  — Run nurture engine for current user
+ * GET  /api/nurture/summary · Exact queue counters + mailbox connected or not
+ * GET  /api/nurture/emails · List nurture emails (pending/sent), optional ?chain= filter
+ * POST /api/nurture/emails/:id/approve · Approve a pending email
+ * POST /api/nurture/emails/:id/cancel · Cancel a pending email
+ * POST /api/nurture/emails/cancel-stale · Cancel drafts older than N days
+ * POST /api/nurture/run · Run nurture engine for current user
  *
- * POST /api/nurture/send                 — Send a one-off personal email
+ * POST /api/nurture/send · Send a one-off personal email
  */
 
 const { Router } = require('express');
 const db = require('../db');
 const { encrypt } = require('../config/crypto');
 const { sendPersonalEmail, sendNurtureEmail, testEmailAccount } = require('../lib/email-outbound');
-const { runNurtureEngine } = require('../lib/nurture-engine');
+const { runNurtureEngine, generateEmail } = require('../lib/nurture-engine');
 const { matchContacts } = require('../lib/trigger-matching');
+const { getStagnantDays } = require('../lib/stagnation');
 const logger = require('../lib/logger');
 
 const router = Router();
@@ -34,11 +38,146 @@ const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : 'http://localhost:5173');
 
+/** Âge à partir duquel un brouillon en attente est considéré périmé.
+ *
+ *  Même horloge que l'expiration automatique de `stepNurture`
+ *  (lib/crm-agent.js) : l'écran ne doit pas appeler « périmé » autre chose que
+ *  ce que l'agent annulera de lui-même au prochain passage. */
+const STALE_DRAFT_DAYS = 14;
+
+// ═══════════════════════════════════════════════════
+//  Summary · état réel de la file (compteurs exacts)
+// ═══════════════════════════════════════════════════
+
+// GET /api/nurture/summary · ce que la page d'Automatisation ne pouvait pas
+// savoir : les compteurs exacts par statut et l'existence d'une boîte mail.
+//
+// L'écran dérivait ses compteurs de GET /emails, plafonné à 50 lignes : la nav
+// affichait 188 en attente et l'onglet « En attente (50) ». Surtout, rien ne
+// disait qu'aucune boîte mail n'était connectée, alors que c'est la seule
+// raison pour laquelle ces brouillons ne partent pas (cf. getDefaultAccount
+// dans lib/email-outbound.js, et le gel de l'expiration dans stepNurture).
+router.get('/summary', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [counts, mailbox] = await Promise.all([
+      db.query(`
+        SELECT status,
+               COUNT(*)::int AS n,
+               COUNT(*) FILTER (WHERE created_at < now() - ($2::int * INTERVAL '1 day'))::int AS stale
+          FROM nurture_emails
+         WHERE user_id = $1
+         GROUP BY status
+      `, [userId, STALE_DRAFT_DAYS]),
+      // Même sélection que l'envoi : un compte `expired` ou `revoked` ne
+      // permet pas d'envoyer, donc il ne compte pas comme connecté.
+      db.query(
+        `SELECT COUNT(*)::int AS n FROM email_accounts WHERE user_id = $1 AND status = 'active'`,
+        [userId]
+      ),
+    ]);
+
+    const byStatus = {};
+    let stalePending = 0;
+    for (const row of counts.rows) {
+      byStatus[row.status] = row.n;
+      if (row.status === 'pending') stalePending = row.stale;
+    }
+
+    res.json({
+      pending: byStatus.pending || 0,
+      sent: byStatus.sent || 0,
+      cancelled: byStatus.cancelled || 0,
+      failed: byStatus.failed || 0,
+      stalePending,
+      staleDays: STALE_DRAFT_DAYS,
+      hasMailbox: mailbox.rows[0].n > 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  Stats · historique consolidé de l'automatisation
+// ═══════════════════════════════════════════════════
+
+// GET /api/nurture/stats · l'équivalent des KPIs de l'Historique de
+// prospection, côté Automatisation : emails de relance (nurture_emails),
+// actions des workflows (campaign_sends liées à un enrollment), workflows par
+// objectif et envois par mois. Les réponses viennent des enrollments stoppés
+// pour cause de réponse · c'est le signal de succès du moteur, pas un
+// tracking d'ouverture (inexistant sur ces envois).
+router.get('/stats', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const [emails, byTrigger, workflows, wfActions, monthly] = await Promise.all([
+      db.query(`
+        SELECT COUNT(*) FILTER (WHERE status = 'sent')::int AS sent,
+               COUNT(*) FILTER (WHERE status = 'sent' AND sent_at > now() - interval '30 days')::int AS sent_30d,
+               COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+               COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
+          FROM nurture_emails WHERE user_id = $1
+      `, [userId]),
+      db.query(`
+        SELECT COALESCE(t.trigger_type, 'custom') AS type, COUNT(*)::int AS sent
+          FROM nurture_emails e
+          LEFT JOIN nurture_triggers t ON t.id = e.trigger_id
+         WHERE e.user_id = $1 AND e.status = 'sent'
+         GROUP BY 1 ORDER BY 2 DESC
+      `, [userId]),
+      db.query(`
+        SELECT goal,
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+               COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+               COUNT(*) FILTER (WHERE stop_reason = 'replied')::int AS replied
+          FROM sequence_enrollments
+         WHERE user_id = $1 AND status <> 'draft'
+         GROUP BY goal
+      `, [userId]),
+      db.query(`
+        SELECT COUNT(*)::int AS sent,
+               COUNT(*) FILTER (WHERE sent_at > now() - interval '30 days')::int AS sent_30d
+          FROM campaign_sends
+         WHERE user_id = $1 AND enrollment_id IS NOT NULL AND status = 'sent'
+      `, [userId]),
+      db.query(`
+        SELECT to_char(date_trunc('month', sent_at), 'YYYY-MM') AS month,
+               COUNT(*) FILTER (WHERE source = 'nurture')::int AS nurture,
+               COUNT(*) FILTER (WHERE source = 'workflow')::int AS workflow
+          FROM (
+            SELECT sent_at, 'nurture' AS source FROM nurture_emails
+             WHERE user_id = $1 AND status = 'sent'
+               AND sent_at >= date_trunc('month', now()) - interval '5 months'
+            UNION ALL
+            SELECT sent_at, 'workflow' AS source FROM campaign_sends
+             WHERE user_id = $1 AND enrollment_id IS NOT NULL AND status = 'sent'
+               AND sent_at >= date_trunc('month', now()) - interval '5 months'
+          ) s
+         GROUP BY 1 ORDER BY 1
+      `, [userId]),
+    ]);
+
+    res.json({
+      emails: emails.rows[0],
+      workflowActions: wfActions.rows[0],
+      byTrigger: byTrigger.rows,
+      workflows: workflows.rows,
+      monthly: monthly.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ═══════════════════════════════════════════════════
 //  Email Accounts
 // ═══════════════════════════════════════════════════
 
-// POST /api/nurture/email-accounts — Add SMTP account
+// POST /api/nurture/email-accounts · Add SMTP account
 router.post('/email-accounts', async (req, res, next) => {
   try {
     const { provider, emailAddress, smtpHost, smtpPort, smtpUser, smtpPass } = req.body;
@@ -70,7 +209,8 @@ router.post('/email-accounts', async (req, res, next) => {
 router.get('/email-accounts', async (req, res, next) => {
   try {
     const result = await db.query(
-      `SELECT id, provider, email_address, smtp_host, smtp_port, status, is_default, created_at
+      `SELECT id, provider, email_address, smtp_host, smtp_port, status, is_default, created_at,
+              signature_text, signature_image
        FROM email_accounts WHERE user_id = $1 ORDER BY is_default DESC`,
       [req.user.id]
     );
@@ -80,7 +220,7 @@ router.get('/email-accounts', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/email-accounts/test — Test connection
+// POST /api/nurture/email-accounts/test · Test connection
 router.post('/email-accounts/test', async (req, res, next) => {
   try {
     const { id } = req.body;
@@ -92,6 +232,38 @@ router.post('/email-accounts/test', async (req, res, next) => {
 
     const result = await testEmailAccount(account.rows[0]);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/nurture/email-accounts/:id/signature · { signatureText, signatureImage }
+// Texte ≤ 2000 caractères ; image en data-URI (png/jpeg/gif/webp) ≤ 300 Ko
+// décodés, embarquée inline CID à l'envoi (lib/email-outbound.js). null efface.
+router.patch('/email-accounts/:id/signature', async (req, res, next) => {
+  try {
+    const { signatureText, signatureImage } = req.body || {};
+
+    const text = signatureText == null ? null : String(signatureText).trim().slice(0, 2000) || null;
+
+    let image = null;
+    if (signatureImage != null && signatureImage !== '') {
+      const m = String(signatureImage).match(/^data:(image\/(?:png|jpe?g|gif|webp));base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return res.status(400).json({ error: 'Image must be a png/jpeg/gif/webp data URI' });
+      if (Buffer.from(m[2], 'base64').length > 300 * 1024) {
+        return res.status(400).json({ error: 'Image too large (max 300 KB)' });
+      }
+      image = signatureImage;
+    }
+
+    const result = await db.query(
+      `UPDATE email_accounts SET signature_text = $1, signature_image = $2, updated_at = now()
+       WHERE id = $3 AND user_id = $4
+       RETURNING id, signature_text, signature_image`,
+      [text, image, req.params.id, req.user.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Account not found' });
+    res.json({ account: result.rows[0] });
   } catch (err) {
     next(err);
   }
@@ -136,6 +308,52 @@ router.post('/triggers', async (req, res, next) => {
     ]);
 
     res.json({ trigger: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/nurture/triggers/match-counts · combien de contacts une règle
+// toucherait si on la créait maintenant.
+//
+// Un utilisateur devait choisir un type parmi dix, un délai en jours et un
+// mode d'envoi sans aucun retour sur ce que ça donnerait : en production,
+// 1 règle créée sur 15 comptes. Cette route alimente les recettes prêtes à
+// l'emploi, avec le nombre réel devant chacune.
+//
+// Une seule requête pour plusieurs recettes : la base des opportunités est
+// chargée une fois, pas une fois par carte.
+router.post('/triggers/match-counts', async (req, res, next) => {
+  try {
+    const recipes = Array.isArray(req.body?.recipes) ? req.body.recipes.slice(0, 6) : [];
+    if (!recipes.length) return res.status(400).json({ error: 'recipes (array) is required' });
+
+    const opps = await db.opportunities.listByUser(req.user.id, 10000, 0);
+    const stagnantDays = await getStagnantDays(req.user.id);
+    const now = Date.now();
+
+    const counts = recipes.map(r => {
+      const matched = matchContacts(
+        { trigger_type: r.triggerType, conditions: { days: parseInt(r.days, 10) || undefined } },
+        opps,
+        now,
+        { stagnantDays }
+      );
+      if (matched === null) {
+        return { id: r.id ?? r.triggerType, count: null, manualOnly: true, sample: [] };
+      }
+      // Un contact sans email ne peut pas être relancé : le compte annoncé
+      // doit être celui des contacts réellement joignables.
+      const reachable = matched.filter(o => (o.email || '').trim());
+      return {
+        id: r.id ?? r.triggerType,
+        count: reachable.length,
+        manualOnly: false,
+        sample: reachable.slice(0, 3).map(o => ({ name: o.name, company: o.company })),
+      };
+    });
+
+    res.json({ counts, stagnantDays });
   } catch (err) {
     next(err);
   }
@@ -194,7 +412,7 @@ router.delete('/triggers/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/triggers/:id/run — Manually run a specific trigger
+// POST /api/nurture/triggers/:id/run · Manually run a specific trigger
 router.post('/triggers/:id/run', async (req, res, next) => {
   try {
     const result = await runNurtureEngine(req.user.id);
@@ -208,10 +426,11 @@ router.post('/triggers/:id/run', async (req, res, next) => {
 //  Nurture Emails
 // ═══════════════════════════════════════════════════
 
-// GET /api/nurture/emails — List emails (with optional status filter)
+// GET /api/nurture/emails · List emails (with optional status filter)
 router.get('/emails', async (req, res, next) => {
   try {
     const status = req.query.status || null;
+    const chain = req.query.chain || null; // 'deal_reactivation' | 'auto_upsell'
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     let sql = `SELECT ne.*, nt.name as trigger_name
                FROM nurture_emails ne
@@ -219,8 +438,12 @@ router.get('/emails', async (req, res, next) => {
                WHERE ne.user_id = $1`;
     const params = [req.user.id];
     if (status) {
-      sql += ` AND ne.status = $2`;
+      sql += ` AND ne.status = $${params.length + 1}`;
       params.push(status);
+    }
+    if (chain) {
+      sql += ` AND ne.metadata ->> 'chain' = $${params.length + 1}`;
+      params.push(chain);
     }
     sql += ` ORDER BY ne.created_at DESC LIMIT $${params.length + 1}`;
     params.push(limit);
@@ -232,13 +455,13 @@ router.get('/emails', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/emails/:id/approve — Approve and send a pending email
+// POST /api/nurture/emails/:id/approve · Approve and send a pending email
 //
 // Un échec d'envoi doit sortir en NON-2xx. Avant ce correctif la route
 // répondait 200 avec `{ success: false, error }` : le client (`services/
 // api-client.js`) ne lève que sur `!res.ok`, donc le `catch` des appelants
 // n'était jamais atteint et le clic « Approuver » ne produisait ni envoi ni
-// message — l'email restait pending, puis mourait 14 jours plus tard sur
+// message · l'email restait pending, puis mourait 14 jours plus tard sur
 // l'expiration de `stepNurture`. C'est la cause du « 0 email envoyé » :
 // aucune boîte mail n'a jamais été connectée et rien ne le disait.
 router.post('/emails/:id/approve', async (req, res, next) => {
@@ -260,6 +483,27 @@ router.post('/emails/:id/approve', async (req, res, next) => {
       existingEmailId: e.id,
     });
 
+    // If this email came from an autonomous chain (deal_reactivation/auto_upsell),
+    // keep agent_chain_executions in sync with the real send outcome · before any
+    // early return, so a failed send is recorded too.
+    await db.query(
+      `UPDATE agent_chain_executions SET status = $1, executed_at = now()
+       WHERE nurture_email_id = $2 AND status = 'pending'`,
+      [result.success ? 'executed' : 'failed', e.id]
+    );
+
+    // Reactivation/upsell emails: give the reply a week before this candidate can
+    // resurface in the queue, as a baseline safety net when the CRM isn't updated.
+    // If a real reply arrives sooner, the existing response-analysis/autopilot flow
+    // (Pipedrive-only today) already updates status/planned_followup_date faster.
+    const chain = e.metadata?.chain;
+    if (result.success && e.opportunity_id && (chain === 'deal_reactivation' || chain === 'auto_upsell')) {
+      await db.query(
+        `UPDATE opportunities SET planned_followup_date = now() + interval '7 days', planned_followup_reason = 'post_send_cooldown' WHERE id = $1`,
+        [e.opportunity_id]
+      );
+    }
+
     if (!result.success) {
       // 422 plutôt que 500 : la requête est valide, c'est l'envoi qui n'aboutit
       // pas (config manquante ou refus du serveur SMTP). `code` permet au front
@@ -273,7 +517,7 @@ router.post('/emails/:id/approve', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/emails/approve-batch — Approve and send up to 20 pending
+// POST /api/nurture/emails/approve-batch · Approve and send up to 20 pending
 // emails in one call. Envois séquentiels (un compte SMTP perso n'aime pas les
 // rafales) ; au-delà de 20, le front ré-appelle avec le reste.
 const APPROVE_BATCH_MAX = 20;
@@ -300,6 +544,23 @@ router.post('/emails/approve-batch', async (req, res, next) => {
         body: e.body,
         existingEmailId: e.id,
       });
+
+      // Même synchro que /emails/:id/approve : refléter l'issue réelle de l'envoi
+      // dans agent_chain_executions, puis cooldown 7j sur l'opportunité pour les
+      // chaînes reactivation/upsell.
+      await db.query(
+        `UPDATE agent_chain_executions SET status = $1, executed_at = now()
+         WHERE nurture_email_id = $2 AND status = 'pending'`,
+        [result.success ? 'executed' : 'failed', e.id]
+      );
+      const chain = e.metadata?.chain;
+      if (result.success && e.opportunity_id && (chain === 'deal_reactivation' || chain === 'auto_upsell')) {
+        await db.query(
+          `UPDATE opportunities SET planned_followup_date = now() + interval '7 days', planned_followup_reason = 'post_send_cooldown' WHERE id = $1`,
+          [e.opportunity_id]
+        );
+      }
+
       if (result.success) sent++; else failed++;
       results.push({ id: e.id, success: result.success, error: result.error || null });
     }
@@ -310,36 +571,86 @@ router.post('/emails/approve-batch', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/emails/cancel-batch — Cancel pending emails in bulk
+// POST /api/nurture/emails/cancel-batch · Cancel pending emails in bulk
 // (purge d'un backlog obsolète sans cliquer 70 fois).
 router.post('/emails/cancel-batch', async (req, res, next) => {
   try {
     const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
     if (!ids.length) return res.status(400).json({ error: 'ids (array) is required' });
     const result = await db.query(
-      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'`,
+      `UPDATE nurture_emails SET status = 'cancelled'
+        WHERE id = ANY($1) AND user_id = $2 AND status = 'pending'
+        RETURNING id`,
       [ids, req.user.id]
     );
+    // Même suite que l'annulation unitaire : sans ça la chaîne reste « pending »
+    // sur un brouillon qui n'existe plus, et le contact n'est jamais relibéré.
+    await blockChainExecutions(result.rows.map(r => r.id));
     res.json({ ok: true, cancelled: result.rowCount });
   } catch (err) {
     next(err);
   }
 });
 
+// POST /api/nurture/emails/cancel-stale · Annule d'un coup les brouillons de
+// plus de N jours (14 par défaut, cf. STALE_DRAFT_DAYS).
+//
+// Tant qu'aucune boîte mail n'est connectée, `stepNurture` gèle l'expiration
+// automatique : la file grossit sans jamais se vider (188 brouillons en prod,
+// dont 157 de plus de trois semaines). Purger reste un choix de
+// l'utilisateur · d'où cette route, plutôt qu'une expiration forcée qui
+// jetterait du travail qu'il voulait peut-être encore envoyer.
+router.post('/emails/cancel-stale', async (req, res, next) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.body?.olderThanDays, 10) || STALE_DRAFT_DAYS, 1), 365);
+    const result = await db.query(
+      `UPDATE nurture_emails SET status = 'cancelled'
+        WHERE user_id = $1 AND status = 'pending'
+          AND created_at < now() - ($2::int * INTERVAL '1 day')
+        RETURNING id`,
+      [req.user.id, days]
+    );
+    await blockChainExecutions(result.rows.map(r => r.id));
+    logger.info('nurture', `${result.rowCount} brouillons de plus de ${days}j annulés (user ${req.user.id})`);
+    res.json({ ok: true, cancelled: result.rowCount, olderThanDays: days });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Une chaîne en attente sur un brouillon annulé doit passer « blocked ». */
+async function blockChainExecutions(emailIds) {
+  if (!emailIds.length) return;
+  await db.query(
+    `UPDATE agent_chain_executions SET status = 'blocked'
+      WHERE nurture_email_id = ANY($1) AND status = 'pending'`,
+    [emailIds]
+  );
+}
+
 // POST /api/nurture/emails/:id/cancel
 router.post('/emails/:id/cancel', async (req, res, next) => {
   try {
-    await db.query(
-      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = $1 AND user_id = $2 AND status = 'pending'`,
+    const result = await db.query(
+      `UPDATE nurture_emails SET status = 'cancelled' WHERE id = $1 AND user_id = $2 AND status = 'pending' RETURNING id`,
       [req.params.id, req.user.id]
     );
+
+    if (result.rows[0]) {
+      await db.query(
+        `UPDATE agent_chain_executions SET status = 'blocked'
+         WHERE nurture_email_id = $1 AND status = 'pending'`,
+        [result.rows[0].id]
+      );
+    }
+
     res.json({ ok: true });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/nurture/run — Run CRM agent (sync + clean + nurture)
+// POST /api/nurture/run · Run CRM agent (sync + clean + nurture)
 router.post('/run', async (req, res, next) => {
   try {
     const { runAgent } = require('../lib/crm-agent');
@@ -350,11 +661,191 @@ router.post('/run', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/preview — Preview what would happen without sending
+// POST /api/nurture/run-scoped · Relance CADRÉE, issue du dialogue de l'assistant
+//
+// /run ci-dessus lance l'agent complet sur tous les triggers actifs : il ignore le
+// périmètre, l'angle et le mode. Tant que l'assistant exécutait sans rien demander, ça
+// n'avait aucune conséquence visible. Depuis qu'il cadre en trois questions, y router la
+// relance reviendrait à jeter les trois réponses de l'utilisateur et à envoyer autre chose
+// que ce qu'il vient de valider. D'où ce chemin séparé : une population explicite, un
+// angle transmis au rédacteur, un mode d'envoi respecté.
+const SCOPED_RUN_MAX = 25;
+const SCOPED_RUN_DEFAULT = 5;
+
+const SCOPED_POPULATIONS = {
+  // Deals ouverts sans activité depuis N jours · même base que le compte-rendu de lecture
+  // (COALESCE(last_activity_at, created_at), jamais updated_at que l'import réécrit).
+  deal_stagnant: {
+    chain: 'deal_reactivation',
+    where: `status NOT IN ('won', 'lost') AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')`,
+  },
+  inactive_contact: {
+    chain: 'deal_reactivation',
+    where: `status <> 'lost' AND COALESCE(last_activity_at, created_at) < NOW() - ($2::int * INTERVAL '1 day')`,
+  },
+  upsell_opportunity: {
+    chain: 'auto_upsell',
+    where: `status = 'won'`,
+  },
+  churn_risk: {
+    chain: 'auto_upsell',
+    // Seuil partagé avec la file de priorités et le scoring, sinon le chat proposerait
+    // une population « à risque » différente de celle que l'app affiche.
+    where: `status = 'won' AND churn_score >= ${require('../lib/churn-scoring').AT_RISK_THRESHOLD}`,
+  },
+};
+
+router.post('/run-scoped', async (req, res, next) => {
+  try {
+    const { triggerType, angle, mode, contactIds } = req.body || {};
+    const population = SCOPED_POPULATIONS[triggerType];
+    if (!population && !Array.isArray(contactIds)) {
+      return res.status(400).json({
+        error: `triggerType must be one of: ${Object.keys(SCOPED_POPULATIONS).join(', ')} (or pass contactIds)`,
+      });
+    }
+
+    const limit = Math.min(
+      Math.max(parseInt(req.body?.limit, 10) || SCOPED_RUN_DEFAULT, 1),
+      SCOPED_RUN_MAX
+    );
+    const days = parseInt(req.body?.days, 10) || await getStagnantDays(req.user.id);
+
+    // Dédup (règle produit) : jamais deux emails au même contact à 7 jours d'intervalle,
+    // et jamais un doublon d'un email déjà en attente d'approbation.
+    const dedup = `AND NOT EXISTS (
+      SELECT 1 FROM nurture_emails ne
+      WHERE ne.user_id = o.user_id AND ne.opportunity_id = o.id
+        AND (ne.status = 'pending' OR ne.created_at > NOW() - INTERVAL '7 days')
+    )`;
+
+    let candidates;
+    if (Array.isArray(contactIds) && contactIds.length > 0) {
+      candidates = await db.query(
+        `SELECT o.id, o.name, o.company, o.email, o.deal_value, o.status FROM opportunities o
+         WHERE o.user_id = $1 AND o.id = ANY($2::uuid[]) AND o.email IS NOT NULL AND o.email <> ''
+         ${dedup}
+         ORDER BY o.deal_value DESC NULLS LAST LIMIT $3`,
+        [req.user.id, contactIds.slice(0, SCOPED_RUN_MAX), limit]
+      );
+    } else {
+      candidates = await db.query(
+        // `$2::int >= 0` est un garde-fou de typage, pas un filtre : les populations
+        // « clients » n'utilisent pas le seuil de jours, et Postgres refuse un paramètre
+        // fourni mais jamais référencé (« could not determine data type of parameter $2 »).
+        `SELECT o.id, o.name, o.company, o.email, o.deal_value, o.status FROM opportunities o
+         WHERE o.user_id = $1 AND $2::int >= 0 AND o.email IS NOT NULL AND o.email <> ''
+           AND ${population.where}
+         ${dedup}
+         ORDER BY o.deal_value DESC NULLS LAST LIMIT $3`,
+        [req.user.id, days, limit]
+      );
+    }
+
+    if (candidates.rows.length === 0) {
+      return res.json({ sent: 0, queued: 0, skipped: 0, message: 'aucun contact éligible (déjà relancé récemment, ou sans email)' });
+    }
+
+    const dealCoach = require('../lib/agents/deal-coach');
+    const upsellDetector = require('../lib/agents/upsell-detector');
+
+    let sent = 0;
+    let queued = 0;
+    const skipped = [];
+    const drafts = [];
+
+    for (const opp of candidates.rows) {
+      // Un client gagné n'est pas un deal à réactiver : le rédacteur suit le contact,
+      // pas le libellé du raccourci cliqué.
+      const useUpsell = opp.status === 'won';
+      const draft = useUpsell
+        ? await upsellDetector.draftOne(req.user.id, opp.id, { angle })
+        : await dealCoach.coachAndDraftOne(req.user.id, opp.id, { angle });
+
+      if (draft.error) {
+        skipped.push({ name: opp.name, reason: draft.error });
+        continue;
+      }
+
+      const chain = useUpsell ? 'auto_upsell' : 'deal_reactivation';
+      const inserted = await db.query(
+        `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8) RETURNING id`,
+        [
+          req.user.id, opp.id, opp.email, opp.name, draft.subject, draft.body,
+          draft.patternIds || [],
+          JSON.stringify({ chain, source: 'chat_scoped', angle: angle || null }),
+        ]
+      );
+      const emailId = inserted.rows[0].id;
+
+      // Même trace que la file de réactivation, pour que l'attribution (« Deals touchés »)
+      // et l'historique comptent aussi les relances lancées depuis le chat.
+      await db.query(
+        `INSERT INTO agent_chain_executions (user_id, chain_type, trigger_agent, trigger_data, steps_completed, result, status, nurture_email_id)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)`,
+        [
+          req.user.id, chain, useUpsell ? 'upsell_detector' : 'deal_coach',
+          JSON.stringify({ opportunityId: opp.id, source: 'chat_scoped' }), ['draft_scoped'],
+          JSON.stringify({ subject: draft.subject, contact: opp.name }), emailId,
+        ]
+      );
+
+      if (mode === 'auto') {
+        const result = await sendNurtureEmail(req.user.id, {
+          opportunityId: opp.id,
+          to: opp.email,
+          toName: opp.name,
+          subject: draft.subject,
+          body: draft.body,
+          existingEmailId: emailId,
+        });
+        await db.query(
+          `UPDATE agent_chain_executions SET status = $1, executed_at = now() WHERE nurture_email_id = $2 AND status = 'pending'`,
+          [result.success ? 'executed' : 'failed', emailId]
+        );
+        if (result.success) {
+          sent += 1;
+        } else {
+          // L'email reste en base, l'utilisateur pourra le renvoyer depuis la file.
+          skipped.push({ name: opp.name, reason: result.error || 'send_failed' });
+        }
+      } else {
+        queued += 1;
+      }
+
+      drafts.push({ contact: opp.name, company: opp.company, subject: draft.subject });
+    }
+
+    logger.info('nurture', 'Scoped run from chat', {
+      userId: req.user.id, triggerType, mode: mode || 'approval', sent, queued, skipped: skipped.length,
+    });
+
+    res.json({ sent, queued, skipped: skipped.length, skippedDetail: skipped, drafts, angle: angle || null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/nurture/preview · Qui les règles actives vont toucher, et à quoi
+// ressemble le premier email.
+//
+// L'aperçu avait son propre prompt, plus court, sans les règles anti-IA ni la
+// mémoire du moteur : il montrait donc un texte que le produit n'envoie pas.
+// Il jetait ensuite sa génération, et le moteur en refaisait une autre au
+// lancement · un appel Claude par règle, payé pour rien. Il appelle désormais
+// le générateur du moteur (lib/nurture-engine.generateEmail) et conserve le
+// brouillon produit en mode approbation.
 router.post('/preview', async (req, res, next) => {
   try {
     const { getUserCrmToken } = require('../lib/crm-token');
-    const claude = require('../api/claude');
+    const { getPatternContext, getTeamId } = require('../lib/email-context');
+
+    // Même mémoire que le moteur, résolue une fois pour tout l'aperçu.
+    let patternCtx = { text: '', ids: [] };
+    try {
+      patternCtx = await getPatternContext(await getTeamId(req.user.id), req.user.id);
+    } catch { /* mémoire optionnelle */ }
 
     const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
     const activeCrm = userRow.rows[0]?.active_crm_provider || 'pipedrive';
@@ -378,13 +869,17 @@ router.post('/preview', async (req, res, next) => {
     );
     const recentSet = new Set(recent.rows.map(r => r.to_email?.toLowerCase()));
 
+    // Même repli que le cron, sinon la preview affiche autre chose que ce qui
+    // partira réellement (cf. lib/stagnation.js).
+    const stagnantDays = await getStagnantDays(req.user.id);
+
     const previews = [];
 
     for (const trigger of triggers.rows) {
-      // Même logique de matching que le cron (lib/trigger-matching.js) —
+      // Même logique de matching que le cron (lib/trigger-matching.js) · 
       // la preview affichait des contacts calculés sur updated_at alors que
       // le cron déclenchait sur last_activity_at.
-      let matched = matchContacts(trigger, opps, now);
+      let matched = matchContacts(trigger, opps, now, { stagnantDays });
 
       // Types évalués uniquement en run manuel (newsletter_*) : signaler
       // plutôt que d'ignorer silencieusement.
@@ -406,45 +901,81 @@ router.post('/preview', async (req, res, next) => {
 
       if (matched.length === 0) continue;
 
-      // Generate ONE sample email for preview (with memory patterns)
+      const actionType = trigger.action_type || 'email';
       const sample = matched[0];
-      const template = trigger.email_template || {};
       let sampleEmail = null;
-      try {
-        // Load memory patterns for better email generation
-        let patternsCtx = '';
+      let sampleEmailId = null;
+      let sampleReused = false;
+
+      // Les actions LinkedIn ne produisent pas d'email : ne rien inventer.
+      if (!actionType.startsWith('linkedin_')) {
         try {
-          const patterns = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
-          if (patterns.length > 0) {
-            patternsCtx = '\n\nPATTERNS QUI FONCTIONNENT :\n' +
-              patterns.map(p => `- ${p.applied ? '[APPROUV\u00c9]' : ''} ${p.pattern}`).join('\n') +
-              '\nApplique en priorit\u00e9 les patterns APPROUV\u00c9S.';
+          // Un brouillon en attente existe d\u00E9j\u00e0 pour ce contact : c'est lui
+          // qu'il faut montrer. Le r\u00E9g\u00E9n\u00E9rer co\u00fbterait un appel pour afficher
+          // autre chose que ce qui partira (contrainte 067 : un seul pending
+          // par contact, donc le nouveau texte ne remplacerait rien).
+          const existing = await db.query(
+            `SELECT id, subject, body FROM nurture_emails
+              WHERE user_id = $1 AND opportunity_id = $2 AND status = 'pending'
+              LIMIT 1`,
+            [req.user.id, sample.id]
+          );
+
+          if (existing.rows[0]) {
+            sampleEmail = { subject: existing.rows[0].subject, body: existing.rows[0].body };
+            sampleEmailId = existing.rows[0].id;
+            sampleReused = true;
+          } else {
+            const contact = {
+              id: sample.id,
+              name: sample.name || '',
+              email: sample.email,
+              title: sample.title || '',
+              company: sample.company || '',
+              // La table opportunities n'a pas de nom de deal distinct : le
+              // moteur n'affichera donc pas la ligne « Deal », plutôt que
+              // d'inventer un libellé à partir du contact.
+              dealName: null,
+              dealStatus: sample.status || null,
+            };
+            const generated = await generateEmail(trigger, contact, patternCtx);
+            sampleEmail = { subject: generated.subject, body: generated.body };
+
+            // Mode approbation : le brouillon est conserv\u00E9, il rejoint la file.
+            // Avant, l'aper\u00e7u jetait sa g\u00E9n\u00E9ration et le moteur en refaisait
+            // une autre derri\u00E8re : un appel pay\u00E9 pour rien, et un exemple qui
+            // ne ressemblait pas \u00e0 l'email r\u00E9ellement envoy\u00E9.
+            //
+            // Mode auto : on ne persiste pas. Le moteur enverra sans passer par
+            // la file, la ligne pending resterait orpheline.
+            if (trigger.mode !== 'auto') {
+              const ins = await db.query(`
+                INSERT INTO nurture_emails
+                  (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
+                RETURNING id
+              `, [req.user.id, trigger.id, sample.id, sample.email, sample.name, sampleEmail.subject, sampleEmail.body, patternCtx.ids]);
+              sampleEmailId = ins.rows[0].id;
+            }
           }
-        } catch { /* optional */ }
-
-        const prompt = `G\u00E9n\u00E8re un email personnel pour :
-- ${sample.name} (${sample.title || ''}) chez ${sample.company || ''}
-- Trigger : ${trigger.trigger_type} \u2014 ${trigger.name}
-- Ton : ${template.tone || 'professionnel mais chaleureux'}
-- Max 6 lignes, texte simple${patternsCtx}
-Retourne un JSON : { "subject": "...", "body": "..." }`;
-
-        const result = await claude.callClaude('Retourne uniquement du JSON valide.', prompt, 500);
-        if (result.parsed) sampleEmail = result.parsed;
-        else {
-          const m = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
-          if (m) { try { sampleEmail = JSON.parse(m[0]); } catch { /* malformed JSON */ } }
+        } catch (err) {
+          // G\u00E9n\u00E9ration ou insertion en \u00E9chec : l'aper\u00e7u reste utile sans exemple.
+          logger.warn('nurture', `Aper\u00e7u sans exemple pour le trigger ${trigger.id} : ${err.message}`);
         }
-      } catch { /* skip preview generation */ }
+      }
 
       previews.push({
         triggerId: trigger.id,
         triggerName: trigger.name,
         triggerType: trigger.trigger_type,
+        actionType,
         mode: trigger.mode,
         contactsCount: matched.length,
         contacts: matched.slice(0, 5).map(o => ({ id: o.id, name: o.name, email: o.email, company: o.company })),
         sampleEmail,
+        sampleEmailId,
+        sampleReused,
+        sampleContactName: sample.name || sample.company || sample.email,
       });
     }
 
@@ -470,7 +1001,7 @@ setInterval(() => {
   }
 }, 300000).unref();
 
-// GET /api/nurture/email-accounts/connect/gmail — Start Gmail OAuth flow
+// GET /api/nurture/email-accounts/connect/gmail · Start Gmail OAuth flow
 router.get('/email-accounts/connect/gmail', (req, res, next) => {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -494,7 +1025,7 @@ router.get('/email-accounts/connect/gmail', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/nurture/email-accounts/callback/gmail — Gmail OAuth callback
+// GET /api/nurture/email-accounts/callback/gmail · Gmail OAuth callback
 async function gmailCallback(req, res) {
   const { code, state } = req.query;
   const oauthData = _oauthStates.get(state);
@@ -561,7 +1092,7 @@ async function gmailCallback(req, res) {
   }
 }
 
-// GET /api/nurture/email-accounts/connect/microsoft — Start Microsoft OAuth flow
+// GET /api/nurture/email-accounts/connect/microsoft · Start Microsoft OAuth flow
 router.get('/email-accounts/connect/microsoft', (req, res, next) => {
   try {
     const clientId = process.env.MICROSOFT_CLIENT_ID;
@@ -584,7 +1115,7 @@ router.get('/email-accounts/connect/microsoft', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// GET /api/nurture/email-accounts/callback/microsoft — Microsoft OAuth callback
+// GET /api/nurture/email-accounts/callback/microsoft · Microsoft OAuth callback
 async function microsoftCallback(req, res) {
   const { code, state } = req.query;
   const oauthData = _oauthStates.get(state);
@@ -651,7 +1182,7 @@ async function microsoftCallback(req, res) {
   }
 }
 
-// GET /api/nurture/ab-results — Get A/B test results
+// GET /api/nurture/ab-results · Get A/B test results
 router.get('/ab-results', async (req, res, next) => {
   try {
     const result = await db.query(`
@@ -682,7 +1213,7 @@ router.get('/ab-results', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/nurture/send — Send a one-off personal email (from chat or UI)
+// POST /api/nurture/send · Send a one-off personal email (from chat or UI)
 router.post('/send', async (req, res, next) => {
   try {
     const { to, toName, subject, body, opportunityId } = req.body;

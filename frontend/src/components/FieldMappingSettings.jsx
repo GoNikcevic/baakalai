@@ -105,7 +105,7 @@ export default function FieldMappingSettings() {
 
   const selectedField = crmFields.find(f => f.key === selectedCrmField);
   const targetOptions = selectedBaakalaiField === 'product_line'
-    ? productLines.map(pl => ({ id: pl.id, label: `${pl.icon || '📦'} ${pl.name}` }))
+    ? productLines.map(pl => ({ id: pl.id, label: pl.icon ? `${pl.icon} ${pl.name}` : pl.name }))
     : STATUS_OPTIONS;
 
   return (
@@ -165,7 +165,7 @@ export default function FieldMappingSettings() {
                 <label className="form-label" style={{ fontSize: 11 }}>{en ? 'CRM field' : 'Champ CRM'}</label>
                 <select className="form-input" style={{ fontSize: 12 }}
                   value={selectedCrmField} onChange={e => { setSelectedCrmField(e.target.value); setMappingValues({}); }}>
-                  <option value="">{en ? '— Select a field —' : '— S\u00e9lectionner —'}</option>
+                  <option value="">{en ? ' Select a field ' : ' S\u00e9lectionner '}</option>
                   {crmFields
                     .filter(f => f.options?.length > 0) // Only show fields with options
                     .map(f => (
@@ -202,7 +202,7 @@ export default function FieldMappingSettings() {
                       <select className="form-input" style={{ flex: 1, fontSize: 11, padding: '4px 8px' }}
                         value={mappingValues[opt.id] || ''}
                         onChange={e => setMappingValues(prev => ({ ...prev, [opt.id]: e.target.value }))}>
-                        <option value="">— {en ? 'Skip' : 'Ignorer'} —</option>
+                        <option value=""> {en ? 'Skip' : 'Ignorer'} </option>
                         {targetOptions.map(to => (
                           <option key={to.id} value={to.id}>{to.label}</option>
                         ))}

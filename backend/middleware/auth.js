@@ -55,7 +55,7 @@ function verifyToken(token) {
  * Sets req.user = { id, email, role }.
  */
 function requireAuth(req, res, next) {
-  // Les callbacks OAuth CRM sont des redirections navigateur — pas de JWT.
+  // Les callbacks OAuth CRM sont des redirections navigateur · pas de JWT.
   // L'identité vient du paramètre state, vérifié dans le handler.
   if (/^\/api\/crm\/(salesforce|hubspot|pipedrive)\/callback(\?|$)/.test(req.originalUrl)) {
     return next();

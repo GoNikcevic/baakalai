@@ -8,16 +8,16 @@ const FAQ_FR = [
       { q: 'Comment connecter mon CRM ?', a: 'Va dans Paramètres → Intégrations. Baakalai supporte Pipedrive, HubSpot, Salesforce et Odoo. Clique sur "Connecter" et suis les instructions (clé API ou OAuth).' },
       { q: 'Comment lancer ma première campagne ?', a: 'Tape dans le chat : "Crée une campagne de prospection pour [ton secteur cible]". L\'IA génère une séquence email + LinkedIn que tu peux déployer sur Lemlist, Apollo ou Smartlead.' },
       { q: 'Comment connecter mon email (Gmail/Outlook) ?', a: 'Va dans Paramètres → Comptes Email → "Connecter Gmail" ou "Connecter Microsoft". L\'authentification OAuth sécurisée se fait en un clic.' },
-      { q: 'Qu\'est-ce que l\'extension Chrome ?', a: 'L\'extension Baakalai te permet d\'ajouter des contacts depuis LinkedIn, voir leur statut CRM et envoyer des emails — sans quitter LinkedIn. Installe-la depuis les paramètres.' },
+      { q: 'Qu\'est-ce que l\'extension Chrome ?', a: 'L\'extension Baakalai te permet d\'ajouter des contacts depuis LinkedIn, voir leur statut CRM et envoyer des emails, sans quitter LinkedIn. Installe-la depuis les paramètres.' },
     ],
   },
   {
-    category: 'Activation & Nurture',
+    category: 'Automatisation & Nurture',
     items: [
-      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger déclenche automatiquement un email personnalisé quand une condition est remplie (deal stagnant depuis 14j, contact inactif, deal gagné...). Configure-les dans Activation → Triggers.' },
+      { q: 'Qu\'est-ce qu\'un trigger ?', a: 'Un trigger déclenche automatiquement un email personnalisé quand une condition est remplie (lead stagnant depuis 14j, contact inactif, lead gagné...). Configure-les dans Automatisation → Triggers.' },
       { q: 'Quelle est la différence entre mode "auto" et "approbation" ?', a: 'En mode auto, l\'email est envoyé immédiatement. En mode approbation, il est mis en file d\'attente pour que tu le valides avant envoi.' },
       { q: 'Comment fonctionne le A/B testing ?', a: 'Active le A/B sur un trigger → Baakalai génère 2 variantes pour chaque email → après 7 jours, il déclare un gagnant statistiquement. Le système apprend et alloue plus de trafic à la variante gagnante.' },
-      { q: 'Qu\'est-ce que le churn score ?', a: 'Un score de 0 à 100 qui prédit le risque de perte d\'un client. Basé sur : inactivité, sentiment des derniers emails, durée du deal, et retard de paiement.' },
+      { q: 'Qu\'est-ce que le churn score ?', a: 'Un score de 0 à 100 qui prédit le risque de perte d\'un client. Basé sur : inactivité, sentiment des derniers emails, durée du lead, et retard de paiement.' },
     ],
   },
   {
@@ -53,16 +53,16 @@ const FAQ_EN = [
       { q: 'How do I connect my CRM?', a: 'Go to Settings → Integrations. Baakalai supports Pipedrive, HubSpot, Salesforce and Odoo. Click "Connect" and follow the instructions (API key or OAuth).' },
       { q: 'How do I launch my first campaign?', a: 'Type in chat: "Create a prospecting campaign for [your target sector]". The AI generates a full email + LinkedIn sequence you can deploy to Lemlist, Apollo or Smartlead.' },
       { q: 'How do I connect my email (Gmail/Outlook)?', a: 'Go to Settings → Email Accounts → "Connect Gmail" or "Connect Microsoft". Secure OAuth authentication in one click.' },
-      { q: 'What is the Chrome extension?', a: 'The Baakalai extension lets you add contacts from LinkedIn, see their CRM status and send emails — without leaving LinkedIn. Install it from settings.' },
+      { q: 'What is the Chrome extension?', a: 'The Baakalai extension lets you add contacts from LinkedIn, see their CRM status and send emails, without leaving LinkedIn. Install it from settings.' },
     ],
   },
   {
-    category: 'Activation & Nurture',
+    category: 'Automation & Nurture',
     items: [
-      { q: 'What is a trigger?', a: 'A trigger automatically sends a personalized email when a condition is met (deal stagnant for 14 days, inactive contact, deal won...). Configure them in Activation → Triggers.' },
+      { q: 'What is a trigger?', a: 'A trigger automatically sends a personalized email when a condition is met (lead stagnant for 14 days, inactive contact, lead won...). Configure them in Automation → Triggers.' },
       { q: 'What\'s the difference between "auto" and "approval" mode?', a: 'In auto mode, the email is sent immediately. In approval mode, it\'s queued for you to validate before sending.' },
       { q: 'How does A/B testing work?', a: 'Enable A/B on a trigger → Baakalai generates 2 variants per email → after 7 days, it declares a statistically significant winner. The system learns and allocates more traffic to the winning variant.' },
-      { q: 'What is the churn score?', a: 'A 0-100 score predicting client loss risk. Based on: inactivity, recent email sentiment, deal duration, and payment delays.' },
+      { q: 'What is the churn score?', a: 'A 0-100 score predicting client loss risk. Based on: inactivity, recent email sentiment, lead duration, and payment delays.' },
     ],
   },
   {

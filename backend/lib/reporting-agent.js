@@ -35,7 +35,7 @@ async function runReportingAgent() {
     );
 
     if (activeUsers.rows.length === 0) {
-      report.skipped.push('No users with recently collected campaigns — skipping reports');
+      report.skipped.push('No users with recently collected campaigns, skipping reports');
       report.duration = Date.now() - startTime;
       return report;
     }
@@ -149,7 +149,7 @@ async function runReportingAgent() {
   }
 
   report.duration = Date.now() - startTime;
-  logger.info('reporting-agent', `Complete in ${report.duration}ms — anomalies: ${report.anomalies.length}, errors: ${report.errors.length}`);
+  logger.info('reporting-agent', `Complete in ${report.duration}ms, anomalies: ${report.anomalies.length}, errors: ${report.errors.length}`);
 
   return report;
 }

@@ -28,12 +28,20 @@ const config = {
     parentPageId: process.env.NOTION_PARENT_PAGE_ID,
   },
 
+  // Clé centrale baakalai pour la recherche d'emails (option payante, opt-in).
+  // Sans DROPCONTACT_API_KEY posée sur Railway, l'option n'apparaît pas.
+  reveal: {
+    dropcontactKey: process.env.DROPCONTACT_API_KEY || '',
+    unitPriceCents: parseInt(process.env.REVEAL_PRICE_CENTS, 10) || 10,
+    monthlyCap: parseInt(process.env.REVEAL_MONTHLY_CAP, 10) || 500,
+  },
+
   claude: {
     apiKey: process.env.ANTHROPIC_API_KEY,
     // Défaut global. Conserve son rôle de commutateur Settings : s'il contient
     // "opus", il surcharge TOUTES les actions (cf. resolveModel).
     model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
-    // Le routage par action vit désormais dans config/models.js — une seule
+    // Le routage par action vit désormais dans config/models.js · une seule
     // source de vérité, exhaustive, surchargeable par CLAUDE_MODEL_<ACTION>
     // et CLAUDE_TIER_<TIER>.
   },
@@ -53,7 +61,7 @@ async function getUserKey(userId, provider) {
     const row = await db.userIntegrations.get(userId, provider);
     if (row) return decrypt(row.access_token);
   } catch {
-    // Decryption or DB error — fall through to .env
+    // Decryption or DB error · fall through to .env
   }
 
   // Fallback to .env values for core services
@@ -63,6 +71,29 @@ async function getUserKey(userId, provider) {
     claude: config.claude.apiKey,
   };
   return envFallback[provider] || null;
+}
+
+/**
+ * Which of these providers does this user have a genuinely usable connection for · a
+ * user_integrations row whose access_token actually decrypts to a non-empty value. Deliberately
+ * does NOT fall back to .env system-level tokens like getUserKey() does (those back internal
+ * features, e.g. template generation's own Notion access · they say nothing about whether THIS
+ * user has their own working connection), so a row with a corrupted/placeholder token (e.g. test
+ * data seeded directly in the DB, bypassing the normal encrypt-on-save flow) is correctly treated
+ * as not connected, instead of silently appearing configured everywhere "connected" is checked.
+ */
+async function getValidatedIntegrations(userId, providers) {
+  const db = require('../db');
+  const { decrypt } = require('./crypto');
+  const result = await db.query(
+    `SELECT provider, access_token FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)`,
+    [userId, providers]
+  );
+  return result.rows
+    .filter(r => {
+      try { return !!decrypt(r.access_token); } catch { return false; }
+    })
+    .map(r => r.provider);
 }
 
 function validateConfig(keys) {
@@ -80,4 +111,4 @@ function validateConfig(keys) {
   return missing.length === 0;
 }
 
-module.exports = { config, validateConfig, getUserKey };
+module.exports = { config, validateConfig, getUserKey, getValidatedIntegrations };

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import api from '../../../services/api-client';
 import ProspectGenerator from '../ProspectGenerator';
 import { useT } from '../../../i18n';
+import Icon from '../../Icon';
 
 export default function ProspectsTab({ campaign: c }) {
   const t = useT();
@@ -149,7 +150,7 @@ export default function ProspectsTab({ campaign: c }) {
           marginBottom: 16,
         }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>
-            {'\uD83D\uDCCB'} {t('campaigns.prospectsLinked', { count: prospects.length })}
+            <Icon name="clipboard" size={13} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.prospectsLinked', { count: prospects.length })}
           </div>
 
           {/* Action buttons */}
@@ -160,7 +161,7 @@ export default function ProspectsTab({ campaign: c }) {
               onClick={handleDeleteAll}
               style={{ fontSize: 11, padding: '6px 10px', color: 'var(--text-muted)' }}
             >
-              {'\uD83D\uDDD1'} {t('campaigns.deleteAll')}
+              <Icon name="trash" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{t('campaigns.deleteAll')}
             </button>
           )}
           {prospectsWithoutEmail.length > 0 && !loading && (
@@ -171,8 +172,18 @@ export default function ProspectsTab({ campaign: c }) {
               style={{ fontSize: 12, padding: '8px 14px' }}
             >
               {revealing
-                ? `\u23F3 ${t('campaigns.revealing', { done: revealProgress.done, total: revealProgress.total })}`
-                : `\uD83D\uDD13 ${t('campaigns.revealEmails', { count: prospectsWithoutEmail.length })}`}
+                ? (
+                  <>
+                    <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {t('campaigns.revealing', { done: revealProgress.done, total: revealProgress.total })}
+                  </>
+                )
+                : (
+                  <>
+                    <Icon name="unlock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+                    {t('campaigns.revealEmails', { count: prospectsWithoutEmail.length })}
+                  </>
+                )}
             </button>
           )}
           </div>
@@ -188,7 +199,7 @@ export default function ProspectsTab({ campaign: c }) {
             color: 'var(--danger, #dc2626)',
             marginBottom: 12,
           }}>
-            {'\u26A0\uFE0F'} {revealError}
+            <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{revealError}
           </div>
         )}
 

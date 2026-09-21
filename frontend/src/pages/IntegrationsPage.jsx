@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Integrations Documentation Page
+   BAKAL · Integrations Documentation Page
    Shows all integrations with details about what Baakal does with each one.
    Accessible via the platform (requires login).
    =============================================================================== */

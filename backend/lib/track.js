@@ -1,10 +1,10 @@
 /**
- * Instrumentation produit — écriture best-effort dans product_events.
+ * Instrumentation produit · écriture best-effort dans product_events.
  *
  * Répond à une seule question : où les beta testers décrochent-ils entre le
  * signup et la première valeur ? Lecture via scripts/funnel-report.js.
  *
- * Contrat : track() ne lève JAMAIS — un événement perdu vaut mieux qu'un
+ * Contrat : track() ne lève JAMAIS · un événement perdu vaut mieux qu'un
  * signup qui échoue à cause de l'analytics.
  */
 

@@ -1,8 +1,8 @@
 /* ===============================================================================
-   BAKAL — CRM Diagnostic Report
+   BAKAL · CRM Diagnostic Report
    Full-screen modal shown after first CRM import.
    Displays: contact stats, health score, churn risk, deal coach suggestions,
-   top companies — all from POST /api/crm/first-diagnostic.
+   top companies · all from POST /api/crm/first-diagnostic.
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -10,16 +10,17 @@ import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
+import Icon from './Icon';
 
 const ISSUE_META = {
-  duplicate_email: { icon: '\uD83D\uDD04', color: 'var(--danger)' },
-  duplicate_name: { icon: '\uD83D\uDC65', color: 'var(--warning)' },
-  missing_email: { icon: '\uD83D\uDCE7', color: 'var(--danger)' },
-  missing_name: { icon: '\uD83D\uDC64', color: 'var(--warning)' },
-  missing_company: { icon: '\uD83C\uDFE2', color: 'var(--text-muted)' },
-  invalid_email: { icon: '\u26A0\uFE0F', color: 'var(--danger)' },
-  inactive: { icon: '\uD83D\uDE34', color: 'var(--text-muted)' },
-  format_name_caps: { icon: 'Aa', color: 'var(--blue)' },
+  duplicate_email: { icon: 'refresh', color: 'var(--danger)' },
+  duplicate_name: { icon: 'users', color: 'var(--warning)' },
+  missing_email: { icon: 'mail', color: 'var(--danger)' },
+  missing_name: { icon: 'user', color: 'var(--warning)' },
+  missing_company: { icon: 'building', color: 'var(--text-muted)' },
+  invalid_email: { icon: 'alert', color: 'var(--danger)' },
+  inactive: { icon: 'moon', color: 'var(--text-muted)' },
+  format_name_caps: { icon: 'edit', color: 'var(--blue)' },
 };
 
 const URGENCY_COLORS = {
@@ -28,13 +29,25 @@ const URGENCY_COLORS = {
   low: { bg: 'rgba(34,197,94,0.1)', color: '#22c55e', border: 'rgba(34,197,94,0.2)' },
 };
 
+/* Chaque sous-score du Hidden Revenue Score pointe vers l'écran qui agit
+   dessus. C'est ce qui transforme le score en sommaire du produit plutôt qu'en
+   chiffre décoratif : on lit la barre la plus haute, on clique, on travaille.
+   Les dimensions non encore évaluées n'ont pas de destination et ne sont pas
+   cliquables, mais elles restent affichées pour que leur absence se voie. */
+const HRS_DIMENSIONS = [
+  { key: 'dormant_pipeline', path: '/deals-to-reactivate' },
+  { key: 'customer_reactivation', path: '/clients' },
+  { key: 'customer_expansion', path: '/clients-to-upsell' },
+  { key: 'lead_reactivation', path: null },
+];
+
 const ACTION_ICONS = {
-  email: '\uD83D\uDCE7',
-  call: '\uD83D\uDCDE',
-  linkedin: '\uD83D\uDC64',
-  content: '\uD83D\uDCCE',
-  intro: '\uD83E\uDD1D',
-  offer: '\uD83C\uDF81',
+  email: 'mail',
+  call: 'phone',
+  linkedin: 'user',
+  content: 'paperclip',
+  intro: 'handshake',
+  offer: 'gift',
 };
 
 export default function CRMDiagnosticReport({ onClose }) {
@@ -144,7 +157,9 @@ export default function CRMDiagnosticReport({ onClose }) {
       <div style={styles.overlay}>
         <div style={styles.modal}>
           <div style={{ textAlign: 'center', padding: '60px 40px' }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>{'\u26A0\uFE0F'}</div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: 'var(--danger)' }}>
+              <Icon name="alert" size={40} strokeWidth={1.5} />
+            </div>
             <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>{t('diagnostic.error')}</div>
             <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => handleNav('/dashboard')}>
               {t('diagnostic.goToDashboard')}
@@ -161,7 +176,9 @@ export default function CRMDiagnosticReport({ onClose }) {
       <div style={styles.overlay}>
         <div style={styles.modal}>
           <div style={{ textAlign: 'center', padding: '60px 40px' }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>{'\uD83D\uDCCB'}</div>
+            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }}>
+              <Icon name="clipboard" size={40} strokeWidth={1.5} />
+            </div>
             <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>{t('diagnostic.noData')}</div>
             <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => handleNav('/clients')}>
               {t('diagnostic.goToClients')}
@@ -172,7 +189,16 @@ export default function CRMDiagnosticReport({ onClose }) {
     );
   }
 
-  const { contacts, health, churn, dealCoach } = data;
+  const { contacts, health, churn, dealCoach, hiddenRevenue } = data;
+
+  /* Montants arrondis au millier : afficher « 143 812 € » sur une estimation
+     encadrée par une fourchette donnerait une fausse impression de précision. */
+  const money = (n) => {
+    const v = Math.round(Number(n) || 0);
+    return v >= 10000
+      ? new Intl.NumberFormat(en ? 'en-US' : 'fr-FR', { maximumFractionDigits: 0 }).format(Math.round(v / 1000) * 1000) + ' €'
+      : new Intl.NumberFormat(en ? 'en-US' : 'fr-FR', { maximumFractionDigits: 0 }).format(v) + ' €';
+  };
   const healthLabel = health?.score >= 80 ? t('diagnostic.healthExcellent')
     : health?.score >= 50 ? t('diagnostic.healthGood')
     : health?.score != null && health.score < 30 ? t('diagnostic.healthCritical')
@@ -189,7 +215,9 @@ export default function CRMDiagnosticReport({ onClose }) {
       <div style={{ ...styles.modal, maxWidth: 720 }}>
         {/* Header */}
         <div style={styles.header}>
-          <div style={{ fontSize: 28, marginBottom: 4 }}>{'\uD83D\uDD0D'}</div>
+          <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
+            <Icon name="activity" size={28} strokeWidth={1.75} />
+          </div>
           <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: 'var(--text)' }}>
             {t('diagnostic.title')}
           </h2>
@@ -199,6 +227,103 @@ export default function CRMDiagnosticReport({ onClose }) {
         </div>
 
         <div style={styles.body}>
+          {/* ── Hidden Revenue Score · le chiffre qui donne son titre au diagnostic ── */}
+          {hiddenRevenue && (
+            <div style={{ ...styles.card, marginBottom: 14 }}>
+              {hiddenRevenue.quantifiable ? (
+                <>
+                  <div style={styles.cardLabel}>{t('hrs.label')}</div>
+                  <div style={{
+                    fontSize: 30, fontWeight: 800, color: 'var(--primary)',
+                    lineHeight: 1.05, letterSpacing: '-0.02em', margin: '6px 0 4px',
+                  }}>
+                    {money(hiddenRevenue.expectedLow)} {t('hrs.to')} {money(hiddenRevenue.expectedHigh)}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                    {t('hrs.rangeCap', {
+                      qualified: money(hiddenRevenue.qualifiedValue),
+                      count: hiddenRevenue.opportunityCount,
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={styles.cardLabel}>{t('hrs.label')}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, margin: '6px 0 4px', color: 'var(--text)' }}>
+                    {t('hrs.notQuantTitle')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                    {t('hrs.notQuantBody', {
+                      count: hiddenRevenue.opportunityCount,
+                      missing: hiddenRevenue.context?.countWithoutValue ?? 0,
+                    })}
+                  </div>
+                </>
+              )}
+
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+                <span style={{
+                  fontSize: 11, padding: '3px 9px', borderRadius: 4,
+                  background: 'rgba(110,87,250,0.1)', color: 'var(--primary)', fontWeight: 600,
+                }}>
+                  {t('hrs.score')} {hiddenRevenue.hrs}/100
+                </span>
+                <span style={{
+                  fontSize: 11, padding: '3px 9px', borderRadius: 4,
+                  background: 'var(--bg-elevated)', color: 'var(--text-muted)',
+                }}>
+                  {t(`hrs.band.${hiddenRevenue.scoreBand}`)}
+                </span>
+                <span style={{
+                  fontSize: 11, padding: '3px 9px', borderRadius: 4,
+                  background: 'var(--bg-elevated)', color: 'var(--text-muted)',
+                }}>
+                  {t('hrs.confidence')} {hiddenRevenue.confidence}% · {t(`hrs.conf.${hiddenRevenue.confidenceBand}`)}
+                </span>
+              </div>
+
+              <div style={{ marginTop: 14 }}>
+                {HRS_DIMENSIONS.map(({ key, path }) => {
+                  const d = hiddenRevenue.dimensions?.[key];
+                  const evaluated = d?.evaluated;
+                  const clickable = evaluated && path;
+                  return (
+                    <div
+                      key={key}
+                      onClick={clickable ? () => handleNav(path) : undefined}
+                      role={clickable ? 'button' : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNav(path); } } : undefined}
+                      style={{
+                        display: 'grid', gridTemplateColumns: '1fr 2fr 38px',
+                        alignItems: 'center', gap: 10, padding: '6px 0',
+                        cursor: clickable ? 'pointer' : 'default',
+                        opacity: evaluated ? 1 : 0.55,
+                      }}
+                    >
+                      <span style={{ fontSize: 12.5, color: 'var(--text)' }}>{t(`hrs.dim.${key}`)}</span>
+                      <span style={{ height: 6, borderRadius: 3, background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                        {evaluated && (
+                          <span style={{
+                            display: 'block', height: 6, borderRadius: 3,
+                            width: `${Math.min(d.subScore, 100)}%`, background: 'var(--primary)',
+                          }} />
+                        )}
+                      </span>
+                      <span style={{ fontSize: 11.5, color: 'var(--text-muted)', textAlign: 'right' }}>
+                        {evaluated ? d.subScore : t('hrs.notEvaluated')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.5 }}>
+                {t('hrs.note')}
+              </div>
+            </div>
+          )}
+
           {/* ── ROW 1: Contact stats + Health score ── */}
           <div style={styles.row}>
             {/* Contacts card */}
@@ -294,7 +419,7 @@ export default function CRMDiagnosticReport({ onClose }) {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {health.issues.map((issue, i) => {
-                  const meta = ISSUE_META[issue.type] || { icon: '\u2022', color: 'var(--text-muted)' };
+                  const meta = ISSUE_META[issue.type] || { icon: 'alert', color: 'var(--text-muted)' };
                   const isMergeable = issue.suggestedAction === 'merge'
                     || (issue.suggestedAction === 'review' && issue.contacts?.length >= 2);
                   const actionLabel = isMergeable ? t('diagnostic.merge')
@@ -308,7 +433,7 @@ export default function CRMDiagnosticReport({ onClose }) {
                       display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                       background: 'var(--bg-elevated)', borderRadius: 8, fontSize: 13,
                     }}>
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{meta.icon}</span>
+                      <Icon name={meta.icon} size={16} color={meta.color} />
                       <span style={{ flex: 1, color: 'var(--text)', minWidth: 0 }}>
                         {issue.count != null && (
                           <strong style={{ color: meta.color }}>{issue.count} </strong>
@@ -316,7 +441,7 @@ export default function CRMDiagnosticReport({ onClose }) {
                         {issueLabel}
                         {issue.key && (
                           <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 6 }}>
-                            — {issue.key}
+, {issue.key}
                           </span>
                         )}
                       </span>
@@ -382,7 +507,7 @@ export default function CRMDiagnosticReport({ onClose }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {dealCoach.suggestions.map((s, i) => {
                   const urgency = URGENCY_COLORS[s.urgency] || URGENCY_COLORS.medium;
-                  const actionIcon = ACTION_ICONS[s.action] || '\u27A1\uFE0F';
+                  const actionIcon = ACTION_ICONS[s.action] || 'target';
                   const urgencyLabel = s.urgency === 'high' ? t('diagnostic.urgencyHigh')
                     : s.urgency === 'low' ? t('diagnostic.urgencyLow')
                     : t('diagnostic.urgencyMedium');
@@ -392,7 +517,7 @@ export default function CRMDiagnosticReport({ onClose }) {
                       background: urgency.bg, border: `1px solid ${urgency.border}`,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>{actionIcon}</span>
+                        <Icon name={actionIcon} size={16} color={urgency.color} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                           {s.contactName} {s.company ? `@ ${s.company}` : ''}
                         </span>
@@ -418,8 +543,9 @@ export default function CRMDiagnosticReport({ onClose }) {
 
           {dealCoach && (!dealCoach.suggestions || dealCoach.suggestions.length === 0) && !dealCoach.skipped && (
             <div style={{ ...styles.section, textAlign: 'center', padding: 20 }}>
-              <div style={{ fontSize: 13, color: 'var(--success)' }}>
-                {'\u2705'} {t('diagnostic.dealCoachEmpty')}
+              <div style={{ fontSize: 13, color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Icon name="checkCircle" size={16} />
+                <span>{t('diagnostic.dealCoachEmpty')}</span>
               </div>
             </div>
           )}

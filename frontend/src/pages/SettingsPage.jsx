@@ -1,5 +1,5 @@
 /* ===============================================================================
-   BAKAL — Settings Page (React)
+   BAKAL · Settings Page (React)
    API key management with encrypted storage, test connectivity, masked display.
    Includes preferences, theme toggle, notification settings, and integrations library.
    Backend: routes/settings.js (GET/POST /api/settings/keys, POST /keys/test)
@@ -13,10 +13,9 @@ import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
 import { useI18n } from '../i18n';
 import EmailAccountSettings from '../components/EmailAccountSettings';
-import TeamSettings from '../components/TeamSettings';
-import ProductLinesSettings from '../components/ProductLinesSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
 import LoadingTips from '../components/LoadingTips';
+import Icon from '../components/Icon';
 
 /* ─── Unified tool list organized by category ─── */
 
@@ -44,9 +43,9 @@ function getMainTools(lang) {
       guide: en ? ['Go to app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copy the personal token'] : ['Allez dans app.pipedrive.com', 'Settings \u2192 Personal preferences \u2192 API', 'Copiez le token personnel'], link: 'https://app.pipedrive.com/settings/api' },
     { field: 'odooKey', label: 'Odoo', desc: en ? 'ERP + CRM + Invoicing' : 'ERP + CRM + Facturation', placeholder: en ? 'Click to configure' : 'Cliquez pour configurer', color: '#714B67', icon: 'Od', category: 'CRM', multiField: true,
       guide: en ? ['URL + database name + login + password'] : ['URL + nom de base + login + mot de passe'] },
-    { field: 'notionToken', label: 'Notion', desc: en ? 'CRM + Docs — import & sync contacts' : 'CRM + Docs — import et sync contacts', placeholder: en ? 'ntn_ or secret_ token' : 'Token ntn_ ou secret_', color: '#000000', icon: 'N', category: 'CRM', hasMetadata: 'notion',
+    { field: 'notionToken', label: 'Notion', desc: en ? 'CRM + Docs, import & sync contacts' : 'CRM + Docs, import et sync contacts', placeholder: en ? 'ntn_ or secret_ token' : 'Token ntn_ ou secret_', color: '#000000', icon: 'N', category: 'CRM', hasMetadata: 'notion',
       guide: en ? ['Go to notion.so/my-integrations', 'Create an internal integration', 'Copy the token (starts with ntn_ or secret_)', 'Share your CRM database with the integration'] : ['Allez dans notion.so/my-integrations', 'Cr\u00e9ez une int\u00e9gration interne', 'Copiez le token (commence par ntn_ ou secret_)', 'Partagez votre base CRM avec l\'int\u00e9gration'], link: 'https://www.notion.so/my-integrations' },
-    { field: 'airtableKey', label: 'Airtable', desc: en ? 'CRM + spreadsheet — import & sync contacts' : 'CRM + tableur — import et sync contacts', placeholder: en ? 'Your Airtable personal access token' : 'Votre personal access token Airtable', color: '#18BFFF', icon: 'At', category: 'CRM', hasMetadata: 'airtable',
+    { field: 'airtableKey', label: 'Airtable', desc: en ? 'CRM + spreadsheet, import & sync contacts' : 'CRM + tableur, import et sync contacts', placeholder: en ? 'Your Airtable personal access token' : 'Votre personal access token Airtable', color: '#18BFFF', icon: 'At', category: 'CRM', hasMetadata: 'airtable',
       guide: en ? ['Go to airtable.com/create/tokens', 'Create a personal access token', 'Grant read/write scopes on your base', 'Copy and paste here'] : ['Allez dans airtable.com/create/tokens', 'Cr\u00e9ez un personal access token', 'Accordez les scopes lecture/\u00e9criture sur votre base', 'Copiez et collez ici'], link: 'https://airtable.com/create/tokens' },
   ];
 }
@@ -54,7 +53,7 @@ function getMainTools(lang) {
 /* Extended tools in dropdown.
    Seuls les outils réellement branchés (client dans backend/api/ + usage) sont
    affichés. Retirés le 2026-08-18 car la clé était stockée mais jamais utilisée
-   (aucun client API) — à réintroduire ici le jour où le backend les branche :
+   (aucun client API) · à réintroduire ici le jour où le backend les branche :
    Kaspr, Lusha, Snov.io (enrichissement), PhantomBuster, Captain Data
    (scraping), Calendly, Cal.com (calendrier), MailReach, Warmbox
    (délivrabilité). */
@@ -70,8 +69,14 @@ function getExtendedTools(lang) {
         helpSteps: ['Get your API credentials from your Informz admin', 'Format: username:password:brandId', 'Your server IP must be whitelisted by Informz'] },
     ]},
     { label: 'LinkedIn', keys: [
-      { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'li_at cookie — enrichment + automated outreach' : 'Cookie li_at — enrichissement + outreach automatisé', placeholder: en ? 'Your li_at cookie (from browser)' : 'Votre cookie li_at (depuis le navigateur)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
-        helpSteps: en ? ['Log in to linkedin.com', 'Open DevTools (F12) → Application → Cookies', 'Copy the value of the "li_at" cookie', 'Paste it here'] : ['Connectez-vous à linkedin.com', 'Ouvrez les DevTools (F12) → Application → Cookies', 'Copiez la valeur du cookie "li_at"', 'Collez-la ici'] },
+      { field: 'linkedinKey', label: 'LinkedIn', desc: en ? 'Your LinkedIn session, powers LinkedIn steps in your follow-up workflows' : 'Votre session LinkedIn, alimente les étapes LinkedIn de vos workflows de relance', placeholder: en ? 'Your li_at cookie (or use the extension)' : 'Votre cookie li_at (ou passez par l\'extension)', color: '#0A66C2', icon: 'in', category: 'LinkedIn',
+        helpSteps: en ? [
+          'Easiest: install the "baakalai, LinkedIn Connect" Chrome extension, log in to linkedin.com, click "Connect". The connection then stays up to date on its own.',
+          'Manual fallback: log in to linkedin.com, open DevTools (F12) → Application → Cookies, copy the "li_at" value and paste it here.',
+        ] : [
+          'Le plus simple : installez l\'extension Chrome « baakalai, LinkedIn Connect », connectez-vous à linkedin.com, cliquez sur « Connecter ». La connexion se maintient ensuite toute seule.',
+          'Méthode manuelle : connectez-vous à linkedin.com, ouvrez les DevTools (F12) → Application → Cookies, copiez la valeur de « li_at » et collez-la ici.',
+        ] },
     ]},
   ];
 }
@@ -102,7 +107,7 @@ function StatusBadge({ status, lang }) {
     <span className={`settings-status-badge ${info.cls}`}>
       {info.text}
       {status.message && status.status !== 'connected' && status.status !== 'not_configured'
-        ? ` — ${status.message}` : ''}
+        ? `, ${status.message}` : ''}
     </span>
   );
 }
@@ -125,7 +130,7 @@ export default function SettingsPage() {
       if (res.url) { window.location.href = res.url; return; }
       throw new Error('no url');
     } catch {
-      setOauthUnavailable(prev => ({ ...prev, [provider]: true }));
+      setOauthUnavailable(prev => ({...prev, [provider]: true }));
     }
   };
   const [saving, setSaving] = useState(false);
@@ -133,6 +138,7 @@ export default function SettingsPage() {
 
   const [syncStatus, setSyncStatus] = useState(null);
   const [crmSyncStatus, setCrmSyncStatus] = useState(null);
+  const [crmSummary, setCrmSummary] = useState(null);
   const [activeCrm, setActiveCrm] = useState(null);
   const { socket } = useSocket();
   const { showToast: notifyToast } = useNotifications();
@@ -142,11 +148,30 @@ export default function SettingsPage() {
   const EXTENDED_TOOLS = getExtendedTools(lang);
   const [preferences, setPreferences] = useState(() => {
     const saved = localStorage.getItem('bakal-preferences');
-    try { return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : { ...DEFAULT_PREFERENCES }; } catch { return { ...DEFAULT_PREFERENCES }; }
+    try { return saved ? {...DEFAULT_PREFERENCES,...JSON.parse(saved) } : {...DEFAULT_PREFERENCES }; } catch { return {...DEFAULT_PREFERENCES }; }
   });
   const [theme, setTheme] = useState(() =>
     document.documentElement.getAttribute('data-theme') || 'light'
   );
+
+  /* ─── Email preferences (RGPD opt-out, migration 101) ─── */
+  const [emailPrefs, setEmailPrefs] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    request('/settings/email-prefs')
+.then(d => { if (!cancelled) setEmailPrefs(d.prefs || null); })
+.catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const toggleEmailPref = async (category) => {
+    const next = !(emailPrefs?.[category] !== false);
+    setEmailPrefs(prev => ({...prev, [category]: next }));
+    try {
+      await request('/settings/email-prefs', { method: 'PATCH', body: JSON.stringify({ [category]: next }) });
+    } catch {
+      setEmailPrefs(prev => ({...prev, [category]: !next }));
+    }
+  };
 
   /* ─── Load key status ─── */
 
@@ -248,15 +273,38 @@ export default function SettingsPage() {
 
   /* ─── Socket listener for CRM sync progress ─── */
 
+  // Compteurs actionnables affichés une fois l'analyse terminée. Les deux
+  // endpoints existent déjà (dashboard + data-quality) ; si l'un échoue on
+  // retombe sur les CTA génériques, jamais sur un état cassé.
+  const loadCrmSummary = useCallback(async () => {
+    const [activation, quality] = await Promise.all([
+      request('/dashboard/activation').catch(() => null),
+      request('/data-quality/dashboard-summary').catch(() => null),
+    ]);
+    if (!activation && !quality) return;
+    const q = quality
+      ? (quality.duplicates || 0) + (quality.general || 0) + (quality.dealQuality || 0) + (quality.clientQuality || 0)
+      : 0;
+    setCrmSummary({
+      stagnant: activation?.segments?.stagnant ?? 0,
+      churnRisk: activation?.segments?.churnRisk ?? 0,
+      qualityIssues: q,
+    });
+  }, []);
+
   useEffect(() => {
     if (!socket) return;
     const onCrmSync = (data) => {
       setCrmSyncStatus(data);
       if (data.status === 'done') {
+        setCrmSummary(null);
+        loadCrmSummary();
         notifyToast({
           type: 'success',
           title: en ? 'CRM analysis' : 'Analyse CRM',
-          message: data.message,
+          message: data.dealsCount != null
+            ? t('settings.crmDoneSummary', { deals: data.dealsCount, patterns: data.patternsCount ?? 0 })
+            : data.message,
           duration: 5000,
         });
       } else if (data.status === 'error') {
@@ -270,7 +318,7 @@ export default function SettingsPage() {
     };
     socket.on('crm:sync', onCrmSync);
     return () => socket.off('crm:sync', onCrmSync);
-  }, [socket, notifyToast, en]);
+  }, [socket, notifyToast, en, t, loadCrmSummary]);
 
   /* ─── Outreach sync handler ─── */
 
@@ -312,18 +360,18 @@ export default function SettingsPage() {
   /* ─── Edit / cancel / save per-field ─── */
 
   function startEdit(field) {
-    setEditing(prev => ({ ...prev, [field]: true }));
-    setDrafts(prev => ({ ...prev, [field]: '' }));
+    setEditing(prev => ({...prev, [field]: true }));
+    setDrafts(prev => ({...prev, [field]: '' }));
   }
 
   function cancelEdit(field) {
     setEditing(prev => {
-      const next = { ...prev };
+      const next = {...prev };
       delete next[field];
       return next;
     });
     setDrafts(prev => {
-      const next = { ...prev };
+      const next = {...prev };
       delete next[field];
       return next;
     });
@@ -357,7 +405,7 @@ export default function SettingsPage() {
       showToast(en ? 'Key deleted' : 'Clé supprimée');
       cancelEdit(field);
       setTestStatus(prev => {
-        const next = { ...prev };
+        const next = {...prev };
         delete next[field];
         return next;
       });
@@ -403,14 +451,14 @@ export default function SettingsPage() {
 
   function updatePreference(key, value) {
     setPreferences(prev => {
-      const next = { ...prev, [key]: value };
+      const next = {...prev, [key]: value };
       localStorage.setItem('bakal-preferences', JSON.stringify(next));
       return next;
     });
   }
 
   function resetPreferences() {
-    setPreferences({ ...DEFAULT_PREFERENCES });
+    setPreferences({...DEFAULT_PREFERENCES });
     localStorage.removeItem('bakal-preferences');
     showToast(en ? 'Preferences reset' : 'Préférences réinitialisées');
   }
@@ -422,7 +470,7 @@ export default function SettingsPage() {
 
   /* ─── Count configured keys ─── */
 
-  const allKeyDefs = [...MAIN_TOOLS, ...EXTENDED_TOOLS.flatMap(g => g.keys)];
+  const allKeyDefs = [...MAIN_TOOLS,...EXTENDED_TOOLS.flatMap(g => g.keys)];
   const [showMore, setShowMore] = useState(false);
   const configuredCount = Object.values(keyStatus).filter(k => k.configured).length;
   const totalCount = Object.keys(keyStatus).length || allKeyDefs.length;
@@ -503,7 +551,7 @@ export default function SettingsPage() {
                 type="password"
                 placeholder={keyDef.placeholder}
                 value={drafts[keyDef.field] || ''}
-                onChange={e => setDrafts(prev => ({ ...prev, [keyDef.field]: e.target.value }))}
+                onChange={e => setDrafts(prev => ({...prev, [keyDef.field]: e.target.value }))}
                 autoFocus
                 onKeyDown={e => {
                   if (e.key === 'Enter') saveField(keyDef.field);
@@ -542,7 +590,7 @@ export default function SettingsPage() {
         <div>
           <div className="page-title">{t('settings.title')}</div>
           <div className="page-subtitle">
-            {t('settings.subtitle')} — {configuredCount}/{totalCount} {t('settings.configured')}
+            {t('settings.subtitle')}, {configuredCount}/{totalCount} {t('settings.configured')}
           </div>
         </div>
         <div className="header-actions">
@@ -565,7 +613,7 @@ export default function SettingsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20, alignItems: 'start' }}>
       {/* Left column */}
       <div>
-      {/* Integrations — 2-column grid */}
+      {/* Integrations · 2-column grid */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div className="card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -623,7 +671,7 @@ export default function SettingsPage() {
                   {isEditing && tool.multiField === true && (
                     <OdooConfigForm
                       draft={drafts[tool.field] || ''}
-                      onSave={(json) => { setDrafts(prev => ({ ...prev, [tool.field]: json })); saveField(tool.field, json); }}
+                      onSave={(json) => { setDrafts(prev => ({...prev, [tool.field]: json })); saveField(tool.field, json); }}
                       onCancel={() => cancelEdit(tool.field)}
                       saving={saving}
                       isConnected={isConnected}
@@ -673,7 +721,7 @@ export default function SettingsPage() {
                         type="password"
                         placeholder={tool.placeholder}
                         value={drafts[tool.field] || ''}
-                        onChange={e => setDrafts(prev => ({ ...prev, [tool.field]: e.target.value }))}
+                        onChange={e => setDrafts(prev => ({...prev, [tool.field]: e.target.value }))}
                         autoFocus
                         onKeyDown={e => {
                           if (e.key === 'Enter') saveField(tool.field);
@@ -704,7 +752,7 @@ export default function SettingsPage() {
             })}
           </div>
 
-          {/* Voir plus — inside the same card */}
+          {/* Voir plus · inside the same card */}
           <div
             style={{
               padding: '12px 20px', cursor: 'pointer',
@@ -754,6 +802,8 @@ export default function SettingsPage() {
 
       {/* Right column */}
       <div>
+      <div className="settings-group-title">{t('settings.groupConnections')}</div>
+
       {/* Lemlist Sync */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -844,20 +894,20 @@ export default function SettingsPage() {
                   <ul style={{ margin: '8px 0 0 0', paddingLeft: 16 }}>
                     <li>Identify <strong>conversion patterns</strong> (what wins vs. what loses)</li>
                     <li>Build your <strong>ideal customer profile</strong> from real data</li>
-                    <li>Detect <strong>stagnant deals</strong> and suggest next actions</li>
+                    <li>Detect <strong>stagnant leads</strong> and suggest next actions</li>
                     <li>Score <strong>churn risk</strong> for each contact</li>
                     <li>Find <strong>data quality issues</strong> (duplicates, missing emails, formatting)</li>
                   </ul>
                 </>
               ) : (
                 <>
-                  Cliquez sur <strong>Analyser le CRM</strong> pour laisser baakalai scanner vos donn\u00e9es {connectedCrmLabel}. L'IA va :
+                  Cliquez sur <strong>Analyser le CRM</strong> pour laisser baakalai scanner vos données {connectedCrmLabel}. L&apos;IA va :
                   <ul style={{ margin: '8px 0 0 0', paddingLeft: 16 }}>
                     <li>Identifier les <strong>patterns de conversion</strong> (ce qui gagne vs. ce qui perd)</li>
-                    <li>Construire votre <strong>profil client id\u00e9al</strong> depuis vos donn\u00e9es r\u00e9elles</li>
-                    <li>D\u00e9tecter les <strong>deals stagnants</strong> et sugg\u00e9rer des actions</li>
+                    <li>Construire votre <strong>profil client idéal</strong> depuis vos données réelles</li>
+                    <li>Détecter les <strong>leads stagnants</strong> et suggérer des actions</li>
                     <li>Scorer le <strong>risque de churn</strong> par contact</li>
-                    <li>Trouver les <strong>probl\u00e8mes de qualit\u00e9</strong> (doublons, emails manquants, formatage)</li>
+                    <li>Trouver les <strong>problèmes de qualité</strong> (doublons, emails manquants, formatage)</li>
                   </ul>
                 </>
               )}
@@ -890,7 +940,11 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div style={{ fontSize: 12, color: crmSyncStatus.status === 'done' ? 'var(--success)' : crmSyncStatus.status === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
-                {crmSyncStatus.status === 'done' ? '\u2705 ' : crmSyncStatus.status === 'error' ? '\u274c ' : ''}{crmSyncStatus.message || ''}
+                {crmSyncStatus.status === 'done' && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+                {crmSyncStatus.status === 'error' && <Icon name="close" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+                {crmSyncStatus.status === 'done' && crmSyncStatus.dealsCount != null
+                  ? t('settings.crmDoneSummary', { deals: crmSyncStatus.dealsCount, patterns: crmSyncStatus.patternsCount ?? 0 })
+                  : (crmSyncStatus.message || '')}
               </div>
               {crmSyncStatus.status !== 'done' && crmSyncStatus.status !== 'error' && (
                 <LoadingTips
@@ -900,22 +954,69 @@ export default function SettingsPage() {
               )}
               {crmSyncStatus.status === 'done' && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
-                    {en
-                      ? 'Your CRM data is now synced. Here\'s what you can do next:'
-                      : 'Vos données CRM sont synchronisées. Voici ce que vous pouvez faire :'}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
-                      {en ? 'View Analytics' : 'Voir les Analytics'}
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/clients')}>
-                      {en ? 'Browse Clients' : 'Voir les Clients'}
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
-                      {en ? 'Ask the AI' : 'Demander à l\'IA'}
-                    </button>
-                  </div>
+                  {crmSummary ? (
+                    (() => {
+                      const rows = [
+                        { key: 'stagnant', count: crmSummary.stagnant, icon: 'flame', label: t('settings.crmFoundStagnant', { count: crmSummary.stagnant }), to: '/deals-to-reactivate' },
+                        { key: 'churn', count: crmSummary.churnRisk, icon: 'alert', label: t('settings.crmFoundChurn', { count: crmSummary.churnRisk }), to: '/churn-risk' },
+                        { key: 'quality', count: crmSummary.qualityIssues, icon: 'sparkles', label: t('settings.crmFoundQuality', { count: crmSummary.qualityIssues }), to: '/data-quality' },
+                      ].filter(r => r.count > 0);
+                      return (
+                        <>
+                          {rows.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                              {rows.map((r, i) => (
+                                <div key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  <Icon name={r.icon} size={14} style={{ flexShrink: 0, color: i === 0 ? 'var(--primary, #6E57FA)' : 'var(--text-muted)' }} />
+                                  <span style={{ flex: 1 }}>{r.label}</span>
+                                  <button
+                                    className={`btn btn-sm ${i === 0 ? 'btn-primary' : 'btn-ghost'}`}
+                                    onClick={() => navigate(r.to)}
+                                  >
+                                    {t('settings.crmSee')}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
+                              {t('settings.crmFoundNothing')}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {rows.length === 0 && (
+                              <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
+                                {t('settings.crmCtaAnalytics')}
+                              </button>
+                            )}
+                            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
+                              {t('settings.crmCtaAsk')}
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()
+                  ) : (
+                    /* Résumé pas (encore) chargé · CTA génériques en secours */
+                    <>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10, lineHeight: 1.6 }}>
+                        {en
+                          ? 'Your CRM data is now synced. Here\'s what you can do next:'
+                          : 'Vos données CRM sont synchronisées. Voici ce que vous pouvez faire :'}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button className="btn btn-primary btn-sm" onClick={() => navigate('/analytics')}>
+                          {en ? 'View Analytics' : 'Voir les Analytics'}
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/clients')}>
+                          {en ? 'Browse Clients' : 'Voir les Clients'}
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/chat')}>
+                          {en ? 'Ask the AI' : 'Demander à l\'IA'}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -923,22 +1024,23 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Team */}
-      <TeamSettings />
-
-      {/* Product Lines */}
-      <ProductLinesSettings />
+      <div className="settings-group-title">{t('settings.groupCrmConfig')}</div>
 
       {/* CRM Field Mapping */}
       <FieldMappingSettings />
 
+      {/* Écriture Baakalai → CRM (opt-in) */}
+      <CrmWritebackSection t={t} showToast={showToast} lang={lang} />
+
+      <div className="settings-group-title">{t('settings.groupEmailing')}</div>
+
       {/* Email sortant */}
       <EmailAccountSettings />
 
-      {/* Preferences */}
+      {/* Envoi · cadence et fenêtres des emails sortants */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
-          <div className="card-title">{t('settings.preferences')}</div>
+          <div className="card-title">{t('settings.sendingTitle')}</div>
         </div>
         <div className="card-body">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -979,19 +1081,84 @@ export default function SettingsPage() {
                 <option value="Tous les jours">{en ? 'Every day' : 'Tous les jours'}</option>
               </select>
             </div>
-            <div className="settings-pref-row">
-              <label className="settings-pref-label">{t('settings.claudeModel')}</label>
-              <select
-                className="form-input"
-                value={preferences.claudeModel}
-                onChange={e => updatePreference('claudeModel', e.target.value)}
-              >
-                <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
-                <option value="claude-opus-4-6">Claude Opus 4.6</option>
-                <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
-                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-              </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Emails de baakalai · adresse de notification + opt-out RGPD */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">{t('settings.baakalaiEmailsTitle')}</div>
+        </div>
+        <div className="card-body">
+          <div className="settings-pref-row">
+            <label className="settings-pref-label">{en ? 'Notification email' : 'Email de notification'}</label>
+            <input
+              className="form-input"
+              type="email"
+              placeholder={en ? "your@email.com" : "votre@email.com"}
+              value={preferences.notificationEmail}
+              onChange={e => updatePreference('notificationEmail', e.target.value)}
+            />
+          </div>
+
+          {emailPrefs && (
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                {t('settings.emailPrefsIntro')}
+              </div>
+              {[
+                { key: 'crm_digest', label: t('settings.emailPrefCrmDigest'), desc: t('settings.emailPrefCrmDigestDesc') },
+                { key: 'weekly_report', label: t('settings.emailPrefWeeklyReport'), desc: t('settings.emailPrefWeeklyReportDesc') },
+                { key: 'tips', label: t('settings.emailPrefTips'), desc: t('settings.emailPrefTipsDesc') },
+              ].map(({ key, label, desc }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--border)' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{desc}</div>
+                  </div>
+                  <div
+                    role="switch"
+                    aria-checked={emailPrefs[key] !== false}
+                    aria-label={label}
+                    tabIndex={0}
+                    className={`toggle-switch${emailPrefs[key] !== false ? ' on' : ''}`}
+                    onClick={() => toggleEmailPref(key)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleEmailPref(key); } }}
+                  />
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+                {t('settings.emailPrefsHint')}
+              </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* SLA de réactivité */}
+      <SlaSection t={t} showToast={showToast} lang={lang} />
+
+      <div className="settings-group-title">{t('settings.groupAccount')}</div>
+
+      {/* Preferences · modèle IA (les réglages d'envoi ont rejoint le groupe Emails) */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header">
+          <div className="card-title">{t('settings.preferences')}</div>
+        </div>
+        <div className="card-body">
+          <div className="settings-pref-row">
+            <label className="settings-pref-label">{t('settings.claudeModel')}</label>
+            <select
+              className="form-input"
+              value={preferences.claudeModel}
+              onChange={e => updatePreference('claudeModel', e.target.value)}
+            >
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+              <option value="claude-opus-5">Claude Opus 5</option>
+              <option value="claude-opus-4-8">Claude Opus 4.8</option>
+              <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+            </select>
           </div>
         </div>
       </div>
@@ -1066,25 +1233,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Notification email */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-header">
-          <div className="card-title">{en ? 'Notifications' : 'Notifications'}</div>
-        </div>
-        <div className="card-body">
-          <div className="settings-pref-row">
-            <label className="settings-pref-label">{en ? 'Notification email' : 'Email de notification'}</label>
-            <input
-              className="form-input"
-              type="email"
-              placeholder={en ? "your@email.com" : "votre@email.com"}
-              value={preferences.notificationEmail}
-              onChange={e => updatePreference('notificationEmail', e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Reset */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
         <button className="btn btn-ghost" onClick={resetPreferences}>
@@ -1106,7 +1254,7 @@ export default function SettingsPage() {
             const tkn = localStorage.getItem('bakal_token');
             fetch('/api/auth/onboarding-reset', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
+              headers: { 'Content-Type': 'application/json',...(tkn ? { Authorization: `Bearer ${tkn}` } : {}) },
             }).catch(() => {});
             window.location.reload();
           }}>
@@ -1115,104 +1263,11 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Abonnement (Stripe) */}
-      <BillingSection t={t} showToast={showToast} lang={lang} />
-
-      {/* Écriture Baakalai → CRM (opt-in) */}
-      <CrmWritebackSection t={t} showToast={showToast} lang={lang} />
+      <div className="settings-group-title">{t('settings.groupDanger')}</div>
 
       {/* Danger Zone */}
       <DeleteAccountSection t={t} showToast={showToast} lang={lang} />
       </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══ Billing Section (Stripe) ═══ */
-// Tant que Stripe n'est pas branché côté backend (STRIPE_SECRET_KEY absente),
-// GET /billing renvoie billingEnabled:false : les cartes s'affichent avec les
-// prix mais les boutons sont neutralisés — aucun flux de paiement fantôme.
-
-function BillingSection({ t, showToast, lang }) {
-  const en = lang === 'en';
-  const [state, setState] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    request('/billing').then(setState).catch(() => {});
-  }, []);
-
-  const checkout = async (plan) => {
-    setBusy(true);
-    try {
-      const d = await request('/billing/checkout', {
-        method: 'POST',
-        body: JSON.stringify({ plan }),
-      });
-      if (d.url) window.location.href = d.url;
-    } catch (err) {
-      showToast({ type: 'error', title: t('settings.billingSoon'), message: err.message });
-    }
-    setBusy(false);
-  };
-
-  const portal = async () => {
-    setBusy(true);
-    try {
-      const d = await request('/billing/portal', { method: 'POST' });
-      if (d.url) window.location.href = d.url;
-    } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
-    }
-    setBusy(false);
-  };
-
-  const enabled = !!state?.billingEnabled;
-  const currentPlan = state?.plan || 'trial';
-  const plans = [
-    { key: 'starter', name: 'Starter', price: state?.prices?.starter ?? 49, feat: t('settings.billingFeatStarter') },
-    { key: 'growth', name: 'Growth', price: state?.prices?.growth ?? 149, feat: t('settings.billingFeatGrowth') },
-    { key: 'scale', name: 'Scale', price: state?.prices?.scale ?? 349, feat: t('settings.billingFeatScale') },
-  ];
-
-  return (
-    <div className="card" style={{ marginTop: 24, padding: '20px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{t('settings.billingTitle')}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-            {t('settings.billingCurrent')} : <strong>{currentPlan === 'trial' ? t('settings.billingTrialLabel') : currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</strong>
-            {!enabled && <span style={{ marginLeft: 8, color: 'var(--primary)' }}>· {t('settings.billingSoon')}</span>}
-          </div>
-        </div>
-        {state?.subscribed && (
-          <button className="btn btn-ghost" onClick={portal} disabled={busy} style={{ whiteSpace: 'nowrap' }}>
-            {t('settings.billingManage')}
-          </button>
-        )}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        {plans.map(p => (
-          <div key={p.key} style={{
-            border: currentPlan === p.key ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-            borderRadius: 10, padding: '14px 16px',
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{p.name}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: '6px 0' }}>
-              {p.price}€<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{t('settings.billingPerMonth')}</span>
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', minHeight: 32 }}>{p.feat}</div>
-            <button
-              className={currentPlan === p.key ? 'btn btn-ghost' : 'btn btn-primary'}
-              onClick={() => checkout(p.key)}
-              disabled={busy || !enabled || currentPlan === p.key}
-              style={{ width: '100%', marginTop: 10 }}
-            >
-              {currentPlan === p.key ? t('settings.billingCurrentBtn') : t('settings.billingSubscribe')}
-            </button>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -1240,12 +1295,9 @@ function CrmWritebackSection({ t, showToast, lang }) {
         body: JSON.stringify({ enabled: !enabled }),
       });
       setEnabled(!!d.enabled);
-      showToast({
-        type: 'success',
-        title: d.enabled ? t('settings.writebackOnToast') : t('settings.writebackOffToast'),
-      });
+      showToast(d.enabled ? t('settings.writebackOnToast') : t('settings.writebackOffToast'));
     } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message });
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
     }
     setBusy(false);
   };
@@ -1270,6 +1322,93 @@ function CrmWritebackSection({ t, showToast, lang }) {
           {busy ? '…' : enabled ? t('settings.writebackEnabled') : t('settings.writebackDisabled')}
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ═══ SLA Section ═══ */
+// Seuils de réactivité évalués dans « À traiter aujourd'hui » et le digest du
+// lundi (backend lib/sla.js). Off par défaut : un SLA est une promesse que
+// l'admin déclare. Composant autonome (GET/PATCH propres), comme la section
+// write-back.
+
+function SlaSection({ t, showToast, lang }) {
+  const en = lang === 'en';
+  const [cfg, setCfg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    request('/settings/sla').then(setCfg).catch(() => {});
+  }, []);
+
+  const save = async (patch) => {
+    setBusy(true);
+    try {
+      const d = await request('/settings/sla', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      });
+      setCfg(d);
+      if ('enabled' in patch) {
+        showToast(d.enabled ? t('settings.slaOnToast') : t('settings.slaOffToast'));
+      }
+    } catch (err) {
+      showToast(err.message || (en ? 'Error' : 'Erreur'), 'error');
+    }
+    setBusy(false);
+  };
+
+  if (!cfg) return null;
+
+  const FIELDS = [
+    { key: 'newLeadDays', labelKey: 'settings.slaNewLead', min: 1, max: 30 },
+    { key: 'followupGraceDays', labelKey: 'settings.slaFollowup', min: 0, max: 30 },
+    { key: 'inactiveDays', labelKey: 'settings.slaInactive', min: 7, max: 365 },
+  ];
+
+  return (
+    <div className="card" style={{ marginTop: 24, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+            {t('settings.slaTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 560 }}>
+            {t('settings.slaDesc')}
+          </div>
+        </div>
+        <button
+          className={cfg.enabled ? 'btn btn-primary' : 'btn btn-ghost'}
+          onClick={() => save({ enabled: !cfg.enabled })}
+          disabled={busy}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {busy ? '…' : cfg.enabled ? t('settings.slaEnabled') : t('settings.slaDisabled')}
+        </button>
+      </div>
+      {cfg.enabled && (
+        <div style={{ display: 'flex', gap: 20, marginTop: 16, flexWrap: 'wrap' }}>
+          {FIELDS.map((f) => (
+            <label key={f.key} style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {t(f.labelKey)}
+              <input
+                type="number"
+                min={f.min}
+                max={f.max}
+                value={cfg[f.key]}
+                disabled={busy}
+                onChange={(e) => setCfg((prev) => ({...prev, [f.key]: e.target.value }))}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (Number.isInteger(v) && v >= f.min && v <= f.max) save({ [f.key]: v });
+                  else request('/settings/sla').then(setCfg).catch(() => {});
+                }}
+                style={{ width: 90, padding: '6px 10px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--paper)', color: 'var(--text)' }}
+              />
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1453,7 +1592,7 @@ function MetadataConfig({ provider, en }) {
         {options && options.length > 0 && (
           <select className="form-input" style={{ fontSize: 12, padding: '6px 8px', width: '100%', marginBottom: 6 }}
             value={selected} onChange={e => setSelected(e.target.value)}>
-            <option value="">{en ? '— Select a database —' : '— Choisir une base —'}</option>
+            <option value="">{en ? ' Select a database ' : ' Choisir une base '}</option>
             {options.map(db => <option key={db.id} value={db.id}>{db.title}</option>)}
           </select>
         )}
@@ -1469,7 +1608,7 @@ function MetadataConfig({ provider, en }) {
         )}
         {(saved || (currentMeta?.database_id && !selected)) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>{'\u2705'} {en ? 'Database configured' : 'Base configurée'}</span>
+            <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />{en ? 'Database configured' : 'Base configurée'}</span>
             <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-muted)' }}
               onClick={() => { setSaved(false); setSelected(''); }}>
               {en ? 'Change' : 'Changer'}
@@ -1501,7 +1640,7 @@ function MetadataConfig({ provider, en }) {
         {options && options.length > 0 && (
           <select className="form-input" style={{ fontSize: 12, padding: '6px 8px', width: '100%', marginBottom: 6 }}
             value={selected} onChange={e => setSelected(e.target.value)}>
-            <option value="">{en ? '— Select a table —' : '— Choisir une table —'}</option>
+            <option value="">{en ? ' Select a table ' : ' Choisir une table '}</option>
             {options.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
           </select>
         )}
@@ -1646,7 +1785,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
         </button>
         <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px', marginTop: 2, width: '100%', color: 'var(--text-muted)' }}
           onClick={() => setShowAdminHelp(v => !v)}>
-          {en ? '? OAuth error / restricted org — admin approval guide' : '? Erreur OAuth / org restreinte — guide pour votre admin'}
+          {en ? '? OAuth error / restricted org, admin approval guide' : '? Erreur OAuth / org restreinte, guide pour votre admin'}
         </button>
         {showAdminHelp && (
           <div style={{
@@ -1656,18 +1795,18 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
             {en
               ? <>
                   <strong>Seeing an "OAuth Error" (OAUTH_APPROVAL_ERROR_GENERIC)?</strong><br/>
-                  Your Salesforce org restricts third-party apps — your admin needs to approve Baakal.ai first:<br/>
+                  Your Salesforce org restricts third-party apps, your admin needs to approve Baakal.ai first:<br/>
                   1. In Salesforce Setup, search for <strong>"Connected Apps OAuth Usage"</strong><br/>
-                  2. Find <strong>Baakal.ai</strong> in the list and click <strong>Install</strong> (the app appears after a connection attempt — if missing, retry connecting, then refresh the page)<br/>
+                  2. Find <strong>Baakal.ai</strong> in the list and click <strong>Install</strong> (the app appears after a connection attempt, if missing, retry connecting, then refresh the page)<br/>
                   3. <strong>Manage Policies</strong> &gt; allow your profile (or set "All users may self-authorize")<br/>
                   4. Check your user profile has the <strong>API Enabled</strong> permission<br/>
                   Then retry "Connect with Salesforce". If your admin prefers not to approve external apps, use your own Connected App above instead.
                 </>
               : <>
                   <strong>Vous voyez une {'«'} OAuth Error {'»'} (OAUTH_APPROVAL_ERROR_GENERIC) ?</strong><br/>
-                  Votre org Salesforce restreint les apps tierces {'—'} votre admin doit d'abord approuver Baakal.ai :<br/>
+                  Votre org Salesforce restreint les apps tierces {' '} votre admin doit d'abord approuver Baakal.ai :<br/>
                   1. Dans la Configuration Salesforce, recherchez <strong>{'«'} Utilisation OAuth des applications connect{'é'}es {'»'}</strong> (Connected Apps OAuth Usage)<br/>
-                  2. Rep{'é'}rez <strong>Baakal.ai</strong> dans la liste et cliquez <strong>Installer</strong> (l'app appara{'î'}t apr{'è'}s une tentative de connexion {'—'} si absente, retentez une connexion puis actualisez la page)<br/>
+                  2. Rep{'é'}rez <strong>Baakal.ai</strong> dans la liste et cliquez <strong>Installer</strong> (l'app appara{'î'}t apr{'è'}s une tentative de connexion {' '} si absente, retentez une connexion puis actualisez la page)<br/>
                   3. <strong>G{'é'}rer les strat{'é'}gies</strong> &gt; autorisez votre profil (ou {'«'} Tous les utilisateurs peuvent s'auto-autoriser {'»'})<br/>
                   4. V{'é'}rifiez que votre profil utilisateur a la permission <strong>API activ{'é'}e</strong> (API Enabled)<br/>
                   Puis retentez {'«'} Connecter via Salesforce {'»'}. Si votre admin ne souhaite pas approuver d'app externe, utilisez votre propre Connected App ci-dessus.
@@ -1753,7 +1892,7 @@ function SalesforceConfigForm({ onCancel, saving, isConnected, onRemove, onDone 
         <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>{en ? 'Connected!' : 'Connect\u00E9 !'}</div>
       )}
       {status === 'test_failed' && (
-        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed \u2014 token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9 \u2014 le token a peut-\u00EAtre expir\u00E9'}</div>
+        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{en ? 'Saved but connection test failed, token may have expired' : 'Sauvegard\u00E9 mais test \u00E9chou\u00E9, le token a peut-\u00EAtre expir\u00E9'}</div>
       )}
       {status === 'error' && (
         <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{en ? 'Connection failed' : '\u00C9chec de connexion'}</div>

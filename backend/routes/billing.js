@@ -1,10 +1,10 @@
 /**
- * Billing routes — Stripe Checkout, portail client, webhook.
+ * Billing routes · Stripe Checkout, portail client, webhook.
  *
- * GET  /api/billing            — état du plan + entitlements
- * POST /api/billing/checkout   — session Stripe Checkout {plan} (501 sans clés)
- * POST /api/billing/portal     — session portail client Stripe (501 sans clés)
- * POST /api/webhooks/stripe    — webhook Stripe (monté en RAW dans server.js,
+ * GET  /api/billing · état du plan + entitlements
+ * POST /api/billing/checkout · session Stripe Checkout {plan} (501 sans clés)
+ * POST /api/billing/portal · session portail client Stripe (501 sans clés)
+ * POST /api/webhooks/stripe · webhook Stripe (monté en RAW dans server.js,
  *                                avant express.json, pour la signature)
  */
 
@@ -102,7 +102,7 @@ router.post('/portal', async (req, res) => {
 });
 
 /**
- * Webhook Stripe. req.body est un Buffer (express.raw) — obligatoire pour
+ * Webhook Stripe. req.body est un Buffer (express.raw) · obligatoire pour
  * vérifier la signature. Ne JAMAIS monter derrière express.json.
  */
 async function stripeWebhook(req, res) {
@@ -117,7 +117,7 @@ async function stripeWebhook(req, res) {
     } else {
       // Sans secret configuré on refuse : un webhook non vérifié permettrait
       // de s'attribuer un plan payant avec un simple curl.
-      logger.error('billing', 'STRIPE_WEBHOOK_SECRET manquant — webhook rejeté');
+      logger.error('billing', 'STRIPE_WEBHOOK_SECRET manquant, webhook rejeté');
       return res.status(501).end();
     }
   } catch (err) {

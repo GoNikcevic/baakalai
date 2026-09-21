@@ -2,7 +2,7 @@ name: Release Notes
 
 on:
   schedule:
-    # 08:00 UTC every Mon/Wed/Fri — ~10h Paris in summer, ~9h Paris in winter.
+    # 08:00 UTC every Mon/Wed/Fri : ~10h Paris in summer, ~9h Paris in winter.
     # Rhythm is ~48h between runs, close to the target cadence.
     - cron: '0 8 * * 1,3,5'
   workflow_dispatch:

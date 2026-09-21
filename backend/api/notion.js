@@ -12,7 +12,7 @@ function getClient() {
 const db = () => config.notion.databases;
 
 // =============================================
-// Campagnes — Résultats
+// Campagnes · Résultats
 // =============================================
 
 async function createResultat(data) {
@@ -71,7 +71,7 @@ async function updateResultat(pageId, data) {
 }
 
 // =============================================
-// Campagnes — Diagnostics
+// Campagnes · Diagnostics
 // =============================================
 
 async function createDiagnostic(data) {
@@ -107,7 +107,7 @@ async function queryDiagnostics(campaignName) {
 }
 
 // =============================================
-// Campagnes — Historique Versions
+// Campagnes · Historique Versions
 // =============================================
 
 async function createVersion(data) {

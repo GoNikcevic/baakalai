@@ -4,14 +4,14 @@
  * POURQUOI CE MODULE EXISTE
  * -------------------------
  * La variable Railway « " ORCHESTRATOR_ENABLED" » (espace en tête) a éteint
- * les 8 crons pendant environ trois mois — avril à juillet 2026 — sans
+ * les 8 crons pendant environ trois mois · avril à juillet 2026 · sans
  * qu'aucun signal ne le révèle : un cron qui ne se déclenche pas ne produit
  * aucune erreur, juste une absence. Ce module surveille l'absence.
  *
  * PRINCIPE
  * --------
  * L'orchestrateur trace chaque exécution dans `cron_runs` (migration 069).
- * Le watchdog tourne dans le PROCESSUS WEB — délibérément hors du flag
+ * Le watchdog tourne dans le PROCESSUS WEB · délibérément hors du flag
  * ORCHESTRATOR_ENABLED : si le flag casse à nouveau, le web continue de
  * tourner et c'est lui qui donne l'alerte.
  *
@@ -30,7 +30,7 @@ const logger = require('./logger');
  * (26 h) pour tolérer un run lent ou un redeploy pile sur le créneau ;
  * 8 jours sur les hebdomadaires.
  *
- * À maintenir en même temps que les schedule() de orchestrator/index.js —
+ * À maintenir en même temps que les schedule() de orchestrator/index.js · 
  * un job absent d'ici est tracé mais jamais surveillé.
  */
 const EXPECTED_JOBS = {
@@ -38,20 +38,21 @@ const EXPECTED_JOBS = {
   'evening-batch': 26,
   'crm-agent': 26,
   'strategic-daily': 26,
-  'agent-chains': 26,
   'lifecycle-emails': 26,
   'memory-agent': 8 * 24,
+  'churn-signals': 180,
+  'signal-scheduler': 3, // tick 30 min, 3h de retard = vraiment mort
   'crm-digest': 8 * 24,
   'reporting-agent': 8 * 24,
 };
 
 /**
  * Détermine les jobs en retard à partir des dernières exécutions connues.
- * Fonction pure — c'est elle que les tests couvrent.
+ * Fonction pure · c'est elle que les tests couvrent.
  *
  * @param {Array<{job: string, last_started: string|Date}>} lastRuns
  *        dernière exécution par job (toute exécution compte, même en échec :
- *        on surveille le déclenchement, pas le succès — un job qui tourne et
+ *        on surveille le déclenchement, pas le succès · un job qui tourne et
  *        échoue produit déjà ses propres logs d'erreur)
  * @param {Date} now
  * @returns {Array<{job: string, hoursLate: number, expectedHours: number}>}
@@ -116,14 +117,14 @@ async function checkOnce(db) {
     );
     if (!claimed.rows[0]) continue;
 
-    const subject = `⚠️ baakalai — le cron « ${s.job} » ne tourne plus`;
+    const subject = `⚠️ baakalai, le cron « ${s.job} » ne tourne plus`;
     const body = `Le job planifié « ${s.job} » n'a pas démarré depuis plus de ${s.expectedHours} h `
       + `(retard : ~${s.hoursLate} h au-delà du délai attendu).\n\n`
       + `Causes déjà vues : variable ORCHESTRATOR_ENABLED absente ou mal nommée après un `
       + `changement Railway, orchestrateur qui ne démarre plus, crash au boot du scheduler.\n`
       + `Vérifier : railway logs (ligne « 8 cron jobs registered ») et la table cron_runs.`;
 
-    logger.error('cron-watchdog', `${s.job} silencieux depuis ${s.expectedHours + s.hoursLate}h — alerte émise`);
+    logger.error('cron-watchdog', `${s.job} silencieux depuis ${s.expectedHours + s.hoursLate}h, alerte émise`);
 
     try {
       const alertTo = process.env.ALERT_EMAIL;

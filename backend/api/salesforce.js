@@ -7,30 +7,84 @@
 
 const { extractActivityDate } = require('../lib/crm-activity-date');
 
+// Les orgs Salesforce renvoient parfois un 502/503/504 transitoire (page HTML
+// « We are down for maintenance ») : on retente avant de remonter l'erreur.
+const TRANSIENT_STATUSES = new Set([502, 503, 504]);
+const TRANSIENT_RETRIES = 2;
+
 async function sfFetch(instanceUrl, accessToken, endpoint, options = {}) {
   if (!accessToken || !instanceUrl) {
     throw new Error('Salesforce credentials required (accessToken + instanceUrl)');
   }
   const url = `${instanceUrl}/services/data/v58.0${endpoint}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
-  });
+
+  const run = async (token) => {
+    const fetchOptions = {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+    };
+
+    let res;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await fetch(url, fetchOptions);
+      } catch (netErr) {
+        // Pendant une maintenance, Salesforce coupe des connexions (fetch failed) :
+        // c'est transitoire, on retente comme pour un 503 avant d'abandonner.
+        if (attempt >= TRANSIENT_RETRIES) throw netErr;
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
+      if (res.ok || !TRANSIENT_STATUSES.has(res.status) || attempt >= TRANSIENT_RETRIES) break;
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+    }
+    return res;
+  };
+
+  let res = await run(accessToken);
+
+  // Une session Salesforce peut mourir avant l'expiration qu'on avait estimée
+  // (révocation, rotation, timeout de session de l'org). Sans ce rattrapage,
+  // TOUS les appels du user échouent jusqu'à ce que le refresh préventif de
+  // crm-token.js se déclenche : on rafraîchit ici et on rejoue une fois.
+  if (res.status === 401) {
+    let body = '';
+    try { body = await res.clone().text(); } catch { body = ''; }
+    if (/INVALID_SESSION_ID/.test(body)) {
+      let fresh = null;
+      try {
+        const { refreshSalesforceByToken } = require('../lib/crm-token');
+        fresh = await refreshSalesforceByToken(accessToken);
+      } catch { fresh = null; }
+      if (fresh && fresh !== accessToken) res = await run(fresh);
+    }
+  }
 
   if (!res.ok) {
-    const body = await res.text();
+    let body = await res.text();
+    const transient = TRANSIENT_STATUSES.has(res.status);
+    // Ne jamais propager une page HTML (maintenance, proxy) dans le message
+    if (/^\s*</.test(body)) {
+      body = transient ? 'temporarily unavailable (maintenance)' : `HTML error page (${body.length} chars)`;
+    }
     throw Object.assign(
       new Error(`Salesforce API ${res.status}: ${body}`),
-      { status: res.status }
+      { status: res.status, transient }
     );
   }
 
   if (res.status === 204) return null;
   return res.json();
+}
+
+// SOQL échappe avec un antislash, pas en doublant la quote comme SQL : une
+// valeur contenant une apostrophe passée en `''` fait un MALFORMED_QUERY.
+function soqlEscape(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 // ── Contacts ──
@@ -49,7 +103,7 @@ async function createContact(instanceUrl, accessToken, data) {
 }
 
 async function searchContacts(instanceUrl, accessToken, email) {
-  const query = `SELECT Id, FirstName, LastName, Email, Title FROM Contact WHERE Email = '${email.replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
+  const query = `SELECT Id, FirstName, LastName, Email, Title FROM Contact WHERE Email = '${soqlEscape(email)}'`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return result.records || [];
 }
@@ -78,25 +132,77 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
   });
 }
 
-async function getDeals(instanceUrl, accessToken, limit = 100) {
+async function getDeals(instanceUrl, accessToken, limit = 10000) {
   // LastActivityDate / LastModifiedDate : sans elles, la récence d'un deal est
   // inconnue et rien ne peut être signalé comme dormant. Voir lib/crm-activity-date.js.
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
-  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  return (result.records || []).map(r => ({
-    id: r.Id,
-    name: r.Name,
-    stage: r.StageName,
-    amount: r.Amount,
-    closeDate: r.CloseDate,
-    createdAt: r.CreatedDate,
-    // Sans ces deux champs le deal remonte sans recence, donc jamais dormant.
-    lastActivityAt: extractActivityDate('salesforce', r),
-  }));
+  // IsWon/IsClosed are native Opportunity fields (true source of truth for won/lost · no need
+  // to cross-reference OpportunityStage). The OpportunityContactRoles subquery resolves the
+  // primary contact, since Opportunity has no direct contact lookup (only AccountId).
+  // Paginé via nextRecordsUrl (comme listContacts) : le plafond de 100 sans
+  // pagination laissait les opportunités anciennes des vrais orgs sans mapping
+  // won/lost · donc invisibles comme clients.
+  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed, AccountId,
+    (SELECT ContactId FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
+    FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  const deals = [];
+  let result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
+  for (;;) {
+    for (const r of result.records || []) {
+      deals.push({
+        id: r.Id,
+        name: r.Name,
+        stage: r.StageName,
+        status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
+        value: r.Amount,
+        personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
+        accountId: r.AccountId || null,
+        closeDate: r.CloseDate,
+        createdAt: r.CreatedDate,
+        updatedAt: r.LastModifiedDate,
+        // Sans ces deux champs le deal remonte sans recence, donc jamais dormant.
+        lastActivityAt: extractActivityDate('salesforce', r),
+      });
+    }
+    if (result.done || !result.nextRecordsUrl || deals.length >= limit) break;
+    result = await sfFetch(instanceUrl, accessToken, result.nextRecordsUrl.replace('/services/data/v58.0', ''));
+  }
+
+  // Fallback contact role manquant (décision Goran 15/09) : beaucoup d'orgs ne
+  // remplissent pas les OpportunityContactRoles · sans eux, personId reste null
+  // et le deal n'est jamais rattaché (donc jamais mappé won/lost côté app). Si
+  // le compte de l'opp n'a qu'UN seul contact emailable, on rattache le deal à
+  // ce contact : zéro ambiguïté. À 2 contacts ou plus, on s'abstient · on ne
+  // devine jamais qui est le bon interlocuteur. Best-effort : ne fait jamais
+  // échouer getDeals.
+  const orphans = deals.filter(d => !d.personId && d.accountId);
+  if (orphans.length > 0) {
+    try {
+      const contactsByAccount = new Map();
+      let res = await sfFetch(instanceUrl, accessToken,
+        `/query?q=${encodeURIComponent('SELECT Id, AccountId FROM Contact WHERE AccountId != null AND Email != null')}`);
+      for (;;) {
+        for (const c of res.records || []) {
+          const list = contactsByAccount.get(c.AccountId) || [];
+          list.push(c.Id);
+          contactsByAccount.set(c.AccountId, list);
+        }
+        if (res.done || !res.nextRecordsUrl) break;
+        res = await sfFetch(instanceUrl, accessToken, res.nextRecordsUrl.replace('/services/data/v58.0', ''));
+      }
+      for (const d of orphans) {
+        const contacts = contactsByAccount.get(d.accountId);
+        if (contacts && contacts.length === 1) d.personId = contacts[0];
+      }
+    } catch (err) {
+      console.warn('[salesforce] Single-contact fallback failed:', err.message);
+    }
+  }
+
+  return deals;
 }
 
 // Diagnostic public (lead magnet) : lecture unique et anonyme des
-// opportunités via OAuth central — même forme de retour que
+// opportunités via OAuth central · même forme de retour que
 // pipedrive/hubspot.listDealsForDiagnostic (routes/public-diagnostic.js).
 async function listDealsForDiagnostic({ accessToken, instanceUrl }, { maxDeals = 2000 } = {}) {
   const soql = `SELECT Name, Amount, CreatedDate, LastActivityDate, LastModifiedDate, IsClosed, IsWon, Account.Name FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${maxDeals}`;
@@ -161,30 +267,87 @@ function mapOpportunityToContact(opp) {
 // ── Update Contact ──
 
 async function updateContact(instanceUrl, accessToken, contactId, data) {
-  await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      FirstName: data.firstName,
-      LastName: data.lastName,
-      Email: data.email,
-      Title: data.title,
-      ...(data.company ? { Account: { Name: data.company } } : {}),
-    }),
-  });
+  // Le nom arrive soit éclaté (firstName/lastName, push CRM), soit combiné
+  // (name, resolvedFields de la fusion Data Quality). On ne touche JAMAIS à
+  // Account : Salesforce rejette un {Account:{Name}} imbriqué (Name n'est pas un
+  // External ID), et l'appartenance à un compte est portée par AccountId, pas le
+  // nom · d'où l'INVALID_FIELD qui faisait échouer chaque fusion.
+  const body = {};
+  if (data.firstName !== undefined || data.lastName !== undefined) {
+    if (data.firstName !== undefined) body.FirstName = data.firstName;
+    if (data.lastName !== undefined) body.LastName = data.lastName;
+  } else if (data.name) {
+    const parts = String(data.name).trim().split(/\s+/);
+    if (parts.length > 1) { body.FirstName = parts[0]; body.LastName = parts.slice(1).join(' '); }
+    else body.LastName = parts[0];
+  }
+  if (data.email) body.Email = data.email;
+  if (data.title !== undefined && data.title !== null) body.Title = data.title;
+  if (data.phone) body.Phone = data.phone;
+
+  if (Object.keys(body).length > 0) {
+    await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+  return { id: contactId };
+}
+
+// ── Delete Contact ──
+// Hard delete via REST (Salesforce retains it in the Recycle Bin ~15 days server-side, but from
+// our API's perspective it's gone). Undo recreates a NEW Contact via createContact · it gets a
+// new Salesforce Id, a known limitation of this approach vs. the Recycle Bin's `undelete`
+// composite API, which could restore the exact same Id within the 15-day window if ever needed.
+async function deleteContact(instanceUrl, accessToken, contactId) {
+  await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}`, { method: 'DELETE' });
   return { id: contactId };
 }
 
 // ── Upsert Contact (search by email, update or create) ──
 
 async function upsertContact(instanceUrl, accessToken, data) {
-  const existing = await searchContacts(instanceUrl, accessToken, data.email);
-  if (existing && existing.length > 0) {
-    const contactId = existing[0].Id;
-    await updateContact(instanceUrl, accessToken, contactId, data);
-    return { id: contactId, created: false };
+  // L'ID connu prime sur l'email : un contact sans email ou dont l'email a
+  // divergé entre baakalai et Salesforce était recréé à chaque re-push.
+  if (data.contactId && await contactExists(instanceUrl, accessToken, data.contactId)) {
+    await updateContact(instanceUrl, accessToken, data.contactId, data);
+    return { id: data.contactId, created: false };
+  }
+  if (data.email) {
+    const existing = await searchContacts(instanceUrl, accessToken, data.email);
+    if (existing && existing.length > 0) {
+      const contactId = existing[0].Id;
+      await updateContact(instanceUrl, accessToken, contactId, data);
+      return { id: contactId, created: false };
+    }
   }
   const created = await createContact(instanceUrl, accessToken, data);
   return { id: created.id, created: true };
+}
+
+// ── Existence checks ──
+// 404 = supprimé côté Salesforce (corbeille comprise, du point de vue REST) ;
+// toute autre erreur remonte · un token expiré ne doit pas passer pour
+// « le record n'existe plus » et déclencher une recréation.
+
+async function contactExists(instanceUrl, accessToken, contactId) {
+  try {
+    await sfFetch(instanceUrl, accessToken, `/sobjects/Contact/${contactId}?fields=Id`);
+    return true;
+  } catch (err) {
+    if (err.status === 404) return false;
+    throw err;
+  }
+}
+
+async function dealExists(instanceUrl, accessToken, dealId) {
+  try {
+    await sfFetch(instanceUrl, accessToken, `/sobjects/Opportunity/${dealId}?fields=Id`);
+    return true;
+  } catch (err) {
+    if (err.status === 404) return false;
+    throw err;
+  }
 }
 
 // ── Get Deal by ID ──
@@ -234,6 +397,11 @@ async function getActivities(instanceUrl, accessToken, contactId) {
     status: a.Status,
     date: a.ActivityDate,
     description: a.Description,
+    // Aliases matching Pipedrive/Odoo's getActivities shape, for callers that consume
+    // multiple providers generically (e.g. response-analysis-agent.js).
+    dueDate: a.ActivityDate,
+    note: a.Description,
+    type: 'task',
   }));
 }
 
@@ -242,7 +410,7 @@ async function getActivities(instanceUrl, accessToken, contactId) {
 async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
   const all = [];
   let result = await sfFetch(instanceUrl, accessToken,
-    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Title, Account.Name, OwnerId, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
+    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Phone, Title, Account.Name, OwnerId, MailingCountry, MailingCity, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
   );
   const mapRecords = (records) => {
     for (const c of (records || [])) {
@@ -250,16 +418,20 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
         id: c.Id,
         name: `${c.FirstName || ''} ${c.LastName || ''}`.trim(),
         email: c.Email,
+        phone: c.Phone || null,
         title: c.Title,
         company: c.Account?.Name || '',
         ownerId: c.OwnerId,
+        country: c.MailingCountry || null,
+        city: c.MailingCity || null,
+        updatedAt: c.LastModifiedDate,
         // C'est ce chemin-ci qu'emprunte la synchro (stepSync), pas getDeals.
         lastActivityAt: extractActivityDate('salesforce', c),
       });
     }
   };
   mapRecords(result.records);
-  // queryMore pagination — nextRecordsUrl is a full path, fetch directly
+  // queryMore pagination · nextRecordsUrl is a full path, fetch directly
   while (!result.done && result.nextRecordsUrl && all.length < limit) {
     const url = `${instanceUrl}${result.nextRecordsUrl}`;
     const res = await fetch(url, {
@@ -355,48 +527,132 @@ async function updateCampaignMemberStatus(instanceUrl, accessToken, memberId, st
   });
 }
 
-// ── Email Messages (Fonteva / Salesforce transactional emails) ──
+// ── Email Messages (emails transactionnels Salesforce, dont Fonteva) ──
 
-async function getEmailMessages(instanceUrl, accessToken, { contactId, contactEmail, limit = 200, since } = {}) {
-  let where = '';
-  if (contactId) {
-    where = `WHERE RelatedToId = '${contactId}' OR (ToAddress = (SELECT Email FROM Contact WHERE Id = '${contactId}'))`;
-  } else if (contactEmail) {
-    where = `WHERE ToAddress = '${contactEmail.replace(/'/g, "''").replace(/\\/g, '\\\\')}'`;
-  } else {
-    where = 'WHERE CreatedDate > ' + (since || 'LAST_N_DAYS:90');
-  }
-  if (since && contactId) {
-    where += ` AND CreatedDate > ${since}`;
-  }
+const DEFAULT_SINCE = 'LAST_N_DAYS:90';
+const SINCE_KEYWORDS = new Set([
+  'TODAY', 'YESTERDAY', 'THIS_WEEK', 'LAST_WEEK', 'THIS_MONTH', 'LAST_MONTH',
+  'THIS_QUARTER', 'LAST_QUARTER', 'THIS_YEAR', 'LAST_YEAR',
+]);
+const SF_ID_RE = /^[a-zA-Z0-9]{15,18}$/;
+const EMAIL_PAGE_MAX = 2000;   // taille d'une page REST
+const SOQL_LIMIT_MAX = 50000;  // plafond du LIMIT SOQL
 
-  const query = `SELECT Id, Subject, Status, ToAddress, FromAddress, CreatedDate, MessageDate,
-    HasAttachment, IsExternallyVisible, TextBody
-    FROM EmailMessage ${where}
-    ORDER BY CreatedDate DESC LIMIT ${limit}`;
+// Les champs d'ouverture viennent d'Enhanced Email : toutes les orgs ne les
+// exposent pas, d'où la requête de repli plus bas.
+const EMAIL_BASE_FIELDS = 'Id, Subject, Status, ToAddress, FromAddress, CreatedDate, MessageDate, HasAttachment, IsExternallyVisible, Incoming, TextBody';
+const EMAIL_TRACKING_FIELDS = 'IsTracked, IsOpened, FirstOpenedDate, LastOpenedDate';
 
-  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  return (result.records || []).map(e => ({
+// `since` arrive d'un query param : il entre dans la requête en clair (les
+// littéraux de date SOQL ne se paramètrent pas), donc rien ne passe hors liste.
+function sanitizeSince(since) {
+  if (!since) return DEFAULT_SINCE;
+  const raw = String(since).trim();
+  const upper = raw.toUpperCase();
+  if (SINCE_KEYWORDS.has(upper)) return upper;
+  const relative = upper.match(/^LAST_N_(DAYS|WEEKS|MONTHS|QUARTERS|YEARS):(\d{1,4})$/);
+  if (relative) return `LAST_N_${relative[1]}:${parseInt(relative[2], 10)}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00:00Z`;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(raw)) return raw;
+  return DEFAULT_SINCE;
+}
+
+function isUnknownFieldError(err) {
+  return /INVALID_FIELD|No such column/i.test(err?.message || '');
+}
+
+function mapEmailMessage(e) {
+  return {
     id: e.Id,
     subject: e.Subject,
     status: e.Status, // 0=New, 1=Read, 2=Replied, 3=Sent, 4=Forwarded, 5=Draft
     to: e.ToAddress,
+    toAddresses: String(e.ToAddress || '').split(/[;,]/).map(a => a.trim()).filter(Boolean),
     from: e.FromAddress,
+    incoming: e.Incoming === true,
+    isTracked: e.IsTracked === true,
+    isOpened: e.IsOpened === true,
+    firstOpenedAt: e.FirstOpenedDate || null,
+    lastOpenedAt: e.LastOpenedDate || null,
     createdAt: e.CreatedDate,
     messageDate: e.MessageDate,
     hasAttachment: e.HasAttachment,
     preview: (e.TextBody || '').slice(0, 200),
-  }));
+  };
 }
 
-async function getEmailMessageStats(instanceUrl, accessToken, { since = 'LAST_N_DAYS:90' } = {}) {
+/**
+ * Liste les EmailMessage d'une org.
+ * @returns {Promise<{messages: object[], trackingAvailable: boolean, truncated: boolean}>}
+ *   trackingAvailable = l'org expose le suivi d'ouverture (Enhanced Email).
+ *   truncated = le plafond a été atteint, la fenêtre n'est pas complète.
+ */
+async function getEmailMessages(instanceUrl, accessToken, { contactId, contactEmail, limit = 200, since, paginate = false } = {}) {
+  const sinceLiteral = sanitizeSince(since);
+  const pageSize = Math.min(Math.max(parseInt(limit, 10) || 200, 1), EMAIL_PAGE_MAX);
+  const hardCap = paginate ? Math.max(parseInt(limit, 10) || 0, 10000) : pageSize;
+
+  const clauses = [];
+  if (contactId) {
+    if (!SF_ID_RE.test(contactId)) throw new Error('Salesforce contact id invalide');
+    // SOQL n'accepte pas de sous-requête scalaire dans une comparaison :
+    // il faut résoudre l'adresse du contact avant de filtrer dessus.
+    let email = contactEmail || null;
+    if (!email) {
+      const contact = await sfFetch(instanceUrl, accessToken,
+        `/query?q=${encodeURIComponent(`SELECT Email FROM Contact WHERE Id = '${contactId}'`)}`);
+      email = contact.records?.[0]?.Email || null;
+    }
+    const or = [`RelatedToId = '${contactId}'`];
+    if (email) or.push(`ToAddress = '${soqlEscape(email)}'`, `FromAddress = '${soqlEscape(email)}'`);
+    clauses.push(`(${or.join(' OR ')})`);
+  } else if (contactEmail) {
+    const safe = soqlEscape(contactEmail);
+    clauses.push(`(ToAddress = '${safe}' OR FromAddress = '${safe}')`);
+  }
+  // Sur un contact précis, on ne borne dans le temps que si l'appelant l'a demandé.
+  if (since || !(contactId || contactEmail)) clauses.push(`CreatedDate > ${sinceLiteral}`);
+
+  const build = (tracking) => `SELECT ${EMAIL_BASE_FIELDS}${tracking ? `, ${EMAIL_TRACKING_FIELDS}` : ''}
+    FROM EmailMessage WHERE ${clauses.join(' AND ')}
+    ORDER BY CreatedDate DESC LIMIT ${Math.min(hardCap, SOQL_LIMIT_MAX)}`;
+
+  let trackingAvailable = true;
+  let result;
+  try {
+    result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(build(true))}`);
+  } catch (err) {
+    if (!isUnknownFieldError(err)) throw err;
+    trackingAvailable = false;
+    result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(build(false))}`);
+  }
+
+  const messages = (result.records || []).map(mapEmailMessage);
+  while (paginate && !result.done && result.nextRecordsUrl && messages.length < hardCap) {
+    const res = await fetch(`${instanceUrl}${result.nextRecordsUrl}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) break;
+    result = await res.json();
+    for (const r of (result.records || [])) messages.push(mapEmailMessage(r));
+  }
+
+  return {
+    messages,
+    trackingAvailable,
+    truncated: messages.length >= hardCap,
+  };
+}
+
+async function getEmailMessageStats(instanceUrl, accessToken, { since } = {}) {
+  const sinceLiteral = sanitizeSince(since);
   const query = `SELECT Status, COUNT(Id) total
     FROM EmailMessage
-    WHERE CreatedDate > ${since}
+    WHERE CreatedDate > ${sinceLiteral}
     GROUP BY Status`;
 
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  const stats = { sent: 0, read: 0, replied: 0, forwarded: 0, total: 0 };
+  const stats = { sent: 0, read: 0, replied: 0, forwarded: 0, total: 0, tracked: 0, opened: 0, trackingAvailable: false };
   for (const r of (result.records || [])) {
     const count = r.total || 0;
     stats.total += count;
@@ -406,25 +662,41 @@ async function getEmailMessageStats(instanceUrl, accessToken, { since = 'LAST_N_
     else if (r.Status === '2') stats.replied += count;
     else if (r.Status === '4') stats.forwarded += count;
   }
+
+  // Status ne mesure pas l'ouverture d'un email sortant : seul le suivi
+  // Enhanced Email le fait. Absent de l'org, on le dit au lieu de l'inventer.
+  try {
+    const trackingQuery = `SELECT IsTracked, IsOpened, COUNT(Id) total
+      FROM EmailMessage
+      WHERE CreatedDate > ${sinceLiteral} AND Incoming = false
+      GROUP BY IsTracked, IsOpened`;
+    const tracked = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(trackingQuery)}`);
+    stats.trackingAvailable = true;
+    for (const r of (tracked.records || [])) {
+      if (r.IsTracked !== true) continue;
+      stats.tracked += r.total || 0;
+      if (r.IsOpened === true) stats.opened += r.total || 0;
+    }
+  } catch {
+    // Le suivi est un bonus : son absence ne doit pas casser les stats de base.
+    stats.trackingAvailable = false;
+  }
+
   return stats;
 }
 
 async function getContactEmailActivity(instanceUrl, accessToken, contactEmail) {
-  const safe = contactEmail.replace(/'/g, "''").replace(/\\/g, '\\\\');
-  const query = `SELECT Id, Subject, Status, CreatedDate, ToAddress, FromAddress
-    FROM EmailMessage
-    WHERE ToAddress = '${safe}' OR FromAddress = '${safe}'
-    ORDER BY CreatedDate DESC LIMIT 50`;
-
-  const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
-  return (result.records || []).map(e => ({
-    id: e.Id,
-    subject: e.Subject,
-    status: e.Status,
-    createdAt: e.CreatedDate,
-    to: e.ToAddress,
-    from: e.FromAddress,
-    direction: e.ToAddress?.toLowerCase() === contactEmail.toLowerCase() ? 'inbound' : 'outbound',
+  const { messages } = await getEmailMessages(instanceUrl, accessToken, { contactEmail, limit: 50 });
+  return messages.map(e => ({
+    id: e.id,
+    subject: e.subject,
+    status: e.status,
+    createdAt: e.createdAt,
+    to: e.to,
+    from: e.from,
+    isOpened: e.isOpened,
+    firstOpenedAt: e.firstOpenedAt,
+    direction: e.incoming ? 'inbound' : 'outbound',
   }));
 }
 
@@ -446,7 +718,7 @@ async function createLead(instanceUrl, accessToken, data) {
 }
 
 async function searchLeads(instanceUrl, accessToken, email) {
-  const safe = email.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  const safe = soqlEscape(email);
   const query = `SELECT Id, FirstName, LastName, Email, Company, Title, Phone, Status, OwnerId, CreatedDate FROM Lead WHERE Email = '${safe}'`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return result.records || [];
@@ -518,7 +790,7 @@ async function createAccount(instanceUrl, accessToken, data) {
 }
 
 async function searchAccounts(instanceUrl, accessToken, name) {
-  const safe = name.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  const safe = soqlEscape(name);
   const query = `SELECT Id, Name, Industry, Website, Phone, BillingCity, OwnerId, CreatedDate FROM Account WHERE Name LIKE '%${safe}%' ORDER BY CreatedDate DESC LIMIT 50`;
   const result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
   return (result.records || []).map(a => ({
@@ -760,9 +1032,12 @@ async function bulkQuery(instanceUrl, accessToken, soqlQuery) {
 module.exports = {
   createContact,
   updateContact,
+  deleteContact,
   upsertContact,
   searchContacts,
   listContacts,
+  contactExists,
+  dealExists,
   createDeal,
   updateDeal,
   getDeal,
