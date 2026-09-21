@@ -583,6 +583,7 @@
     "workflowActions": "Workflow actions sent",
     "last30d": "last 30 days",
     "pending": "pending",
+    "failed": "failed",
     "replies": "Replies received",
     "repliesHelp": "Workflows stopped because the contact replied: the goal of any follow-up.",
     "activeWorkflows": "Active workflows",
@@ -644,7 +645,8 @@
     "results": {
       "byRule": "Sends by rule",
       "abTests": "A/B tests",
-      "newsletters": "Salesforce / Fonteva emails"
+      "newsletters": "Salesforce / Fonteva emails",
+      "lastSends": "Last {count} sends only."
     },
     "teamCampaigns": "Team campaigns",
     "runEngine": "Run the rules now",

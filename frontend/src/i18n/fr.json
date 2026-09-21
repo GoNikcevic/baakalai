@@ -583,6 +583,7 @@
     "workflowActions": "Actions de workflow envoyées",
     "last30d": "30 derniers jours",
     "pending": "en attente",
+    "failed": "en échec",
     "replies": "Réponses obtenues",
     "repliesHelp": "Workflows arrêtés parce que le contact a répondu, c'est l'objectif d'une relance.",
     "activeWorkflows": "Workflows actifs",
@@ -644,7 +645,8 @@
     "results": {
       "byRule": "Envois par règle",
       "abTests": "Tests A/B",
-      "newsletters": "Emails Salesforce / Fonteva"
+      "newsletters": "Emails Salesforce / Fonteva",
+      "lastSends": "Les {count} derniers envois seulement."
     },
     "teamCampaigns": "Campagnes équipe",
     "runEngine": "Lancer les règles maintenant",

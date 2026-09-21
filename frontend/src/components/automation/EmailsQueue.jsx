@@ -48,11 +48,11 @@ export default function EmailsQueue({ type = 'pending', sendBlocked = false, sum
     } catch { /* liste vide, l'état réel est de toute façon dans le résumé */ }
     setLoading(false);
     onChange();
-    // refreshToken : le parent force un rechargement après un aperçu ou un
-    // lancement, qui viennent d'écrire dans la file.
-  }, [type, onChange, refreshToken]);
+  }, [type, onChange]);
 
-  useEffect(() => { load(); }, [load]);
+  // refreshToken : le parent force un rechargement après un aperçu ou un
+  // lancement, qui viennent d'écrire dans la file.
+  useEffect(() => { load(); }, [load, refreshToken]);
 
   const toggleExpanded = (id, value) => {
     setExpandedIds(prev => {

@@ -70,8 +70,11 @@ export default function AutomationStats() {
     {
       value: emailsSent,
       label: t('automationStats.emailsSent'),
+      // Les échecs étaient comptés par l'API et affichés nulle part : un envoi
+      // qui ne part pas est exactement ce qu'il faut voir sur cet écran.
       sub: `+${data.emails?.sent_30d || 0} · ${t('automationStats.last30d')}`
-        + ((data.emails?.pending || 0) > 0 ? ` · ${data.emails.pending} ${t('automationStats.pending')}` : ''),
+        + ((data.emails?.pending || 0) > 0 ? ` · ${data.emails.pending} ${t('automationStats.pending')}` : '')
+        + ((data.emails?.failed || 0) > 0 ? ` · ${data.emails.failed} ${t('automationStats.failed')}` : ''),
     },
     {
       value: wfSent,

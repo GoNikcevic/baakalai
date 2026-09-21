@@ -39,6 +39,9 @@ export default function SentCampaigns() {
     campaigns[key].emails.push(e);
   }
   const keys = Object.keys(campaigns);
+  // Le plafond serveur est de 200 lignes : le dire, plutôt que de laisser
+  // croire que ce tableau couvre tout l'historique.
+  const truncated = emails.length >= 200;
 
   if (keys.length === 0) {
     return (
@@ -56,6 +59,9 @@ export default function SentCampaigns() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {truncated && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('activation.results.lastSends', { count: 200 })}</div>
+      )}
       {keys.map(key => {
         const campaign = campaigns[key];
         const emailList = campaign.emails || [];
