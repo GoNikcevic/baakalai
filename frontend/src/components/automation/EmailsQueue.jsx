@@ -27,7 +27,7 @@ const PAGE_SIZE = 200;
 // chaque rendu, donc `load` aussi, donc l'effet qui l'appelle boucle.
 const NOOP = () => {};
 
-export default function EmailsQueue({ type = 'pending', sendBlocked = false, summary = null, onChange = NOOP }) {
+export default function EmailsQueue({ type = 'pending', sendBlocked = false, summary = null, onChange = NOOP, refreshToken = 0 }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
@@ -48,7 +48,9 @@ export default function EmailsQueue({ type = 'pending', sendBlocked = false, sum
     } catch { /* liste vide, l'état réel est de toute façon dans le résumé */ }
     setLoading(false);
     onChange();
-  }, [type, onChange]);
+    // refreshToken : le parent force un rechargement après un aperçu ou un
+    // lancement, qui viennent d'écrire dans la file.
+  }, [type, onChange, refreshToken]);
 
   useEffect(() => { load(); }, [load]);
 

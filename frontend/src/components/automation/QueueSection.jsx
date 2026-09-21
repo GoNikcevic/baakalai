@@ -22,15 +22,41 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
   const [previews, setPreviews] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const [executing, setExecuting] = useState(false);
+  // Incrémenté après un lancement : la file se recharge sans remonter le composant.
+  const [queueVersion, setQueueVersion] = useState(0);
 
   const sendBlocked = summary ? !summary.hasMailbox : false;
   const totalPreviewed = previews ? previews.reduce((s, p) => s + (p.contactsCount || 0), 0) : 0;
+
+  // Ce que le lancement va réellement produire, règle par règle. Le bouton
+  // annonçait « Envoyer N emails » alors qu'en mode approbation il ne crée que
+  // des brouillons, et qu'une règle LinkedIn n'envoie aucun email.
+  const buckets = (previews || []).reduce((acc, p) => {
+    if (p.manualOnly || !p.contactsCount) return acc;
+    if ((p.actionType || 'email').startsWith('linkedin_')) acc.actions += p.contactsCount;
+    else if (p.mode === 'auto') acc.sends += p.contactsCount;
+    else acc.drafts += p.contactsCount;
+    return acc;
+  }, { drafts: 0, sends: 0, actions: 0 });
+
+  const runLabel = () => {
+    const { drafts, sends, actions } = buckets;
+    const kinds = [drafts > 0, sends > 0, actions > 0].filter(Boolean).length;
+    if (kinds === 1 && drafts > 0) return t('activation.previewRun.createDrafts', { count: drafts });
+    if (kinds === 1 && sends > 0) return t('activation.previewRun.sendNow', { count: sends });
+    if (kinds === 1 && actions > 0) return t('activation.previewRun.runActions', { count: actions });
+    return t('activation.runEngine');
+  };
 
   const runPreview = async () => {
     setPreviewing(true);
     try {
       const data = await request('/nurture/preview', { method: 'POST' });
       setPreviews(data.previews || []);
+      // L'aperçu conserve le premier brouillon de chaque règle : la file en
+      // dessous doit le montrer tout de suite.
+      setQueueVersion(v => v + 1);
+      onSummaryRefresh();
     } catch (err) {
       showToast({ type: 'error', title: t('common.error'), message: err.message });
     }
@@ -42,6 +68,7 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
     try {
       await request('/nurture/run', { method: 'POST' });
       setPreviews(null);
+      setQueueVersion(v => v + 1);
       onSummaryRefresh();
     } catch (err) {
       showToast({ type: 'error', title: t('common.error'), message: err.message });
@@ -84,6 +111,9 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
               </div>
               <div style={{ fontSize: 12, color: 'var(--grey-500)', marginTop: 2 }}>
                 {t('activation.triggersActive', { count: previews.length })}
+                {buckets.drafts > 0 && ` · ${t('activation.previewRun.partDrafts', { count: buckets.drafts })}`}
+                {buckets.sends > 0 && ` · ${t('activation.previewRun.partSends', { count: buckets.sends })}`}
+                {buckets.actions > 0 && ` · ${t('activation.previewRun.partActions', { count: buckets.actions })}`}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -91,11 +121,12 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
                 <button
                   className="btn btn-primary"
                   style={{ fontSize: 12, padding: '6px 16px' }}
-                  disabled={executing}
+                  disabled={executing || (sendBlocked && buckets.sends > 0)}
+                  title={sendBlocked && buckets.sends > 0 ? t('activation.mailbox.blockedHint') : undefined}
                   onClick={runEngine}
                 >
                   {executing && <Icon name="clock" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
-                  {executing ? t('activation.sending') : t('activation.runEngine')}
+                  {executing ? t('activation.sending') : runLabel()}
                 </button>
               )}
               <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => setPreviews(null)}>
@@ -140,11 +171,18 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
                   borderLeft: '3px solid var(--lavender)',
                 }}>
                   <div style={{ fontSize: 11, color: 'var(--grey-500)', marginBottom: 4 }}>
-                    {en ? `Sample email for ${p.contacts[0]?.name || 'a contact'}:` : `Exemple d'email pour ${p.contacts[0]?.name || 'un contact'} :`}
+                    {t('activation.previewRun.sampleFor', { name: p.sampleContactName || p.contacts[0]?.name || '' })}
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{p.sampleEmail.subject}</div>
                   <div style={{ fontSize: 12, color: 'var(--grey-700)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
                     {p.sampleEmail.body}
+                  </div>
+                  {/* Dire ce qu'est ce texte : un brouillon rangé dans la file,
+                      ou un email qui partira sans passer par elle. */}
+                  <div style={{ fontSize: 11, color: 'var(--grey-500)', marginTop: 8, fontStyle: 'italic' }}>
+                    {p.sampleEmailId
+                      ? (p.sampleReused ? t('activation.previewRun.sampleExisting') : t('activation.previewRun.sampleQueued'))
+                      : t('activation.previewRun.sampleAuto')}
                   </div>
                 </div>
               )}
@@ -153,7 +191,13 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
         </div>
       )}
 
-      <EmailsQueue type="pending" sendBlocked={sendBlocked} summary={summary} onChange={onSummaryRefresh} />
+      <EmailsQueue
+        type="pending"
+        sendBlocked={sendBlocked}
+        summary={summary}
+        onChange={onSummaryRefresh}
+        refreshToken={queueVersion}
+      />
 
       {/* Signaux · même nature de travail : quelque chose attend une décision */}
       <div ref={signalsRef} style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>

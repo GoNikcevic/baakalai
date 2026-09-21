@@ -648,6 +648,18 @@
     },
     "teamCampaigns": "Campagnes équipe",
     "runEngine": "Lancer les règles maintenant",
+    "previewRun": {
+      "createDrafts": "Créer {count} brouillons",
+      "sendNow": "Envoyer {count} emails",
+      "runActions": "Lancer {count} actions LinkedIn",
+      "partDrafts": "{count} brouillons à valider",
+      "partSends": "{count} emails partiront directement",
+      "partActions": "{count} actions LinkedIn",
+      "sampleFor": "Premier email, pour {name} :",
+      "sampleQueued": "Ce brouillon est déjà dans la file ci-dessous, rien n'est parti.",
+      "sampleExisting": "Brouillon déjà en attente pour ce contact, c'est celui qui partira.",
+      "sampleAuto": "Cette règle est en envoi automatique : un email de ce genre partira sans validation."
+    },
     "stale": {
       "title": "{count} brouillons ont plus de {days} jours",
       "desc": "Le contexte de ces contacts a changé depuis. Une fois une boîte mail connectée, l'agent les remplace de lui-même par des brouillons à jour.",

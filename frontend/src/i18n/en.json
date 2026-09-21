@@ -648,6 +648,18 @@
     },
     "teamCampaigns": "Team campaigns",
     "runEngine": "Run the rules now",
+    "previewRun": {
+      "createDrafts": "Create {count} drafts",
+      "sendNow": "Send {count} emails",
+      "runActions": "Run {count} LinkedIn actions",
+      "partDrafts": "{count} drafts to approve",
+      "partSends": "{count} emails will go out directly",
+      "partActions": "{count} LinkedIn actions",
+      "sampleFor": "First email, for {name}:",
+      "sampleQueued": "This draft is already in the queue below, nothing has been sent.",
+      "sampleExisting": "A draft was already waiting for this contact, this is the one that will go out.",
+      "sampleAuto": "This rule sends automatically: an email like this one will go out without approval."
+    },
     "stale": {
       "title": "{count} drafts are older than {days} days",
       "desc": "Those contacts have moved on since. Once a mailbox is connected, the agent replaces them with up to date drafts on its own.",

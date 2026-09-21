@@ -26,7 +26,7 @@ const { Router } = require('express');
 const db = require('../db');
 const { encrypt } = require('../config/crypto');
 const { sendPersonalEmail, sendNurtureEmail, testEmailAccount } = require('../lib/email-outbound');
-const { runNurtureEngine } = require('../lib/nurture-engine');
+const { runNurtureEngine, generateEmail } = require('../lib/nurture-engine');
 const { matchContacts } = require('../lib/trigger-matching');
 const { getStagnantDays } = require('../lib/stagnation');
 const logger = require('../lib/logger');
@@ -780,11 +780,25 @@ router.post('/run-scoped', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/preview · Preview what would happen without sending
+// POST /api/nurture/preview · Qui les règles actives vont toucher, et à quoi
+// ressemble le premier email.
+//
+// L'aperçu avait son propre prompt, plus court, sans les règles anti-IA ni la
+// mémoire du moteur : il montrait donc un texte que le produit n'envoie pas.
+// Il jetait ensuite sa génération, et le moteur en refaisait une autre au
+// lancement · un appel Claude par règle, payé pour rien. Il appelle désormais
+// le générateur du moteur (lib/nurture-engine.generateEmail) et conserve le
+// brouillon produit en mode approbation.
 router.post('/preview', async (req, res, next) => {
   try {
     const { getUserCrmToken } = require('../lib/crm-token');
-    const claude = require('../api/claude');
+    const { getPatternContext, getTeamId } = require('../lib/email-context');
+
+    // Même mémoire que le moteur, résolue une fois pour tout l'aperçu.
+    let patternCtx = { text: '', ids: [] };
+    try {
+      patternCtx = await getPatternContext(await getTeamId(req.user.id), req.user.id);
+    } catch { /* mémoire optionnelle */ }
 
     const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
     const activeCrm = userRow.rows[0]?.active_crm_provider || 'pipedrive';
@@ -840,45 +854,81 @@ router.post('/preview', async (req, res, next) => {
 
       if (matched.length === 0) continue;
 
-      // Generate ONE sample email for preview (with memory patterns)
+      const actionType = trigger.action_type || 'email';
       const sample = matched[0];
-      const template = trigger.email_template || {};
       let sampleEmail = null;
-      try {
-        // Load memory patterns for better email generation
-        let patternsCtx = '';
+      let sampleEmailId = null;
+      let sampleReused = false;
+
+      // Les actions LinkedIn ne produisent pas d'email : ne rien inventer.
+      if (!actionType.startsWith('linkedin_')) {
         try {
-          const patterns = await db.memoryPatterns.listForPrompt(8, null, req.user.id);
-          if (patterns.length > 0) {
-            patternsCtx = '\n\nPATTERNS QUI FONCTIONNENT :\n' +
-              patterns.map(p => `- ${p.applied ? '[APPROUV\u00c9]' : ''} ${p.pattern}`).join('\n') +
-              '\nApplique en priorit\u00e9 les patterns APPROUV\u00c9S.';
+          // Un brouillon en attente existe d\u00E9j\u00e0 pour ce contact : c'est lui
+          // qu'il faut montrer. Le r\u00E9g\u00E9n\u00E9rer co\u00fbterait un appel pour afficher
+          // autre chose que ce qui partira (contrainte 067 : un seul pending
+          // par contact, donc le nouveau texte ne remplacerait rien).
+          const existing = await db.query(
+            `SELECT id, subject, body FROM nurture_emails
+              WHERE user_id = $1 AND opportunity_id = $2 AND status = 'pending'
+              LIMIT 1`,
+            [req.user.id, sample.id]
+          );
+
+          if (existing.rows[0]) {
+            sampleEmail = { subject: existing.rows[0].subject, body: existing.rows[0].body };
+            sampleEmailId = existing.rows[0].id;
+            sampleReused = true;
+          } else {
+            const contact = {
+              id: sample.id,
+              name: sample.name || '',
+              email: sample.email,
+              title: sample.title || '',
+              company: sample.company || '',
+              // La table opportunities n'a pas de nom de deal distinct : le
+              // moteur n'affichera donc pas la ligne « Deal », plutôt que
+              // d'inventer un libellé à partir du contact.
+              dealName: null,
+              dealStatus: sample.status || null,
+            };
+            const generated = await generateEmail(trigger, contact, patternCtx);
+            sampleEmail = { subject: generated.subject, body: generated.body };
+
+            // Mode approbation : le brouillon est conserv\u00E9, il rejoint la file.
+            // Avant, l'aper\u00e7u jetait sa g\u00E9n\u00E9ration et le moteur en refaisait
+            // une autre derri\u00E8re : un appel pay\u00E9 pour rien, et un exemple qui
+            // ne ressemblait pas \u00e0 l'email r\u00E9ellement envoy\u00E9.
+            //
+            // Mode auto : on ne persiste pas. Le moteur enverra sans passer par
+            // la file, la ligne pending resterait orpheline.
+            if (trigger.mode !== 'auto') {
+              const ins = await db.query(`
+                INSERT INTO nurture_emails
+                  (user_id, trigger_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8)
+                RETURNING id
+              `, [req.user.id, trigger.id, sample.id, sample.email, sample.name, sampleEmail.subject, sampleEmail.body, patternCtx.ids]);
+              sampleEmailId = ins.rows[0].id;
+            }
           }
-        } catch { /* optional */ }
-
-        const prompt = `G\u00E9n\u00E8re un email personnel pour :
-- ${sample.name} (${sample.title || ''}) chez ${sample.company || ''}
-- Trigger : ${trigger.trigger_type}, ${trigger.name}
-- Ton : ${template.tone || 'professionnel mais chaleureux'}
-- Max 6 lignes, texte simple${patternsCtx}
-Retourne un JSON : { "subject": "...", "body": "..." }`;
-
-        const result = await claude.callClaude('Retourne uniquement du JSON valide.', prompt, 500);
-        if (result.parsed) sampleEmail = result.parsed;
-        else {
-          const m = (result.content || '').match(/\{[\s\S]*"subject"[\s\S]*"body"[\s\S]*\}/);
-          if (m) { try { sampleEmail = JSON.parse(m[0]); } catch { /* malformed JSON */ } }
+        } catch (err) {
+          // G\u00E9n\u00E9ration ou insertion en \u00E9chec : l'aper\u00e7u reste utile sans exemple.
+          logger.warn('nurture', `Aper\u00e7u sans exemple pour le trigger ${trigger.id} : ${err.message}`);
         }
-      } catch { /* skip preview generation */ }
+      }
 
       previews.push({
         triggerId: trigger.id,
         triggerName: trigger.name,
         triggerType: trigger.trigger_type,
+        actionType,
         mode: trigger.mode,
         contactsCount: matched.length,
         contacts: matched.slice(0, 5).map(o => ({ id: o.id, name: o.name, email: o.email, company: o.company })),
         sampleEmail,
+        sampleEmailId,
+        sampleReused,
+        sampleContactName: sample.name || sample.company || sample.email,
       });
     }
 
