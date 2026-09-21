@@ -33,7 +33,7 @@ function ContextFact({ label, children }) {
 
 /* Why this email exists: where the relationship with this account stands
    (stage, value, inactivity) + the AI's own justification. Churn risk is a
-   client-side concept (post-sale retention) — it doesn't belong on a deal
+   client-side concept (post-sale retention): it doesn't belong on a deal
    reactivation card, which is pre-sale. */
 function DraftContextCard({ context, kind }) {
   const t = useT();

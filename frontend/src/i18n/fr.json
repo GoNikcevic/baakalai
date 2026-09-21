@@ -615,6 +615,39 @@
       "connectFailed": "Connexion impossible pour le moment",
       "blockedHint": "Connectez une boîte mail pour pouvoir envoyer."
     },
+    "sections": {
+      "queue": "À valider",
+      "rules": "Automatisations",
+      "results": "Résultats"
+    },
+    "queue": {
+      "title": "À valider",
+      "subtitle": "Les relances écrites par baakalai et les signaux détectés attendent votre décision ici.",
+      "selectAll": "Tout sélectionner ({count})",
+      "sendSelection": "Envoyer la sélection ({count})",
+      "cancelSelection": "Annuler la sélection ({count})",
+      "confirmSend": "Envoyer {count} email(s) maintenant ?",
+      "confirmCancel": "Annuler {count} brouillon(s) ?",
+      "sending": "Envoi en cours, {done} sur {total}",
+      "sendDone": "{sent} envoyé(s), {failed} en échec"
+    },
+    "rules": {
+      "title": "Règles de relance",
+      "subtitle": "Chaque règle surveille une situation dans le CRM et déclenche une relance quand elle se produit."
+    },
+    "workflows": {
+      "title": "Workflows en cours",
+      "subtitle": "Séquences de relance approuvées, en train de se dérouler.",
+      "step": "étape {done} sur {total}",
+      "open": "Ouvrir"
+    },
+    "results": {
+      "byRule": "Envois par règle",
+      "abTests": "Tests A/B",
+      "newsletters": "Emails Salesforce / Fonteva"
+    },
+    "teamCampaigns": "Campagnes équipe",
+    "runEngine": "Lancer les règles maintenant",
     "stale": {
       "title": "{count} brouillons ont plus de {days} jours",
       "desc": "Le contexte de ces contacts a changé depuis. Une fois une boîte mail connectée, l'agent les remplace de lui-même par des brouillons à jour.",
@@ -1177,6 +1210,8 @@
   "signals": {
     "title": "Signaux",
     "subtitle": "Détectez les signaux d'achat et trouvez les bons prospects au bon moment",
+    "configTitle": "Surveillance des signaux",
+    "configSubtitle": "Ce que baakalai surveille sur le web, et à quelle fréquence.",
     "howTitle": "Comment ça marche",
     "howStep1": "baakalai surveille le web en continu (vérifications toutes les 30 minutes) : vos configurations (levées de fonds, recrutements, changements de direction…) et les comptes de votre CRM. Les comptes chauds (deals importants, clients à risque) sont revus plusieurs fois par jour, et un deal qui bouge dans votre CRM déclenche une vérification dans la demi-heure.",
     "howStep2": "Chaque signal détecté arrive dans ce fil avec sa source et son type, l'onglet Configuration règle ce qui est surveillé, et « Lancer le scan » force une vérification immédiate.",

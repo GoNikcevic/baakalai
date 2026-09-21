@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { request } from '../services/api-client';
 import { useT, useI18n } from '../i18n';
-import { getTriggerTypes } from '../pages/NurturePage';
+import { getTriggerTypes } from './automation/trigger-types';
 
 const CARD = {
   background: 'var(--bg-card, white)',

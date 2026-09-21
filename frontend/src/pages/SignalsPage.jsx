@@ -24,12 +24,17 @@ const SIGNAL_COLORS = {
 
 const HOWTO_KEY = 'bakal_signals_howto';
 
-export default function SignalsPage() {
+/** `view` découpe la page en deux morceaux montables séparément :
+ *  'feed' (les signaux à traiter, dans la file « À valider ») et 'config'
+ *  (la surveillance, dans « Automatisations »). Sans `view`, la page se rend
+ *  entière, comme avant. */
+export default function SignalsPage({ view = null }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
+  const embedded = view === 'feed' || view === 'config';
 
-  const [activeTab, setActiveTab] = useState('feed');
+  const [activeTab, setActiveTab] = useState(embedded ? view : 'feed');
   // « Comment ça marche » : fermable définitivement (même patron que la file de réactivation)
   const [showHowTo, setShowHowTo] = useState(() => {
     try { return !localStorage.getItem(HOWTO_KEY); } catch { return true; }
@@ -187,30 +192,48 @@ export default function SignalsPage() {
     companyView ? { key: 'company', label: companyView, icon: 'chart', count: null } : null,
   ].filter(Boolean);
 
+  const actions = (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {activeTab === 'config' && (
+        <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}
+          onClick={() => setShowCreate(true)}>
+          {t('signals.newConfigBtn')}
+        </button>
+      )}
+      <button className={`btn ${embedded ? 'btn-ghost' : 'btn-primary'}`} style={{ fontSize: embedded ? 12 : 13, padding: embedded ? '6px 14px' : '8px 18px' }}
+        onClick={handleScan} disabled={scanning}>
+        {!scanning && <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+        {scanning ? t('signals.scanning') : t('signals.scan')}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="dashboard-page">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{t('signals.title')}</h1>
-          <div className="page-subtitle">{t('signals.subtitle')}</div>
+    <div className={embedded ? undefined : 'dashboard-page'}>
+      {embedded ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 650 }}>
+              {view === 'config' ? t('signals.configTitle') : t('signals.title')}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              {view === 'config' ? t('signals.configSubtitle') : t('signals.subtitle')}
+            </div>
+          </div>
+          {actions}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {activeTab === 'config' && (
-            <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}
-              onClick={() => setShowCreate(true)}>
-              {t('signals.newConfigBtn')}
-            </button>
-          )}
-          <button className="btn btn-primary" style={{ fontSize: 13, padding: '8px 18px' }}
-            onClick={handleScan} disabled={scanning}>
-            {!scanning && <Icon name="search" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
-            {scanning ? t('signals.scanning') : t('signals.scan')}
-          </button>
+      ) : (
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">{t('signals.title')}</h1>
+            <div className="page-subtitle">{t('signals.subtitle')}</div>
+          </div>
+          {actions}
         </div>
-      </div>
+      )}
 
       {/* KPIs Dashboard */}
-      {stats?.kpis && (
+      {view !== 'config' && stats?.kpis && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           {[
             { label: t('signals.kpiWeek'), value: stats.kpis.this_week || 0, color: 'var(--accent)' },
@@ -230,8 +253,8 @@ export default function SignalsPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+      {/* Tabs · masqués quand la page est montée en morceau dans Automatisation */}
+      <div style={{ display: embedded ? 'none' : 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
         {tabs.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
             padding: '10px 18px', border: 'none', background: 'transparent',

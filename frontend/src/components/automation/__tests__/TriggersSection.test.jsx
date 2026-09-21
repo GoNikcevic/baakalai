@@ -1,35 +1,31 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
-import NurturePage from '../NurturePage';
-import { I18nProvider } from '../../i18n';
+import TriggersSection from '../TriggersSection';
+import { I18nProvider } from '../../../i18n';
 
-vi.mock('../../services/auth', () => ({
+vi.mock('../../../services/auth', () => ({
   isLoggedIn: () => true,
   getUser: () => ({ id: 1, email: 'test@baakal.ai' }),
   getToken: () => 'token',
   getRefreshToken: () => null,
 }));
 
-vi.mock('../../services/api-client', () => ({
-  // Le dashboard d'Activation attend `null` quand les métriques ne sont pas
-  // encore calculées ; un objet vide le ferait planter sur metrics.segments.
-  request: vi.fn(url => Promise.resolve(
-    url.startsWith('/dashboard') ? null : { triggers: [], emails: [] }
-  )),
+vi.mock('../../../services/api-client', () => ({
+  request: vi.fn(() => Promise.resolve({ triggers: [] })),
   default: {},
 }));
 
-vi.mock('../../services/notifications', () => ({ showToast: vi.fn() }));
+vi.mock('../../../services/notifications', () => ({ showToast: vi.fn() }));
 
-function renderPage() {
+function renderSection() {
   // jsdom annonce une locale « en » : sans ce réglage l'écran serait rendu en
   // anglais et les libellés français ci-dessous ne diraient plus rien.
   localStorage.setItem('baakalai_lang', 'fr');
   return render(
     <MemoryRouter>
       <I18nProvider>
-        <NurturePage />
+        <TriggersSection />
       </I18nProvider>
     </MemoryRouter>
   );
@@ -40,9 +36,9 @@ function renderPage() {
  * de jours ni le mode d'envoi n'étaient explicables sans lire le moteur de
  * nurture. Ces tests verrouillent l'explication affichée sous le formulaire.
  */
-describe('NurturePage, formulaire de création de trigger', () => {
+describe('Règles de relance, formulaire de création', () => {
   it('explique le délai en jours selon le type de trigger choisi', async () => {
-    renderPage();
+    renderSection();
     fireEvent.click(await screen.findByText('+ Nouveau trigger'));
 
     // Type par défaut : lead stagnant, 30 jours.
@@ -56,7 +52,7 @@ describe('NurturePage, formulaire de création de trigger', () => {
   });
 
   it("reprend le nombre saisi dans l'explication", async () => {
-    renderPage();
+    renderSection();
     fireEvent.click(await screen.findByText('+ Nouveau trigger'));
 
     fireEvent.change(await screen.findByLabelText('Délai (jours)'), { target: { value: '90' } });
@@ -72,7 +68,7 @@ describe('NurturePage, formulaire de création de trigger', () => {
   });
 
   it("explique Approbation, Automatique, et le cas LinkedIn", async () => {
-    renderPage();
+    renderSection();
     fireEvent.click(await screen.findByText('+ Nouveau trigger'));
 
     expect(await screen.findByText(/Rien ne part tant que vous ne l'avez pas validé/i)).toBeTruthy();

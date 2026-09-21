@@ -465,12 +465,18 @@ const sequenceEnrollments = {
   },
 
   async listByUser(userId, { status, opportunityId } = {}) {
-    const conds = ['user_id = $1'];
+    const conds = ['e.user_id = $1'];
     const values = [userId];
-    if (status) { values.push(status); conds.push(`status = $${values.length}`); }
-    if (opportunityId) { values.push(opportunityId); conds.push(`opportunity_id = $${values.length}`); }
+    if (status) { values.push(status); conds.push(`e.status = $${values.length}`); }
+    if (opportunityId) { values.push(opportunityId); conds.push(`e.opportunity_id = $${values.length}`); }
+    // Le contact est joint ici : sans son nom, une liste de workflows n'est
+    // qu'une colonne d'identifiants (l'écran Automatisation en affiche une).
     const result = await query(
-      `SELECT * FROM sequence_enrollments WHERE ${conds.join(' AND ')} ORDER BY created_at DESC`,
+      `SELECT e.*, o.name AS contact_name, o.company AS contact_company
+         FROM sequence_enrollments e
+         LEFT JOIN opportunities o ON o.id = e.opportunity_id
+        WHERE ${conds.join(' AND ')}
+        ORDER BY e.created_at DESC`,
       values
     );
     return result.rows;

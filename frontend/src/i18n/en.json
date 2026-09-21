@@ -615,6 +615,39 @@
       "connectFailed": "Connection unavailable right now",
       "blockedHint": "Connect a mailbox to be able to send."
     },
+    "sections": {
+      "queue": "To approve",
+      "rules": "Automations",
+      "results": "Results"
+    },
+    "queue": {
+      "title": "To approve",
+      "subtitle": "Follow-ups written by baakalai and signals it detected are waiting for your decision here.",
+      "selectAll": "Select all ({count})",
+      "sendSelection": "Send selection ({count})",
+      "cancelSelection": "Cancel selection ({count})",
+      "confirmSend": "Send {count} email(s) now?",
+      "confirmCancel": "Cancel {count} draft(s)?",
+      "sending": "Sending, {done} of {total}",
+      "sendDone": "{sent} sent, {failed} failed"
+    },
+    "rules": {
+      "title": "Follow-up rules",
+      "subtitle": "Each rule watches one situation in the CRM and triggers a follow-up when it happens."
+    },
+    "workflows": {
+      "title": "Running workflows",
+      "subtitle": "Approved follow-up sequences currently playing out.",
+      "step": "step {done} of {total}",
+      "open": "Open"
+    },
+    "results": {
+      "byRule": "Sends by rule",
+      "abTests": "A/B tests",
+      "newsletters": "Salesforce / Fonteva emails"
+    },
+    "teamCampaigns": "Team campaigns",
+    "runEngine": "Run the rules now",
     "stale": {
       "title": "{count} drafts are older than {days} days",
       "desc": "Those contacts have moved on since. Once a mailbox is connected, the agent replaces them with up to date drafts on its own.",
@@ -1177,6 +1210,8 @@
   "signals": {
     "title": "Signals",
     "subtitle": "Detect buying signals and find the right prospects at the right time",
+    "configTitle": "Signal monitoring",
+    "configSubtitle": "What baakalai watches on the web, and how often.",
     "howTitle": "How it works",
     "howStep1": "baakalai monitors the web continuously (checks every 30 minutes): your configurations (funding rounds, hiring, leadership changes…) and your CRM accounts. Hot accounts (big deals, at-risk clients) are re-checked several times a day, and a deal moving in your CRM triggers a check within the half hour.",
     "howStep2": "Every detected signal lands in this feed with its source and type, the Configuration tab controls what gets monitored, and \"Run scan\" forces an immediate check.",

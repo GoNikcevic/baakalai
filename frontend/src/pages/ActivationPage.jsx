@@ -1,33 +1,68 @@
 /* ===============================================================================
-   BAKAL · Activation Page (wrapper)
-   Merges Nurture (activation triggers/emails) + Signals into one nav entry.
+   BAKAL · Automatisation
+
+   Trois destinations, plus onze. L'écran empilait 3 sections et 9 sous-onglets
+   sur deux niveaux, sans distinguer ce qu'on traite tous les jours (approuver)
+   de ce qu'on règle une fois (règles, autopilot) et de ce qu'on regarde après
+   coup (stats, A/B). Découpage retenu :
+
+     À valider      · brouillons de relance + signaux détectés
+     Automatisations· règles, workflows en cours, répondeur, surveillance, équipe
+     Résultats      · chiffres d'envoi, envois par règle, tests A/B, Salesforce
+
+   Les anciens liens (?section=nurture|signals|stats) continuent de tomber au
+   bon endroit : ils sont posés dans la nav, le chat, les notifications et le
+   bilan hebdo.
    =============================================================================== */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useT } from '../i18n';
 import { request } from '../services/api-client';
-import NurturePage from './NurturePage';
-import SignalsPage from './SignalsPage';
-import AutomationStats from '../components/AutomationStats';
 import MailboxBanner from '../components/MailboxBanner';
+import QueueSection from '../components/automation/QueueSection';
+import RulesSection from '../components/automation/RulesSection';
+import ResultsSection from '../components/automation/ResultsSection';
 
 const SECTIONS = [
-  { key: 'nurture', i18n: 'activation.title' },
-  { key: 'signals', i18n: 'nav.signals' },
-  { key: 'stats', i18n: 'automationStats.tab' },
+  { key: 'queue', i18n: 'activation.sections.queue' },
+  { key: 'rules', i18n: 'activation.sections.rules' },
+  { key: 'results', i18n: 'activation.sections.results' },
 ];
+
+// Anciennes valeurs de ?section=, toujours en circulation dans les liens.
+const LEGACY_SECTIONS = {
+  nurture: 'queue',
+  signals: 'queue',
+  stats: 'results',
+  pending: 'queue',
+  triggers: 'rules',
+};
 
 export default function ActivationPage() {
   const t = useT();
   // La section active vit dans l'URL (?section=) pour rester deep-linkable
-  // depuis la TodayCard et le chat.
+  // depuis la TodayCard, le bilan hebdo et le chat.
   const [searchParams, setSearchParams] = useSearchParams();
   const urlSection = searchParams.get('section');
-  const section = SECTIONS.some(s => s.key === urlSection) ? urlSection : 'nurture';
+  const section = SECTIONS.some(s => s.key === urlSection)
+    ? urlSection
+    : (LEGACY_SECTIONS[urlSection] || 'queue');
+
+  // Un lien « signaux » tombe dans la file, où les signaux sont plus bas que
+  // les brouillons : on descend jusqu'au bloc plutôt que de laisser croire que
+  // le lien n'a rien fait.
+  const signalsRef = useRef(null);
+  useEffect(() => {
+    if (urlSection !== 'signals' || !signalsRef.current) return;
+    const id = setTimeout(() => {
+      signalsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+    return () => clearTimeout(id);
+  }, [urlSection]);
 
   // L'état de la file (compteurs exacts + boîte mail connectée) est chargé une
-  // fois ici : le bandeau en a besoin sur les trois sections, et Nurture s'en
+  // fois ici : le bandeau en a besoin sur les trois sections, et la file s'en
   // sert pour savoir si un envoi est seulement possible.
   const [summary, setSummary] = useState(null);
   const loadSummary = useCallback(() => {
@@ -35,8 +70,21 @@ export default function ActivationPage() {
   }, []);
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
+  const counts = {
+    queue: summary ? summary.pending : 0,
+    rules: 0,
+    results: 0,
+  };
+
   return (
-    <div>
+    <div className="dashboard-page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{t('activation.title')}</h1>
+          <div className="page-subtitle">{t('activation.subtitle')}</div>
+        </div>
+      </div>
+
       <MailboxBanner summary={summary} />
 
       {/* Top-level section switcher */}
@@ -60,13 +108,16 @@ export default function ActivationPage() {
             }}
           >
             {t(s.i18n)}
+            {counts[s.key] > 0 && <span style={{ fontSize: 11, opacity: 0.7 }}> ({counts[s.key]})</span>}
           </button>
         ))}
       </div>
 
-      {section === 'nurture' && <NurturePage summary={summary} onSummaryRefresh={loadSummary} />}
-      {section === 'signals' && <SignalsPage />}
-      {section === 'stats' && <AutomationStats />}
+      {section === 'queue' && (
+        <QueueSection summary={summary} onSummaryRefresh={loadSummary} signalsRef={signalsRef} />
+      )}
+      {section === 'rules' && <RulesSection />}
+      {section === 'results' && <ResultsSection />}
     </div>
   );
 }
