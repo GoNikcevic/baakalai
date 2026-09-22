@@ -63,11 +63,30 @@ describe('Recettes de règles', () => {
     expect(screen.getByText('Reprendre contact avec les silencieux')).toBeTruthy();
   });
 
+  it('propose la rétention des clients à risque sans délai d\'attente', async () => {
+    request.mockResolvedValue({ counts: [{ id: 'atRisk', count: 4, manualOnly: false, sample: [] }] });
+    const onCreated = vi.fn();
+
+    renderRecipes({ existingTypes: ['deal_stagnant', 'inactive_contact', 'feedback_request'], onCreated });
+
+    fireEvent.click(await screen.findByText('Activer'));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    const createCall = request.mock.calls.find(([url]) => url === '/nurture/triggers');
+    const body = createCall[1].body;
+    expect(body).toContain('"triggerType":"churn_risk"');
+    // days 0 = dès le signalement : le churn n'attend pas une ancienneté.
+    expect(body).toContain('"days":0');
+    expect(body).toContain('"mode":"approval"');
+  });
+
   it('crée la règle en approbation, jamais en envoi automatique', async () => {
     request.mockResolvedValue({ counts: [{ id: 'dormant', count: 5, manualOnly: false, sample: [] }] });
     const onCreated = vi.fn();
 
-    renderRecipes({ existingTypes: ['inactive_contact', 'feedback_request'], onCreated });
+    // On ne laisse qu'une seule recette disponible pour que « Activer » soit
+    // sans ambiguïté.
+    renderRecipes({ existingTypes: ['inactive_contact', 'feedback_request', 'churn_risk'], onCreated });
 
     fireEvent.click(await screen.findByText('Activer'));
 

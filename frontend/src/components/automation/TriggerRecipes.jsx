@@ -19,6 +19,9 @@ import Icon from '../Icon';
 const RECIPES = [
   { key: 'dormant', triggerType: 'deal_stagnant', days: 30, icon: 'moon' },
   { key: 'silent', triggerType: 'inactive_contact', days: 60, icon: 'refresh' },
+  // days: 0 = dès le signalement. Le déclencheur churn_risk ne mesure pas une
+  // ancienneté mais un délai après le passage à risque (cf. trigger-matching).
+  { key: 'atRisk', triggerType: 'churn_risk', days: 0, icon: 'churn' },
   { key: 'feedback', triggerType: 'feedback_request', days: 30, icon: 'message' },
 ];
 

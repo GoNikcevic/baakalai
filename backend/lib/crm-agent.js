@@ -697,12 +697,18 @@ async function generateNurtureEmail(trigger, opp, { abTest = false, teamId = nul
   const contactCtx = `${opp.name} (${opp.title || ''}) chez ${opp.company || ''}`;
   const triggerCtx = `${trigger.trigger_type}, ${trigger.name}`;
   const toneCtx = template.tone || 'professionnel mais chaleureux';
+  // Un client à risque ne reçoit pas le même email qu'un lead stagnant : sans
+  // cette consigne, le modèle produisait un suivi générique, parfois un pitch.
+  // Même intention que lib/agents/retention.js et que nurture-engine.
+  const intentCtx = trigger.trigger_type === 'churn_risk'
+    ? `\n- Intention : ce client se désengage. Rouvrir le dialogue et faire remonter le problème, rien d'autre. Ne vends RIEN (ni upsell, ni offre, ni devis, ni renouvellement), pose une question ouverte, ne mentionne aucun score ni système automatique, ne culpabilise pas sur le silence.`
+    : '';
 
   if (abTest) {
     const prompt = `G\u00E9n\u00E8re DEUX variantes d'email personnel (PAS marketing) pour A/B testing.
 - Contact : ${contactCtx}
 - Trigger : ${triggerCtx}
-- Ton : ${toneCtx}
+- Ton : ${toneCtx}${intentCtx}
 - Max 6 lignes chaque, texte simple, doit sembler humain
 
 Variante A : approche directe et concise
@@ -726,7 +732,7 @@ Retourne un JSON : { "A": { "subject": "...", "body": "..." }, "B": { "subject":
   const prompt = `G\u00E9n\u00E8re un email personnel (PAS marketing) pour :
 - ${contactCtx}
 - Trigger : ${triggerCtx}
-- Ton : ${toneCtx}
+- Ton : ${toneCtx}${intentCtx}
 - Max 6 lignes, texte simple, doit sembler humain${patternsContext}${effectivenessContext}
 
 Retourne un JSON : { "subject": "...", "body": "..." }`;

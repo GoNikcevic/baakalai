@@ -287,7 +287,16 @@ function initSchema() {
       weekly_report INTEGER,
       email_crm_digest INTEGER DEFAULT 1,
       email_weekly_report INTEGER DEFAULT 1,
-      email_tips INTEGER DEFAULT 1
+      email_tips INTEGER DEFAULT 1,
+      -- Qualification ICP (migration 106) : NULL y signifie « inconnu »,
+      -- jamais « zéro » (cf. lib/icp-signals.js).
+      job_role TEXT,
+      icp_crm_history_months INTEGER,
+      icp_crm_seat_count INTEGER,
+      icp_deals_count INTEGER,
+      icp_won_deals_count INTEGER,
+      icp_has_client_base INTEGER,
+      icp_computed_at DATETIME
     );
 
     CREATE TABLE IF NOT EXISTS project_files (
@@ -337,6 +346,7 @@ function initSchema() {
       autopilot_enabled INTEGER,
       batch_number INTEGER,
       churn_factors TEXT,
+      churn_flagged_at DATETIME,
       churn_score INTEGER,
       churn_scored_at DATETIME,
       city TEXT,

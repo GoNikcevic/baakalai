@@ -653,7 +653,7 @@
     "runEngine": "Lancer les règles maintenant",
     "recipes": {
       "title": "Démarrer en deux clics",
-      "subtitle": "Trois règles qui couvrent l'essentiel. Le chiffre annonce les contacts joignables concernés aujourd'hui.",
+      "subtitle": "Quatre règles qui couvrent l'essentiel. Le chiffre annonce les contacts joignables concernés aujourd'hui.",
       "matches": "{count} contacts concernés aujourd'hui",
       "none": "Aucun contact concerné aujourd'hui",
       "counting": "Calcul en cours...",
@@ -665,6 +665,11 @@
         "title": "Relancer les deals dormants",
         "name": "Relance deals dormants",
         "desc": "Un deal encore ouvert n'a plus aucune activité depuis {days} jours : baakalai rédige la relance."
+      },
+      "atRisk": {
+        "title": "Retenir les clients qui décrochent",
+        "name": "Relance clients à risque",
+        "desc": "Dès qu'un client passe au-dessus du seuil de risque de départ, baakalai rouvre le dialogue, sans rien lui vendre."
       },
       "silent": {
         "title": "Reprendre contact avec les silencieux",
@@ -720,6 +725,7 @@
       "deal_lost": "l'email part {days} jour(s) après la perte du deal.",
       "onboarding_check": "l'email part {days} jour(s) après la signature, pour vérifier la prise en main.",
       "renewal_reminder": "le rappel part {days} jour(s) avant la date de renouvellement inscrite dans le CRM.",
+      "churn_risk": "l'email part {days} jour(s) après le passage du client au-dessus du seuil de risque de départ, une seule fois par passage.",
       "upsell_opportunity": "l'email part aux clients signés depuis au moins {days} jours.",
       "feedback_request": "la demande part {days} jour(s) après la signature.",
       "newsletter_inactive": "analyse les newsletters des {days} derniers jours et repère les contacts qui n'en ont ouvert aucune.",

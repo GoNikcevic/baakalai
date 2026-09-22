@@ -143,6 +143,32 @@ async function evaluateTriggers(userId) {
         break;
       }
 
+      case 'churn_risk': {
+        // Comme renewal_reminder : l'information vit dans notre base (le score
+        // est calculé chez nous), pas dans le CRM. Même fenêtre que le cron
+        // (lib/trigger-matching.js) pour que les deux chemins voient la même
+        // population : signalés entre J+days et J+days+7.
+        const { AT_RISK_THRESHOLD } = require('./churn-scoring');
+        const days = conditions.days || 0;
+        const atRisk = await db.query(
+          `SELECT o.* FROM opportunities o
+            WHERE o.user_id = (SELECT user_id FROM nurture_triggers WHERE id = $1)
+              AND o.campaign_id IS NULL
+              AND o.status = 'won'
+              AND o.churn_score >= $2
+              AND o.churn_flagged_at IS NOT NULL
+              AND o.churn_flagged_at <= now() - ($3::int * INTERVAL '1 day')
+              AND o.churn_flagged_at > now() - (($3::int + 7) * INTERVAL '1 day')`,
+          [trigger.id, AT_RISK_THRESHOLD, days]
+        );
+        for (const o of (atRisk.rows || [])) {
+          const contact = contacts.find(c => c.id === o.crm_contact_id);
+          if (contact) matched.push(normalizeContact(contact, { name: o.company, status: 'won' }));
+          else matched.push({ id: o.id, name: o.name, email: o.email, title: o.title || '', company: o.company || '', dealName: null, dealStage: null, dealStatus: 'churn_risk' });
+        }
+        break;
+      }
+
       case 'newsletter_inactive': {
         // Contacts à qui l'org a envoyé des emails suivis et qui ne les ont ni
         // ouverts ni répondus. Sans suivi d'ouverture, l'information n'existe
@@ -302,6 +328,22 @@ function buildPatternsBlock(patternCtx) {
  * `patternCtx` ({ text, ids } de getPatternContext) est optionnel · sans lui,
  * la génération reste possible mais n'exploite pas la mémoire.
  */
+/**
+ * Consigne d'intention propre à certains triggers. Sans elle, un déclencheur
+ * « client à risque » produisait un email de suivi générique, quand ce n'est
+ * pas un pitch : exactement ce qu'il ne faut pas envoyer à un client qui a un
+ * pied dehors (même raison d'être que lib/agents/retention.js).
+ */
+function triggerIntent(triggerType) {
+  if (triggerType !== 'churn_risk') return '';
+  return `
+- Intention : ce client montre des signes de désengagement. L'email sert à rouvrir le dialogue et à faire remonter le problème, rien d'autre.
+- Ne vends RIEN : pas d'upsell, pas de nouvelle offre, pas de devis, pas de relance de renouvellement.
+- Pose une question ouverte à laquelle il est facile de répondre honnêtement.
+- Ne mentionne jamais un score, un signal détecté ou un système automatique.
+- Ne culpabilise pas sur le silence.`;
+}
+
 async function generateEmail(trigger, contact, patternCtx = null) {
   const template = trigger.email_template || {};
   const prompt = `Tu es un commercial B2B. Génère un email professionnel et personnel (PAS un email marketing).
@@ -318,7 +360,7 @@ Instructions :
 - L'email doit sembler écrit par un humain, pas généré
 - Pas de template marketing, pas de header/footer fancy
 - Maximum 6 lignes
-- Tutoiement : ${template.formality === 'tu' ? 'oui' : 'non, vouvoyer'}
+- Tutoiement : ${template.formality === 'tu' ? 'oui' : 'non, vouvoyer'}${triggerIntent(trigger.trigger_type)}
 ${require('./human-style').HUMAN_STYLE_RULES_FR}${buildPatternsBlock(patternCtx)}
 
 Retourne un JSON : { "subject": "...", "body": "..." }`;

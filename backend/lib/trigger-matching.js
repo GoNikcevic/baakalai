@@ -14,6 +14,10 @@
  */
 
 const { onlyCrmContacts } = require('./crm-scope');
+// Seuil partagé avec le scoring, la file de priorités et la population
+// churn_risk du chat : une règle ne doit pas parler d'« à risque » autrement
+// que le reste du produit.
+const { AT_RISK_THRESHOLD } = require('./churn-scoring');
 
 const DAY_MS = 86400000;
 
@@ -101,6 +105,23 @@ function matchContacts(trigger, allOpps, now = Date.now(), defaults = {}) {
         const age = ageDays(o, o.won_date || o.updated_at);
         return age !== null && age >= days;
       });
+
+    case 'churn_risk':
+      // Le churn est un état : sans date de franchissement, la règle
+      // reproposerait la même population tous les jours. On matche donc sur
+      // l'ÉVÉNEMENT « ce client vient de passer à risque » (churn_flagged_at,
+      // migration 109), avec la même fenêtre de 7 jours que deal_won : le
+      // client est vu une fois, la dédup 7 jours fait le reste.
+      // `days` = délai de courtoisie avant de relancer (0 = dès le signalement).
+      // NB : `churn_flagged_at` doit être testée explicitement · ageDays()
+      // retombe sur created_at quand la date est absente, ce qui ferait matcher
+      // de vieux clients jamais signalés.
+      return opps.filter(o =>
+        o.status === 'won' &&
+        o.churn_flagged_at &&
+        (o.churn_score || 0) >= AT_RISK_THRESHOLD &&
+        inWindow(ageDays(o, o.churn_flagged_at), conditions.days || 0, 7)
+      );
 
     case 'upsell_opportunity':
       return opps.filter(o => {

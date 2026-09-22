@@ -363,7 +363,20 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
       const values = batch.map((r, idx) => `($${idx * 3 + 1}::uuid, $${idx * 3 + 2}::int, $${idx * 3 + 3}::jsonb)`).join(', ');
       const params = batch.flatMap(r => [r.id, r.score, r.factors]);
       await db.query(
-        `UPDATE opportunities AS o SET churn_score = v.score, churn_factors = v.factors, churn_scored_at = now()
+        // churn_flagged_at date le franchissement du seuil vers le haut, pas
+        // l'état : c'est ce qui permet au déclencheur « client à risque »
+        // (lib/trigger-matching.js) de matcher un client une fois au lieu de le
+        // reproposer à chaque run. Dans un UPDATE, `o.churn_score` à droite du
+        // SET est l'ANCIENNE valeur : la comparaison compare bien avant/après.
+        `UPDATE opportunities AS o SET
+           churn_score = v.score,
+           churn_factors = v.factors,
+           churn_scored_at = now(),
+           churn_flagged_at = CASE
+             WHEN v.score < ${AT_RISK_THRESHOLD} THEN NULL
+             WHEN o.churn_score IS NULL OR o.churn_score < ${AT_RISK_THRESHOLD} THEN now()
+             ELSE o.churn_flagged_at
+           END
          FROM (VALUES ${values}) AS v(id, score, factors)
          WHERE o.id = v.id`,
         params

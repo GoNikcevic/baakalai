@@ -26,6 +26,16 @@ const FIELD_LABEL = {
   marginBottom: 4,
 };
 
+/**
+ * Delai saisi, en jours. Zero est une valeur legitime (declencheur « client a
+ * risque » : relancer des le signalement), donc on ne peut pas se reposer sur
+ * `|| 30`, qui l'ecrasait silencieusement. Champ vide ou illisible = 30.
+ */
+function parseDays(value) {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 30;
+}
+
 export default function TriggersSection() {
   const t = useT();
   const { lang } = useI18n();
@@ -60,9 +70,11 @@ export default function TriggersSection() {
   // le meme sens selon le type de trigger (avant le renouvellement, apres la
   // signature, depuis la derniere activite...), donc chaque type a son texte.
   const isLinkedinAction = form.actionType.startsWith('linkedin_');
-  // Meme repli que handleCreate (`|| 30`) : l'explication doit annoncer le
-  // delai qui sera reellement enregistre, champ vide ou a zero compris.
-  const effectiveDays = parseInt(form.days, 10) || 30;
+  // Meme repli que handleCreate : l'explication doit annoncer le delai qui
+  // sera reellement enregistre, champ vide compris. Zero est une valeur
+  // legitime depuis le declencheur « client a risque » (relance des le
+  // signalement), d'ou le test sur NaN plutot qu'un `|| 30` qui l'ecrasait.
+  const effectiveDays = parseDays(form.days);
   const daysExplanation = t(`activation.daysHint.${form.triggerType}`, { days: effectiveDays });
   const modeExplanation = isLinkedinAction
     ? t('activation.modeHintLinkedin')
@@ -78,7 +90,7 @@ export default function TriggersSection() {
           name: form.name,
           triggerType: form.triggerType,
           actionType: form.actionType,
-          conditions: { days: parseInt(form.days, 10) || 30 },
+          conditions: { days: parseDays(form.days) },
           mode: form.actionType.startsWith('linkedin_') ? 'auto' : form.mode,
           emailTemplate: { tone: form.tone },
         }),
@@ -178,7 +190,10 @@ export default function TriggersSection() {
                         ...p,
                         triggerType: e.target.value,
                         name: p.name || tt?.defaultName || '',
-                        days: tt?.defaultDays || p.days,
+                        // `??` et non `||` : le declencheur « client a risque »
+                        // a un defaut de 0 jour, qu'un `||` aurait remplace par
+                        // le delai precedemment affiche.
+                        days: tt?.defaultDays ?? p.days,
                       }));
                     }}
                     className="form-input"
@@ -194,7 +209,7 @@ export default function TriggersSection() {
                   <input
                     id="trigger-days"
                     type="number"
-                    min="1"
+                    min="0"
                     placeholder={en ? 'Days' : 'Jours'}
                     value={form.days}
                     onChange={e => setForm(p => ({ ...p, days: e.target.value }))}

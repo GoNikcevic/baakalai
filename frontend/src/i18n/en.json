@@ -653,7 +653,7 @@
     "runEngine": "Run the rules now",
     "recipes": {
       "title": "Start in two clicks",
-      "subtitle": "Three rules that cover the basics. The number shows reachable contacts concerned today.",
+      "subtitle": "Four rules that cover the basics. The number shows reachable contacts concerned today.",
       "matches": "{count} contacts concerned today",
       "none": "No contact concerned today",
       "counting": "Counting...",
@@ -665,6 +665,11 @@
         "title": "Follow up on dormant deals",
         "name": "Dormant deal follow-up",
         "desc": "An open deal has had no activity for {days} days: baakalai writes the follow-up."
+      },
+      "atRisk": {
+        "title": "Keep clients who are drifting away",
+        "name": "At-risk client follow-up",
+        "desc": "As soon as a client crosses the churn risk threshold, baakalai reopens the dialogue without selling anything."
       },
       "silent": {
         "title": "Reconnect with silent contacts",
@@ -720,6 +725,7 @@
       "deal_lost": "the email goes out {days} day(s) after the deal is lost.",
       "onboarding_check": "the email goes out {days} day(s) after signing, to check adoption.",
       "renewal_reminder": "the reminder goes out {days} day(s) before the renewal date stored in the CRM.",
+      "churn_risk": "the email goes out {days} day(s) after the client crosses the churn risk threshold, once per crossing.",
       "upsell_opportunity": "the email goes to clients who signed at least {days} days ago.",
       "feedback_request": "the request goes out {days} day(s) after signing.",
       "newsletter_inactive": "looks at newsletters from the last {days} days and picks out contacts who never opened one.",
