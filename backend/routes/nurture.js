@@ -209,8 +209,12 @@ router.post('/email-accounts', async (req, res, next) => {
 router.get('/email-accounts', async (req, res, next) => {
   try {
     const result = await db.query(
+      // `replyReadEnabled` : la lecture de la boîte est un consentement à part
+      // sur Outlook (migration 111). Sans lui, la séquence continue de tourner
+      // après une réponse · l'interface doit pouvoir le dire et le réclamer.
       `SELECT id, provider, email_address, smtp_host, smtp_port, status, is_default, created_at,
-              signature_text, signature_image
+              signature_text, signature_image,
+              (graph_refresh_token IS NOT NULL) AS reply_read_enabled
        FROM email_accounts WHERE user_id = $1 ORDER BY is_default DESC`,
       [req.user.id]
     );
@@ -1129,6 +1133,65 @@ router.get('/email-accounts/connect/microsoft', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/nurture/email-accounts/:id/connect/microsoft-read · autoriser la
+// LECTURE de la boîte Outlook (détection des réponses).
+//
+// Consentement distinct de celui de l'envoi : Azure AD délivre un jeton pour
+// une seule ressource à la fois, et l'envoi utilise outlook.office365.com quand
+// la lecture passe par graph.microsoft.com. Ajouter le scope à la demande
+// existante exposerait une connexion qui marche au risque d'un refus.
+router.get('/email-accounts/:id/connect/microsoft-read', async (req, res, next) => {
+  try {
+    const graph = require('../lib/microsoft-graph');
+    if (!graph.isConfigured()) return res.status(500).json({ error: 'Microsoft OAuth not configured' });
+    if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
+
+    const account = await db.query(
+      `SELECT id, provider FROM email_accounts WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (!account.rows[0]) return res.status(404).json({ error: 'Email account not found' });
+    if (account.rows[0].provider !== 'microsoft') {
+      return res.status(400).json({ error: 'Cette autorisation ne concerne que les comptes Outlook' });
+    }
+
+    const state = require('crypto').randomBytes(16).toString('hex');
+    _oauthStates.set(state, {
+      userId: req.user.id, provider: 'microsoft-read', accountId: account.rows[0].id,
+      expiresAt: Date.now() + 600000,
+    });
+
+    res.json({
+      url: graph.authorizeUrl({
+        state,
+        redirectUri: APP_URL + '/api/nurture/email-accounts/callback/microsoft-read',
+      }),
+    });
+  } catch (err) { next(err); }
+});
+
+// GET /api/nurture/email-accounts/callback/microsoft-read
+async function microsoftReadCallback(req, res) {
+  const { code, state } = req.query;
+  const oauthData = _oauthStates.get(state);
+
+  if (!oauthData || oauthData.expiresAt < Date.now() || oauthData.provider !== 'microsoft-read') {
+    return res.redirect(APP_URL + '/settings?email_error=invalid_state');
+  }
+  _oauthStates.delete(state);
+
+  try {
+    const graph = require('../lib/microsoft-graph');
+    const tokens = await graph.exchangeCode(code, APP_URL + '/api/nurture/email-accounts/callback/microsoft-read');
+    await graph.storeReadGrant(oauthData.accountId, tokens);
+    logger.info('nurture', `Lecture Outlook autorisée pour le compte ${oauthData.accountId}`);
+    res.redirect(APP_URL + '/settings?email_connected=microsoft_read');
+  } catch (err) {
+    logger.error('nurture', `Autorisation de lecture Outlook échouée: ${err.message}`);
+    res.redirect(APP_URL + '/settings?email_error=microsoft_read_failed');
+  }
+}
+
 // GET /api/nurture/email-accounts/callback/microsoft · Microsoft OAuth callback
 async function microsoftCallback(req, res) {
   const { code, state } = req.query;
@@ -1252,4 +1315,5 @@ router.post('/send', async (req, res, next) => {
 module.exports = router;
 module.exports.gmailCallback = gmailCallback;
 module.exports.microsoftCallback = microsoftCallback;
+module.exports.microsoftReadCallback = microsoftReadCallback;
 module.exports._oauthStates = _oauthStates;

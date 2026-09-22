@@ -156,9 +156,11 @@ app.use('/api/public/diagnostic', require('./routes/public-diagnostic'));
 app.use('/api/public/email-prefs', require('./routes/email-prefs'));
 
 // OAuth email callbacks (public · user returns from Google/Microsoft redirect, no auth needed)
-const { gmailCallback, microsoftCallback } = require('./routes/nurture');
+const { gmailCallback, microsoftCallback, microsoftReadCallback } = require('./routes/nurture');
 app.get('/api/nurture/email-accounts/callback/gmail', gmailCallback);
 app.get('/api/nurture/email-accounts/callback/microsoft', microsoftCallback);
+// Lecture de la boîte Outlook · consentement distinct de l'envoi (migration 111)
+app.get('/api/nurture/email-accounts/callback/microsoft-read', microsoftReadCallback);
 
 // Team context · inject req.team + req.teamRole on every authenticated request
 const { teamContext } = require('./middleware/team-context');

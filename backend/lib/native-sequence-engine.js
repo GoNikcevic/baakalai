@@ -21,9 +21,12 @@
  *  - NATIVE_EMAIL_DAILY_CAP emails / jour / utilisateur (campagnes ET
  *    relances confondues · c'est la même boîte qui protège sa délivrabilité),
  *    NATIVE_EMAILS_PER_RUN par passage (le cron horaire étale la journée) ;
- *  - arrêt de séquence par prospect sur réponse détectée (Gmail API · même
- *    token OAuth que l'envoi, scope mail.google.com), bounce définitif,
- *    désinscription ou stop manuel ;
+ *  - arrêt de séquence par prospect sur réponse détectée, bounce définitif,
+ *    désinscription ou stop manuel. La détection lit la boîte de l'utilisateur :
+ *    Gmail via le même token OAuth que l'envoi (scope mail.google.com), Outlook
+ *    via Microsoft Graph, qui demande un consentement séparé de l'envoi
+ *    (migration 111, lib/microsoft-graph.js). Un SMTP de domaine custom n'offre
+ *    aucune API de lecture : l'arrêt sur réponse y reste manuel ;
  *  - un seul passage à la fois par utilisateur (bail lib/db-lock · le cron
  *    et le bouton « Traiter maintenant » peuvent se chevaucher).
  *
@@ -46,6 +49,7 @@ const emailOutbound = require('./email-outbound');
 const NATIVE_EMAIL_DAILY_CAP = 40;
 const NATIVE_EMAILS_PER_RUN = 12;
 const REPLY_LOOKBACK_DAYS = 14;
+const DAY_MS = 86400000;
 
 // Branches suivies par le chemin principal (null/default = séquence linéaire).
 const MAIN_PATH_CONDITIONS = new Set(['not_opened', 'not_replied', 'not_clicked', 'not_accepted', 'default']);
@@ -430,7 +434,7 @@ async function processEnrollments(enrollments, ctx) {
   return report;
 }
 
-/* ═══════════════════ Détection de réponses (Gmail) ═══════════════════ */
+/* ═══════════════════ Détection de réponses (Gmail + Outlook) ═══════════════════ */
 
 async function insertActivity(userId, campaignId, prospect, type, dedupKey) {
   const [firstName, ...rest] = String(prospect.name || '').trim().split(/\s+/);
@@ -458,7 +462,9 @@ async function checkReplies(userId, campaigns, enrollments) {
   const report = { replies: 0, errors: [] };
 
   let account = await emailOutbound.getDefaultAccount(userId);
-  if (!account || account.provider !== 'gmail') return report;
+  // SMTP domaine custom : aucune API de lecture, l'arrêt sur réponse y reste
+  // manuel (décision Goran, non prioritaire).
+  if (!account || (account.provider !== 'gmail' && account.provider !== 'microsoft')) return report;
 
   // Prospects candidats : au moins un email envoyé, séquence encore vivante.
   const candidates = [];
@@ -488,76 +494,114 @@ async function checkReplies(userId, campaigns, enrollments) {
   }
   if (candidates.length === 0) return report;
 
-  try {
-    account = await emailOutbound.refreshTokenIfNeeded(account);
-  } catch (err) {
-    report.errors.push(`token: ${err.message}`);
-    return report;
+  // Gmail lit avec le jeton d'envoi, il faut donc le rafraîchir. Outlook lit
+  // avec un jeton Graph distinct : un jeton d'ENVOI expiré ne doit pas empêcher
+  // de voir les réponses, sinon une boîte à reconnecter ferait tourner les
+  // séquences à l'aveugle en plus de ne plus envoyer.
+  if (account.provider === 'gmail') {
+    try {
+      account = await emailOutbound.refreshTokenIfNeeded(account);
+    } catch (err) {
+      report.errors.push(`token: ${err.message}`);
+      return report;
+    }
   }
-  const accessToken = emailOutbound.decryptAccount(account).decryptedAccessToken;
-  if (!accessToken) return report;
-
   const byEmail = new Map(candidates.map(c => [String(c.prospect.email).toLowerCase(), c]));
-  const emails = [...byEmail.keys()];
   const replied = new Set();
 
-  try {
-    // Requêtes par lot de 15 adresses · Gmail accepte les groupes from:(a OR b).
-    for (let i = 0; i < emails.length; i += 15) {
-      const chunk = emails.slice(i, i + 15);
-      const q = encodeURIComponent(`in:inbox newer_than:${REPLY_LOOKBACK_DAYS}d from:(${chunk.join(' OR ')})`);
-      const list = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=25`);
-      for (const m of list.messages || []) {
-        const msg = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From`);
-        const fromHeader = (msg.payload?.headers || []).find(h => h.name === 'From')?.value || '';
-        const fromEmail = (fromHeader.match(/<([^>]+)>/)?.[1] || fromHeader).trim().toLowerCase();
-        const candidate = byEmail.get(fromEmail);
-        if (!candidate || replied.has(candidate.prospect.id)) continue;
-        const prospect = candidate.prospect;
-        replied.add(prospect.id);
+  // Une réponse trouvée se traite de la même façon quel que soit le fournisseur :
+  // on stoppe la séquence, on trace l'activité, on classe l'intention et on
+  // passe la main à l'autopilot (qui alerte l'utilisateur dans tous les cas).
+  const handleReply = async (candidate, { messageId, snippet }) => {
+    const prospect = candidate.prospect;
+    if (replied.has(prospect.id)) return;
+    replied.add(prospect.id);
 
-        if (candidate.enrollmentId) {
-          await stopEnrollment(candidate.enrollmentId, 'replied');
-        } else {
-          await stopSequence(userId, prospect.id, 'replied');
-        }
-        await insertActivity(userId, prospect.campaign_id, prospect, 'emailsReplied', m.id);
-        report.replies++;
+    if (candidate.enrollmentId) {
+      await stopEnrollment(candidate.enrollmentId, 'replied');
+    } else {
+      await stopSequence(userId, prospect.id, 'replied');
+    }
+    await insertActivity(userId, prospect.campaign_id, prospect, 'emailsReplied', messageId);
+    report.replies++;
 
-        // Classification d'intention puis autopilot · best-effort : la
-        // séquence est déjà stoppée, c'est l'essentiel.
-        try {
-          const claude = require('../api/claude');
-          const { intentEnumForPrompt, isKnownIntent } = require('./reply-intents');
-          const result = await claude.callClaude(
-            'Return only valid JSON.',
-            `Classify this reply from an outreach prospect.\n\nReply (snippet): "${(msg.snippet || '').slice(0, 500)}"\n\nReturn JSON: { "intent": ${intentEnumForPrompt()}, "sentiment": "positive"|"neutral"|"negative" }`,
-            200,
-            'native_reply_intent'
-          );
-          const intent = isKnownIntent(result.parsed?.intent) ? result.parsed.intent : 'question';
-          const autopilot = require('./conversation-autopilot');
-          await autopilot.processReply(userId, {
-            opportunityId: prospect.id,
-            email: prospect.email,
-            contactName: prospect.name,
-            company: prospect.company,
-            replyContent: msg.snippet || '',
-            intent,
-            sentiment: result.parsed?.sentiment || 'neutral',
-            channel: 'email',
-            // Conteneur de la conversation : le compteur de tours repart de
-            // zéro dans un nouveau workflow (la campagne est lue sur le
-            // contact lui-même, cf. conversation-autopilot).
-            enrollmentId: candidate.enrollmentId || null,
-          });
-        } catch (err) {
-          report.errors.push(`autopilot ${prospect.email}: ${err.message}`);
+    // Classification d'intention puis autopilot · best-effort : la séquence
+    // est déjà stoppée, c'est l'essentiel.
+    try {
+      const claude = require('../api/claude');
+      const { intentEnumForPrompt, isKnownIntent } = require('./reply-intents');
+      const result = await claude.callClaude(
+        'Return only valid JSON.',
+        `Classify this reply from an outreach prospect.\n\nReply (snippet): "${(snippet || '').slice(0, 500)}"\n\nReturn JSON: { "intent": ${intentEnumForPrompt()}, "sentiment": "positive"|"neutral"|"negative" }`,
+        200,
+        'native_reply_intent'
+      );
+      const intent = isKnownIntent(result.parsed?.intent) ? result.parsed.intent : 'question';
+      const autopilot = require('./conversation-autopilot');
+      await autopilot.processReply(userId, {
+        opportunityId: prospect.id,
+        email: prospect.email,
+        contactName: prospect.name,
+        company: prospect.company,
+        replyContent: snippet || '',
+        intent,
+        sentiment: result.parsed?.sentiment || 'neutral',
+        channel: 'email',
+        // Conteneur de la conversation : le compteur de tours repart de zéro
+        // dans un nouveau workflow (la campagne est lue sur le contact
+        // lui-même, cf. conversation-autopilot).
+        enrollmentId: candidate.enrollmentId || null,
+      });
+    } catch (err) {
+      report.errors.push(`autopilot ${prospect.email}: ${err.message}`);
+    }
+  };
+
+  if (account.provider === 'gmail') {
+    const accessToken = emailOutbound.decryptAccount(account).decryptedAccessToken;
+    if (!accessToken) return report;
+    const emails = [...byEmail.keys()];
+    try {
+      // Requêtes par lot de 15 adresses · Gmail accepte les groupes from:(a OR b).
+      for (let i = 0; i < emails.length; i += 15) {
+        const chunk = emails.slice(i, i + 15);
+        const q = encodeURIComponent(`in:inbox newer_than:${REPLY_LOOKBACK_DAYS}d from:(${chunk.join(' OR ')})`);
+        const list = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=25`);
+        for (const m of list.messages || []) {
+          const msg = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From`);
+          const fromHeader = (msg.payload?.headers || []).find(h => h.name === 'From')?.value || '';
+          const fromEmail = (fromHeader.match(/<([^>]+)>/)?.[1] || fromHeader).trim().toLowerCase();
+          const candidate = byEmail.get(fromEmail);
+          if (candidate) await handleReply(candidate, { messageId: m.id, snippet: msg.snippet || '' });
         }
       }
+    } catch (err) {
+      report.errors.push(`gmail: ${err.message}`);
+    }
+    return report;
+  }
+
+  // Outlook · la lecture demande un consentement distinct de l'envoi
+  // (migration 111). Sans lui, on ne crie pas d'erreur à chaque passage : on
+  // note une fois ce qui manque, l'interface propose le bouton.
+  const graph = require('./microsoft-graph');
+  const token = await graph.getReadToken(account);
+  if (!token) {
+    if (!graph.hasReadGrant(account)) {
+      report.errors.push(`outlook: lecture des réponses non autorisée pour ${account.email_address}`);
+    }
+    return report;
+  }
+
+  try {
+    const since = new Date(Date.now() - REPLY_LOOKBACK_DAYS * DAY_MS).toISOString();
+    const messages = await graph.listInboxSince(token, since);
+    for (const msg of messages) {
+      const candidate = byEmail.get(msg.fromEmail);
+      if (candidate) await handleReply(candidate, { messageId: msg.id, snippet: msg.snippet });
     }
   } catch (err) {
-    report.errors.push(`gmail: ${err.message}`);
+    report.errors.push(`outlook: ${err.message}`);
   }
 
   return report;

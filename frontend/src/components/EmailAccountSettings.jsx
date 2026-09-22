@@ -45,6 +45,7 @@ export default function EmailAccountSettings() {
   const [selectedPreset, setSelectedPreset] = useState(0);
 
   const [connectingOAuth, setConnectingOAuth] = useState(null);
+  const [connectingRead, setConnectingRead] = useState(null);
 
   const [form, setForm] = useState({
     emailAddress: '',
@@ -68,7 +69,12 @@ export default function EmailAccountSettings() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('email_connected')) {
-      setTestResult({ success: true, message: `${params.get('email_connected')} ${lang === 'en' ? 'connected successfully!' : 'connect\u00E9 avec succ\u00E8s !'}` });
+      const connected = params.get('email_connected');
+      setTestResult(connected === 'microsoft_read'
+        // Retour de l'autorisation de lecture, pas d'une nouvelle bo\u00EEte :
+        // \u00AB microsoft_read connect\u00E9 \u00BB ne voulait rien dire pour l'utilisateur.
+        ? { success: true, message: t('emailAccount.replyReadDone') }
+        : { success: true, message: `${connected} ${lang === 'en' ? 'connected successfully!' : 'connect\u00E9 avec succ\u00E8s !'}` });
       loadAccounts();
       window.history.replaceState({}, '', window.location.pathname);
     } else if (params.get('email_error')) {
@@ -85,6 +91,19 @@ export default function EmailAccountSettings() {
     } catch (err) {
       setTestResult({ success: false, error: err.message });
       setConnectingOAuth(null);
+    }
+  };
+
+  // Autorisation de LECTURE de la boîte Outlook, demandée à part de l'envoi :
+  // Azure AD ne délivre un jeton que pour une ressource à la fois.
+  const handleConnectRead = async (accountId) => {
+    setConnectingRead(accountId);
+    try {
+      const data = await request(`/nurture/email-accounts/${accountId}/connect/microsoft-read`);
+      if (data.url) window.location.href = data.url;
+    } catch (err) {
+      setTestResult({ success: false, error: err.message });
+      setConnectingRead(null);
     }
   };
 
@@ -321,6 +340,35 @@ export default function EmailAccountSettings() {
                     </button>
                   </div>
                 </div>
+
+                {/* Outlook : lire la boîte demande un consentement distinct de
+                    l'envoi. Sans lui, une séquence continue de tourner après
+                    une réponse et aucune alerte ne part · ça se dit ici. */}
+                {acc.provider === 'microsoft' && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                    padding: '8px 14px', borderTop: '1px solid var(--border)',
+                  }}>
+                    <div style={{ fontSize: 11, color: acc.reply_read_enabled ? 'var(--text-muted)' : 'var(--warning)' }}>
+                      <Icon
+                        name={acc.reply_read_enabled ? 'checkCircle' : 'alert'}
+                        size={11}
+                        style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }}
+                      />
+                      {acc.reply_read_enabled ? t('emailAccount.replyReadOn') : t('emailAccount.replyReadOff')}
+                    </div>
+                    {!acc.reply_read_enabled && (
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 10, padding: '4px 10px', flexShrink: 0 }}
+                        disabled={connectingRead === acc.id}
+                        onClick={() => handleConnectRead(acc.id)}
+                      >
+                        {connectingRead === acc.id ? '...' : t('emailAccount.replyReadConnect')}
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {sigOpenId === acc.id && (
                   <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
