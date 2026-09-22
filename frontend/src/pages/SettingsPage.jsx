@@ -468,6 +468,26 @@ export default function SettingsPage() {
     showToast(en ? 'Settings saved' : 'Paramètres enregistrés');
   }
 
+  /**
+   * Changement de langue. setLang() n'écrit que localStorage : sans la
+   * persistance backend, users.language reste sur l'ancienne valeur et pilote
+   * quand même le chat et les digests. L'erreur était avalée par un
+   * .catch(() => {}), l'interface affichait donc une préférence que la base
+   * n'avait pas enregistrée. On revient à la langue réellement persistée.
+   */
+  async function selectLanguage(next) {
+    // Pas de garde `next === lang` : l'interface et la base peuvent déjà être
+    // désynchronisées, cliquer sur la langue affichée doit pouvoir la rattraper.
+    const previous = lang;
+    setLang(next);
+    try {
+      await saveLanguage(next);
+    } catch {
+      setLang(previous);
+      showToast(t('settings.languageSaveError'), 'error');
+    }
+  }
+
   /* ─── Count configured keys ─── */
 
   const allKeyDefs = [...MAIN_TOOLS,...EXTENDED_TOOLS.flatMap(g => g.keys)];
@@ -1205,7 +1225,7 @@ export default function SettingsPage() {
             <label className="settings-pref-label">{t('settings.languageDesc')}</label>
             <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
               <button
-                onClick={() => { setLang('fr'); saveLanguage('fr').catch(() => {}); }}
+                onClick={() => selectLanguage('fr')}
                 style={{
                   padding: '8px 20px', borderRadius: 20, fontSize: 13, fontWeight: 600,
                   background: lang === 'fr' ? 'var(--blue)' : 'var(--bg-elevated)',
@@ -1217,7 +1237,7 @@ export default function SettingsPage() {
                 FR
               </button>
               <button
-                onClick={() => { setLang('en'); saveLanguage('en').catch(() => {}); }}
+                onClick={() => selectLanguage('en')}
                 style={{
                   padding: '8px 20px', borderRadius: 20, fontSize: 13, fontWeight: 600,
                   background: lang === 'en' ? 'var(--blue)' : 'var(--bg-elevated)',
