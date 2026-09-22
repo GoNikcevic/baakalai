@@ -25,6 +25,7 @@ const { sendNurtureEmail } = require('./email-outbound');
 const { notifyUser } = require('../socket');
 const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
 const { extractActivityDate } = require('./crm-activity-date');
+const { extractCreatedDate } = require('./crm-origin');
 const { applyMappings } = require('./crm-field-mapper');
 const { matchContacts } = require('./trigger-matching');
 const { getStagnantDays } = require('./stagnation');
@@ -344,6 +345,13 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
       // de la fraîcheur du deal. Voir lib/crm-activity-date.js.
       const lastActivityAt = extractActivityDate(crmProvider, raw);
 
+      // Date de naissance du contact DANS le CRM du client (migration 113).
+      // Encore une date distincte : `created_at` est notre date d'insertion,
+      // `last_activity_at` la récence commerciale, celle-ci l'ancienneté de la
+      // base. C'est elle qui rend mesurable le critère ICP « ≥ 12 mois
+      // d'historique ». Voir lib/crm-origin.js.
+      const crmCreatedAt = extractCreatedDate(crmProvider, raw);
+
       // Géo rapatriée du CRM (migration 093). Odoo renvoie country_id = [id, libellé] ;
       // Pipedrive n'a pas d'adresse standard sur les personnes → reste null (fallback
       // TLD email côté analytics).
@@ -385,6 +393,7 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
           ownerEmail,
           ownerId,
           lastActivityAt,
+          crmCreatedAt,
           country,
           city,
         });
@@ -406,6 +415,14 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         if (lastActivityAt && (!existing.last_activity_at
             || new Date(lastActivityAt) > new Date(existing.last_activity_at))) {
           updates.last_activity_at = lastActivityAt;
+        }
+        // Rattrapage des lignes antérieures à la migration 113 : c'est ce
+        // chemin, et non un ré-import manuel, qui remplira la date CRM des
+        // opportunités déjà en base. Écrit une seule fois, jamais réécrit : une
+        // date de naissance ne bouge pas, et la resynchroniser ferait varier
+        // l'ancienneté du CRM d'un passage de cron à l'autre.
+        if (crmCreatedAt && !existing.crm_created_at) {
+          updates.crm_created_at = crmCreatedAt;
         }
         // Sync owner
         if (crmOwnerId && crmOwnerId !== existing.crm_owner_id) {
