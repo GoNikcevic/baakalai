@@ -45,6 +45,22 @@ export default function AutopilotSettings({ scope }) {
   }, [scope]);
 
   const enabled = !!settings?.[scope];
+  // Un tour = une réponse écrite par baakalai et réellement envoyée.
+  const maxTurns = settings?.maxTurns?.[scope] ?? (scope === 'crm' ? 1 : 3);
+
+  const saveTurns = async (next) => {
+    const previous = maxTurns;
+    setSettings(prev => ({ ...prev, maxTurns: { ...prev.maxTurns, [scope]: next } }));
+    try {
+      await request('/crm/autopilot/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ maxTurns: { [scope]: next } }),
+      });
+    } catch (err) {
+      setSettings(prev => ({ ...prev, maxTurns: { ...prev.maxTurns, [scope]: previous } }));
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+  };
 
   const toggleEnabled = async () => {
     const next = !enabled;
@@ -117,12 +133,44 @@ export default function AutopilotSettings({ scope }) {
               {enabled ? t('autopilot.active') : t('autopilot.enable')}
             </button>
           </div>
+
+          {/* Jusqu'où baakalai va seul. Éteint, il s'arrête à la première
+              réponse et prévient : c'est le « rends-moi la main », il n'a donc
+              pas besoin d'une option de plus. */}
+          {enabled && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{t('autopilot.turnsTitle')}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, maxWidth: 560 }}>
+                {t('autopilot.turnsDesc')}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[1, 3, 5].map(n => (
+                  <button
+                    key={n}
+                    className={`btn ${maxTurns === n ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: 11, padding: '6px 14px' }}
+                    onClick={() => saveTurns(n)}
+                  >
+                    {t(`autopilot.turns${n}`)}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
+                {t('autopilot.turnsHint', { count: maxTurns })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {!enabled && (
         <div className="card" style={{ marginBottom: 16, background: 'var(--bg-elevated)' }}>
           <div className="card-body" style={{ padding: 20 }}>
+            {/* Ce qui se passe SANS autopilot. C'était l'angle mort : rien ne
+                disait à l'utilisateur qu'il garde la main et qu'on le prévient. */}
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+              {t('autopilot.offBehaviour')}
+            </div>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{t('autopilot.howItWorks')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
               {steps.map((step, i) => (

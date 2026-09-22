@@ -33,10 +33,36 @@ const { outcomeOf, instructionFor } = require('./reply-intents');
 // Garde-fou des conversations qui ne concluent pas. Les deux issues nettes ont
 // leur propre sortie, sur l'intention détectée et non sur un compteur : une
 // demande de RDV déclenche une proposition de créneaux puis l'arrêt, un refus
-// coupe l'autopilot sur le contact. MAX_TURNS ne sert qu'au troisième cas · 
-// l'interlocuteur enchaîne les questions sans jamais dire oui ni non. Sans
-// cette borne, l'IA discuterait indéfiniment ; au-delà, elle rend la main.
-const MAX_TURNS = 5;
+// coupe l'autopilot sur le contact. Le nombre de tours ne sert qu'au troisième
+// cas · l'interlocuteur enchaîne les questions sans jamais dire oui ni non.
+//
+// Un TOUR = une réponse écrite par baakalai et réellement envoyée. Il n'est
+// plus en dur : chaque portée porte le sien (arbitrage Goran du 2026-09-22),
+// parce que répondre seul à un inconnu et répondre seul à un client qui paie
+// n'engagent pas le même risque.
+//
+// « S'arrêter à la première réponse et rendre la main » ne s'exprime PAS par
+// zéro tour mais en éteignant la portée : deux réglages pour une même chose
+// obligeraient l'interface à les réconcilier, et l'un des deux finirait par
+// mentir. Portée éteinte (défaut CRM) = alerte, et rien d'autre.
+// Ces valeurs ne servent donc que quand la portée est allumée : 3 tours en
+// prospection (qualifier puis rendre la main), 1 côté clients (prudence, la
+// conversation appartient à l'humain).
+const DEFAULT_MAX_TURNS = { prospection: 3, crm: 1 };
+const TURNS_CEILING = 5;
+
+/**
+ * Profondeur retenue pour une portée. Bornée à TURNS_CEILING : un réglage
+ * ancien ou fabriqué à la main ne doit pas autoriser une conversation sans fin.
+ * Le minimum est 1, jamais 0 · « ne rien écrire » s'exprime en éteignant la
+ * portée, sinon deux réglages diraient la même chose et l'un finirait par
+ * mentir. Valeur absente ou illisible = le défaut de la portée.
+ */
+function clampTurns(value, fallback) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, 1), TURNS_CEILING);
+}
 const MIN_DELAY_MS = 2 * 60 * 60 * 1000;  // 2 hours
 const MAX_DELAY_MS = 4 * 60 * 60 * 1000;  // 4 hours
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -50,11 +76,17 @@ const NOT_NOW_FOLLOWUP_DAYS = 21; // matches the "in a few weeks" wording used i
  * Called by response-analysis-agent after analyzing a reply.
  *
  * @param {string} userId
- * @param {object} opts - { opportunityId, email, contactName, company, replyContent, intent, sentiment, channel }
+ * @param {object} opts - { opportunityId, email, contactName, company, replyContent, intent,
+ *   sentiment, channel, enrollmentId } · enrollmentId borne le compteur de tours au workflow
+ *   en cours (la campagne, elle, est lue sur le contact).
  * @returns {{ action: 'replied'|'scheduled'|'stopped'|'handoff', reason: string }}
  */
 async function processReply(userId, opts) {
-  const { opportunityId, email, contactName, company, replyContent, intent, sentiment, channel = 'email' } = opts;
+  const {
+    opportunityId, email, contactName, company, replyContent, intent, sentiment, channel = 'email',
+    // Conteneur de la conversation · borne le compteur de tours (migration 110).
+    enrollmentId = null,
+  } = opts;
 
   if (!opportunityId || !email) {
     return { action: 'skipped', reason: 'Missing opportunityId or email' };
@@ -69,14 +101,36 @@ async function processReply(userId, opts) {
   if (!opp.rows[0]) {
     return { action: 'skipped', reason: 'Unknown opportunity' };
   }
-  if (opp.rows[0].autopilot_enabled === false) {
-    return { action: 'skipped', reason: 'Autopilot disabled for this contact' };
-  }
 
   const population = populationOf(opp.rows[0]);
   const settings = await getAutopilotSettings(userId);
-  if (!settings[population]) {
-    return { action: 'skipped', reason: `Autopilot disabled for ${population}` };
+  const autopilotOn = opp.rows[0].autopilot_enabled !== false && !!settings[population];
+  const maxTurns = autopilotOn ? settings.maxTurns[population] : 0;
+  const campaignId = opp.rows[0].campaign_id || null;
+
+  // L'alerte part sur CHAQUE réponse, avant toute décision d'autopilot : c'est
+  // le seul signal de l'utilisateur quand baakalai ne répond pas, et il doit
+  // aussi savoir quand baakalai s'apprête à répondre pour pouvoir l'annuler
+  // pendant les 2 à 4 heures d'attente.
+  // Best-effort : une alerte en échec ne doit pas avaler la réponse.
+  try {
+    const { notifyReply } = require('./reply-alert');
+    await notifyReply(userId, {
+      opportunityId, contactName, company, email, replyContent, intent, channel, population,
+      // Un refus met fin à l'échange quel que soit le réglage : la main revient
+      // à l'utilisateur dans tous les cas.
+      handedOver: !autopilotOn || outcomeOf(intent) === 'stop',
+    });
+  } catch (err) {
+    logger.warn('autopilot', `Alerte de réponse non envoyée (${email}): ${err.message}`);
+  }
+
+  // Autopilot éteint = baakalai n'écrit rien et ne touche à rien. Le marquage
+  // « perdu » sur un refus reste un geste automatique : il n'a lieu que si
+  // l'utilisateur a accepté que l'IA agisse sur cette population.
+  if (!autopilotOn) {
+    await logConversation(userId, opportunityId, email, 'handoff', { intent, reason: 'autopilot_off' });
+    return { action: 'handoff', reason: 'Autopilot off, conversation handed over' };
   }
 
   // Stop conditions
@@ -101,17 +155,20 @@ async function processReply(userId, opts) {
       instruction: instructionFor(intent),
     });
 
-    await scheduleReply(userId, opportunityId, email, contactName, reply, channel);
+    await scheduleReply(userId, opportunityId, email, contactName, reply, channel, { campaignId, enrollmentId });
     await db.opportunities.update(opportunityId, { status: 'meeting' });
     await logConversation(userId, opportunityId, email, 'meeting_proposed', { reply });
     return { action: 'replied', reason: 'Meeting proposal sent' };
   }
 
-  // Check turn count
-  const turnCount = await getConversationTurnCount(userId, email);
-  if (turnCount >= MAX_TURNS) {
-    await logConversation(userId, opportunityId, email, 'handoff', { turns: turnCount });
-    return { action: 'handoff', reason: `Max turns reached (${MAX_TURNS})` };
+  // Check turn count · borné au conteneur de la conversation (cette campagne,
+  // ce workflow), pas à la vie entière de l'adresse : un prospect qui n'avait
+  // pas répondu et qu'on relance dans une nouvelle campagne 60 jours plus tard
+  // repartait sinon avec un compteur déjà épuisé.
+  const turnCount = await getConversationTurnCount(userId, { opportunityId, campaignId, enrollmentId });
+  if (turnCount >= maxTurns) {
+    await logConversation(userId, opportunityId, email, 'handoff', { turns: turnCount, maxTurns });
+    return { action: 'handoff', reason: `Max turns reached (${maxTurns})` };
   }
 
   // L'instruction vient de la déclaration de l'intention ; une valeur inconnue
@@ -127,9 +184,13 @@ async function processReply(userId, opts) {
     });
   }
 
-  // If we're at turn 3+, push toward meeting
-  if (turnCount >= 3 && intent !== 'not_now') {
-    instruction += ' We have been exchanging for a while, propose a quick 15-minute call to discuss further.';
+  // Dernier tour autorisé : c'est maintenant ou jamais pour proposer le RDV.
+  // Le seuil était en dur à 3, ce qui ne voulait plus rien dire une fois le
+  // nombre de tours réglable · à 1 tour, l'unique réponse ne demandait jamais
+  // le rendez-vous, et la main revenait sans rien avoir tenté.
+  const lastTurn = turnCount + 1 >= maxTurns;
+  if (lastTurn && intent !== 'not_now') {
+    instruction += ' This is the last message before handing over to a human, propose a quick 15-minute call to discuss further.';
   }
 
   const reply = await generateReply(userId, {
@@ -138,10 +199,10 @@ async function processReply(userId, opts) {
     instruction,
   });
 
-  await scheduleReply(userId, opportunityId, email, contactName, reply, channel);
-  await logConversation(userId, opportunityId, email, 'auto_reply', { intent, turn: turnCount + 1, reply });
+  await scheduleReply(userId, opportunityId, email, contactName, reply, channel, { campaignId, enrollmentId });
+  await logConversation(userId, opportunityId, email, 'auto_reply', { intent, turn: turnCount + 1, maxTurns, reply });
 
-  return { action: 'scheduled', reason: `Auto-reply scheduled (turn ${turnCount + 1}/${MAX_TURNS})` };
+  return { action: 'scheduled', reason: `Auto-reply scheduled (turn ${turnCount + 1}/${maxTurns})` };
 }
 
 /**
@@ -226,14 +287,17 @@ ${channel === 'linkedin'
 /**
  * Schedule a reply with a human-like delay.
  */
-async function scheduleReply(userId, opportunityId, toEmail, toName, reply, channel) {
+async function scheduleReply(userId, opportunityId, toEmail, toName, reply, channel, container = {}) {
   const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
   const scheduledAt = new Date(Date.now() + delay);
 
   await db.query(`
-    INSERT INTO autopilot_queue (user_id, opportunity_id, to_email, to_name, channel, content, scheduled_at, status)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
-  `, [userId, opportunityId, toEmail, toName, channel, JSON.stringify(reply), scheduledAt]);
+    INSERT INTO autopilot_queue (user_id, opportunity_id, campaign_id, enrollment_id, to_email, to_name, channel, content, scheduled_at, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+  `, [
+    userId, opportunityId, container.campaignId || null, container.enrollmentId || null,
+    toEmail, toName, channel, JSON.stringify(reply), scheduledAt,
+  ]);
 
   logger.info('autopilot', `Scheduled ${channel} reply to ${toName} at ${scheduledAt.toISOString()}`);
 }
@@ -367,12 +431,30 @@ async function getConversationHistory(userId, email) {
 }
 
 /**
- * Count autopilot turns for a conversation.
+ * Nombre de tours déjà joués dans CETTE conversation · un tour = une réponse
+ * écrite par baakalai et réellement envoyée (les brouillons en file ne comptent
+ * pas, ils sont encore annulables).
+ *
+ * Le conteneur borne le compteur : la campagne de prospection, ou le workflow
+ * CRM. Relancer un prospect dans une nouvelle campagne rouvre donc un compteur
+ * neuf, ce qui n'était pas le cas quand il se comptait par adresse email sur
+ * toute la vie du compte. Hors campagne et hors workflow (relance CRM issue
+ * d'une règle), il retombe sur le contact, ce qui reste la bonne unité.
  */
-async function getConversationTurnCount(userId, email) {
+async function getConversationTurnCount(userId, { opportunityId, campaignId = null, enrollmentId = null }) {
+  const scope = enrollmentId
+    ? { clause: 'AND enrollment_id = $3', value: enrollmentId }
+    : campaignId
+      ? { clause: 'AND campaign_id = $3', value: campaignId }
+      : null;
+
+  const params = [userId, opportunityId];
+  if (scope) params.push(scope.value);
+
   const result = await db.query(
-    `SELECT COUNT(*) as count FROM autopilot_queue WHERE user_id = $1 AND to_email = $2 AND status = 'sent'`,
-    [userId, email]
+    `SELECT COUNT(*) as count FROM autopilot_queue
+     WHERE user_id = $1 AND opportunity_id = $2 AND status = 'sent' ${scope ? scope.clause : ''}`,
+    params
   );
   return parseInt(result.rows[0]?.count || '0', 10);
 }
@@ -397,6 +479,10 @@ async function getAutopilotSettings(userId) {
   return {
     prospection: settings.autopilot_prospection_enabled ?? legacy,
     crm: settings.autopilot_crm_enabled ?? false,
+    maxTurns: {
+      prospection: clampTurns(settings.autopilot_prospection_max_turns, DEFAULT_MAX_TURNS.prospection),
+      crm: clampTurns(settings.autopilot_crm_max_turns, DEFAULT_MAX_TURNS.crm),
+    },
   };
 }
 
@@ -411,4 +497,12 @@ async function logConversation(userId, opportunityId, email, event, data) {
   );
 }
 
-module.exports = { processReply, sendScheduledReplies, getAutopilotSettings, getConversationHistory };
+module.exports = {
+  processReply,
+  sendScheduledReplies,
+  getAutopilotSettings,
+  getConversationHistory,
+  clampTurns,
+  TURNS_CEILING,
+  DEFAULT_MAX_TURNS,
+};

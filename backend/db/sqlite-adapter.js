@@ -288,6 +288,7 @@ function initSchema() {
       email_crm_digest INTEGER DEFAULT 1,
       email_weekly_report INTEGER DEFAULT 1,
       email_tips INTEGER DEFAULT 1,
+      email_reply_alert INTEGER DEFAULT 1,
       -- Qualification ICP (migration 106) : NULL y signifie « inconnu »,
       -- jamais « zéro » (cf. lib/icp-signals.js).
       job_role TEXT,

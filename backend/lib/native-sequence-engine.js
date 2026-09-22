@@ -546,6 +546,10 @@ async function checkReplies(userId, campaigns, enrollments) {
             intent,
             sentiment: result.parsed?.sentiment || 'neutral',
             channel: 'email',
+            // Conteneur de la conversation : le compteur de tours repart de
+            // zéro dans un nouveau workflow (la campagne est lue sur le
+            // contact lui-même, cf. conversation-autopilot).
+            enrollmentId: candidate.enrollmentId || null,
           });
         } catch (err) {
           report.errors.push(`autopilot ${prospect.email}: ${err.message}`);

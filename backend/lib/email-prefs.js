@@ -2,10 +2,11 @@
  * Email Preferences · opt-out par catégorie pour les emails système (Resend).
  *
  * RGPD art. 21 / ePrivacy : tout email non strictement nécessaire au service
- * doit être désinscriptible simplement. Trois catégories (migration 101) :
+ * doit être désinscriptible simplement. Quatre catégories (migrations 101, 110) :
  *   crm_digest    → digest CRM du lundi
  *   weekly_report → rapport hebdo & tendances
  *   tips          → conseils & découverte (onboarding + rétention)
+ *   reply_alert   → un prospect ou un client vient de répondre
  *
  * Deux chemins de désinscription :
  *   - Paramètres > Notifications (toggles, routes/settings.js)
@@ -25,12 +26,14 @@ const CATEGORIES = {
   crm_digest: 'email_crm_digest',
   weekly_report: 'email_weekly_report',
   tips: 'email_tips',
+  reply_alert: 'email_reply_alert',
 };
 
 const CATEGORY_LABELS = {
   crm_digest: { fr: 'le digest CRM du lundi', en: 'the Monday CRM digest' },
   weekly_report: { fr: 'le rapport hebdomadaire', en: 'the weekly report' },
   tips: { fr: 'les conseils et découvertes', en: 'tips & product discovery' },
+  reply_alert: { fr: 'l\'alerte quand quelqu\'un vous répond', en: 'the alert when someone replies to you' },
 };
 
 function isValidCategory(category) {

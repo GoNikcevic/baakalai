@@ -1130,6 +1130,7 @@ export default function SettingsPage() {
               {[
                 { key: 'crm_digest', label: t('settings.emailPrefCrmDigest'), desc: t('settings.emailPrefCrmDigestDesc') },
                 { key: 'weekly_report', label: t('settings.emailPrefWeeklyReport'), desc: t('settings.emailPrefWeeklyReportDesc') },
+                { key: 'reply_alert', label: t('settings.emailPrefReplyAlert'), desc: t('settings.emailPrefReplyAlertDesc') },
                 { key: 'tips', label: t('settings.emailPrefTips'), desc: t('settings.emailPrefTipsDesc') },
               ].map(({ key, label, desc }) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--border)' }}>

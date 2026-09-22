@@ -2060,11 +2060,24 @@ router.patch('/autopilot/settings', async (req, res, next) => {
     // et répondre tout seul à un client en cours n'engagent pas le même risque.
     // `enabled` est l'ancien réglage unique, encore accepté pour ne pas casser
     // un appel existant · il ne pilote que la prospection.
-    const { prospection, crm, enabled } = req.body;
+    const { prospection, crm, enabled, maxTurns } = req.body;
     const updates = {};
     if (prospection !== undefined) updates.autopilot_prospection_enabled = !!prospection;
     else if (enabled !== undefined) updates.autopilot_prospection_enabled = !!enabled;
     if (crm !== undefined) updates.autopilot_crm_enabled = !!crm;
+
+    // Profondeur de conversation, par portée (1 à 5 tours). Zéro n'est pas une
+    // valeur : « ne rien écrire » s'exprime en éteignant la portée.
+    const { TURNS_CEILING } = require('../lib/conversation-autopilot');
+    for (const scope of ['prospection', 'crm']) {
+      const value = maxTurns?.[scope];
+      if (value === undefined) continue;
+      const n = parseInt(value, 10);
+      if (!Number.isFinite(n) || n < 1 || n > TURNS_CEILING) {
+        return res.status(400).json({ error: `maxTurns.${scope} doit être un entier entre 1 et ${TURNS_CEILING}` });
+      }
+      updates[`autopilot_${scope}_max_turns`] = n;
+    }
 
     await db.query(
       `UPDATE users SET settings = COALESCE(settings, '{}')::jsonb || $1::jsonb WHERE id = $2`,
