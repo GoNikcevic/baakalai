@@ -207,12 +207,103 @@ async function listInboxSince(accessToken, sinceIso) {
   return messages;
 }
 
+/**
+ * Codes Azure AD qui signifient « il faut un administrateur », pas « réessayez ».
+ *
+ * POURQUOI CETTE DISTINCTION EXISTE
+ * ---------------------------------
+ * Tant que baakal.ai n'est pas un éditeur vérifié chez Microsoft, la plupart
+ * des tenants refusent le consentement utilisateur : le réglage par défaut
+ * d'Entra ID n'autorise l'utilisateur à consentir que pour les applications
+ * d'éditeurs vérifiés. Le testeur beta n'y peut rien, et réessayer ne marchera
+ * jamais. Seul son administrateur peut débloquer, ou la vérification d'éditeur
+ * côté baakalai.
+ *
+ * Les deux callbacks jetaient ce diagnostic : ils ne lisaient même pas
+ * `req.query.error`, partaient échanger un `code` inexistant, et affichaient
+ * « Échec de connexion, veuillez réessayer ». Le testeur bouclait sans jamais
+ * savoir qu'il devait demander à son IT.
+ */
+const ADMIN_CONSENT_CODES = [
+  'AADSTS65001',   // l'utilisateur ou l'administrateur n'a pas consenti
+  'AADSTS90094',   // l'octroi demande une autorisation d'administrateur
+  'AADSTS900941',  // consentement administrateur requis sur ce tenant
+  'AADSTS50194',   // application non configurée comme multi-tenant
+];
+
+/** L'utilisateur a explicitement refusé : ce n'est pas un problème d'admin. */
+const USER_DECLINED_CODES = ['AADSTS65004', 'AADSTS50105'];
+
+/**
+ * Classe le retour d'Azure AD sur le callback OAuth.
+ *
+ * @param {object} query  req.query du callback
+ * @returns {{kind: string, code: string|null, description: string|null}}
+ *   kind vaut 'ok' (rien à signaler), 'admin_consent_required',
+ *   'user_declined', 'admin_consent_granted' ou 'unknown'.
+ */
+function classifyCallback(query = {}) {
+  // Retour du flux de consentement ADMINISTRATEUR : Azure renvoie
+  // `admin_consent=True` et AUCUN code d'autorisation. Sans ce cas, ce retour
+  // parfaitement réussi partait dans la branche d'erreur.
+  if (query.admin_consent && !query.code) {
+    const accorde = String(query.admin_consent).toLowerCase() === 'true';
+    return { kind: accorde ? 'admin_consent_granted' : 'user_declined', code: null, description: null };
+  }
+
+  const description = query.error_description || null;
+  if (!query.error && query.code) return { kind: 'ok', code: null, description: null };
+  if (!query.error && !query.code) {
+    return { kind: 'unknown', code: null, description: 'Azure a répondu sans code ni erreur' };
+  }
+
+  const texte = String(description || '');
+  const code = (texte.match(/AADSTS\d+/) || [])[0] || null;
+
+  if (code && ADMIN_CONSENT_CODES.includes(code)) {
+    return { kind: 'admin_consent_required', code, description };
+  }
+  if (code && USER_DECLINED_CODES.includes(code)) {
+    return { kind: 'user_declined', code, description };
+  }
+  // `consent_required` sans code exploitable : Azure le renvoie aussi quand le
+  // tenant bloque le consentement utilisateur. On penche vers l'admin, parce
+  // que c'est le cas de loin le plus fréquent tant qu'on n'est pas vérifié.
+  if (query.error === 'consent_required') {
+    return { kind: 'admin_consent_required', code, description };
+  }
+  return { kind: 'unknown', code, description };
+}
+
+/**
+ * Lien que le testeur transmet à l'administrateur de son organisation.
+ *
+ * Accorde le consentement pour tout le tenant, une fois pour toutes. C'est le
+ * contournement tant que la vérification d'éditeur n'est pas obtenue, et il
+ * reste utile après : beaucoup d'organisations verrouillent le consentement
+ * utilisateur même pour les éditeurs vérifiés.
+ *
+ * `redirectUri` doit être une URI déjà enregistrée sur l'application Azure,
+ * sinon Microsoft refuse la demande. On réutilise celle du callback d'envoi.
+ */
+function adminConsentUrl({ redirectUri, state }) {
+  const params = new URLSearchParams({
+    client_id: process.env.MICROSOFT_CLIENT_ID,
+    redirect_uri: redirectUri,
+  });
+  if (state) params.set('state', state);
+  return `https://login.microsoftonline.com/common/adminconsent?${params}`;
+}
+
 module.exports = {
   GRAPH_SCOPES,
   isConfigured,
   hasReadGrant,
   authorizeUrl,
   exchangeCode,
+  classifyCallback,
+  adminConsentUrl,
+  ADMIN_CONSENT_CODES,
   storeReadGrant,
   revokeReadGrant,
   getReadToken,

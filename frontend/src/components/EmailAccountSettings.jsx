@@ -47,6 +47,12 @@ export default function EmailAccountSettings() {
   const [connectingOAuth, setConnectingOAuth] = useState(null);
   const [connectingRead, setConnectingRead] = useState(null);
 
+  // Microsoft a refusé faute de consentement administrateur : cas à part, qui
+  // ne se règle pas en réessayant. Voir lib/microsoft-graph.js côté serveur.
+  const [needsMsAdmin, setNeedsMsAdmin] = useState(false);
+  const [msAdminLink, setMsAdminLink] = useState(null);
+  const [msAdminCopied, setMsAdminCopied] = useState(false);
+
   const [form, setForm] = useState({
     emailAddress: '',
     smtpHost: 'ssl0.ovh.net',
@@ -70,6 +76,14 @@ export default function EmailAccountSettings() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('email_connected')) {
       const connected = params.get('email_connected');
+      // L'administrateur vient d'autoriser baakalai pour toute l'organisation :
+      // aucune boîte n'a été connectée pour autant, c'est l'étape d'avant.
+      if (connected === 'microsoft_admin_consent') {
+        setNeedsMsAdmin(false);
+        setTestResult({ success: true, message: t('emailAccount.msAdminGranted') });
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
       setTestResult(connected === 'microsoft_read'
         // Retour de l'autorisation de lecture, pas d'une nouvelle bo\u00EEte :
         // \u00AB microsoft_read connect\u00E9 \u00BB ne voulait rien dire pour l'utilisateur.
@@ -78,10 +92,33 @@ export default function EmailAccountSettings() {
       loadAccounts();
       window.history.replaceState({}, '', window.location.pathname);
     } else if (params.get('email_error')) {
-      setTestResult({ success: false, error: lang === 'en' ? 'Connection failed. Please try again.' : '\u00C9chec de connexion. Veuillez r\u00E9essayer.' });
+      const err = params.get('email_error');
+      // \u00AB Veuillez r\u00E9essayer \u00BB \u00E9tait le pire message possible sur ce cas-l\u00E0 :
+      // quand Microsoft exige un administrateur, r\u00E9essayer ne marchera jamais.
+      // Le testeur bouclait sans savoir qu'il devait s'adresser \u00E0 son IT.
+      if (err === 'microsoft_admin_consent_required' || err === 'microsoft_read_admin_consent_required') {
+        setNeedsMsAdmin(true);
+        setTestResult(null);
+      } else if (err === 'microsoft_declined' || err === 'microsoft_read_declined') {
+        setTestResult({ success: false, error: t('emailAccount.msDeclined') });
+      } else {
+        setTestResult({ success: false, error: lang === 'en' ? 'Connection failed. Please try again.' : '\u00C9chec de connexion. Veuillez r\u00E9essayer.' });
+      }
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  // Lien de consentement \u00E0 transmettre \u00E0 l'administrateur de l'organisation.
+  // Demand\u00E9 au serveur seulement quand le cas se pr\u00E9sente : il ouvre un \u00E9tat
+  // c\u00F4t\u00E9 backend, inutile de le faire \u00E0 chaque affichage des r\u00E9glages.
+  const loadMsAdminLink = useCallback(async () => {
+    try {
+      const data = await request('/nurture/email-accounts/connect/microsoft/admin-consent');
+      if (data.url) setMsAdminLink(data.url);
+    } catch { /* le texte d'explication reste utile sans le lien */ }
+  }, []);
+
+  useEffect(() => { if (needsMsAdmin && !msAdminLink) loadMsAdminLink(); }, [needsMsAdmin, msAdminLink, loadMsAdminLink]);
 
   const handleOAuthConnect = async (provider) => {
     setConnectingOAuth(provider);
@@ -459,7 +496,50 @@ export default function EmailAccountSettings() {
             color: testResult.success ? 'var(--success)' : 'var(--danger)',
           }}>
             <Icon name={testResult.success ? 'checkCircle' : 'close'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-            {testResult.success ? 'Connexion r\u00E9ussie' : testResult.error}
+            {/* `message` \u00E9tait calcul\u00E9 puis jet\u00E9 : tous les retours d'OAuth
+                affichaient \u00AB Connexion r\u00E9ussie \u00BB \u00E0 la place de leur texte. */}
+            {testResult.success
+              ? (testResult.message || t('emailAccount.connectionOk'))
+              : testResult.error}
+          </div>
+        )}
+
+        {/* Refus Microsoft faute de consentement administrateur.
+            Bloc distinct du bandeau d'erreur : ce n'est pas un \u00E9chec que
+            l'utilisateur peut corriger en r\u00E9essayant, c'est une action \u00E0
+            d\u00E9l\u00E9guer, et le ton doit le dire.
+            Non persist\u00E9 : il dispara\u00EEt au rechargement de la page. Relancer la
+            connexion reproduit le refus et le r\u00E9affiche, donc rien n'est perdu
+            d\u00E9finitivement, et on \u00E9vite de stocker un \u00E9tat de plus. */}
+        {needsMsAdmin && (
+          <div style={{
+            padding: '12px 14px', borderRadius: 8, marginBottom: 12, fontSize: 12,
+            background: 'rgba(255,184,0,0.1)', border: '1px solid rgba(255,184,0,0.35)',
+            color: 'var(--text)',
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>
+              <Icon name="alert" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+              {t('emailAccount.msAdminTitle')}
+            </div>
+            <div style={{ lineHeight: 1.55, marginBottom: 10, opacity: 0.9 }}>
+              {t('emailAccount.msAdminBody')}
+            </div>
+            {msAdminLink && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(msAdminLink);
+                  setMsAdminCopied(true);
+                  setTimeout(() => setMsAdminCopied(false), 2500);
+                }}
+                style={{
+                  padding: '7px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                  border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)',
+                }}
+              >
+                {msAdminCopied ? t('emailAccount.msAdminCopied') : t('emailAccount.msAdminCopy')}
+              </button>
+            )}
           </div>
         )}
 

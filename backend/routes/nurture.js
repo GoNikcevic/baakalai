@@ -1133,6 +1133,46 @@ router.get('/email-accounts/connect/microsoft', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/nurture/email-accounts/connect/microsoft/admin-consent
+//
+// Lien à transmettre à l'administrateur de l'organisation, qui accorde le
+// consentement pour tout le tenant en une fois.
+//
+// POURQUOI CE DÉTOUR EXISTE
+// -------------------------
+// baakal.ai n'est pas encore un éditeur vérifié chez Microsoft. Le réglage par
+// défaut d'Entra ID n'autorise le consentement utilisateur que pour les
+// éditeurs vérifiés : le testeur beta se fait refuser, et rien de ce qu'il fait
+// ne peut y changer quoi que ce soit. Ce lien est la seule sortie tant que la
+// vérification n'est pas obtenue, et il reste utile après, beaucoup
+// d'organisations verrouillant le consentement utilisateur en toutes
+// circonstances.
+//
+// L'administrateur n'a pas besoin d'un compte baakalai : le callback est
+// public, et l'état est stocké côté serveur, pas dans sa session.
+router.get('/email-accounts/connect/microsoft/admin-consent', (req, res, next) => {
+  try {
+    const graph = require('../lib/microsoft-graph');
+    if (!graph.isConfigured()) return res.status(500).json({ error: 'Microsoft OAuth not configured' });
+    if (_oauthStates.size >= MAX_OAUTH_STATES) return res.status(429).json({ error: 'Too many pending OAuth requests' });
+
+    const state = require('crypto').randomBytes(16).toString('hex');
+    // Fenêtre plus large que les 10 minutes d'un OAuth ordinaire : le testeur
+    // doit transmettre le lien à son IT, qui ne le traitera pas dans la minute.
+    _oauthStates.set(state, {
+      userId: req.user.id, provider: 'microsoft-admin-consent',
+      expiresAt: Date.now() + 7 * 24 * 3600 * 1000,
+    });
+
+    res.json({
+      url: graph.adminConsentUrl({
+        redirectUri: APP_URL + '/api/nurture/email-accounts/callback/microsoft',
+        state,
+      }),
+    });
+  } catch (err) { next(err); }
+});
+
 // PATCH /api/nurture/email-accounts/:id/default · boîte d'envoi par défaut
 //
 // Utilisée par tout ce qui n'est pas une campagne : relances CRM, workflows,
@@ -1206,8 +1246,16 @@ async function microsoftReadCallback(req, res) {
   }
   _oauthStates.delete(state);
 
+  const graph = require('../lib/microsoft-graph');
+  // Même défaut que sur le callback d'envoi : le refus d'Azure était ignoré.
+  const verdict = graph.classifyCallback(req.query);
+  if (verdict.kind !== 'ok') {
+    const detail = verdict.code ? ` [${verdict.code}]` : '';
+    logger.warn('nurture', `Lecture Outlook · ${verdict.kind}${detail} : ${verdict.description || 'sans detail'}`);
+    return res.redirect(APP_URL + '/settings' + microsoftRedirectFor(verdict.kind, 'microsoft_read'));
+  }
+
   try {
-    const graph = require('../lib/microsoft-graph');
     const tokens = await graph.exchangeCode(code, APP_URL + '/api/nurture/email-accounts/callback/microsoft-read');
     await graph.storeReadGrant(oauthData.accountId, tokens);
     logger.info('nurture', `Lecture Outlook autorisée pour le compte ${oauthData.accountId}`);
@@ -1218,15 +1266,62 @@ async function microsoftReadCallback(req, res) {
   }
 }
 
+/**
+ * Traduit le verdict d'Azure AD en paramètre de retour vers l'app.
+ *
+ * Le consentement accordé par un administrateur est un SUCCÈS, pas une erreur :
+ * il revient sur le même callback, avec `admin_consent=True` et sans code
+ * d'autorisation. Il doit donc sortir par `email_connected`.
+ */
+function microsoftRedirectFor(kind, prefixeErreur = 'microsoft') {
+  if (kind === 'admin_consent_granted') return '?email_connected=microsoft_admin_consent';
+  if (kind === 'admin_consent_required') return `?email_error=${prefixeErreur}_admin_consent_required`;
+  if (kind === 'user_declined') return `?email_error=${prefixeErreur}_declined`;
+  return `?email_error=${prefixeErreur}_failed`;
+}
+
 // GET /api/nurture/email-accounts/callback/microsoft · Microsoft OAuth callback
 async function microsoftCallback(req, res) {
   const { code, state } = req.query;
+  const graphMod = require('../lib/microsoft-graph');
+
+  // Le retour de consentement ADMINISTRATEUR se traite AVANT la validation de
+  // l'état, et volontairement.
+  //
+  // `_oauthStates` vit en mémoire : Railway redémarre à chaque déploiement, et
+  // le lien transmis à un IT peut très bien être ouvert plusieurs jours plus
+  // tard. Exiger l'état ici rendrait le contournement inutilisable dès le
+  // déploiement suivant, c'est-à-dire précisément quand on en a besoin.
+  //
+  // Ne rien exiger est sans danger : ce retour ne porte aucun code
+  // d'autorisation, aucun jeton n'est échangé et rien n'est écrit en base. Le
+  // consentement est accordé côté Microsoft, pour tout le tenant ; ici on se
+  // contente de l'annoncer. L'état, quand il a survécu, ne sert qu'à faire le
+  // ménage dans la map.
+  if (req.query.admin_consent) {
+    if (state) _oauthStates.delete(state);
+    const verdictAdmin = graphMod.classifyCallback(req.query);
+    logger.info('email-oauth', `Consentement administrateur Microsoft · ${verdictAdmin.kind} (tenant ${req.query.tenant || 'inconnu'})`);
+    return res.redirect(APP_URL + '/settings' + microsoftRedirectFor(verdictAdmin.kind));
+  }
+
   const oauthData = _oauthStates.get(state);
 
   if (!oauthData || oauthData.expiresAt < Date.now()) {
     return res.redirect(APP_URL + '/settings?email_error=invalid_state');
   }
   _oauthStates.delete(state);
+
+  // Azure répond d'abord ici quand il refuse : `error` + `error_description`,
+  // et PAS de code. Sans cette lecture, on partait échanger un code inexistant
+  // et l'utilisateur recevait « Échec de connexion, veuillez réessayer » alors
+  // que réessayer ne pouvait pas marcher. Voir lib/microsoft-graph.js.
+  const verdict = graphMod.classifyCallback(req.query);
+  if (verdict.kind !== 'ok') {
+    const detail = verdict.code ? ` [${verdict.code}]` : '';
+    logger.warn('email-oauth', `Microsoft OAuth · ${verdict.kind}${detail} : ${verdict.description || 'sans detail'}`);
+    return res.redirect(APP_URL + '/settings' + microsoftRedirectFor(verdict.kind));
+  }
 
   try {
     // Exchange code for tokens
