@@ -93,8 +93,13 @@ async function updateDeal(accessToken, dealId, properties) {
   });
 }
 
-async function getDeal(accessToken, dealId) {
-  return hubspotFetch(accessToken, `/crm/v3/objects/deals/${dealId}`);
+// `properties` est optionnel : sans lui, HubSpot ne renvoie que son jeu par
+// défaut, qui ne contient pas `pipeline`. resolveDealStage() en a besoin.
+async function getDeal(accessToken, dealId, properties = null) {
+  const qs = properties?.length
+    ? `?properties=${encodeURIComponent(properties.join(','))}`
+    : '';
+  return hubspotFetch(accessToken, `/crm/v3/objects/deals/${dealId}${qs}`);
 }
 
 async function getDealStageLabels(accessToken) {
@@ -128,8 +133,72 @@ async function getDealPipelines(accessToken) {
       id: String(s.id),
       name: s.label || String(s.id),
       order: s.displayOrder ?? 0,
+      // metadata.isClosed et metadata.probability sont posés par HubSpot sur
+      // TOUT pipeline, y compris personnalisé : c'est le seul moyen de trouver
+      // l'étape gagnée ou perdue d'un pipeline dont on ne connaît pas les ids.
+      closed: String(s.metadata?.isClosed) === 'true',
+      won: Number(s.metadata?.probability) === 1,
     })),
   }));
+}
+
+/**
+ * Étape à écrire sur un deal EXISTANT, pour un statut baakalai donné.
+ *
+ * mapStatusToDealStage() ne connaît que les ids du pipeline par défaut
+ * (`appointmentscheduled`, `qualifiedtobuy`…). Les appliquer à un deal rangé
+ * dans un pipeline personnalisé écrit un id qui n'y existe pas. On résout donc
+ * l'étape DANS le pipeline du deal, et on renonce quand on ne sait pas :
+ *   - gagné ou perdu : trouvés par metadata, fiables sur tout pipeline ;
+ *   - statuts intermédiaires : seulement sur le pipeline par défaut ;
+ *   - sinon : null, le stage n'est pas touché.
+ *
+ * @returns {Promise<string|null>} id d'étape à écrire, ou null s'il n'y a rien
+ *   à faire (deal absent, étape non résolue, ou deal déjà sur la bonne étape).
+ */
+async function resolveDealStage(accessToken, dealId, status) {
+  let deal;
+  try {
+    deal = await getDeal(accessToken, dealId, ['dealstage', 'pipeline']);
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+  if (!deal) return null;
+
+  const pipelineId = deal.properties?.pipeline || null;
+  const currentStage = deal.properties?.dealstage || null;
+
+  let target = null;
+  if (status === 'won' || status === 'lost') {
+    const pipelines = await getDealPipelines(accessToken);
+    const pipeline = pipelines.find(p => p.id === String(pipelineId));
+    if (!pipeline) return null;
+    const wanted = status === 'won';
+    target = pipeline.stages.find(s => s.closed && s.won === wanted)?.id || null;
+  } else if (pipelineId === 'default') {
+    target = mapStatusToDealStage(status);
+  }
+
+  if (!target || target === currentStage) return null;
+  return target;
+}
+
+/**
+ * Écrit UNIQUEMENT l'étape d'un deal existant.
+ *
+ * À utiliser partout où un deal est déjà lié : mapOpportunityToDeal() reconstruit
+ * `dealname`, `description` et `pipeline`, ce qui renomme le deal du client,
+ * écrase sa description et le déplace vers le pipeline par défaut. Ces trois
+ * champs n'ont leur place qu'à la création d'un deal par baakalai.
+ *
+ * @returns {Promise<string|null>} l'étape écrite, ou null si rien n'a été écrit.
+ */
+async function updateDealStage(accessToken, dealId, status) {
+  const dealstage = await resolveDealStage(accessToken, dealId, status);
+  if (!dealstage) return null;
+  await updateDeal(accessToken, dealId, { dealstage });
+  return dealstage;
 }
 
 async function getDeals(accessToken, limit = 10000) {
@@ -472,6 +541,8 @@ module.exports = {
   getDeals,
   getDealStageLabels,
   getDealPipelines,
+  resolveDealStage,
+  updateDealStage,
   listDealsForDiagnostic,
   // Associations
   associateContactToDeal,

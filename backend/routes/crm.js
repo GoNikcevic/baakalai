@@ -287,11 +287,14 @@ async function syncOpportunityToHubspot(accessToken, opportunity) {
   }
 
   // --- Deal ---
-  const dealProps = hubspot.mapOpportunityToDeal(opportunity, campaign);
-
+  // Sur un deal EXISTANT, on n'écrit que l'étape. mapOpportunityToDeal()
+  // reconstruit dealname, description et pipeline : en PATCH, ces trois champs
+  // renommaient le deal du client, écrasaient sa description et le déplaçaient
+  // vers le pipeline par défaut. Ils ne valent qu'à la création.
   if (dealId) {
-    await hubspot.updateDeal(accessToken, dealId, dealProps);
+    await hubspot.updateDealStage(accessToken, dealId, opportunity.status);
   } else {
+    const dealProps = hubspot.mapOpportunityToDeal(opportunity, campaign);
     const created = await hubspot.createDeal(accessToken, dealProps);
     dealId = created.id;
   }

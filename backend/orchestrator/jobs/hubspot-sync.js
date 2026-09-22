@@ -69,12 +69,18 @@ async function onStatusChange({ opportunityId, newStatus }) {
     }
 
     // --- Create or update deal ---
-    const dealProps = hubspot.mapOpportunityToDeal(opportunity, campaign);
-    dealProps.dealstage = hubspot.mapStatusToDealStage(newStatus);
-
+    // Sur un deal EXISTANT, on n'écrit que l'étape : mapOpportunityToDeal()
+    // reconstruit dealname, description et pipeline, donc l'envoyer en PATCH
+    // renommait le deal du client, écrasait sa description et le renvoyait vers
+    // le pipeline par défaut. Ces champs ne valent qu'à la création.
     if (dealId) {
-      await hubspot.updateDeal(accessToken, dealId, dealProps);
+      const written = await hubspot.updateDealStage(accessToken, dealId, newStatus);
+      if (!written) {
+        console.log(`[hubspot-sync] Deal ${dealId} : etape inchangee (statut ${newStatus} non resolu dans son pipeline)`);
+      }
     } else {
+      const dealProps = hubspot.mapOpportunityToDeal(opportunity, campaign);
+      dealProps.dealstage = hubspot.mapStatusToDealStage(newStatus);
       const created = await hubspot.createDeal(accessToken, dealProps);
       dealId = created.id;
     }
