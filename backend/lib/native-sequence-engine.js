@@ -18,9 +18,11 @@
  * pas une infra d'emailing froid.
  *
  * Garde-fous :
- *  - NATIVE_EMAIL_DAILY_CAP emails / jour / utilisateur (campagnes ET
- *    relances confondues · c'est la même boîte qui protège sa délivrabilité),
- *    NATIVE_EMAILS_PER_RUN par passage (le cron horaire étale la journée) ;
+ *  - NATIVE_EMAIL_DAILY_CAP emails / jour / BOÎTE (migration 112 · le plafond
+ *    protège la délivrabilité d'une adresse, le compter par utilisateur
+ *    punissait celui qui en connecte plusieurs, ce que font précisément les
+ *    commerciaux pour ne pas se faire bannir), NATIVE_EMAILS_PER_RUN par
+ *    passage et par utilisateur (le cron horaire étale la journée) ;
  *  - arrêt de séquence par prospect sur réponse détectée, bounce définitif,
  *    désinscription ou stop manuel. La détection lit la boîte de l'utilisateur :
  *    Gmail via le même token OAuth que l'envoi (scope mail.google.com), Outlook
@@ -105,6 +107,39 @@ function buildMainPath(touchpoints, { accepted = false } = {}) {
   return path.map((tp) => ({ ...tp, delayDays: parseTiming(tp.timing) }));
 }
 
+/**
+ * Budget d'envoi d'un passage. Deux limites, deux rôles distincts :
+ *  - le plafond JOURNALIER protège la délivrabilité d'une adresse : il se
+ *    compte par boîte. Le compter par utilisateur, comme avant la migration
+ *    112, punissait celui qui en connecte plusieurs, ce que font précisément
+ *    les commerciaux pour ne pas se faire bannir ;
+ *  - le quota PAR PASSAGE étale la journée pour l'utilisateur : il reste
+ *    global, sinon le cron horaire enverrait tout d'un coup dès qu'une
+ *    deuxième boîte est connectée.
+ *
+ * `defaultAccountId` sert de clé aux envois sans boîte explicite (relances CRM,
+ * workflows) : ils partent bien de cette boîte-là, ils doivent donc peser
+ * dessus.
+ */
+function createEmailBudget(sentTodayByAccount, defaultAccountId) {
+  return {
+    runBudget: NATIVE_EMAILS_PER_RUN,
+    sentTodayByAccount,
+    budgetFor(accountId) {
+      if (this.runBudget <= 0) return 0;
+      const key = accountId || defaultAccountId;
+      if (!key) return 0;
+      return Math.min(this.runBudget, Math.max(0, NATIVE_EMAIL_DAILY_CAP - (this.sentTodayByAccount.get(key) || 0)));
+    },
+    consume(accountId) {
+      const key = accountId || defaultAccountId;
+      this.runBudget--;
+      if (key) this.sentTodayByAccount.set(key, (this.sentTodayByAccount.get(key) || 0) + 1);
+    },
+    defaultAccountId,
+  };
+}
+
 /** L'arbre contient-il une branche « accepted » exécutable en natif ? */
 function hasAcceptedBranch(touchpoints) {
   return touchpoints.some((tp) => tp.condition_type === 'accepted');
@@ -151,13 +186,13 @@ function publicIdOf(prospect) {
 
 /* ═══════════════════ Journal d'envoi ═══════════════════ */
 
-async function recordSend({ userId, campaignId, enrollmentId, opportunityId, touchpointId, channel, status, messageId, error }) {
+async function recordSend({ userId, campaignId, enrollmentId, opportunityId, touchpointId, channel, status, messageId, error, emailAccountId }) {
   await db.query(
-    `INSERT INTO campaign_sends (user_id, campaign_id, enrollment_id, opportunity_id, touchpoint_id, channel, status, message_id, error, sent_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+    `INSERT INTO campaign_sends (user_id, campaign_id, enrollment_id, opportunity_id, touchpoint_id, channel, status, message_id, error, email_account_id, sent_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
      ON CONFLICT (opportunity_id, touchpoint_id)
-     DO UPDATE SET status = $7, message_id = $8, error = $9, sent_at = now()`,
-    [userId, campaignId || null, enrollmentId || null, opportunityId, touchpointId, channel, status, messageId || null, (error || '').slice(0, 500) || null]
+     DO UPDATE SET status = $7, message_id = $8, error = $9, email_account_id = $10, sent_at = now()`,
+    [userId, campaignId || null, enrollmentId || null, opportunityId, touchpointId, channel, status, messageId || null, (error || '').slice(0, 500) || null, emailAccountId || null]
   );
 }
 
@@ -199,14 +234,27 @@ async function notifyLinkedinExpired(userId) {
   }
 }
 
-async function emailsSentToday(userId) {
+/**
+ * Emails envoyés aujourd'hui, PAR BOÎTE.
+ *
+ * Le plafond protège la délivrabilité d'une adresse : le compter par
+ * utilisateur revenait à punir celui qui en connecte plusieurs, alors que c'est
+ * précisément ce que font les commerciaux pour ne pas se faire bannir. Les
+ * envois antérieurs à la migration 112 n'ont pas de boîte enregistrée : ils
+ * sont imputés à la boîte par défaut, qui est celle qui les a réellement faits.
+ *
+ * @returns {Promise<Map<string, number>>} clé = id de boîte, ou 'legacy'.
+ */
+async function emailsSentTodayByAccount(userId) {
   const r = await db.query(
-    `SELECT COUNT(*) AS n FROM campaign_sends
+    `SELECT COALESCE(email_account_id::text, 'legacy') AS account, COUNT(*) AS n
+     FROM campaign_sends
      WHERE user_id = $1 AND channel = 'email' AND status = 'sent'
-       AND sent_at >= date_trunc('day', now())`,
+       AND sent_at >= date_trunc('day', now())
+     GROUP BY 1`,
     [userId]
   );
-  return parseInt(r.rows[0].n, 10);
+  return new Map(r.rows.map(row => [row.account, parseInt(row.n, 10)]));
 }
 
 /* ═══════════════════ Avancement d'un prospect dans son chemin ═══════════════════ */
@@ -242,7 +290,10 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
   const base = { userId, ...ids, opportunityId: prospect.id, touchpointId: next.id, channel };
 
   if (channel === 'email') {
-    if (ctx.emailBudget <= 0) return 'waiting';
+    // `accountId` = boîte choisie pour cette campagne (migration 112) ; les
+    // workflows CRM n'en portent pas et partent de la boîte par défaut.
+    const accountId = ctx.accountId || null;
+    if (ctx.budgetFor(accountId) <= 0) return 'waiting';
     if (!prospect.email) {
       await recordSend({ ...base, status: 'skipped', error: 'no_email' });
       report.skipped++;
@@ -256,11 +307,15 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
       toName: prospect.name,
       subject,
       body,
+      accountId,
     });
 
     if (result.success) {
-      await recordSend({ ...base, status: 'sent', messageId: result.messageId });
-      ctx.emailBudget--;
+      // On trace la boîte que l'envoi a REELLEMENT utilisée, pas celle qu'on a
+      // demandée : en cas de repli (boîte supprimée, expirée), le plafond doit
+      // suivre l'adresse qui a vraiment servi.
+      await recordSend({ ...base, status: 'sent', messageId: result.messageId, emailAccountId: result.accountId });
+      ctx.consume(result.accountId);
       report.emailsSent++;
       return 'sent';
     }
@@ -272,7 +327,7 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
     }
     if (result.code === 'no_email_account' || result.code === 'token_refresh_failed') {
       // Plus de boîte utilisable : inutile d'itérer les autres prospects.
-      ctx.emailBudget = 0;
+      ctx.runBudget = 0;
       report.failed++;
       return 'failed';
     }
@@ -333,6 +388,10 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
 async function processCampaign(campaign, ctx) {
   const report = { emailsSent: 0, linkedinActions: 0, skipped: 0, failed: 0, stopped: 0 };
   const userId = campaign.user_id;
+  // Expéditeur de CETTE campagne (migration 112). Les campagnes sont traitées
+  // l'une après l'autre dans un même passage : poser la boîte ici suffit, et
+  // chaque campagne repose la sienne.
+  ctx.accountId = campaign.email_account_id || null;
 
   const [touchpoints, prospects, sends] = await Promise.all([
     db.touchpoints.listByCampaign(campaign.id),
@@ -364,7 +423,7 @@ async function processCampaign(campaign, ctx) {
   const campaignStart = campaign.start_date ? new Date(campaign.start_date).getTime() : Date.now();
 
   for (const prospect of eligible) {
-    if (ctx.emailBudget <= 0 && ctx.linkedinExhausted) break;
+    if (ctx.budgetFor(ctx.accountId) <= 0 && ctx.linkedinExhausted) break;
 
     const path = (withAccepted && await ctx.isAccepted(prospect)) ? pathAccepted : pathDefault;
     await advanceOneStep({
@@ -394,7 +453,7 @@ async function processEnrollments(enrollments, ctx) {
   const report = { emailsSent: 0, linkedinActions: 0, skipped: 0, failed: 0, stopped: 0, completed: 0 };
 
   for (const enrollment of enrollments) {
-    if (ctx.emailBudget <= 0 && ctx.linkedinExhausted) break;
+    if (ctx.budgetFor(ctx.accountId) <= 0 && ctx.linkedinExhausted) break;
 
     const [touchpoints, prospect, sends] = await Promise.all([
       db.touchpoints.listByEnrollment(enrollment.id),
@@ -454,17 +513,24 @@ async function gmailFetch(accessToken, url) {
 
 /**
  * Détecte les réponses des prospects (campagnes natives ET enrollments) dans
- * la boîte Gmail de l'utilisateur, stoppe leur séquence et passe la main à
- * l'autopilot. Microsoft/SMTP : pas de scope lecture · stop manuel + bounce
- * automatique.
+ * les boîtes de l'utilisateur, stoppe leur séquence et passe la main à
+ * l'autopilot.
+ *
+ * TOUTES les boîtes actives sont interrogées, pas seulement celle par défaut :
+ * depuis la migration 112 une campagne part de la boîte de son choix, et la
+ * réponse arrive dans celle-là. Ne regarder que la boîte par défaut ferait
+ * tourner les autres campagnes à l'aveugle, ce qui serait pire que l'absence
+ * de choix d'expéditeur.
+ *
+ * Un SMTP de domaine custom n'offre aucune API de lecture : l'arrêt sur
+ * réponse y reste manuel (arbitrage Goran, non prioritaire).
  */
 async function checkReplies(userId, campaigns, enrollments) {
   const report = { replies: 0, errors: [] };
 
-  let account = await emailOutbound.getDefaultAccount(userId);
-  // SMTP domaine custom : aucune API de lecture, l'arrêt sur réponse y reste
-  // manuel (décision Goran, non prioritaire).
-  if (!account || (account.provider !== 'gmail' && account.provider !== 'microsoft')) return report;
+  const accounts = (await emailOutbound.listActiveAccounts(userId))
+    .filter(a => a.provider === 'gmail' || a.provider === 'microsoft');
+  if (accounts.length === 0) return report;
 
   // Prospects candidats : au moins un email envoyé, séquence encore vivante.
   const candidates = [];
@@ -494,18 +560,6 @@ async function checkReplies(userId, campaigns, enrollments) {
   }
   if (candidates.length === 0) return report;
 
-  // Gmail lit avec le jeton d'envoi, il faut donc le rafraîchir. Outlook lit
-  // avec un jeton Graph distinct : un jeton d'ENVOI expiré ne doit pas empêcher
-  // de voir les réponses, sinon une boîte à reconnecter ferait tourner les
-  // séquences à l'aveugle en plus de ne plus envoyer.
-  if (account.provider === 'gmail') {
-    try {
-      account = await emailOutbound.refreshTokenIfNeeded(account);
-    } catch (err) {
-      report.errors.push(`token: ${err.message}`);
-      return report;
-    }
-  }
   const byEmail = new Map(candidates.map(c => [String(c.prospect.email).toLowerCase(), c]));
   const replied = new Set();
 
@@ -557,54 +611,75 @@ async function checkReplies(userId, campaigns, enrollments) {
     }
   };
 
-  if (account.provider === 'gmail') {
-    const accessToken = emailOutbound.decryptAccount(account).decryptedAccessToken;
-    if (!accessToken) return report;
-    const emails = [...byEmail.keys()];
+  // Une boîte en panne (jeton expiré, consentement révoqué) ne doit pas
+  // empêcher de regarder les autres : chaque boîte a son try.
+  for (const account of accounts) {
     try {
-      // Requêtes par lot de 15 adresses · Gmail accepte les groupes from:(a OR b).
-      for (let i = 0; i < emails.length; i += 15) {
-        const chunk = emails.slice(i, i + 15);
-        const q = encodeURIComponent(`in:inbox newer_than:${REPLY_LOOKBACK_DAYS}d from:(${chunk.join(' OR ')})`);
-        const list = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=25`);
-        for (const m of list.messages || []) {
-          const msg = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From`);
-          const fromHeader = (msg.payload?.headers || []).find(h => h.name === 'From')?.value || '';
-          const fromEmail = (fromHeader.match(/<([^>]+)>/)?.[1] || fromHeader).trim().toLowerCase();
-          const candidate = byEmail.get(fromEmail);
-          if (candidate) await handleReply(candidate, { messageId: m.id, snippet: msg.snippet || '' });
-        }
+      if (account.provider === 'gmail') {
+        await checkRepliesGmail(account, byEmail, handleReply, report);
+      } else {
+        await checkRepliesOutlook(account, byEmail, handleReply, report);
       }
     } catch (err) {
-      report.errors.push(`gmail: ${err.message}`);
+      report.errors.push(`${account.email_address}: ${err.message}`);
     }
-    return report;
-  }
-
-  // Outlook · la lecture demande un consentement distinct de l'envoi
-  // (migration 111). Sans lui, on ne crie pas d'erreur à chaque passage : on
-  // note une fois ce qui manque, l'interface propose le bouton.
-  const graph = require('./microsoft-graph');
-  const token = await graph.getReadToken(account);
-  if (!token) {
-    if (!graph.hasReadGrant(account)) {
-      report.errors.push(`outlook: lecture des réponses non autorisée pour ${account.email_address}`);
-    }
-    return report;
-  }
-
-  try {
-    const since = new Date(Date.now() - REPLY_LOOKBACK_DAYS * DAY_MS).toISOString();
-    const messages = await graph.listInboxSince(token, since);
-    for (const msg of messages) {
-      const candidate = byEmail.get(msg.fromEmail);
-      if (candidate) await handleReply(candidate, { messageId: msg.id, snippet: msg.snippet });
-    }
-  } catch (err) {
-    report.errors.push(`outlook: ${err.message}`);
   }
 
   return report;
+}
+
+/** Lecture Gmail · même jeton OAuth que l'envoi, il faut donc le rafraîchir. */
+async function checkRepliesGmail(account, byEmail, handleReply, report) {
+  let fresh;
+  try {
+    fresh = await emailOutbound.refreshTokenIfNeeded(account);
+  } catch (err) {
+    report.errors.push(`token ${account.email_address}: ${err.message}`);
+    return;
+  }
+  const accessToken = emailOutbound.decryptAccount(fresh).decryptedAccessToken;
+  if (!accessToken) return;
+
+  const emails = [...byEmail.keys()];
+  // Requêtes par lot de 15 adresses · Gmail accepte les groupes from:(a OR b).
+  for (let i = 0; i < emails.length; i += 15) {
+    const chunk = emails.slice(i, i + 15);
+    const q = encodeURIComponent(`in:inbox newer_than:${REPLY_LOOKBACK_DAYS}d from:(${chunk.join(' OR ')})`);
+    const list = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=25`);
+    for (const m of list.messages || []) {
+      const msg = await gmailFetch(accessToken, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From`);
+      const fromHeader = (msg.payload?.headers || []).find(h => h.name === 'From')?.value || '';
+      const fromEmail = (fromHeader.match(/<([^>]+)>/)?.[1] || fromHeader).trim().toLowerCase();
+      const candidate = byEmail.get(fromEmail);
+      if (candidate) await handleReply(candidate, { messageId: m.id, snippet: msg.snippet || '' });
+    }
+  }
+}
+
+/**
+ * Lecture Outlook · jeton Graph distinct de celui de l'envoi (migration 111).
+ * Un jeton d'ENVOI expiré n'empêche donc pas de voir les réponses : une boîte à
+ * reconnecter ferait sinon tourner les séquences à l'aveugle en plus de ne plus
+ * envoyer.
+ */
+async function checkRepliesOutlook(account, byEmail, handleReply, report) {
+  const graph = require('./microsoft-graph');
+  const token = await graph.getReadToken(account);
+  if (!token) {
+    // Consentement jamais donné : on le signale une fois par passage, sans
+    // crier · l'interface porte le bouton qui le répare.
+    if (!graph.hasReadGrant(account)) {
+      report.errors.push(`outlook: lecture des réponses non autorisée pour ${account.email_address}`);
+    }
+    return;
+  }
+
+  const since = new Date(Date.now() - REPLY_LOOKBACK_DAYS * DAY_MS).toISOString();
+  const messages = await graph.listInboxSince(token, since);
+  for (const msg of messages) {
+    const candidate = byEmail.get(msg.fromEmail);
+    if (candidate) await handleReply(candidate, { messageId: msg.id, snippet: msg.snippet });
+  }
 }
 
 /* ═══════════════════ Points d'entrée ═══════════════════ */
@@ -643,10 +718,19 @@ async function runForUser(userId, { campaignId, enrollmentId } = {}) {
       if (campaignId) enrollmentsList = [];
     }
 
-    const sentToday = await emailsSentToday(userId);
+    const sentTodayByAccount = await emailsSentTodayByAccount(userId);
+    const defaultAccount = await emailOutbound.getDefaultAccount(userId);
+    // Les envois d'avant la 112 (sans boîte enregistrée) sont imputés à la
+    // boîte par défaut : c'est elle qui les a faits, tout partait d'elle.
+    if (sentTodayByAccount.has('legacy') && defaultAccount) {
+      const legacy = sentTodayByAccount.get('legacy');
+      sentTodayByAccount.set(defaultAccount.id, (sentTodayByAccount.get(defaultAccount.id) || 0) + legacy);
+      sentTodayByAccount.delete('legacy');
+    }
+
     const ctx = {
       userId,
-      emailBudget: Math.max(0, Math.min(NATIVE_EMAIL_DAILY_CAP - sentToday, NATIVE_EMAILS_PER_RUN)),
+      ...createEmailBudget(sentTodayByAccount, defaultAccount?.id || null),
       linkedinExhausted: false,
       _cookie: undefined,
       _acceptedSet: undefined,
@@ -781,5 +865,7 @@ module.exports = {
   hasAcceptedBranch,
   parseTiming,
   renderTemplate,
+  createEmailBudget,
   NATIVE_EMAIL_DAILY_CAP,
+  NATIVE_EMAILS_PER_RUN,
 };

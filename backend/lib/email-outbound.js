@@ -171,6 +171,9 @@ function decryptAccount(account) {
 
 /**
  * Get the default email account for a user.
+ * `is_default` est un vrai drapeau depuis la migration 112 (un seul vrai par
+ * utilisateur) ; le tri par ancienneté reste le filet pour un compte qui n'en
+ * aurait aucun, par exemple si la boîte par défaut a expiré.
  */
 async function getDefaultAccount(userId) {
   const result = await db.query(
@@ -178,6 +181,35 @@ async function getDefaultAccount(userId) {
     [userId]
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Boîte d'envoi à utiliser : celle demandée si elle est utilisable, la boîte
+ * par défaut sinon.
+ *
+ * Le repli est volontaire : une campagne lancée depuis une boîte supprimée ou
+ * expirée doit continuer à partir plutôt que de s'arrêter en silence. Le
+ * changement d'expéditeur est journalisé, il n'est jamais muet.
+ */
+async function resolveAccount(userId, accountId) {
+  if (accountId) {
+    const asked = await db.query(
+      `SELECT * FROM email_accounts WHERE id = $1 AND user_id = $2 AND status = 'active'`,
+      [accountId, userId]
+    );
+    if (asked.rows[0]) return asked.rows[0];
+    logger.warn('email-outbound', `Boîte ${accountId} indisponible pour ${userId}, repli sur la boîte par défaut`);
+  }
+  return getDefaultAccount(userId);
+}
+
+/** Boîtes actives d'un utilisateur, la boîte par défaut en tête. */
+async function listActiveAccounts(userId) {
+  const result = await db.query(
+    `SELECT * FROM email_accounts WHERE user_id = $1 AND status = 'active' ORDER BY is_default DESC, created_at ASC`,
+    [userId]
+  );
+  return result.rows;
 }
 
 function escapeHtml(s) {
@@ -231,7 +263,7 @@ function applySignature(mailOptions, account, body) {
  * @param {{ to, toName, subject, body, replyTo }} options
  * @returns {{ success, messageId, error, code }}
  */
-async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo }) {
+async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo, accountId }) {
   // Règle produit : aucun contenu généré ne part avec un tiret cadratin
   // (marqueur IA). Appliqué ici, au transport, pour couvrir tous les
   // appelants ; la signature du compte (texte de l'utilisateur) est ajoutée
@@ -240,7 +272,9 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
   subject = humanize(subject);
   body = humanize(body);
 
-  let account = await getDefaultAccount(userId);
+  // `accountId` : expéditeur choisi pour cette campagne (migration 112). Sans
+  // lui, la boîte par défaut · c'est le cas de toutes les relances CRM.
+  let account = await resolveAccount(userId, accountId);
   if (!account) {
     return {
       success: false,
@@ -278,8 +312,10 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo })
 
   try {
     const info = await transport.sendMail(mailOptions);
-    logger.info('email-outbound', `Sent: ${subject} → ${to} via ${account.provider}`, { messageId: info.messageId });
-    return { success: true, messageId: info.messageId };
+    logger.info('email-outbound', `Sent: ${subject} → ${to} via ${account.email_address}`, { messageId: info.messageId });
+    // `accountId` remonte à l'appelant : c'est lui qui trace la boîte dans
+    // campaign_sends, d'où se calcule le plafond journalier par boîte.
+    return { success: true, messageId: info.messageId, accountId: account.id };
   } catch (err) {
     logger.error('email-outbound', `Failed: ${subject} → ${to}: ${err.message}`);
 
@@ -445,6 +481,8 @@ module.exports = {
   sendNurtureEmail,
   testEmailAccount,
   getDefaultAccount,
+  resolveAccount,
+  listActiveAccounts,
   // Consommés par le moteur natif de prospection (lecture Gmail API pour la
   // détection de réponses · même token OAuth que l'envoi, scope mail.google.com).
   refreshTokenIfNeeded,

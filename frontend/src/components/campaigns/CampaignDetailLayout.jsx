@@ -40,6 +40,9 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
   // Lemlist senders
   const [senders, setSenders] = useState([]);
   const [selectedSender, setSelectedSender] = useState(null);
+  // Boîtes d'envoi du canal natif (migration 112)
+  const [mailboxes, setMailboxes] = useState([]);
+  const [selectedMailbox, setSelectedMailbox] = useState(null);
   // Canal d'envoi au lancement : Lemlist si configuré, sinon natif (boîte
   // email de l'utilisateur + LinkedIn) · le natif rend le lancement possible
   // sans aucun compte Lemlist, sur des volumes réduits.
@@ -69,6 +72,17 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
             setSenders(data.senders);
             setSelectedSender(data.senders[0].id);
           }
+        })
+        .catch(() => {});
+
+      // Boîtes d'envoi du canal natif. Un commercial en connecte plusieurs
+      // pour répartir ses envois : la campagne part de celle qu'il choisit
+      // ici, et le plafond journalier se compte sur cette boîte-là.
+      api.request('/nurture/email-accounts')
+        .then(data => {
+          const active = (data.accounts || []).filter(a => a.status === 'active');
+          setMailboxes(active);
+          setSelectedMailbox((active.find(a => a.is_default) || active[0])?.id || null);
         })
         .catch(() => {});
     }
@@ -136,7 +150,7 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
       setLaunching(true);
       setLaunchAlert(null);
       try {
-        const result = await api.launchCampaignNative(c._backendId || c.id);
+        const result = await api.launchCampaignNative(c._backendId || c.id, selectedMailbox);
         setCampaigns((prev) => ({
           ...prev,
           [c.id]: {
@@ -476,6 +490,30 @@ export default function CampaignDetailLayout({ campaign: c, onBack, setCampaigns
               <Icon name="mail" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 5 }} />
               {t('campaigns.channelNative')}
             </span>
+          )}
+          {/* Expéditeur du canal natif. Affiché dès qu'il y a un choix à
+              faire : avec une seule boîte, le sélecteur ne dirait rien. */}
+          {isPrep && sendChannel === 'native' && mailboxes.length > 1 && (
+            <select
+              value={selectedMailbox || ''}
+              onChange={e => setSelectedMailbox(e.target.value)}
+              style={{
+                fontSize: 11,
+                padding: '6px 10px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+              title={t('campaigns.mailboxTitle')}
+            >
+              {mailboxes.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.email_address}{m.is_default ? ` (${t('campaigns.mailboxDefault')})` : ''}
+                </option>
+              ))}
+            </select>
           )}
           {isPrep && sendChannel === 'lemlist' && senders.length > 1 && (
             <select

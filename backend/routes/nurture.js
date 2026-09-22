@@ -1133,6 +1133,32 @@ router.get('/email-accounts/connect/microsoft', (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// PATCH /api/nurture/email-accounts/:id/default · boîte d'envoi par défaut
+//
+// Utilisée par tout ce qui n'est pas une campagne : relances CRM, workflows,
+// réponses de l'autopilot. Jusqu'à la migration 112, `is_default` valait true
+// pour toutes les lignes et n'était jamais écrit : la plus ancienne boîte
+// gagnait au tri, sans que personne puisse en décider.
+router.patch('/email-accounts/:id/default', async (req, res, next) => {
+  try {
+    const account = await db.query(
+      `SELECT id, status FROM email_accounts WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (!account.rows[0]) return res.status(404).json({ error: 'Email account not found' });
+    if (account.rows[0].status !== 'active') {
+      return res.status(400).json({ error: 'Cette boîte doit être reconnectée avant de devenir celle par défaut.' });
+    }
+
+    // L'index unique partiel (migration 112) interdit deux boîtes par défaut :
+    // on retire l'ancienne avant de poser la nouvelle, dans cet ordre.
+    await db.query(`UPDATE email_accounts SET is_default = false WHERE user_id = $1 AND is_default`, [req.user.id]);
+    await db.query(`UPDATE email_accounts SET is_default = true, updated_at = now() WHERE id = $1`, [req.params.id]);
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // GET /api/nurture/email-accounts/:id/connect/microsoft-read · autoriser la
 // LECTURE de la boîte Outlook (détection des réponses).
 //

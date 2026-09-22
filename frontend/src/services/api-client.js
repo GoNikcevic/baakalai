@@ -799,9 +799,16 @@ export async function launchCampaignToSalesforce(campaignId, options = {}) {
   });
 }
 
-/** Lancement natif · envoi depuis la boîte email connectée + LinkedIn, sans Lemlist */
-export async function launchCampaignNative(campaignId) {
-  return request(`/campaigns/${campaignId}/launch-native`, { method: 'POST' });
+/**
+ * Lancement natif · envoi depuis la boîte email connectée + LinkedIn, sans Lemlist.
+ * `emailAccountId` : boîte d'envoi choisie pour CETTE campagne (migration 112).
+ * Sans elle, la boîte par défaut du compte.
+ */
+export async function launchCampaignNative(campaignId, emailAccountId) {
+  return request(`/campaigns/${campaignId}/launch-native`, {
+    method: 'POST',
+    body: JSON.stringify(emailAccountId ? { emailAccountId } : {}),
+  });
 }
 
 export async function runNativeCampaign(campaignId) {

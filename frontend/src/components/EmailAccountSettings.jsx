@@ -94,6 +94,15 @@ export default function EmailAccountSettings() {
     }
   };
 
+  const handleSetDefault = async (accountId) => {
+    try {
+      await request(`/nurture/email-accounts/${accountId}/default`, { method: 'PATCH' });
+      loadAccounts();
+    } catch (err) {
+      setTestResult({ success: false, error: err.message });
+    }
+  };
+
   // Autorisation de LECTURE de la boîte Outlook, demandée à part de l'envoi :
   // Azure AD ne délivre un jeton que pour une ressource à la fois.
   const handleConnectRead = async (accountId) => {
@@ -306,7 +315,25 @@ export default function EmailAccountSettings() {
                       {acc.status === 'active' ? t('emailAccount.active') : t('emailAccount.expired')}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {/* Boîte par défaut : celle qui envoie tout ce qui n'est
+                        pas une campagne (relances CRM, workflows, réponses de
+                        l'autopilot). Une campagne, elle, choisit la sienne. */}
+                    {accounts.length > 1 && (
+                      acc.is_default ? (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--success)', padding: '4px 8px' }}>
+                          {t('emailAccount.isDefault')}
+                        </span>
+                      ) : acc.status === 'active' && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: 10, padding: '4px 10px' }}
+                          onClick={() => handleSetDefault(acc.id)}
+                        >
+                          {t('emailAccount.setDefault')}
+                        </button>
+                      )
+                    )}
                     {acc.status === 'expired' && (acc.provider === 'gmail' || acc.provider === 'microsoft') && (
                       <button
                         className="btn btn-primary"

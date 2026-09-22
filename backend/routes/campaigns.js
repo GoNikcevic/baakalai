@@ -918,9 +918,17 @@ router.post('/:id/launch-native', async (req, res, next) => {
 
     if (hasEmailSteps) {
       const emailOutbound = require('../lib/email-outbound');
-      const account = await emailOutbound.getDefaultAccount(req.user.id);
+      // Expéditeur choisi au lancement (migration 112). Les commerciaux
+      // répartissent leurs envois sur plusieurs adresses pour ne pas se faire
+      // bannir : la campagne garde la sienne, elle n'est pas rejouée au hasard
+      // d'un réglage global. Sans choix explicite, la boîte par défaut.
+      const requested = req.body?.emailAccountId;
+      const account = await emailOutbound.resolveAccount(req.user.id, requested);
       if (!account) {
         return res.status(400).json({ code: 'no_email_account', error: 'Aucune boîte email connectée. Connectez Gmail ou SMTP dans Réglages → Email sortant.' });
+      }
+      if (requested && account.id !== requested) {
+        return res.status(400).json({ code: 'unknown_email_account', error: "Cette boîte d'envoi n'existe pas ou n'est plus active." });
       }
       if (prospects.filter(p => p.email).length === 0) {
         return res.status(400).json({ code: 'no_prospects', error: 'Aucun prospect avec email. Ajoutez des prospects avant de lancer.' });
