@@ -9,6 +9,8 @@ const claude = require('../api/claude');
 const db = require('../db');
 const { notifyUser } = require('../socket');
 const { extractActivityDate } = require('./crm-activity-date');
+const { extractCreatedDate } = require('./crm-origin');
+const { buildOwnerMap, resolveOwner } = require('./crm-owner-resolver');
 
 /**
  * Sync deals from the user's CRM and analyze them with Claude.
@@ -95,8 +97,10 @@ async function syncCRM(userId) {
 
       // Also pull Contacts (orgs like AOM may not use Opportunities)
       try {
+        // `OwnerId` manquait : sans lui, aucun contact rapatrié par ce chemin
+        // ne pouvait être rattaché à un commercial (lib/crm-owner-resolver.js).
         const contactSoql = encodeURIComponent(
-          'SELECT Id, FirstName, LastName, Email, Phone, Account.Name, Title, CreatedDate, LastModifiedDate FROM Contact WHERE Email != null LIMIT 500'
+          'SELECT Id, FirstName, LastName, Email, Phone, Account.Name, Title, OwnerId, CreatedDate, LastModifiedDate FROM Contact WHERE Email != null LIMIT 500'
         );
         const contactRes = await fetch(
           `${instanceUrl}/services/data/v58.0/query?q=${contactSoql}`,
@@ -104,6 +108,10 @@ async function syncCRM(userId) {
         );
         if (contactRes.ok) {
           const contactData = await contactRes.json();
+          let ownerMap = new Map();
+          try {
+            ownerMap = await buildOwnerMap('salesforce', { instanceUrl, accessToken: apiKey }, userId);
+          } catch { /* le rapprochement d'owner est optionnel, l'import ne l'est pas */ }
           let contactsImported = 0;
           for (const c of (contactData.records || [])) {
             const email = c.Email;
@@ -124,6 +132,9 @@ async function syncCRM(userId) {
                 // LastModifiedDate était déjà demandée dans le SOQL ci-dessus
                 // mais jamais exploitée.
                 lastActivityAt: extractActivityDate('salesforce', c),
+                // CreatedDate était dans le même cas : demandée, reçue, jetée.
+                crmCreatedAt: extractCreatedDate('salesforce', c),
+                ...resolveOwner('salesforce', c, ownerMap),
               });
               contactsImported++;
             } catch { /* skip individual failures */ }

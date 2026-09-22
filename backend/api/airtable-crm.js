@@ -168,6 +168,39 @@ function mapOpportunityToProspect(opportunity) {
 }
 
 /**
+ * Intitulés sous lesquels une base Airtable range le commercial en charge.
+ * Même logique que pour `name` / `email` : Airtable n'impose aucun schéma, on
+ * reconnaît les noms de colonnes courants, en français comme en anglais.
+ */
+const OWNER_FIELD_NAMES = [
+  'Owner', 'Propriétaire', 'Proprietaire',
+  'Assigned To', 'Assignee', 'Assigné à', 'Assigne a',
+  'Responsable', 'Commercial', 'Account Manager', 'Sales Rep',
+];
+
+/**
+ * Email du propriétaire d'un record Airtable, ou null.
+ *
+ * Une colonne « Owner » peut contenir une chaîne libre, un collaborateur
+ * Airtable (`{ id, email, name }`), ou une liste des deux. On ne retient que
+ * ce qui ressemble à une adresse : un prénom seul ne permet de rapprocher
+ * personne et gonflerait le comptage de sièges avec des homonymes.
+ */
+function extractOwnerEmail(fields) {
+  for (const key of OWNER_FIELD_NAMES) {
+    const value = fields[key];
+    if (!value) continue;
+    const first = Array.isArray(value) ? value[0] : value;
+    if (!first) continue;
+    const candidate = typeof first === 'object' ? first.email : first;
+    if (typeof candidate === 'string' && candidate.includes('@')) {
+      return candidate.trim().toLowerCase();
+    }
+  }
+  return null;
+}
+
+/**
  * List all records from an Airtable table (paginated).
  * Returns normalized contact objects for import.
  */
@@ -186,7 +219,24 @@ async function listRecords(apiKey, baseId, tableName) {
       const email = f['Email'] || f['E-mail'] || f['email'] || '';
       const title = f['Title'] || f['Titre'] || f['Job Title'] || f['Poste'] || f['Fonction'] || '';
       const company = f['Company'] || f['Entreprise'] || f['Organisation'] || f['Société'] || '';
-      contacts.push({ airtableRecordId: rec.id, name, email, title, company });
+      contacts.push({
+        airtableRecordId: rec.id,
+        name,
+        email,
+        title,
+        company,
+        // Airtable horodate chaque record sans qu'on ait à le demander. La
+        // valeur était jetée ici ; elle alimente opportunities.crm_created_at
+        // (migration 113). Volontairement nommée `createdTime`, le nom natif
+        // d'Airtable : la publier en `createdAt` la ferait aussi passer pour
+        // une date de dernière activité (lib/crm-activity-date.js), alors
+        // qu'une date de création ne dit rien de la récence commerciale.
+        createdTime: rec.createdTime || null,
+        // Airtable n'a pas de notion d'owner : c'est une colonne libre. On lit
+        // les intitulés courants et on ne retient qu'une adresse email, seule
+        // forme exploitable pour rapprocher un membre d'équipe.
+        ownerEmail: extractOwnerEmail(f),
+      });
     }
     offset = data.offset;
   } while (offset);

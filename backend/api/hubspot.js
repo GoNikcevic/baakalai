@@ -365,6 +365,9 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
     // aucun deal ne peut être détecté comme dormant : voir lib/crm-activity-date.js.
     let url = '/crm/v3/objects/contacts?limit=100&properties=email,firstname,lastname,jobtitle,company,hubspot_owner_id'
       + ',country,city'
+      // `createdate` alimente opportunities.crm_created_at (migration 113) :
+      // sans elle, HubSpot ne renvoie aucune date de naissance du contact.
+      + ',createdate'
       + ',hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate';
     if (after) url += `&after=${after}`;
     const data = await hubspotFetch(accessToken, url);
@@ -382,6 +385,7 @@ async function listAllContacts(accessToken, { limit = 10000 } = {}) {
         // Ce connecteur aplatit `properties` : sans cette ligne, les dates
         // demandées ci-dessus seraient récupérées puis jetées.
         lastActivityAt: extractActivityDate('hubspot', c),
+        createdAt: c.properties?.createdate || null,
       });
     }
     if (!data.paging?.next?.after || results.length === 0) break;

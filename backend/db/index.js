@@ -1662,8 +1662,8 @@ const opportunities = {
 
   async create(data) {
     const result = await query(`
-      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date, country, city)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+      INSERT INTO opportunities (user_id, campaign_id, name, title, company, company_size, status, status_color, timing, email, linkedin_url, hubspot_contact_id, hubspot_deal_id, crm_provider, crm_contact_id, crm_deal_id, owner_id, owner_email, crm_owner_id, data, last_activity_at, deal_value, won_date, lost_date, country, city, crm_created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
       RETURNING *
     `, [
       data.userId || null,
@@ -1695,6 +1695,12 @@ const opportunities = {
       data.lostDate || data.lost_date || null,
       data.country || null,
       data.city || null,
+      // Date de création DANS LE CRM du client (migration 113), à ne pas
+      // confondre avec `created_at` qui est notre date d'insertion. Fournie par
+      // lib/crm-origin.js. Une colonne présente ici mais absente du mapping de
+      // update() ci-dessous serait perdue sans erreur : le piège s'est déjà
+      // produit sur last_activity_at, deal_value, won_date et lost_date.
+      data.crmCreatedAt || data.crm_created_at || null,
     ]);
     return result.rows[0];
   },
@@ -1726,6 +1732,7 @@ const opportunities = {
       lost_date: 'lost_date', lostDate: 'lost_date',
       renewal_date: 'renewal_date', renewalDate: 'renewal_date',
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
+      crm_created_at: 'crm_created_at', crmCreatedAt: 'crm_created_at',
       planned_followup_date: 'planned_followup_date', plannedFollowupDate: 'planned_followup_date',
       planned_followup_reason: 'planned_followup_reason', plannedFollowupReason: 'planned_followup_reason',
       crm_stage: 'crm_stage', crmStage: 'crm_stage',

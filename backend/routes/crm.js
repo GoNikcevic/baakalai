@@ -707,6 +707,24 @@ router.post('/bulk-delete', async (req, res, next) => {
   }
 });
 
+/**
+ * Carte des utilisateurs du CRM, sans jamais faire échouer un import.
+ *
+ * `buildOwnerMap` fait un appel réseau supplémentaire (liste des utilisateurs
+ * du CRM) une seule fois par import, pas une fois par contact. Elle sert à
+ * traduire l'identifiant d'owner en email, puis en membre d'équipe baakalai.
+ * Un CRM qui refuse ce scope, ou un connecteur sans notion d'utilisateur,
+ * rend une map vide : on persiste alors l'identifiant CRM brut, ce qui suffit
+ * déjà à compter les sièges et à regrouper les deals par commercial.
+ */
+async function safeOwnerMap(provider, credentials, userId) {
+  try {
+    return await buildOwnerMap(provider, credentials, userId);
+  } catch {
+    return new Map();
+  }
+}
+
 // POST /api/crm/import/:provider · Import contacts/deals FROM CRM INTO Baakalai
 router.post('/import/:provider', async (req, res, next) => {
   try {
@@ -721,6 +739,7 @@ router.post('/import/:provider', async (req, res, next) => {
 
     if (provider === 'pipedrive') {
       const persons = await pipedrive.listAllPersons(token);
+      const ownerMap = await safeOwnerMap(provider, token, req.user.id);
 
       for (const raw of (persons || [])) {
         try {
@@ -744,6 +763,8 @@ router.post('/import/:provider', async (req, res, next) => {
             crmProvider: 'pipedrive',
             crmContactId: String(raw.id),
             lastActivityAt: extractActivityDate(provider, raw),
+            crmCreatedAt: extractCreatedDate(provider, raw),
+            ...resolveOwner(provider, raw, ownerMap),
           });
           imported++;
         } catch (err) {
@@ -755,6 +776,7 @@ router.post('/import/:provider', async (req, res, next) => {
       try { creds = JSON.parse(token); } catch { return res.status(400).json({ error: 'Odoo credentials invalid' }); }
 
       const contacts = await odoo.listAllContacts(creds);
+      const ownerMap = await safeOwnerMap(provider, creds, req.user.id);
       for (const raw of contacts) {
         try {
           if (!raw.email) { skipped++; continue; }
@@ -770,6 +792,8 @@ router.post('/import/:provider', async (req, res, next) => {
             crmProvider: 'odoo',
             crmContactId: String(raw.id),
             lastActivityAt: extractActivityDate(provider, raw),
+            crmCreatedAt: extractCreatedDate(provider, raw),
+            ...resolveOwner(provider, raw, ownerMap),
           });
           imported++;
         } catch (err) {
@@ -784,6 +808,7 @@ router.post('/import/:provider', async (req, res, next) => {
       if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
       const sf = require('../api/salesforce');
       const contacts = await sf.listContacts(instanceUrl, token);
+      const ownerMap = await safeOwnerMap(provider, { instanceUrl, accessToken: token }, req.user.id);
 
       for (const raw of contacts) {
         try {
@@ -800,7 +825,11 @@ router.post('/import/:provider', async (req, res, next) => {
             crmProvider: 'salesforce',
             crmContactId: String(raw.id),
             lastActivityAt: extractActivityDate(provider, raw),
-            crmOwnerId: raw.ownerId || null,
+            crmCreatedAt: extractCreatedDate(provider, raw),
+            // Remplace `crmOwnerId: raw.ownerId` : l'identifiant seul ne
+            // rapprochait rien, la résolution ajoute l'email du commercial et
+            // le membre d'équipe baakalai correspondant quand il existe.
+            ...resolveOwner(provider, raw, ownerMap),
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
@@ -808,7 +837,10 @@ router.post('/import/:provider', async (req, res, next) => {
     } else if (provider === 'hubspot') {
       // Les trois dernières propriétés portent la récence commerciale : sans
       // elles aucun deal ne peut être détecté dormant (lib/crm-activity-date.js).
-      const res2 = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=500&properties=email,firstname,lastname,jobtitle,company,hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate', {
+      // `createdate` alimente crm_created_at (migration 113), `hubspot_owner_id`
+      // le propriétaire : ni l'une ni l'autre n'était demandée ici, donc ni
+      // l'une ni l'autre ne pouvait être persistée.
+      const res2 = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=500&properties=email,firstname,lastname,jobtitle,company,hubspot_owner_id,createdate,hs_last_sales_activity_timestamp,notes_last_contacted,lastmodifieddate', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res2.ok) {
@@ -816,6 +848,7 @@ router.post('/import/:provider', async (req, res, next) => {
         return res.status(502).json({ error: `HubSpot API ${res2.status}: ${errBody.slice(0, 200)}` });
       }
       const data = await res2.json();
+      const ownerMap = await safeOwnerMap(provider, token, req.user.id);
       for (const c of (data.results || [])) {
         try {
           const email = c.properties?.email;
@@ -832,6 +865,8 @@ router.post('/import/:provider', async (req, res, next) => {
             crmProvider: 'hubspot',
             crmContactId: String(c.id),
             lastActivityAt: extractActivityDate(provider, c),
+            crmCreatedAt: extractCreatedDate(provider, c),
+            ...resolveOwner(provider, c, ownerMap),
           });
           imported++;
         } catch (err) { errors.push({ error: err.message }); }
@@ -855,6 +890,11 @@ router.post('/import/:provider', async (req, res, next) => {
           if (!email) { skipped++; continue; }
 
           const lastActivityAt = extractActivityDate(provider, raw);
+          // Notion horodate ses pages (`created_time`) mais n'expose aucun
+          // propriétaire exploitable : le « responsable » y est une colonne
+          // libre sans identifiant stable. L'owner reste donc NULL pour ce
+          // connecteur, et l'ICP compte les sièges sur les autres.
+          const crmCreatedAt = extractCreatedDate(provider, raw);
           const statusNorm = notionCrm.normalizeNotionStatus(raw.status);
           const dealValue = typeof raw.dealValue === 'number' ? raw.dealValue : null;
 
@@ -868,6 +908,12 @@ router.post('/import/:provider', async (req, res, next) => {
             }
             if (dealValue != null && Number(existing.deal_value || 0) !== dealValue) {
               updates.dealValue = dealValue;
+            }
+            // Rattrapage des lignes importées avant la migration 113. Écrit une
+            // seule fois : une date de naissance ne change pas, et la réécrire
+            // à chaque resynchronisation ferait varier l'ancienneté du CRM.
+            if (crmCreatedAt && !existing.crm_created_at) {
+              updates.crmCreatedAt = crmCreatedAt;
             }
             if (raw.contact && raw.contact !== existing.name) updates.name = raw.contact;
             if (company && company !== existing.company) updates.company = company;
@@ -897,6 +943,7 @@ router.post('/import/:provider', async (req, res, next) => {
             crmProvider: 'notion',
             crmContactId: raw.notionPageId || null,
             lastActivityAt,
+            crmCreatedAt,
             dealValue,
             wonDate: statusNorm === 'won' ? (lastActivityAt || new Date().toISOString()) : null,
             lostDate: statusNorm === 'lost' ? (lastActivityAt || new Date().toISOString()) : null,
@@ -928,6 +975,11 @@ router.post('/import/:provider', async (req, res, next) => {
             crmProvider: 'airtable',
             crmContactId: raw.airtableRecordId || null,
             lastActivityAt: extractActivityDate(provider, raw),
+            crmCreatedAt: extractCreatedDate(provider, raw),
+            // Airtable n'a pas d'utilisateurs interrogeables : pas de map à
+            // construire. `resolveOwner` récupère quand même l'email lu sur la
+            // colonne « Owner » du record par le connecteur.
+            ...resolveOwner(provider, raw, new Map()),
           });
           imported++;
         } catch (err) { errors.push({ name: raw.name, error: err.message }); }
@@ -1753,34 +1805,51 @@ async function importContactsForUser(userId, provider) {
 
   let contacts = [];
 
+  // Cette fonction aplatit chaque connecteur dans une forme commune avant
+  // d'insérer. Tout champ absent de l'aplatissement est perdu, même si le DAO
+  // sait l'écrire : c'est par là que la date CRM et l'owner disparaissaient.
+  // `ownerMap` est renseignée par la branche du connecteur, avant le .map() qui
+  // lit cette closure.
+  let ownerMap = new Map();
+  const origin = (r) => ({
+    crmCreatedAt: extractCreatedDate(provider, r),
+    ...resolveOwner(provider, r, ownerMap),
+  });
+
   if (provider === 'pipedrive') {
     const raw = await pipedrive.listAllPersons(token);
+    ownerMap = await safeOwnerMap(provider, token, userId);
     contacts = (raw || []).map(r => ({
       name: r.name || 'Unknown',
       email: Array.isArray(r.email) ? (r.email.find(e => e.primary)?.value || r.email[0]?.value || null) : (r.email || null),
       title: r.job_title || null,
       company: r.org_name || r.org_id?.name || null,
       crmContactId: String(r.id),
+      ...origin(r),
     }));
   } else if (provider === 'hubspot') {
     const raw = await hubspot.listAllContacts(token);
+    ownerMap = await safeOwnerMap(provider, token, userId);
     contacts = (raw || []).map(r => ({
       name: r.name || 'Unknown',
       email: r.email || null,
       title: r.job_title || null,
       company: r.org_name || null,
       crmContactId: String(r.id),
+      ...origin(r),
     }));
   } else if (provider === 'odoo') {
     let creds;
     try { creds = JSON.parse(token); } catch { return { imported: 0 }; }
     const raw = await odoo.listAllContacts(creds);
+    ownerMap = await safeOwnerMap(provider, creds, userId);
     contacts = (raw || []).map(r => ({
       name: r.name || 'Unknown',
       email: r.email || null,
       title: r.function || null,
       company: r.company_name || (r.parent_id ? r.parent_id[1] : null),
       crmContactId: String(r.id),
+      ...origin(r),
     }));
   } else if (provider === 'salesforce') {
     const integration = await db.query(
@@ -1789,13 +1858,14 @@ async function importContactsForUser(userId, provider) {
     const instanceUrl = integration.rows[0]?.instance_url;
     if (!instanceUrl) throw new Error('Salesforce instance URL not configured');
     const raw = await salesforce.listContacts(instanceUrl, token);
+    ownerMap = await safeOwnerMap(provider, { instanceUrl, accessToken: token }, userId);
     contacts = (raw || []).map(r => ({
       name: r.name || 'Unknown',
       email: r.email || null,
       title: r.title || null,
       company: r.company || null,
       crmContactId: String(r.id),
-      crmOwnerId: r.ownerId || null,
+      ...origin(r),
     }));
   } else if (provider === 'notion') {
     const integration = await db.userIntegrations.get(userId, 'notion');
@@ -1810,6 +1880,7 @@ async function importContactsForUser(userId, provider) {
       title: r.title || null,
       company: r.company || null,
       crmContactId: r.notionPageId || null,
+      ...origin(r),
     }));
   } else if (provider === 'airtable') {
     const integration = await db.userIntegrations.get(userId, 'airtable');
@@ -1824,6 +1895,7 @@ async function importContactsForUser(userId, provider) {
       title: r.title || null,
       company: r.company || null,
       crmContactId: r.airtableRecordId || null,
+      ...origin(r),
     }));
   }
 
@@ -1842,7 +1914,10 @@ async function importContactsForUser(userId, provider) {
         status: 'imported',
         crmProvider: provider,
         crmContactId: c.crmContactId,
+        crmCreatedAt: c.crmCreatedAt || null,
         crmOwnerId: c.crmOwnerId || null,
+        ownerEmail: c.ownerEmail || null,
+        ownerId: c.ownerId || null,
       });
       imported++;
     } catch { /* skip individual failures */ }
@@ -2039,6 +2114,8 @@ router.post('/auto-clean', cleanLimit, async (req, res, next) => {
 // Delegated to shared utility to avoid circular deps
 const { getUserCrmToken } = require('../lib/crm-token');
 const { extractActivityDate } = require('../lib/crm-activity-date');
+const { extractCreatedDate } = require('../lib/crm-origin');
+const { buildOwnerMap, resolveOwner } = require('../lib/crm-owner-resolver');
 
 // =============================================
 // Autopilot settings

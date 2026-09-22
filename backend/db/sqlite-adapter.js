@@ -353,6 +353,7 @@ function initSchema() {
       city TEXT,
       country TEXT,
       crm_contact_id TEXT,
+      crm_created_at DATETIME,
       crm_deal_id TEXT,
       crm_owner_id TEXT,
       crm_provider TEXT,
@@ -509,7 +510,14 @@ function query(text, params = []) {
 
   // Replace PostgreSQL-specific syntax
   let adapted = sqliteText
-    .replace(/::numeric/g, '')
+    // Casts Postgres · SQLite n'a pas la syntaxe `expr::type` et s'arrête sur
+    // le premier « : ». Seul `::numeric` était traité, si bien qu'une requête
+    // parfaitement valide en production échouait ici avec « unrecognized token:
+    // ":" » dès qu'elle utilisait un autre cast. `count(*)::int` est le cas le
+    // plus fréquent : en pg il sert à récupérer un nombre plutôt qu'une chaîne,
+    // ce que SQLite fait déjà nativement. Liste explicite plutôt que `::\w+`
+    // pour ne pas massacrer une chaîne littérale qui contiendrait « :: ».
+    .replace(/::(int|integer|bigint|numeric|float|real|text|uuid|boolean|bool|date|timestamptz|timestamp|jsonb|json|vector)\b/gi, '')
     // Les fenêtres temporelles s'écrivent « now() - interval '7 days' » en pg ;
     // SQLite ne connaît pas interval et attend datetime('now','-7 days').
     .replace(/now\(\)\s*([-+])\s*interval\s*'(\d+)\s*(\w+)'/gi,
