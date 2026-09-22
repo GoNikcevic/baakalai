@@ -73,10 +73,6 @@ function silenceRank(c) {
   return d == null ? Number.MAX_SAFE_INTEGER : d;
 }
 
-function formatAmount(value, lang) {
-  return `${Math.round(value).toLocaleString(lang === 'en' ? 'en-US' : 'fr-FR')} €`;
-}
-
 function getStatusLabels(lang) {
   if (lang === 'en') return { new: 'New', imported: 'Imported', interested: 'Interested', meeting: 'Meeting', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
   return { new: 'Nouveau', imported: 'Import\u00e9', interested: 'Int\u00e9ress\u00e9', meeting: 'RDV', negotiation: 'N\u00e9go', won: 'Gagn\u00e9', lost: 'Perdu' };
@@ -523,12 +519,6 @@ export default function ClientsPage({ scope }) {
         }}>
           <span style={{ color: dealStats.dormant > 0 ? 'var(--warning)' : 'var(--text-muted)', fontWeight: dealStats.dormant > 0 ? 600 : 400 }}>
             {t('clients.dealsDormant', { count: dealStats.dormant })}
-          </span>
-          <span>·</span>
-          <span>
-            {dealStats.valued > 0
-              ? t('clients.dealsValued', { value: formatAmount(dealStats.value, lang), count: dealStats.valued })
-              : t('clients.dealsNoValue')}
           </span>
           <div style={{ flex: 1 }} />
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

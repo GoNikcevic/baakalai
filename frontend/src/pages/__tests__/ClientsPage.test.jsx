@@ -112,12 +112,6 @@ describe('ClientsPage · Vue globale Deals', () => {
     expect(silences).toEqual([142, 61, 4]);
   });
 
-  it('affiche le montant total en annonçant combien de deals sont valorisés', async () => {
-    renderDeals();
-    // 45 000 + 12 000 sur 2 deals valorisés, sur 3 deals en cours.
-    await screen.findByText(/57 000 . sur 2 deal/);
-  });
-
   it('compte comme dormants les seuls deals silencieux depuis plus de 30 jours', async () => {
     renderDeals();
     await screen.findByText('2 dorment depuis plus de 30 jours');

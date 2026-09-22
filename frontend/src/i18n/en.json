@@ -787,8 +787,6 @@
     "contactsInCrm": "{count} contact(s) in your CRM",
     "dealsInCrm": "{count} ongoing deal(s) in your CRM",
     "dealsDormant": "{count} asleep for over 30 days",
-    "dealsValued": "{value} across {count} valued deal(s)",
-    "dealsNoValue": "no amount recorded on these deals",
     "silenceDays": "{days}d without contact",
     "silenceNever": "no contact on record",
     "inStageDays": "{days}d in stage",
