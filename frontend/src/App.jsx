@@ -207,6 +207,7 @@ export default function App() {
             <Route path="/clients-to-upsell/:opportunityId/workflow" element={<WorkflowPage goal="upsell" backBase="/clients-to-upsell" />} />
             <Route path="/data-quality" element={<DataQualityPage />} />
             <Route path="/churn-risk" element={<ChurnPage />} />
+            <Route path="/churn-risk/:opportunityId/workflow" element={<WorkflowPage goal="churn_prevention" backBase="/churn-risk" backLabelKey="workflow.backToChurn" />} />
             <Route path="/activation" element={<ActivationPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsWrapper />} />

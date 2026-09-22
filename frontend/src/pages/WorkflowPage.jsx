@@ -116,7 +116,7 @@ const filterTree = (tree, id) => tree
   .filter(tp => tp.id !== id)
   .map(tp => (tp.children?.length ? { ...tp, children: filterTree(tp.children, id) } : tp));
 
-export default function WorkflowPage({ goal, backBase }) {
+export default function WorkflowPage({ goal, backBase, backLabelKey = 'workflow.backToQueue' }) {
   const t = useT();
   const { lang } = useI18n();
   const navigate = useNavigate();
@@ -324,7 +324,7 @@ export default function WorkflowPage({ goal, backBase }) {
             {errorKey === 'workflow.errorGeneration' && (
               <button className="btn btn-accent" onClick={propose}>{t('workflow.retry')}</button>
             )}
-            <button className="btn btn-ghost" onClick={() => navigate(backBase)}>{t('workflow.backToQueue')}</button>
+            <button className="btn btn-ghost" onClick={() => navigate(backBase)}>{t(backLabelKey)}</button>
           </div>
         </div>
       </div>
@@ -572,7 +572,7 @@ export default function WorkflowPage({ goal, backBase }) {
   return (
     <div className="dashboard-page" style={{ paddingBottom: (isDraft || editing) ? 90 : undefined }}>
       <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px', marginBottom: 12 }} onClick={() => navigate(backBase)}>
-        ← {t('workflow.backToQueue')}
+        ← {t(backLabelKey)}
       </button>
 
       <div className="page-header">

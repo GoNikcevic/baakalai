@@ -661,7 +661,8 @@ router.post('/run', async (req, res, next) => {
   }
 });
 
-// POST /api/nurture/run-scoped · Relance CADRÉE, issue du dialogue de l'assistant
+// POST /api/nurture/run-scoped · Relance CADRÉE : dialogue de l'assistant, ou
+// envoi groupé depuis la page « Clients à risque » (source: churn_page)
 //
 // /run ci-dessus lance l'agent complet sur tous les triggers actifs : il ignore le
 // périmètre, l'angle et le mode. Tant que l'assistant exécutait sans rien demander, ça
@@ -671,6 +672,9 @@ router.post('/run', async (req, res, next) => {
 // angle transmis au rédacteur, un mode d'envoi respecté.
 const SCOPED_RUN_MAX = 25;
 const SCOPED_RUN_DEFAULT = 5;
+// Provenances autorisées : le chat (dialogue cadré) et l'envoi groupé de la
+// page « Clients à risque ».
+const SCOPED_SOURCES = ['chat_scoped', 'churn_page'];
 
 const SCOPED_POPULATIONS = {
   // Deals ouverts sans activité depuis N jours · même base que le compte-rendu de lecture
@@ -698,6 +702,9 @@ const SCOPED_POPULATIONS = {
 router.post('/run-scoped', async (req, res, next) => {
   try {
     const { triggerType, angle, mode, contactIds } = req.body || {};
+    // La provenance est tracée dans metadata et relue par l'attribution : liste
+    // blanche, jamais la chaîne brute du client.
+    const source = SCOPED_SOURCES.includes(req.body?.source) ? req.body.source : 'chat_scoped';
     const population = SCOPED_POPULATIONS[triggerType];
     if (!population && !Array.isArray(contactIds)) {
       return res.status(400).json({
@@ -748,6 +755,7 @@ router.post('/run-scoped', async (req, res, next) => {
 
     const dealCoach = require('../lib/agents/deal-coach');
     const upsellDetector = require('../lib/agents/upsell-detector');
+    const retention = require('../lib/agents/retention');
 
     let sent = 0;
     let queued = 0;
@@ -756,37 +764,43 @@ router.post('/run-scoped', async (req, res, next) => {
 
     for (const opp of candidates.rows) {
       // Un client gagné n'est pas un deal à réactiver : le rédacteur suit le contact,
-      // pas le libellé du raccourci cliqué.
-      const useUpsell = opp.status === 'won';
-      const draft = useUpsell
-        ? await upsellDetector.draftOne(req.user.id, opp.id, { angle })
-        : await dealCoach.coachAndDraftOne(req.user.id, opp.id, { angle });
+      // pas le libellé du raccourci cliqué. Et un client à risque de churn n'est pas
+      // un client à upseller : lui proposer une extension quand il a un pied dehors
+      // est précisément le mauvais email, d'où le troisième rédacteur.
+      const isClient = opp.status === 'won';
+      const useRetention = isClient && triggerType === 'churn_risk';
+      const draft = useRetention
+        ? await retention.draftOne(req.user.id, opp.id, { angle })
+        : isClient
+          ? await upsellDetector.draftOne(req.user.id, opp.id, { angle })
+          : await dealCoach.coachAndDraftOne(req.user.id, opp.id, { angle });
 
       if (draft.error) {
         skipped.push({ name: opp.name, reason: draft.error });
         continue;
       }
 
-      const chain = useUpsell ? 'auto_upsell' : 'deal_reactivation';
+      const chain = useRetention ? 'churn_prevention' : isClient ? 'auto_upsell' : 'deal_reactivation';
       const inserted = await db.query(
         `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, to_name, subject, body, status, pattern_ids, metadata)
          VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8) RETURNING id`,
         [
           req.user.id, opp.id, opp.email, opp.name, draft.subject, draft.body,
           draft.patternIds || [],
-          JSON.stringify({ chain, source: 'chat_scoped', angle: angle || null }),
+          JSON.stringify({ chain, source, angle: angle || null }),
         ]
       );
       const emailId = inserted.rows[0].id;
 
       // Même trace que la file de réactivation, pour que l'attribution (« Deals touchés »)
-      // et l'historique comptent aussi les relances lancées depuis le chat.
+      // et l'historique comptent aussi les relances lancées hors des files.
+      const triggerAgent = useRetention ? 'retention' : isClient ? 'upsell_detector' : 'deal_coach';
       await db.query(
         `INSERT INTO agent_chain_executions (user_id, chain_type, trigger_agent, trigger_data, steps_completed, result, status, nurture_email_id)
          VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)`,
         [
-          req.user.id, chain, useUpsell ? 'upsell_detector' : 'deal_coach',
-          JSON.stringify({ opportunityId: opp.id, source: 'chat_scoped' }), ['draft_scoped'],
+          req.user.id, chain, triggerAgent,
+          JSON.stringify({ opportunityId: opp.id, source }), ['draft_scoped'],
           JSON.stringify({ subject: draft.subject, contact: opp.name }), emailId,
         ]
       );
@@ -817,8 +831,8 @@ router.post('/run-scoped', async (req, res, next) => {
       drafts.push({ contact: opp.name, company: opp.company, subject: draft.subject });
     }
 
-    logger.info('nurture', 'Scoped run from chat', {
-      userId: req.user.id, triggerType, mode: mode || 'approval', sent, queued, skipped: skipped.length,
+    logger.info('nurture', 'Scoped run', {
+      userId: req.user.id, source, triggerType, mode: mode || 'approval', sent, queued, skipped: skipped.length,
     });
 
     res.json({ sent, queued, skipped: skipped.length, skippedDetail: skipped, drafts, angle: angle || null });
