@@ -301,7 +301,13 @@ router.get('/account', async (req, res, next) => {
       db.query('SELECT id, email, name, company, role, created_at FROM users WHERE id = $1', [userId]),
       db.query('SELECT * FROM user_profiles WHERE user_id = $1', [userId]),
       db.query('SELECT id, name, client, status, channel, sector, position, nb_prospects, open_rate, reply_rate, interested, meetings, created_at FROM campaigns WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
-      db.query('SELECT id, name, title, company, company_size, status, email, phone, linkedin_url, created_at FROM opportunities WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
+      // `phone` a été retiré le 2026-09-22 : la colonne n'a jamais existé sur
+      // opportunities. La requête jetait donc « column "phone" does not exist »,
+      // et comme les dix requêtes de cet export tournent dans un Promise.all,
+      // c'est l'export RGPD ENTIER qui répondait 500, pour tous les
+      // utilisateurs. Décision Goran : on ne stocke pas le téléphone, il reste
+      // dans le CRM du client. Ne pas le réintroduire ici sans colonne.
+      db.query('SELECT id, name, title, company, company_size, status, email, linkedin_url, created_at FROM opportunities WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
       db.query(`SELECT t.id, t.title, t.created_at, json_agg(json_build_object('role', m.role, 'content', m.content, 'created_at', m.created_at) ORDER BY m.created_at) as messages FROM chat_threads t LEFT JOIN chat_messages m ON m.thread_id = t.id WHERE t.user_id = $1 GROUP BY t.id ORDER BY t.created_at DESC`, [userId]),
       db.query('SELECT id, original_name, mime_type, file_size, created_at FROM documents WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
       db.query('SELECT id, name, trigger_type, conditions, email_template, mode, enabled, created_at FROM nurture_triggers WHERE user_id = $1 ORDER BY created_at DESC', [userId]),

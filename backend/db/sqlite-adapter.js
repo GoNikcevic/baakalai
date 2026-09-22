@@ -466,6 +466,57 @@ function initSchema() {
       team_id TEXT,
       UNIQUE(user_id, provider)
     );
+
+    -- Les deux tables de relance manquaient au miroir, si bien que l'export
+    -- RGPD (GET /api/export/account) ne pouvait pas être testé du tout : deux
+    -- de ses dix requêtes échouaient sur « no such table ». Répliquées d'après
+    -- le schéma de production au 2026-09-22.
+    -- Pas de backtick dans ce bloc : il vit dans un template literal JS.
+    CREATE TABLE IF NOT EXISTS nurture_triggers (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      trigger_type TEXT NOT NULL,
+      conditions TEXT NOT NULL DEFAULT '{}',
+      action_type TEXT NOT NULL DEFAULT 'email',
+      email_template TEXT,
+      sequence_id TEXT,
+      mode TEXT,
+      enabled INTEGER DEFAULT 1,
+      crm_provider TEXT,
+      last_run DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      team_id TEXT,
+      ab_enabled INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS nurture_emails (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      trigger_id TEXT,
+      opportunity_id TEXT,
+      email_account_id TEXT,
+      to_email TEXT NOT NULL,
+      to_name TEXT,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      action_type TEXT NOT NULL DEFAULT 'email',
+      sent_at DATETIME,
+      crm_activity_id TEXT,
+      error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      team_id TEXT,
+      analyzed_at DATETIME,
+      team_campaign_id TEXT,
+      variant TEXT,
+      ab_group_id TEXT,
+      replied_at DATETIME,
+      sentiment TEXT,
+      pattern_ids TEXT,
+      metadata TEXT
+    );
   `);
 }
 
@@ -522,6 +573,17 @@ function query(text, params = []) {
     // SQLite ne connaît pas interval et attend datetime('now','-7 days').
     .replace(/now\(\)\s*([-+])\s*interval\s*'(\d+)\s*(\w+)'/gi,
       (_, sign, amount, unit) => `datetime('now','${sign}${amount} ${unit}')`)
+    // Agrégats JSON · pg dit json_agg / json_build_object, SQLite dit
+    // json_group_array / json_object. Sans cette traduction, l'export RGPD
+    // n'était pas testable du tout : sa requête sur les fils de discussion
+    // échouait sur « no such function », ce qui masquait les vraies erreurs.
+    // Le « ORDER BY » interne à un agrégat n'est supporté qu'à partir de
+    // SQLite 3.44 : on le retire ici. Le miroir ne garantit donc pas l'ordre
+    // des éléments agrégés, contrairement à la production. Ne pas écrire de
+    // test qui dépende de cet ordre.
+    .replace(/json_agg\(/gi, 'json_group_array(')
+    .replace(/json_build_object\(/gi, 'json_object(')
+    .replace(/json_group_array\((.*?)\s+ORDER BY\s+[\w.]+(\s+(?:ASC|DESC))?\)/gis, 'json_group_array($1)')
     .replace(/ON CONFLICT\((\w+)\) DO UPDATE SET/g, 'ON CONFLICT($1) DO UPDATE SET')
     .replace(/now\(\)/g, "datetime('now')")
     .replace(/EXCLUDED\./g, 'excluded.');

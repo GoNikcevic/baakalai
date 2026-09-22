@@ -68,6 +68,10 @@ async function setup() {
   app.use('/api/projects', requireAuth, require('../routes/projects'));
   app.use('/api/profile', requireAuth, require('../routes/profile'));
   app.use('/api/ai', requireAuth, require('../routes/ai'));
+  // Monté pour que l'export RGPD soit testable : ses requêtes listent leurs
+  // colonnes une par une, et une colonne disparue y passe inaperçue jusqu'au
+  // 500 en production. C'est arrivé avec `phone` sur opportunities.
+  app.use('/api/export', requireAuth, require('../routes/export'));
   app.use(errorHandler);
 
   return new Promise((resolve) => {

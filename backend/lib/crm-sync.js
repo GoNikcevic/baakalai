@@ -100,7 +100,7 @@ async function syncCRM(userId) {
         // `OwnerId` manquait : sans lui, aucun contact rapatrié par ce chemin
         // ne pouvait être rattaché à un commercial (lib/crm-owner-resolver.js).
         const contactSoql = encodeURIComponent(
-          'SELECT Id, FirstName, LastName, Email, Phone, Account.Name, Title, OwnerId, CreatedDate, LastModifiedDate FROM Contact WHERE Email != null LIMIT 500'
+          'SELECT Id, FirstName, LastName, Email, Account.Name, Title, OwnerId, CreatedDate, LastModifiedDate FROM Contact WHERE Email != null LIMIT 500'
         );
         const contactRes = await fetch(
           `${instanceUrl}/services/data/v58.0/query?q=${contactSoql}`,
@@ -125,7 +125,10 @@ async function syncCRM(userId) {
                 email,
                 title: c.Title || null,
                 company: c.Account?.Name || null,
-                phone: c.Phone || null,
+                // `phone` retiré le 2026-09-22 : opportunities n'a pas cette
+                // colonne, la clé était donc silencieusement ignorée par le
+                // DAO. On ne stocke pas le téléphone (décision Goran), il reste
+                // dans le CRM du client.
                 status: 'imported',
                 crmProvider: 'salesforce',
                 crmContactId: c.Id,
