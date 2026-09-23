@@ -13,6 +13,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
 import { useI18n } from '../i18n';
 import EmailAccountSettings from '../components/EmailAccountSettings';
+import AutopilotSettings from '../components/AutopilotSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
@@ -1056,6 +1057,14 @@ export default function SettingsPage() {
 
       {/* Email sortant */}
       <EmailAccountSettings />
+
+      {/* Réponse automatique aux contacts et clients du CRM.
+          Elle vivait sur la page Automatisation ; celle-ci est devenue
+          100 % événementielle et l'autopilot y deviendra une étape de
+          workflow (décision du 22/09). En attendant que l'étape soit
+          branchée, le réglage global vit ici, avec les autres réglages
+          d'envoi, plutôt que de rester inaccessible. */}
+      <AutopilotSettings scope="crm" />
 
       {/* Envoi · cadence et fenêtres des emails sortants */}
       <div className="card" style={{ marginBottom: 16 }}>
