@@ -21,6 +21,7 @@
 
 const db = require('../db');
 const logger = require('./logger');
+const { setPlannedFollowupDate } = require('./reactivation-queue');
 
 async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
   const result = { processed: 0, updated: 0 };
@@ -80,11 +81,13 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
         updates.lost_reason = deal.lostReason;
         updates.lost_reason_source = 'crm';
       }
-      // Pipedrive's native "next activity" date feeds planned_followup_date · never overwrite
-      // a manually-set date with null (Pipedrive is the only provider that returns this today).
+      // The CRM's native "next activity" date feeds planned_followup_date · it wins over
+      // whatever Baakalai had planned (a rep changing the date in the CRM is the source of
+      // truth), but never overwrites a manually-set date with null. Routed through
+      // setPlannedFollowupDate (not batched into `updates`) so the change lands in
+      // followup_date_history with the previous value, not just silently overwritten.
       if (deal.nextActivityDate && deal.nextActivityDate !== o.planned_followup_date) {
-        updates.planned_followup_date = deal.nextActivityDate;
-        updates.planned_followup_reason = 'crm_sync';
+        await setPlannedFollowupDate(userId, o.id, deal.nextActivityDate, { source: 'crm_sync', reason: 'crm_sync' });
       }
       // The CRM's own "last modified" timestamp is the real activity signal · `updated_at`
       // gets reset to now() by a DB trigger on every internal write (e.g. churn scoring),

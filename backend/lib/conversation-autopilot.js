@@ -29,6 +29,7 @@ const { sendNurtureEmail } = require('./email-outbound');
 const logger = require('./logger');
 const { populationOf } = require('./crm-scope');
 const { outcomeOf, instructionFor } = require('./reply-intents');
+const { setPlannedFollowupDate } = require('./reactivation-queue');
 
 // Garde-fou des conversations qui ne concluent pas. Les deux issues nettes ont
 // leur propre sortie, sur l'intention détectée et non sur un compteur : une
@@ -175,12 +176,14 @@ async function processReply(userId, opts) {
   // retombe sur le repli, qui poursuit l'échange sans rien conclure.
   let instruction = instructionFor(intent);
 
-  if (intent === 'not_now') {
+  if (intent === 'not_now' && !opts.requestedFollowupDate) {
     // La réponse promet « dans quelques semaines » · on le planifie vraiment,
     // au lieu d'envoyer une politesse sans effet sur la file de réactivation.
-    await db.opportunities.update(opportunityId, {
-      planned_followup_date: new Date(Date.now() + NOT_NOW_FOLLOWUP_DAYS * DAY_MS).toISOString(),
-      planned_followup_reason: 'not_now',
+    // Si l'appelant a déjà extrait une date précise de la réponse (cf.
+    // response-analysis-agent.js), elle a déjà été posée et prime sur ce
+    // repli générique · pas de re-planification qui l'écraserait.
+    await setPlannedFollowupDate(userId, opportunityId, new Date(Date.now() + NOT_NOW_FOLLOWUP_DAYS * DAY_MS).toISOString(), {
+      source: 'auto_email', reason: 'not_now',
     });
   }
 

@@ -198,6 +198,29 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
     }
   }
 
+  // Prochaine tâche ouverte par deal (Task.WhatId) · pas de champ direct sur
+  // Opportunity côté Salesforce (contrairement à Pipedrive/HubSpot/Odoo), donc
+  // une requête séparée. Best-effort : une org sans accès à Task, ou une liste
+  // trop longue, ne doit jamais faire échouer le sync des deals eux-mêmes.
+  try {
+    const dealIds = deals.map(d => d.id);
+    const CHUNK = 200;
+    const nextByOppId = new Map();
+    for (let i = 0; i < dealIds.length; i += CHUNK) {
+      const idList = dealIds.slice(i, i + CHUNK).map(id => `'${id}'`).join(',');
+      const taskQuery = `SELECT WhatId, ActivityDate FROM Task WHERE WhatId IN (${idList}) AND IsClosed = false AND ActivityDate != null ORDER BY WhatId, ActivityDate ASC`;
+      const taskRes = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(taskQuery)}`);
+      for (const t of taskRes.records || []) {
+        if (!nextByOppId.has(t.WhatId)) nextByOppId.set(t.WhatId, t.ActivityDate);
+      }
+    }
+    for (const d of deals) {
+      if (nextByOppId.has(d.id)) d.nextActivityDate = nextByOppId.get(d.id);
+    }
+  } catch (err) {
+    console.warn('[salesforce] Next activity date lookup failed:', err.message);
+  }
+
   return deals;
 }
 

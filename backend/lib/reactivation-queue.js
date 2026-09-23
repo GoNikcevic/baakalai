@@ -144,14 +144,43 @@ async function listClientsToUpsell(userId, sort = 'score') {
 }
 
 /**
+ * Single write path for opportunities.planned_followup_date. Every caller
+ * (Reporter manuel, réponse email analysée, autopilot, sync CRM) passe par ici
+ * pour que followup_date_history garde une trace réelle (old → new, source,
+ * raison) au lieu de ne connaître que la valeur courante. No-op si la date ne
+ * change pas réellement (évite de bruiter l'historique).
+ */
+async function setPlannedFollowupDate(userId, opportunityId, newDate, { source, reason = null } = {}) {
+  const current = await db.query(
+    `SELECT planned_followup_date FROM opportunities WHERE id = $1 AND user_id = $2`,
+    [opportunityId, userId]
+  );
+  if (current.rows.length === 0) return null;
+  const oldDate = current.rows[0].planned_followup_date;
+  const oldTime = oldDate ? new Date(oldDate).getTime() : null;
+  const newTime = newDate ? new Date(newDate).getTime() : null;
+  if (oldTime === newTime) return { id: opportunityId };
+
+  const result = await db.query(
+    `UPDATE opportunities SET planned_followup_date = $1, planned_followup_reason = $2 WHERE id = $3 AND user_id = $4 RETURNING id`,
+    [newDate, reason, opportunityId, userId]
+  );
+  if (result.rows.length === 0) return null;
+
+  await db.query(
+    `INSERT INTO followup_date_history (user_id, opportunity_id, old_date, new_date, source, reason)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [userId, opportunityId, oldDate, newDate, source, reason]
+  );
+
+  return result.rows[0];
+}
+
+/**
  * "Reporter" · set (or clear) the planned follow-up date for a deal or upsell candidate.
  */
 async function postponeOpportunity(userId, opportunityId, date) {
-  const result = await db.query(
-    `UPDATE opportunities SET planned_followup_date = $1, planned_followup_reason = 'manual' WHERE id = $2 AND user_id = $3 RETURNING id`,
-    [date, opportunityId, userId]
-  );
-  return result.rows[0] || null;
+  return setPlannedFollowupDate(userId, opportunityId, date, { source: 'manual', reason: 'manual' });
 }
 
 /**
@@ -171,10 +200,11 @@ async function failedSendIds(userId, kind, opportunityIds) {
 }
 
 /**
- * History tab: everything that has happened via Baakalai for this kind's candidates · 
- * emails actually sent, follow-ups postponed (manual or automatic · post-send cooldown is
- * excluded, it's covered by the "sent" entry already), and deals/clients closed CRM-side
- * (won/lost). No AI call, rule-based reads only.
+ * History tab: everything that has happened via Baakalai for this kind's candidates ·
+ * emails actually sent, follow-up date changes (old → new, with source: manual Reporter,
+ * auto_email reply analysis, or crm_sync · post-send cooldown is excluded, it's covered
+ * by the "sent" entry already), and deals/clients closed CRM-side (won/lost). No AI call,
+ * rule-based reads only.
  */
 async function getHistory(userId, kind) {
   const sentResult = await db.query(
@@ -194,25 +224,32 @@ async function getHistory(userId, kind) {
     company: r.company,
   }));
 
+  // Trace réelle des changements (old → new, source) plutôt qu'un instantané de
+  // la valeur courante · un changement reste visible même une fois sa date
+  // passée ou re-changée depuis (cf. migration 116 / setPlannedFollowupDate).
   const postponedResult = await db.query(
-    `SELECT id, name, title, company, planned_followup_date, planned_followup_reason
-     FROM opportunities
-     WHERE user_id = $1 AND status ${kind === 'auto_upsell' ? "= 'won'" : "NOT IN ('won', 'lost')"}
-       AND campaign_id IS NULL
-       AND planned_followup_date IS NOT NULL AND planned_followup_date > now()
-       AND (planned_followup_reason IS NULL OR planned_followup_reason != 'post_send_cooldown')
-     ORDER BY planned_followup_date DESC LIMIT 50`,
+    `SELECT h.id, h.old_date, h.new_date, h.source, h.reason, h.changed_at,
+            o.id AS opportunity_id, o.name, o.title, o.company
+     FROM followup_date_history h
+     JOIN opportunities o ON o.id = h.opportunity_id
+     WHERE h.user_id = $1 AND o.status ${kind === 'auto_upsell' ? "= 'won'" : "NOT IN ('won', 'lost')"}
+       AND o.campaign_id IS NULL
+       AND (h.reason IS NULL OR h.reason != 'post_send_cooldown')
+     ORDER BY h.changed_at DESC LIMIT 50`,
     [userId]
   );
   const postponed = postponedResult.rows.map(r => ({
     eventType: 'postponed',
-    date: r.planned_followup_date,
-    opportunityId: r.id,
+    date: r.changed_at,
+    opportunityId: r.opportunity_id,
     name: r.name,
     title: r.title,
     company: r.company,
-    isManual: r.planned_followup_reason === 'manual' || !r.planned_followup_reason,
-    reason: r.planned_followup_reason || 'manual',
+    oldDate: r.old_date,
+    newDate: r.new_date,
+    source: r.source,
+    isManual: r.source === 'manual',
+    reason: r.reason || 'manual',
   }));
 
   const closedResult = await db.query(
@@ -238,4 +275,4 @@ async function getHistory(userId, kind) {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-module.exports = { listDealsToReactivate, listClientsToUpsell, postponeOpportunity, failedSendIds, getHistory, computeOverdue };
+module.exports = { listDealsToReactivate, listClientsToUpsell, postponeOpportunity, setPlannedFollowupDate, failedSendIds, getHistory, computeOverdue };
