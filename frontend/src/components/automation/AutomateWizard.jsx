@@ -30,12 +30,18 @@ import { showToast } from '../../services/notifications';
 import { useT } from '../../i18n';
 import Icon from '../Icon';
 import WorkflowEditor, { emptySteps } from './WorkflowEditor';
+import { triggerSentence as sentenceOf } from './triggerLabels';
 
 const SIGNAL_CONTEXT = { contact: true, company: true, signal: true, deal: false, owner: false };
+// Un événement CRM porte un deal : le montant, l'étape et le propriétaire
+// deviennent disponibles dans les étapes, là où un signal ne les a pas.
+const CRM_CONTEXT = { contact: true, company: true, signal: false, deal: true, owner: true };
 
-// Déclarés, visibles, grisés. Mieux vaut montrer la cible et dire qu'elle
-// n'est pas prête que laisser croire qu'elle n'existe pas.
+// `deal_stage_changed` est branché. Les deux autres ne le sont pas, et pas par
+// manque de temps : ils se déclencheraient sur chaque ligne d'un import CRM,
+// donc un premier import inscrirait la base entière.
 const CRM_EVENTS = ['deal_stage_changed', 'deal_created', 'contact_created'];
+const WIRED_CRM_EVENTS = ['deal_stage_changed'];
 const EMAIL_EVENTS = ['reply_received', 'no_reply_days'];
 
 export default function AutomateWizard({ signalTypes, preselected, mode, onClose, onDone }) {
@@ -47,6 +53,8 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
   const [typesData, setTypesData] = useState(null);
   const [typesError, setTypesError] = useState(false);
   const [picked, setPicked] = useState(signalTypes || []);
+  const [crmSel, setCrmSel] = useState(null);   // { eventKey, toStages: [] }
+  const [stageData, setStageData] = useState(null);
   const [pick, setPick] = useState(null);
   const [name, setName] = useState('');
   const [steps, setSteps] = useState(emptySteps);
@@ -69,6 +77,9 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
       .then(setMeta)
       .catch(() => setMeta({ workflows: [], hasMailbox: false }));
     loadTypes();
+    request('/automations/stages')
+      .then(setStageData)
+      .catch(() => setStageData({ stages: [], provider: null, latency: 'none' }));
   }, [loadTypes]);
 
   useEffect(() => {
@@ -89,9 +100,12 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
     if (ty.automated) automated[ty.signalType] = ty.automated;
   }));
 
-  const triggerSentence = types.length > 1
-    ? t('automation.wizard.sentenceMulti', { types: typeLabels.join(', ') })
-    : t('automation.wizard.sentenceOne', { type: typeLabels[0] || '' });
+  const hasCrm = !!(crmSel && crmSel.toStages.length > 0);
+  const triggerSentence = hasCrm && types.length === 0
+    ? sentenceOf(t, { eventSource: 'crm_event', eventKey: crmSel.eventKey, conditions: { toStages: crmSel.toStages } })
+    : (types.length > 1
+      ? t('automation.wizard.sentenceMulti', { types: typeLabels.join(', ') })
+      : t('automation.wizard.sentenceOne', { type: typeLabels[0] || '' }));
 
   const toggleType = (ty) => setPicked(p => (p.includes(ty) ? p.filter(x => x !== ty) : [...p, ty]));
 
@@ -113,6 +127,9 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
 
       const body = {
         signalTypes: types,
+        crmEvents: hasCrm
+          ? [{ eventKey: crmSel.eventKey, conditions: { toStages: crmSel.toStages } }]
+          : [],
         arm: !asDraft,
         backfill: backfillIds,
         reenrollPolicy: reenroll,
@@ -135,7 +152,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
         message: asDraft
           ? t('automation.wizard.draftSavedBody')
           : t('automation.wizard.armedBody', {
-            types: typeLabels.join(', '),
+            types: typeLabels.length ? typeLabels.join(', ') : triggerSentence,
             workflow: result.workflow.name,
             queued: enrolled,
           }),
@@ -286,10 +303,64 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                     <EventButton
                       key={k}
                       label={t(`automation.wizard.event.${k}`)}
-                      off={t('automation.wizard.notWiredEvent')}
+                      sub={k === 'deal_stage_changed' ? t(`automation.wizard.latency.${stageData?.latency || 'none'}`) : ''}
+                      off={WIRED_CRM_EVENTS.includes(k) ? null : t('automation.wizard.notWiredImport')}
+                      selected={crmSel?.eventKey === k}
+                      onClick={() => setCrmSel(crmSel?.eventKey === k ? null : { eventKey: k, toStages: [] })}
                     />
                   ))}
                 </div>
+
+                {/* L'étape cible n'est pas un raffinement : sans elle, le
+                    déclencheur partirait à chaque mouvement du pipeline, dans
+                    les deux sens, y compris sur une correction de saisie. */}
+                {crmSel?.eventKey === 'deal_stage_changed' && (
+                  <div style={{
+                    marginTop: 8, padding: '10px 12px', borderRadius: 'var(--r-lg)',
+                    border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+                  }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>
+                      {t('automation.wizard.pickStage')}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      {t('automation.wizard.pickStageHint')}
+                    </div>
+                    {stageData === null && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+                    )}
+                    {stageData && stageData.stages.length === 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--warning)' }}>
+                        {t('automation.wizard.noStages')}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {(stageData?.stages || []).map(st => {
+                        const on = crmSel.toStages.includes(st.stage);
+                        return (
+                          <button
+                            key={st.stage}
+                            onClick={() => setCrmSel(c => ({
+                              ...c,
+                              toStages: on
+                                ? c.toStages.filter(x => x !== st.stage)
+                                : [...c.toStages, st.stage],
+                            }))}
+                            style={{
+                              fontSize: 12, padding: '4px 12px', borderRadius: 'var(--r-full)',
+                              border: `1px solid ${on ? 'var(--text-primary)' : 'var(--border)'}`,
+                              background: on ? 'var(--bg-card)' : 'transparent',
+                              color: 'var(--text-primary)', cursor: 'pointer',
+                              fontWeight: on ? 600 : 400,
+                            }}
+                          >
+                            {st.stage}
+                            <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {st.deals}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -366,7 +437,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
               steps={steps}
               onStepsChange={setSteps}
               triggerSentence={triggerSentence}
-              context={SIGNAL_CONTEXT}
+              context={hasCrm && types.length === 0 ? CRM_CONTEXT : SIGNAL_CONTEXT}
               crmProvider={meta?.activeCrmProvider}
             />
           )}
@@ -389,9 +460,11 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                   {t('automation.wizard.fromNowTitle')}
                 </div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>
-                  {types.length > 1
-                    ? t('automation.wizard.fromNowMulti', { count: types.length })
-                    : t('automation.wizard.fromNowOne', { type: typeLabels[0] })}
+                  {hasCrm && types.length === 0
+                    ? t('automation.wizard.fromNowStage')
+                    : (types.length > 1
+                      ? t('automation.wizard.fromNowMulti', { count: types.length })
+                      : t('automation.wizard.fromNowOne', { type: typeLabels[0] }))}
                 </div>
               </div>
 
@@ -486,8 +559,8 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
             {step === 0 && (
               <button
                 className="btn btn-primary"
-                style={{ fontSize: 12, padding: '6px 16px', opacity: picked.length ? 1 : 0.45 }}
-                disabled={picked.length === 0}
+                style={{ fontSize: 12, padding: '6px 16px', opacity: (picked.length || hasCrm) ? 1 : 0.45 }}
+                disabled={picked.length === 0 && !hasCrm}
                 onClick={() => setStep(1)}
               >
                 {t('common.continue')}

@@ -563,7 +563,9 @@ const workflows = {
       `SELECT w.*,
               (SELECT COUNT(*) FROM touchpoints t WHERE t.workflow_id = w.id) AS step_count,
               COALESCE((
-                SELECT json_agg(json_build_object('id', a.id, 'label', a.label, 'status', a.status)
+                SELECT json_agg(json_build_object('id', a.id, 'label', a.label, 'status', a.status,
+                                                  'eventSource', a.event_source, 'eventKey', a.event_key,
+                                                  'conditions', a.conditions)
                                 ORDER BY a.created_at)
                   FROM automation_triggers a WHERE a.workflow_id = w.id
               ), '[]'::json) AS triggers
@@ -606,13 +608,17 @@ const workflows = {
 };
 
 const automationTriggers = {
-  async create({ userId, workflowId, eventSource, eventKey, label, status }) {
+  async create({ userId, workflowId, eventSource, eventKey, label, status, conditions }) {
     const result = await query(
-      `INSERT INTO automation_triggers (user_id, workflow_id, event_source, event_key, label, status, armed_at)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6::text, 'draft'),
+      `INSERT INTO automation_triggers
+         (user_id, workflow_id, event_source, event_key, label, status, conditions, armed_at)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::text, 'draft'), COALESCE($7::jsonb, '{}'::jsonb),
                CASE WHEN $6::text IN ('active', 'paused') THEN now() END)
        RETURNING *`,
-      [userId, workflowId, eventSource, eventKey, label, status || null]
+      [
+        userId, workflowId, eventSource, eventKey, label, status || null,
+        conditions ? JSON.stringify(conditions) : null,
+      ]
     );
     return result.rows[0];
   },

@@ -151,7 +151,19 @@
         "no_reply_days": "No reply for N days"
       },
       "typesError": "Signal types could not be loaded.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "sentenceStage": "a deal moves to {stages}",
+      "sentenceStageShort": "Deal moved to {stages}",
+      "pickStage": "To which stage?",
+      "pickStageHint": "Without a target stage, the trigger would fire on every pipeline move, in both directions, including a typo being corrected. The number is how many deals sit on that stage today.",
+      "noStages": "No pipeline stage has come back from your CRM yet. Run a sync from Settings.",
+      "notWiredImport": "Not available yet: this event would fire on every row of an import, so a first import would enroll your whole base.",
+      "fromNowStage": "Every deal that moves to this stage will enroll its contact in this workflow automatically.",
+      "latency": {
+        "realtime": "Received immediately, your CRM sends a webhook.",
+        "sync": "Received at the next sync pass, or as soon as you run a manual sync.",
+        "none": "This connector does not report pipeline stages."
+      }
     },
     "editor": {
       "workflowName": "Workflow name",
@@ -257,7 +269,8 @@
         "waiting": "Armed, but no {type} signal has arrived since. Nothing to fix, this is normal quiet.",
         "nobox": "Armed, but no mailbox is connected. Nothing can go out.",
         "breaker": "Paused for safety: the threshold is {threshold} enrollments per hour. {reason}. Check the list before restarting.",
-        "draft": "Not armed. Nothing goes out until the recap is confirmed."
+        "draft": "Not armed. Nothing goes out until the recap is confirmed.",
+        "waitingEvent": "Armed, but \"{what}\" has not happened yet. Nothing to fix, this is normal quiet."
       },
       "noWorkflow": "No workflow yet.",
       "usedBy": "Used by {count} triggers: {list}",

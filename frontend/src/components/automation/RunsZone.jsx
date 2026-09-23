@@ -13,6 +13,7 @@
 import { useState, useEffect } from 'react';
 import { request } from '../../services/api-client';
 import { useT, useI18n } from '../../i18n';
+import { triggerLabel } from './triggerLabels';
 import Icon from '../Icon';
 
 export default function RunsZone({ activeTriggers, onGoSignals, onGoTriggers }) {
@@ -73,7 +74,7 @@ export default function RunsZone({ activeTriggers, onGoSignals, onGoTriggers }) 
               </td>
               <td style={{ padding: '10px 12px' }}>{r.workflowName}</td>
               <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--grey-700)' }}>
-                {r.triggerLabel ? t(`signals.type.${r.triggerLabel}`) : ''}
+                {triggerLabel(t, r.trigger)}
               </td>
               <td style={{ padding: '10px 12px', fontSize: 12 }}>
                 {t('automation.runs.step', { done: r.doneSteps, total: r.totalSteps })}

@@ -13,6 +13,7 @@
 import { useState, useEffect } from 'react';
 import { request } from '../../services/api-client';
 import { useT, useI18n } from '../../i18n';
+import { triggerLabel } from './triggerLabels';
 
 const REASON_TONE = {
   replied: 'var(--primary)',
@@ -79,7 +80,7 @@ export default function HistoryZone({ hasRuns }) {
               </td>
               <td style={{ padding: '10px 12px' }}>{e.workflowName}</td>
               <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--grey-700)' }}>
-                {e.triggerLabel ? t(`signals.type.${e.triggerLabel}`) : ''}
+                {triggerLabel(t, e.trigger)}
               </td>
               <td style={{ padding: '10px 12px', fontSize: 12 }}>{fmt(e.enteredAt)}</td>
               <td style={{ padding: '10px 12px', fontSize: 12 }}>{fmt(e.exitedAt)}</td>

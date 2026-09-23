@@ -80,6 +80,7 @@ const fakeDb = {
       return { rows: state.liveEnrollment ? [{ '?column?': 1 }] : [] };
     }
     if (/FROM signals/.test(sql) && /id = ANY/.test(sql)) return { rows: state.backfillSignals || [] };
+    if (/FROM automation_triggers/.test(sql)) return { rows: state.crmTriggers || [] };
     return { rows: [] };
   },
   opportunities: {
@@ -115,7 +116,9 @@ require.cache[dbPath] = {
   loaded: true, children: [], paths: [], exports: fakeDb,
 };
 
-const { enrollFromSignal, runBackfill, dedupKeyFor, BREAKER_PER_HOUR } = require('../lib/automation-enroll');
+const {
+  enrollFromSignal, runBackfill, dedupKeyFor, onCrmEvent, matchesConditions, BREAKER_PER_HOUR,
+} = require('../lib/automation-enroll');
 
 const SIGNAL = {
   id: 'sig-1', user_id: 'u1', signal_type: 'hiring', status: 'new',
@@ -317,4 +320,105 @@ test('un rattrapage sans identifiant ne fait rien', async () => {
   reset();
   const report = await runBackfill('u1', state.trigger, []);
   assert.deepEqual(report, { enrolled: 0, skipped: 0, reasons: {} });
+});
+
+
+/* ─────────────── evenement CRM : changement de stage ─────────────── */
+
+const CRM_TRIGGER = {
+  id: 'trig-crm', user_id: 'u1', workflow_id: 'wf-1',
+  event_source: 'crm_event', event_key: 'deal_stage_changed', status: 'active',
+  conditions: { toStages: ['Gagné'] },
+};
+
+test('un deal qui passe au stage cible inscrit son contact', async () => {
+  reset();
+  state.crmTriggers = [CRM_TRIGGER];
+  const out = await onCrmEvent({
+    userId: 'u1', opportunityId: 'opp-1', eventKey: 'deal_stage_changed', toStage: 'Gagné',
+  });
+
+  assert.equal(out.ok, true);
+  assert.equal(state.createdEnrollments.length, 1);
+  assert.equal(state.createdEnrollments[0].triggerId, 'trig-crm');
+  // Aucun signal n'est touche : l evenement ne vient pas de la veille.
+  assert.equal(state.signalUpdates.length, 0);
+});
+
+test('un deal qui passe a un AUTRE stage n inscrit personne', async () => {
+  reset();
+  state.crmTriggers = [CRM_TRIGGER];
+  const out = await onCrmEvent({
+    userId: 'u1', opportunityId: 'opp-1', eventKey: 'deal_stage_changed', toStage: 'Négociation',
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(state.createdEnrollments.length, 0);
+});
+
+test('la comparaison de stage ignore la casse', () => {
+  assert.equal(matchesConditions(CRM_TRIGGER, { toStage: 'gagné' }), true);
+  assert.equal(matchesConditions(CRM_TRIGGER, { toStage: 'GAGNÉ' }), true);
+});
+
+test('un declencheur de stage SANS stage cible ne matche rien, jamais tout', () => {
+  // Le piege a eviter : une condition vide interpretee comme « tous les
+  // stages » ferait partir le declencheur a chaque mouvement de pipeline.
+  const naked = { ...CRM_TRIGGER, conditions: {} };
+  assert.equal(matchesConditions(naked, { toStage: 'Gagné' }), false);
+  assert.equal(matchesConditions(naked, {}), false);
+});
+
+test('un prospect de campagne n est pas inscrit par un evenement CRM non plus', async () => {
+  reset({ opportunity: { id: 'opp-1', user_id: 'u1', email: 'x@y.fr', campaign_id: 'camp-1' } });
+  state.crmTriggers = [CRM_TRIGGER];
+  const out = await onCrmEvent({
+    userId: 'u1', opportunityId: 'opp-1', eventKey: 'deal_stage_changed', toStage: 'Gagné',
+  });
+
+  assert.equal(out.reason, 'no_known_contact');
+  assert.equal(state.createdEnrollments.length, 0);
+});
+
+test('deux declencheurs sur le meme evenement : seul celui qui matche part', async () => {
+  reset();
+  state.crmTriggers = [
+    { ...CRM_TRIGGER, id: 'trig-a', conditions: { toStages: ['Négociation'] } },
+    { ...CRM_TRIGGER, id: 'trig-b', conditions: { toStages: ['Gagné'] } },
+  ];
+  const out = await onCrmEvent({
+    userId: 'u1', opportunityId: 'opp-1', eventKey: 'deal_stage_changed', toStage: 'Gagné',
+  });
+
+  assert.equal(out.ok, true);
+  assert.equal(state.createdEnrollments.length, 1);
+  assert.equal(state.createdEnrollments[0].triggerId, 'trig-b');
+});
+
+test('aucun declencheur CRM arme : rien ne se passe', async () => {
+  reset();
+  state.crmTriggers = [];
+  const out = await onCrmEvent({
+    userId: 'u1', opportunityId: 'opp-1', eventKey: 'deal_stage_changed', toStage: 'Gagné',
+  });
+  assert.equal(out.reason, 'no_trigger');
+  assert.equal(state.createdEnrollments.length, 0);
+});
+
+test('un evenement CRM ne leve jamais, meme si la base tombe', async () => {
+  // Une automatisation qui echoue ne doit jamais casser la synchro CRM qui
+  // l a produite : trackStage appelle ceci en plein milieu d un import.
+  reset();
+  Object.defineProperty(state, 'crmTriggers', {
+    get() { throw new Error('base indisponible'); },
+    configurable: true,
+  });
+
+  const out = await onCrmEvent({
+    userId: 'u1', opportunityId: 'opp-1', eventKey: 'deal_stage_changed', toStage: 'Gagné',
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.reason, 'error');
+  delete state.crmTriggers;
 });

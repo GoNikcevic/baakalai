@@ -81,21 +81,60 @@ function contextOf(eventSource, eventKey) {
  * laisser croire qu'elle n'existe pas. Le grisage doit toujours porter sa
  * raison, jamais une phrase générique.
  */
-const WIRED_EVENT_SOURCES = ['signal'];
+const WIRED_EVENT_SOURCES = ['signal', 'crm_event'];
 
 function isWired(eventSource) {
   return WIRED_EVENT_SOURCES.includes(eventSource);
 }
 
-/** Catalogue des événements CRM et email, déclarés mais pas encore branchés. */
 const CRM_EVENT_KEYS = ['deal_stage_changed', 'deal_created', 'contact_created'];
 const EMAIL_EVENT_KEYS = ['reply_received', 'no_reply_days'];
+
+/**
+ * Les événements CRM réellement branchés.
+ *
+ * `deal_stage_changed` l'est parce qu'il a un point d'entrée unique
+ * (lib/stage-tracking.trackStage), emprunté aussi bien par le webhook
+ * Pipedrive que par la synchro delta.
+ *
+ * `deal_created` et `contact_created` ne le sont PAS, et pas par manque de
+ * temps : ils se déclencheraient sur chaque ligne d'un import CRM. Un premier
+ * import inscrirait la base entière. Les brancher demande d'abord de
+ * distinguer une création réelle d'une découverte à l'import, ce qui est un
+ * autre chantier.
+ */
+const WIRED_CRM_EVENT_KEYS = ['deal_stage_changed'];
+
+/**
+ * À quelle vitesse un changement de stage nous parvient, par connecteur.
+ * L'interface doit le dire : sur un connecteur en synchro quotidienne, un
+ * déclencheur qui paraît muet est simplement en attente du prochain passage.
+ *
+ *   'realtime' · webhook, le changement arrive tout de suite
+ *   'sync'     · au prochain passage de synchro (cron quotidien ou manuel)
+ *   'none'     · ce connecteur n'a pas de pipeline suivi
+ */
+const STAGE_CHANGE_LATENCY = {
+  pipedrive: 'realtime',
+  hubspot: 'sync',
+  salesforce: 'sync',
+  odoo: 'sync',
+  notion: 'none',
+  airtable: 'none',
+  folk: 'none',
+};
+
+function stageChangeLatency(provider) {
+  return STAGE_CHANGE_LATENCY[provider] || 'none';
+}
 
 module.exports = {
   VEILLE_SIGNAL_TYPES,
   CRM_SIGNAL_TYPES,
   CRM_EVENT_KEYS,
+  WIRED_CRM_EVENT_KEYS,
   EMAIL_EVENT_KEYS,
+  stageChangeLatency,
   FAMILY_VEILLE,
   FAMILY_CRM,
   familyOfSignalType,

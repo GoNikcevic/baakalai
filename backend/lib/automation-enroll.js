@@ -148,31 +148,28 @@ async function markSignal(signalId, patch) {
 }
 
 /**
- * Inscrit le contact d'un signal dans le workflow de son déclencheur.
+ * Le coeur commun : un déclencheur, un contact, un enrollment.
  *
- * @param {object} signal  ligne complète de `signals`
- * @param {object} opts    { source: 'event' | 'backfill', trigger, workflow }
- * @returns {Promise<{ ok: boolean, reason?: string, enrollmentId?: string }>}
+ * L'ORDRE des vérifications est significatif et ne doit pas bouger. Le contact
+ * n'est résolu qu'APRÈS la boîte mail et le disjoncteur : une cause transitoire
+ * ne doit pas consommer l'événement qui l'a portée, alors qu'une cause
+ * définitive doit pouvoir être écrite sur lui.
+ *
+ * `resolve()` rend { opp } ou { skip } : c'est le seul point qui diffère entre
+ * un signal (contact déduit du signal) et un événement CRM (contact déjà
+ * connu, c'est lui qui a bougé).
  */
-async function enrollFromSignal(signal, opts = {}) {
-  const source = opts.source === 'backfill' ? 'backfill' : 'event';
-
-  const trigger = opts.trigger
-    || await db.automationTriggers.findActive(signal.user_id, 'signal', signal.signal_type);
-  if (!trigger) return { ok: false, reason: 'no_trigger' };
-
-  const workflow = opts.workflow || await db.workflows.get(trigger.workflow_id);
-  if (!workflow || workflow.archived_at) return { ok: false, reason: 'no_workflow' };
+async function runEnrollment({ userId, trigger, workflow, source, resolve, rationale, signalId }) {
+  const wf = workflow || await db.workflows.get(trigger.workflow_id);
+  if (!wf || wf.archived_at) return { ok: false, reason: 'no_workflow' };
 
   // Un workflow sans étape n'inscrit personne : il enverrait le contact dans
   // une file vide, et l'enrollment se terminerait aussitôt en `completed`,
   // ce qui ressemblerait à un parcours réussi.
-  const stepCount = (await db.touchpoints.listByWorkflow(workflow.id)).length;
+  const stepCount = (await db.touchpoints.listByWorkflow(wf.id)).length;
   if (stepCount === 0) return { ok: false, reason: 'workflow_empty' };
 
-  if (!await hasActiveMailbox(signal.user_id)) {
-    return { ok: false, reason: 'no_mailbox' };
-  }
+  if (!await hasActiveMailbox(userId)) return { ok: false, reason: 'no_mailbox' };
 
   // Disjoncteur, avant toute écriture. Seul le flux événementiel est compté.
   if (source === 'event') {
@@ -186,70 +183,155 @@ async function enrollFromSignal(signal, opts = {}) {
     }
   }
 
-  const { opp, skip } = await resolveContact(signal);
-  if (skip) {
-    await markSignal(signal.id, { status: 'skipped', triggerId: trigger.id, skipReason: skip });
-    return { ok: false, reason: skip };
-  }
-  if (!opp.email) {
-    await markSignal(signal.id, { status: 'skipped', triggerId: trigger.id, skipReason: 'no_email' });
-    return { ok: false, reason: 'no_email' };
-  }
+  const { opp, skip } = await resolve();
+  if (skip) return { ok: false, reason: skip, consumed: true };
+  if (!opp.email) return { ok: false, reason: 'no_email', consumed: true };
 
   // Réinscription. `never` s'appuie sur l'index unique (course possible entre
   // deux passages de cron), `period` sur une lecture.
-  if (workflow.reenroll_policy === 'period'
-      && await enrolledRecently(workflow.id, opp.id, workflow.reenroll_days)) {
-    await markSignal(signal.id, {
-      status: 'skipped', triggerId: trigger.id, skipReason: 'recently_enrolled',
-    });
-    return { ok: false, reason: 'recently_enrolled' };
+  if (wf.reenroll_policy === 'period'
+      && await enrolledRecently(wf.id, opp.id, wf.reenroll_days)) {
+    return { ok: false, reason: 'recently_enrolled', consumed: true };
   }
 
   // Sortie de sécurité « contact déjà inscrit dans un autre workflow ». Elle
   // existait déjà comme index unique partiel (migration 103) : on la lit avant
   // d'écrire pour pouvoir en donner la raison, au lieu de la subir en 23505.
   if (await hasLiveEnrollment(opp.id)) {
-    await markSignal(signal.id, {
-      status: 'skipped', triggerId: trigger.id, skipReason: 'contact_in_other_workflow',
-    });
-    return { ok: false, reason: 'contact_in_other_workflow' };
+    return { ok: false, reason: 'contact_in_other_workflow', consumed: true };
   }
 
   let enrollment;
   try {
     enrollment = await db.sequenceEnrollments.create({
-      userId: signal.user_id,
+      userId,
       opportunityId: opp.id,
       goal: 'automation',
-      rationale: signal.title || null,
+      rationale: rationale || null,
       createdBy: 'trigger',
       triggerId: trigger.id,
-      workflowId: workflow.id,
-      signalId: signal.id,
+      workflowId: wf.id,
+      signalId: signalId || null,
       enrollmentSource: source,
-      dedupKey: dedupKeyFor(workflow, opp.id),
+      dedupKey: dedupKeyFor(wf, opp.id),
       status: 'active',
     });
   } catch (err) {
     // 23505 = l'un des deux index uniques a parlé (dédup de réinscription, ou
     // un parcours vivant créé entre notre lecture et notre écriture).
-    if (err.code === '23505') {
-      await markSignal(signal.id, {
-        status: 'skipped', triggerId: trigger.id, skipReason: 'recently_enrolled',
-      });
-      return { ok: false, reason: 'recently_enrolled' };
-    }
+    if (err.code === '23505') return { ok: false, reason: 'recently_enrolled', consumed: true };
     throw err;
   }
 
-  await copySteps(workflow.id, enrollment.id);
-  await markSignal(signal.id, {
-    status: 'automated', triggerId: trigger.id, enrollmentId: enrollment.id,
-  });
+  await copySteps(wf.id, enrollment.id);
   await db.automationTriggers.markFired(trigger.id);
 
   return { ok: true, enrollmentId: enrollment.id, opportunityId: opp.id };
+}
+
+/**
+ * La condition d'entrée d'un événement CRM.
+ *
+ * Pour `deal_stage_changed` elle est OBLIGATOIRE : sans stage cible, le
+ * déclencheur inscrirait un contact à chaque mouvement de pipeline, dans les
+ * deux sens, y compris quand un commercial corrige une faute de saisie. Un
+ * déclencheur sans condition ne matche donc rien, plutôt que tout.
+ */
+function matchesConditions(trigger, { toStage } = {}) {
+  const c = trigger.conditions || {};
+  if (trigger.event_key === 'deal_stage_changed') {
+    const wanted = Array.isArray(c.toStages) ? c.toStages : [];
+    if (wanted.length === 0 || !toStage) return false;
+    return wanted.some(w => String(w).toLowerCase() === String(toStage).toLowerCase());
+  }
+  return true;
+}
+
+/**
+ * Inscrit le contact d'un signal dans le workflow de son déclencheur.
+ *
+ * @param {object} signal  ligne complète de `signals`
+ * @param {object} opts    { source: 'event' | 'backfill', trigger, workflow }
+ * @returns {Promise<{ ok: boolean, reason?: string, enrollmentId?: string }>}
+ */
+async function enrollFromSignal(signal, opts = {}) {
+  const source = opts.source === 'backfill' ? 'backfill' : 'event';
+
+  const trigger = opts.trigger
+    || await db.automationTriggers.findActive(signal.user_id, 'signal', signal.signal_type);
+  if (!trigger) return { ok: false, reason: 'no_trigger' };
+
+  const out = await runEnrollment({
+    userId: signal.user_id,
+    trigger,
+    workflow: opts.workflow,
+    source,
+    rationale: signal.title,
+    signalId: signal.id,
+    resolve: () => resolveContact(signal),
+  });
+
+  if (out.ok) {
+    await markSignal(signal.id, {
+      status: 'automated', triggerId: trigger.id, enrollmentId: out.enrollmentId,
+    });
+  } else if (out.consumed) {
+    // Cause définitive pour CE signal : il quitte `new` avec sa raison, sinon
+    // le backlog ne bouge jamais et un déclencheur muet reste inexplicable.
+    await markSignal(signal.id, {
+      status: 'skipped', triggerId: trigger.id, skipReason: out.reason,
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Un événement CRM : le contact est déjà connu, c'est lui qui a bougé.
+ *
+ * Plusieurs déclencheurs peuvent viser le même événement avec des conditions
+ * différentes (« passé à Gagné » et « passé à Négociation » sont deux
+ * automatisations légitimes), donc on les évalue tous.
+ *
+ * Ne lève jamais : une automatisation qui échoue ne doit pas faire échouer la
+ * synchro CRM qui l'a produite.
+ */
+async function onCrmEvent({ userId, opportunityId, eventKey, toStage }) {
+  try {
+    const r = await db.query(
+      `SELECT * FROM automation_triggers
+        WHERE user_id = $1 AND event_source = 'crm_event' AND event_key = $2 AND status = 'active'`,
+      [userId, eventKey]
+    );
+    if (r.rows.length === 0) return { ok: false, reason: 'no_trigger' };
+
+    const results = [];
+    for (const trigger of r.rows) {
+      if (!matchesConditions(trigger, { toStage })) continue;
+
+      const out = await runEnrollment({
+        userId,
+        trigger,
+        source: 'event',
+        rationale: toStage ? `Stage ${toStage}` : null,
+        resolve: async () => {
+          const { isCrmContact } = require('./crm-scope');
+          const opp = await db.opportunities.get(opportunityId);
+          if (!opp || !isCrmContact(opp)) return { skip: 'no_known_contact' };
+          return { opp };
+        },
+      });
+      results.push(out);
+      // Un contact n'entre que dans un workflow à la fois : inutile de le
+      // présenter aux déclencheurs suivants une fois qu'il est inscrit.
+      if (out.ok) break;
+    }
+
+    return results.find(x => x.ok) || results[0] || { ok: false, reason: 'no_match' };
+  } catch (err) {
+    logger.warn('automation', `Evenement CRM ${eventKey} non traite : ${err.message}`);
+    return { ok: false, reason: 'error' };
+  }
 }
 
 /**
@@ -312,6 +394,8 @@ module.exports = {
   BREAKER_PER_HOUR,
   enrollFromSignal,
   onSignalCreated,
+  onCrmEvent,
+  matchesConditions,
   runBackfill,
   // exportés pour les tests
   resolveContact,

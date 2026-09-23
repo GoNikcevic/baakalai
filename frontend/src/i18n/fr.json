@@ -151,7 +151,19 @@
         "no_reply_days": "Aucune réponse depuis N jours"
       },
       "typesError": "Les types de signaux n'ont pas pu être chargés.",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "sentenceStage": "un deal passe à {stages}",
+      "sentenceStageShort": "Deal passé à {stages}",
+      "pickStage": "Vers quelle étape ?",
+      "pickStageHint": "Sans étape cible, le déclencheur partirait à chaque mouvement du pipeline, dans les deux sens, y compris sur une correction de saisie. Le chiffre est le nombre de deals actuellement sur l'étape.",
+      "noStages": "Aucune étape de pipeline n'est encore remontée de ton CRM. Lance une synchro dans les Réglages.",
+      "notWiredImport": "Pas encore disponible : cet événement se déclencherait sur chaque ligne d'un import, donc un premier import inscrirait toute ta base.",
+      "fromNowStage": "Chaque deal qui passera à cette étape inscrira automatiquement son contact dans ce workflow.",
+      "latency": {
+        "realtime": "Reçu tout de suite, ton CRM envoie un webhook.",
+        "sync": "Reçu au prochain passage de synchro, ou dès que tu lances une synchro manuelle.",
+        "none": "Ce connecteur ne remonte pas d'étapes de pipeline."
+      }
     },
     "editor": {
       "workflowName": "Nom du workflow",
@@ -257,7 +269,8 @@
         "waiting": "Armé, mais aucun signal {type} n'est arrivé depuis. Rien à corriger, c'est un silence normal.",
         "nobox": "Armé, mais aucune boîte mail n'est connectée. Rien ne peut partir.",
         "breaker": "Mis en pause par sécurité : le seuil est de {threshold} inscriptions par heure. {reason}. Vérifie la liste avant de relancer.",
-        "draft": "Pas armé. Rien ne part tant que le récapitulatif n'est pas validé."
+        "draft": "Pas armé. Rien ne part tant que le récapitulatif n'est pas validé.",
+        "waitingEvent": "Armé, mais « {what} » ne s'est pas encore produit. Rien à corriger, c'est un silence normal."
       },
       "noWorkflow": "Aucun workflow pour l'instant.",
       "usedBy": "Utilisé par {count} déclencheurs : {list}",

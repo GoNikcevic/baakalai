@@ -29,6 +29,7 @@ import { showToast } from '../../services/notifications';
 import { useT, useI18n } from '../../i18n';
 import WorkflowEditor, { emptySteps } from './WorkflowEditor';
 import AutomateWizard from './AutomateWizard';
+import { triggerLabel, triggerSentence } from './triggerLabels';
 
 function fmtDate(iso, en) {
   if (!iso) return null;
@@ -96,7 +97,7 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
   };
 
   const remove = async (trig) => {
-    if (!window.confirm(t('automation.triggers.deleteConfirm', { label: t(`signals.type.${trig.eventKey}`) }))) return;
+    if (!window.confirm(t('automation.triggers.deleteConfirm', { label: triggerLabel(t, trig) }))) return;
     try {
       await request(`/automations/${trig.id}`, { method: 'DELETE' });
       load();
@@ -201,11 +202,9 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
             <div className="card-body" style={{ padding: '12px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 180, flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
-                    {t('automation.triggers.signalLabel', { type: t(`signals.type.${trig.eventKey}`) })}
-                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{triggerLabel(t, trig)}</div>
                   <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    {t('automation.triggers.signalSub', { type: t(`signals.type.${trig.eventKey}`) })}
+                    {triggerSentence(t, trig)}
                   </div>
                 </div>
 
@@ -268,7 +267,7 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
               )}
               {state === 'waiting' && (
                 <Alert tone="neutral">
-                  {t('automation.triggers.alert.waiting', { type: t(`signals.type.${trig.eventKey}`) })}
+                  {t('automation.triggers.alert.waitingEvent', { what: triggerSentence(t, trig) })}
                 </Alert>
               )}
               {state === 'nobox' && (
@@ -321,7 +320,11 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
                   {users.length
                     ? t('automation.triggers.usedBy', {
                       count: users.length,
-                      list: users.map(u => t(`signals.type.${u.label}`)).join(', '),
+                      list: users.map(u => triggerLabel(t, {
+                      eventSource: u.eventSource || (u.label && u.label.startsWith('deal_') ? 'crm_event' : 'signal'),
+                      eventKey: u.label,
+                      conditions: u.conditions,
+                    })).join(', '),
                     })
                     : t('automation.triggers.orphan')}
                 </div>
@@ -488,7 +491,7 @@ function WorkflowEditPanel({ workflowId, crmProvider, onClose }) {
   };
 
   const sentence = state.trigger
-    ? t('automation.wizard.sentenceOne', { type: t(`signals.type.${state.trigger.eventKey}`) })
+    ? triggerSentence(t, state.trigger)
     : t('automation.editor.noTrigger');
 
   return (

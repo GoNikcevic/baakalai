@@ -173,6 +173,7 @@ router.get('/', async (req, res, next) => {
         label: t.label,
         eventSource: t.event_source,
         eventKey: t.event_key,
+        conditions: t.conditions || {},
         status: t.status,
         pausedReason: t.paused_reason,
         workflowId: t.workflow_id,
@@ -227,13 +228,49 @@ router.get('/workflows/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * GET /api/automations/stages · les étapes de pipeline réellement présentes.
+ *
+ * Lues localement sur `opportunities.crm_stage` (rapatriées depuis la
+ * migration 092) plutôt que rappelées au connecteur : c'est instantané, ça
+ * marche sur les 7 providers de la même façon, et surtout ça ne propose que
+ * des étapes que le compte utilise vraiment. Une liste d'étapes théoriques
+ * ferait choisir un stage sur lequel aucun deal ne passera jamais.
+ */
+router.get('/stages', async (req, res, next) => {
+  try {
+    const [stages, provider] = await Promise.all([
+      db.query(
+        `SELECT crm_stage AS stage, COUNT(*)::int AS deals
+           FROM opportunities
+          WHERE user_id = $1 AND campaign_id IS NULL AND crm_stage IS NOT NULL AND crm_stage <> ''
+          GROUP BY crm_stage
+          ORDER BY COUNT(*) DESC`,
+        [req.user.id]
+      ).then(r => r.rows),
+      db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [req.user.id])
+        .then(r => r.rows[0]?.active_crm_provider || null),
+    ]);
+
+    res.json({
+      provider,
+      // L'interface doit dire la latence réelle : sur un connecteur en synchro
+      // quotidienne, un déclencheur qui paraît muet attend simplement le
+      // prochain passage. Ne pas le dire, c'est laisser croire à une panne.
+      latency: catalog.stageChangeLatency(provider),
+      stages,
+    });
+  } catch (err) { next(err); }
+});
+
 /** Contacts actuellement engagés, avec l'étape où ils se trouvent. */
 router.get('/runs', async (req, res, next) => {
   try {
     const r = await db.query(
       `SELECT e.id, e.created_at, e.started_at, e.status,
               o.name AS contact_name, o.company AS contact_company,
-              w.name AS workflow_name, a.label AS trigger_label,
+              w.name AS workflow_name,
+              a.event_source AS trigger_source, a.event_key AS trigger_key, a.conditions AS trigger_conditions,
               (SELECT COUNT(*) FROM touchpoints t WHERE t.enrollment_id = e.id) AS total_steps,
               (SELECT COUNT(DISTINCT cs.touchpoint_id) FROM campaign_sends cs
                 WHERE cs.enrollment_id = e.id AND cs.status = 'sent') AS done_steps
@@ -252,7 +289,9 @@ router.get('/runs', async (req, res, next) => {
         contactName: row.contact_name,
         contactCompany: row.contact_company,
         workflowName: row.workflow_name,
-        triggerLabel: row.trigger_label,
+        trigger: row.trigger_key
+          ? { eventSource: row.trigger_source, eventKey: row.trigger_key, conditions: row.trigger_conditions || {} }
+          : null,
         status: row.status,
         doneSteps: parseInt(row.done_steps, 10) || 0,
         totalSteps: parseInt(row.total_steps, 10) || 0,
@@ -273,7 +312,8 @@ router.get('/history', async (req, res, next) => {
     const r = await db.query(
       `SELECT e.id, e.created_at, e.completed_at, e.stopped_at, e.status, e.stop_reason,
               o.name AS contact_name, o.company AS contact_company,
-              w.name AS workflow_name, a.label AS trigger_label
+              w.name AS workflow_name,
+              a.event_source AS trigger_source, a.event_key AS trigger_key, a.conditions AS trigger_conditions
          FROM sequence_enrollments e
          LEFT JOIN opportunities o ON o.id = e.opportunity_id
          LEFT JOIN workflows w ON w.id = e.workflow_id
@@ -291,7 +331,9 @@ router.get('/history', async (req, res, next) => {
         contactName: row.contact_name,
         contactCompany: row.contact_company,
         workflowName: row.workflow_name,
-        triggerLabel: row.trigger_label,
+        trigger: row.trigger_key
+          ? { eventSource: row.trigger_source, eventKey: row.trigger_key, conditions: row.trigger_conditions || {} }
+          : null,
         enteredAt: row.created_at,
         exitedAt: row.stopped_at || row.completed_at,
         // `completed` sans motif = le workflow est allé jusqu'au bout sans
@@ -319,18 +361,42 @@ router.get('/history', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const {
-      signalTypes, workflowId, workflowName, steps,
+      signalTypes, crmEvents, workflowId, workflowName, steps,
       backfill, arm, reenrollPolicy, reenrollDays, maxDurationDays,
     } = req.body;
 
     const types = Array.isArray(signalTypes) ? signalTypes.filter(Boolean) : [];
-    if (types.length === 0) {
-      return res.status(400).json({ error: 'Choisis au moins un type de signal.', code: 'no_types' });
+    const events = Array.isArray(crmEvents) ? crmEvents.filter(Boolean) : [];
+
+    if (types.length === 0 && events.length === 0) {
+      return res.status(400).json({ error: 'Choisis au moins un événement.', code: 'no_types' });
     }
     const unknown = types.filter(t => !catalog.VEILLE_SIGNAL_TYPES.includes(t)
       && !catalog.CRM_SIGNAL_TYPES.includes(t));
     if (unknown.length > 0) {
       return res.status(400).json({ error: `Type de signal inconnu : ${unknown[0]}`, code: 'unknown_type' });
+    }
+
+    // Un événement CRM sans condition inscrirait un contact à chaque mouvement
+    // de pipeline, dans les deux sens. La condition n'est pas un raffinement,
+    // elle fait partie de la définition du déclencheur.
+    for (const ev of events) {
+      if (!catalog.WIRED_CRM_EVENT_KEYS.includes(ev.eventKey)) {
+        return res.status(400).json({
+          error: `Événement CRM non disponible : ${ev.eventKey}`, code: 'event_not_wired',
+        });
+      }
+      if (ev.eventKey === 'deal_stage_changed') {
+        const stages = Array.isArray(ev.conditions?.toStages)
+          ? ev.conditions.toStages.filter(x => String(x || '').trim())
+          : [];
+        if (stages.length === 0) {
+          return res.status(400).json({
+            error: 'Choisis au moins une étape cible : sans elle, le déclencheur partirait à chaque mouvement du pipeline.',
+            code: 'no_target_stage',
+          });
+        }
+      }
     }
 
     // Workflow : existant ou nouveau. Un workflow existant n'est pas réécrit
@@ -392,10 +458,37 @@ router.post('/', async (req, res, next) => {
       }));
     }
 
+    // Les événements CRM, eux, peuvent coexister sur la même clé avec des
+    // conditions différentes : « passé à Gagné » et « passé à Négociation »
+    // sont deux automatisations légitimes. L'unicité est portée par l'index
+    // (user, source, clé, conditions) de la migration 115.
+    for (const ev of events) {
+      try {
+        created.push(await db.automationTriggers.create({
+          userId: req.user.id,
+          workflowId: workflow.id,
+          eventSource: 'crm_event',
+          eventKey: ev.eventKey,
+          label: ev.eventKey,
+          conditions: ev.conditions || {},
+          status,
+        }));
+      } catch (err) {
+        if (err.code === '23505') {
+          return res.status(409).json({
+            error: 'Cette automatisation existe déjà, avec les mêmes conditions.',
+            code: 'already_automated',
+          });
+        }
+        throw err;
+      }
+    }
+
     // Rattrapage, uniquement sur ce qui a été explicitement sélectionné.
     const backfillReport = {};
     if (status === 'active' && backfill && typeof backfill === 'object') {
       for (const trigger of created) {
+        if (trigger.event_source !== 'signal') continue;
         const ids = backfill[trigger.event_key];
         if (!Array.isArray(ids) || ids.length === 0) continue;
         backfillReport[trigger.event_key] = await runBackfill(req.user.id, trigger, ids);
