@@ -58,13 +58,18 @@ export default function SignalsZone({ onAutomated }) {
   const [data, setData] = useState(null);
   const [showAutomated, setShowAutomated] = useState(false);
   const [typeSel, setTypeSel] = useState({});
+  const [loadError, setLoadError] = useState(false);
   const [panel, setPanel] = useState(null);      // { signalType }
   const [wizard, setWizard] = useState(null);    // { signalTypes, preselected }
 
+  // « Rien détecté » et « ça n'a pas chargé » ne sont pas le même écran. Les
+  // confondre rend la page indiagnosticable : on regarde une liste vide sans
+  // pouvoir savoir si c'est normal.
   const load = useCallback(() => {
+    setLoadError(false);
     request('/signals/types')
       .then(setData)
-      .catch(() => setData({ families: [], totalNew: 0 }));
+      .catch(() => { setData({ families: [], totalNew: 0 }); setLoadError(true); });
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -158,19 +163,19 @@ export default function SignalsZone({ onAutomated }) {
         <div className="card">
           <div className="card-body" style={{ padding: '32px 20px', textAlign: 'center' }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-              {t('automation.signals.empty.title')}
+              {loadError ? t('automation.signals.loadError.title') : t('automation.signals.empty.title')}
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 520, margin: '0 auto 14px' }}>
-              {t('automation.signals.empty.body')}
+              {loadError ? t('automation.signals.loadError.body') : t('automation.signals.empty.body')}
             </div>
             {/* Une zone vide ne doit pas être un cul-de-sac : un déclencheur
                 s'arme très bien avant qu'un seul signal soit arrivé. */}
             <button
               className="btn btn-ghost"
               style={{ fontSize: 12, padding: '6px 16px' }}
-              onClick={() => navigate('/activation?section=triggers')}
+              onClick={loadError ? load : () => navigate('/activation?section=triggers')}
             >
-              {t('automation.signals.empty.cta')}
+              {loadError ? t('automation.wizard.retry') : t('automation.signals.empty.cta')}
             </button>
           </div>
         </div>
@@ -418,7 +423,7 @@ function SignalPanel({ signalType, onClose, onIgnoreType, onAutomate, onChanged 
     if (ids.length === 0) return;
     setBusy(true);
     try {
-      await request('/signals/dismiss', { method: 'POST', body: { ids } });
+      await request('/signals/dismiss', { method: 'POST', body: JSON.stringify({ ids }) });
       setSel({});
       setAllIds(null);
       load();

@@ -87,7 +87,11 @@
       "ignore": "Ignorer",
       "shownOf": "{shown} affichés sur {total}",
       "noContactTitle": "Pas de fiche à ouvrir",
-      "noContactBody": "Cette société n'est pas dans votre base. Un contact n'est jamais créé depuis un signal."
+      "noContactBody": "Cette société n'est pas dans votre base. Un contact n'est jamais créé depuis un signal.",
+      "loadError": {
+        "title": "Les signaux n'ont pas pu être chargés.",
+        "body": "La liste n'a pas répondu. Ce n'est pas un compte vide, c'est un appel qui a échoué."
+      }
     },
     "wizard": {
       "titleOne": "Automatiser {type}",
@@ -145,7 +149,9 @@
         "contact_created": "Nouveau contact",
         "reply_received": "Réponse reçue",
         "no_reply_days": "Aucune réponse depuis N jours"
-      }
+      },
+      "typesError": "Les types de signaux n'ont pas pu être chargés.",
+      "retry": "Réessayer"
     },
     "editor": {
       "workflowName": "Nom du workflow",

@@ -87,7 +87,11 @@
       "ignore": "Ignore",
       "shownOf": "{shown} shown of {total}",
       "noContactTitle": "No record to open",
-      "noContactBody": "This company is not in your base. A contact is never created from a signal."
+      "noContactBody": "This company is not in your base. A contact is never created from a signal.",
+      "loadError": {
+        "title": "Signals could not be loaded.",
+        "body": "The list did not answer. This is not an empty account, this is a failed call."
+      }
     },
     "wizard": {
       "titleOne": "Automate {type}",
@@ -145,7 +149,9 @@
         "contact_created": "New contact",
         "reply_received": "Reply received",
         "no_reply_days": "No reply for N days"
-      }
+      },
+      "typesError": "Signal types could not be loaded.",
+      "retry": "Try again"
     },
     "editor": {
       "workflowName": "Workflow name",
