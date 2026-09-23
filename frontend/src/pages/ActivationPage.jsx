@@ -115,12 +115,13 @@ export default function ActivationPage() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           padding: '8px 14px', marginBottom: 12, borderRadius: 'var(--r-lg)',
-          background: 'var(--warning-soft, #fef3c7)', border: '1px solid var(--warning, #d97706)',
+          background: 'var(--warning-soft)', border: '1px solid var(--warning)',
           fontSize: 13,
         }}>
           <span style={{
             fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 'var(--r-full)',
-            background: 'var(--warning, #d97706)', color: 'var(--paper, #fff)',
+            background: 'var(--warning-soft)', color: 'var(--warning)',
+            border: '1px solid var(--warning)',
           }}>{pending}</span>
           <span style={{ flex: 1, minWidth: 220 }}>{t('automation.toValidate', { count: pending })}</span>
           <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 14px' }} onClick={() => go('queue')}>
@@ -141,7 +142,8 @@ export default function ActivationPage() {
                 key={c.key}
                 onClick={() => go(c.key)}
                 style={{
-                  flex: 1, minWidth: 140, background: 'var(--bg-card, #fff)', border: 'none',
+                  flex: 1, minWidth: 140, background: 'var(--bg-card)', border: 'none',
+                  color: 'var(--text-primary)',
                   padding: '10px 16px', display: 'flex', flexDirection: 'column',
                   alignItems: 'flex-start', gap: 3, cursor: 'pointer', textAlign: 'left',
                 }}
@@ -180,7 +182,7 @@ export default function ActivationPage() {
                 {s.key === 'signals' && signalCount > 0 && (
                   <span style={{
                     fontSize: 10.5, padding: '2px 8px', borderRadius: 'var(--r-full)',
-                    background: 'var(--primary-softer)', color: 'var(--primary-deep, #5941d6)',
+                    background: 'var(--primary-softer)', color: 'var(--primary)',
                   }}>{signalCount}</span>
                 )}
               </button>

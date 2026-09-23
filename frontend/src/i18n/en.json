@@ -41,7 +41,8 @@
       "veilleSettings": "Watch settings",
       "empty": {
         "title": "baakalai has not spotted anything yet.",
-        "body": "The watch reads your CRM companies every morning: hiring, funding, leadership changes. Signals will show up here."
+        "body": "The watch reads your CRM companies every morning: hiring, funding, leadership changes. Signals will show up here.",
+        "cta": "Create a trigger without waiting"
       },
       "family": {
         "veille": {
@@ -123,7 +124,28 @@
       "draftSaved": "Draft saved",
       "draftSavedBody": "Nothing goes out until the recap is confirmed.",
       "armed": "Automation armed",
-      "armedBody": "{types} to {workflow}. {queued} contacts queued."
+      "armedBody": "{types} to {workflow}. {queued} contacts queued.",
+      "step0": "Trigger",
+      "titleCatalog": "New automation",
+      "pickEvent": "When should baakalai act? Pick the event. Conditions come later.",
+      "family": {
+        "veille": "External watch signals",
+        "crm": "CRM signals",
+        "crmEvent": "Direct CRM events",
+        "emailEvent": "Email events"
+      },
+      "familyCrmEmpty": "Stagnant deal, at-risk customer and inactive contact still live on their own pages. They will join this catalogue.",
+      "notWiredEvent": "Not wired yet: only signals trigger a workflow for now.",
+      "pendingCount": "{count} pending",
+      "noPending": "None pending. The trigger arms anyway and waits for the first one.",
+      "alreadyAutomated": "Already automated to {workflow}.",
+      "event": {
+        "deal_stage_changed": "The deal changes stage",
+        "deal_created": "New deal",
+        "contact_created": "New contact",
+        "reply_received": "Reply received",
+        "no_reply_days": "No reply for N days"
+      }
     },
     "editor": {
       "workflowName": "Workflow name",
@@ -193,7 +215,10 @@
       "savedBody": "Contacts already running keep the steps they received when they entered.",
       "back": "Automation",
       "editHint": "Editing this workflow touches no running journey: each contact keeps the copy of the steps received when they entered.",
-      "noTrigger": "No trigger points to this workflow"
+      "noTrigger": "No trigger points to this workflow",
+      "created": "Workflow created",
+      "createdBody": "It will not run until a trigger points to it.",
+      "createHint": "You can prepare the journey now and decide later what launches it. Until a trigger points to it, it does not run."
     },
     "triggers": {
       "byTrigger": "By trigger",
@@ -230,7 +255,9 @@
       },
       "noWorkflow": "No workflow yet.",
       "usedBy": "Used by {count} triggers: {list}",
-      "orphan": "Does not run: no trigger points to this workflow."
+      "orphan": "Does not run: no trigger points to this workflow.",
+      "create": "Create an automation",
+      "newWorkflow": "New workflow"
     },
     "runs": {
       "empty": {
@@ -458,8 +485,8 @@
     "tabHistory": "History",
     "channelTitle": "Sending channel",
     "channelLemlist": "Send via Lemlist",
-      "mailboxTitle": "Sending mailbox for this campaign",
-      "mailboxDefault": "default",
+    "mailboxTitle": "Sending mailbox for this campaign",
+    "mailboxDefault": "default",
     "channelNative": "Send from my inbox",
     "channelNativeHint": "Emails are sent from your connected inbox (Gmail/Microsoft/SMTP), LinkedIn steps via your LinkedIn account. Volumes are capped to protect your deliverability.",
     "nativeLaunching": "Launching campaign...",
@@ -1408,18 +1435,18 @@
     "noAccount": "No email configured. Add your account to send automated emails.",
     "appPasswordRequired": "App password required (not your regular Gmail password)",
     "steps": "Steps",
-      "isDefault": "Default",
-      "setDefault": "Set as default",
-      "replyReadOn": "Reply detection on: a reply stops the sequence and alerts you.",
-      "replyReadOff": "Reply detection off: a sequence keeps running even after the prospect replied.",
-      "replyReadDone": "Inbox read allowed. Replies will now stop sequences and alert you.",
-      "replyReadConnect": "Allow inbox read",
-      "msAdminTitle": "Your organisation needs to approve baakalai",
-      "msAdminBody": "Microsoft refused the connection: at your company, only an administrator can allow an external app to send from your mailbox. Trying again will not help. Send this link to whoever runs your IT: they approve baakalai once, for the whole organisation, then you come back and connect here.",
-      "msAdminCopy": "Copy the link for my administrator",
-      "msAdminCopied": "Link copied",
-      "msAdminGranted": "Your administrator approved baakalai. You can now connect your Outlook mailbox.",
-      "msDeclined": "Connection cancelled. You declined the permission Microsoft asked for.",
+    "isDefault": "Default",
+    "setDefault": "Set as default",
+    "replyReadOn": "Reply detection on: a reply stops the sequence and alerts you.",
+    "replyReadOff": "Reply detection off: a sequence keeps running even after the prospect replied.",
+    "replyReadDone": "Inbox read allowed. Replies will now stop sequences and alert you.",
+    "replyReadConnect": "Allow inbox read",
+    "msAdminTitle": "Your organisation needs to approve baakalai",
+    "msAdminBody": "Microsoft refused the connection: at your company, only an administrator can allow an external app to send from your mailbox. Trying again will not help. Send this link to whoever runs your IT: they approve baakalai once, for the whole organisation, then you come back and connect here.",
+    "msAdminCopy": "Copy the link for my administrator",
+    "msAdminCopied": "Link copied",
+    "msAdminGranted": "Your administrator approved baakalai. You can now connect your Outlook mailbox.",
+    "msDeclined": "Connection cancelled. You declined the permission Microsoft asked for.",
     "signature": "Signature",
     "signatureTextPlaceholder": "First Last\nRole · Company\n+1 555 123 4567\nhttps://yoursite.com",
     "signatureHint": "Appended to every email sent from this mailbox (follow-ups, nurture, prospecting). Emails sent by baakalai do not include the signature configured in Gmail/Outlook, set it here. Exception: if your company appends a server-side signature (Exchange, Exclaimer…), leave this empty to avoid duplicates.",
@@ -1629,7 +1656,7 @@
     "dismiss": "Dismiss",
     "signalsCount": "{count} signals",
     "contactsInCrm": "{count} contacts in CRM",
-    "backToFeed": "\u2190 Back to feed",
+    "backToFeed": "← Back to feed",
     "crmContacts": "CRM contacts",
     "timeline": "Signal timeline",
     "noCompanySignals": "No signals for this company",

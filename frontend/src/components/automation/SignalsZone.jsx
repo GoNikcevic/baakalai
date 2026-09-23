@@ -134,12 +134,12 @@ export default function SignalsZone({ onAutomated }) {
             {t('automation.signals.showAutomated')}
             <span style={{
               width: 28, height: 16, borderRadius: 'var(--r-full)', position: 'relative',
-              background: showAutomated ? 'var(--ink, #1c1917)' : 'var(--border-strong, #d6d3d1)',
+              background: showAutomated ? 'var(--ink)' : 'var(--border-strong)',
               display: 'block', transition: 'background 0.15s ease',
             }}>
               <span style={{
                 position: 'absolute', top: 2, left: showAutomated ? 14 : 2,
-                width: 12, height: 12, borderRadius: '50%', background: 'var(--paper, #fff)',
+                width: 12, height: 12, borderRadius: '50%', background: 'var(--paper)',
                 transition: 'left 0.15s ease',
               }} />
             </span>
@@ -160,9 +160,18 @@ export default function SignalsZone({ onAutomated }) {
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
               {t('automation.signals.empty.title')}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 520, margin: '0 auto' }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 520, margin: '0 auto 14px' }}>
               {t('automation.signals.empty.body')}
             </div>
+            {/* Une zone vide ne doit pas être un cul-de-sac : un déclencheur
+                s'arme très bien avant qu'un seul signal soit arrivé. */}
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 12, padding: '6px 16px' }}
+              onClick={() => navigate('/activation?section=triggers')}
+            >
+              {t('automation.signals.empty.cta')}
+            </button>
           </div>
         </div>
       )}
@@ -177,8 +186,8 @@ export default function SignalsZone({ onAutomated }) {
               <span style={{
                 fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
                 padding: '2px 8px', borderRadius: 'var(--r-full)',
-                background: fam.key === 'veille' ? 'var(--lavender-soft, #f1eafe)' : 'var(--paper-2)',
-                color: fam.key === 'veille' ? 'var(--primary-deep, #5941d6)' : 'var(--grey-700)',
+                background: fam.key === 'veille' ? 'var(--lavender-soft)' : 'var(--paper-2)',
+                color: fam.key === 'veille' ? 'var(--primary)' : 'var(--grey-700)',
               }}>
                 {t(`automation.signals.family.${fam.key}.tag`)}
               </span>
@@ -205,7 +214,7 @@ export default function SignalsZone({ onAutomated }) {
                     <th style={{ padding: '8px 12px', fontWeight: 500, color: 'var(--grey-500)', fontSize: 11 }}>
                       {t('automation.signals.col.companies')}
                     </th>
-                    <th style={{ padding: '8px 12px', fontWeight: 500, color: 'var(--ink, #1c1917)', fontSize: 11 }}>
+                    <th style={{ padding: '8px 12px', fontWeight: 500, color: 'var(--ink)', fontSize: 11 }}>
                       {t('automation.signals.col.last')} ↓
                     </th>
                     <th style={{ width: 130, padding: '8px 12px' }} />
@@ -238,11 +247,11 @@ export default function SignalsZone({ onAutomated }) {
                         </td>
                         <td style={{
                           padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums',
-                          color: ty.newCount ? 'var(--text-primary)' : 'var(--grey-400, #a8a29e)',
+                          color: ty.newCount ? 'var(--text-primary)' : 'var(--grey-400)',
                         }}>
                           {ty.automated ? 0 : ty.newCount}
                         </td>
-                        <td style={{ padding: '10px 12px', fontSize: 12, color: ty.automated ? 'var(--success, #16a34a)' : 'var(--grey-700)' }}>
+                        <td style={{ padding: '10px 12px', fontSize: 12, color: ty.automated ? 'var(--success)' : 'var(--grey-700)' }}>
                           {ty.automated
                             ? t('automation.signals.automatedTo', { workflow: ty.automated.workflowName })
                             : t('common.no')}
@@ -295,7 +304,7 @@ export default function SignalsZone({ onAutomated }) {
         <div style={{
           position: 'sticky', bottom: 16, marginTop: 16, display: 'flex', alignItems: 'center',
           gap: 12, padding: '10px 16px', borderRadius: 'var(--r-full)',
-          background: 'var(--ink, #1c1917)', color: 'var(--paper, #fff)',
+          background: 'var(--ink)', color: 'var(--paper)',
           boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
         }}>
           <span style={{ fontSize: 13 }}>
@@ -310,7 +319,7 @@ export default function SignalsZone({ onAutomated }) {
           <span style={{ flex: 1 }} />
           <button
             className="btn"
-            style={{ fontSize: 12, padding: '5px 14px', background: 'var(--paper, #fff)', color: 'var(--ink, #1c1917)' }}
+            style={{ fontSize: 12, padding: '5px 14px', background: 'var(--paper)', color: 'var(--ink)' }}
             onClick={() => setWizard({ signalTypes: selectedTypes })}
           >
             {selectedTypes.length > 1
@@ -433,7 +442,7 @@ function SignalPanel({ signalType, onClose, onIgnoreType, onAutomate, onChanged 
         aria-modal="true"
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(460px, 100vw)',
-          background: 'var(--bg-card, #fff)', borderLeft: '1px solid var(--border)',
+          background: 'var(--bg-card)', borderLeft: '1px solid var(--border)',
           zIndex: 91, display: 'flex', flexDirection: 'column',
         }}
       >
@@ -518,7 +527,7 @@ function SignalPanel({ signalType, onClose, onIgnoreType, onAutomate, onChanged 
                   }}
                   style={{
                     flex: 1, minWidth: 0, textAlign: 'left', background: 'none',
-                    border: 'none', padding: 0, cursor: 'pointer',
+                    border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)',
                   }}
                 >
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{s.company_name || t('automation.signals.unknownCompany')}</div>

@@ -27,7 +27,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../../services/api-client';
 import { showToast } from '../../services/notifications';
 import { useT, useI18n } from '../../i18n';
-import WorkflowEditor from './WorkflowEditor';
+import WorkflowEditor, { emptySteps } from './WorkflowEditor';
+import AutomateWizard from './AutomateWizard';
 
 function fmtDate(iso, en) {
   if (!iso) return null;
@@ -46,13 +47,13 @@ function stateOf(trig, hasMailbox) {
 }
 
 const STATE_COLOR = {
-  active: 'var(--success, #16a34a)',
-  silent: 'var(--warning, #d97706)',
+  active: 'var(--success)',
+  silent: 'var(--warning)',
   waiting: 'var(--grey-500)',
-  nobox: 'var(--warning, #d97706)',
-  breaker: 'var(--danger, #dc2626)',
+  nobox: 'var(--warning)',
+  breaker: 'var(--danger)',
   paused: 'var(--grey-500)',
-  draft: 'var(--grey-400, #a8a29e)',
+  draft: 'var(--grey-400)',
 };
 
 export default function TriggersZone({ hasMailbox, onChanged }) {
@@ -63,6 +64,8 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
   const [data, setData] = useState(null);
   const [view, setView] = useState('trig');
   const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [newWorkflow, setNewWorkflow] = useState(false);
 
   const load = useCallback(() => {
     request('/automations').then(setData).catch(() => setData({ triggers: [], workflows: [] }));
@@ -117,6 +120,15 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
     );
   }
 
+  if (newWorkflow) {
+    return (
+      <WorkflowCreatePanel
+        crmProvider={data.activeCrmProvider}
+        onClose={() => { setNewWorkflow(false); load(); }}
+      />
+    );
+  }
+
   const triggers = data.triggers || [];
   const workflows = data.workflows || [];
 
@@ -130,12 +142,35 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
               onClick={() => setView(k)}
               style={{
                 padding: '5px 14px', border: 'none', borderRadius: 8, fontSize: 12, cursor: 'pointer',
-                background: view === k ? 'var(--bg-card, #fff)' : 'transparent',
+                background: view === k ? 'var(--bg-card)' : 'transparent',
                 color: view === k ? 'var(--text-primary)' : 'var(--text-muted)',
                 fontWeight: view === k ? 600 : 400,
               }}
             >{label}</button>
           ))}
+        </div>
+
+        {/* La création ne dépend d'aucun signal existant. Un compte neuf n'en a
+            aucun : si la promotion d'un type était la seule porte d'entrée, il
+            n'y aurait aucun moyen de créer quoi que ce soit tant que la veille
+            n'a pas tourné. */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {view === 'wf' && (
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 12, padding: '5px 14px' }}
+              onClick={() => setNewWorkflow(true)}
+            >
+              + {t('automation.triggers.newWorkflow')}
+            </button>
+          )}
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 12, padding: '5px 14px' }}
+            onClick={() => setCreating(true)}
+          >
+            + {t('automation.triggers.create')}
+          </button>
         </div>
       </div>
 
@@ -143,9 +178,18 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
         <div className="card">
           <div className="card-body" style={{ padding: '32px 20px', textAlign: 'center' }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{t('automation.triggers.empty.title')}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 560, margin: '0 auto' }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 560, margin: '0 auto 14px' }}>
               {t('automation.triggers.empty.body')}
             </div>
+            {/* L'état vide mène à la création, pas vers des signaux qui
+                n'existent peut-être pas encore. */}
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 12, padding: '6px 16px' }}
+              onClick={() => setCreating(true)}
+            >
+              + {t('automation.triggers.create')}
+            </button>
           </div>
         </div>
       )}
@@ -183,7 +227,7 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
                 </div>
 
                 <div style={{ minWidth: 80, fontSize: 12, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  <div style={{ color: trig.entered30d ? 'var(--text-primary)' : 'var(--grey-400, #a8a29e)' }}>
+                  <div style={{ color: trig.entered30d ? 'var(--text-primary)' : 'var(--grey-400)' }}>
                     {trig.entered30d}
                   </div>
                   <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{t('automation.triggers.entered30d')}</div>
@@ -205,7 +249,7 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
                   )}
                   <button
                     className="btn btn-ghost"
-                    style={{ fontSize: 11, padding: '3px 10px', color: 'var(--danger, #dc2626)' }}
+                    style={{ fontSize: 11, padding: '3px 10px', color: 'var(--danger)' }}
                     onClick={() => remove(trig)}
                   >
                     {t('common.delete')}
@@ -272,7 +316,7 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
                   fontSize: 11.5, marginTop: 2,
                   // Un workflow sans déclencheur ne s'exécute jamais. Le dire,
                   // plutôt que de laisser croire à un parcours qui dort.
-                  color: users.length ? 'var(--text-muted)' : 'var(--warning, #d97706)',
+                  color: users.length ? 'var(--text-muted)' : 'var(--warning)',
                 }}>
                   {users.length
                     ? t('automation.triggers.usedBy', {
@@ -298,14 +342,25 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
           </div>
         );
       })}
+
+      <CreateGate
+        open={creating}
+        onClose={() => setCreating(false)}
+        onDone={() => { setCreating(false); load(); if (onChanged) onChanged(); }}
+      />
     </div>
   );
 }
 
+function CreateGate({ open, onClose, onDone }) {
+  if (!open) return null;
+  return <AutomateWizard mode="catalog" onClose={onClose} onDone={onDone} />;
+}
+
 function Alert({ tone, children }) {
   const bg = {
-    warning: 'var(--warning-soft, #fef3c7)',
-    danger: 'var(--danger-soft, #fee2e2)',
+    warning: 'var(--warning-soft)',
+    danger: 'var(--danger-soft)',
     neutral: 'var(--paper-2)',
   }[tone];
   return (
@@ -314,6 +369,81 @@ function Alert({ tone, children }) {
       background: bg, fontSize: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap',
     }}>
       {children}
+    </div>
+  );
+}
+
+/* ═══════════════════ Création d'un workflow seul ═══════════════════ */
+
+/**
+ * Un workflow sans déclencheur ne s'exécutera pas, et la vue « par workflow »
+ * le dit en toutes lettres. Préparer le parcours avant de décider ce qui le
+ * lance reste un ordre de travail légitime : la page ne doit pas obliger à
+ * attendre qu'un signal existe pour pouvoir construire quelque chose.
+ */
+function WorkflowCreatePanel({ crmProvider, onClose }) {
+  const t = useT();
+  const [name, setName] = useState('');
+  const [steps, setSteps] = useState(emptySteps);
+  const [busy, setBusy] = useState(false);
+
+  const valid = name.trim().length > 0
+    && steps.some(s => s.type === 'email')
+    && steps.filter(s => s.type === 'email').every(s => String(s.consigne || '').trim());
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await request('/automations/workflows', {
+        method: 'POST',
+        body: {
+          name: name.trim(),
+          steps: steps.map(s => (s.type === 'wait'
+            ? { type: 'wait', days: s.days }
+            : { type: 'email', consigne: s.consigne })),
+        },
+      });
+      showToast({
+        type: 'success',
+        title: t('automation.editor.created'),
+        message: t('automation.editor.createdBody'),
+      });
+      onClose();
+    } catch (err) {
+      showToast({ type: 'error', title: t('common.error'), message: err.message });
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <button className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }} onClick={onClose}>
+          {'< '}{t('automation.editor.back')}
+        </button>
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '6px 16px', opacity: valid ? 1 : 0.45 }}
+          disabled={!valid || busy}
+          onClick={save}
+        >
+          {t('common.save')}
+        </button>
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+        {t('automation.editor.createHint')}
+      </div>
+
+      <WorkflowEditor
+        name={name}
+        onNameChange={setName}
+        steps={steps}
+        onStepsChange={setSteps}
+        triggerSentence={t('automation.editor.noTrigger')}
+        context={{ contact: true, company: true, signal: false, deal: false, owner: false }}
+        crmProvider={crmProvider}
+      />
     </div>
   );
 }

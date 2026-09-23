@@ -461,6 +461,35 @@ router.delete('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * POST /api/automations/workflows · un workflow seul, sans déclencheur.
+ *
+ * Il ne s'exécutera pas tant qu'aucun déclencheur ne pointe dessus, et
+ * l'interface le dit. Mais préparer un parcours avant de décider ce qui le
+ * lance est un ordre de travail légitime : la page ne doit pas obliger à
+ * attendre qu'un signal existe pour pouvoir construire quoi que ce soit.
+ */
+router.post('/workflows', async (req, res, next) => {
+  try {
+    const { name, steps, reenrollPolicy, reenrollDays, maxDurationDays } = req.body;
+    const invalid = validateSteps(steps);
+    if (invalid) return res.status(400).json(invalid);
+    const label = String(name || '').trim();
+    if (!label) return res.status(400).json({ error: 'Donne un nom au workflow.', code: 'no_name' });
+
+    const workflow = await db.workflows.create({
+      userId: req.user.id, name: label, maxDurationDays, reenrollPolicy, reenrollDays,
+    });
+    const result = await replaceWorkflowSteps(workflow.id, steps);
+
+    res.json({
+      workflow: { id: workflow.id, name: workflow.name },
+      stepCount: result.count,
+      warnings: result.warnings,
+    });
+  } catch (err) { next(err); }
+});
+
 router.put('/workflows/:id', async (req, res, next) => {
   try {
     const workflow = await ownedWorkflow(req, res);

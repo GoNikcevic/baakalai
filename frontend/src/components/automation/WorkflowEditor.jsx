@@ -80,7 +80,7 @@ export default function WorkflowEditor({
   const catalog = catalogFor(t, crmProvider);
 
   const Catalog = ({ at }) => (
-    <div className="card" style={{ margin: '6px 0', borderColor: 'var(--border-strong, #d6d3d1)' }}>
+    <div className="card" style={{ margin: '6px 0', borderColor: 'var(--border-strong)' }}>
       <div className="card-body" style={{ padding: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ fontSize: 12, fontWeight: 600 }}>{t('automation.editor.addStep')}</span>
@@ -101,13 +101,14 @@ export default function WorkflowEditor({
               onClick={() => !c.off && insert(c.type, at)}
               style={{
                 textAlign: 'left', padding: '8px 10px', borderRadius: 'var(--r-lg)',
-                border: '1px solid var(--border)', background: 'var(--paper)',
+                border: '1px solid var(--border)', background: 'var(--bg-card)',
+                color: 'var(--text-primary)',
                 cursor: c.off ? 'not-allowed' : 'pointer', opacity: c.off ? 0.55 : 1,
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                 <span style={{ fontSize: 12.5, fontWeight: 500 }}>{t(`automation.editor.catalog.${c.labelKey}`)}</span>
-                <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: c.off ? 'var(--grey-500)' : 'var(--success, #16a34a)' }}>
+                <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: c.off ? 'var(--grey-500)' : 'var(--success)' }}>
                   {c.off ? t('automation.editor.catalog.greyed') : t('automation.editor.catalog.available')}
                 </span>
               </div>
@@ -132,7 +133,7 @@ export default function WorkflowEditor({
           style={{
             width: '100%', fontSize: 15, fontWeight: 600, padding: '8px 10px',
             border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
-            background: 'var(--paper)', marginBottom: 4,
+            background: 'var(--bg-elevated)', color: 'var(--text-primary)', marginBottom: 4,
           }}
         />
         <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 12 }}>
@@ -141,7 +142,7 @@ export default function WorkflowEditor({
 
         {/* Étape 0 · le déclencheur, épinglé */}
         <div style={{
-          border: '1px solid var(--border-strong, #d6d3d1)', borderRadius: 'var(--r-lg)',
+          border: '1px solid var(--border-strong)', borderRadius: 'var(--r-lg)',
           padding: '10px 14px', background: 'var(--paper-2)', marginBottom: 4,
         }}>
           <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--grey-500)' }}>
@@ -163,13 +164,13 @@ export default function WorkflowEditor({
         {steps.map((s, i) => (
           <div key={s.id}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
-              <span style={{ width: 1, height: 12, background: 'var(--border-strong, #d6d3d1)', marginLeft: 14 }} />
+              <span style={{ width: 1, height: 12, background: 'var(--border-strong)', marginLeft: 14 }} />
               <button
                 onClick={() => setInsertAt(insertAt === i ? null : i)}
                 aria-label={t('automation.editor.addStepHere')}
                 style={{
                   width: 20, height: 20, lineHeight: '18px', borderRadius: '50%',
-                  border: '1px solid var(--border-strong, #d6d3d1)', background: 'var(--paper)',
+                  border: '1px solid var(--border-strong)', background: 'var(--paper)',
                   cursor: 'pointer', fontSize: 13, color: 'var(--grey-700)', padding: 0,
                 }}
               >+</button>
@@ -207,7 +208,8 @@ export default function WorkflowEditor({
                       style={{
                         width: '100%', fontSize: 12.5, padding: '8px 10px', resize: 'vertical',
                         border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
-                        background: 'var(--paper)',
+                        background: 'var(--bg-elevated)', color: 'var(--text-primary)',
+                        fontFamily: 'var(--font-sans)',
                       }}
                     />
                     {/* Une consigne, pas un email rédigé : elle vaut pour tous
@@ -216,7 +218,7 @@ export default function WorkflowEditor({
                       {t('automation.editor.consigneHint')}
                     </div>
                     {!String(s.consigne || '').trim() && (
-                      <div style={{ fontSize: 11, color: 'var(--warning, #d97706)', marginTop: 4 }}>
+                      <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
                         {t('automation.editor.consigneMissing')}
                       </div>
                     )}
@@ -234,6 +236,7 @@ export default function WorkflowEditor({
                       style={{
                         width: 64, fontSize: 12.5, padding: '4px 8px',
                         border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
+                        background: 'var(--bg-elevated)', color: 'var(--text-primary)',
                       }}
                     />
                     {t('automation.editor.waitDays')}
@@ -245,7 +248,7 @@ export default function WorkflowEditor({
         ))}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0' }}>
-          <span style={{ width: 1, height: 12, background: 'var(--border-strong, #d6d3d1)', marginLeft: 14 }} />
+          <span style={{ width: 1, height: 12, background: 'var(--border-strong)', marginLeft: 14 }} />
         </div>
         {insertAt === 'end' && <Catalog at="end" />}
         <button
@@ -271,7 +274,7 @@ export default function WorkflowEditor({
                 <div key={k} style={{ display: 'flex', gap: 7, alignItems: 'baseline', fontSize: 11.5 }}>
                   <span style={{
                     width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
-                    background: 'var(--ink, #1c1917)', marginTop: 5,
+                    background: 'var(--ink)', marginTop: 5,
                   }} />
                   <span>{t(`automation.editor.exit.${k}`)}</span>
                 </div>
@@ -282,7 +285,7 @@ export default function WorkflowEditor({
               <div style={{ display: 'flex', gap: 7, alignItems: 'baseline', fontSize: 11.5, opacity: 0.5 }}>
                 <span style={{
                   width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
-                  background: 'var(--grey-400, #a8a29e)', marginTop: 5,
+                  background: 'var(--grey-400)', marginTop: 5,
                 }} />
                 <span style={{ textDecoration: 'line-through' }}>{t('automation.editor.exit.dealStage')}</span>
               </div>
