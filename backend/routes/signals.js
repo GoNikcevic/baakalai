@@ -206,6 +206,26 @@ router.delete('/types/:type/ignore', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * GET /api/signals/types/:type/ids · tous les identifiants en attente d'un type.
+ *
+ * « Tout sélectionner » doit vouloir dire les 124, pas les 50 affichés. Sans
+ * cet appel, l'utilisateur coche une case en croyant armer son stock entier et
+ * n'en inscrit qu'une page : l'écart entre ce qu'il a vu et ce qui est parti
+ * est exactement le genre d'erreur qu'on ne rattrape pas.
+ */
+router.get('/types/:type/ids', async (req, res, next) => {
+  try {
+    const r = await db.query(
+      `SELECT id FROM signals
+        WHERE user_id = $1 AND signal_type = $2 AND status = 'new'
+        ORDER BY detected_at DESC`,
+      [req.user.id, req.params.type]
+    );
+    res.json({ ids: r.rows.map(x => x.id) });
+  } catch (err) { next(err); }
+});
+
 /** Ignorer une sélection de signaux, sans toucher au type. */
 router.post('/dismiss', async (req, res, next) => {
   try {

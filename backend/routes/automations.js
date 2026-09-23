@@ -147,14 +147,26 @@ async function replaceWorkflowSteps(workflowId, steps) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const [triggers, workflows, mailbox] = await Promise.all([
+    const [triggers, workflows, mailbox, crm, runsCount] = await Promise.all([
       db.automationTriggers.listByUser(req.user.id),
       db.workflows.listByUser(req.user.id),
       hasActiveMailbox(req.user.id),
+      // Le grisage du catalogue doit nommer le CRM connecté. Une phrase
+      // générale du type « aucun CRM ne sait faire ça » serait fausse : le
+      // problème est le branchement, et il diffère selon le connecteur.
+      db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [req.user.id])
+        .then(r => r.rows[0]?.active_crm_provider || null),
+      db.query(
+        `SELECT COUNT(*)::int AS n FROM sequence_enrollments
+          WHERE user_id = $1 AND status IN ('draft', 'active', 'paused')`,
+        [req.user.id]
+      ).then(r => r.rows[0]?.n || 0),
     ]);
 
     res.json({
       hasMailbox: mailbox,
+      activeCrmProvider: crm,
+      runsCount,
       breakerPerHour: BREAKER_PER_HOUR,
       triggers: triggers.map(t => ({
         id: t.id,
@@ -268,7 +280,7 @@ router.get('/history', async (req, res, next) => {
          LEFT JOIN automation_triggers a ON a.id = e.trigger_id
         WHERE e.user_id = $1
           AND e.status IN ('completed', 'stopped')
-          AND COALESCE(e.stopped_at, e.completed_at) > now() - make_interval(days => $2)
+          AND COALESCE(e.stopped_at, e.completed_at) > now() - make_interval(days => $2::int)
         ORDER BY COALESCE(e.stopped_at, e.completed_at) DESC
         LIMIT 500`,
       [req.user.id, days]

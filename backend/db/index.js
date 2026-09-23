@@ -476,9 +476,9 @@ const sequenceEnrollments = {
          (user_id, opportunity_id, goal, rationale, created_by,
           trigger_id, workflow_id, signal_id, enrollment_source, dedup_key, status,
           approved_at, started_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, 'draft'),
-               CASE WHEN $11 = 'active' THEN now() END,
-               CASE WHEN $11 = 'active' THEN now() END)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::text, 'draft'),
+               CASE WHEN $11::text = 'active' THEN now() END,
+               CASE WHEN $11::text = 'active' THEN now() END)
        RETURNING *`,
       [
         userId, opportunityId, goal, rationale || null, createdBy || 'agent',
@@ -543,7 +543,7 @@ const workflows = {
   async create({ userId, name, maxDurationDays, reenrollPolicy, reenrollDays }) {
     const result = await query(
       `INSERT INTO workflows (user_id, name, max_duration_days, reenroll_policy, reenroll_days)
-       VALUES ($1, $2, COALESCE($3, 45), COALESCE($4, 'period'), COALESCE($5, 90))
+       VALUES ($1, $2, COALESCE($3::int, 45), COALESCE($4::text, 'period'), COALESCE($5::int, 90))
        RETURNING *`,
       [userId, name, maxDurationDays || null, reenrollPolicy || null, reenrollDays || null]
     );
@@ -609,8 +609,8 @@ const automationTriggers = {
   async create({ userId, workflowId, eventSource, eventKey, label, status }) {
     const result = await query(
       `INSERT INTO automation_triggers (user_id, workflow_id, event_source, event_key, label, status, armed_at)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'draft'),
-               CASE WHEN $6 IN ('active', 'paused') THEN now() END)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6::text, 'draft'),
+               CASE WHEN $6::text IN ('active', 'paused') THEN now() END)
        RETURNING *`,
       [userId, workflowId, eventSource, eventKey, label, status || null]
     );
@@ -701,7 +701,7 @@ const automationTriggers = {
       `SELECT COUNT(*) AS n FROM sequence_enrollments
         WHERE trigger_id = $1
           AND enrollment_source = 'event'
-          AND created_at > now() - make_interval(mins => $2)`,
+          AND created_at > now() - make_interval(mins => $2::int)`,
       [triggerId, withinMinutes]
     );
     return parseInt(result.rows[0].n, 10) || 0;

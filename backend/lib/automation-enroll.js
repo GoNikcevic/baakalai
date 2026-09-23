@@ -54,17 +54,26 @@ async function hasActiveMailbox(userId) {
 
 /**
  * Le contact visé par un signal, s'il existe déjà.
- * Jamais de création : voir la règle 1 en tête de fichier.
+ *
+ * Jamais de création : voir la règle 1 en tête de fichier. Et jamais un
+ * prospect de campagne non plus : `opportunities` mélange deux populations
+ * (lib/crm-scope), et `findByEmail` ne fait pas la différence. Un prospect
+ * froid est déjà engagé dans la séquence de la campagne qui l'a fait entrer ;
+ * l'inscrire ici lui vaudrait un deuxième fil d'emails en parallèle, écrit
+ * pour un client avec qui on a un historique. C'est exactement la frontière
+ * que crm-scope a été écrit pour tenir.
  */
 async function resolveContact(signal) {
+  const { isCrmContact } = require('./crm-scope');
+
   if (signal.opportunity_id) {
     const opp = await db.opportunities.get(signal.opportunity_id);
-    if (opp) return { opp };
+    if (opp) return isCrmContact(opp) ? { opp } : { skip: 'no_known_contact' };
   }
   if (!signal.contact_email) return { skip: 'no_known_contact' };
 
   const opp = await db.opportunities.findByEmail(signal.user_id, signal.contact_email);
-  if (!opp) return { skip: 'no_known_contact' };
+  if (!opp || !isCrmContact(opp)) return { skip: 'no_known_contact' };
   return { opp };
 }
 
@@ -82,7 +91,7 @@ async function enrolledRecently(workflowId, opportunityId, days) {
   const r = await db.query(
     `SELECT 1 FROM sequence_enrollments
       WHERE workflow_id = $1 AND opportunity_id = $2
-        AND created_at > now() - make_interval(days => $3)
+        AND created_at > now() - make_interval(days => $3::int)
       LIMIT 1`,
     [workflowId, opportunityId, days]
   );

@@ -156,8 +156,12 @@ function initSchema() {
       open_rate_b REAL,
       reply_rate_b REAL,
       accept_rate_b REAL,
-      -- Conteneur alternatif : workflow de relance CRM (migration 103)
+      -- Conteneurs alternatifs : workflow de relance CRM (enrollment,
+      -- migration 103) et modèle de workflow réutilisable (migration 114).
+      -- Sans workflow_id ici, toute création de séquence repart en 500 :
+      -- db.touchpoints.create écrit les trois conteneurs dans le même INSERT.
       enrollment_id TEXT,
+      workflow_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );

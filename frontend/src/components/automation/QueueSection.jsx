@@ -13,9 +13,8 @@ import { showToast } from '../../services/notifications';
 import { useT, useI18n } from '../../i18n';
 import Icon from '../Icon';
 import EmailsQueue from './EmailsQueue';
-import SignalsPage from '../../pages/SignalsPage';
 
-export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) {
+export default function QueueSection({ summary, onSummaryRefresh }) {
   const t = useT();
   const { lang } = useI18n();
   const en = lang === 'en';
@@ -191,6 +190,9 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
         </div>
       )}
 
+      {/* Les signaux ne sont plus ici : ils ont leur onglet, groupés par type
+          et sans score. Les laisser en double sous la file remettrait sous les
+          yeux la liste ligne à ligne qui a produit 320 signaux non traités. */}
       <EmailsQueue
         type="pending"
         sendBlocked={sendBlocked}
@@ -198,11 +200,6 @@ export default function QueueSection({ summary, onSummaryRefresh, signalsRef }) 
         onChange={onSummaryRefresh}
         refreshToken={queueVersion}
       />
-
-      {/* Signaux · même nature de travail : quelque chose attend une décision */}
-      <div ref={signalsRef} style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-        <SignalsPage view="feed" />
-      </div>
     </div>
   );
 }
