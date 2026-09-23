@@ -91,11 +91,26 @@ describe('Auth routes', () => {
       assert.ok(res.body.refreshToken);
     });
 
-    it('rejects used refresh token (rotation)', async () => {
-      const { refreshToken } = await registerAndLogin({ email: 'rotate@bakal.test' });
-      // Use it once
+    it('accepte encore le token precedent pendant la periode de grace', async () => {
+      const { refreshToken } = await registerAndLogin({ email: 'grace@bakal.test' });
+      // Rejeu legitime : deux onglets dont l access token expire en meme temps,
+      // un onglet restaure depuis le cache. La rotation seche renvoyait 401, et
+      // le client traduisait ce 401 en deconnexion.
       await request('POST', '/api/auth/refresh', { body: { refreshToken } });
-      // Try to use it again
+      const res = await request('POST', '/api/auth/refresh', { body: { refreshToken } });
+      assert.equal(res.status, 200);
+      assert.ok(res.body.token);
+    });
+
+    it('rejette le token precedent une fois la grace ecoulee', async () => {
+      const { refreshToken } = await registerAndLogin({ email: 'rotate@bakal.test' });
+      await request('POST', '/api/auth/refresh', { body: { refreshToken } });
+      // On pousse l echeance de grace dans le passe plutot que d attendre 60 s.
+      // Requires locaux : charger db au niveau module devance l initialisation
+      // faite par setup() et casse les suites qui partagent la base.
+      const db = require('../db');
+      const { hashRefreshToken } = require('../middleware/auth');
+      await db.refreshTokens.expireIn(hashRefreshToken(refreshToken), -1);
       const res = await request('POST', '/api/auth/refresh', { body: { refreshToken } });
       assert.equal(res.status, 401);
     });

@@ -1567,6 +1567,22 @@ const refreshTokens = {
     return { changes: result.rowCount };
   },
 
+  // Rotation : au lieu de supprimer le token qui vient d'être échangé, on
+  // rapproche son échéance de quelques secondes. L'échéance est calculée en JS
+  // et non en SQL (pas de make_interval ni de LEAST) pour rester valable sur le
+  // miroir SQLite des tests. La clause sur expires_at joue le rôle de LEAST :
+  // on ne fait que raccourcir, jamais PROLONGER un token déjà proche de sa fin.
+  // Le ménage est fait par deleteExpired(), toutes les heures.
+  async expireIn(tokenHash, seconds) {
+    const graceUntil = new Date(Date.now() + seconds * 1000).toISOString();
+    const result = await query(
+      `UPDATE refresh_tokens SET expires_at = $2
+        WHERE token_hash = $1 AND expires_at > $2`,
+      [tokenHash, graceUntil]
+    );
+    return { changes: result.rowCount };
+  },
+
   async deleteByUser(userId) {
     const result = await query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
     return { changes: result.rowCount };
