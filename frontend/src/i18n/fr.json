@@ -1,6 +1,6 @@
 {
   "automation": {
-    "subtitle": "Ce que baakalai déclenche, exécute et arrête à ta place.",
+    "subtitle": "Ce que baakalai déclenche, exécute et arrête à votre place.",
     "tab": {
       "signals": "Signaux",
       "triggers": "Déclencheurs et workflows",
@@ -12,7 +12,7 @@
       "armed": "Déclencheurs actifs",
       "signals": "Signaux en attente"
     },
-    "toValidate": "Des emails attendent ta validation avant de partir.",
+    "toValidate": "Des emails attendent votre validation avant de partir.",
     "validate": "Valider",
     "backToAutomation": "Retour à Automatisation",
     "legacyRulesHint": "Les anciennes règles de relance, le répondeur automatique, la veille et les campagnes d'équipe ne sont pas encore fusionnés dans ce modèle.",
@@ -27,7 +27,7 @@
       "folk": "Folk"
     },
     "skip": {
-      "no_known_contact": "la société n'est pas dans ta base",
+      "no_known_contact": "la société n'est pas dans votre base",
       "no_email": "le contact n'a pas d'adresse email",
       "recently_enrolled": "le contact est déjà passé par ce workflow récemment",
       "contact_in_other_workflow": "le contact est déjà engagé dans un autre workflow",
@@ -41,7 +41,7 @@
       "veilleSettings": "Réglages de la veille",
       "empty": {
         "title": "baakalai n'a encore rien remarqué.",
-        "body": "La veille lit chaque matin les sociétés de ton CRM : recrutements, levées de fonds, changements de direction. Les signaux apparaîtront ici.",
+        "body": "La veille lit chaque matin les sociétés de votre CRM : recrutements, levées de fonds, changements de direction. Les signaux apparaîtront ici.",
         "cta": "Créer un déclencheur sans attendre"
       },
       "family": {
@@ -53,7 +53,7 @@
         "crm": {
           "tag": "CRM",
           "label": "Signaux CRM",
-          "hint": "Le compte a un historique dans ton CRM."
+          "hint": "Le compte a un historique dans votre CRM."
         }
       },
       "familyCount": "{count} nouveaux.",
@@ -87,7 +87,7 @@
       "ignore": "Ignorer",
       "shownOf": "{shown} affichés sur {total}",
       "noContactTitle": "Pas de fiche à ouvrir",
-      "noContactBody": "Cette société n'est pas dans ta base. Un contact n'est jamais créé depuis un signal."
+      "noContactBody": "Cette société n'est pas dans votre base. Un contact n'est jamais créé depuis un signal."
     },
     "wizard": {
       "titleOne": "Automatiser {type}",
@@ -99,7 +99,7 @@
       "sentenceMulti": "un signal {types} apparaît",
       "question": "Quand {sentence}, que doit faire baakalai ?",
       "newWorkflow": "Créer un workflow",
-      "newWorkflowHint": "Tu arrives dans l'éditeur, le déclencheur est déjà posé en étape 0.",
+      "newWorkflowHint": "Vous arrivez dans l'éditeur, le déclencheur est déjà posé en étape 0.",
       "workflowEmpty": "Ce workflow n'a aucune étape.",
       "workflowMeta": "{steps} étapes",
       "recap": "Quand {sentence}, inscrire le contact dans {workflow}.",
@@ -109,14 +109,14 @@
       "pendingTitle": "Les {count} {type} en attente",
       "backfillSelected": "Inscrire aussi les {count} signaux sélectionnés maintenant.",
       "backfillPending": "Inscrire aussi les {count} signaux en attente maintenant.",
-      "backfillHint": "Un déclencheur ne voit que ce qui arrive après lui : sans ce rattrapage, les signaux déjà là ne partiront jamais. L'envoi reste étalé selon le plafond journalier de ta boîte.",
+      "backfillHint": "Un déclencheur ne voit que ce qui arrive après lui : sans ce rattrapage, les signaux déjà là ne partiront jamais. L'envoi reste étalé selon le plafond journalier de votre boîte.",
       "backfillNone": "Aucun signal en attente pour ce type.",
       "reenrollTitle": "Réinscription",
       "reenrollNever": "Jamais deux fois dans ce workflow",
       "reenrollPeriod": "Pas avant 90 jours",
       "reenrollAlways": "À chaque nouvel événement",
       "reenrollHint": "La règle porte sur le workflow, pas sur le déclencheur : un contact déjà passé par ce parcours n'y entre pas une seconde fois par un autre signal.",
-      "noMailbox": "Aucune boîte mail connectée. L'automatisation sera armée, mais rien ne partira tant que tu n'en auras pas connecté une.",
+      "noMailbox": "Aucune boîte mail connectée. L'automatisation sera armée, mais rien ne partira tant que vous n'en aurez pas connecté une.",
       "toActivation": "Continuer vers l'activation",
       "keepDraft": "Garder en brouillon",
       "armOne": "Armer l'automatisation",
@@ -189,7 +189,7 @@
       "varBarredHint": "Barrées : ce déclencheur ne fournit pas de deal.",
       "catalog": {
         "email": "Envoyer un email",
-        "emailSub": "baakalai rédige à partir de ta consigne et de l'historique du contact.",
+        "emailSub": "baakalai rédige à partir de votre consigne et de l'historique du contact.",
         "wait": "Attendre N jours",
         "waitSub": "Pause avant l'étape suivante.",
         "autopilot": "Répondre automatiquement, N tours",
@@ -218,14 +218,14 @@
       "noTrigger": "Aucun déclencheur ne pointe vers ce workflow",
       "created": "Workflow créé",
       "createdBody": "Il ne s'exécutera pas tant qu'aucun déclencheur ne pointe dessus.",
-      "createHint": "Tu peux préparer le parcours maintenant et décider plus tard de ce qui le lance. Tant qu'aucun déclencheur ne pointe dessus, il ne s'exécute pas."
+      "createHint": "Vous pouvez préparer le parcours maintenant et décider plus tard de ce qui le lance. Tant qu'aucun déclencheur ne pointe dessus, il ne s'exécute pas."
     },
     "triggers": {
       "byTrigger": "Par déclencheur",
       "byWorkflow": "Par workflow",
       "empty": {
         "title": "Aucune automatisation armée.",
-        "body": "Un déclencheur dit quand, un workflow dit quoi. Tant que les deux ne sont pas armés ensemble, baakalai ne fait rien à ta place. Pars d'un type de signal dans l'onglet Signaux."
+        "body": "Un déclencheur dit quand, un workflow dit quoi. Tant que les deux ne sont pas armés ensemble, baakalai ne fait rien à votre place. Partez d'un type de signal dans l'onglet Signaux."
       },
       "signalLabel": "Signal {type}",
       "signalSub": "Un signal {type} apparaît",
@@ -267,7 +267,7 @@
       },
       "emptyArmed": {
         "title": "Personne en cours aujourd'hui.",
-        "body": "Tes déclencheurs tournent. Aucun contact ne correspondait, ou aucune boîte mail ne permet d'envoyer.",
+        "body": "Vos déclencheurs tournent. Aucun contact ne correspondait, ou aucune boîte mail ne permet d'envoyer.",
         "cta": "Voir mes déclencheurs"
       },
       "col": {
@@ -361,14 +361,14 @@
     "loading": "Chargement...",
     "or": "ou",
     "googleLogin": "Se connecter avec Google",
-    "checkEmail": "Vérifie ta boîte de réception",
+    "checkEmail": "Vérifiez votre boîte de réception",
     "checkEmailDesc": "On vient d'envoyer un lien de confirmation à :",
-    "checkEmailAction": "Clique sur le lien dans l'email pour activer ton compte Baakalai, puis reviens ici pour te connecter.",
+    "checkEmailAction": "Cliquez sur le lien dans l'email pour activer votre compte Baakalai, puis revenez ici pour vous connecter.",
     "resend": "Je n'ai rien reçu : Renvoyer l'email",
     "resendIn": "Renvoyer dans {seconds}s",
-    "resendSuccess": "Email renvoyé : vérifie ta boîte de réception (et les spams).",
+    "resendSuccess": "Email renvoyé : vérifiez votre boîte de réception (et les spams).",
     "backToLogin": "Retour à la connexion",
-    "verified": "Email vérifié. Tu peux maintenant te connecter.",
+    "verified": "Email vérifié. Vous pouvez maintenant vous connecter.",
     "invalidToken": "Lien de vérification invalide ou expiré. Demande un nouveau lien ci-dessous.",
     "resetTitle": "Réinitialiser votre mot de passe",
     "resetDesc": "Entrez votre email et nous vous enverrons un lien de réinitialisation.",
@@ -404,7 +404,7 @@
     "deleteAll": "Tout supprimer",
     "prospectsLinked": "Prospects liés à la campagne ({count})",
     "noProspectsYet": "Aucun prospect pour le moment. Génère-en avec le panel ci-dessus ou ajoute-en depuis le chat.",
-    "batchPrompt": "Tu as {count} prospects. Veux-tu lancer en mode batch ?\n\nOK = Mode batch : envoie les {batchSize} premiers, A/B test, puis batch suivant\nAnnuler = Tout envoyer d'un coup",
+    "batchPrompt": "Vous avez {count} prospects. Voulez-vous lancer en mode batch ?\n\nOK = Mode batch : envoie les {batchSize} premiers, A/B test, puis batch suivant\nAnnuler = Tout envoyer d'un coup",
     "batchDeployed": "Batch {batch} déployé vers Lemlist",
     "deployed": "Campagne déployée vers Lemlist",
     "started": "Campagne démarrée automatiquement",
@@ -446,7 +446,7 @@
     "optimizeCampaign": "Affiner la campagne",
     "optimizeHelpLabel": "Aide : Comment fonctionne l'affinage",
     "optimizeHelpTitle": "Comment fonctionne l'affinage",
-    "optimizeHelpBody": "Baakalai analyse les performances de ta campagne et identifie le touchpoint qui performe le moins. Il propose ensuite une nouvelle variante que tu peux valider avant de la pousser vers Lemlist en A/B testing.",
+    "optimizeHelpBody": "Baakalai analyse les performances de votre campagne et identifie le touchpoint qui performe le moins. Il propose ensuite une nouvelle variante que vous pouvez valider avant de la pousser vers Lemlist en A/B testing.",
     "optimizeHelpMinProspects": "Min. 20 prospects contactés",
     "optimizeHelpFrequency": "1 affinage / 7 jours recommandé",
     "optimizeHelpMemory": "Au-delà de 50 prospects, le pattern alimente la mémoire collective",
@@ -455,14 +455,14 @@
     "archiveFailed": "Impossible d'archiver la campagne : {error}",
     "launchMissingSequence": "Impossible de lancer : séquences manquantes",
     "launchMissingSequenceDesc": "Génère d'abord les séquences via Baakalai depuis l'onglet Copy & Séquences.",
-    "batchConfirm": "Tu as {count} prospects. Veux-tu lancer en mode batch ?\n\n• OK = Mode batch : envoie les 100 premiers, A/B test, puis batch suivant\n• Annuler = Tout envoyer d'un coup ({count} prospects)",
-    "batchModalDesc": "Tu as {count} prospects. Comment veux-tu lancer ?",
+    "batchConfirm": "Vous avez {count} prospects. Voulez-vous lancer en mode batch ?\n\n• OK = Mode batch : envoie les 100 premiers, A/B test, puis batch suivant\n• Annuler = Tout envoyer d'un coup ({count} prospects)",
+    "batchModalDesc": "Vous avez {count} prospects. Comment voulez-vous lancer ?",
     "batchModeBtn": "Mode batch (recommandé)",
     "batchModeDesc": "Envoie les 100 premiers, A/B test automatique, puis batch suivant",
     "sendAllBtn": "Tout envoyer d'un coup",
     "sendAllDesc": "Envoyer les {count} prospects en une seule fois",
     "launchFailed": "Échec du lancement Lemlist",
-    "launchFailedDesc": "Erreur inconnue : vérifie ta clé API Lemlist dans Intégrations.",
+    "launchFailedDesc": "Erreur inconnue : vérifiez votre clé API Lemlist dans Intégrations.",
     "launchStepCreate": "Création de la campagne sur Lemlist…",
     "launchStepSequences": "Déploiement des séquences email & LinkedIn…",
     "launchStepProspects": "Ajout des prospects dans la liste…",
@@ -543,7 +543,7 @@
     "stepHelper3": "Étape 3 : vérifie les emails révélés puis ajoute-les à la campagne.",
     "revealBtn": "Révéler {count} email{plural} ({count} crédit{pluralCredits})",
     "cancelReveal": "Annuler",
-    "revealCancelled": "Révélation annulée, tu peux relancer manuellement.",
+    "revealCancelled": "Révélation annulée, vous pouvez relancer manuellement.",
     "noVerifiedEmail": "Aucun contact avec email vérifié dans la sélection. Révèle d'abord les emails.",
     "saveFailed": "Sauvegarde échouée",
     "addToCampaign": "Ajouter {count} à la campagne",
@@ -639,7 +639,7 @@
   "common": {
     "no": "Non",
     "continue": "Continuer",
-    "tagline": "Le système IA qui exploite ton CRM",
+    "tagline": "Le système IA qui exploite votre CRM",
     "cancel": "Annuler",
     "save": "Enregistrer",
     "confirm": "Confirmer",
@@ -724,14 +724,14 @@
     "language": "Langue",
     "languageDesc": "Langue de l'interface",
     "languageSaveError": "La langue n'a pas pu être enregistrée, réessaie.",
-    "writebackTitle": "Écriture dans ton CRM",
-    "writebackDesc": "Autorise baakalai à déposer ses analyses (risque de churn et ses facteurs, deals à relancer) en note sur tes contacts, directement dans ton CRM. Désactivé par défaut : rien n'est écrit sans ton accord. Une note n'est réécrite que si l'analyse a changé.",
+    "writebackTitle": "Écriture dans votre CRM",
+    "writebackDesc": "Autorise baakalai à déposer ses analyses (risque de churn et ses facteurs, deals à relancer) en note sur vos contacts, directement dans votre CRM. Désactivé par défaut : rien n'est écrit sans votre accord. Une note n'est réécrite que si l'analyse a changé.",
     "writebackEnabled": "Activée",
     "writebackDisabled": "Désactivée",
-    "writebackOnToast": "Écriture CRM activée : les analyses seront déposées en note sur tes contacts.",
+    "writebackOnToast": "Écriture CRM activée : les analyses seront déposées en note sur vos contacts.",
     "writebackOffToast": "Écriture CRM désactivée : plus aucune note ne sera écrite.",
     "slaTitle": "SLA de réactivité",
-    "slaDesc": "Déclare tes seuils de suivi : lead entrant jamais contacté, relance planifiée dépassée, deal ouvert sans activité. Les dépassements remontent en tête de « À traiter aujourd'hui » et dans le digest du lundi. Désactivé par défaut.",
+    "slaDesc": "Déclarez vos seuils de suivi : lead entrant jamais contacté, relance planifiée dépassée, deal ouvert sans activité. Les dépassements remontent en tête de « À traiter aujourd'hui » et dans le digest du lundi. Désactivé par défaut.",
     "slaEnabled": "Activés",
     "slaDisabled": "Désactivés",
     "slaOnToast": "SLA activés : les dépassements remonteront dans « À traiter aujourd’hui ».",
@@ -759,8 +759,8 @@
     "deleting": "Suppression..."
   },
   "billing": {
-    "lockedTitle": "Ton essai gratuit est terminé",
-    "lockedBody": "baakalai continue de lire ton CRM, mais l'accès à l'app nécessite un abonnement. Choisis un plan pour reprendre là où tu en étais.",
+    "lockedTitle": "Votre essai gratuit est terminé",
+    "lockedBody": "baakalai continue de lire votre CRM, mais l'accès à l'app nécessite un abonnement. Choisissez un plan pour reprendre là où vous en étiez.",
     "lockedCta": "Voir les plans"
   },
   "icp": {
@@ -1496,7 +1496,7 @@
     "sectorLabel": "Secteur d'activité",
     "website": "Site web",
     "teamSize": "Taille d'équipe",
-    "jobRole": "Ton poste",
+    "jobRole": "Votre poste",
     "jobRoleFounder": "Dirigeant ou fondateur",
     "jobRoleSalesLead": "Directeur ou responsable commercial",
     "jobRoleSales": "Commercial",
