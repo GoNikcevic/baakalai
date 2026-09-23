@@ -24,7 +24,7 @@
    déclenche qu'à l'insertion.
    =============================================================================== */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { request } from '../../services/api-client';
 import { showToast } from '../../services/notifications';
 import { useT } from '../../i18n';
@@ -45,6 +45,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
   const [step, setStep] = useState(fromCatalog ? 0 : 1);
   const [meta, setMeta] = useState(null);
   const [typesData, setTypesData] = useState(null);
+  const [typesError, setTypesError] = useState(false);
   const [picked, setPicked] = useState(signalTypes || []);
   const [pick, setPick] = useState(null);
   const [name, setName] = useState('');
@@ -53,14 +54,22 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
   const [reenroll, setReenroll] = useState('period');
   const [busy, setBusy] = useState(false);
 
+  // Un appel qui échoue ne doit JAMAIS se traduire par une liste vide et
+  // muette : c'est exactement ce qui rend un écran indiagnosticable, on ne
+  // peut plus distinguer « il n'y a rien » de « ça n'a pas chargé ».
+  const loadTypes = useCallback(() => {
+    setTypesError(false);
+    request('/signals/types')
+      .then(setTypesData)
+      .catch(() => { setTypesData({ families: [] }); setTypesError(true); });
+  }, []);
+
   useEffect(() => {
     request('/automations')
       .then(setMeta)
       .catch(() => setMeta({ workflows: [], hasMailbox: false }));
-    request('/signals/types')
-      .then(setTypesData)
-      .catch(() => setTypesData({ families: [] }));
-  }, []);
+    loadTypes();
+  }, [loadTypes]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -117,7 +126,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
         body.workflowId = pick;
       }
 
-      const result = await request('/automations', { method: 'POST', body });
+      const result = await request('/automations', { method: 'POST', body: JSON.stringify(body) });
       const enrolled = Object.values(result.backfill || {}).reduce((a, r) => a + (r.enrolled || 0), 0);
 
       showToast({
@@ -224,6 +233,21 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
                   {t('automation.wizard.family.veille')}
                 </div>
+                {typesData === null && (
+                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+                )}
+                {typesError && (
+                  <div style={{ fontSize: 12.5, color: 'var(--warning)', display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {t('automation.wizard.typesError')}
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: 11, padding: '3px 10px' }}
+                      onClick={loadTypes}
+                    >
+                      {t('automation.wizard.retry')}
+                    </button>
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
                   {(typesData?.families?.find(f => f.key === 'veille')?.types || []).map(ty => (
                     <EventButton

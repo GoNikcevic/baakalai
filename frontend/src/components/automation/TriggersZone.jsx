@@ -76,7 +76,7 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
     try {
       await request(`/automations/${trig.id}`, {
         method: 'PATCH',
-        body: { status, ...(confirmBreaker ? { confirmBreaker: true } : {}) },
+        body: JSON.stringify({ status, ...(confirmBreaker ? { confirmBreaker: true } : {}) }),
       });
       load();
       if (onChanged) onChanged();
@@ -396,12 +396,12 @@ function WorkflowCreatePanel({ crmProvider, onClose }) {
     try {
       await request('/automations/workflows', {
         method: 'POST',
-        body: {
+        body: JSON.stringify({
           name: name.trim(),
           steps: steps.map(s => (s.type === 'wait'
             ? { type: 'wait', days: s.days }
             : { type: 'email', consigne: s.consigne })),
-        },
+        }),
       });
       showToast({
         type: 'success',
@@ -472,12 +472,12 @@ function WorkflowEditPanel({ workflowId, crmProvider, onClose }) {
     try {
       await request(`/automations/workflows/${workflowId}`, {
         method: 'PUT',
-        body: {
+        body: JSON.stringify({
           name: state.name,
           steps: state.steps.map(s => (s.type === 'wait'
             ? { type: 'wait', days: s.days }
             : { type: 'email', consigne: s.consigne })),
-        },
+        }),
       });
       showToast({ type: 'success', title: t('automation.editor.saved'), message: t('automation.editor.savedBody') });
       onClose();
