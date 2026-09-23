@@ -41,7 +41,8 @@
       "veilleSettings": "Réglages de la veille",
       "empty": {
         "title": "baakalai n'a encore rien remarqué.",
-        "body": "La veille lit chaque matin les sociétés de ton CRM : recrutements, levées de fonds, changements de direction. Les signaux apparaîtront ici."
+        "body": "La veille lit chaque matin les sociétés de ton CRM : recrutements, levées de fonds, changements de direction. Les signaux apparaîtront ici.",
+        "cta": "Créer un déclencheur sans attendre"
       },
       "family": {
         "veille": {
@@ -123,7 +124,28 @@
       "draftSaved": "Brouillon enregistré",
       "draftSavedBody": "Rien ne part tant que le récapitulatif n'est pas validé.",
       "armed": "Automatisation armée",
-      "armedBody": "{types} vers {workflow}. {queued} contacts en file."
+      "armedBody": "{types} vers {workflow}. {queued} contacts en file.",
+      "step0": "Déclencheur",
+      "titleCatalog": "Nouvelle automatisation",
+      "pickEvent": "Quand baakalai doit-il agir ? Choisis l'événement. Les conditions s'affinent plus tard.",
+      "family": {
+        "veille": "Signaux de veille externe",
+        "crm": "Signaux CRM",
+        "crmEvent": "Événements CRM directs",
+        "emailEvent": "Événements d'email"
+      },
+      "familyCrmEmpty": "Deal stagnant, client à risque et contact inactif vivent encore sur leurs pages. Ils rejoindront ce catalogue.",
+      "notWiredEvent": "Pas encore branché : seuls les signaux déclenchent un workflow pour l'instant.",
+      "pendingCount": "{count} en attente",
+      "noPending": "Aucun en attente, le déclencheur s'arme quand même et attend le premier.",
+      "alreadyAutomated": "Déjà automatisé vers {workflow}.",
+      "event": {
+        "deal_stage_changed": "Le deal change de stage",
+        "deal_created": "Nouveau deal",
+        "contact_created": "Nouveau contact",
+        "reply_received": "Réponse reçue",
+        "no_reply_days": "Aucune réponse depuis N jours"
+      }
     },
     "editor": {
       "workflowName": "Nom du workflow",
@@ -193,7 +215,10 @@
       "savedBody": "Les contacts déjà en parcours gardent les étapes reçues à leur entrée.",
       "back": "Automatisation",
       "editHint": "Modifier ce workflow ne touche aucun parcours en cours : chaque contact garde la copie des étapes reçue à son entrée.",
-      "noTrigger": "Aucun déclencheur ne pointe vers ce workflow"
+      "noTrigger": "Aucun déclencheur ne pointe vers ce workflow",
+      "created": "Workflow créé",
+      "createdBody": "Il ne s'exécutera pas tant qu'aucun déclencheur ne pointe dessus.",
+      "createHint": "Tu peux préparer le parcours maintenant et décider plus tard de ce qui le lance. Tant qu'aucun déclencheur ne pointe dessus, il ne s'exécute pas."
     },
     "triggers": {
       "byTrigger": "Par déclencheur",
@@ -230,7 +255,9 @@
       },
       "noWorkflow": "Aucun workflow pour l'instant.",
       "usedBy": "Utilisé par {count} déclencheurs : {list}",
-      "orphan": "Ne s'exécute pas : aucun déclencheur ne pointe vers ce workflow."
+      "orphan": "Ne s'exécute pas : aucun déclencheur ne pointe vers ce workflow.",
+      "create": "Créer une automatisation",
+      "newWorkflow": "Nouveau workflow"
     },
     "runs": {
       "empty": {
@@ -458,8 +485,8 @@
     "tabHistory": "Historique",
     "channelTitle": "Canal d'envoi",
     "channelLemlist": "Envoyer via Lemlist",
-      "mailboxTitle": "Boîte d'envoi de cette campagne",
-      "mailboxDefault": "par défaut",
+    "mailboxTitle": "Boîte d'envoi de cette campagne",
+    "mailboxDefault": "par défaut",
     "channelNative": "Envoyer depuis ma boîte email",
     "channelNativeHint": "Les emails partent de votre boîte connectée (Gmail/Microsoft/SMTP), les steps LinkedIn via votre compte LinkedIn. Volumes limités pour protéger votre délivrabilité.",
     "nativeLaunching": "Lancement de la campagne...",
@@ -1408,18 +1435,18 @@
     "noAccount": "Aucun email configuré. Ajoutez votre compte pour envoyer des emails automatiques.",
     "appPasswordRequired": "Mot de passe d'application requis (pas votre mot de passe Gmail habituel)",
     "steps": "Étapes",
-      "isDefault": "Par défaut",
-      "setDefault": "Définir par défaut",
-      "replyReadOn": "Détection des réponses active : une réponse arrête la séquence et vous alerte.",
-      "replyReadOff": "Détection des réponses inactive : une séquence continue de tourner même si le prospect a répondu.",
-      "replyReadDone": "Lecture de la boîte autorisée. Les réponses arrêteront désormais les séquences et vous alerteront.",
-      "replyReadConnect": "Autoriser la lecture",
-      "msAdminTitle": "Votre organisation doit autoriser baakalai",
-      "msAdminBody": "Microsoft a refusé la connexion : dans votre entreprise, seul un administrateur peut autoriser une application externe à envoyer depuis votre boîte. Réessayer ne changera rien. Transmettez ce lien à la personne qui gère votre informatique : elle autorise baakalai une fois, pour toute l'organisation, puis vous reprenez la connexion ici.",
-      "msAdminCopy": "Copier le lien pour mon administrateur",
-      "msAdminCopied": "Lien copié",
-      "msAdminGranted": "Votre administrateur a autorisé baakalai. Vous pouvez maintenant connecter votre boîte Outlook.",
-      "msDeclined": "Connexion annulée. Vous avez refusé l'autorisation demandée par Microsoft.",
+    "isDefault": "Par défaut",
+    "setDefault": "Définir par défaut",
+    "replyReadOn": "Détection des réponses active : une réponse arrête la séquence et vous alerte.",
+    "replyReadOff": "Détection des réponses inactive : une séquence continue de tourner même si le prospect a répondu.",
+    "replyReadDone": "Lecture de la boîte autorisée. Les réponses arrêteront désormais les séquences et vous alerteront.",
+    "replyReadConnect": "Autoriser la lecture",
+    "msAdminTitle": "Votre organisation doit autoriser baakalai",
+    "msAdminBody": "Microsoft a refusé la connexion : dans votre entreprise, seul un administrateur peut autoriser une application externe à envoyer depuis votre boîte. Réessayer ne changera rien. Transmettez ce lien à la personne qui gère votre informatique : elle autorise baakalai une fois, pour toute l'organisation, puis vous reprenez la connexion ici.",
+    "msAdminCopy": "Copier le lien pour mon administrateur",
+    "msAdminCopied": "Lien copié",
+    "msAdminGranted": "Votre administrateur a autorisé baakalai. Vous pouvez maintenant connecter votre boîte Outlook.",
+    "msDeclined": "Connexion annulée. Vous avez refusé l'autorisation demandée par Microsoft.",
     "signature": "Signature",
     "signatureTextPlaceholder": "Prénom Nom\nFonction · Société\n+33 6 12 34 56 78\nhttps://votresite.com",
     "signatureHint": "Ajoutée à la fin de chaque email envoyé depuis cette boîte (relances, nurture, prospection). Les emails envoyés par baakalai ne reprennent pas la signature configurée dans Gmail/Outlook, configurez-la ici. Exception : si votre entreprise ajoute une signature automatique côté serveur (Exchange, Exclaimer…), laissez ce champ vide pour éviter le doublon.",
@@ -1629,7 +1656,7 @@
     "dismiss": "Ignorer",
     "signalsCount": "{count} signaux",
     "contactsInCrm": "{count} contacts dans le CRM",
-    "backToFeed": "\u2190 Retour au flux",
+    "backToFeed": "← Retour au flux",
     "crmContacts": "Contacts CRM",
     "timeline": "Historique des signaux",
     "noCompanySignals": "Aucun signal pour cette entreprise",

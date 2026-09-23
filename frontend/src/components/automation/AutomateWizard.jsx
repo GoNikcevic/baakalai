@@ -1,28 +1,27 @@
 /* ===============================================================================
-   BAKAL · « Automatiser » · promouvoir un type de signal en déclencheur
+   BAKAL · Créer une automatisation
 
-   Le mot annonce ce qui arrive. L'ancien bouton disait « Traiter », c'est-à-dire
-   du travail à faire à la main, et c'est exactement ce qui a produit 320
-   signaux à zéro traité.
+   Deux portes d'entrée, une seule mécanique.
 
-   Trois écrans, pas six. Le déclencheur est déjà connu : la sélection de types
-   EST sa définition, l'utilisateur n'a rien à rédiger.
+   - Depuis Signaux : un type est déjà choisi, la sélection EST la définition du
+     déclencheur, l'utilisateur n'a rien à rédiger.
+   - Depuis Déclencheurs : on part du catalogue d'événements. Indispensable,
+     parce qu'un compte neuf n'a aucun signal : si la promotion était la seule
+     porte, il n'y aurait littéralement aucun moyen de créer quoi que ce soit
+     tant que la veille n'a pas tourné.
 
-     1 · Workflow      nouveau ou existant
-     2 · Étapes        seulement si nouveau
-     3 · Activation    le récapitulatif, et c'est là que ça s'arme
+   Un déclencheur sur un type de signal ne demande AUCUN signal existant : il
+   s'arme pour l'avenir. Le stock en attente n'est qu'une option de rattrapage.
+
+   Le mot « Automatiser » annonce ce qui arrive. L'ancien bouton disait
+   « Traiter », c'est-à-dire du travail à faire à la main, et c'est exactement
+   ce qui a produit 320 signaux à zéro traité.
 
    Le récapitulatif sépare toujours DEUX conséquences, et ne les fusionne
-   jamais en silence :
-
-     - à partir de maintenant, chaque nouveau signal inscrira le contact
-     - les N déjà là, qu'un déclencheur événementiel ne verra JAMAIS puisqu'il
-       se déclenche à l'insertion
-
-   Le rattrapage est décoché par défaut : la première automatisation de
-   quelqu'un ne doit pas commencer par des dizaines d'emails partis d'un coup
-   vers ses vrais clients. Mais il doit exister, sinon un backlog de 320 reste
-   à 320 pour toujours, même une fois la feature parfaite.
+   jamais en silence : armer pour l'avenir, et inscrire les N déjà là. Le
+   rattrapage est décoché par défaut, mais il doit exister, sinon un backlog de
+   320 reste à 320 pour toujours puisqu'un déclencheur événementiel ne se
+   déclenche qu'à l'insertion.
    =============================================================================== */
 
 import { useState, useEffect } from 'react';
@@ -34,30 +33,33 @@ import WorkflowEditor, { emptySteps } from './WorkflowEditor';
 
 const SIGNAL_CONTEXT = { contact: true, company: true, signal: true, deal: false, owner: false };
 
-export default function AutomateWizard({ signalTypes, preselected, onClose, onDone }) {
-  const t = useT();
+// Déclarés, visibles, grisés. Mieux vaut montrer la cible et dire qu'elle
+// n'est pas prête que laisser croire qu'elle n'existe pas.
+const CRM_EVENTS = ['deal_stage_changed', 'deal_created', 'contact_created'];
+const EMAIL_EVENTS = ['reply_received', 'no_reply_days'];
 
-  const [step, setStep] = useState(1);
-  const [meta, setMeta] = useState(null);            // workflows + hasMailbox + crm
-  const [pick, setPick] = useState(null);            // 'new' | workflowId
+export default function AutomateWizard({ signalTypes, preselected, mode, onClose, onDone }) {
+  const t = useT();
+  const fromCatalog = mode === 'catalog';
+
+  const [step, setStep] = useState(fromCatalog ? 0 : 1);
+  const [meta, setMeta] = useState(null);
+  const [typesData, setTypesData] = useState(null);
+  const [picked, setPicked] = useState(signalTypes || []);
+  const [pick, setPick] = useState(null);
   const [name, setName] = useState('');
   const [steps, setSteps] = useState(emptySteps);
-  const [counts, setCounts] = useState({});          // par type : signaux en attente
-  const [backfill, setBackfill] = useState({});      // par type : coché ?
+  const [backfill, setBackfill] = useState({});
   const [reenroll, setReenroll] = useState('period');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     request('/automations')
-      .then(d => setMeta(d))
+      .then(setMeta)
       .catch(() => setMeta({ workflows: [], hasMailbox: false }));
     request('/signals/types')
-      .then(d => {
-        const map = {};
-        (d.families || []).forEach(f => f.types.forEach(ty => { map[ty.signalType] = ty.newCount; }));
-        setCounts(map);
-      })
-      .catch(() => {});
+      .then(setTypesData)
+      .catch(() => setTypesData({ families: [] }));
   }, []);
 
   useEffect(() => {
@@ -66,20 +68,30 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const typeLabels = signalTypes.map(ty => t(`signals.type.${ty}`));
-  const triggerSentence = signalTypes.length > 1
+  const types = signalTypes && signalTypes.length ? signalTypes : picked;
+  const typeLabels = types.map(ty => t(`signals.type.${ty}`));
+
+  // Un type déjà automatisé ne peut pas l'être une seconde fois : l'index
+  // unique côté base le refuse, autant le dire avant.
+  const counts = {};
+  const automated = {};
+  (typesData?.families || []).forEach(f => f.types.forEach(ty => {
+    counts[ty.signalType] = ty.newCount;
+    if (ty.automated) automated[ty.signalType] = ty.automated;
+  }));
+
+  const triggerSentence = types.length > 1
     ? t('automation.wizard.sentenceMulti', { types: typeLabels.join(', ') })
-    : t('automation.wizard.sentenceOne', { type: typeLabels[0] });
+    : t('automation.wizard.sentenceOne', { type: typeLabels[0] || '' });
+
+  const toggleType = (ty) => setPicked(p => (p.includes(ty) ? p.filter(x => x !== ty) : [...p, ty]));
 
   const arm = async (asDraft) => {
     setBusy(true);
     try {
-      // Le rattrapage ne porte que sur ce qui a été explicitement demandé,
-      // type par type. Sans sélection venue du panneau, on prend le stock en
-      // attente, mais seulement si la case est cochée.
       const backfillIds = {};
       if (!asDraft) {
-        for (const ty of signalTypes) {
+        for (const ty of types) {
           if (!backfill[ty]) continue;
           if (preselected && preselected[ty]?.length) {
             backfillIds[ty] = preselected[ty];
@@ -91,7 +103,7 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
       }
 
       const body = {
-        signalTypes,
+        signalTypes: types,
         arm: !asDraft,
         backfill: backfillIds,
         reenrollPolicy: reenroll,
@@ -106,9 +118,8 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
       }
 
       const result = await request('/automations', { method: 'POST', body });
+      const enrolled = Object.values(result.backfill || {}).reduce((a, r) => a + (r.enrolled || 0), 0);
 
-      const enrolled = Object.values(result.backfill || {})
-        .reduce((a, r) => a + (r.enrolled || 0), 0);
       showToast({
         type: 'success',
         title: asDraft ? t('automation.wizard.draftSaved') : t('automation.wizard.armed'),
@@ -127,50 +138,74 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
     setBusy(false);
   };
 
-  const stepNames = [t('automation.wizard.step1'), t('automation.wizard.step2'), t('automation.wizard.step3')];
-  const canContinue1 = !!pick;
+  const stepList = fromCatalog
+    ? [t('automation.wizard.step0'), t('automation.wizard.step1'), t('automation.wizard.step3')]
+    : [t('automation.wizard.step1'), t('automation.wizard.step2'), t('automation.wizard.step3')];
+  const stepIndex = fromCatalog ? step : step - 1;
+
   const stepsValid = steps.some(s => s.type === 'email')
     && steps.filter(s => s.type === 'email').every(s => String(s.consigne || '').trim())
     && name.trim().length > 0;
 
+  const EventButton = ({ label, sub, off, selected, onClick }) => (
+    <button
+      disabled={!!off}
+      title={off || ''}
+      onClick={onClick}
+      style={{
+        textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--r-lg)',
+        border: `1px solid ${selected ? 'var(--text-primary)' : 'var(--border)'}`,
+        background: selected ? 'var(--bg-elevated)' : 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        cursor: off ? 'not-allowed' : 'pointer', opacity: off ? 0.5 : 1, width: '100%',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: selected ? 600 : 500 }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{off || sub}</div>
+    </button>
+  );
+
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 100 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 100 }} />
       <div
         role="dialog"
         aria-modal="true"
         style={{
           position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
           width: 'min(820px, 94vw)', maxHeight: '88vh', overflowY: 'auto', zIndex: 101,
-          background: 'var(--bg-card, #fff)', border: '1px solid var(--border)',
-          borderRadius: 'var(--r-xl)', boxShadow: '0 20px 60px rgba(0,0,0,0.22)',
+          background: 'var(--bg-card)', color: 'var(--text-primary)',
+          border: '1px solid var(--border)', borderRadius: 'var(--r-xl)',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
         <header style={{ padding: '16px 20px 10px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
             <span style={{ fontSize: 15, fontWeight: 650 }}>
-              {signalTypes.length > 1
-                ? t('automation.wizard.titleMulti', { count: signalTypes.length })
-                : t('automation.wizard.titleOne', { type: typeLabels[0] })}
+              {types.length > 1
+                ? t('automation.wizard.titleMulti', { count: types.length })
+                : (types.length === 1
+                  ? t('automation.wizard.titleOne', { type: typeLabels[0] })
+                  : t('automation.wizard.titleCatalog'))}
             </span>
             <button
               onClick={onClose}
               aria-label={t('common.close')}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--grey-500)' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
             >
               <Icon name="close" size={16} />
             </button>
           </div>
           <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
-            {stepNames.map((label, i) => (
+            {stepList.map((label, i) => (
               <span key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
                 <span style={{
                   height: 2, borderRadius: 2,
-                  background: i + 1 <= step ? 'var(--ink, #1c1917)' : 'var(--border)',
+                  background: i <= stepIndex ? 'var(--text-primary)' : 'var(--border)',
                 }} />
                 <span style={{
                   fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em',
-                  color: i + 1 === step ? 'var(--text-primary)' : 'var(--grey-500)',
+                  color: i === stepIndex ? 'var(--text-primary)' : 'var(--text-muted)',
                 }}>{i + 1} · {label}</span>
               </span>
             ))}
@@ -178,6 +213,78 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
         </header>
 
         <div style={{ padding: 20 }}>
+          {/* ÉTAPE 0 · l'événement. Le choix, rien d'autre : les conditions
+              d'entrée ne doivent pas être un formulaire posé avant que
+              l'utilisateur ait écrit son premier email. */}
+          {step === 0 && (
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ fontSize: 13.5 }}>{t('automation.wizard.pickEvent')}</div>
+
+              <div>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {t('automation.wizard.family.veille')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
+                  {(typesData?.families?.find(f => f.key === 'veille')?.types || []).map(ty => (
+                    <EventButton
+                      key={ty.signalType}
+                      label={t(`signals.type.${ty.signalType}`)}
+                      // Le compte est une information, pas une condition : un
+                      // type à zéro s'arme très bien, il attend simplement.
+                      sub={ty.newCount > 0
+                        ? t('automation.wizard.pendingCount', { count: ty.newCount })
+                        : t('automation.wizard.noPending')}
+                      off={automated[ty.signalType]
+                        ? t('automation.wizard.alreadyAutomated', { workflow: automated[ty.signalType].workflowName })
+                        : null}
+                      selected={picked.includes(ty.signalType)}
+                      onClick={() => toggleType(ty.signalType)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {t('automation.wizard.family.crm')}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {t('automation.wizard.familyCrmEmpty')}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {t('automation.wizard.family.crmEvent')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
+                  {CRM_EVENTS.map(k => (
+                    <EventButton
+                      key={k}
+                      label={t(`automation.wizard.event.${k}`)}
+                      off={t('automation.wizard.notWiredEvent')}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {t('automation.wizard.family.emailEvent')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
+                  {EMAIL_EVENTS.map(k => (
+                    <EventButton
+                      key={k}
+                      label={t(`automation.wizard.event.${k}`)}
+                      off={t('automation.wizard.notWiredEvent')}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ÉTAPE 1 · quel workflow */}
           {step === 1 && (
             <>
@@ -189,8 +296,8 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
                   onClick={() => setPick('new')}
                   style={{
                     textAlign: 'left', padding: '12px 14px', borderRadius: 'var(--r-lg)',
-                    border: `1px ${pick === 'new' ? 'solid' : 'dashed'} ${pick === 'new' ? 'var(--ink, #1c1917)' : 'var(--border-strong, #d6d3d1)'}`,
-                    background: 'var(--paper)', cursor: 'pointer',
+                    border: `1px ${pick === 'new' ? 'solid' : 'dashed'} ${pick === 'new' ? 'var(--text-primary)' : 'var(--border-strong)'}`,
+                    background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer',
                   }}
                 >
                   <div style={{ fontSize: 13, fontWeight: 600 }}>+ {t('automation.wizard.newWorkflow')}</div>
@@ -209,9 +316,9 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
                       onClick={() => setPick(w.id)}
                       style={{
                         textAlign: 'left', padding: '12px 14px', borderRadius: 'var(--r-lg)',
-                        border: `1px solid ${pick === w.id ? 'var(--ink, #1c1917)' : 'var(--border)'}`,
-                        background: 'var(--paper)', cursor: empty ? 'not-allowed' : 'pointer',
-                        opacity: empty ? 0.5 : 1,
+                        border: `1px solid ${pick === w.id ? 'var(--text-primary)' : 'var(--border)'}`,
+                        background: 'var(--bg-card)', color: 'var(--text-primary)',
+                        cursor: empty ? 'not-allowed' : 'pointer', opacity: empty ? 0.5 : 1,
                       }}
                     >
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{w.name}</div>
@@ -251,28 +358,25 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
               </p>
 
               <div style={{
-                border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '12px 14px',
-                background: 'var(--paper-2)',
+                border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
+                padding: '12px 14px', background: 'var(--bg-elevated)',
               }}>
-                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--grey-500)' }}>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
                   {t('automation.wizard.fromNowTitle')}
                 </div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>
-                  {signalTypes.length > 1
-                    ? t('automation.wizard.fromNowMulti', { count: signalTypes.length })
+                  {types.length > 1
+                    ? t('automation.wizard.fromNowMulti', { count: types.length })
                     : t('automation.wizard.fromNowOne', { type: typeLabels[0] })}
                 </div>
               </div>
 
-              {signalTypes.map(ty => {
+              {types.map(ty => {
                 const pending = preselected?.[ty]?.length ?? counts[ty] ?? 0;
                 const fromPanel = !!preselected?.[ty]?.length;
                 return (
-                  <div
-                    key={ty}
-                    style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '12px 14px' }}
-                  >
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--grey-500)' }}>
+                  <div key={ty} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '12px 14px' }}>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
                       {t('automation.wizard.pendingTitle', { count: counts[ty] ?? 0, type: t(`signals.type.${ty}`) })}
                     </div>
                     {pending > 0 ? (
@@ -304,7 +408,7 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
               })}
 
               <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '12px 14px' }}>
-                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--grey-500)', marginBottom: 6 }}>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
                   {t('automation.wizard.reenrollTitle')}
                 </div>
                 {[
@@ -325,7 +429,8 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
               {meta && !meta.hasMailbox && (
                 <div style={{
                   fontSize: 12.5, padding: '10px 12px', borderRadius: 'var(--r-lg)',
-                  background: 'var(--warning-soft, #fef3c7)', border: '1px solid var(--warning, #d97706)',
+                  background: 'var(--warning-soft)', border: '1px solid var(--warning)',
+                  color: 'var(--text-primary)',
                 }}>
                   {t('automation.wizard.noMailbox')}
                 </div>
@@ -341,17 +446,34 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
           <button
             className="btn btn-ghost"
             style={{ fontSize: 12, padding: '6px 14px' }}
-            onClick={() => (step === 1 ? onClose() : setStep(step - 1))}
+            onClick={() => {
+              const first = fromCatalog ? 0 : 1;
+              if (step === first) return onClose();
+              // Retour depuis l'activation : on saute l'éditeur si le workflow
+              // choisi était un existant, il n'a jamais été affiché.
+              if (step === 3 && pick !== 'new') return setStep(1);
+              setStep(step - 1);
+            }}
           >
-            {step === 1 ? t('common.cancel') : t('common.back')}
+            {step === (fromCatalog ? 0 : 1) ? t('common.cancel') : t('common.back')}
           </button>
 
           <div style={{ display: 'flex', gap: 8 }}>
+            {step === 0 && (
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 12, padding: '6px 16px', opacity: picked.length ? 1 : 0.45 }}
+                disabled={picked.length === 0}
+                onClick={() => setStep(1)}
+              >
+                {t('common.continue')}
+              </button>
+            )}
             {step === 1 && (
               <button
                 className="btn btn-primary"
-                style={{ fontSize: 12, padding: '6px 16px', opacity: canContinue1 ? 1 : 0.45 }}
-                disabled={!canContinue1}
+                style={{ fontSize: 12, padding: '6px 16px', opacity: pick ? 1 : 0.45 }}
+                disabled={!pick}
                 onClick={() => setStep(pick === 'new' ? 2 : 3)}
               >
                 {t('common.continue')}
@@ -383,8 +505,8 @@ export default function AutomateWizard({ signalTypes, preselected, onClose, onDo
                   disabled={busy}
                   onClick={() => arm(false)}
                 >
-                  {signalTypes.length > 1
-                    ? t('automation.wizard.armN', { count: signalTypes.length })
+                  {types.length > 1
+                    ? t('automation.wizard.armN', { count: types.length })
                     : t('automation.wizard.armOne')}
                 </button>
               </>

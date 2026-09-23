@@ -16,14 +16,14 @@ import { useT, useI18n } from '../../i18n';
 
 const REASON_TONE = {
   replied: 'var(--primary)',
-  meeting_requested: 'var(--success, #16a34a)',
-  deal_stage_reached: 'var(--success, #16a34a)',
-  deal_updated: 'var(--success, #16a34a)',
+  meeting_requested: 'var(--success)',
+  deal_stage_reached: 'var(--success)',
+  deal_updated: 'var(--success)',
   completed_no_reply: 'var(--grey-500)',
-  max_duration: 'var(--warning, #d97706)',
+  max_duration: 'var(--warning)',
   manual: 'var(--grey-500)',
-  unsubscribed: 'var(--danger, #dc2626)',
-  bounced: 'var(--danger, #dc2626)',
+  unsubscribed: 'var(--danger)',
+  bounced: 'var(--danger)',
   handed_off: 'var(--primary)',
 };
 
