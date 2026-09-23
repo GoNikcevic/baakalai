@@ -53,6 +53,173 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * GET /api/signals/types · la zone Signaux, groupée par TYPE.
+ *
+ * 320 lignes ne se traitent pas, 7 lignes se traitent. C'est tout le sujet :
+ * la liste ligne à ligne offrait une action qui coûtait un email rédigé à la
+ * main, multipliée par 320, et personne ne l'a jamais payée une seule fois.
+ * Ici chaque type porte son compte et deux sorties, automatiser ou ignorer.
+ *
+ * Aucun score n'est renvoyé. Un score par signal sert à ordonner une file
+ * qu'on traite à la main : le jour où la zone devient un entonnoir de
+ * promotion, il n'a plus de consommateur, et il entre en concurrence avec le
+ * lead score sur 100 qui existe déjà ailleurs. Les FAITS (source fiable,
+ * contact joignable, deal ouvert) restent, eux : ce sont les raisons derrière
+ * le score, et ils deviendront le vocabulaire des conditions d'entrée.
+ */
+router.get('/types', async (req, res, next) => {
+  try {
+    const catalog = require('../lib/automation-catalog');
+
+    const [rows, ignored, triggers, lastScan] = await Promise.all([
+      db.query(`
+        SELECT signal_type,
+               COUNT(*) FILTER (WHERE status = 'new') AS new_count,
+               COUNT(*) FILTER (WHERE status = 'automated') AS automated_count,
+               COUNT(*) FILTER (WHERE status = 'skipped') AS skipped_count,
+               COUNT(*) AS total_count,
+               MAX(detected_at) AS last_detected_at,
+               COUNT(DISTINCT company_name) FILTER (WHERE status = 'new') AS company_count
+          FROM signals
+         WHERE user_id = $1
+         GROUP BY signal_type
+      `, [req.user.id]).then(r => r.rows),
+      db.query(
+        `SELECT signal_type FROM signal_type_preferences WHERE user_id = $1`,
+        [req.user.id]
+      ).then(r => r.rows.map(x => x.signal_type)),
+      db.query(`
+        SELECT a.event_key, a.id, a.status, w.name AS workflow_name
+          FROM automation_triggers a
+          JOIN workflows w ON w.id = a.workflow_id
+         WHERE a.user_id = $1 AND a.event_source = 'signal'
+      `, [req.user.id]).then(r => r.rows),
+      db.query(
+        `SELECT MAX(last_run) AS last_run FROM signal_configs WHERE user_id = $1`,
+        [req.user.id]
+      ).then(r => r.rows[0]?.last_run || null),
+    ]);
+
+    // Les trois sociétés à montrer par type, les plus récentes d'abord.
+    const companies = await db.query(`
+      SELECT signal_type, company_name FROM (
+        SELECT signal_type, company_name, detected_at,
+               ROW_NUMBER() OVER (PARTITION BY signal_type ORDER BY detected_at DESC) AS rn
+          FROM (SELECT DISTINCT ON (signal_type, company_name)
+                       signal_type, company_name, detected_at
+                  FROM signals
+                 WHERE user_id = $1 AND status = 'new' AND company_name IS NOT NULL
+                 ORDER BY signal_type, company_name, detected_at DESC) d
+      ) t WHERE rn <= 3
+    `, [req.user.id]);
+
+    const byType = new Map(rows.map(r => [r.signal_type, r]));
+    const cosByType = new Map();
+    for (const c of companies.rows) {
+      if (!cosByType.has(c.signal_type)) cosByType.set(c.signal_type, []);
+      cosByType.get(c.signal_type).push(c.company_name);
+    }
+    const trigByType = new Map(triggers.filter(t => t.status !== 'draft').map(t => [t.event_key, t]));
+
+    const build = (signalType) => {
+      const r = byType.get(signalType) || {};
+      const trig = trigByType.get(signalType) || null;
+      return {
+        signalType,
+        family: catalog.familyOfSignalType(signalType),
+        newCount: parseInt(r.new_count, 10) || 0,
+        automatedCount: parseInt(r.automated_count, 10) || 0,
+        skippedCount: parseInt(r.skipped_count, 10) || 0,
+        totalCount: parseInt(r.total_count, 10) || 0,
+        companyCount: parseInt(r.company_count, 10) || 0,
+        companies: cosByType.get(signalType) || [],
+        lastDetectedAt: r.last_detected_at || null,
+        ignored: ignored.includes(signalType),
+        automated: trig ? { triggerId: trig.id, workflowName: trig.workflow_name, status: trig.status } : null,
+      };
+    };
+
+    // Les types déjà détectés d'abord, puis ceux que la veille sait produire
+    // mais qui n'ont encore rien remonté : un type à zéro est une information,
+    // pas une ligne à cacher.
+    const veille = catalog.VEILLE_SIGNAL_TYPES.map(build);
+    const crm = catalog.CRM_SIGNAL_TYPES.map(build);
+
+    res.json({
+      lastScanAt: lastScan,
+      totalNew: veille.concat(crm)
+        .filter(t => !t.ignored && !t.automated)
+        .reduce((a, t) => a + t.newCount, 0),
+      families: [
+        { key: catalog.FAMILY_VEILLE, types: veille },
+        { key: catalog.FAMILY_CRM, types: crm },
+      ],
+    });
+  } catch (err) { next(err); }
+});
+
+/**
+ * POST /api/signals/types/:type/ignore · « Ignorer ce type ».
+ *
+ * Une vraie décision, qui fait tomber le compteur d'un coup. Aujourd'hui,
+ * ignorer un signal consiste à ne pas cliquer : ça ressemble à du retard alors
+ * que c'est souvent un arbitrage correct.
+ */
+router.post('/types/:type/ignore', async (req, res, next) => {
+  try {
+    const catalog = require('../lib/automation-catalog');
+    const signalType = req.params.type;
+    if (!catalog.VEILLE_SIGNAL_TYPES.includes(signalType)
+        && !catalog.CRM_SIGNAL_TYPES.includes(signalType)) {
+      return res.status(400).json({ error: 'Type de signal inconnu' });
+    }
+
+    await db.query(
+      `INSERT INTO signal_type_preferences (user_id, signal_type) VALUES ($1, $2)
+       ON CONFLICT (user_id, signal_type) DO NOTHING`,
+      [req.user.id, signalType]
+    );
+    // Les signaux en attente sortent de la vue, sans disparaître : ils restent
+    // consultables comme trace, et la décision est réversible.
+    const r = await db.query(
+      `UPDATE signals SET status = 'ignored_type'
+        WHERE user_id = $1 AND signal_type = $2 AND status = 'new'`,
+      [req.user.id, signalType]
+    );
+    res.json({ ok: true, hidden: r.rowCount });
+  } catch (err) { next(err); }
+});
+
+router.delete('/types/:type/ignore', async (req, res, next) => {
+  try {
+    await db.query(
+      `DELETE FROM signal_type_preferences WHERE user_id = $1 AND signal_type = $2`,
+      [req.user.id, req.params.type]
+    );
+    const r = await db.query(
+      `UPDATE signals SET status = 'new'
+        WHERE user_id = $1 AND signal_type = $2 AND status = 'ignored_type'`,
+      [req.user.id, req.params.type]
+    );
+    res.json({ ok: true, restored: r.rowCount });
+  } catch (err) { next(err); }
+});
+
+/** Ignorer une sélection de signaux, sans toucher au type. */
+router.post('/dismiss', async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(Boolean) : [];
+    if (ids.length === 0) return res.status(400).json({ error: 'ids is required' });
+    const r = await db.query(
+      `UPDATE signals SET status = 'dismissed', actioned_at = now()
+        WHERE user_id = $1 AND id = ANY($2::uuid[]) AND status = 'new'`,
+      [req.user.id, ids]
+    );
+    res.json({ ok: true, dismissed: r.rowCount });
+  } catch (err) { next(err); }
+});
+
 // GET /api/signals/preferences · Cadence de la veille automatique
 router.get('/preferences', async (req, res, next) => {
   try {

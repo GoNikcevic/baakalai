@@ -326,16 +326,18 @@ const touchpoints = {
     }
 
     const result = await query(`
-      INSERT INTO touchpoints (campaign_id, enrollment_id, step, type, label, sub_type, timing,
+      INSERT INTO touchpoints (campaign_id, enrollment_id, workflow_id, step, type, label, sub_type, timing,
         subject, body, subject_b, body_b, max_chars, sort_order,
         parent_step_id, condition_type, condition_value, branch_label, is_root)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `, [
       campaignId || null,
-      // Conteneur alternatif : workflow de relance d'un contact CRM
-      // (migration 103) · exactement un des deux doit être posé.
+      // Conteneurs alternatifs : workflow de relance d'un contact CRM
+      // (enrollment, migration 103) ou modèle de workflow réutilisable
+      // (migration 114) · exactement un des trois doit être posé.
       data.enrollmentId || null,
+      data.workflowId || null,
       data.step,
       type,
       data.label || null,
@@ -435,6 +437,22 @@ const touchpoints = {
     return { changes: result.rowCount };
   },
 
+  // Modèle de workflow (migration 114) · les étapes du modèle ne sont jamais
+  // exécutées telles quelles : elles sont copiées dans l'enrollment à
+  // l'inscription du contact (lib/automation-enroll).
+  async listByWorkflow(workflowId) {
+    const result = await query(
+      'SELECT * FROM touchpoints WHERE workflow_id = $1 ORDER BY sort_order',
+      [workflowId]
+    );
+    return result.rows;
+  },
+
+  async deleteByWorkflow(workflowId) {
+    const result = await query('DELETE FROM touchpoints WHERE workflow_id = $1', [workflowId]);
+    return { changes: result.rowCount };
+  },
+
   // Suppression unitaire · la réconciliation de séquence (PUT /:id/sequence)
   // ne retire que les steps réellement supprimés par l'utilisateur ; le
   // journal campaign_sends survit en ON DELETE SET NULL (migration 103).
@@ -449,12 +467,24 @@ const touchpoints = {
 // =============================================
 
 const sequenceEnrollments = {
-  async create({ userId, opportunityId, goal, rationale, createdBy }) {
+  async create({
+    userId, opportunityId, goal, rationale, createdBy,
+    triggerId, workflowId, signalId, enrollmentSource, dedupKey, status,
+  }) {
     const result = await query(
-      `INSERT INTO sequence_enrollments (user_id, opportunity_id, goal, rationale, created_by)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO sequence_enrollments
+         (user_id, opportunity_id, goal, rationale, created_by,
+          trigger_id, workflow_id, signal_id, enrollment_source, dedup_key, status,
+          approved_at, started_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, 'draft'),
+               CASE WHEN $11 = 'active' THEN now() END,
+               CASE WHEN $11 = 'active' THEN now() END)
        RETURNING *`,
-      [userId, opportunityId, goal, rationale || null, createdBy || 'agent']
+      [
+        userId, opportunityId, goal, rationale || null, createdBy || 'agent',
+        triggerId || null, workflowId || null, signalId || null,
+        enrollmentSource || 'agent', dedupKey || null, status || null,
+      ]
     );
     return result.rows[0];
   },
@@ -497,6 +527,184 @@ const sequenceEnrollments = {
       [status, stopReason || null, id]
     );
     return result.rows[0] || null;
+  },
+};
+
+// =============================================
+// Workflows et déclencheurs · Automatisation (migration 114)
+// =============================================
+//
+// Un workflow est un MODÈLE : une liste ordonnée d'étapes, réutilisable par
+// plusieurs déclencheurs. Ses étapes vivent dans touchpoints(workflow_id) et
+// ne sont jamais exécutées telles quelles : elles sont copiées dans
+// l'enrollment à l'inscription du contact.
+
+const workflows = {
+  async create({ userId, name, maxDurationDays, reenrollPolicy, reenrollDays }) {
+    const result = await query(
+      `INSERT INTO workflows (user_id, name, max_duration_days, reenroll_policy, reenroll_days)
+       VALUES ($1, $2, COALESCE($3, 45), COALESCE($4, 'period'), COALESCE($5, 90))
+       RETURNING *`,
+      [userId, name, maxDurationDays || null, reenrollPolicy || null, reenrollDays || null]
+    );
+    return result.rows[0];
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM workflows WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  // La liste porte ce qui fait exister la vue « par workflow » : le nombre
+  // d'étapes, et surtout les déclencheurs qui pointent dessus. Un workflow
+  // sans déclencheur ne s'exécute jamais, et l'interface doit le dire.
+  async listByUser(userId) {
+    const result = await query(
+      `SELECT w.*,
+              (SELECT COUNT(*) FROM touchpoints t WHERE t.workflow_id = w.id) AS step_count,
+              COALESCE((
+                SELECT json_agg(json_build_object('id', a.id, 'label', a.label, 'status', a.status)
+                                ORDER BY a.created_at)
+                  FROM automation_triggers a WHERE a.workflow_id = w.id
+              ), '[]'::json) AS triggers
+         FROM workflows w
+        WHERE w.user_id = $1 AND w.archived_at IS NULL
+        ORDER BY w.created_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  },
+
+  async update(id, { name, maxDurationDays, reenrollPolicy, reenrollDays }) {
+    const sets = [];
+    const values = [];
+    let i = 1;
+    if (name !== undefined) { sets.push(`name = $${i++}`); values.push(name); }
+    if (maxDurationDays !== undefined) { sets.push(`max_duration_days = $${i++}`); values.push(maxDurationDays); }
+    if (reenrollPolicy !== undefined) { sets.push(`reenroll_policy = $${i++}`); values.push(reenrollPolicy); }
+    if (reenrollDays !== undefined) { sets.push(`reenroll_days = $${i++}`); values.push(reenrollDays); }
+    if (sets.length === 0) return null;
+    sets.push('updated_at = now()');
+    values.push(id);
+    const result = await query(
+      `UPDATE workflows SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`,
+      values
+    );
+    return result.rows[0] || null;
+  },
+
+  // Archivage et non suppression : les enrollments en vol gardent leur copie
+  // des étapes, mais l'Historique doit pouvoir continuer à nommer le workflow
+  // d'où sort un contact.
+  async archive(id) {
+    const result = await query(
+      `UPDATE workflows SET archived_at = now(), updated_at = now() WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    return result.rows[0] || null;
+  },
+};
+
+const automationTriggers = {
+  async create({ userId, workflowId, eventSource, eventKey, label, status }) {
+    const result = await query(
+      `INSERT INTO automation_triggers (user_id, workflow_id, event_source, event_key, label, status, armed_at)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'draft'),
+               CASE WHEN $6 IN ('active', 'paused') THEN now() END)
+       RETURNING *`,
+      [userId, workflowId, eventSource, eventKey, label, status || null]
+    );
+    return result.rows[0];
+  },
+
+  async get(id) {
+    const result = await query('SELECT * FROM automation_triggers WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  // Le déclencheur armé qui correspond à un événement. Un seul peut exister
+  // par (compte, source, clé) : l'index unique de la migration 114 l'impose,
+  // sinon un même signal inscrirait le contact deux fois.
+  async findActive(userId, eventSource, eventKey) {
+    const result = await query(
+      `SELECT * FROM automation_triggers
+        WHERE user_id = $1 AND event_source = $2 AND event_key = $3 AND status = 'active'
+        LIMIT 1`,
+      [userId, eventSource, eventKey]
+    );
+    return result.rows[0] || null;
+  },
+
+  // Tout ce dont la ligne a besoin pour se raconter : le workflow visé, les
+  // entrées des 30 derniers jours, et de quoi expliquer un déclencheur muet.
+  async listByUser(userId) {
+    const result = await query(
+      `SELECT a.*,
+              w.name AS workflow_name,
+              w.archived_at AS workflow_archived_at,
+              (SELECT COUNT(*) FROM touchpoints t WHERE t.workflow_id = w.id) AS workflow_step_count,
+              (SELECT COUNT(*) FROM sequence_enrollments e
+                WHERE e.trigger_id = a.id AND e.created_at > now() - interval '30 days') AS entered_30d,
+              (SELECT COUNT(*) FROM sequence_enrollments e
+                WHERE e.trigger_id = a.id) AS entered_total,
+              -- Un déclencheur armé qui n'a jamais rien inscrit n'est pas
+              -- forcément cassé : il se peut qu'aucun événement ne soit
+              -- survenu. Ces deux compteurs font la différence entre « rien
+              -- ne s'est passé » et « des événements sont passés et ont tous
+              -- été écartés », qui n'appellent pas la même action.
+              (SELECT COUNT(*) FROM signals s
+                WHERE s.automation_trigger_id = a.id AND s.status = 'skipped') AS skipped_count,
+              (SELECT s.automation_skip_reason FROM signals s
+                WHERE s.automation_trigger_id = a.id AND s.status = 'skipped'
+                GROUP BY s.automation_skip_reason
+                ORDER BY COUNT(*) DESC LIMIT 1) AS top_skip_reason
+         FROM automation_triggers a
+         JOIN workflows w ON w.id = a.workflow_id
+        WHERE a.user_id = $1
+        ORDER BY a.created_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  },
+
+  async setStatus(id, status, { pausedReason } = {}) {
+    const result = await query(
+      `UPDATE automation_triggers
+          SET status = $1,
+              paused_reason = $2,
+              armed_at = CASE WHEN $1 = 'active' THEN COALESCE(armed_at, now()) ELSE armed_at END,
+              updated_at = now()
+        WHERE id = $3
+        RETURNING *`,
+      [status, pausedReason || null, id]
+    );
+    return result.rows[0] || null;
+  },
+
+  async markFired(id) {
+    await query(
+      `UPDATE automation_triggers SET last_fired_at = now(), updated_at = now() WHERE id = $1`,
+      [id]
+    );
+  },
+
+  async remove(id) {
+    const result = await query('DELETE FROM automation_triggers WHERE id = $1', [id]);
+    return { changes: result.rowCount };
+  },
+
+  // Compteur du disjoncteur. Seules les inscriptions nées d'un ÉVÉNEMENT sont
+  // comptées : un rattrapage inscrit volontairement 124 contacts d'un coup, il
+  // ne doit pas déclencher la sécurité qui protège des boucles.
+  async recentEventEnrollments(triggerId, withinMinutes = 60) {
+    const result = await query(
+      `SELECT COUNT(*) AS n FROM sequence_enrollments
+        WHERE trigger_id = $1
+          AND enrollment_source = 'event'
+          AND created_at > now() - make_interval(mins => $2)`,
+      [triggerId, withinMinutes]
+    );
+    return parseInt(result.rows[0].n, 10) || 0;
   },
 };
 
@@ -2342,6 +2550,8 @@ module.exports = {
   campaigns,
   touchpoints,
   sequenceEnrollments,
+  workflows,
+  automationTriggers,
   diagnostics,
   versions,
   memoryPatterns,

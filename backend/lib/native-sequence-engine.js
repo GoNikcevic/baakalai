@@ -473,6 +473,21 @@ async function processEnrollments(enrollments, ctx) {
 
     const baseTime = new Date(enrollment.started_at || enrollment.approved_at || enrollment.created_at).getTime();
 
+    // Sortie de sécurité « durée maximale ». Rien ne bornait un enrollment
+    // jusqu'ici : un contact pouvait rester en parcours indéfiniment si aucune
+    // autre sortie ne tombait, et l'Historique ne l'aurait jamais vu sortir.
+    // La borne vit sur le workflow (migration 114) ; les enrollments d'agent
+    // qui n'en ont pas gardent leur comportement d'avant.
+    if (enrollment.workflow_id) {
+      const wf = await db.workflows.get(enrollment.workflow_id);
+      const maxDays = wf?.max_duration_days;
+      if (maxDays && Date.now() - baseTime > maxDays * 86400000) {
+        await stopEnrollment(enrollment.id, 'max_duration');
+        report.stopped++;
+        continue;
+      }
+    }
+
     const outcome = await advanceOneStep({
       prospect,
       path,
@@ -591,6 +606,22 @@ async function checkReplies(userId, campaigns, enrollments) {
         'native_reply_intent'
       );
       const intent = isKnownIntent(result.parsed?.intent) ? result.parsed.intent : 'question';
+
+      // Le motif de sortie est l'unité de l'Historique et des statistiques.
+      // La classification tombait APRÈS l'arrêt et n'était jamais écrite :
+      // « Rendez-vous demandé » ne pouvait donc pas exister comme motif. On ne
+      // réordonne pas pour autant (l'arrêt doit rester garanti même si le
+      // classifieur échoue) : on précise le motif une fois qu'il est connu.
+      // « Rendez-vous demandé » et jamais « RDV pris » : c'est une lecture de
+      // la réponse, pas un fait.
+      if (candidate.enrollmentId && intent === 'meeting_request') {
+        await db.query(
+          `UPDATE sequence_enrollments SET stop_reason = 'meeting_requested', updated_at = now()
+            WHERE id = $1 AND stop_reason = 'replied'`,
+          [candidate.enrollmentId]
+        );
+      }
+
       const autopilot = require('./conversation-autopilot');
       await autopilot.processReply(userId, {
         opportunityId: prospect.id,
