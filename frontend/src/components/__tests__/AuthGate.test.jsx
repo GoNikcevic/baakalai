@@ -20,7 +20,7 @@ describe('AuthGate', () => {
   it('renders the login form by default', () => {
     render(<AuthGate onAuth={mockOnAuth} />);
 
-    expect(screen.getByText('Le système IA qui exploite ton CRM')).toBeInTheDocument();
+    expect(screen.getByText('Le système IA qui exploite votre CRM')).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
     expect(screen.getByLabelText('Mot de passe')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Se connecter' })).toBeInTheDocument();
