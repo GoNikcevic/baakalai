@@ -20,6 +20,7 @@ const db = require('../db');
 const logger = require('../lib/logger');
 const catalog = require('../lib/automation-catalog');
 const { runBackfill, BREAKER_PER_HOUR } = require('../lib/automation-enroll');
+const { CONSIGNE_MARKER } = require('../lib/workflow-step-email');
 
 const router = Router();
 
@@ -87,10 +88,14 @@ function stepsToTouchpoints(steps) {
     out.push({
       step: `E${emailIndex}`,
       type: 'email',
+      // Le marqueur qui dit au moteur que ce corps est une CONSIGNE et non un
+      // email. Sans lui, `advanceOneStep` enverrait la consigne telle quelle
+      // au contact : « Féliciter pour le recrutement » en guise de message.
+      subType: CONSIGNE_MARKER,
       timing: `J+${pendingDays}`,
       // La consigne est une règle écrite une fois pour N contacts, pas un
       // email rédigé pour quelqu'un en particulier. Le corps est généré à
-      // l'envoi à partir d'elle et de l'historique du contact.
+      // l'envoi à partir d'elle, du contact et de ce qui lui a déjà été dit.
       subject: null,
       body: String(s.consigne || '').trim(),
       sortOrder: out.length,
