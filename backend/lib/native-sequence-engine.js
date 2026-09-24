@@ -299,9 +299,41 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
       report.skipped++;
       return 'skipped';
     }
-    const subject = renderTemplate(next.subject, prospect)
-      || `Re: ${renderTemplate(path.find(s => s.type === 'email')?.subject || '', prospect) || 'notre échange'}`;
-    const body = renderTemplate(next.body, prospect);
+    // Étape de workflow : le corps stocké est une CONSIGNE, pas un email.
+    // L'email est écrit ici, au moment de l'envoi, avec ce qu'on sait du
+    // contact et de ce qui lui a déjà été envoyé dans ce parcours.
+    //
+    // Si la génération échoue on n'envoie RIEN : expédier la consigne telle
+    // quelle mettrait une note de service sous les yeux d'un client. Une
+    // étape non partie se rattrape au passage suivant, un email absurde non.
+    const { isConsigneStep, generateStepEmail } = require('./workflow-step-email');
+    let subject;
+    let body;
+
+    if (isConsigneStep(next)) {
+      // `campaign_sends` ne garde ni objet ni corps : on repart des CONSIGNES
+      // des étapes déjà parties, ce qui suffit à ne pas redire la même chose.
+      const previous = path
+        .filter(s => s.type === 'email' && s.id !== next.id && done.has(s.id))
+        .map(s => ({ subject: null, body: s.body }));
+      const written = await generateStepEmail({
+        consigne: next.body,
+        prospect,
+        previous,
+        isFirst: previous.length === 0,
+      });
+      if (!written) {
+        await recordSend({ ...base, status: 'skipped', error: 'generation_failed' });
+        report.skipped++;
+        return 'skipped';
+      }
+      subject = written.subject;
+      body = written.body;
+    } else {
+      subject = renderTemplate(next.subject, prospect)
+        || `Re: ${renderTemplate(path.find(s => s.type === 'email')?.subject || '', prospect) || 'notre échange'}`;
+      body = renderTemplate(next.body, prospect);
+    }
     const result = await emailOutbound.sendPersonalEmail(userId, {
       to: prospect.email,
       toName: prospect.name,

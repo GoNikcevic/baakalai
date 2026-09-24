@@ -104,3 +104,15 @@ test('un premier email sans attente ne fabrique pas de carte attente fantome', (
   const back = touchpointsToSteps([{ timing: 'J+0', body: 'A' }]);
   assert.deepEqual(back, [{ type: 'email', consigne: 'A' }]);
 });
+
+test('chaque etape email porte le marqueur de consigne', () => {
+  // Load-bearing : sans ce marqueur, advanceOneStep enverrait la consigne
+  // telle quelle au contact au lieu de rediger un email a partir d elle.
+  const { CONSIGNE_MARKER } = require('../lib/workflow-step-email');
+  const { touchpoints } = stepsToTouchpoints([
+    { type: 'email', consigne: 'A' },
+    { type: 'wait', days: 2 },
+    { type: 'email', consigne: 'B' },
+  ]);
+  assert.ok(touchpoints.every(tp => tp.subType === CONSIGNE_MARKER));
+});
