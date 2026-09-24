@@ -124,7 +124,7 @@ const I18N = {
       perks: [
         "Tout le produit : CRM Intelligence, Automatisation, Prospection, mémoire Synapse",
         "Vos CRM, vos boîtes Gmail et Outlook, votre LinkedIn : connectés, jamais en supplément",
-        "Jusqu'à 5 sièges par équipe, vous payez les sièges occupés",
+        "Aucun plafond de sièges : vous payez les sièges occupés, pas un de plus",
         "Onboarding accompagné : opérationnel en 30 minutes",
       ],
       expect: [
@@ -302,7 +302,7 @@ const I18N = {
       perks: [
         "The whole product: CRM Intelligence, Automation, Prospection, Synapse memory",
         "Your CRMs, your Gmail and Outlook inboxes, your LinkedIn: connected, never an add-on",
-        "Up to 5 seats per team, you pay for seats in use",
+        "No seat cap: you pay for seats in use, not one more",
         "Guided onboarding: operational in 30 minutes",
       ],
       expect: [
