@@ -27,7 +27,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { request } from '../../services/api-client';
 import { showToast } from '../../services/notifications';
 import { useT, useI18n } from '../../i18n';
-import WorkflowEditor, { emptySteps } from './WorkflowEditor';
+import WorkflowEditor from './WorkflowEditor';
 import AutomateWizard from './AutomateWizard';
 import { triggerLabel, triggerSentence } from './triggerLabels';
 
@@ -66,7 +66,6 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
   const [view, setView] = useState('trig');
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [newWorkflow, setNewWorkflow] = useState(false);
 
   const load = useCallback(() => {
     request('/automations').then(setData).catch(() => setData({ triggers: [], workflows: [] }));
@@ -121,15 +120,6 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
     );
   }
 
-  if (newWorkflow) {
-    return (
-      <WorkflowCreatePanel
-        crmProvider={data.activeCrmProvider}
-        onClose={() => { setNewWorkflow(false); load(); }}
-      />
-    );
-  }
-
   const triggers = data.triggers || [];
   const workflows = data.workflows || [];
 
@@ -151,28 +141,20 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
           ))}
         </div>
 
-        {/* La création ne dépend d'aucun signal existant. Un compte neuf n'en a
-            aucun : si la promotion d'un type était la seule porte d'entrée, il
-            n'y aurait aucun moyen de créer quoi que ce soit tant que la veille
-            n'a pas tourné. */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          {view === 'wf' && (
-            <button
-              className="btn btn-ghost"
-              style={{ fontSize: 12, padding: '5px 14px' }}
-              onClick={() => setNewWorkflow(true)}
-            >
-              + {t('automation.triggers.newWorkflow')}
-            </button>
-          )}
-          <button
-            className="btn btn-primary"
-            style={{ fontSize: 12, padding: '5px 14px' }}
-            onClick={() => setCreating(true)}
-          >
-            + {t('automation.triggers.create')}
-          </button>
-        </div>
+        {/* Une seule porte de création, et elle commence par le déclencheur.
+            Un workflow seul ne peut RIEN produire : l'email n'est rédigé qu'à
+            l'inscription d'un contact, et un contact n'est inscrit que par un
+            déclencheur. Créer un workflow isolé ne fabriquerait donc que des
+            brouillons muets, c'est-à-dire le même échec qu'un backlog de
+            signaux jamais traités. Le workflow se crée dans le parcours, une
+            fois l'événement choisi. */}
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '5px 14px' }}
+          onClick={() => setCreating(true)}
+        >
+          + {t('automation.triggers.create')}
+        </button>
       </div>
 
       {view === 'trig' && triggers.length === 0 && (
@@ -372,81 +354,6 @@ function Alert({ tone, children }) {
       background: bg, fontSize: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap',
     }}>
       {children}
-    </div>
-  );
-}
-
-/* ═══════════════════ Création d'un workflow seul ═══════════════════ */
-
-/**
- * Un workflow sans déclencheur ne s'exécutera pas, et la vue « par workflow »
- * le dit en toutes lettres. Préparer le parcours avant de décider ce qui le
- * lance reste un ordre de travail légitime : la page ne doit pas obliger à
- * attendre qu'un signal existe pour pouvoir construire quelque chose.
- */
-function WorkflowCreatePanel({ crmProvider, onClose }) {
-  const t = useT();
-  const [name, setName] = useState('');
-  const [steps, setSteps] = useState(emptySteps);
-  const [busy, setBusy] = useState(false);
-
-  const valid = name.trim().length > 0
-    && steps.some(s => s.type === 'email')
-    && steps.filter(s => s.type === 'email').every(s => String(s.consigne || '').trim());
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      await request('/automations/workflows', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: name.trim(),
-          steps: steps.map(s => (s.type === 'wait'
-            ? { type: 'wait', days: s.days }
-            : { type: 'email', consigne: s.consigne })),
-        }),
-      });
-      showToast({
-        type: 'success',
-        title: t('automation.editor.created'),
-        message: t('automation.editor.createdBody'),
-      });
-      onClose();
-    } catch (err) {
-      showToast({ type: 'error', title: t('common.error'), message: err.message });
-    }
-    setBusy(false);
-  };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <button className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 12px' }} onClick={onClose}>
-          {'< '}{t('automation.editor.back')}
-        </button>
-        <button
-          className="btn btn-primary"
-          style={{ fontSize: 12, padding: '6px 16px', opacity: valid ? 1 : 0.45 }}
-          disabled={!valid || busy}
-          onClick={save}
-        >
-          {t('common.save')}
-        </button>
-      </div>
-
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-        {t('automation.editor.createHint')}
-      </div>
-
-      <WorkflowEditor
-        name={name}
-        onNameChange={setName}
-        steps={steps}
-        onStepsChange={setSteps}
-        triggerSentence={t('automation.editor.noTrigger')}
-        context={{ contact: true, company: true, signal: false, deal: false, owner: false }}
-        crmProvider={crmProvider}
-      />
     </div>
   );
 }

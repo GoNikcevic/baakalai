@@ -233,10 +233,7 @@
       "savedBody": "Les contacts déjà en parcours gardent les étapes reçues à leur entrée.",
       "back": "Automatisation",
       "editHint": "Modifier ce workflow ne touche aucun parcours en cours : chaque contact garde la copie des étapes reçue à son entrée.",
-      "noTrigger": "Aucun déclencheur ne pointe vers ce workflow",
-      "created": "Workflow créé",
-      "createdBody": "Il ne s'exécutera pas tant qu'aucun déclencheur ne pointe dessus.",
-      "createHint": "Vous pouvez préparer le parcours maintenant et décider plus tard de ce qui le lance. Tant qu'aucun déclencheur ne pointe dessus, il ne s'exécute pas."
+      "noTrigger": "Aucun déclencheur ne pointe vers ce workflow"
     },
     "triggers": {
       "byTrigger": "Par déclencheur",
@@ -275,8 +272,7 @@
       "noWorkflow": "Aucun workflow pour l'instant.",
       "usedBy": "Utilisé par {count} déclencheurs : {list}",
       "orphan": "Ne s'exécute pas : aucun déclencheur ne pointe vers ce workflow.",
-      "create": "Créer une automatisation",
-      "newWorkflow": "Nouveau workflow"
+      "create": "Créer une automatisation"
     },
     "runs": {
       "empty": {
