@@ -18,6 +18,9 @@ const APP_URL = process.env.APP_URL || (process.env.RAILWAY_PUBLIC_DOMAIN
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_PUBLIC_DOMAIN;
 
+// Combien de temps un refresh token déjà tourné reste accepté (cf. /refresh).
+const ROTATION_GRACE_SECONDS = 60;
+
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: IS_PRODUCTION,
@@ -104,9 +107,23 @@ const authLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === 'test',
 });
 
+// Le refresh n'est pas une tentative d'authentification : chaque onglet ouvert
+// en déclenche un toutes les 15 minutes (durée de l'access token), et le nav
+// poll toutes les 2 minutes. Le mettre dans le seau de /login produisait des
+// 429 en usage normal, et un 429 était traité côté client comme une session
+// morte : déconnexion sèche. Seau séparé, plafond large.
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many refresh attempts. Try again later.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
 router.use('/login', authLimiter);
 router.use('/register', authLimiter);
-router.use('/refresh', authLimiter);
+router.use('/refresh', refreshLimiter);
 router.use('/forgot-password', authLimiter);
 router.use('/reset-password', authLimiter);
 router.use('/resend-verification', authLimiter);
@@ -225,11 +242,16 @@ router.post('/refresh', async (req, res, next) => {
     const stored = await db.refreshTokens.getByHash(tokenHash);
     if (!stored) return res.status(401).json({ error: 'Invalid refresh token' });
 
-    await db.refreshTokens.deleteByHash(tokenHash);
-
     if (new Date(stored.expires_at) < new Date()) {
+      await db.refreshTokens.deleteByHash(tokenHash);
       return res.status(401).json({ error: 'Refresh token expired' });
     }
+
+    // Rotation avec période de grâce plutôt que suppression sèche : l'ancien
+    // token reste accepté une minute. Un rejeu légitime (onglet restauré, deux
+    // onglets qui expirent en même temps, requête retentée par le navigateur)
+    // ne doit pas tuer la session, sinon le client reçoit un 401 et déloge.
+    await db.refreshTokens.expireIn(tokenHash, ROTATION_GRACE_SECONDS);
 
     const user = await db.users.getById(stored.user_id);
     if (!user) return res.status(401).json({ error: 'User not found' });
@@ -245,10 +267,37 @@ router.post('/refresh', async (req, res, next) => {
 // POST /api/auth/logout
 router.post('/logout', requireAuth, async (req, res, next) => {
   try {
-    // Invalidate ALL sessions for this user (not just the current token)
-    await db.refreshTokens.deleteAllByUser(req.user.id);
+    // Ne révoquer que la session présentée : se déconnecter du portable ne doit
+    // pas tuer celle du téléphone ni celle de l'extension. La révocation globale
+    // reste pour le changement de mot de passe et la suppression de compte.
+    // Sans token présenté on ne sait pas laquelle viser : on retombe sur tout,
+    // plutôt que de laisser une chaîne vivante derrière soi.
+    const presented = req.cookies?.bakal_refresh || req.body?.refreshToken;
+    if (presented) {
+      await db.refreshTokens.deleteByHash(hashRefreshToken(presented));
+    } else {
+      await db.refreshTokens.deleteAllByUser(req.user.id);
+    }
     clearRefreshCookie(res);
     res.json({ message: 'Logged out' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/extension-session
+// L'extension Chrome détecte l'access token dans l'onglet app ouvert, puis
+// l'échange ici contre sa PROPRE chaîne de refresh. Avant ça elle recopiait le
+// refresh token de l'app : la rotation côté serveur invalidait alors le cookie
+// du navigateur, et l'utilisateur était délogué de app.baakal.ai à chaque fois
+// que l'extension rafraîchissait. Les deux sessions sont désormais disjointes.
+// Pas de cookie posé ici : l'appel vient d'une origine chrome-extension://.
+router.post('/extension-session', requireAuth, async (req, res, next) => {
+  try {
+    const user = await db.users.getById(req.user.id);
+    if (!user) return res.status(401).json({ error: 'User not found' });
+    const tokens = await issueTokens({ id: user.id, email: user.email, role: user.role });
+    res.json({ token: tokens.accessToken, refreshToken: tokens.refreshToken });
   } catch (err) {
     next(err);
   }

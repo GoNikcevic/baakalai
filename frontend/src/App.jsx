@@ -131,6 +131,19 @@ export default function App() {
     checkAuth()
   }, [])
 
+  // Session morte en cours d'usage. Sans ce signal, l'app restait affichée
+  // après un clearSession() : chaque appel retombait dans son `.catch()` et
+  // ça se voyait comme des listes vides et un CRM « déconnecté », jusqu'à ce
+  // que l'utilisateur actualise de lui même. On renvoie au login tout de suite.
+  useEffect(() => {
+    function handleSessionExpired() {
+      setAuthed(false)
+      setOnboarded(false)
+    }
+    window.addEventListener('bakal:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('bakal:session-expired', handleSessionExpired)
+  }, [])
+
   useEffect(() => {
     if (authed) {
       initData()

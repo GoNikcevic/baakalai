@@ -22,6 +22,7 @@ const pipedrive = require('../api/pipedrive');
 const claude = require('../api/claude');
 const logger = require('./logger');
 const { intentEnumForPrompt, isKnownIntent } = require('./reply-intents');
+const { setPlannedFollowupDate } = require('./reactivation-queue');
 
 const DAY_MS = 86400000;
 
@@ -114,7 +115,17 @@ async function analyzeResponses(userId) {
       else if (analysis.sentiment === 'negative') report.negative++;
       else report.neutral++;
 
-      // 4. Update opportunity status based on analysis
+      // 4. Une date de relance explicitement demandée par le contact prime sur
+      // tout le reste · une instruction concrète ("rappelez en mars") vaut
+      // mieux que le repli générique à 90 jours.
+      const requestedDate = parseRequestedDate(analysis.requestedFollowupDate);
+      if (email.opp_id && requestedDate) {
+        await setPlannedFollowupDate(userId, email.opp_id, requestedDate.toISOString(), {
+          source: 'auto_email', reason: 'reply_requested_date',
+        });
+      }
+
+      // 5. Update opportunity status based on analysis
       if (email.opp_id && analysis.suggestedStatus) {
         await db.opportunities.update(email.opp_id, {
           status: analysis.suggestedStatus,
@@ -125,13 +136,12 @@ async function analyzeResponses(userId) {
           action: analysis.suggestedAction,
           newStatus: analysis.suggestedStatus,
         });
-      } else if (email.opp_id && analysis.sentiment === 'negative') {
-        // Negative signal, but Claude wasn't confident enough to call the deal lost · 
+      } else if (email.opp_id && analysis.sentiment === 'negative' && !requestedDate) {
+        // Negative signal, but Claude wasn't confident enough to call the deal lost ·
         // stop suggesting reactivation for a while rather than nagging on a cold trail,
         // without auto-declaring the deal dead (that stays a human call).
-        await db.opportunities.update(email.opp_id, {
-          planned_followup_date: new Date(Date.now() + 90 * DAY_MS).toISOString(),
-          planned_followup_reason: 'negative_sentiment',
+        await setPlannedFollowupDate(userId, email.opp_id, new Date(Date.now() + 90 * DAY_MS).toISOString(), {
+          source: 'auto_email', reason: 'negative_sentiment',
         });
       }
 
@@ -154,6 +164,7 @@ async function analyzeResponses(userId) {
           intent: analysis.intent,
           sentiment: analysis.sentiment,
           channel: 'email',
+          requestedFollowupDate: requestedDate ? requestedDate.toISOString() : null,
         });
       } catch (err) {
         logger.warn('response-agent', `Autopilot failed for ${email.contact_name}: ${err.message}`);
@@ -235,12 +246,18 @@ async function analyzeResponses(userId) {
           else if (analysis.sentiment === 'negative') report.negative++;
           else report.neutral++;
 
+          const liRequestedDate = parseRequestedDate(analysis.requestedFollowupDate);
+          if (activity.opp_id && liRequestedDate) {
+            await setPlannedFollowupDate(userId, activity.opp_id, liRequestedDate.toISOString(), {
+              source: 'auto_email', reason: 'reply_requested_date',
+            });
+          }
+
           if (activity.opp_id && analysis.suggestedStatus) {
             await db.opportunities.update(activity.opp_id, { status: analysis.suggestedStatus });
-          } else if (activity.opp_id && analysis.sentiment === 'negative') {
-            await db.opportunities.update(activity.opp_id, {
-              planned_followup_date: new Date(Date.now() + 90 * DAY_MS).toISOString(),
-              planned_followup_reason: 'negative_sentiment',
+          } else if (activity.opp_id && analysis.sentiment === 'negative' && !liRequestedDate) {
+            await setPlannedFollowupDate(userId, activity.opp_id, new Date(Date.now() + 90 * DAY_MS).toISOString(), {
+              source: 'auto_email', reason: 'negative_sentiment',
             });
           }
 
@@ -263,6 +280,7 @@ async function analyzeResponses(userId) {
               intent: analysis.intent,
               sentiment: analysis.sentiment,
               channel: 'linkedin',
+              requestedFollowupDate: liRequestedDate ? liRequestedDate.toISOString() : null,
             });
           } catch (err) {
             logger.warn('response-agent', `LinkedIn autopilot failed: ${err.message}`);
@@ -310,6 +328,7 @@ function checkIntent(analysis) {
 }
 
 async function analyzeWithClaude(email, activityTexts) {
+  const today = new Date().toISOString().split('T')[0];
   const prompt = `Analyse cette r\u00E9ponse \u00E0 un email de relance B2B.
 
 Email envoy\u00E9 :
@@ -321,6 +340,8 @@ Email envoy\u00E9 :
 R\u00E9ponse(s) d\u00E9tect\u00E9e(s) dans le CRM :
 ${activityTexts.join('\n')}
 
+Date du jour : ${today}
+
 Analyse et retourne un JSON :
 {
   "sentiment": "positive" | "negative" | "neutral",
@@ -328,6 +349,7 @@ Analyse et retourne un JSON :
   "confidence": 0.0-1.0,
   "suggestedAction": "description courte de l'action \u00E0 prendre",
   "suggestedStatus": "interested" | "meeting" | "won" | "lost" | null,
+  "requestedFollowupDate": "AAAA-MM-JJ, uniquement si le contact demande explicitement d'\u00EAtre recontact\u00E9 \u00E0 un moment pr\u00E9cis (ex: \\"rappelez-moi en mars\\", \\"dans 3 mois\\", \\"la semaine prochaine\\") \u00B7 r\u00E9sous les dates relatives par rapport \u00E0 la date du jour ci-dessus, sinon null \u00B7 ne jamais inventer une date",
   "summary": "r\u00E9sum\u00E9 en 1 phrase"
 }`;
 
@@ -350,8 +372,22 @@ Analyse et retourne un JSON :
     confidence: 0.3,
     suggestedAction: 'V\u00E9rifier manuellement',
     suggestedStatus: null,
+    requestedFollowupDate: null,
     summary: 'Analyse automatique non disponible',
   };
+}
+
+/**
+ * Valide la date demand\u00E9e par le contact telle qu'extraite par Claude \u00B7 un
+ * mod\u00E8le peut halluciner une date pass\u00E9e ou un format cass\u00E9, donc on ignore
+ * tout ce qui n'est pas une date future exploitable plut\u00F4t que de planifier
+ * une relance dans le pass\u00E9.
+ */
+function parseRequestedDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
+  return d;
 }
 
 /**

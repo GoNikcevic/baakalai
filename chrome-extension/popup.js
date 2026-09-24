@@ -74,20 +74,32 @@ async function detectFromBaakalaiTab() {
     const tabs = await chrome.tabs.query({ url: APP_URLS });
     for (const tab of tabs) {
       try {
+        // On n'emprunte que l'access token (15 minutes), le temps de demander
+        // notre PROPRE chaîne de refresh. Recopier aussi le refresh token de
+        // l'app, ce que faisait la version précédente, revenait à partager sa
+        // session : la rotation côté serveur invalidait le cookie du navigateur
+        // et délogeait l'utilisateur de app.baakal.ai dès que l'extension se
+        // rafraîchissait. Les deux sessions sont maintenant indépendantes.
         const results = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          func: () => ({
-            token: localStorage.getItem('bakal_token'),
-            refresh: localStorage.getItem('bakal_refresh_token'),
-          }),
+          func: () => localStorage.getItem('bakal_token'),
         });
-        const data = results?.[0]?.result;
-        if (data?.token) {
-          await saveTokens(data.token, data.refresh);
-          API_BASE = `${new URL(tab.url).origin}/api`;
-          await new Promise((resolve) => chrome.storage.local.set({ baakalai_api: API_BASE }, resolve));
-          return true;
-        }
+        const appToken = results?.[0]?.result;
+        if (!appToken) continue;
+
+        const base = `${new URL(tab.url).origin}/api`;
+        const res = await fetch(`${base}/auth/extension-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${appToken}` },
+        });
+        if (!res.ok) continue;
+        const session = await res.json();
+        if (!session?.token) continue;
+
+        await saveTokens(session.token, session.refreshToken);
+        API_BASE = base;
+        await new Promise((resolve) => chrome.storage.local.set({ baakalai_api: API_BASE }, resolve));
+        return true;
       } catch { /* tab not accessible */ }
     }
   } catch { /* no tabs permission or no tabs */ }

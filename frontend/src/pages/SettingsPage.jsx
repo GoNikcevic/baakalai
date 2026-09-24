@@ -13,6 +13,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useSocket } from '../context/SocketContext';
 import { useI18n } from '../i18n';
 import EmailAccountSettings from '../components/EmailAccountSettings';
+import AutopilotSettings from '../components/AutopilotSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
@@ -1057,6 +1058,14 @@ export default function SettingsPage() {
       {/* Email sortant */}
       <EmailAccountSettings />
 
+      {/* Réponse automatique aux contacts et clients du CRM.
+          Elle vivait sur la page Automatisation ; celle-ci est devenue
+          100 % événementielle et l'autopilot y deviendra une étape de
+          workflow (décision du 22/09). En attendant que l'étape soit
+          branchée, le réglage global vit ici, avec les autres réglages
+          d'envoi, plutôt que de rester inaccessible. */}
+      <AutopilotSettings scope="crm" />
+
       {/* Envoi · cadence et fenêtres des emails sortants */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
@@ -1348,10 +1357,12 @@ function CrmWritebackSection({ t, showToast, lang }) {
 }
 
 /* ═══ SLA Section ═══ */
-// Seuils de réactivité évalués dans « À traiter aujourd'hui » et le digest du
-// lundi (backend lib/sla.js). Off par défaut : un SLA est une promesse que
-// l'admin déclare. Composant autonome (GET/PATCH propres), comme la section
-// write-back.
+// Seuils de réactivité évalués par buildTodayList (backend lib/priorities.js,
+// qui appelle lib/sla.js). Seule surface qui les affiche : le digest du lundi.
+// La liste « À traiter aujourd'hui » a été retirée du front, et /api/priorities
+// n'est plus appelée par aucun composant : ne pas la citer dans la copy.
+// Off par défaut : un SLA est une promesse que l'admin déclare. Composant
+// autonome (GET/PATCH propres), comme la section write-back.
 
 function SlaSection({ t, showToast, lang }) {
   const en = lang === 'en';

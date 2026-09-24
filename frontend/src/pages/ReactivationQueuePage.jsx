@@ -100,23 +100,38 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
   useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
-    if (tab !== 'history' || historyLoaded) return;
+    // Recharge à chaque fois qu'on ouvre l'onglet (pas seulement la première
+    // fois) : un changement de date de relance peut venir d'ailleurs pendant
+    // qu'on regardait autre chose (réponse email analysée, sync CRM) · sans
+    // ça l'onglet restait figé sur l'état du premier chargement, y compris
+    // pour un "Reporter" fait à l'instant sur l'onglet "En attente".
+    if (tab !== 'history') return;
+    let cancelled = false;
+    setHistoryLoaded(false);
     (async () => {
       try {
         const data = await request(`/reactivation/history?kind=${kind}`);
-        setHistory(data.events || []);
+        if (!cancelled) setHistory(data.events || []);
       } catch {
-        setHistory([]);
+        if (!cancelled) setHistory([]);
       }
-      setHistoryLoaded(true);
+      if (!cancelled) setHistoryLoaded(true);
     })();
-  }, [tab, historyLoaded, kind]);
+    return () => { cancelled = true; };
+  }, [tab, kind]);
 
   const historyLabel = (e) => {
     const date = new Date(e.date).toLocaleDateString(dateLocale);
     if (e.eventType === 'sent') return t('reactivation.historySentOn', { date });
     if (e.eventType === 'postponed') {
-      return t(e.isManual ? 'reactivation.historyPostponedManualOn' : 'reactivation.historyPostponedAutoOn', { date });
+      const newDate = e.newDate ? new Date(e.newDate).toLocaleDateString(dateLocale) : date;
+      const oldDate = e.oldDate ? new Date(e.oldDate).toLocaleDateString(dateLocale) : null;
+      const keyBase = e.source === 'crm_sync'
+        ? 'historyPostponedCrm'
+        : (e.source === 'manual' || e.isManual) ? 'historyPostponedManual' : 'historyPostponedAuto';
+      return oldDate
+        ? t(`reactivation.${keyBase}FromTo`, { oldDate, newDate })
+        : t(`reactivation.${keyBase}On`, { date: newDate });
     }
     return t(e.status === 'won' ? 'reactivation.historyWonOn' : 'reactivation.historyLostOn', { date });
   };

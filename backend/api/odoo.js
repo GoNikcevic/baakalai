@@ -198,7 +198,9 @@ async function getDeals(creds, { limit = 100 } = {}) {
   if (!ids || ids.length === 0) return [];
 
   const deals = await call(creds, 'crm.lead', 'read', [ids], {
-    fields: ['id', 'name', 'partner_id', 'stage_id', 'probability', 'expected_revenue', 'type', 'write_date', 'create_date', 'active', 'date_closed'],
+    // activity_date_deadline vient du mixin mail.activity (hérité par crm.lead) ·
+    // la date de la prochaine activité planifiée, telle qu'affichée dans Odoo.
+    fields: ['id', 'name', 'partner_id', 'stage_id', 'probability', 'expected_revenue', 'type', 'write_date', 'create_date', 'active', 'date_closed', 'activity_date_deadline'],
   });
 
   // is_won lives on crm.stage, not crm.lead itself · resolve once and cross-reference.
@@ -223,6 +225,7 @@ async function getDeals(creds, { limit = 100 } = {}) {
       updatedAt: d.write_date,
       createdAt: d.create_date,
       closeDate: d.date_closed || null,
+      nextActivityDate: d.activity_date_deadline || null,
     };
   });
 }

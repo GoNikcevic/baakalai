@@ -213,7 +213,7 @@ async function getDeals(accessToken, limit = 10000) {
     const params = new URLSearchParams({
       limit: String(Math.min(limit - deals.length, 100)),
       associations: 'contacts',
-      properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate',
+      properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate,hs_next_activity_date',
     });
     if (after) params.set('after', after);
     const data = await hubspotFetch(accessToken, `/crm/v3/objects/deals?${params.toString()}`);
@@ -230,6 +230,7 @@ async function getDeals(accessToken, limit = 10000) {
         personId: d.associations?.contacts?.results?.[0]?.id || null,
         closeDate: p.closedate || null,
         updatedAt: p.hs_lastmodifieddate || null,
+        nextActivityDate: p.hs_next_activity_date || null,
       });
     }
     after = data.paging?.next?.after || null;

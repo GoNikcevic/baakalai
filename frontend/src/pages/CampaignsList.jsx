@@ -15,6 +15,10 @@ import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import CampaignAssistant from '../components/campaigns/CampaignAssistant';
 import AutopilotSettings from '../components/AutopilotSettings';
+// Campagnes envoyées depuis la boîte de chaque commercial : de la prospection,
+// rien d'événementiel. Elles occupaient une place sur la page Automatisation,
+// qui ne contient plus que ce qui part tout seul sur un événement.
+import TeamCampaigns from '../components/automation/TeamCampaigns';
 import Icon from '../components/Icon';
 
 export default function CampaignsList({ onNavigateCampaign }) {
@@ -184,6 +188,7 @@ export default function CampaignsList({ onNavigateCampaign }) {
           { key: 'assistant', label: t('campaigns.tabCreate') },
           { key: 'campaigns', label: t('campaigns.tabHistory') },
           { key: 'autopilot', label: 'Autopilot' },
+          ...(isAdmin ? [{ key: 'team', label: t('activation.teamCampaigns') }] : []),
         ].map(tab => (
           <button key={tab.key} onClick={() => setView(tab.key)} style={{
             padding: '10px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
@@ -197,6 +202,8 @@ export default function CampaignsList({ onNavigateCampaign }) {
       </div>
 
       {view === 'autopilot' && <AutopilotSettings scope="prospection" />}
+
+      {view === 'team' && <TeamCampaigns />}
 
       {view === 'assistant' && <CampaignAssistant />}
 

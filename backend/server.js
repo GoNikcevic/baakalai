@@ -191,6 +191,7 @@ app.use('/api/nav', requireAuth, require('./routes/nav'));
 app.use('/api/team-campaigns', requireAuth, require('./routes/team-campaigns'));
 app.use('/api/strategic', requireAuth, require('./routes/strategic'));
 app.use('/api/signals', requireAuth, require('./routes/signals'));
+app.use('/api/automations', requireAuth, require('./routes/automations'));
 app.use('/api/informz', requireAuth, require('./routes/informz'));
 app.use('/api/analytics', requireAuth, analyticsRouter);
 app.use('/api/analytics/membership', requireAuth, require('./routes/analytics-membership'));

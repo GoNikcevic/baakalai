@@ -93,6 +93,31 @@ async function trackStage(userId, opp, { stageId, stageLabel }, { status = null,
   } catch (err) {
     logger.warn('stage-tracking', `History insert failed for opp ${opp.id}: ${err.message}`);
   }
+
+  // Point d'entrée unique des changements de stage : le webhook Pipedrive et
+  // la synchro delta passent tous les deux par ici, donc un déclencheur
+  // « le deal change de stage » s'accroche ici et nulle part ailleurs.
+  //
+  // Garde-fou décisif : une PREMIÈRE observation n'est pas un changement.
+  // À l'import initial, `opp.crm_stage` est NULL et chaque deal produirait une
+  // transition ; sans ce test, brancher un déclencheur puis importer un CRM
+  // inscrirait la base entière d'un coup. Le disjoncteur finirait par couper,
+  // mais après coup et après des envois.
+  if (opp.crm_stage) {
+    try {
+      const { onCrmEvent } = require('./automation-enroll');
+      await onCrmEvent({
+        userId,
+        opportunityId: opp.id,
+        eventKey: 'deal_stage_changed',
+        toStage: stageLabel,
+      });
+    } catch (err) {
+      // Best-effort : une automatisation ne doit jamais casser la synchro.
+      logger.warn('stage-tracking', `Automation hook failed for opp ${opp.id}: ${err.message}`);
+    }
+  }
+
   return updates;
 }
 

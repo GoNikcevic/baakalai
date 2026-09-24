@@ -4,7 +4,7 @@
    Transforms backend snake_case → frontend camelCase data shapes.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { getToken, refreshAccessToken, clearSession } from './auth';
+import { getToken, refreshAccessToken, expireSession } from './auth';
 
 const BASE = '/api';
 
@@ -29,11 +29,14 @@ export async function request(path, opts = {}) {
       // Retry the original request with the new token
       headers['Authorization'] = 'Bearer ' + newToken;
       res = await fetch(url, { headers,...opts });
+      // Refusé avec un token tout juste émis : la session est bien morte.
+      if (res.status === 401) expireSession();
     }
 
-    // Still 401 after refresh · session is dead
+    // Toujours 401. Si le refresh a échoué pour une raison passagère (429,
+    // 5xx, réseau), refreshAccessToken a laissé la session en place : on lève
+    // l'erreur sans la détruire, l'appel suivant réessaiera.
     if (res.status === 401) {
-      clearSession();
       throw Object.assign(new Error('Session expired'), { status: 401 });
     }
   }
@@ -746,12 +749,14 @@ export async function uploadFiles(files, options = {}) {
       headers['Authorization'] = 'Bearer ' + newToken;
       const retry = await fetch(url, { method: 'POST', headers, body: formData });
       if (!retry.ok) {
+        // Refusé avec un token tout juste émis : la session est bien morte.
+        if (retry.status === 401) expireSession();
         const body = await retry.json().catch(() => ({}));
         throw Object.assign(new Error(body.error || `HTTP ${retry.status}`), { status: retry.status });
       }
       return retry.json();
     }
-    clearSession();
+    // Refresh impossible : passager ou non, refreshAccessToken a déjà tranché.
     throw Object.assign(new Error('Session expired'), { status: 401 });
   }
 

@@ -44,6 +44,24 @@ export function clearSession() {
   localStorage.removeItem('bakal_profile');
 }
 
+/**
+ * La session est morte pour de bon : on vide le stockage ET on prévient l'app.
+ * App.jsx ne relit isLoggedIn() qu'au montage ; sans ce signal, l'interface
+ * restait affichée après un clearSession() et chaque appel retombait dans son
+ * `.catch()`, ce qui se voyait comme des listes vides et un CRM « déconnecté »
+ * au lieu d'un retour au login.
+ *
+ * À n'appeler que sur un vrai échec d'authentification, jamais sur une panne
+ * passagère (429, 5xx, réseau) : sinon un redéploiement déloge tout le monde.
+ */
+export function expireSession() {
+  const wasLoggedIn = !!getToken();
+  clearSession();
+  if (wasLoggedIn && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bakal:session-expired'));
+  }
+}
+
 export function isLoggedIn() {
   return !!getToken();
 }
@@ -121,7 +139,11 @@ export async function refreshAccessToken() {
       });
 
       if (!res.ok) {
-        clearSession();
+        // Seul un refus d'authentification signifie que la session est morte.
+        // Un 429 (rate limit), un 502 pendant un redéploiement Railway ou un
+        // 5xx sont passagers : on renvoie null sans rien effacer, l'appel
+        // suivant réessaiera avec le refresh token toujours en place.
+        if (res.status === 401 || res.status === 403) expireSession();
         return null;
       }
 
@@ -156,13 +178,22 @@ export async function deleteAccount(password) {
 }
 
 export async function logout() {
-  // Revoke refresh token on the server (best-effort)
+  // Revoke refresh token on the server (best-effort).
+  // Le serveur ne révoque plus que la session présentée : on lui donne de quoi
+  // l'identifier, sinon il retombe sur une révocation globale qui tuerait les
+  // autres appareils.
+  const rt = getRefreshToken();
   try {
-    await fetch('/api/auth/logout', {
+    const opts = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken() },
       credentials: 'include', // sends httpOnly cookie for server-side cleanup
-    });
+      body: JSON.stringify(rt ? { refreshToken: rt } : {}),
+    };
+    const res = await fetch('/api/auth/logout', opts);
+    // La session locale part de toute façon, mais un refus ici veut dire que le
+    // refresh token reste vivant côté serveur : ça ne doit pas passer en silence.
+    if (!res.ok) console.warn('[auth] révocation serveur refusée:', res.status);
   } catch { /* ignore */ }
   clearSession();
 }
@@ -185,18 +216,23 @@ export async function validateToken() {
       }
       return true;
     }
-    // Token expired — try refresh
+    // Backend en vrac (5xx, proxy Railway en cours de redéploiement) : on ne
+    // touche pas à la session, elle est probablement intacte.
+    if (res.status !== 401) return false;
+
+    // Token expiré : on tente le refresh. refreshAccessToken() se charge
+    // lui-même d'expirer la session si le refus est authentifié ; ici un null
+    // peut aussi venir d'une panne passagère, auquel cas on ne détruit rien.
     const newToken = await refreshAccessToken();
-    if (!newToken) {
-      clearSession();
-      return false;
-    }
+    if (!newToken) return false;
+
     // Re-validate with new token
     const res2 = await fetch('/api/auth/me', {
       headers: { Authorization: 'Bearer ' + newToken },
     });
     if (!res2.ok) {
-      clearSession();
+      // Refusé avec un token tout juste émis : la session n'est plus valable.
+      if (res2.status === 401 || res2.status === 403) expireSession();
       return false;
     }
     const data2 = await res2.json();

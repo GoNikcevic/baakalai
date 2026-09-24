@@ -299,9 +299,41 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
       report.skipped++;
       return 'skipped';
     }
-    const subject = renderTemplate(next.subject, prospect)
-      || `Re: ${renderTemplate(path.find(s => s.type === 'email')?.subject || '', prospect) || 'notre échange'}`;
-    const body = renderTemplate(next.body, prospect);
+    // Étape de workflow : le corps stocké est une CONSIGNE, pas un email.
+    // L'email est écrit ici, au moment de l'envoi, avec ce qu'on sait du
+    // contact et de ce qui lui a déjà été envoyé dans ce parcours.
+    //
+    // Si la génération échoue on n'envoie RIEN : expédier la consigne telle
+    // quelle mettrait une note de service sous les yeux d'un client. Une
+    // étape non partie se rattrape au passage suivant, un email absurde non.
+    const { isConsigneStep, generateStepEmail } = require('./workflow-step-email');
+    let subject;
+    let body;
+
+    if (isConsigneStep(next)) {
+      // `campaign_sends` ne garde ni objet ni corps : on repart des CONSIGNES
+      // des étapes déjà parties, ce qui suffit à ne pas redire la même chose.
+      const previous = path
+        .filter(s => s.type === 'email' && s.id !== next.id && done.has(s.id))
+        .map(s => ({ subject: null, body: s.body }));
+      const written = await generateStepEmail({
+        consigne: next.body,
+        prospect,
+        previous,
+        isFirst: previous.length === 0,
+      });
+      if (!written) {
+        await recordSend({ ...base, status: 'skipped', error: 'generation_failed' });
+        report.skipped++;
+        return 'skipped';
+      }
+      subject = written.subject;
+      body = written.body;
+    } else {
+      subject = renderTemplate(next.subject, prospect)
+        || `Re: ${renderTemplate(path.find(s => s.type === 'email')?.subject || '', prospect) || 'notre échange'}`;
+      body = renderTemplate(next.body, prospect);
+    }
     const result = await emailOutbound.sendPersonalEmail(userId, {
       to: prospect.email,
       toName: prospect.name,
@@ -473,6 +505,21 @@ async function processEnrollments(enrollments, ctx) {
 
     const baseTime = new Date(enrollment.started_at || enrollment.approved_at || enrollment.created_at).getTime();
 
+    // Sortie de sécurité « durée maximale ». Rien ne bornait un enrollment
+    // jusqu'ici : un contact pouvait rester en parcours indéfiniment si aucune
+    // autre sortie ne tombait, et l'Historique ne l'aurait jamais vu sortir.
+    // La borne vit sur le workflow (migration 114) ; les enrollments d'agent
+    // qui n'en ont pas gardent leur comportement d'avant.
+    if (enrollment.workflow_id) {
+      const wf = await db.workflows.get(enrollment.workflow_id);
+      const maxDays = wf?.max_duration_days;
+      if (maxDays && Date.now() - baseTime > maxDays * 86400000) {
+        await stopEnrollment(enrollment.id, 'max_duration');
+        report.stopped++;
+        continue;
+      }
+    }
+
     const outcome = await advanceOneStep({
       prospect,
       path,
@@ -591,6 +638,22 @@ async function checkReplies(userId, campaigns, enrollments) {
         'native_reply_intent'
       );
       const intent = isKnownIntent(result.parsed?.intent) ? result.parsed.intent : 'question';
+
+      // Le motif de sortie est l'unité de l'Historique et des statistiques.
+      // La classification tombait APRÈS l'arrêt et n'était jamais écrite :
+      // « Rendez-vous demandé » ne pouvait donc pas exister comme motif. On ne
+      // réordonne pas pour autant (l'arrêt doit rester garanti même si le
+      // classifieur échoue) : on précise le motif une fois qu'il est connu.
+      // « Rendez-vous demandé » et jamais « RDV pris » : c'est une lecture de
+      // la réponse, pas un fait.
+      if (candidate.enrollmentId && intent === 'meeting_request') {
+        await db.query(
+          `UPDATE sequence_enrollments SET stop_reason = 'meeting_requested', updated_at = now()
+            WHERE id = $1 AND stop_reason = 'replied'`,
+          [candidate.enrollmentId]
+        );
+      }
+
       const autopilot = require('./conversation-autopilot');
       await autopilot.processReply(userId, {
         opportunityId: prospect.id,

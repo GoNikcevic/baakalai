@@ -21,6 +21,44 @@ const claude = require('../../api/claude');
 const logger = require('../logger');
 const { safeParseClaudeArray } = require('../utils/safe-json-parse');
 
+/**
+ * Un type que l'utilisateur a décidé d'ignorer n'entre plus dans le backlog.
+ * Le signal est quand même écrit : il reste consultable comme trace, et la
+ * décision est réversible. Ce qui change, c'est qu'il ne compte plus.
+ */
+async function initialStatus(userId, signalType) {
+  try {
+    const r = await db.query(
+      `SELECT 1 FROM signal_type_preferences WHERE user_id = $1 AND signal_type = $2`,
+      [userId, signalType]
+    );
+    return r.rows.length > 0 ? 'ignored_type' : 'new';
+  } catch {
+    // La table n'existe pas encore (migration 114 pas jouée) : le comportement
+    // d'avant reste valable, aucun type n'est ignoré.
+    return 'new';
+  }
+}
+
+/**
+ * Un signal est un ÉVÉNEMENT : son insertion est le déclenchement. Si
+ * l'utilisateur a promu ce type en déclencheur, le contact est inscrit tout de
+ * suite et le signal quitte `new`. C'est la seule preuve mesurable que la
+ * feature sert à quelque chose, et ce qui fait visiblement tomber le backlog.
+ *
+ * Ne lève jamais : une automatisation qui échoue ne doit pas faire échouer la
+ * détection qui l'a produite.
+ */
+async function maybeAutomate(signalRow) {
+  if (!signalRow || signalRow.status !== 'new') return;
+  try {
+    const { onSignalCreated } = require('../automation-enroll');
+    await onSignalCreated(signalRow);
+  } catch (err) {
+    logger.warn('signal-agent', `automatisation ignoree : ${err.message}`);
+  }
+}
+
 // Notification persistée (cloche + socket) : le cron tourne à 8h, l'utilisateur
 // n'est en général pas connecté · un événement socket seul serait perdu.
 async function notifyNewSignals(userId, count) {
@@ -148,10 +186,11 @@ async function scanConfig(userId, config, recentSet) {
 
       // Insert signal
       try {
-        await db.query(`
+        const inserted = await db.query(`
           INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
-            company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score, relevance_factors)
-          VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13, $14)
+            company_name, company_domain, contact_name, contact_title, contact_email, contact_linkedin, relevance_score, relevance_factors, status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'brave_search', $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          RETURNING *
         `, [
           userId, config.id, signalType,
           signal.title, signal.description, signal.sourceUrl,
@@ -162,8 +201,10 @@ async function scanConfig(userId, config, recentSet) {
           enriched.linkedinUrl || null,
           signal.relevance || 50,
           serializeRelevanceFactors(signal.relevanceFactors),
+          await initialStatus(userId, signalType),
         ]);
         detected++;
+        await maybeAutomate(inserted.rows[0]);
       } catch (insertErr) {
         logger.warn('signal-agent', `Insert failed for "${signal.title}": ${insertErr.message}`);
       }
@@ -312,17 +353,20 @@ async function scanCompanyAccount(userId, acct, recentSet) {
       recentSet.add(key);
 
       try {
-        await db.query(`
+        const inserted = await db.query(`
           INSERT INTO signals (user_id, config_id, signal_type, title, description, source_url, source,
-            company_name, contact_name, contact_title, contact_email, relevance_score, relevance_factors, opportunity_id)
-          VALUES ($1, NULL, $2, $3, $4, $5, 'crm_watch', $6, $7, $8, $9, $10, $11, $12)
+            company_name, contact_name, contact_title, contact_email, relevance_score, relevance_factors, opportunity_id, status)
+          VALUES ($1, NULL, $2, $3, $4, $5, 'crm_watch', $6, $7, $8, $9, $10, $11, $12, $13)
+          RETURNING *
         `, [
           userId, signal.signalType, signal.title, signal.description, signal.sourceUrl,
           acct.company, acct.contact_name || null, acct.contact_title || null,
           acct.contact_email || null, signal.relevance || 50,
           serializeRelevanceFactors(signal.relevanceFactors), acct.opportunity_id,
+          await initialStatus(userId, signal.signalType),
         ]);
         detected++;
+        await maybeAutomate(inserted.rows[0]);
       } catch (insertErr) {
         logger.warn('signal-agent', `crm-watch insert failed for "${signal.title}": ${insertErr.message}`);
       }
