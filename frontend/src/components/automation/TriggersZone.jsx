@@ -249,7 +249,9 @@ export default function TriggersZone({ hasMailbox, onChanged }) {
               )}
               {state === 'waiting' && (
                 <Alert tone="neutral">
-                  {t('automation.triggers.alert.waitingEvent', { what: triggerSentence(t, trig) })}
+                  {trig.eventSource === 'crm_state'
+                    ? t('automation.triggers.alert.waitingState')
+                    : t('automation.triggers.alert.waitingEvent', { what: triggerSentence(t, trig) })}
                 </Alert>
               )}
               {state === 'nobox' && (

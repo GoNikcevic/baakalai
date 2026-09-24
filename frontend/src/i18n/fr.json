@@ -163,6 +163,17 @@
         "realtime": "Reçu tout de suite, ton CRM envoie un webhook.",
         "sync": "Reçu au prochain passage de synchro, ou dès que tu lances une synchro manuelle.",
         "none": "Ce connecteur ne remonte pas d'étapes de pipeline."
+      },
+      "matchingCount": "{count} contacts concernés aujourd'hui",
+      "stateDaysLabel": "Seuil",
+      "fromNowState": "Chaque contact qui remplira cette condition sera inscrit automatiquement, à chaque passage quotidien.",
+      "notPorted": "Les deux déclencheurs newsletter restent dans les anciens réglages : ils lisent l'activité d'emailing Salesforce, qui ne vit pas dans les données synchronisées.",
+      "needs": {
+        "won_date": "Aucun contact concerné : il faut une date de signature dans ton CRM.",
+        "lost_date": "Aucun contact concerné : il faut une date de perte dans ton CRM.",
+        "last_activity_at": "Aucun contact concerné pour l'instant.",
+        "renewal_date": "Aucun contact concerné : aucune date de renouvellement n'est remontée de ton CRM.",
+        "churn_flagged_at": "Aucun client au-dessus du seuil de risque pour l'instant."
       }
     },
     "editor": {
@@ -267,7 +278,8 @@
         "nobox": "Armé, mais aucune boîte mail n'est connectée. Rien ne peut partir.",
         "breaker": "Mis en pause par sécurité : le seuil est de {threshold} inscriptions par heure. {reason}. Vérifie la liste avant de relancer.",
         "draft": "Pas armé. Rien ne part tant que le récapitulatif n'est pas validé.",
-        "waitingEvent": "Armé, mais « {what} » ne s'est pas encore produit. Rien à corriger, c'est un silence normal."
+        "waitingEvent": "Armé, mais « {what} » ne s'est pas encore produit. Rien à corriger, c'est un silence normal.",
+        "waitingState": "Armé, mais aucun contact ne remplit encore la condition. Rien à corriger, c'est un silence normal. La condition est réévaluée à chaque passage."
       },
       "noWorkflow": "Aucun workflow pour l'instant.",
       "usedBy": "Utilisé par {count} déclencheurs : {list}",
@@ -323,6 +335,53 @@
         "unknown": "Motif inconnu"
       },
       "inferenceHint": "Lecture de la réponse par baakalai, à vérifier."
+    },
+    "state": {
+      "deal_won": {
+        "label": "Lead gagné",
+        "desc": "Un deal est passé en gagné il y a N jours. Pour souhaiter la bienvenue ou lancer l'onboarding.",
+        "sentence": "un deal est gagné depuis {days} jours"
+      },
+      "deal_stagnant": {
+        "label": "Lead stagnant",
+        "desc": "Un deal encore ouvert n'a pas bougé depuis N jours. C'est le coeur de la réactivation.",
+        "sentence": "un deal n'a pas bougé depuis {days} jours"
+      },
+      "inactive_contact": {
+        "label": "Contact inactif",
+        "desc": "Aucune activité avec ce contact depuis N jours.",
+        "sentence": "un contact est sans activité depuis {days} jours"
+      },
+      "deal_lost": {
+        "label": "Lead perdu",
+        "desc": "Un deal a été perdu il y a N jours. Pour revenir plus tard sans insister.",
+        "sentence": "un deal est perdu depuis {days} jours"
+      },
+      "onboarding_check": {
+        "label": "Check onboarding",
+        "desc": "N jours après la signature, vérifier que la prise en main se passe bien.",
+        "sentence": "un client a signé il y a {days} jours"
+      },
+      "renewal_reminder": {
+        "label": "Renouvellement",
+        "desc": "N jours AVANT la date de renouvellement. Le seul qui regarde devant.",
+        "sentence": "un renouvellement arrive dans {days} jours"
+      },
+      "churn_risk": {
+        "label": "Client à risque",
+        "desc": "Le score de risque de départ a franchi le seuil. Les jours sont un délai de courtoisie, pas une ancienneté.",
+        "sentence": "un client passe au-dessus du seuil de risque de départ"
+      },
+      "upsell_opportunity": {
+        "label": "Opportunité upsell",
+        "desc": "Client depuis N jours, sans nouvelle proposition.",
+        "sentence": "un client l'est depuis {days} jours"
+      },
+      "feedback_request": {
+        "label": "Demande de feedback",
+        "desc": "N jours après la signature, demander un retour d'expérience.",
+        "sentence": "un client a signé il y a {days} jours"
+      }
     }
   },
   "nav": {

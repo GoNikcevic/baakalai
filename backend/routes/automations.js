@@ -23,7 +23,8 @@ const { Router } = require('express');
 const db = require('../db');
 const logger = require('../lib/logger');
 const catalog = require('../lib/automation-catalog');
-const { runBackfill, BREAKER_PER_HOUR } = require('../lib/automation-enroll');
+const { runBackfill, runStateTriggers, BREAKER_PER_HOUR } = require('../lib/automation-enroll');
+const stateTriggers = require('../lib/automation-state-triggers');
 const { CONSIGNE_MARKER } = require('../lib/workflow-step-email');
 
 const router = Router();
@@ -194,7 +195,9 @@ router.get('/', async (req, res, next) => {
         topSkipReason: t.top_skip_reason,
         armedAt: t.armed_at,
         lastFiredAt: t.last_fired_at,
-        context: catalog.contextOf(t.event_source, t.event_key),
+        context: t.event_source === 'crm_state'
+          ? stateTriggers.contextFor(t.event_key)
+          : catalog.contextOf(t.event_source, t.event_key),
       })),
       workflows: workflows.map(w => ({
         id: w.id,
@@ -269,6 +272,44 @@ router.get('/stages', async (req, res, next) => {
       latency: catalog.stageChangeLatency(provider),
       stages,
     });
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /api/automations/state-triggers · les déclencheurs d'état, avec le
+ * nombre de contacts que chacun ferait entrer AUJOURD'HUI.
+ *
+ * Ce compte est la meilleure protection contre la déception. Un type à zéro
+ * n'est pas caché, il est montré avec la donnée qui lui manque. C'est la
+ * leçon des connecteurs Notion et des étapes LinkedIn : la plomberie existait,
+ * la donnée non, et rien ne le disait.
+ */
+router.get('/state-triggers', async (req, res, next) => {
+  try {
+    const [catalog, mailbox] = await Promise.all([
+      stateTriggers.catalogWithCounts(req.user.id),
+      hasActiveMailbox(req.user.id),
+    ]);
+    res.json({
+      hasMailbox: mailbox,
+      notPorted: stateTriggers.NOT_PORTED,
+      triggers: catalog,
+    });
+  } catch (err) { next(err); }
+});
+
+/**
+ * POST /api/automations/run-state · évaluer maintenant.
+ *
+ * Indispensable, et pas seulement pour le confort : staging tourne avec
+ * ORCHESTRATOR_ENABLED=false, donc aucun cron. Sans ce déclenchement manuel,
+ * un déclencheur d'état armé là-bas ne partirait jamais et la feature serait
+ * invérifiable avant la production.
+ */
+router.post('/run-state', async (req, res, next) => {
+  try {
+    const report = await runStateTriggers(req.user.id);
+    res.json(report);
   } catch (err) { next(err); }
 });
 
@@ -370,14 +411,15 @@ router.get('/history', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const {
-      signalTypes, crmEvents, workflowId, workflowName, steps,
+      signalTypes, crmEvents, stateEvents, workflowId, workflowName, steps,
       backfill, arm, reenrollPolicy, reenrollDays, maxDurationDays,
     } = req.body;
 
     const types = Array.isArray(signalTypes) ? signalTypes.filter(Boolean) : [];
     const events = Array.isArray(crmEvents) ? crmEvents.filter(Boolean) : [];
+    const states = Array.isArray(stateEvents) ? stateEvents.filter(Boolean) : [];
 
-    if (types.length === 0 && events.length === 0) {
+    if (types.length === 0 && events.length === 0 && states.length === 0) {
       return res.status(400).json({ error: 'Choisis au moins un événement.', code: 'no_types' });
     }
     const unknown = types.filter(t => !catalog.VEILLE_SIGNAL_TYPES.includes(t)
@@ -405,6 +447,14 @@ router.post('/', async (req, res, next) => {
             code: 'no_target_stage',
           });
         }
+      }
+    }
+
+    for (const st of states) {
+      if (!stateTriggers.isStateKey(st.eventKey)) {
+        return res.status(400).json({
+          error: `Déclencheur d'état inconnu : ${st.eventKey}`, code: 'unknown_state_trigger',
+        });
       }
     }
 
@@ -465,6 +515,31 @@ router.post('/', async (req, res, next) => {
         label: signalType,
         status,
       }));
+    }
+
+    // Les déclencheurs d'état portent leur nombre de jours dans les
+    // conditions : « stagnant depuis 30 jours » et « stagnant depuis 90 » sont
+    // deux automatisations différentes, l'index unique de la 115 les distingue.
+    for (const st of states) {
+      try {
+        created.push(await db.automationTriggers.create({
+          userId: req.user.id,
+          workflowId: workflow.id,
+          eventSource: 'crm_state',
+          eventKey: st.eventKey,
+          label: st.eventKey,
+          conditions: { days: stateTriggers.daysFor(st.eventKey, st.conditions) },
+          status,
+        }));
+      } catch (err) {
+        if (err.code === '23505') {
+          return res.status(409).json({
+            error: 'Cette automatisation existe déjà, avec les mêmes conditions.',
+            code: 'already_automated',
+          });
+        }
+        throw err;
+      }
     }
 
     // Les événements CRM, eux, peuvent coexister sur la même clé avec des

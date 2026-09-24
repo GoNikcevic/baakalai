@@ -263,6 +263,21 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       await stepAnalysis(userId, report, teamId);
     }
 
+    // ── Step 7 : déclencheurs d'état du modèle Déclencheur -> Workflow ──
+    // Après la synchro, donc sur des données fraîches : « stagnant depuis 30
+    // jours » n'a de sens qu'une fois les dates d'activité à jour.
+    // Best-effort, comme le reste : une automatisation qui échoue ne doit pas
+    // faire échouer le passage de l'agent.
+    try {
+      const { runStateTriggers } = require('./automation-enroll');
+      report.automation = await runStateTriggers(userId);
+      if (report.automation.enrolled > 0) {
+        logger.info('crm-agent', `Automatisation user ${userId}: ${report.automation.enrolled} contact(s) inscrits par ${report.automation.evaluated} declencheur(s) d etat`);
+      }
+    } catch (err) {
+      report.errors.push(`Automatisation: ${err.message}`);
+    }
+
   } catch (err) {
     report.errors.push(err.message);
     logger.error('crm-agent', `Agent failed for user ${userId}: ${err.message}`);

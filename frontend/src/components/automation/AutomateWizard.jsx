@@ -54,6 +54,8 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
   const [typesError, setTypesError] = useState(false);
   const [picked, setPicked] = useState(signalTypes || []);
   const [crmSel, setCrmSel] = useState(null);   // { eventKey, toStages: [] }
+  const [stateSel, setStateSel] = useState(null); // { eventKey, days }
+  const [stateData, setStateData] = useState(null);
   const [stageData, setStageData] = useState(null);
   const [pick, setPick] = useState(null);
   const [name, setName] = useState('');
@@ -80,6 +82,9 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
     request('/automations/stages')
       .then(setStageData)
       .catch(() => setStageData({ stages: [], provider: null, latency: 'none' }));
+    request('/automations/state-triggers')
+      .then(setStateData)
+      .catch(() => setStateData({ triggers: [], notPorted: [] }));
   }, [loadTypes]);
 
   useEffect(() => {
@@ -101,7 +106,10 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
   }));
 
   const hasCrm = !!(crmSel && crmSel.toStages.length > 0);
-  const triggerSentence = hasCrm && types.length === 0
+  const hasState = !!stateSel;
+  const triggerSentence = hasState && types.length === 0 && !hasCrm
+    ? t(`automation.state.${stateSel.eventKey}.sentence`, { days: stateSel.days })
+    : hasCrm && types.length === 0
     ? sentenceOf(t, { eventSource: 'crm_event', eventKey: crmSel.eventKey, conditions: { toStages: crmSel.toStages } })
     : (types.length > 1
       ? t('automation.wizard.sentenceMulti', { types: typeLabels.join(', ') })
@@ -129,6 +137,9 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
         signalTypes: types,
         crmEvents: hasCrm
           ? [{ eventKey: crmSel.eventKey, conditions: { toStages: crmSel.toStages } }]
+          : [],
+        stateEvents: hasState
+          ? [{ eventKey: stateSel.eventKey, conditions: { days: stateSel.days } }]
           : [],
         arm: !asDraft,
         backfill: backfillIds,
@@ -172,6 +183,17 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
   const stepsValid = steps.some(s => s.type === 'email')
     && steps.filter(s => s.type === 'email').every(s => String(s.consigne || '').trim())
     && name.trim().length > 0;
+
+  // Ce que le déclencheur choisi met à disposition des étapes : un état sur
+  // un deal fournit montant et propriétaire, un contact inactif non.
+  const stateContext = () => {
+    if (hasState && types.length === 0 && !hasCrm) {
+      const def = (stateData?.triggers || []).find(x => x.eventKey === stateSel.eventKey);
+      return def?.context || CRM_CONTEXT;
+    }
+    if (hasCrm && types.length === 0) return CRM_CONTEXT;
+    return SIGNAL_CONTEXT;
+  };
 
   const EventButton = ({ label, sub, off, selected, onClick }) => (
     <button
@@ -289,9 +311,66 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
                   {t('automation.wizard.family.crm')}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {t('automation.wizard.familyCrmEmpty')}
+                {stateData === null && (
+                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 6 }}>
+                  {(stateData?.triggers || []).map(st => (
+                    <EventButton
+                      key={st.eventKey}
+                      label={t(`automation.state.${st.eventKey}.label`)}
+                      // Le nombre de contacts concernés aujourd'hui, et la
+                      // donnée qui manque quand il est à zéro. Un type muet
+                      // doit dire pourquoi, pas afficher un zéro nu.
+                      sub={st.matching > 0
+                        ? t('automation.wizard.matchingCount', { count: st.matching })
+                        : t(`automation.wizard.needs.${st.needs}`)}
+                      selected={stateSel?.eventKey === st.eventKey}
+                      onClick={() => setStateSel(
+                        stateSel?.eventKey === st.eventKey
+                          ? null
+                          : { eventKey: st.eventKey, days: st.defaultDays }
+                      )}
+                    />
+                  ))}
                 </div>
+
+                {stateSel && (
+                  <div style={{
+                    marginTop: 8, padding: '10px 12px', borderRadius: 'var(--r-lg)',
+                    border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+                  }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>
+                      {t(`automation.state.${stateSel.eventKey}.label`)}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      {t(`automation.state.${stateSel.eventKey}.desc`)}
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+                      {t('automation.wizard.stateDaysLabel')}
+                      <input
+                        type="number"
+                        min="0"
+                        value={stateSel.days}
+                        onChange={e => setStateSel(v => ({
+                          ...v, days: Math.max(0, parseInt(e.target.value, 10) || 0),
+                        }))}
+                        style={{
+                          width: 72, fontSize: 12.5, padding: '4px 8px',
+                          border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
+                          background: 'var(--bg-card)', color: 'var(--text-primary)',
+                        }}
+                      />
+                      {t('automation.editor.waitDays')}
+                    </label>
+                  </div>
+                )}
+
+                {stateData?.notPorted?.length > 0 && (
+                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 8 }}>
+                    {t('automation.wizard.notPorted')}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -437,7 +516,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
               steps={steps}
               onStepsChange={setSteps}
               triggerSentence={triggerSentence}
-              context={hasCrm && types.length === 0 ? CRM_CONTEXT : SIGNAL_CONTEXT}
+              context={stateContext()}
               crmProvider={meta?.activeCrmProvider}
             />
           )}
@@ -460,7 +539,9 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                   {t('automation.wizard.fromNowTitle')}
                 </div>
                 <div style={{ fontSize: 13, marginTop: 4 }}>
-                  {hasCrm && types.length === 0
+                  {hasState && types.length === 0 && !hasCrm
+                    ? t('automation.wizard.fromNowState')
+                    : hasCrm && types.length === 0
                     ? t('automation.wizard.fromNowStage')
                     : (types.length > 1
                       ? t('automation.wizard.fromNowMulti', { count: types.length })
@@ -559,8 +640,8 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
             {step === 0 && (
               <button
                 className="btn btn-primary"
-                style={{ fontSize: 12, padding: '6px 16px', opacity: (picked.length || hasCrm) ? 1 : 0.45 }}
-                disabled={picked.length === 0 && !hasCrm}
+                style={{ fontSize: 12, padding: '6px 16px', opacity: (picked.length || hasCrm || hasState) ? 1 : 0.45 }}
+                disabled={picked.length === 0 && !hasCrm && !hasState}
                 onClick={() => setStep(1)}
               >
                 {t('common.continue')}

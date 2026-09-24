@@ -354,6 +354,77 @@ async function onSignalCreated(signal) {
 }
 
 /**
+ * Les déclencheurs d'ÉTAT, évalués périodiquement.
+ *
+ * Différence de nature avec un signal ou un changement de stage : un état
+ * reste VRAI tous les jours. « Ce lead est stagnant depuis 30 jours » le sera
+ * encore demain. Rien ici n'essaie de deviner si c'est « nouveau » : c'est la
+ * politique de réinscription du workflow qui empêche de reprendre le même
+ * contact, et l'index d'un seul parcours vivant par contact qui ferme la
+ * porte. Chercher à détecter la transition en plus serait un troisième
+ * mécanisme de dédup, donc un troisième endroit où se tromper.
+ *
+ * Le plafond par passage existe pour une raison précise : le premier
+ * armement d'un déclencheur « contact inactif depuis 60 jours » peut
+ * correspondre à toute la base d'un coup. Le disjoncteur le verrait, mais
+ * après coup. Mieux vaut étaler.
+ */
+async function runStateTriggers(userId, { perTriggerLimit = 25 } = {}) {
+  const state = require('./automation-state-triggers');
+  const report = { evaluated: 0, enrolled: 0, skipped: 0, reasons: {} };
+
+  const r = await db.query(
+    `SELECT * FROM automation_triggers
+      WHERE user_id = $1 AND event_source = 'crm_state' AND status = 'active'`,
+    [userId]
+  );
+
+  for (const trigger of r.rows) {
+    if (!state.isStateKey(trigger.event_key)) continue;
+    report.evaluated++;
+
+    let contacts;
+    try {
+      contacts = await state.listMatching(userId, trigger.event_key, trigger.conditions, {
+        limit: perTriggerLimit,
+      });
+    } catch (err) {
+      logger.warn('automation', `Evaluation de ${trigger.event_key} : ${err.message}`);
+      continue;
+    }
+
+    const workflow = await db.workflows.get(trigger.workflow_id);
+    for (const contact of contacts) {
+      const out = await runEnrollment({
+        userId,
+        trigger,
+        workflow,
+        source: 'event',
+        rationale: trigger.event_key,
+        resolve: async () => {
+          const { isCrmContact } = require('./crm-scope');
+          const opp = await db.opportunities.get(contact.id);
+          if (!opp || !isCrmContact(opp)) return { skip: 'no_known_contact' };
+          return { opp };
+        },
+      });
+
+      if (out.ok) {
+        report.enrolled++;
+      } else {
+        report.skipped++;
+        report.reasons[out.reason] = (report.reasons[out.reason] || 0) + 1;
+        // Le disjoncteur a parlé ou il n'y a pas de boîte : inutile de
+        // parcourir les contacts suivants de ce déclencheur.
+        if (out.reason === 'breaker_open' || out.reason === 'no_mailbox') break;
+      }
+    }
+  }
+
+  return report;
+}
+
+/**
  * Rattrapage du stock au moment de la promotion d'un type.
  *
  * Il n'est pas un confort : un déclencheur événementiel se déclenche à
@@ -395,6 +466,7 @@ module.exports = {
   enrollFromSignal,
   onSignalCreated,
   onCrmEvent,
+  runStateTriggers,
   matchesConditions,
   runBackfill,
   // exportés pour les tests

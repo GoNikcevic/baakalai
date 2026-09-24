@@ -163,6 +163,17 @@
         "realtime": "Received immediately, your CRM sends a webhook.",
         "sync": "Received at the next sync pass, or as soon as you run a manual sync.",
         "none": "This connector does not report pipeline stages."
+      },
+      "matchingCount": "{count} contacts match today",
+      "stateDaysLabel": "Threshold",
+      "fromNowState": "Every contact that meets this condition will be enrolled automatically, at each daily pass.",
+      "notPorted": "The two newsletter triggers stay in the older settings: they read Salesforce emailing activity, which does not live in the synced data.",
+      "needs": {
+        "won_date": "No contact matches: you need a signing date in your CRM.",
+        "lost_date": "No contact matches: you need a lost date in your CRM.",
+        "last_activity_at": "No contact matches right now.",
+        "renewal_date": "No contact matches: no renewal date comes back from your CRM.",
+        "churn_flagged_at": "No customer is above the risk threshold right now."
       }
     },
     "editor": {
@@ -267,7 +278,8 @@
         "nobox": "Armed, but no mailbox is connected. Nothing can go out.",
         "breaker": "Paused for safety: the threshold is {threshold} enrollments per hour. {reason}. Check the list before restarting.",
         "draft": "Not armed. Nothing goes out until the recap is confirmed.",
-        "waitingEvent": "Armed, but \"{what}\" has not happened yet. Nothing to fix, this is normal quiet."
+        "waitingEvent": "Armed, but \"{what}\" has not happened yet. Nothing to fix, this is normal quiet.",
+        "waitingState": "Armed, but no contact meets the condition yet. Nothing to fix, this is normal quiet. The condition is re-evaluated at each pass."
       },
       "noWorkflow": "No workflow yet.",
       "usedBy": "Used by {count} triggers: {list}",
@@ -323,6 +335,53 @@
         "unknown": "Unknown reason"
       },
       "inferenceHint": "Read from the reply by baakalai, worth checking."
+    },
+    "state": {
+      "deal_won": {
+        "label": "Deal won",
+        "desc": "A deal turned won N days ago. To welcome them or kick off onboarding.",
+        "sentence": "a deal has been won for {days} days"
+      },
+      "deal_stagnant": {
+        "label": "Stagnant deal",
+        "desc": "An open deal has not moved for N days. This is the heart of reactivation.",
+        "sentence": "a deal has not moved for {days} days"
+      },
+      "inactive_contact": {
+        "label": "Inactive contact",
+        "desc": "No activity with this contact for N days.",
+        "sentence": "a contact has been inactive for {days} days"
+      },
+      "deal_lost": {
+        "label": "Deal lost",
+        "desc": "A deal was lost N days ago. To come back later without pushing.",
+        "sentence": "a deal has been lost for {days} days"
+      },
+      "onboarding_check": {
+        "label": "Onboarding check",
+        "desc": "N days after signing, check that adoption is going well.",
+        "sentence": "a customer signed {days} days ago"
+      },
+      "renewal_reminder": {
+        "label": "Renewal",
+        "desc": "N days BEFORE the renewal date. The only one that looks ahead.",
+        "sentence": "a renewal is due in {days} days"
+      },
+      "churn_risk": {
+        "label": "Customer at risk",
+        "desc": "The churn risk score crossed the threshold. The days are a grace delay, not an age.",
+        "sentence": "a customer crosses the churn risk threshold"
+      },
+      "upsell_opportunity": {
+        "label": "Upsell opportunity",
+        "desc": "A customer for N days, with no new proposal.",
+        "sentence": "a customer has been one for {days} days"
+      },
+      "feedback_request": {
+        "label": "Feedback request",
+        "desc": "N days after signing, ask how it is going.",
+        "sentence": "a customer signed {days} days ago"
+      }
     }
   },
   "nav": {
