@@ -8,14 +8,18 @@ const I18N = {
     nav: { how: "Comment ça marche", features: "Ce que fait le système", pricing: "Tarif", faq: "FAQ", blog: "Blog", diag: "Diagnostic gratuit", book: "Rejoindre la beta", signin: "Se connecter" },
     hero: {
       eyebrow: "",
-      title_a: "Vous avez un patrimoine commercial. ",
-      title_em: "Personne",
-      title_b: " n'a le temps de le gérer.",
+      title_a: "Votre CRM vaut plus ",
+      title_em: "que ce qu'il vous rapporte",
+      title_b: ".",
       sub: "baakalai lit votre CRM 24/7 et repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner. Puis il agit. Un deal récupéré rembourse l'outil pour des mois.",
       cta: "Rejoindre la beta",
       cta_2: "Prendre rendez-vous",
       tag_1: "CRM connecté en un clic", tag_2: "Opérationnel en 30 min", tag_3: "79 €/siège/mois",
       beta_badge: "EARLY ACCESS",
+      // La réponse tapée juste en dessous vit dans le script de frappe (lignes
+      // `lines` près de #hero-typed), pas ici : elle s'anime caractère par
+      // caractère. La question, elle, est statique et passe par applyI18n.
+      chat_q: "Mon pipeline a des deals qui dorment. Qu'est-ce qu'on peut récupérer ?",
     },
     hrs: {
       eyebrow: "LE HIDDEN REVENUE SCORE",
@@ -62,10 +66,16 @@ const I18N = {
     },
     diagcta: {
       eyebrow: "DIAGNOSTIC GRATUIT",
-      title_a: "Sur Pipedrive, HubSpot ou Salesforce ? ",
-      title_em: "Mesurez le CA qui attend une relance",
-      title_b: " dans votre pipeline.",
-      sub: "20 à 40 % des deals d'une PME restent sans suite. Collez votre clé API, obtenez le chiffre des vôtres en 30 secondes, sans compte. Autre CRM ? Le même diagnostic vous attend dans l'app.",
+      // Ce bloc ne refait pas la promesse : la section Hidden Revenue Score
+      // s'en charge plus haut. Ici on lève les objections pratiques, quels CRM,
+      // quelle donnée on touche, ce qu'il faut créer (rien).
+      // Espace insécable avant le « ? » : en espace normale la ligne casse
+      // entre « Salesforce » et « ? », qui se retrouve orphelin en tête de
+      // ligne suivante. Visible seulement sur un titre, d'où le traitement ici.
+      title_a: "Pipedrive, HubSpot ou Salesforce ? ",
+      title_em: "Trente secondes suffisent",
+      title_b: ".",
+      sub: "Vous collez une clé API en lecture seule, le rapport tombe, aucun compte à créer. Sur Odoo, Notion, Airtable ou Folk, le même diagnostic vous attend dans l'app une fois le CRM connecté.",
       cta: "Lire mon CRM gratuitement",
       trust: "Lecture seule · clé jamais stockée · rapport supprimé après 30 jours",
     },
@@ -185,14 +195,15 @@ const I18N = {
     nav: { how: "How it works", features: "What the system does", pricing: "Pricing", faq: "FAQ", blog: "Blog", diag: "Free diagnostic", book: "Join the beta", signin: "Sign in" },
     hero: {
       eyebrow: "",
-      title_a: "Your CRM holds years of revenue. ",
-      title_em: "Nobody",
-      title_b: " has the time to work it.",
+      title_a: "Your CRM is worth more ",
+      title_em: "than it pays you",
+      title_b: ".",
       sub: "baakalai reads your CRM 24/7 and spots dying deals, upsell-ready clients, accounts about to churn. Then it acts. One recovered deal pays for the tool for months.",
       cta: "Join the beta",
       cta_2: "Book a call",
       tag_1: "One-click CRM connection", tag_2: "Operational in 30 min", tag_3: "€79/seat/month",
       beta_badge: "EARLY ACCESS",
+      chat_q: "My pipeline has deals going quiet. What can we recover?",
     },
     hrs: {
       eyebrow: "THE HIDDEN REVENUE SCORE",
@@ -239,10 +250,10 @@ const I18N = {
     },
     diagcta: {
       eyebrow: "FREE DIAGNOSTIC",
-      title_a: "On Pipedrive, HubSpot or Salesforce? ",
-      title_em: "Find out how much is sleeping",
-      title_b: " in your pipeline.",
-      sub: "20-40% of SMB pipelines are dormant. Paste your API key, get your own number in 30 seconds, no account needed. On another CRM? The same diagnostic awaits in the app.",
+      title_a: "Pipedrive, HubSpot or Salesforce? ",
+      title_em: "Thirty seconds is all it takes",
+      title_b: ".",
+      sub: "You paste a read-only API key, the report lands, no account to create. On Odoo, Notion, Airtable or Folk, the same diagnostic waits in the app once your CRM is connected.",
       cta: "Read my CRM for free",
       trust: "Read-only · key never stored · report deleted after 30 days",
     },

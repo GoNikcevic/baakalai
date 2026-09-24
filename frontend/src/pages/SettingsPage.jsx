@@ -1357,10 +1357,12 @@ function CrmWritebackSection({ t, showToast, lang }) {
 }
 
 /* ═══ SLA Section ═══ */
-// Seuils de réactivité évalués dans « À traiter aujourd'hui » et le digest du
-// lundi (backend lib/sla.js). Off par défaut : un SLA est une promesse que
-// l'admin déclare. Composant autonome (GET/PATCH propres), comme la section
-// write-back.
+// Seuils de réactivité évalués par buildTodayList (backend lib/priorities.js,
+// qui appelle lib/sla.js). Seule surface qui les affiche : le digest du lundi.
+// La liste « À traiter aujourd'hui » a été retirée du front, et /api/priorities
+// n'est plus appelée par aucun composant : ne pas la citer dans la copy.
+// Off par défaut : un SLA est une promesse que l'admin déclare. Composant
+// autonome (GET/PATCH propres), comme la section write-back.
 
 function SlaSection({ t, showToast, lang }) {
   const en = lang === 'en';
