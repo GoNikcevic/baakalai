@@ -233,10 +233,7 @@
       "savedBody": "Contacts already running keep the steps they received when they entered.",
       "back": "Automation",
       "editHint": "Editing this workflow touches no running journey: each contact keeps the copy of the steps received when they entered.",
-      "noTrigger": "No trigger points to this workflow",
-      "created": "Workflow created",
-      "createdBody": "It will not run until a trigger points to it.",
-      "createHint": "You can prepare the journey now and decide later what launches it. Until a trigger points to it, it does not run."
+      "noTrigger": "No trigger points to this workflow"
     },
     "triggers": {
       "byTrigger": "By trigger",
@@ -275,8 +272,7 @@
       "noWorkflow": "No workflow yet.",
       "usedBy": "Used by {count} triggers: {list}",
       "orphan": "Does not run: no trigger points to this workflow.",
-      "create": "Create an automation",
-      "newWorkflow": "New workflow"
+      "create": "Create an automation"
     },
     "runs": {
       "empty": {
