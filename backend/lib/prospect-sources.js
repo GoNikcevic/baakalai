@@ -6,8 +6,17 @@
 
 const db = require('../db');
 
-// Providers we recognize and their search capability status
+// Providers we recognize and their search capability status.
+// `keyless: true` marque une source disponible sans abonnement ni clé : elle est
+// proposée à tout le monde, sans ligne dans user_integrations.
 const PROVIDER_REGISTRY = {
+  sirene: {
+    name: 'Entreprises France',
+    label: 'Entreprises France',
+    canSearch: true,
+    keyless: true,
+    note: 'Registre officiel français (INSEE et RNE), sans clé ni abonnement. Recherche par secteur, effectif, région et ancienneté, avec le dirigeant nommé. Les emails ne sont pas fournis, ils restent à révéler.',
+  },
   apollo: {
     name: 'Apollo',
     label: 'Apollo',
@@ -46,22 +55,35 @@ const PROVIDER_REGISTRY = {
   },
 };
 
-const OUTREACH_PROVIDERS = Object.keys(PROVIDER_REGISTRY);
+// Outils d'envoi : les sources sans clé n'en sont pas, elles ne savent que chercher.
+const OUTREACH_PROVIDERS = Object.keys(PROVIDER_REGISTRY).filter(
+  p => !PROVIDER_REGISTRY[p].keyless
+);
+
+const KEYLESS_PROVIDERS = Object.keys(PROVIDER_REGISTRY).filter(
+  p => PROVIDER_REGISTRY[p].keyless
+);
 
 /**
- * Get the list of prospect sources configured for a user.
- * Returns providers from user_integrations that are in PROVIDER_REGISTRY,
- * annotated with their canSearch capability.
+ * Get the list of prospect sources available to a user.
+ * Providers from user_integrations that are in PROVIDER_REGISTRY, plus the
+ * keyless sources, which need no configuration and are therefore always there.
  */
 async function listUserSources(userId) {
   const integrations = await db.userIntegrations.listByUser(userId);
-  return integrations
+  const configured = integrations
     .filter(i => PROVIDER_REGISTRY[i.provider])
     .map(i => ({
       provider: i.provider,
       ...PROVIDER_REGISTRY[i.provider],
       configured: true,
     }));
+
+  const keyless = KEYLESS_PROVIDERS
+    .filter(p => !configured.some(c => c.provider === p))
+    .map(p => ({ provider: p, ...PROVIDER_REGISTRY[p], configured: true }));
+
+  return [...configured, ...keyless];
 }
 
 /**
@@ -70,6 +92,27 @@ async function listUserSources(userId) {
 async function listSearchableSources(userId) {
   const all = await listUserSources(userId);
   return all.filter(s => s.canSearch);
+}
+
+/**
+ * Choose the source to use when the caller did not name one.
+ *
+ * Une source sans clé est désormais toujours disponible, donc « exactement une
+ * source cherchable » n'arrive plus jamais : sans cet arbitrage, tout compte
+ * ayant Apollo prendrait un MULTIPLE_SOURCES. On garde donc la priorité à la
+ * source configurée par l'utilisateur, et le sans-clé sert de repli.
+ *
+ * @returns {{ source: string|null, ambiguous: object[]|null }}
+ */
+async function pickDefaultSource(userId) {
+  const searchable = await listSearchableSources(userId);
+  const keyed = searchable.filter(s => !s.keyless);
+
+  if (keyed.length === 1) return { source: keyed[0].provider, ambiguous: null };
+  if (keyed.length > 1) return { source: null, ambiguous: keyed };
+
+  const keyless = searchable.find(s => s.keyless);
+  return { source: keyless ? keyless.provider : null, ambiguous: null };
 }
 
 /**
@@ -83,6 +126,22 @@ async function searchProspects(userId, source, criteria) {
   }
   if (!meta.canSearch) {
     throw new Error(`${meta.name} ne supporte pas la recherche de prospects. ${meta.note}`);
+  }
+
+  if (source === 'sirene') {
+    const { searchCompanies, companiesToContacts } = require('../api/recherche-entreprises');
+    const { companies, totalResults, diagnostics } = await searchCompanies(criteria);
+    const contacts = companiesToContacts(companies, { maxPerCompany: criteria.maxPerCompany });
+
+    // Le registre ne connaît que les mandataires : un critère de titre ne peut
+    // pas filtrer ici, autant le dire plutôt que de le jeter en silence.
+    const ignoredCriteria = [];
+    if (criteria.titles && criteria.titles.length) ignoredCriteria.push('titles');
+
+    return {
+      contacts: contacts.slice(0, criteria.limit || 25),
+      diagnostics: { ...diagnostics, totalResults, ignoredCriteria },
+    };
   }
 
   if (source === 'apollo') {
@@ -132,7 +191,9 @@ async function searchProspects(userId, source, criteria) {
 module.exports = {
   PROVIDER_REGISTRY,
   OUTREACH_PROVIDERS,
+  KEYLESS_PROVIDERS,
   listUserSources,
   listSearchableSources,
+  pickDefaultSource,
   searchProspects,
 };
