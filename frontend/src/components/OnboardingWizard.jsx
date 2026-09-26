@@ -324,6 +324,14 @@ export default function OnboardingWizard({ onComplete }) {
   // l'utilisateur soit entré.
   const [jobRole, setJobRole] = useState('');
 
+  // Récap "Ce que baakalai a compris" · écran intercalé après l'étape
+  // entreprise, uniquement si des documents et/ou un site web ont été
+  // fournis. Reste à step === 0 : ce n'est pas une étape numérotée de plus,
+  // juste un sous-écran de l'étape entreprise.
+  const [analyzingCompany, setAnalyzingCompany] = useState(false);
+  const [showCompanyRecap, setShowCompanyRecap] = useState(false);
+  const [companyAnalysis, setCompanyAnalysis] = useState(null);
+
   // Step 2 · Keys
   const [outreachProvider, setOutreachProvider] = useState('');
   const [outreachKey, setOutreachKey] = useState('');
@@ -430,6 +438,61 @@ export default function OnboardingWizard({ onComplete }) {
   }
   function prev() {
     if (step > 0) setStep(s => s - 1);
+  }
+
+  /* ─── Étape entreprise : analyse IA (documents et/ou site web) ───
+     Best-effort, jamais bloquant : si rien n'est détecté ou que l'appel
+     échoue, on passe à l'étape suivante comme si de rien n'était. */
+  async function handleCompanyContinue() {
+    const hasSource = uploadedDocs.length > 0 || website.trim().length > 3;
+    if (!hasSource) { next(); return; }
+
+    setAnalyzingCompany(true);
+    try {
+      // /profile/auto-fill lit le site depuis le profil déjà sauvegardé :
+      // on doit donc persister le brouillon avant de l'appeler.
+      await request('/profile', {
+        method: 'POST',
+        body: JSON.stringify({ company, sector, website, team_size: teamSize, job_role: jobRole }),
+      });
+      const data = await request('/profile/auto-fill', { method: 'POST' });
+      const products = Array.isArray(data.products) ? data.products : [];
+      const p = data.profile || {};
+      const hasContent = !!(p.description || p.persona_primary || p.persona_secondary || products.length > 0);
+      if (!hasContent) { next(); return; }
+
+      // Persiste immédiatement : le profil est déjà rempli dans Réglages
+      // même si l'utilisateur quitte le wizard avant la fin.
+      await request('/profile', {
+        method: 'POST',
+        body: JSON.stringify({ ...p, company, sector, website, team_size: teamSize, job_role: jobRole }),
+      }).catch(() => {});
+      for (const item of products) {
+        if (!item?.name) continue;
+        request('/crm/product-lines', {
+          method: 'POST',
+          body: JSON.stringify({ name: item.name, icon: '📦', description: item.description || '' }),
+        }).catch(() => {});
+      }
+
+      if (p.persona_primary) setPersonaPrimary(p.persona_primary);
+      if (p.target_sectors) setTargetSectors(p.target_sectors);
+      if (p.target_size) setTargetSize(p.target_size);
+      if (p.target_zones) setTargetZones(p.target_zones);
+      if (p.value_prop) setValueProp(p.value_prop);
+
+      setCompanyAnalysis({
+        description: p.description || '',
+        personaPrimary: p.persona_primary || '',
+        personaSecondary: p.persona_secondary || '',
+        products,
+      });
+      setShowCompanyRecap(true);
+    } catch {
+      next();
+    } finally {
+      setAnalyzingCompany(false);
+    }
   }
 
   /* ─── OAuth CRM (hubspot/pipedrive) ─── */
@@ -732,6 +795,67 @@ export default function OnboardingWizard({ onComplete }) {
   /* ─── Render steps ─── */
 
   function renderStep() {
+    if (step === 0 && showCompanyRecap && companyAnalysis) {
+      return (
+        <>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+            {t('wizard.recapTitle')}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+            {t('wizard.recapSubtitle')}
+          </div>
+
+          {companyAnalysis.description && (
+            <div style={{ marginBottom: 14 }}>
+              <div className="form-label" style={{ marginBottom: 4 }}>{t('wizard.recapDescriptionLabel')}</div>
+              <div style={{
+                fontSize: 13, color: 'var(--ink)', lineHeight: 1.6,
+                background: 'var(--paper-2)', borderRadius: 8, padding: '10px 12px',
+              }}>
+                {companyAnalysis.description}
+              </div>
+            </div>
+          )}
+
+          {companyAnalysis.products.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div className="form-label" style={{ marginBottom: 6 }}>{t('wizard.recapProductsLabel')}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {companyAnalysis.products.map((p, i) => (
+                  <div key={i} style={{ fontSize: 13, background: 'var(--paper-2)', borderRadius: 8, padding: '8px 12px' }}>
+                    <span style={{ fontWeight: 600 }}>{p.name}</span>
+                    {p.description && <span style={{ color: 'var(--text-muted)' }}> · {p.description}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(companyAnalysis.personaPrimary || companyAnalysis.personaSecondary) && (
+            <div style={{ marginBottom: 4 }}>
+              <div className="form-label" style={{ marginBottom: 6 }}>{t('wizard.recapPersonasLabel')}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {companyAnalysis.personaPrimary && (
+                  <div style={{ fontSize: 13, background: 'var(--paper-2)', borderRadius: 8, padding: '8px 12px' }}>
+                    {companyAnalysis.personaPrimary}
+                  </div>
+                )}
+                {companyAnalysis.personaSecondary && (
+                  <div style={{ fontSize: 13, background: 'var(--paper-2)', borderRadius: 8, padding: '8px 12px' }}>
+                    {companyAnalysis.personaSecondary}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12 }}>
+            {t('wizard.recapEditNote')}
+          </div>
+        </>
+      );
+    }
+
     switch (step) {
       case 0:
         return (
@@ -1244,6 +1368,15 @@ export default function OnboardingWizard({ onComplete }) {
   /* ─── Actions per step ─── */
 
   function renderActions() {
+    if (step === 0 && showCompanyRecap) {
+      return (
+        <div className="wizard-actions">
+          <button className="btn btn-ghost" onClick={() => setShowCompanyRecap(false)}>{t('wizard.back')}</button>
+          <button className="btn btn-primary" onClick={next}>{t('wizard.continue')}</button>
+        </div>
+      );
+    }
+
     if (step === TOTAL_STEPS - 1) {
       const { status, imported } = importState;
       // Le libelle suit l'etat de l'import : pendant, on ne promet rien ;
@@ -1270,6 +1403,10 @@ export default function OnboardingWizard({ onComplete }) {
         {step === 1 ? (
           <button className="btn btn-primary" onClick={handleSaveKeys} disabled={saving}>
             {saving ? t('wizard.saving') : t('wizard.continue')}
+          </button>
+        ) : step === 0 ? (
+          <button className="btn btn-primary" onClick={handleCompanyContinue} disabled={analyzingCompany}>
+            {analyzingCompany ? t('wizard.analyzingCompany') : t('wizard.continue')}
           </button>
         ) : (
           <button className="btn btn-primary" onClick={next}>
