@@ -1324,7 +1324,7 @@ export default function OnboardingWizard({ onComplete }) {
             </div>
             <div className="wizard-complete-title">{t('wizard.allReady')}</div>
             <div className="wizard-complete-desc">
-              {t('wizard.completeDesc')}
+              {(crmKey || crmOauthConnected) && crmProvider ? t('wizard.completeDescCrmConnected') : t('wizard.completeDescNoCrm')}
             </div>
             <div className="wizard-checklist">
               <div className="wizard-check-item">
@@ -1351,10 +1351,6 @@ export default function OnboardingWizard({ onComplete }) {
                   <Icon name={targetSectors || personaPrimary ? 'checkCircle' : 'circle'} size={14} />
                 </span>
                 <span>{t('wizard.checkTargeting')} {targetSectors ? `  ${targetSectors}` : t('wizard.checkTargetingLater')}</span>
-              </div>
-              <div className="wizard-check-item">
-                <span className="wizard-check-icon"><Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} /></span>
-                <span>{t('wizard.checkStyle')} {' '} {tone}, {formality}</span>
               </div>
             </div>
             {/* Etat du premier import CRM. Sans ce retour, un import qui echoue
