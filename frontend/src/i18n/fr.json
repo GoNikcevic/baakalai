@@ -1593,6 +1593,7 @@
     "uploading": "Upload en cours...",
     "uploadBtn": "+ Uploader des documents",
     "uploadRequired": "Recommandé : vous pourrez aussi en ajouter plus tard dans Documents",
+    "requiredFieldsNote": "* Champs obligatoires (site web et documents facultatifs)",
     "analyzingCompany": "Analyse en cours…",
     "recapTitle": "Ce que baakalai a compris de votre entreprise",
     "recapSubtitle": "À partir de vos documents et/ou de votre site web.",

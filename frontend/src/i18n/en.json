@@ -1593,6 +1593,7 @@
     "uploading": "Uploading...",
     "uploadBtn": "+ Upload documents",
     "uploadRequired": "Recommended, you can also add documents later in Documents",
+    "requiredFieldsNote": "* Required fields (website and documents are optional)",
     "analyzingCompany": "Analyzing…",
     "recapTitle": "What baakalai understood about your company",
     "recapSubtitle": "Based on your documents and/or your website.",

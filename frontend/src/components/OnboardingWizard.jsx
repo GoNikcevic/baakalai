@@ -331,6 +331,13 @@ export default function OnboardingWizard({ onComplete }) {
   const [analyzingCompany, setAnalyzingCompany] = useState(false);
   const [showCompanyRecap, setShowCompanyRecap] = useState(false);
   const [companyAnalysis, setCompanyAnalysis] = useState(null);
+  // Source (site web + documents) sur laquelle `companyAnalysis` a ete
+  // calculee : sert a savoir si un retour arriere peut reafficher le
+  // resultat deja obtenu ou doit relancer l'analyse (site/documents changes).
+  const [companyAnalysisSourcesKey, setCompanyAnalysisSourcesKey] = useState(null);
+
+  // Étape entreprise : tout est obligatoire sauf le site web et les documents.
+  const companyStepReady = !!(company.trim() && sector.trim() && teamSize && jobRole);
 
   // Step 2 · Keys
   const [outreachProvider, setOutreachProvider] = useState('');
@@ -447,6 +454,14 @@ export default function OnboardingWizard({ onComplete }) {
     const hasSource = uploadedDocs.length > 0 || website.trim().length > 3;
     if (!hasSource) { next(); return; }
 
+    // Site web et documents inchangés depuis la dernière analyse : on
+    // réaffiche le résultat déjà obtenu au lieu de relancer l'IA.
+    const sourcesKey = `${website.trim()}|${uploadedDocs.map(d => d.id || d.original_name || d.name || '').sort().join(',')}`;
+    if (companyAnalysis && sourcesKey === companyAnalysisSourcesKey) {
+      setShowCompanyRecap(true);
+      return;
+    }
+
     setAnalyzingCompany(true);
     try {
       // /profile/auto-fill lit le site depuis le profil déjà sauvegardé :
@@ -487,6 +502,7 @@ export default function OnboardingWizard({ onComplete }) {
         personaSecondary: p.persona_secondary || '',
         products,
       });
+      setCompanyAnalysisSourcesKey(sourcesKey);
       setShowCompanyRecap(true);
     } catch {
       next();
@@ -862,11 +878,11 @@ export default function OnboardingWizard({ onComplete }) {
           <>
             <div className="form-grid">
               <div className="form-group">
-                <label className="form-label">{t('wizard.companyName')}</label>
+                <label className="form-label">{t('wizard.companyName')}<span style={{ color: 'var(--danger, #B42318)' }}> *</span></label>
                 <input className="form-input" placeholder="Ex: FormaPro Consulting" value={company} onChange={e => setCompany(e.target.value)} />
               </div>
               <div className="form-group" style={{ position: 'relative' }}>
-                <label className="form-label">{t('wizard.sectorLabel')}</label>
+                <label className="form-label">{t('wizard.sectorLabel')}<span style={{ color: 'var(--danger, #B42318)' }}> *</span></label>
                 <input
                   className="form-input"
                   placeholder="Ex: SaaS, Formation, Finance..."
@@ -907,7 +923,7 @@ export default function OnboardingWizard({ onComplete }) {
                 <input className="form-input" type="url" placeholder="https://..." value={website} onChange={e => setWebsite(e.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">{t('wizard.teamSize')}</label>
+                <label className="form-label">{t('wizard.teamSize')}<span style={{ color: 'var(--danger, #B42318)' }}> *</span></label>
                 <select className="form-input" value={teamSize} onChange={e => setTeamSize(e.target.value)}>
                   <option value="">{t('wizard.selectPlaceholder')}</option>
                   <option value="1-5">1-5</option>
@@ -919,7 +935,7 @@ export default function OnboardingWizard({ onComplete }) {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">{t('wizard.jobRole')}</label>
+                <label className="form-label">{t('wizard.jobRole')}<span style={{ color: 'var(--danger, #B42318)' }}> *</span></label>
                 <select className="form-input" value={jobRole} onChange={e => setJobRole(e.target.value)}>
                   <option value="">{t('wizard.selectPlaceholder')}</option>
                   <option value="dirigeant">{t('wizard.jobRoleFounder')}</option>
@@ -960,6 +976,10 @@ export default function OnboardingWizard({ onComplete }) {
                   {t('wizard.uploadRequired')}
                 </div>
               )}
+            </div>
+
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+              {t('wizard.requiredFieldsNote')}
             </div>
           </>
         );
@@ -1405,7 +1425,7 @@ export default function OnboardingWizard({ onComplete }) {
             {saving ? t('wizard.saving') : t('wizard.continue')}
           </button>
         ) : step === 0 ? (
-          <button className="btn btn-primary" onClick={handleCompanyContinue} disabled={analyzingCompany}>
+          <button className="btn btn-primary" onClick={handleCompanyContinue} disabled={analyzingCompany || !companyStepReady}>
             {analyzingCompany ? t('wizard.analyzingCompany') : t('wizard.continue')}
           </button>
         ) : (
