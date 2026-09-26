@@ -26,7 +26,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://baakal.ai/assets/og-home.png">
   <link rel="icon" href="assets/favicon.svg">
-  <link rel="stylesheet" href="site.css?v=20260926">
+  <link rel="stylesheet" href="site.css?v=20260926b">
 </head>
 <body>
 
@@ -58,10 +58,10 @@
   </nav>
 
   <!-- ──────── HERO ──────── -->
-  <section class="hero" id="top">
+  <section class="hero dark" id="top">
     <div class="container hero-grid">
       <div class="hero-text">
-        <span class="eyebrow" style="color:var(--primary);" data-i18n="hero.eyebrow">VOTRE CROISSANCE EST DÉJÀ DANS VOTRE CRM</span>
+        <span class="eyebrow" data-i18n="hero.eyebrow">VOTRE CROISSANCE EST DÉJÀ DANS VOTRE CRM</span>
         <h1 class="h-display h-display--hero" style="margin-top:20px;">
           <span data-i18n="hero.title_a">Votre patrimoine commercial est dans votre CRM. </span><em class="accent" data-i18n="hero.title_em">Faites-le fructifier.</em>
         </h1>
@@ -75,7 +75,7 @@
           </a>
           <a href="#tarif" class="btn btn-ghost" data-i18n="hero.cta_2">Parler à un expert</a>
         </div>
-        <div style="margin-top:30px; font-size:14px; color:var(--grey-500);" data-i18n="hero.trust">
+        <div class="hero-trust" data-i18n="hero.trust">
           Diagnostic gratuit · Connexion en lecture seule · Sans compte à créer
         </div>
       </div>
@@ -91,7 +91,7 @@
           <div class="url">app.baakal.ai / diagnostic</div>
         </div>
         <div class="pad">
-          <span class="eyebrow" style="color:var(--primary);" data-i18n="hero.card_label">VOTRE POTENTIEL DANS LE CRM</span>
+          <span class="eyebrow" data-i18n="hero.card_label">VOTRE POTENTIEL DANS LE CRM</span>
           <div class="amount" data-i18n="hero.card_amount">180 à 310 k€</div>
           <div class="amount-label" data-i18n="hero.card_amount_label">de revenu dormant estimé</div>
           <div class="amount-conf" data-i18n="hero.card_conf">Confiance moyenne : des montants manquent dans le CRM</div>
@@ -119,7 +119,9 @@
   </section>
 
   <!-- ──────── BANDEAU STATISTIQUES ──────── -->
-  <section class="section" style="padding-top:0;">
+  <!-- Sombre comme le hero : hero et bandeau forment un seul bloc noir,
+       la page bascule en clair a la section diagnostic. -->
+  <section class="section dark" style="padding-top:0;">
     <div class="container">
       <div class="stat-band reveal">
         <h3 data-i18n="stats.title">Vous investissez dans l'acquisition. Qui travaille le revenu déjà acquis ?</h3>
@@ -148,7 +150,7 @@
        est lui-même en paper-2, sur une section grise il n'existe plus. -->
   <section class="section" id="diagnostic">
     <div class="container">
-      <span class="eyebrow" style="color:var(--primary);" data-i18n="diag.eyebrow">LE DIAGNOSTIC GRATUIT · HIDDEN REVENUE SCORE</span>
+      <span class="eyebrow" data-i18n="diag.eyebrow">LE DIAGNOSTIC GRATUIT · HIDDEN REVENUE SCORE</span>
       <h2 class="h-section" style="margin-top:18px;">
         <span data-i18n="diag.title_a">Votre CRM a un chiffre </span><em class="accent" data-i18n="diag.title_em">à vous avouer.</em>
       </h2>
@@ -163,7 +165,7 @@
       <div class="steps-3" id="diag-steps"></div>
 
       <div class="note-box reveal">
-        <span class="eyebrow" style="color:var(--primary);" data-i18n="diag.box_eyebrow">POURQUOI C'EST UTILE</span>
+        <span class="eyebrow" data-i18n="diag.box_eyebrow">POURQUOI C'EST UTILE</span>
         <h3 data-i18n="diag.box_title">Un score. Puis des comptes. Puis des ventes.</h3>
         <p data-i18n="diag.box_p">
           Une fourchette large signale des données manquantes. Le score indique où agir ; seul le chiffre d'affaires effectivement gagné après relance compte comme revenu récupéré.
@@ -176,7 +178,7 @@
   <!-- ──────── DU DIAGNOSTIC À L'ACTION ──────── -->
   <section class="section" id="action">
     <div class="container">
-      <span class="eyebrow" style="color:var(--primary);" data-i18n="action.eyebrow">DU DIAGNOSTIC À L'ACTION</span>
+      <span class="eyebrow" data-i18n="action.eyebrow">DU DIAGNOSTIC À L'ACTION</span>
       <h2 class="h-section" style="margin-top:18px;">
         <span data-i18n="action.title_a">Votre CRM n'est pas </span><em class="accent" data-i18n="action.title_em">une archive. Faites-le vendre.</em>
       </h2>
@@ -196,7 +198,7 @@
   <!-- ──────── LE BON SIGNAL, LA BONNE ACTION ──────── -->
   <section class="section paper-2" id="preuve">
     <div class="container">
-      <span class="eyebrow" style="color:var(--primary);" data-i18n="proof.eyebrow">POUR QUE LES OPPORTUNITÉS DEVIENNENT DES RÉSULTATS</span>
+      <span class="eyebrow" data-i18n="proof.eyebrow">POUR QUE LES OPPORTUNITÉS DEVIENNENT DES RÉSULTATS</span>
       <h2 class="h-section" style="margin-top:18px;">
         <span data-i18n="proof.title_a">Le bon signal. La bonne action. </span><em class="accent" data-i18n="proof.title_em">La preuve du résultat.</em>
       </h2>
@@ -207,7 +209,7 @@
       <div class="duo-grid" id="proof-cards"></div>
 
       <div class="note-box soft reveal">
-        <span class="eyebrow" style="color:var(--primary);" data-i18n="proof.box_eyebrow">ET POUR LES NOUVEAUX LEADS ?</span>
+        <span class="eyebrow" data-i18n="proof.box_eyebrow">ET POUR LES NOUVEAUX LEADS ?</span>
         <h3 data-i18n="proof.box_title">La prospection est là quand vous en avez besoin.</h3>
         <p data-i18n="proof.box_p">
           Campagnes assistées, séquences email et LinkedIn, plusieurs boîtes d'envoi, réponses détectées. Un complément à l'exploitation de votre base existante.
@@ -240,7 +242,7 @@
   <!-- ──────── OUTILS COMPATIBLES ──────── -->
   <section class="section" id="outils">
     <div class="container">
-      <span class="eyebrow" style="color:var(--primary);" data-i18n="tools.eyebrow">UNE AUTRE MANIÈRE DE GÉNÉRER DU PIPELINE</span>
+      <span class="eyebrow" data-i18n="tools.eyebrow">UNE AUTRE MANIÈRE DE GÉNÉRER DU PIPELINE</span>
       <h2 class="h-section" style="margin-top:18px;">
         <span data-i18n="tools.title_a">L'acquisition remplit le CRM. </span><em class="accent" data-i18n="tools.title_em">Baakalai en exploite la valeur.</em>
       </h2>
@@ -277,7 +279,7 @@
   <!-- ──────── TARIF ──────── -->
   <section class="section paper-2" id="tarif">
     <div class="container">
-      <span class="eyebrow" style="color:var(--primary);" data-i18n="pricing.eyebrow">UN DIAGNOSTIC GRATUIT. UN TARIF SIMPLE.</span>
+      <span class="eyebrow" data-i18n="pricing.eyebrow">UN DIAGNOSTIC GRATUIT. UN TARIF SIMPLE.</span>
       <h2 class="h-section" style="margin-top:18px;">
         <span data-i18n="pricing.title_a">Découvrez le potentiel. </span><em class="accent" data-i18n="pricing.title_em">Activez-le avec baakalai.</em>
       </h2>
@@ -413,7 +415,7 @@
     </div>
   </footer>
 
-  <script src="i18n.js?v=20260926"></script>
+  <script src="i18n.js?v=20260926b"></script>
   <script>
     // ─── i18n engine ─────────────────────────────────────
     const STORE_KEY = 'baakalai-lang';
