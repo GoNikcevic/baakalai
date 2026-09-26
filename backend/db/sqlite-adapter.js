@@ -432,7 +432,12 @@ function initSchema() {
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
       name TEXT NOT NULL,
       invite_code TEXT UNIQUE,
-      max_members INTEGER DEFAULT 5,
+      -- NULL = aucun plafond, même convention que la migration 107 côté
+      -- Postgres. Le défaut à 5 hérité de la 032 est resté ici parce que la
+      -- 107 est un fichier .sql jamais joué sur ce schéma, construit en JS :
+      -- une équipe créée en local bloquait donc son 6e membre dans
+      -- db.teams.addMember alors que la prod ne plafonne plus.
+      max_members INTEGER,
       created_by TEXT NOT NULL REFERENCES users(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
