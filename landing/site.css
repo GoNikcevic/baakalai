@@ -4,7 +4,7 @@
    animated mark, dotted-grid texture, large editorial type.
    ============================================================ */
 
-@import url('../colors_and_type.css?v=20260926');
+@import url('../colors_and_type.css?v=20260926b');
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1567,4 +1567,69 @@ footer {
   .nav .brand span { display: none; }
   .nav .btn-accent { padding: 8px 12px; font-size: 12.5px; }
   .nav .btn-ghost { padding: 7px 11px; font-size: 12.5px; }
+}
+
+/* ─── Hero sombre ────────────────────────────────────────── */
+/* Le hero et le bandeau de statistiques forment un seul bloc noir, la page
+   bascule en clair a la section diagnostic. Les couleurs ne sont plus en
+   style inline dans index.html : un attribut style bat toute regle de theme,
+   et un eyebrow force a var(--primary) reste violet fonce sur du noir. */
+
+/* Violet sur fond clair, lavande sur fond sombre. Le violet #6E57FA tombe a
+   2,5:1 sur du noir, illisible pour du texte de 11,5px. */
+.hero .eyebrow, .section .eyebrow { color: var(--primary); }
+.hero.dark .eyebrow { color: var(--lavender); }
+/* La carte de diagnostic reste blanche a l'interieur du hero sombre : son
+   eyebrow doit repasser en violet. */
+.hero.dark .diag-card .eyebrow { color: var(--primary); }
+
+.hero.dark { background: var(--ink); color: var(--paper); }
+.hero.dark .h-display { color: var(--paper); }
+.hero.dark .accent { color: var(--lavender); }
+.hero.dark .body { color: rgba(250, 250, 249, 0.74); }
+
+/* Le quadrillage de points utilise var(--border), un gris tres clair : sur
+   fond noir il devient une pluie de points blancs. */
+.hero.dark::before {
+  background-image: radial-gradient(circle, rgba(169, 152, 255, 0.16) 1px, transparent 1px);
+}
+
+.hero-trust {
+  margin-top: 30px;
+  font-size: 14px;
+  color: var(--grey-500);
+}
+.hero.dark .hero-trust { color: rgba(250, 250, 249, 0.5); }
+
+/* Le CTA principal est noir sur fond clair : sur fond noir il disparait.
+   Il passe au violet, la meme couleur d'action que le CTA de la nav. */
+.hero.dark .btn-primary { background: var(--primary); color: #FFFFFF; }
+.hero.dark .btn-primary:hover { background: #7C68FF; }
+.hero.dark .btn-ghost { border-color: rgba(250, 250, 249, 0.28); color: var(--paper); }
+.hero.dark .btn-ghost:hover { background: rgba(250, 250, 249, 0.08); }
+
+/* La carte reste claire : c'est l'ecran du produit, et le contraste avec le
+   fond noir en fait le point de fixation de la page. L'ombre portee sombre
+   etant invisible sur du noir, elle est remplacee par un halo violet et un
+   liseré clair qui detachent la carte du fond. */
+.hero.dark .diag-card {
+  box-shadow: 0 30px 80px -30px rgba(110, 87, 250, 0.45),
+              0 0 0 1px rgba(250, 250, 249, 0.08);
+}
+
+/* Bandeau de statistiques dans la zone sombre : le fond noir plein du bandeau
+   serait invisible sur une section noire. Il devient une surface en relief. */
+.section.dark .stat-band {
+  background: rgba(250, 250, 249, 0.045);
+  border: 1px solid rgba(250, 250, 249, 0.12);
+}
+
+/* La nav est noire et flotte au-dessus du hero : sur un hero noir elle se
+   fond dedans. Elle est eclaircie d'un cran et son liseré renforce, ce qui la
+   detache sur le noir sans la rendre laiteuse sur les sections claires. */
+.nav {
+  background: rgba(22, 22, 25, 0.9);
+  border-color: rgba(250, 250, 249, 0.18);
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.55),
+              inset 0 1px 0 rgba(250, 250, 249, 0.06);
 }
