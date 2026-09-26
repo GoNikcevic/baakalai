@@ -83,9 +83,12 @@
   </style>
 </head>
 <body>
+  <!-- La nav vient de site.css, passée en pilule noire le 26/09 : le logo doit
+       donc être la version claire (la sombre disparaît sur ce fond) et le CTA
+       ne peut plus être .btn-primary, qui est noir sur noir. -->
   <nav class="nav">
     <a href="index.html" class="brand">
-      <img src="assets/favicon.svg" width="22" height="22" alt="">
+      <img src="assets/synapse-mark-on-dark.svg" width="22" height="22" alt="">
       <span>baakalai</span>
     </a>
     <div class="links"></div>
@@ -93,8 +96,8 @@
       <button data-lang="fr" class="active">FR</button>
       <button data-lang="en">EN</button>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <a href="https://app.baakal.ai/?ref=diagnostic" class="btn btn-primary" style="padding:9px 16px;font-size:13px;" id="navCta">Rejoindre la beta</a>
+    <div class="actions">
+      <a href="https://app.baakal.ai/?ref=diagnostic" class="btn btn-accent" id="navCta">Se connecter</a>
     </div>
   </nav>
 
@@ -114,7 +117,7 @@
 
       var T = {
         fr: {
-          navCta: 'Rejoindre la beta',
+          navCta: 'Se connecter',
           title: 'Combien de CA attend une relance dans votre CRM ?',
           subtitle: 'Connectez votre Pipedrive, HubSpot ou Salesforce en lecture seule, le chiffre en 30 secondes, sans compte.',
           pipedrive: 'Pipedrive', hubspot: 'HubSpot',
@@ -198,7 +201,7 @@
           imgOpps: '{opps} opportunités récupérables identifiées',
         },
         en: {
-          navCta: 'Join the beta',
+          navCta: 'Sign in',
           title: 'How much is sleeping in your CRM?',
           subtitle: 'Connect your Pipedrive, HubSpot or Salesforce read-only, free diagnostic in 30 seconds, no account needed.',
           pipedrive: 'Pipedrive', hubspot: 'HubSpot',

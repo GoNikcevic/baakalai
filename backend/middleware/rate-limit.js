@@ -59,4 +59,17 @@ const publicDiagLimiter = rateLimit({
   validate: { xForwardedForHeader: false },
 });
 
-module.exports = { apiLimiter, aiLimiter, chatLimiter, statsLimiter, publicDiagLimiter };
+// Formulaire « Parler à un expert » de la landing : pas coûteux à servir,
+// mais ouvert sans auth et suivi d'un email interne. Une limite plus large
+// que le diagnostic (un prospect qui se trompe d'adresse doit pouvoir
+// renvoyer), assez basse pour qu'une boucle ne remplisse pas la boîte.
+const publicContactLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'rate_limited' },
+  validate: { xForwardedForHeader: false },
+});
+
+module.exports = { apiLimiter, aiLimiter, chatLimiter, statsLimiter, publicDiagLimiter, publicContactLimiter };

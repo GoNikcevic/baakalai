@@ -53,7 +53,11 @@
 .c-nav-links { display: flex; gap: 24px; align-items: center; font-size: 13px; }
 .c-nav-links a.dim { color: var(--muted); }
 .c-nav-links a.dim:hover { color: var(--lavender); }
-.c-cta-pill { background: #FFFFFF; color: #0A0A0A !important; padding: 8px 14px; border-radius: 999px; font-weight: 500; }
+    /* Violet et non blanc depuis le 26/09 : le CTA doit être le même sur les
+       trois pages de la landing. Blanc sur #6E57FA donne 4,77:1, au-dessus
+       du seuil AA de 4,5 pour du texte normal. */
+.c-cta-pill { background: var(--primary); color: #FFFFFF !important; padding: 8px 14px; border-radius: 999px; font-weight: 600; }
+.c-cta-pill:hover { background: #7C68FF; color: #FFFFFF !important; }
 
 .c-lang-switch {
       display: inline-flex; border: 1px solid var(--border); border-radius: 999px;
