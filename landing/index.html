@@ -7,16 +7,16 @@
        dernière est la catégorie que Gong possède et a définie, la revendiquer
        nous placerait dans une comparaison frontale avec un produit à 55 k$.
        « RevOps » désigne une fonction que personne ne possède, et nomme
-       exactement le manque de l'ICP (PME 5-50 sans RevOps).
+       exactement le manque de l'ICP (PME sans RevOps à temps plein).
        Le métier reste en premier dans le titre : la catégorie sert à être
        trouvé, la promesse à convertir. Ne jamais écrire que baakalai EST une
        plateforme RevOps : ni forecast consolidé, ni territoires, ni variable,
        ni CPQ. Toujours « le travail qu'un RevOps ferait ». -->
-  <title>baakalai : le système IA qui exploite votre CRM | RevOps de la PME</title>
-  <meta name="description" content="Le RevOps sans l'équipe RevOps. baakalai lit votre CRM 24/7, repère les deals à relancer, les upsells et les risques de churn, et exécute la séquence de relance depuis votre boîte mail. Connexion CRM en un clic, 79 €/siège/mois.">
+  <title>baakalai : votre patrimoine commercial est dans votre CRM | RevOps de la PME</title>
+  <meta name="description" content="Baakalai chiffre le revenu qui dort dans votre CRM : deals en attente, clients à réactiver, cross-sell. Diagnostic gratuit en lecture seule, sans compte à créer. Puis les comptes à traiter et l'action recommandée, poussés au bon moment. 79 € HT par utilisateur et par mois.">
   <meta property="og:site_name" content="baakalai">
-  <meta property="og:title" content="Le RevOps, sans l'équipe RevOps.">
-  <meta property="og:description" content="Votre CRM vaut plus que ce qu'il vous rapporte. baakalai le lit 24/7, chiffre ce qui reste à récupérer avec le Hidden Revenue Score, et relance à votre place depuis votre propre boîte mail.">
+  <meta property="og:title" content="Votre patrimoine commercial est dans votre CRM.">
+  <meta property="og:description" content="Baakalai chiffre le potentiel de votre patrimoine commercial : deals en attente, clients à réactiver, cross-sell. Il vous remonte les comptes à traiter et l'action recommandée. Vous gardez la main.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://baakal.ai/">
   <meta property="og:locale" content="fr_FR">
@@ -27,209 +27,33 @@
   <meta name="twitter:image" content="https://baakal.ai/assets/og-home.png">
   <link rel="icon" href="assets/favicon.svg">
   <link rel="stylesheet" href="site.css">
-  <style>
-    /* Hero stage fix : give the aspect-ratio box an explicit width */
-.hero-stage { width: 100%; }
-
-    /* ─── Hero mockup (variant D) ──────────────────────── */
-.hero-mockup-wrap {
-      position: relative;
-      aspect-ratio: auto;
-      max-width: 560px;
-      margin-left: auto;
-    }
-    .hero-mockup-wrap .browser-frame {
-      position: relative;
-      background: var(--paper);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-      box-shadow: 0 14px 44px rgba(10,10,10,0.08);
-      display: flex;
-      flex-direction: column;
-      aspect-ratio: 1 / 1;
-    }
-    .hero-mockup-wrap .browser-chrome {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 11px 14px;
-      background: var(--paper-2);
-      border-bottom: 1px solid var(--border);
-    }
-    .hero-mockup-wrap .browser-chrome .dots { display:flex; gap:6px; }
-    .hero-mockup-wrap .browser-chrome .dots span {
-      width: 11px; height: 11px; border-radius: 50%;
-    }
-    .hero-mockup-wrap .browser-chrome .dots span:nth-child(1) { background: #FF5F57; }
-    .hero-mockup-wrap .browser-chrome .dots span:nth-child(2) { background: #FEBC2E; }
-    .hero-mockup-wrap .browser-chrome .dots span:nth-child(3) { background: #28C840; }
-    .hero-mockup-wrap .browser-chrome .url {
-      flex: 1;
-      background: var(--paper);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 5px 12px;
-      font-family: var(--font-mono);
-      font-size: 11.5px;
-      color: var(--grey-700);
-      text-align: center;
-    }
-    .hero-mockup-wrap .browser-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      padding: 22px 22px 60px;
-      background: var(--paper-2);
-      position: relative;
-      overflow: hidden;
-    }
-    .hero-mockup-wrap .chat-bubble {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      max-width: 88%;
-    }
-    .hero-mockup-wrap .chat-bubble.me { flex-direction: row-reverse; align-self: flex-end; }
-    .hero-mockup-wrap .chat-bubble .avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      flex-shrink: 0; display:flex; align-items:center; justify-content:center;
-      font-size: 11px; font-weight: 600;
-    }
-    .hero-mockup-wrap .chat-bubble.them .avatar { background: var(--lavender); color: var(--ink); }
-    .hero-mockup-wrap .chat-bubble.me .avatar { background: var(--primary); color: var(--paper); }
-    .hero-mockup-wrap .chat-bubble .msg {
-      background: var(--paper);
-      border: 1px solid var(--border);
-      border-radius: 13px;
-      padding: 11px 14px;
-      font-size: 13.5px;
-      line-height: 1.5;
-      color: var(--ink);
-    }
-    .hero-mockup-wrap .chat-bubble.me .msg {
-      background: var(--primary);
-      color: var(--paper);
-      border-color: transparent;
-    }
-    .hero-mockup-wrap .typing {
-      display: inline-block;
-      width: 4px; height: 13px;
-      background: currentColor;
-      vertical-align: text-bottom;
-      animation: caret 1s steps(2) infinite;
-      margin-left: 2px;
-    }
-    @keyframes caret { 50% { opacity: 0; } }
-    .hero-mockup-wrap .play-overlay {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(180deg, rgba(20,18,30,0) 35%, rgba(20,18,30,0.45) 100%);
-      pointer-events: none;
-    }
-    .hero-mockup-wrap .play-btn {
-      width: 72px; height: 72px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.96);
-      box-shadow: 0 10px 28px rgba(10,10,10,0.22);
-      display: flex; align-items: center; justify-content: center;
-      pointer-events: auto;
-      cursor: pointer;
-      transition: transform 220ms;
-    }
-    .hero-mockup-wrap .play-btn:hover { transform: scale(1.06); }
-    .hero-mockup-wrap .play-btn::after {
-      content: "";
-      width: 0; height: 0;
-      border-left: 20px solid var(--primary);
-      border-top: 13px solid transparent;
-      border-bottom: 13px solid transparent;
-      margin-left: 5px;
-    }
-    .hero-mockup-wrap .video-meta {
-      position: absolute;
-      bottom: 16px; left: 16px;
-      display: flex; gap: 8px;
-      font-family: var(--font-mono);
-      font-size: 10.5px;
-      letter-spacing: 0.05em;
-      color: rgba(255,255,255,0.96);
-      text-transform: uppercase;
-      pointer-events: none;
-    }
-    .hero-mockup-wrap .video-meta .pill {
-      background: rgba(0,0,0,0.5);
-      padding: 5px 9px;
-      border-radius: 4px;
-    }
-    .hero-mockup-wrap .badge-live {
-      position: absolute;
-      top: -12px; right: 18px;
-      background: var(--ink);
-      color: var(--paper);
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      padding: 6px 11px;
-      border-radius: 4px;
-      z-index: 5;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .hero-mockup-wrap .badge-live .dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: #16A34A;
-      box-shadow: 0 0 0 0 rgba(22,163,74,0.5);
-      animation: liveDot 2s ease-in-out infinite;
-    }
-    @keyframes liveDot {
-      0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.5); }
-      50% { box-shadow: 0 0 0 6px rgba(22,163,74,0); }
-    }
-    .hero-mockup-wrap .powered-by {
-      position: absolute;
-      bottom: 14px; right: 16px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: var(--font-mono);
-      font-size: 9.5px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--grey-500);
-      z-index: 4;
-    }
-  </style>
 </head>
 <body>
 
   <!-- ──────── NAV ──────── -->
+  <!-- Fond noir, CTA violet : le violet est l'accent de toute la page, un
+       header violet plein lui ferait concurrence. Voir le commentaire de
+       .nav dans site.css. Le logo est la version claire, la sombre disparait
+       sur ce fond. -->
   <nav class="nav">
     <a href="#top" class="brand">
-      <img src="assets/favicon.svg" width="22" height="22" alt="">
+      <img src="assets/synapse-mark-on-dark.svg" width="22" height="22" alt="">
       <span>baakalai</span>
     </a>
     <div class="links">
       <a href="how-it-works.html" data-i18n="nav.how">Comment ça marche</a>
-      <a href="#crm-intelligence" data-i18n="nav.features">Ce que fait le système</a>
-      <a href="#beta" data-i18n="nav.pricing">Tarif</a>
+      <a href="#action" data-i18n="nav.features">Ce que fait baakalai</a>
+      <a href="#outils" data-i18n="nav.tools">Outils compatibles</a>
+      <a href="#tarif" data-i18n="nav.pricing">Tarif</a>
       <a href="#faq" data-i18n="nav.faq">FAQ</a>
-      <a href="#blog" data-i18n="nav.blog">Blog</a>
-      <a href="diagnostic.html" data-i18n="nav.diag" style="color:var(--primary);font-weight:600;">Diagnostic gratuit</a>
     </div>
     <div class="lang-toggle">
       <button data-lang="fr" class="active">FR</button>
       <button data-lang="en">EN</button>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <a href="https://app.baakal.ai" class="btn btn-ghost" style="padding:8px 14px;font-size:13px;" data-i18n="nav.signin">Se connecter</a>
-      <a href="#book" class="btn btn-primary" style="padding:9px 16px;font-size:13px;" data-i18n="nav.book">Rejoindre la beta</a>
+    <div class="actions">
+      <a href="diagnostic.html" class="btn btn-accent" data-i18n="nav.diag">Diagnostic gratuit</a>
+      <a href="https://app.baakal.ai" class="btn btn-ghost" data-i18n="nav.signin">Se connecter</a>
     </div>
   </nav>
 
@@ -237,378 +61,175 @@
   <section class="hero" id="top">
     <div class="container hero-grid">
       <div class="hero-text">
-        <h1 class="h-display">
-          <!-- Pas de <br> ici : un retour forcé isole bien la phrase de tension
-               en EN mais laisse « gère. » orphelin en FR. La coupe naturelle
-               place « Personne » seule sur sa ligne, ce qui met l'accent au bon
-               endroit. Revérifier les deux langues avant de toucher à ce titre. -->
-          <span data-i18n="hero.title_a">Votre CRM vaut plus </span><em class="accent" data-i18n="hero.title_em">que ce qu'il vous rapporte</em><span data-i18n="hero.title_b">.</span>
+        <span class="eyebrow" style="color:var(--primary);" data-i18n="hero.eyebrow">VOTRE CROISSANCE EST DÉJÀ DANS VOTRE CRM</span>
+        <h1 class="h-display h-display--hero" style="margin-top:20px;">
+          <span data-i18n="hero.title_a">Votre patrimoine commercial est dans votre CRM. </span><em class="accent" data-i18n="hero.title_em">Faites-le fructifier.</em>
         </h1>
-        <p class="body large" style="margin-top:28px; max-width:540px;" data-i18n="hero.sub">
-          baakalai lit votre CRM 24/7 et repère les deals qui meurent, les clients prêts à upseller, les comptes qui vont churner. Puis il agit. Un deal récupéré rembourse l'outil pour des mois.
+        <p class="body large" style="margin-top:28px; max-width:560px;" data-i18n="hero.sub">
+          Baakalai chiffre le potentiel de votre patrimoine commercial : deals en attente, clients à réactiver, cross-sell. Il vous remonte les comptes à traiter et l'action recommandée, au bon moment. Vous gardez la main.
         </p>
         <div style="margin-top:36px; display:flex; gap:12px; flex-wrap:wrap;">
-          <a href="#book" class="btn btn-primary">
-            <span data-i18n="hero.cta">Rejoindre la beta</span>
+          <a href="diagnostic.html" class="btn btn-primary">
+            <span data-i18n="hero.cta">Calculer mon revenu caché</span>
             <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
           </a>
-          <a href="#book" class="btn btn-ghost" data-i18n="hero.cta_2">Prendre rendez-vous</a>
+          <a href="#tarif" class="btn btn-ghost" data-i18n="hero.cta_2">Parler à un expert</a>
         </div>
-        <div style="margin-top:40px; display:flex; gap:24px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--grey-500);">
-          <span data-i18n="hero.tag_1">CRM connecté en un clic</span>
-          <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_2">Opérationnel en 30 min</span>
-          <span style="color:var(--border-strong)">·</span>
-          <span data-i18n="hero.tag_3">79 €/siège/mois</span>
+        <div style="margin-top:30px; font-size:14px; color:var(--grey-500);" data-i18n="hero.trust">
+          Diagnostic gratuit · Connexion en lecture seule · Sans compte à créer
         </div>
       </div>
 
-      <!-- Hero mockup (variant D : platform mockup) -->
-      <div class="hero-stage hero-mockup-wrap">
-        <div class="badge-live"><span class="dot"></span><span data-i18n="hero.beta_badge">BETA TEST · ACCÈS LIMITÉ</span></div>
-        <div class="browser-frame">
-          <div class="browser-chrome">
-            <div class="dots"><span></span><span></span><span></span></div>
-            <div class="url">app.baakal.ai/synapse</div>
-          </div>
-          <div class="browser-body">
-            <div class="chat-bubble them">
-              <div class="avatar">YO</div>
-              <div class="msg" data-i18n="hero.chat_q">Mon pipeline a des deals qui dorment. Qu'est-ce qu'on peut récupérer ?</div>
-            </div>
-            <div class="chat-bubble me" id="hero-reply">
-              <div class="avatar">
-                <svg width="14" height="14" viewBox="0 0 100 100"><circle cx="50" cy="50" r="22" fill="#FAFAF9"/></svg>
-              </div>
-              <div class="msg"><span id="hero-typed"></span><span class="typing"></span></div>
-            </div>
-            <div class="powered-by">
-              <svg width="16" height="16" viewBox="0 0 120 120">
-                <line x1="60" y1="60" x2="14" y2="22" stroke="#C4B5FD" stroke-width="2"/>
-                <line x1="60" y1="60" x2="104" y2="24" stroke="#9A84EB" stroke-width="2"/>
-                <line x1="60" y1="60" x2="24" y2="104" stroke="#C4B5FD" stroke-width="2"/>
-                <circle cx="14" cy="22" r="6" fill="#C4B5FD"/>
-                <circle cx="104" cy="24" r="7" fill="#9A84EB"/>
-                <circle cx="24" cy="104" r="6" fill="#C4B5FD"/>
-                <circle cx="60" cy="60" r="11" fill="#6E57FA"/>
-              </svg>
-              <span>Powered by Synapse</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ──────── INTEGRATIONS STRIP ──────── -->
-  <div class="integrations-strip">
-    <div class="container">
-      <div class="row">
-        <span class="label" data-i18n="integrations.label">Se connecte à votre CRM</span>
-        <span class="name">Pipedrive</span>
-        <span class="name">HubSpot</span>
-        <span class="name">Salesforce</span>
-        <span class="name">Odoo</span>
-        <span class="name">Notion</span>
-        <span class="name">Airtable</span>
-        <span class="name">Folk</span>
-        <span class="name">Gmail</span>
-        <span class="name">Outlook</span>
-        <span class="name">LinkedIn</span>
-      </div>
-      <!-- Depuis le moteur d'envoi natif (sept. 2026), les outils d'emailing
-           tiers ne sont plus une dépendance : on les garde affichés pour les
-           équipes qui en ont déjà un, mais en second rang et explicitement
-           marqués optionnels. -->
-      <div class="row" style="margin-top:16px;gap:20px;">
-        <span class="label" data-i18n="integrations.optional">Compatible aussi</span>
-        <span class="name" style="font-size:14.5px;opacity:0.45;">Lemlist</span>
-        <span class="name" style="font-size:14.5px;opacity:0.45;">Apollo</span>
-        <span class="name" style="font-size:14.5px;opacity:0.45;">Smartlead</span>
-        <span class="label" style="text-transform:none;letter-spacing:0;font-size:12px;" data-i18n="integrations.optional_note">Optionnels : baakalai envoie depuis votre propre boîte mail.</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ──────── HIDDEN REVENUE SCORE ──────── -->
-  <!-- Le HRS ne vivait que sur diagnostic.html et dans l'app. Il porte ici le
-       cadre « patrimoine commercial » posé par la headline : le score est une
-       valorisation d'actif, pas un tableau de bord de plus. -->
-  <section class="section" id="hidden-revenue">
-    <div class="container feature-block">
-      <div class="feature-text">
-        <span class="eyebrow" data-i18n="hrs.eyebrow">LE HIDDEN REVENUE SCORE</span>
-        <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="hrs.title_a">Votre patrimoine commercial, </span><em class="accent" data-i18n="hrs.title_em">chiffré en 30 secondes</em><span data-i18n="hrs.title_b">.</span>
-        </h2>
-        <p class="body large" data-i18n="hrs.sub">Le Hidden Revenue Score évalue ce que votre base existante peut encore rapporter : un indice sur 100, une fourchette en euros, et quatre poches de revenu nommées une par une. Il se recalcule à chaque synchronisation de votre CRM.</p>
-        <ul class="feature-list" id="hrs-list"></ul>
-        <p class="body" style="margin-top:26px;" data-i18n="hrs.note">Un score élevé ne juge pas votre travail, il mesure ce qui reste à récupérer. Quand il baisse, c'est que la réserve se vide dans le bon sens.</p>
-        <a href="diagnostic.html" class="btn btn-accent" style="margin-top:28px;" data-i18n="hrs.cta">Calculer le mien, gratuitement</a>
-      </div>
-
-      <!-- Mockup : relevé de patrimoine commercial -->
-      <div class="mockup">
+      <!-- Carte de diagnostic : reprend l'écran réel du produit, avec des
+           montants d'exemple. Les deux lignes détaillées doivent toujours
+           totaliser la fourchette affichée en haut (120 + 60 = 180,
+           205 + 105 = 310) : un visiteur qui additionne et tombe à côté ne
+           croit plus rien de ce que la page raconte ensuite. -->
+      <div class="diag-card">
         <div class="chrome">
           <div class="dots"><span></span><span></span><span></span></div>
-          <div class="url">app.baakal.ai/dashboard</div>
+          <div class="url">app.baakal.ai / diagnostic</div>
         </div>
-        <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border);">
-            <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;" data-i18n="hrs.mock.title">Hidden Revenue Score</div>
-            <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--primary-deep);text-transform:uppercase;letter-spacing:0.04em;" data-i18n="hrs.mock.fresh">RECALCULÉ CE MATIN</span>
+        <div class="pad">
+          <span class="eyebrow" style="color:var(--primary);" data-i18n="hero.card_label">VOTRE POTENTIEL DANS LE CRM</span>
+          <div class="amount" data-i18n="hero.card_amount">180 à 310 k€</div>
+          <div class="amount-label" data-i18n="hero.card_amount_label">de revenu dormant estimé</div>
+          <div class="amount-conf" data-i18n="hero.card_conf">Confiance moyenne : des montants manquent dans le CRM</div>
+
+          <div class="diag-row">
+            <div>
+              <div class="t" data-i18n="hero.r1_t">Ventes en attente</div>
+              <div class="s" data-i18n="hero.r1_s">41 dossiers à examiner</div>
+            </div>
+            <div class="v" data-i18n="hero.r1_v">120 à 205 k€</div>
           </div>
 
-          <div style="background:var(--primary-soft);border-radius:12px;padding:18px;text-align:center;">
-            <div style="font-family:var(--font-mono);font-size:36px;font-weight:600;color:var(--primary-deep);line-height:1;">68<span style="font-size:16px;opacity:0.45;">/100</span></div>
-            <div style="font-size:14px;color:var(--ink);margin-top:10px;font-weight:500;">84 000 <span data-i18n="hrs.mock.to">à</span> 120 000 EUR</div>
-            <div style="font-size:11.5px;color:var(--grey-700);margin-top:5px;" data-i18n="hrs.mock.conf">Confiance : estimation robuste</div>
+          <div class="diag-row">
+            <div>
+              <div class="t" data-i18n="hero.r2_t">Anciens clients à recontacter</div>
+              <div class="s" data-i18n="hero.r2_s">63 comptes à examiner</div>
+            </div>
+            <div class="v" data-i18n="hero.r2_v">60 à 105 k€</div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div style="background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:12px;">
-              <div style="font-family:var(--font-mono);font-size:17px;font-weight:600;color:var(--ink);">42 000 EUR</div>
-              <div style="font-size:11px;color:var(--grey-700);margin-top:3px;" data-i18n="hrs.mock.d1">Pipeline dormant</div>
-            </div>
-            <div style="background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:12px;">
-              <div style="font-family:var(--font-mono);font-size:17px;font-weight:600;color:var(--ink);">31 000 EUR</div>
-              <div style="font-size:11px;color:var(--grey-700);margin-top:3px;" data-i18n="hrs.mock.d2">Réactivation client</div>
-            </div>
-            <div style="background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:12px;">
-              <div style="font-family:var(--font-mono);font-size:17px;font-weight:600;color:var(--ink);">18 000 EUR</div>
-              <div style="font-size:11px;color:var(--grey-700);margin-top:3px;" data-i18n="hrs.mock.d3">Expansion client</div>
-            </div>
-            <!-- Dimension non évaluée : grisée, comme dans l'app. Le score se
-                 renormalise sur les dimensions mesurées, jamais comptées zéro. -->
-            <div style="background:var(--paper-2);border:1px dashed var(--border);border-radius:10px;padding:12px;opacity:0.5;">
-              <div style="font-family:var(--font-mono);font-size:17px;font-weight:600;color:var(--grey-500);" data-i18n="hrs.mock.na">non mesuré</div>
-              <div style="font-size:11px;color:var(--grey-700);margin-top:3px;" data-i18n="hrs.mock.d4">Réactivation de leads</div>
-            </div>
+          <div class="disclaimer" data-i18n="hero.card_disclaimer">EXEMPLE ILLUSTRATIF · ESTIMATION, PAS PROMESSE DE VENTE</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────── BANDEAU STATISTIQUES ──────── -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <div class="stat-band reveal">
+        <h3 data-i18n="stats.title">Vous investissez dans l'acquisition. Qui travaille le revenu déjà acquis ?</h3>
+        <div class="items">
+          <div class="item">
+            <span class="fig" data-i18n="stats.s1_fig">60 %</span>
+            <p>
+              <span data-i18n="stats.s1_txt">du temps des commerciaux se passe hors des activités de vente</span>
+              <span class="src" data-i18n="stats.s1_src">Salesforce · State of Sales 2026</span>
+            </p>
+          </div>
+          <div class="item">
+            <span class="fig" data-i18n="stats.s2_fig">10 à 15 %</span>
+            <p>
+              <span data-i18n="stats.s2_txt">de gain d'efficacité rapporté par les entreprises qui automatisent leur force de vente</span>
+              <span class="src" data-i18n="stats.s2_src">McKinsey · Sales automation, 2020</span>
+            </p>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ──────── HOW IT WORKS ──────── -->
-  <section class="section dark" id="how">
+  <!-- ──────── DIAGNOSTIC GRATUIT · HIDDEN REVENUE SCORE ──────── -->
+  <!-- Fond blanc et non paper-2 : l'encadré « Un score. Puis des comptes. »
+       est lui-même en paper-2, sur une section grise il n'existe plus. -->
+  <section class="section" id="diagnostic">
     <div class="container">
-      <div style="max-width:760px;">
-        <span class="eyebrow" data-i18n="how.eyebrow">COMMENT ÇA MARCHE</span>
-        <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="how.title_a">Branchez votre CRM. </span><em class="accent" data-i18n="how.title_em">Le système fait le reste.</em>
-        </h2>
-        <p class="body large" style="margin-top:24px;" data-i18n="how.sub">
-          Pas d'implémentation. Pas d'équipe RevOps. 30 minutes entre la connexion et le premier deal détecté.
+      <span class="eyebrow" style="color:var(--primary);" data-i18n="diag.eyebrow">LE DIAGNOSTIC GRATUIT · HIDDEN REVENUE SCORE</span>
+      <h2 class="h-section" style="margin-top:18px;">
+        <span data-i18n="diag.title_a">Votre CRM a un chiffre </span><em class="accent" data-i18n="diag.title_em">à vous avouer.</em>
+      </h2>
+      <p class="body large lead" data-i18n="diag.sub">
+        Le Hidden Revenue Score mesure le potentiel inexploité de vos deals et de vos clients. Une fourchette en euros, les poches de revenu à activer et le niveau de confiance du calcul.
+      </p>
+      <a href="diagnostic.html" class="btn btn-primary" style="margin-top:32px;">
+        <span data-i18n="diag.cta">Calculer mon potentiel</span>
+        <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </a>
+
+      <div class="steps-3" id="diag-steps"></div>
+
+      <div class="note-box reveal">
+        <span class="eyebrow" style="color:var(--primary);" data-i18n="diag.box_eyebrow">POURQUOI C'EST UTILE</span>
+        <h3 data-i18n="diag.box_title">Un score. Puis des comptes. Puis des ventes.</h3>
+        <p data-i18n="diag.box_p">
+          Une fourchette large signale des données manquantes. Le score indique où agir ; seul le chiffre d'affaires effectivement gagné après relance compte comme revenu récupéré.
+        </p>
+        <div class="fine" data-i18n="diag.box_fine">Diagnostic sans compte pour Pipedrive, HubSpot et Salesforce.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────── DU DIAGNOSTIC À L'ACTION ──────── -->
+  <section class="section" id="action">
+    <div class="container">
+      <span class="eyebrow" style="color:var(--primary);" data-i18n="action.eyebrow">DU DIAGNOSTIC À L'ACTION</span>
+      <h2 class="h-section" style="margin-top:18px;">
+        <span data-i18n="action.title_a">Votre CRM n'est pas </span><em class="accent" data-i18n="action.title_em">une archive. Faites-le vendre.</em>
+      </h2>
+      <p class="body large lead" data-i18n="action.sub">
+        Le diagnostic révèle le potentiel. Baakalai vous remonte ensuite les comptes à traiter, la raison de leur priorité et l'action recommandée.
+      </p>
+
+      <div class="num-cards" id="action-cards"></div>
+
+      <div class="dark-band reveal">
+        <h3 data-i18n="action.band_title">Le patrimoine commercial devient une liste d'actions concrètes.</h3>
+        <p data-i18n="action.band_p">Chaque relance est contextualisée. Chaque résultat est suivi jusqu'au deal gagné.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────── LE BON SIGNAL, LA BONNE ACTION ──────── -->
+  <section class="section paper-2" id="preuve">
+    <div class="container">
+      <span class="eyebrow" style="color:var(--primary);" data-i18n="proof.eyebrow">POUR QUE LES OPPORTUNITÉS DEVIENNENT DES RÉSULTATS</span>
+      <h2 class="h-section" style="margin-top:18px;">
+        <span data-i18n="proof.title_a">Le bon signal. La bonne action. </span><em class="accent" data-i18n="proof.title_em">La preuve du résultat.</em>
+      </h2>
+      <p class="body large lead" data-i18n="proof.sub">
+        Baakalai fait le lien entre les données du CRM, les actions proposées et ce qui se passe ensuite dans les ventes.
+      </p>
+
+      <div class="duo-grid" id="proof-cards"></div>
+
+      <div class="note-box soft reveal">
+        <span class="eyebrow" style="color:var(--primary);" data-i18n="proof.box_eyebrow">ET POUR LES NOUVEAUX LEADS ?</span>
+        <h3 data-i18n="proof.box_title">La prospection est là quand vous en avez besoin.</h3>
+        <p data-i18n="proof.box_p">
+          Campagnes assistées, séquences email et LinkedIn, plusieurs boîtes d'envoi, réponses détectées. Un complément à l'exploitation de votre base existante.
         </p>
       </div>
-
-      <div class="flow" id="flow">
-        <!-- populated by JS so i18n works cleanly -->
-      </div>
     </div>
   </section>
 
-  <!-- ──────── CRM INTELLIGENCE FEATURE ──────── -->
-  <section class="section" id="crm-intelligence">
-    <div class="container feature-block">
-      <div class="feature-text">
-        <span class="eyebrow" data-i18n="crm.eyebrow">CE QUE FAIT LE SYSTÈME</span>
-        <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="crm.title_a">La donnée que vous avez déjà payée </span><em class="accent" data-i18n="crm.title_em">génère du CA</em><span data-i18n="crm.title_b">, sans nouveau lead.</span>
-        </h2>
-        <p class="body large" data-i18n="crm.sub">Réactiver un deal, détecter un upsell, prévenir un churn : trois gestes qui génèrent du revenu sans coût d'acquisition, à partir de votre base existante.</p>
-        <ul class="feature-list" id="crm-list"></ul>
-      </div>
-
-      <!-- Mockup: CRM intelligence dashboard -->
-      <div class="mockup">
-        <div class="chrome">
-          <div class="dots"><span></span><span></span><span></span></div>
-          <div class="url">app.baakal.ai/crm-analytics</div>
-        </div>
-        <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--border);">
-            <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">23 deals récupérables</div>
-            <span style="font-family:var(--font-mono);font-size:10.5px;color:#16A34A;text-transform:uppercase;letter-spacing:0.04em;">74 800 € DE PIPE</span>
-          </div>
-          <div style="display:flex;gap:10px;">
-            <div style="flex:1;background:var(--primary-soft);border-radius:10px;padding:12px;text-align:center;">
-              <div style="font-family:var(--font-mono);font-size:22px;font-weight:600;color:var(--primary-deep);">72%</div>
-              <div style="font-size:11px;color:var(--grey-700);margin-top:2px;">Churn risk</div>
-            </div>
-            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
-              <div style="font-family:var(--font-mono);font-size:22px;font-weight:600;color:var(--ink);">89/100</div>
-              <div style="font-size:11px;color:var(--grey-700);margin-top:2px;">Data quality</div>
-            </div>
-            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
-              <div style="font-family:var(--font-mono);font-size:22px;font-weight:600;color:#16A34A;">5</div>
-              <div style="font-size:11px;color:var(--grey-700);margin-top:2px;">Upsell ready</div>
-            </div>
-          </div>
-          <div style="background:var(--primary-soft);border:1px solid var(--primary);border-radius:12px;padding:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-              <div>
-                <div style="font-weight:500;font-size:14px;color:var(--ink);">Atelier Brun · 24 800 EUR</div>
-                <div style="font-family:var(--font-mono);font-size:11px;color:var(--primary-deep);text-transform:uppercase;letter-spacing:0.04em;margin-top:4px;">STAGNANT 18J · DEAL COACH: RELANCER</div>
-              </div>
-              <span style="background:var(--ink);color:var(--paper);padding:4px 8px;border-radius:6px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">REFINE</span>
-            </div>
-            <!-- Seul tutoiement volontaire du site : ici Alex écrit à Marc, son
-                 prospect. C'est la voix de l'utilisateur vers son contact, pas
-                 celle de baakalai vers l'utilisateur. Ne pas convertir au vous. -->
-            <div style="font-size:13px;line-height:1.5;color:var(--grey-900);background:var(--paper);border-radius:8px;padding:10px;border:1px dashed var(--primary);">
-              « Salut Marc, je sais que la fin de trimestre t'a pris tout ton temps. Je te repropose un créneau jeudi 16h pour finaliser le devis. Alex »
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ──────── DIAGNOSTIC CTA (lead magnet Pipedrive) ──────── -->
-  <section class="section" id="diagnostic-cta" style="padding-top:0;">
-    <div class="container">
-      <div style="
-        background: var(--primary-softer); border: 1px solid var(--primary);
-        border-radius: 18px; padding: clamp(28px, 5vw, 44px); text-align: center;
-      ">
-        <span class="eyebrow" data-i18n="diagcta.eyebrow" style="color:var(--primary-deep);">DIAGNOSTIC GRATUIT</span>
-        <h2 class="h-section" style="margin:14px 0 10px;">
-          <span data-i18n="diagcta.title_a">Pipedrive, HubSpot ou Salesforce&nbsp;? </span><em class="accent" data-i18n="diagcta.title_em">Trente secondes suffisent</em><span data-i18n="diagcta.title_b">.</span>
-        </h2>
-        <p class="body large" data-i18n="diagcta.sub" style="max-width:560px;margin:0 auto 22px;">Vous collez une clé API en lecture seule, le rapport tombe, aucun compte à créer. Sur Odoo, Notion, Airtable ou Folk, le même diagnostic vous attend dans l'app une fois le CRM connecté.</p>
-        <a href="diagnostic.html" class="btn btn-accent" style="padding:13px 26px;font-size:15px;" data-i18n="diagcta.cta">Lire mon CRM gratuitement</a>
-        <div style="margin-top:14px;font-size:12px;color:var(--grey-500);" data-i18n="diagcta.trust">Lecture seule · clé jamais stockée · rapport supprimé après 30 jours</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ──────── ACTIVATION FEATURE ──────── -->
-  <section class="section paper-2" id="activation">
-    <div class="container feature-block reverse">
-      <div class="feature-text">
-        <span class="eyebrow" data-i18n="activation.eyebrow">AUTOMATISATION</span>
-        <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="activation.title_a">Il ne te prévient pas. </span><em class="accent" data-i18n="activation.title_em">Il relance</em><span data-i18n="activation.title_b">.</span>
-        </h2>
-        <p class="body large" data-i18n="activation.sub">Le Deal Coach repère le deal qui stagne et vous propose la séquence de relance complète : le premier message, la relance à J+4, le repli LinkedIn si personne ne répond. Vous validez d'un clic, le système exécute depuis votre boîte mail.</p>
-        <ul class="feature-list" id="activation-list"></ul>
-      </div>
-
-      <!-- Mockup : séquence de relance proposée par le Deal Coach, en attente
-           d'approbation. Remplace l'ancienne liste de triggers : depuis les
-           workflows (sept. 2026), la promesse n'est plus « il détecte » mais
-           « il exécute la relance complète, branches comprises ». -->
-      <div class="mockup">
-        <div class="chrome">
-          <div class="dots"><span></span><span></span><span></span></div>
-          <div class="url">app.baakal.ai/workflows</div>
-        </div>
-        <div class="body-pad" style="display:flex;flex-direction:column;gap:10px;">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--border);">
-            <div>
-              <div style="font-weight:500;font-size:15px;letter-spacing:-0.012em;">Relance : Atelier Brun · 24 800 €</div>
-              <div style="font-family:var(--font-mono);font-size:10.5px;color:var(--primary-deep);text-transform:uppercase;letter-spacing:0.04em;margin-top:4px;">Proposé par le Deal Coach</div>
-            </div>
-            <span style="font-family:var(--font-mono);font-size:10px;color:var(--grey-700);background:var(--paper);border:1px solid var(--border);padding:4px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">En attente</span>
-          </div>
-
-          <div style="display:flex;gap:12px;align-items:stretch;">
-            <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:4px;">
-              <span style="width:9px;height:9px;border-radius:50%;background:var(--primary);flex-shrink:0;"></span>
-              <span style="width:1px;flex:1;background:var(--border-strong);margin-top:4px;"></span>
-            </div>
-            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
-              <div style="font-size:13px;font-weight:500;">Email · Relance du devis</div>
-              <div style="font-size:11px;color:var(--grey-500);margin-top:2px;">Immédiat · depuis alex@atelierbrun.fr</div>
-            </div>
-          </div>
-
-          <div style="display:flex;gap:12px;align-items:stretch;">
-            <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:4px;">
-              <span style="width:9px;height:9px;border-radius:50%;background:var(--primary);flex-shrink:0;"></span>
-              <span style="width:1px;flex:1;background:var(--border-strong);margin-top:4px;"></span>
-            </div>
-            <div style="flex:1;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
-              <div style="font-size:13px;font-weight:500;">Email · Deuxième relance, angle budget</div>
-              <div style="font-size:11px;color:var(--grey-500);margin-top:2px;">J+4 · uniquement si pas de réponse</div>
-            </div>
-          </div>
-
-          <div style="display:flex;gap:8px;">
-            <div style="flex:1;background:var(--paper);border:1px solid #16A34A;border-radius:10px;padding:10px 12px;">
-              <div style="font-family:var(--font-mono);font-size:10px;color:#16A34A;text-transform:uppercase;letter-spacing:0.04em;">S'il répond</div>
-              <div style="font-size:12.5px;line-height:1.45;color:var(--grey-900);margin-top:4px;">Séquence arrêtée, le deal repasse en négociation et la main te revient.</div>
-            </div>
-            <div style="flex:1;background:var(--paper);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
-              <div style="font-family:var(--font-mono);font-size:10px;color:var(--grey-500);text-transform:uppercase;letter-spacing:0.04em;">S'il ignore</div>
-              <div style="font-size:12.5px;line-height:1.45;color:var(--grey-900);margin-top:4px;">J+9 · message LinkedIn court, puis on arrête de le relancer.</div>
-            </div>
-          </div>
-
-          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
-            <span style="background:var(--primary);color:var(--paper);border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:500;">Approuver la séquence</span>
-            <span style="background:var(--paper);border:1px solid var(--border);color:var(--grey-700);border-radius:8px;padding:8px 14px;font-size:12.5px;">Modifier</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ──────── PROSPECTION FEATURE ──────── -->
-  <section class="section" id="prospection">
-    <div class="container feature-block">
-      <div class="feature-text">
-        <span class="eyebrow" data-i18n="prosp.eyebrow">PROSPECTION</span>
-        <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="prosp.title_a">Et quand vous voulez prospecter, </span><em class="accent" data-i18n="prosp.title_em">le système gère</em><span data-i18n="prosp.title_b"> aussi.</span>
-        </h2>
-        <p class="body large" data-i18n="prosp.sub">Campagnes outbound par chat, A/B test automatique, envoi depuis votre propre boîte mail. Et chaque réponse nourrit la mémoire qui améliore tout le reste.</p>
-        <ul class="feature-list" id="prosp-list"></ul>
-      </div>
-
-      <!-- Mockup: chat composer -->
-      <div class="mockup">
-        <div class="chrome">
-          <div class="dots"><span></span><span></span><span></span></div>
-          <div class="url">app.baakal.ai/chat</div>
-        </div>
-        <div class="body-pad" style="display:flex;flex-direction:column;gap:14px;background:var(--paper-2);">
-          <div style="display:flex;gap:10px;align-items:flex-start;">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--lavender);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--ink);">AG</div>
-            <div style="background:var(--paper);border:1px solid var(--border);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;color:var(--ink);max-width:80%;">
-              Cible : DAF cabinets compta 50-200 employes en France. Trigger : levee Q4. Objectif : 10 RDV / semaine.
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;align-items:flex-start;flex-direction:row-reverse;">
-            <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-              <svg width="14" height="14" viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="#FAFAF9"/></svg>
-            </div>
-            <div style="background:var(--primary);color:var(--paper);border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.5;max-width:85%;">
-              Compris. Je génère 3 variantes : un cold email court, un long, une approche LinkedIn-first. Dès que vous validez, j'envoie depuis votre boîte mail et j'arrête toute séquence dont le contact répond.
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
-            <span style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--grey-700);">Variant A · 247 mots</span>
-            <span style="background:var(--paper);border:1px solid var(--primary);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--primary-deep);box-shadow:0 0 0 3px var(--primary-soft);">Variant B · court · 68 mots</span>
-            <span style="background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--grey-700);">Variant C · LinkedIn</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ──────── SYNAPSE 4 AGENTS ──────── -->
-  <section class="section dark" id="synapse">
+  <!-- ──────── MÉMOIRE ──────── -->
+  <!-- Section conservée de l'ancienne landing (demande explicite de Goran,
+       26/09). C'est le seul endroit de la page qui explique pourquoi le
+       produit s'améliore au lieu de rester constant, et c'est l'argument que
+       ni Lemlist ni l'IA native d'un CRM ne peuvent reprendre. -->
+  <section class="section dark" id="memoire">
     <div class="dotgrid" style="position:absolute;inset:0;opacity:0.5;"></div>
     <div class="container" style="position:relative;">
       <div style="max-width:760px;">
-        <span class="eyebrow" data-i18n="synapse.eyebrow">SOUS LE CAPOT · MÉMOIRE SYNAPSE</span>
+        <span class="eyebrow" data-i18n="memoire.eyebrow">SOUS LE CAPOT · MÉMOIRE SYNAPSE</span>
         <h2 class="h-section" style="margin-top:18px; color:var(--paper);">
-          <span data-i18n="synapse.title_a">Plus vous l'utilisez, </span><em class="accent" data-i18n="synapse.title_em">plus il est précis.</em><span data-i18n="synapse.title_b"></span>
+          <span data-i18n="memoire.title_a">Plus vous l'utilisez, </span><em class="accent" data-i18n="memoire.title_em">plus il est précis.</em>
         </h2>
-        <p class="body large" style="margin-top:24px;" data-i18n="synapse.sub">
+        <p class="body large" style="margin-top:24px;" data-i18n="memoire.sub">
           Le système apprend de chaque interaction. Chaque deal relancé, chaque churn évité, chaque upsell détecté crée un pattern réutilisable. Cette mémoire ne se transfère pas, elle crée un avantage qui se renforce avec le temps.
         </p>
       </div>
@@ -616,44 +237,120 @@
     </div>
   </section>
 
-  <!-- ──────── BETA PROGRAM ──────── -->
-  <section class="section" id="beta">
+  <!-- ──────── OUTILS COMPATIBLES ──────── -->
+  <section class="section" id="outils">
     <div class="container">
-      <div style="max-width:720px;">
-        <span class="eyebrow" data-i18n="pricing.eyebrow">TARIF</span>
-        <h2 class="h-section" style="margin-top:18px;">
-          <span data-i18n="pricing.title_a">Un seul plan. </span><em class="accent" data-i18n="pricing.title_em">Le produit complet</em><span data-i18n="pricing.title_b">.</span>
-        </h2>
-        <p class="body large" style="margin-top:24px;" data-i18n="pricing.sub">
-          Pas de palier qui cache la moitié des fonctionnalités derrière un devis. Un prix par siège, tout dedans. La beta reste sur candidature : les équipes qui entrent maintenant gardent 50 % de remise à la sortie publique.
-        </p>
-        <div style="margin-top:36px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
-          <!-- Police sans (pas mono) : en monospace, l'espace fine avant le €
-               prend une chasse pleine et creuse un trou visible à 64px. -->
-          <span style="font-size:clamp(44px,7vw,64px);font-weight:600;letter-spacing:-0.03em;word-spacing:-0.1em;line-height:1;color:var(--ink);" data-i18n="pricing.amount">79 €</span>
-          <span style="font-size:16px;color:var(--grey-700);" data-i18n="pricing.period">par siège et par mois</span>
+      <span class="eyebrow" style="color:var(--primary);" data-i18n="tools.eyebrow">UNE AUTRE MANIÈRE DE GÉNÉRER DU PIPELINE</span>
+      <h2 class="h-section" style="margin-top:18px;">
+        <span data-i18n="tools.title_a">L'acquisition remplit le CRM. </span><em class="accent" data-i18n="tools.title_em">Baakalai en exploite la valeur.</em>
+      </h2>
+      <p class="body large lead" data-i18n="tools.sub">
+        La prospection trouve de nouveaux leads. Baakalai part de votre historique commercial : deals oubliés, clients à développer, comptes à retenir. Les deux approches peuvent se compléter.
+      </p>
+
+      <div class="tools-grid" id="tools-cards"></div>
+
+      <div class="compare reveal">
+        <div class="cols">
+          <div>
+            <h4 data-i18n="tools.cmp_them_t">Lemlist, Apollo</h4>
+            <p data-i18n="tools.cmp_them_d">Leur terrain fort : trouver, enrichir et engager des leads, puis piloter des campagnes outbound.</p>
+          </div>
+          <div class="mine">
+            <h4 data-i18n="tools.cmp_us_t">baakalai</h4>
+            <p data-i18n="tools.cmp_us_d">Notre point d'entrée : mesurer le revenu déjà présent dans le CRM, puis activer deals, upsell, cross-sell et rétention.</p>
+          </div>
         </div>
-        <div style="margin-top:14px;font-family:var(--font-mono);font-size:11.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--grey-500);" data-i18n="pricing.note">Engagement annuel : 2 mois offerts · Founding members beta : −50 %</div>
+        <div class="fine" data-i18n="tools.cmp_fine">Les fonctions se recoupent ; la différence est la priorité donnée au patrimoine commercial existant.</div>
       </div>
-      <div class="beta-grid" id="beta-grid"></div>
+
+      <div class="cta-band reveal">
+        <h3 data-i18n="tools.cta_title">Combien de revenu dort dans votre CRM ?</h3>
+        <a href="diagnostic.html" class="btn btn-primary">
+          <span data-i18n="tools.cta_btn">Calculer mon revenu caché</span>
+          <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </a>
+      </div>
     </div>
   </section>
 
-  <!-- ──────── BOOKING ──────── -->
-  <section class="section dark" id="book">
-    <div class="container booking">
-      <div>
-        <span class="eyebrow" data-i18n="book.eyebrow">CANDIDATER À LA BETA</span>
-        <h2 class="h-section" style="margin-top:18px; color:var(--paper);">
-          <span data-i18n="book.title_a">Vingt minutes pour voir si </span><em class="accent" data-i18n="book.title_em">on peut vous embarquer</em><span data-i18n="book.title_b">.</span>
-        </h2>
-        <p class="body large" style="margin-top:24px;" data-i18n="book.sub">
-          On prend 20 minutes ensemble pour comprendre votre cas. Si baakalai colle, on vous ouvre un accès beta dans la semaine. Sinon, on vous le dit franchement, pas de pitch déguisé.
-        </p>
-        <ul class="feature-list" id="book-points" style="margin-top:32px;"></ul>
-      </div>
-      <div class="booking-iframe">
-        <iframe src="https://calendar.google.com/calendar/appointments/AcZssZ0f9WMJlmt6aqliPaTppk13-TUr3lS6SZcSIGE=?gv=true" style="border: 0" width="100%" height="600" frameborder="0"></iframe>
+  <!-- ──────── TARIF ──────── -->
+  <section class="section paper-2" id="tarif">
+    <div class="container">
+      <span class="eyebrow" style="color:var(--primary);" data-i18n="pricing.eyebrow">UN DIAGNOSTIC GRATUIT. UN TARIF SIMPLE.</span>
+      <h2 class="h-section" style="margin-top:18px;">
+        <span data-i18n="pricing.title_a">Découvrez le potentiel. </span><em class="accent" data-i18n="pricing.title_em">Activez-le avec baakalai.</em>
+      </h2>
+      <p class="body large lead" data-i18n="pricing.sub">
+        Commencez par chiffrer le revenu que votre CRM peut encore révéler. Parlez ensuite à un expert pour voir comment activer les opportunités dans votre équipe.
+      </p>
+
+      <div class="price-split">
+        <div class="offer-card reveal">
+          <span class="tag" data-i18n="pricing.free_tag">HIDDEN REVENUE SCORE</span>
+          <div class="free" data-i18n="pricing.free_amount">Gratuit</div>
+          <p data-i18n="pricing.free_desc">Une estimation de votre revenu caché, sa fiabilité et les premières poches de valeur à examiner.</p>
+          <div class="rule"></div>
+          <span class="tag" data-i18n="pricing.prod_tag">BAAKALAI · ACCÈS PRODUIT</span>
+          <div class="amount">
+            <span class="fig" data-i18n="pricing.amount">79 €</span>
+            <span class="per" data-i18n="pricing.period">HT / utilisateur / mois</span>
+          </div>
+          <p style="margin-top:16px;font-size:13.5px;" data-i18n="pricing.note">Produit complet, aucun module en supplément. Engagement annuel : 2 mois offerts.</p>
+        </div>
+
+        <div>
+          <div class="form-card reveal">
+            <h3 data-i18n="form.title">Parler à un expert baakalai</h3>
+            <p data-i18n="form.sub">Montrez-nous votre contexte. Nous vous recontactons pour un échange sur votre CRM et vos priorités commerciales.</p>
+
+            <form id="expert-form" novalidate>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="f-name" data-i18n="form.f_name">NOM</label>
+                  <input id="f-name" name="name" type="text" autocomplete="name" required maxlength="120" data-i18n-ph="form.f_name_ph" placeholder="Votre nom">
+                </div>
+                <div class="field">
+                  <label for="f-email" data-i18n="form.f_email">EMAIL PROFESSIONNEL</label>
+                  <input id="f-email" name="email" type="email" autocomplete="email" required maxlength="200" data-i18n-ph="form.f_email_ph" placeholder="vous@entreprise.fr">
+                </div>
+                <div class="field">
+                  <label for="f-company" data-i18n="form.f_company">ENTREPRISE</label>
+                  <input id="f-company" name="company" type="text" autocomplete="organization" maxlength="160" data-i18n-ph="form.f_company_ph" placeholder="Nom de votre société">
+                </div>
+                <div class="field">
+                  <label for="f-crm" data-i18n="form.f_crm">VOTRE CRM</label>
+                  <input id="f-crm" name="crm" type="text" maxlength="80" data-i18n-ph="form.f_crm_ph" placeholder="HubSpot, Salesforce...">
+                </div>
+              </div>
+
+              <!-- Champ piège : un humain ne le voit pas, les robots le
+                   remplissent. Le serveur répond 200 sans rien enregistrer,
+                   pour ne pas leur apprendre la règle. aria-hidden et
+                   tabindex le sortent du clavier et des lecteurs d'écran. -->
+              <div class="hp-field" aria-hidden="true">
+                <label for="f-website">Site web</label>
+                <input id="f-website" name="website" type="text" tabindex="-1" autocomplete="off">
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                <span data-i18n="form.submit">Demander un échange avec un expert</span>
+                <svg class="btn-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+              </button>
+              <div class="form-note" data-i18n="form.note">Un échange concret sur votre CRM et vos priorités commerciales.</div>
+              <div class="form-status" id="form-status" role="status" aria-live="polite" hidden></div>
+            </form>
+          </div>
+
+          <div class="calendar-block reveal">
+            <h4 data-i18n="cal.title">Vous savez déjà quand vous êtes disponible ?</h4>
+            <p data-i18n="cal.sub">Choisissez directement votre créneau, sans passer par le formulaire.</p>
+            <iframe
+              src="https://calendar.google.com/calendar/appointments/AcZssZ0f9WMJlmt6aqliPaTppk13-TUr3lS6SZcSIGE=?gv=true"
+              title="Agenda de réservation baakalai"
+              loading="lazy"></iframe>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -669,25 +366,6 @@
     </div>
   </section>
 
-  <!-- ──────── BLOG ──────── -->
-  <section class="section paper-2" id="blog">
-    <div class="container">
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:24px;">
-        <div style="max-width:680px;">
-          <span class="eyebrow" data-i18n="blog.eyebrow">JOURNAL</span>
-          <h2 class="h-section" style="margin-top:18px;">
-            <span data-i18n="blog.title_a">Ce qu'on apprend </span><em class="accent" data-i18n="blog.title_em">en construisant</em><span data-i18n="blog.title_b">.</span>
-          </h2>
-          <p class="body large" style="margin-top:24px;" data-i18n="blog.sub">
-            Notes de terrain, expérimentations, retours bruts de nos premiers utilisateurs.
-          </p>
-        </div>
-        <a href="#blog" class="btn btn-ghost" data-i18n="blog.all">Voir tous les articles</a>
-      </div>
-      <div class="blog-grid" id="blog-grid"></div>
-    </div>
-  </section>
-
   <!-- ──────── FOOTER ──────── -->
   <footer>
     <div class="container">
@@ -697,31 +375,31 @@
             <img src="assets/synapse-mark-on-dark.svg" width="28" height="28" alt="">
             <span style="font-weight:600;font-size:18px;letter-spacing:-0.022em;color:var(--paper);">baakalai</span>
           </div>
-          <p style="font-size:14.5px;line-height:1.6;max-width:340px;" data-i18n="footer.blurb">Le système IA qui exploite votre CRM pour générer du CA : réactivation, upsell, churn, nettoyage.</p>
+          <p style="font-size:14.5px;line-height:1.6;max-width:340px;" data-i18n="footer.blurb">Le système IA qui exploite votre CRM pour générer du CA : réactivation, upsell, churn, nettoyage.</p>
         </div>
         <div>
           <h5 data-i18n="footer.product">PRODUIT</h5>
           <ul>
             <li><a href="how-it-works.html" data-i18n="footer.links.how">Comment ça marche</a></li>
-            <li><a href="#crm-intelligence" data-i18n="footer.links.crm">Ce que fait le système</a></li>
-            <li><a href="#activation" data-i18n="footer.links.activation">Automatisation</a></li>
-            <li><a href="#prospection" data-i18n="footer.links.prosp">Prospection</a></li>
-            <li><a href="#synapse" data-i18n="footer.links.synapse">Sous le capot</a></li>
-            <li><a href="#beta" data-i18n="footer.links.pricing">Tarif</a></li>
+            <li><a href="diagnostic.html" data-i18n="footer.links.diag">Diagnostic gratuit</a></li>
+            <li><a href="#action" data-i18n="footer.links.action">Ce que fait baakalai</a></li>
+            <li><a href="#outils" data-i18n="footer.links.tools">Outils compatibles</a></li>
+            <li><a href="#memoire" data-i18n="footer.links.memoire">Sous le capot</a></li>
+            <li><a href="#tarif" data-i18n="footer.links.pricing">Tarif</a></li>
           </ul>
         </div>
         <div>
           <h5 data-i18n="footer.company">ENTREPRISE</h5>
           <ul>
             <li><a href="#" data-i18n="footer.links.about">À propos</a></li>
-            <li><a href="#blog" data-i18n="footer.links.blog">Blog</a></li>
-            <li><a href="#" data-i18n="footer.links.contact">Contact</a></li>
+            <li><a href="#tarif" data-i18n="footer.links.contact">Contact</a></li>
             <li><a href="#" data-i18n="footer.links.careers">Recrutement</a></li>
           </ul>
         </div>
         <div>
           <h5 data-i18n="footer.legal">LÉGAL</h5>
           <ul>
+            <li><a href="#" data-i18n="footer.links.mentions">Mentions légales</a></li>
             <li><a href="#" data-i18n="footer.links.terms">CGU</a></li>
             <li><a href="#" data-i18n="footer.links.privacy">Confidentialité</a></li>
             <li><a href="#" data-i18n="footer.links.dpa">DPA · RGPD</a></li>
@@ -737,41 +415,6 @@
 
   <script src="i18n.js"></script>
   <script>
-    // ─── Hero mockup typing loop ─────────────────────────
-    (function () {
-      const target = document.getElementById('hero-typed');
-      if (!target) return;
-      const lines = {
-        fr: "23 deals stagnants détectés, 74 800 € de pipe récupérable. Atelier Brun (24 800 €, stagnant 18j), le même angle a réveillé 3 deals similaires. Je relance ?",
-        en: "23 stagnant deals detected, €74,800 in recoverable pipeline. Atelier Brun (€24,800, stagnant 18d), same angle reactivated 3 similar deals. Shall I follow up?"
-      };
-      let i = 0, mode = 'typing', timer;
-      function tick() {
-        const lang = (localStorage.getItem('baakalai-lang') || 'fr');
-        const text = lines[lang] || lines.fr;
-        if (mode === 'typing') {
-          if (i < text.length) {
-            i = Math.min(text.length, i + 2);
-            target.textContent = text.slice(0, i);
-            timer = setTimeout(tick, 28);
-          } else {
-            mode = 'pause';
-            timer = setTimeout(tick, 4500);
-          }
-        } else if (mode === 'pause') {
-          mode = 'reset';
-          target.textContent = '';
-          i = 0;
-          timer = setTimeout(tick, 700);
-        } else {
-          mode = 'typing';
-          tick();
-        }
-      }
-      tick();
-    })();
-  </script>
-  <script>
     // ─── i18n engine ─────────────────────────────────────
     const STORE_KEY = 'baakalai-lang';
     let lang = localStorage.getItem(STORE_KEY) || 'fr';
@@ -784,13 +427,18 @@
       const dict = window.I18N[lang];
       document.documentElement.lang = lang;
 
-      // Static [data-i18n] elements
       document.querySelectorAll('[data-i18n]').forEach(el => {
         const v = get(el.dataset.i18n, dict);
         if (v != null) el.textContent = v;
       });
 
-      // Lang toggle active state
+      // Les placeholders passent par un attribut distinct : `textContent`
+      // écraserait la valeur saisie par le visiteur au changement de langue.
+      document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+        const v = get(el.dataset.i18nPh, dict);
+        if (v != null) el.placeholder = v;
+      });
+
       document.querySelectorAll('.lang-toggle button').forEach(b => {
         b.classList.toggle('active', b.dataset.lang === lang);
       });
@@ -799,30 +447,41 @@
     }
 
     function renderDynamic(d) {
-      // Flow steps
-      const flow = document.getElementById('flow');
-      flow.innerHTML = d.how.steps.map((s, i) => `
-        <div class="flow-step reveal">
-          <div class="num">${String(i + 1).padStart(2, '0')}</div>
-          <h4>${s.t}</h4>
+      // Étapes du diagnostic
+      document.getElementById('diag-steps').innerHTML = d.diag.steps.map((s, i) => `
+        <div class="reveal">
+          <h4>${i + 1}. ${s.t}</h4>
           <p>${s.d}</p>
         </div>
       `).join('');
 
-      // Feature lists
-      document.getElementById('hrs-list').innerHTML = d.hrs.list.map(t => `<li>${t}</li>`).join('');
-      document.getElementById('crm-list').innerHTML = d.crm.list.map(t => `<li>${t}</li>`).join('');
-      document.getElementById('activation-list').innerHTML = d.activation.list.map(t => `<li>${t}</li>`).join('');
-      document.getElementById('prosp-list').innerHTML = d.prosp.list.map(t => `<li>${t}</li>`).join('');
+      // Cartes 01 / 02 / 03
+      document.getElementById('action-cards').innerHTML = d.action.cards.map((c, i) => `
+        <div class="num-card reveal">
+          <span class="num">${String(i + 1).padStart(2, '0')}</span>
+          <h4>${c.t}</h4>
+          <p>${c.d}</p>
+          <div class="foot-spacer"></div>
+          <div class="foot">${c.foot}</div>
+        </div>
+      `).join('');
 
-      // Agents
+      // Cartes de preuve (2 x 2)
+      document.getElementById('proof-cards').innerHTML = d.proof.cards.map(c => `
+        <div class="duo-card reveal">
+          <h4>${c.t}</h4>
+          <p>${c.d}</p>
+        </div>
+      `).join('');
+
+      // Mémoire : 4 cartes
       const icons = {
         0: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
         1: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>`,
         2: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.2 4.2l4.3 4.3M15.5 15.5l4.3 4.3M1 12h6M17 12h6M4.2 19.8l4.3-4.3M15.5 8.5l4.3-4.3"/></svg>`,
         3: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
       };
-      document.getElementById('agents-grid').innerHTML = d.synapse.agents.map((a, i) => `
+      document.getElementById('agents-grid').innerHTML = d.memoire.agents.map((a, i) => `
         <div class="agent-card reveal">
           <span class="agent-tag">${a.tag}</span>
           <div class="agent-icon">${icons[i]}</div>
@@ -831,26 +490,14 @@
         </div>
       `).join('');
 
-      // Pricing tiers
-      const check = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-      document.getElementById('beta-grid').innerHTML = `
-        <div class="beta-card reveal">
-          <div class="beta-card-head">
-            <span class="beta-tag">${lang === 'en' ? 'WHAT YOU GET' : 'CE QUE VOUS OBTENEZ'}</span>
-          </div>
-          <ul class="feats">${d.pricing.perks.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
+      // Outils compatibles
+      document.getElementById('tools-cards').innerHTML = d.tools.cards.map((c, i) => `
+        <div class="tool-card reveal">
+          <h4><span class="n">${i + 1}</span>${c.t}</h4>
+          <div class="main">${c.main}</div>
+          <div class="sub">${c.sub}</div>
         </div>
-        <div class="beta-card reveal">
-          <div class="beta-card-head">
-            <span class="beta-tag">${lang === 'en' ? 'BETA REQUIREMENTS' : 'PRÉ-REQUIS BETA'}</span>
-          </div>
-          <ul class="feats">${d.pricing.expect.map(f => `<li>${check}<span>${f}</span></li>`).join('')}</ul>
-          <a href="#book" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:24px;">${d.pricing.cta}</a>
-        </div>
-      `;
-
-      // Booking points
-      document.getElementById('book-points').innerHTML = d.book.points.map(p => `<li>${p}</li>`).join('');
+      `).join('');
 
       // FAQ
       const plus = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
@@ -861,18 +508,6 @@
         </details>
       `).join('');
 
-      // Blog
-      const arrow = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>`;
-      document.getElementById('blog-grid').innerHTML = d.blog.posts.map(p => `
-        <a href="#" class="blog-card reveal">
-          <div class="meta"><span class="tag">${p.tag}</span><span>${p.date}</span></div>
-          <h4>${p.t}</h4>
-          <p>${p.d}</p>
-          <span class="read">${d.blog.read}${arrow}</span>
-        </a>
-      `).join('');
-
-      // Re-arm reveals after dynamic insertion
       armReveals();
     }
 
@@ -896,6 +531,61 @@
       }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
       document.querySelectorAll('.reveal').forEach(el => io.observe(el));
     }
+
+    // ─── Formulaire « Parler à un expert » ──────────────
+    // La landing est servie par Cloudflare Pages, l'API par Railway : l'appel
+    // est cross-origin, et baakal.ai est déjà dans les origines autorisées
+    // côté serveur (server.js). Même constante que diagnostic.html.
+    (function () {
+      const API = 'https://app.baakal.ai';
+      const form = document.getElementById('expert-form');
+      if (!form) return;
+      const statusEl = document.getElementById('form-status');
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const submitLabel = submitBtn.querySelector('span');
+
+      function say(kind, key) {
+        statusEl.className = 'form-status ' + kind;
+        statusEl.textContent = get('form.' + key, window.I18N[lang]) || '';
+        statusEl.hidden = false;
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(form).entries());
+
+        if (!String(data.name || '').trim() || !form.querySelector('#f-email').checkValidity()) {
+          say('ko', 'err_fields');
+          return;
+        }
+
+        const original = submitLabel.textContent;
+        submitBtn.disabled = true;
+        submitLabel.textContent = get('form.sending', window.I18N[lang]) || original;
+        statusEl.hidden = true;
+
+        try {
+          const res = await fetch(API + '/api/public/contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...data, lang }),
+          });
+          if (res.ok) {
+            form.reset();
+            say('ok', 'ok');
+          } else {
+            // 429 = trop de demandes depuis la même adresse. Le dire, plutôt
+            // que de renvoyer une erreur générique qui pousse à réessayer.
+            say('ko', res.status === 429 ? 'err_rate' : 'err_server');
+          }
+        } catch {
+          say('ko', 'err_server');
+        } finally {
+          submitBtn.disabled = false;
+          submitLabel.textContent = original;
+        }
+      });
+    })();
 
     // Initial render
     applyI18n();

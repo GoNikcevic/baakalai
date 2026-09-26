@@ -152,6 +152,9 @@ app.use('/api/webhooks', require('./routes/webhooks'));
 // Diagnostic CRM public (lead magnet, sans compte · rate-limité par IP dans la route)
 app.use('/api/public/diagnostic', require('./routes/public-diagnostic'));
 
+// Formulaire « Parler à un expert » de la landing (public · rate-limité par IP dans la route)
+app.use('/api/public/contact', require('./routes/public-contact'));
+
 // Désinscription emails (public · le lien arrive en boîte mail, token HMAC, pas de login)
 app.use('/api/public/email-prefs', require('./routes/email-prefs'));
 

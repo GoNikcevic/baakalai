@@ -387,7 +387,7 @@ const AGENTS_EN = [
 // ─── DATA · UI ──────────────────────────────────────────────
 
 const UI_FR = {
-  navHow: 'Comment ça marche', navPricing: 'Tarif', navLogin: 'Se connecter', navTry: 'Rejoindre la beta →',
+  navHow: 'Comment ça marche', navPricing: 'Tarif', navLogin: 'Se connecter', navTry: 'Diagnostic gratuit →',
   heroEyebrow: 'BAAKALAI · COMMENT ÇA MARCHE',
   heroT1: 'Une ', heroEm: 'boucle', heroT2: ' qui se referme.', heroT3: 'Pas une pile d’outils.',
   heroSub: 'baakalai lit ton CRM, détecte les deals qui dorment, propose une séquence de relance, attend ton feu vert, envoie depuis ta boîte Gmail ou Outlook, et s’arrête dès qu’on te répond. Ce qu’il apprend nourrit la détection suivante. Douze agents qui font le travail qu’un RevOps ferait.',
@@ -416,12 +416,12 @@ const UI_FR = {
   agentWord: 'AGENT',
   ctaCaption: 'prêt à voir ta propre boucle tourner ?',
   ctaTitle: 'Connecte ton CRM et ta boîte : baakalai prend le relais.',
-  ctaButton: 'Rejoindre la beta',
-  ctaNote: 'Beta sur candidature · 20 minutes avec un fondateur',
+  ctaButton: 'Calculer mon revenu caché',
+  ctaNote: 'Diagnostic gratuit · Connexion en lecture seule · Sans compte à créer',
 };
 
 const UI_EN = {
-  navHow: 'How it works', navPricing: 'Pricing', navLogin: 'Sign in', navTry: 'Join the beta →',
+  navHow: 'How it works', navPricing: 'Pricing', navLogin: 'Sign in', navTry: 'Free diagnostic →',
   heroEyebrow: 'BAAKALAI · HOW IT WORKS',
   heroT1: 'A ', heroEm: 'loop', heroT2: ' that closes.', heroT3: 'Not a stack of tools.',
   heroSub: 'baakalai reads your CRM, spots sleeping deals, drafts a follow-up sequence, waits for your go, sends from your own Gmail or Outlook inbox, and stops the moment someone replies. What it learns feeds the next detection. Twelve agents doing the work a RevOps hire would do.',
@@ -450,8 +450,8 @@ const UI_EN = {
   agentWord: 'AGENT',
   ctaCaption: 'ready to watch your own loop run?',
   ctaTitle: 'Connect your CRM and your inbox: baakalai takes over.',
-  ctaButton: 'Join the beta',
-  ctaNote: 'Beta by application · 20 minutes with a founder',
+  ctaButton: 'Calculate my hidden revenue',
+  ctaNote: 'Free diagnostic · Read-only connection · No account to create',
 };
 
 function getData(lang) {
@@ -688,13 +688,13 @@ function pageHTML(d) {
     <a href="/" class="c-wordmark">${markSvg}<span>baakalai</span></a>
     <div class="c-nav-links">
       <a href="#">${esc(t.navHow)}</a>
-      <a href="/#beta" class="dim">${esc(t.navPricing)}</a>
+      <a href="/#tarif" class="dim">${esc(t.navPricing)}</a>
       <a href="https://app.baakal.ai" class="dim">${esc(t.navLogin)}</a>
       <div class="c-lang-switch" role="group">
         <button data-lang="fr" class="${d.lang === 'fr' ? 'active' : ''}">FR</button>
         <button data-lang="en" class="${d.lang === 'en' ? 'active' : ''}">EN</button>
       </div>
-      <a href="/#book" class="c-cta-pill">${esc(t.navTry)}</a>
+      <a href="/diagnostic.html" class="c-cta-pill">${esc(t.navTry)}</a>
     </div>
   </nav>
 
@@ -737,7 +737,7 @@ function pageHTML(d) {
   <section class="c-cta">
     <div class="c-eyebrow" style="margin-bottom:14px;">${esc(t.ctaCaption)}</div>
     <h3>${esc(t.ctaTitle)}</h3>
-    <a href="/#book" class="btn">${esc(t.ctaButton)}</a>
+    <a href="/diagnostic.html" class="btn">${esc(t.ctaButton)}</a>
     <div class="note">${esc(t.ctaNote)}</div>
   </section>`;
 }

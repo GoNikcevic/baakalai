@@ -203,6 +203,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 
 /* ─── Nav ────────────────────────────────────────────────── */
+/* Pilule sombre (arbitrage Goran 2026-09-26). Le violet est déjà l'accent de
+   toutes les sections (eyebrows, demi-titres, chiffres du hero) : un header
+   violet plein leur ferait concurrence et noierait son propre CTA. Sur fond
+   noir, le violet redevient une couleur d'action et ne sert qu'à ça.
+   Les trois pages de la landing partagent cette nav : toute modification ici
+   se voit sur index, how-it-works et diagnostic. */
 .nav {
   position: fixed;
   top: 16px;
@@ -213,12 +219,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   align-items: center;
   gap: 4px;
   padding: 8px 8px 8px 18px;
-  background: rgba(250, 250, 249, 0.85);
+  background: rgba(10, 10, 10, 0.86);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(250, 250, 249, 0.12);
   border-radius: 999px;
-  box-shadow: 0 4px 12px -2px rgba(10, 10, 10, 0.06);
+  box-shadow: 0 8px 24px -6px rgba(10, 10, 10, 0.34);
 }
 .nav .brand {
   display: flex;
@@ -228,6 +234,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   font-weight: 600;
   font-size: 15px;
   letter-spacing: -0.022em;
+  color: var(--paper);
 }
 .nav .links {
   display: flex;
@@ -237,17 +244,40 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .nav .links a {
   padding: 6px 10px;
   font-size: 13px;
-  color: var(--grey-700);
+  color: rgba(250, 250, 249, 0.68);
   border-radius: 999px;
   transition: all 200ms;
   white-space: nowrap;
 }
-.nav .links a:hover { color: var(--ink); background: var(--paper-2); }
+.nav .links a:hover { color: var(--paper); background: rgba(250, 250, 249, 0.09); }
+
+/* Boutons de la nav : ils vivent sur fond sombre alors que .btn-primary et
+   .btn-ghost sont calibrés pour le fond clair. Redéfinis ici plutôt que via
+   une classe .section.dark, la nav n'étant pas une section.
+   Tailles et espacements ici et non en style inline : sur mobile il faut
+   pouvoir les réduire, et une règle de media query ne bat pas un attribut
+   style sans !important. */
+.nav .btn-accent {
+  background: var(--primary);
+  color: #FFFFFF;
+  font-weight: 600;
+  padding: 9px 16px;
+  font-size: 13.5px;
+}
+.nav .btn-accent:hover { background: #7C68FF; transform: none; }
+.nav .btn-ghost {
+  border-color: rgba(250, 250, 249, 0.26);
+  color: var(--paper);
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.nav .btn-ghost:hover { background: rgba(250, 250, 249, 0.09); }
+.nav .actions { display: flex; gap: 8px; align-items: center; }
 
 .lang-toggle {
   display: inline-flex;
-  background: var(--paper-2);
-  border: 1px solid var(--border);
+  background: rgba(250, 250, 249, 0.08);
+  border: 1px solid rgba(250, 250, 249, 0.14);
   border-radius: 999px;
   padding: 2px;
   font-family: var(--font-mono);
@@ -260,12 +290,12 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .lang-toggle button {
   padding: 5px 10px;
   border-radius: 999px;
-  color: var(--grey-500);
+  color: rgba(250, 250, 249, 0.6);
   transition: all 200ms;
 }
 .lang-toggle button.active {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 /* ─── Animated Synapse mark (hero) ──────────────────────── */
@@ -946,4 +976,595 @@ footer {
 @media (max-width: 1100px) {
   .nav .links a { padding: 5px 8px; font-size: 12px; }
   .nav { gap: 2px; padding: 6px 6px 6px 14px; }
+}
+
+/* ============================================================
+   LANDING 2026-09 · composants de la maquette
+   Refonte du 26/09 : diagnostic -> action -> preuve -> outils -> tarif.
+   Tout ce qui suit est nouveau et ne reprend aucune classe existante :
+   ajouter ici plutôt qu'au milieu du fichier garde la cascade lisible.
+   ============================================================ */
+
+/* Paragraphe d'introduction sous un titre de section. Borné en largeur :
+   au-delà de ~72 caractères par ligne l'oeil perd le début de la ligne
+   suivante, et ces intros font toutes 2 ou 3 lignes. */
+.lead { max-width: 820px; margin-top: 22px; }
+
+/* Titre du hero. Deux écarts volontaires avec .h-display :
+
+   1. Une taille plus basse. À 88px sur une colonne de ~640px, le titre part
+      sur cinq lignes et la phrase de tension se retrouve coupée en plein
+      milieu d'un mot.
+   2. La phrase accentuée passe en display:block. Un <br> réglerait le cas
+      français et casserait l'anglais (ou l'inverse) : la coupe correcte
+      dépend de la longueur de la traduction, alors que « la seconde phrase
+      commence à la ligne » est vrai dans les deux langues. */
+.h-display--hero { font-size: clamp(38px, 4.6vw, 66px); line-height: 1.02; }
+.hero h1 .accent { display: block; }
+/* Même règle pour les titres de section : la maquette met partout la phrase
+   accentuée sur sa propre ligne. C'est ce qui donne le rythme « constat noir
+   puis promesse violette » d'une section à l'autre. */
+.h-section .accent { display: block; }
+/* Le surlignage de .hero h1 em.accent est calibré pour un fragment en fin de
+   ligne ; sur un bloc entier il barre toute la largeur. La maquette n'en a
+   pas, le violet porte déjà l'accent. */
+.hero h1 em.accent::after { display: none; }
+
+/* ─── Hero · carte de diagnostic ─────────────────────────── */
+.diag-card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 18px 50px -18px rgba(10, 10, 10, 0.18);
+}
+.diag-card .chrome {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--border);
+}
+.diag-card .chrome .dots { display: flex; gap: 6px; }
+.diag-card .chrome .dots span {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--lavender);
+}
+.diag-card .chrome .url {
+  flex: 1;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--grey-500);
+}
+.diag-card .pad { padding: 26px 24px 22px; }
+.diag-card .amount {
+  font-size: clamp(38px, 5vw, 52px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: var(--primary);
+  margin-top: 14px;
+}
+.diag-card .amount-label {
+  font-size: 15px;
+  color: var(--ink);
+  margin-top: 12px;
+}
+.diag-card .amount-conf {
+  font-size: 12.5px;
+  color: var(--grey-500);
+  margin-top: 6px;
+}
+.diag-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--primary-softer);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+.diag-row .t { font-size: 14.5px; font-weight: 500; color: var(--ink); }
+.diag-row .s { font-size: 12.5px; color: var(--grey-500); margin-top: 4px; }
+.diag-row .v {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+/* Mention obligatoire : le hero affiche un montant, il doit dire dans le même
+   cadre que ce montant est un exemple. Ne jamais la retirer ni la sortir de
+   la carte, elle n'a de valeur qu'au contact du chiffre. */
+.diag-card .disclaimer {
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grey-400);
+}
+
+/* ─── Bandeau de statistiques ────────────────────────────── */
+.stat-band {
+  background: var(--ink);
+  border-radius: 20px;
+  padding: clamp(28px, 4vw, 44px);
+  color: var(--paper);
+}
+.stat-band h3 {
+  font-size: clamp(19px, 2.4vw, 25px);
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1.3;
+}
+.stat-band .items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 32px;
+}
+.stat-band .item { display: flex; gap: 20px; align-items: flex-start; }
+.stat-band .fig {
+  font-size: clamp(30px, 4vw, 42px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.stat-band .item p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(250, 250, 249, 0.82);
+}
+.stat-band .src {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(250, 250, 249, 0.48);
+}
+
+/* ─── Étapes numérotées (1 / 2 / 3) ──────────────────────── */
+.steps-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  margin-top: 56px;
+}
+.steps-3 h4 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.steps-3 p {
+  margin-top: 10px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--grey-700);
+}
+
+/* ─── Encadré d'explication ──────────────────────────────── */
+.note-box {
+  background: var(--paper-2);
+  border-radius: 20px;
+  padding: clamp(28px, 4vw, 44px);
+  margin-top: 64px;
+}
+.note-box.soft { background: var(--primary-softer); }
+.note-box h3 {
+  font-size: clamp(20px, 2.6vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.024em;
+  margin-top: 14px;
+}
+.note-box p {
+  margin-top: 16px;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--grey-900);
+  max-width: 880px;
+}
+.note-box .fine {
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--grey-500);
+}
+
+/* ─── Cartes numérotées 01 / 02 / 03 ─────────────────────── */
+.num-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 56px;
+}
+.num-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px;
+  transition: border-color 200ms cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+.num-card:hover { border-color: var(--border-strong); }
+.num-card .num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--primary);
+}
+.num-card h4 {
+  margin-top: 18px;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.num-card > p {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--grey-900);
+}
+/* Le pied de carte est poussé en bas par ce margin-top auto : sans lui, les
+   trois filets se retrouvent à trois hauteurs différentes dès que les textes
+   ne font pas le même nombre de lignes, ce qui arrive à chaque traduction. */
+.num-card .foot {
+  margin-top: auto;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--grey-500);
+}
+.num-card .foot-spacer { min-height: 28px; }
+
+/* ─── Bandeau de conclusion sombre ───────────────────────── */
+.dark-band {
+  background: var(--ink);
+  border-radius: 20px;
+  padding: clamp(26px, 3.4vw, 38px);
+  margin-top: 40px;
+  color: var(--paper);
+}
+.dark-band h3 {
+  font-size: clamp(19px, 2.4vw, 25px);
+  font-weight: 600;
+  letter-spacing: -0.022em;
+}
+.dark-band p {
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(250, 250, 249, 0.76);
+}
+
+/* ─── Grille de cartes 2 x 2 ─────────────────────────────── */
+.duo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 56px;
+}
+.duo-card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px;
+  transition: border-color 200ms cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+.duo-card:hover { border-color: var(--border-strong); }
+.duo-card h4 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.duo-card p {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--grey-700);
+}
+
+/* ─── Outils compatibles ─────────────────────────────────── */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 56px;
+}
+.tool-card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 26px;
+}
+.tool-card h4 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.tool-card h4 .n {
+  font-family: var(--font-mono);
+  color: var(--primary);
+  margin-right: 8px;
+}
+.tool-card .main {
+  margin-top: 18px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.tool-card .sub {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--grey-500);
+}
+
+/* ─── Comparatif ─────────────────────────────────────────── */
+.compare {
+  background: var(--paper-2);
+  border-radius: 20px;
+  padding: clamp(26px, 3.4vw, 40px);
+  margin-top: 24px;
+}
+.compare .cols {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 40px;
+}
+.compare h4 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.compare .mine h4 { color: var(--primary); }
+.compare p {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--grey-900);
+}
+.compare .fine {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-strong);
+  font-size: 13.5px;
+  color: var(--grey-500);
+}
+
+/* ─── Bandeau d'appel à l'action ─────────────────────────── */
+.cta-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  background: var(--primary-softer);
+  border-radius: 20px;
+  padding: clamp(26px, 3.4vw, 40px);
+  margin-top: 40px;
+}
+.cta-band h3 {
+  font-size: clamp(20px, 2.6vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.024em;
+}
+
+/* ─── Tarif : carte de prix + formulaire ─────────────────── */
+.price-split {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 24px;
+  margin-top: 56px;
+  align-items: start;
+}
+.offer-card {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 20px;
+  padding: 32px;
+}
+.offer-card .tag {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lavender);
+}
+.offer-card .free {
+  margin-top: 16px;
+  font-size: clamp(34px, 4.4vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.offer-card p {
+  margin-top: 18px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(250, 250, 249, 0.78);
+}
+.offer-card .rule {
+  height: 1px;
+  background: rgba(250, 250, 249, 0.16);
+  margin: 30px 0 26px;
+}
+.offer-card .amount {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+/* Police sans et non mono : en monospace l'espace fine avant le € prend une
+   chasse pleine et creuse un trou visible à cette taille. */
+.offer-card .amount .fig {
+  font-size: clamp(34px, 4.4vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  word-spacing: -0.1em;
+  line-height: 1;
+}
+.offer-card .amount .per {
+  font-size: 15px;
+  color: rgba(250, 250, 249, 0.72);
+}
+
+.form-card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+}
+.form-card h3 {
+  font-size: clamp(20px, 2.4vw, 25px);
+  font-weight: 600;
+  letter-spacing: -0.024em;
+}
+.form-card > p {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--grey-700);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 26px;
+}
+.field label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grey-700);
+  margin-bottom: 8px;
+}
+.field input {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 14.5px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.field input::placeholder { color: var(--grey-400); }
+.field input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+/* Champ piège anti-robot : masqué sans display:none, que certains robots
+   savent détecter, et retiré du parcours clavier et des lecteurs d'écran. */
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+/* white-space: normal annule le nowrap de .btn. Le libellé « Demander un
+   échange avec un expert » fait ~300px sur une seule ligne : en nowrap il
+   impose sa largeur à toute la colonne de la grille et fait déborder la page
+   de 19px sous 400px de large. */
+.form-card button[type="submit"] {
+  width: 100%;
+  justify-content: center;
+  margin-top: 24px;
+  white-space: normal;
+  text-align: center;
+}
+.form-note {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--grey-500);
+}
+.form-status {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 1.55;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.form-status.ok { background: var(--success-soft); color: #14532D; }
+.form-status.ko { background: var(--danger-soft); color: #7F1D1D; }
+.form-status[hidden] { display: none; }
+
+/* Agenda sous le formulaire : le formulaire capte ceux qui ne savent pas
+   encore quand ils sont libres, l'agenda ceux qui le savent déjà. */
+.calendar-block {
+  margin-top: 24px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 26px 26px 10px;
+}
+.calendar-block h4 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.calendar-block p {
+  margin-top: 8px;
+  margin-bottom: 18px;
+  font-size: 14.5px;
+  color: var(--grey-700);
+}
+/* 500px et non 600 : l'écran de choix du rendez-vous que Google rend au
+   départ tient en ~360px, et le reste était du vide. L'étape suivante (la
+   grille de créneaux) est plus haute, mais l'iframe défile toute seule. */
+.calendar-block iframe {
+  width: 100%;
+  height: 500px;
+  border: 0;
+  display: block;
+  border-radius: 12px;
+}
+
+/* ─── Responsive des composants de la refonte ────────────── */
+@media (max-width: 1000px) {
+  .price-split { grid-template-columns: 1fr; }
+  .compare .cols { grid-template-columns: 1fr; gap: 28px; }
+}
+
+@media (max-width: 900px) {
+  .steps-3, .num-cards, .duo-grid, .tools-grid { grid-template-columns: 1fr; gap: 24px; }
+  .stat-band .items { grid-template-columns: 1fr; gap: 28px; }
+  .note-box, .cta-band { margin-top: 44px; }
+  .num-card .foot-spacer { display: none; }
+  .form-grid { grid-template-columns: 1fr; }
+  .calendar-block iframe { height: 520px; }
+}
+
+@media (max-width: 560px) {
+  .diag-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .stat-band .item { flex-direction: column; gap: 10px; }
+  .cta-band { flex-direction: column; align-items: flex-start; }
+
+  /* La nav est centrée par translateX(-50%) : si elle est plus large que
+     l'écran, elle déborde des DEUX côtés et la moitié gauche devient
+     inatteignable. Le mot-symbole suffit à ce format, le nom écrit part. */
+  .nav {
+    gap: 6px;
+    padding: 6px 6px 6px 10px;
+    max-width: calc(100vw - 20px);
+  }
+  .nav .brand { padding-right: 2px; }
+  .nav .brand span { display: none; }
+  .nav .btn-accent { padding: 8px 12px; font-size: 12.5px; }
+  .nav .btn-ghost { padding: 7px 11px; font-size: 12.5px; }
 }
