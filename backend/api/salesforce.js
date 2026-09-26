@@ -71,9 +71,14 @@ async function sfFetch(instanceUrl, accessToken, endpoint, options = {}) {
     if (/^\s*</.test(body)) {
       body = transient ? 'temporarily unavailable (maintenance)' : `HTML error page (${body.length} chars)`;
     }
+    // isCrmUpstreamError : un 401/403 Salesforce ne doit JAMAIS devenir un 401/403
+    // de l'API Baakalai elle-même · le frontend traite tout 401 comme « ma session
+    // Baakalai a expiré » (api-client.js) et déconnecte l'utilisateur — alors que
+    // le vrai problème est côté Salesforce (session invalide, permissions, org
+    // fraîche mal configurée). cf. middleware/error-handler.js.
     throw Object.assign(
       new Error(`Salesforce API ${res.status}: ${body}`),
-      { status: res.status, transient }
+      { status: res.status, transient, isCrmUpstreamError: true }
     );
   }
 

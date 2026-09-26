@@ -26,9 +26,12 @@ async function hubspotFetch(accessToken, endpoint, options = {}) {
 
     if (!res.ok) {
       const body = await res.text();
+      // isCrmUpstreamError : cf. le même commentaire dans api/salesforce.js · un
+      // 401/403 HubSpot ne doit pas devenir un 401/403 Baakalai (déconnexion
+      // erronée de l'utilisateur pour un problème côté CRM, pas Baakalai).
       throw Object.assign(
         new Error(`HubSpot API ${res.status}: ${body}`),
-        { status: res.status }
+        { status: res.status, isCrmUpstreamError: true }
       );
     }
 
