@@ -1565,7 +1565,7 @@
   },
   "wizard": {
     "step1Title": "Your company",
-    "step1Desc": "Tell us about yourself. Prospection targeting comes later, and it's optional.",
+    "step1Desc": "Tell us about yourself. The more you tell us about your company, the more precise baakalai's setup will be.",
     "step2Title": "Connect your CRM",
     "step2Desc": "Your CRM is worth more than it pays you. baakalai reads it 24/7 and spots dormant deals.",
     "step3Title": "All set!",
@@ -1641,6 +1641,7 @@
     "sfConnecting": "Connecting to Salesforce…",
     "sfOneClickNote": "One-click connection: sign in to Salesforce and authorize baakalai. Nothing to create on your side.",
     "sfManualLink": "Or use your own Connected App (Consumer Key + Secret)",
+    "sfBackLink": "← Back to one-click connection",
     "sfAdminHelpLink": "? OAuth error / restricted org: admin approval guide",
     "sfAdminHelpTitle": "Seeing an \"OAuth Error\" (OAUTH_APPROVAL_ERROR_GENERIC)?",
     "sfAdminHelpIntro": "Your Salesforce org restricts third-party apps, your admin needs to approve Baakal.ai first:",

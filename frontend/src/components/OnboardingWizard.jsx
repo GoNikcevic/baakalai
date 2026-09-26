@@ -1005,6 +1005,15 @@ export default function OnboardingWizard({ onComplete }) {
                           >
                             {sfBusy ? t('wizard.sfConnecting') : t('wizard.sfConnect')}
                           </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => { setSfShowManual(false); setCrmKeyError(null); }}
+                            disabled={sfBusy}
+                            style={{ width: '100%', marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}
+                          >
+                            {t('wizard.sfBackLink')}
+                          </button>
                         </>
                       );
                     }

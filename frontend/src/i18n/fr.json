@@ -1565,7 +1565,7 @@
   },
   "wizard": {
     "step1Title": "Votre entreprise",
-    "step1Desc": "Parlez-nous de vous. Le ciblage prospection viendra plus tard, et il est optionnel.",
+    "step1Desc": "Parlez-nous de vous. Plus vous nous en dites sur votre entreprise, plus la configuration de baakalai sera précise.",
     "step2Title": "Connectez votre CRM",
     "step2Desc": "Votre CRM vaut plus que ce qu'il vous rapporte. baakalai le lit 24/7 et repère les deals dormants.",
     "step3Title": "Tout est prêt !",
@@ -1641,6 +1641,7 @@
     "sfConnecting": "Connexion à Salesforce…",
     "sfOneClickNote": "Connexion en un clic : identifiez-vous sur Salesforce et autorisez baakalai. Rien à créer de votre côté.",
     "sfManualLink": "Ou utiliser votre propre Connected App (Consumer Key + Secret)",
+    "sfBackLink": "← Retour à la connexion en un clic",
     "sfAdminHelpLink": "? Erreur OAuth / org restreinte : guide pour votre admin",
     "sfAdminHelpTitle": "Vous voyez une « OAuth Error » (OAUTH_APPROVAL_ERROR_GENERIC) ?",
     "sfAdminHelpIntro": "Votre org Salesforce restreint les apps tierces, votre admin doit d'abord approuver Baakal.ai :",

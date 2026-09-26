@@ -45,6 +45,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'saved' | 'error' | null
   const [autoFilling, setAutoFilling] = useState(false);
+  // Produits détectés par l'auto-remplissage (docs + site web), à créer côté
+  // ProductLinesSection · null tant que rien n'a été détecté/consommé.
+  const [pendingAutoProducts, setPendingAutoProducts] = useState(null);
 
   /* ─── File upload state ─── */
   const [files, setFiles] = useState([]);
@@ -223,6 +226,9 @@ export default function ProfilePage() {
           return updated;
         });
       }
+      if (Array.isArray(data.products) && data.products.length > 0) {
+        setPendingAutoProducts(data.products);
+      }
     } catch (err) {
       console.warn('Auto-fill failed:', err.message);
       // Auto-retry: reparse docs then try once more
@@ -241,6 +247,9 @@ export default function ProfilePage() {
                 }
                 return updated;
               });
+            }
+            if (Array.isArray(retryData.products) && retryData.products.length > 0) {
+              setPendingAutoProducts(retryData.products);
             }
           } else {
             const details = (reparseData.results || [])
@@ -340,7 +349,7 @@ export default function ProfilePage() {
 
       {/* Product Lines · wraps all profile sections */}
       <ProductLinesSection profile={profile} renderInput={renderInput} renderTextarea={renderTextarea} renderSelect={renderSelect}
-        docProps={{ files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize }} />
+        docProps={{ files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize, pendingAutoProducts, setPendingAutoProducts }} />
 
     </div>
   );
@@ -349,7 +358,7 @@ export default function ProfilePage() {
 /* ═══ Product Lines Section ═══ */
 
 function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelect, docProps }) {
-  const { files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize } = docProps || {};
+  const { files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize, pendingAutoProducts, setPendingAutoProducts } = docProps || {};
   const { lang } = useI18n();
   const en = lang === 'en';
   const [lines, setLines] = useState([]);
@@ -391,6 +400,39 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
   }, [profile?.company]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Produits détectés par l'auto-remplissage (docs + site web) · si la seule
+  // ligne existante est la coquille vide auto-créée par le repli ci-dessus
+  // (icône 🏢, nom = entreprise), on la remplace plutôt que de l'empiler avec
+  // les vrais produits détectés.
+  useEffect(() => {
+    if (!Array.isArray(pendingAutoProducts) || pendingAutoProducts.length === 0) return;
+    const products = pendingAutoProducts;
+    setPendingAutoProducts(null);
+    (async () => {
+      try {
+        if (lines.length === 1 && lines[0].icon === '🏢' && lines[0].name === profile?.company) {
+          await request(`/crm/product-lines/${lines[0].id}`, { method: 'DELETE' }).catch(() => {});
+        }
+        for (const p of products) {
+          if (!p?.name) continue;
+          await request('/crm/product-lines', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: p.name,
+              icon: '📦',
+              description: p.description || '',
+              targetSectors: profile?.target_sectors || '',
+              valueProp: profile?.value_prop || '',
+              painPoints: profile?.pain_points || '',
+            }),
+          }).catch(() => {});
+        }
+        await load();
+      } catch { /* best-effort, la section reste utilisable manuellement */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAutoProducts]);
 
   useEffect(() => {
     if (activeTab === 'new') {
