@@ -767,12 +767,17 @@ export async function uploadFiles(files, options = {}) {
   return res.json();
 }
 
-/** Search prospects via Apollo */
+/** Search prospects via the chosen source (Entreprises France, Apollo, Lemlist) */
 export async function searchProspects(criteria) {
   return request('/ai/search-prospects', {
     method: 'POST',
     body: JSON.stringify(criteria),
   });
+}
+
+/** List the prospect sources available to this user, searchable or not */
+export async function listProspectSources() {
+  return request('/ai/prospect-sources');
 }
 
 /** Add prospects to a campaign (bulk) */
@@ -1001,6 +1006,7 @@ const BakalAPI = {
   fetchTemplate,
   sendRecoFeedback,
   searchProspects,
+  listProspectSources,
   enrichContact,
   enrichCampaignProspects,
   addProspectsToCampaign,

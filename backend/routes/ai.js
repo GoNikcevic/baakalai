@@ -1510,27 +1510,28 @@ router.get('/reveal-emails/:jobId', async (req, res, next) => {
 // POST /api/ai/search-prospects · search contacts via chosen provider (default: apollo)
 router.post('/search-prospects', async (req, res, next) => {
   try {
-    const { searchProspects, listSearchableSources } = require('../lib/prospect-sources');
+    const { searchProspects, pickDefaultSource } = require('../lib/prospect-sources');
     const { source, ...criteria } = req.body;
 
     let chosenSource = source;
     if (!chosenSource) {
-      // Auto-pick: if exactly one searchable source is configured, use it
-      const searchable = await listSearchableSources(req.user.id);
-      if (searchable.length === 0) {
-        return res.status(400).json({
-          error: 'Aucun outil de recherche de prospects configuré. Connecte Apollo dans Intégrations.',
-          code: 'NO_SOURCE',
-        });
-      }
-      if (searchable.length > 1) {
+      // Auto-pick : la source configurée par l'utilisateur d'abord, le registre
+      // public en repli (cf. pickDefaultSource).
+      const { source: picked, ambiguous } = await pickDefaultSource(req.user.id);
+      if (ambiguous) {
         return res.status(400).json({
           error: 'Plusieurs outils disponibles, précise lequel utiliser.',
           code: 'MULTIPLE_SOURCES',
-          sources: searchable.map(s => ({ provider: s.provider, name: s.name })),
+          sources: ambiguous.map(s => ({ provider: s.provider, name: s.name })),
         });
       }
-      chosenSource = searchable[0].provider;
+      if (!picked) {
+        return res.status(400).json({
+          error: 'Aucun outil de recherche de prospects disponible.',
+          code: 'NO_SOURCE',
+        });
+      }
+      chosenSource = picked;
     }
 
     const result = await searchProspects(req.user.id, chosenSource, criteria);

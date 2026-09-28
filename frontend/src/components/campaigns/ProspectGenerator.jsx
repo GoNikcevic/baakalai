@@ -18,6 +18,11 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
     mapSizeToApollo(campaign.size) || '11-50'
   );
   const [limit, setLimit] = useState(25);
+  // Ancienneté minimale de l'entreprise : critère ICP (au moins 12 mois
+  // d'historique CRM), exploitable seulement par le registre français.
+  const [minYearsOld, setMinYearsOld] = useState(3);
+  const [availableSources, setAvailableSources] = useState([]);
+  const [sourceChoice, setSourceChoice] = useState(''); // '' = laisser le backend choisir
 
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState([]); // contacts with optional email + revealStatus
@@ -69,6 +74,9 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
     api.getRevealOptions()
 .then(setRevealOptions)
 .catch(() => {});
+    api.listProspectSources()
+.then(data => setAvailableSources((data.sources || []).filter(s => s.canSearch)))
+.catch(() => setAvailableSources([]));
   }, [campaign._backendId, campaign.id]);
 
   // Cleanup polling on unmount
@@ -92,7 +100,9 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
         locations: locations.split(',').map(s => s.trim()).filter(Boolean),
         companySizes: [companySizes],
         limit: parseInt(limit, 10) || 25,
+        minYearsOld: parseInt(minYearsOld, 10) || 0,
       };
+      if (sourceChoice) criteria.source = sourceChoice;
       const data = await api.searchProspects(criteria);
       const contacts = (data.contacts || []).map(c => ({
 ...c,
@@ -389,6 +399,15 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
   const selectedWithEmail = results.filter(c => selected.has(c.id) && c.email).length;
   const creditCost = selectedNeedingReveal.length;
 
+  // Quelle source sera réellement utilisée : miroir de pickDefaultSource côté
+  // backend, pour n'afficher les critères qu'une source sait honorer.
+  const keyedSources = availableSources.filter(s => !s.keyless);
+  const effectiveSource = sourceChoice
+    || (keyedSources.length === 1 ? keyedSources[0].provider : '')
+    || (keyedSources.length === 0 ? (availableSources.find(s => s.keyless) || {}).provider : '')
+    || '';
+  const showMinYears = effectiveSource === 'sirene';
+
   return (
     <div
       style={{
@@ -458,6 +477,36 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
             <option value="1001+">1001+</option>
           </select>
         </div>
+        {availableSources.length > 1 && (
+          <div>
+            <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>{t('prospectGen.fieldSource')}</label>
+            <select
+              className="form-input"
+              value={sourceChoice}
+              onChange={e => setSourceChoice(e.target.value)}
+              style={{ marginTop: '4px' }}
+            >
+              <option value="">{t('prospectGen.sourceAuto')}</option>
+              {availableSources.map(s => (
+                <option key={s.provider} value={s.provider}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {showMinYears && (
+          <div>
+            <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>{t('prospectGen.fieldMinYears')}</label>
+            <input
+              className="form-input"
+              type="number"
+              min="0"
+              max="50"
+              value={minYearsOld}
+              onChange={e => setMinYearsOld(e.target.value)}
+              style={{ marginTop: '4px' }}
+            />
+          </div>
+        )}
         <div>
           <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>{t('prospectGen.fieldMaxResults')}</label>
           <input
@@ -694,6 +743,35 @@ export default function ProspectGenerator({ campaign, onProspectsAdded }) {
               ? <strong>{searchDiagnostics.applied.map(a => a.criterion).join(', ')}</strong>
               : <strong>{t('prospectGen.diagnosticsNone')}</strong>}.
           </div>
+        </div>
+      )}
+
+      {searchDiagnostics && searchDiagnostics.totalResults != null && (
+        <div style={{
+          marginTop: 16,
+          padding: '12px 14px',
+          background: 'var(--surface-subtle, rgba(110, 87, 250, 0.06))',
+          border: '1px solid rgba(110, 87, 250, 0.25)',
+          borderRadius: 8,
+          fontSize: 12,
+          color: 'var(--text-muted)',
+          lineHeight: 1.6,
+        }}>
+          <div>{t('prospectGen.sirenePoolSize', { count: searchDiagnostics.totalResults })}</div>
+          {searchDiagnostics.ignoredCriteria?.includes('titles') && (
+            <div>{t('prospectGen.sireneIgnoredTitles')}</div>
+          )}
+          {searchDiagnostics.reachedPageCap && (
+            <div>{t('prospectGen.sireneTruncated')}</div>
+          )}
+          {[...(searchDiagnostics.unresolvedSectors || []), ...(searchDiagnostics.unresolvedLocations || [])].length > 0 && (
+            <div>
+              {t('prospectGen.sireneUnresolved')}&nbsp;
+              <strong>
+                {[...(searchDiagnostics.unresolvedSectors || []), ...(searchDiagnostics.unresolvedLocations || [])].join(', ')}
+              </strong>.
+            </div>
+          )}
         </div>
       )}
 

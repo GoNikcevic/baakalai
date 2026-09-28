@@ -13,6 +13,9 @@
 /** Le libellé court, pour une ligne de liste. */
 export function triggerLabel(t, trig) {
   if (!trig) return '';
+  if (trig.eventSource === 'crm_state') {
+    return t(`automation.state.${trig.eventKey}.label`);
+  }
   if (trig.eventSource === 'crm_event') {
     const stages = trig.conditions?.toStages || [];
     if (trig.eventKey === 'deal_stage_changed' && stages.length > 0) {
@@ -26,6 +29,9 @@ export function triggerLabel(t, trig) {
 /** La phrase complète, celle de l'étape 0 de l'éditeur et du récapitulatif. */
 export function triggerSentence(t, trig) {
   if (!trig) return '';
+  if (trig.eventSource === 'crm_state') {
+    return t(`automation.state.${trig.eventKey}.sentence`, { days: trig.conditions?.days ?? 0 });
+  }
   if (trig.eventSource === 'crm_event') {
     const stages = trig.conditions?.toStages || [];
     if (trig.eventKey === 'deal_stage_changed' && stages.length > 0) {
