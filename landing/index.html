@@ -26,7 +26,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://baakal.ai/assets/og-home.png">
   <link rel="icon" href="assets/favicon.svg">
-  <link rel="stylesheet" href="site.css?v=20260926b">
+  <link rel="stylesheet" href="site.css?v=20260928b">
 </head>
 <body>
 
@@ -388,16 +388,16 @@
             <li><a href="#outils" data-i18n="footer.links.tools">Outils compatibles</a></li>
             <li><a href="#memoire" data-i18n="footer.links.memoire">Sous le capot</a></li>
             <li><a href="#tarif" data-i18n="footer.links.pricing">Tarif</a></li>
-          </ul>
-        </div>
-        <div>
-          <h5 data-i18n="footer.company">ENTREPRISE</h5>
-          <ul>
-            <li><a href="#" data-i18n="footer.links.about">À propos</a></li>
             <li><a href="#tarif" data-i18n="footer.links.contact">Contact</a></li>
-            <li><a href="#" data-i18n="footer.links.careers">Recrutement</a></li>
           </ul>
         </div>
+        <!-- La colonne ENTREPRISE a été retirée le 28/09. Elle venait de la
+             génération initiale de la landing (bdb1959) et portait trois liens
+             dont deux morts : « À propos » et « Recrutement », qui pointaient
+             sur `#` et n'ont jamais renvoyé nulle part. Annoncer un
+             recrutement quand on ne recrute pas, et un « À propos » qui
+             n'existe pas, décrédibilise plus que ça ne rassure. « Contact »
+             était le seul lien vivant, il a rejoint PRODUIT. -->
         <div>
           <h5 data-i18n="footer.legal">LÉGAL</h5>
           <ul>
@@ -415,7 +415,7 @@
     </div>
   </footer>
 
-  <script src="i18n.js?v=20260928a"></script>
+  <script src="i18n.js?v=20260928b"></script>
   <script>
     // ─── i18n engine ─────────────────────────────────────
     const STORE_KEY = 'baakalai-lang';

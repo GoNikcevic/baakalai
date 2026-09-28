@@ -206,11 +206,11 @@ const I18N = {
     },
     footer: {
       blurb: "Le système IA qui exploite votre CRM pour générer du CA : réactivation, upsell, churn, nettoyage.",
-      product: "PRODUIT", company: "ENTREPRISE", legal: "LÉGAL",
+      product: "PRODUIT", legal: "LÉGAL",
       links: {
         how: "Comment ça marche", diag: "Diagnostic gratuit", action: "Ce que fait baakalai",
         tools: "Outils compatibles", memoire: "Sous le capot", pricing: "Tarif",
-        about: "À propos", contact: "Contact", careers: "Recrutement",
+        contact: "Contact",
         mentions: "Mentions légales", terms: "CGU", privacy: "Confidentialité", dpa: "DPA · RGPD",
       },
       copy: "© 2026 BAAKALAI · BAAKAL.AI · FAIT À PARIS",
@@ -405,11 +405,11 @@ const I18N = {
     },
     footer: {
       blurb: "The AI system that works your CRM to generate revenue: reactivation, upsell, churn, cleaning.",
-      product: "PRODUCT", company: "COMPANY", legal: "LEGAL",
+      product: "PRODUCT", legal: "LEGAL",
       links: {
         how: "How it works", diag: "Free diagnostic", action: "What baakalai does",
         tools: "Compatible tools", memoire: "Under the hood", pricing: "Pricing",
-        about: "About", contact: "Contact", careers: "Careers",
+        contact: "Contact",
         mentions: "Legal notice", terms: "Terms", privacy: "Privacy", dpa: "DPA · GDPR",
       },
       copy: "© 2026 BAAKALAI · BAAKAL.AI · MADE IN PARIS",

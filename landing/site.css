@@ -918,7 +918,10 @@ footer {
 }
 .footer-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  /* Trois colonnes depuis le 28/09, et non quatre : la colonne ENTREPRISE
+     est partie avec ses deux liens morts. Une quatrième piste vide laissait
+     un blanc à droite qui se voyait. */
+  grid-template-columns: 1.6fr 1fr 1fr;
   gap: 40px;
   padding-bottom: 56px;
   border-bottom: 1px solid rgba(250, 250, 249, 0.1);
