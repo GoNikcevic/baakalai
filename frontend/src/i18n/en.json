@@ -1249,6 +1249,27 @@
     },
     "error": "Error"
   },
+  "stageMapping": {
+    "title": "Your pipeline, as baakalai reads it",
+    "subtitle": "Your {provider} stages translated into baakalai's vocabulary. Fix anything that looks wrong, your choice sticks.",
+    "reanalyze": "Re-read my pipeline",
+    "analyzing": "Reading...",
+    "analyzed": "{count} stage(s) understood, {repositioned} deal(s) repositioned.",
+    "repositioned": "{count} deal(s) repositioned.",
+    "empty": "baakalai has not read your pipeline yet. It will at the next CRM analysis, or right now with the button above.",
+    "uncertain": "{count} stage(s) baakalai was unsure about. They are outlined in orange, those are the ones worth a look.",
+    "sourceRule": "Your CRM says so",
+    "sourceAi": "baakalai inferred",
+    "sourceUser": "You corrected it",
+    "footnote": "Won and lost still come from your CRM, deal by deal: this table only places deals that are still open.",
+    "status": {
+      "interested": "Interested",
+      "meeting": "Meeting",
+      "negotiation": "Negotiation",
+      "won": "Won",
+      "lost": "Lost"
+    }
+  },
   "analytics": {
     "subtitle": "Dig deeper into your CRM and campaign data",
     "groupDeals": "Deals",

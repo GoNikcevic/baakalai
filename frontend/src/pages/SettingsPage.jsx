@@ -15,6 +15,7 @@ import { useI18n } from '../i18n';
 import EmailAccountSettings from '../components/EmailAccountSettings';
 import AutopilotSettings from '../components/AutopilotSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
+import StageMappingSettings from '../components/StageMappingSettings';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
 
@@ -1046,6 +1047,10 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-group-title">{t('settings.groupCrmConfig')}</div>
+
+      {/* Ce que baakalai a compris du pipeline · au-dessus du mappage de
+          champs : c'est la lecture automatique, le mappage manuel vient après. */}
+      <StageMappingSettings />
 
       {/* CRM Field Mapping */}
       <FieldMappingSettings />

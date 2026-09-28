@@ -1249,6 +1249,27 @@
     },
     "error": "Erreur"
   },
+  "stageMapping": {
+    "title": "Votre pipeline, vu par baakalai",
+    "subtitle": "Les étapes de votre {provider} traduites dans le vocabulaire de baakalai. Corrigez ce qui ne colle pas, votre choix est définitif.",
+    "reanalyze": "Relire mon pipeline",
+    "analyzing": "Lecture...",
+    "analyzed": "{count} étape(s) comprises, {repositioned} deal(s) repositionné(s).",
+    "repositioned": "{count} deal(s) repositionné(s).",
+    "empty": "baakalai n'a pas encore lu votre pipeline. Ce sera fait à la prochaine analyse CRM, ou tout de suite avec le bouton ci-dessus.",
+    "uncertain": "{count} étape(s) sur lesquelles baakalai a hésité. Elles sont encadrées en orange, ce sont celles à relire.",
+    "sourceRule": "Votre CRM le dit",
+    "sourceAi": "baakalai a déduit",
+    "sourceUser": "Vous l'avez corrigé",
+    "footnote": "Gagné et perdu restent lus sur votre CRM, deal par deal : ce tableau ne sert qu'à situer les deals encore ouverts.",
+    "status": {
+      "interested": "Intéressé",
+      "meeting": "RDV",
+      "negotiation": "Négo",
+      "won": "Gagné",
+      "lost": "Perdu"
+    }
+  },
   "analytics": {
     "subtitle": "Analysez plus finement les données de votre CRM et de vos campagnes",
     "groupDeals": "Deals",
