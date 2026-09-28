@@ -1,5 +1,5 @@
 /**
- * Website text extraction — best-effort, no external dependency (cheerio/jsdom
+ * Website text extraction, best-effort, no external dependency (cheerio/jsdom
  * would be overkill for "get readable text off a marketing homepage for an
  * LLM prompt"). Never throws: returns null on any failure so the caller can
  * fall back to "no website content available" instead of failing the whole
