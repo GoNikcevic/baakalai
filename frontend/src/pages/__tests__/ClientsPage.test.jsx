@@ -63,19 +63,21 @@ beforeEach(() => {
 
 /**
  * Deux ReferenceError silencieuses ont vécu onze jours dans cette page : un
- * `churnData` inexistant coupait loadData avant la requête des étapes de
- * pipeline, et `crmProviderCounts`, lu hors de sa portée, faisait planter le
- * panneau de détail au clic. Les deux étaient avalées, l'une par un `catch {}`
- * vide, l'autre par l'ErrorBoundary. D'où ces garde-fous.
+ * `churnData` inexistant coupait loadData en route, et `crmProviderCounts`, lu
+ * hors de sa portée, faisait planter le panneau de détail au clic. Les deux
+ * étaient avalées, l'une par un `catch {}` vide, l'autre par l'ErrorBoundary.
+ * D'où ces garde-fous.
  */
 describe('ClientsPage · chargement complet', () => {
-  it('va jusqu\'au bout de loadData, donc jusqu\'aux étapes de pipeline', async () => {
+  it('va jusqu\'au bout de loadData sans rien avaler', async () => {
+    // loadData ne se termine plus sur une requête repérable (la barre de tête
+    // n'interroge plus /crm/stages) : le garde-fou porte désormais sur le
+    // `console.error` du catch, seul endroit où une exception atterrit.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     renderDeals();
-    // Cette requête est la DERNIÈRE de loadData : si elle part, rien n'a
-    // interrompu la fonction en route.
-    await waitFor(() => {
-      expect(request).toHaveBeenCalledWith('/crm/stages');
-    });
+    await screen.findByText('Marie Dupont');
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it('demande la fenêtre triée par silence, pas par date de création', async () => {
@@ -138,14 +140,34 @@ describe('ClientsPage · Vue globale Deals', () => {
     await screen.findByText('aucun contact connu');
   });
 
-  it('ne compte pas les clients gagnés dans la barre des étapes', async () => {
-    // « Paul Gagnant » (status won) tombe dans le repli par nom d'étape, qui est
-    // justement le chemin où il était compté sous Deals.
-    mockApi({ stages: [{ id: 's1', name: 'Won', order: 0, pipelineName: null }] });
+  /**
+   * La barre de tête affichait une tuile par étape de pipeline CRM : sur un
+   * Salesforce standard ça faisait plus de seize tuiles, illisibles et toutes à
+   * zéro faute de crm_stage_id rempli. Elle est désormais un jeu fixe de quatre
+   * segments de silence, indépendant du CRM branché.
+   */
+  it('affiche quatre tuiles de silence, jamais les étapes du CRM', async () => {
+    mockApi({ stages: [{ id: 's1', name: 'Qualification', order: 0, pipelineName: null }] });
     renderDeals();
-    await screen.findByText('Won');
-    const card = screen.getByText('Won').parentElement;
-    expect(card.textContent).toContain('0');
+
+    await screen.findByText('Marie Dupont');
+    expect(screen.queryByText('Qualification')).toBeNull();
+    for (const label of ['Actifs', 'Dorment (30 j+)', 'Au point mort (60 j+)', 'Perdus']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+  });
+
+  it('ne compte pas le client gagné dans les tuiles de tête', async () => {
+    renderDeals();
+    await screen.findByText('Marie Dupont');
+    // Paul Gagnant est silencieux depuis 3 jours : sans la restriction à la
+    // portée Deals, il gonflerait « Actifs », qui ne doit compter que Claire
+    // Mercier (4 j). Ahmed (61 j) et Marie (142 j) sont au point mort.
+    const countOf = (label) => screen.getByText(label).closest('button').textContent.replace(label, '');
+    expect(countOf('Actifs')).toBe('1');
+    expect(countOf('Dorment (30 j+)')).toBe('0');
+    expect(countOf('Au point mort (60 j+)')).toBe('2');
+    expect(countOf('Perdus')).toBe('0');
   });
 });
 
@@ -162,35 +184,54 @@ function renderClients() {
 
 /**
  * Les chiffres de la barre de tête ne servaient à rien : on lisait « 8 » sans
- * pouvoir voir lesquels. Et sous Clients, la barre affichait les étapes du
- * pipeline (« Prospecting », « Qualification »), qui n'ont aucun sens pour un
- * client déjà signé.
+ * pouvoir voir lesquels. Chaque tuile est donc un filtre. Sous Clients, les
+ * segments sont ceux d'un contrat signé ; sous Deals, les tranches de silence.
  */
 describe('ClientsPage · tuiles de tête cliquables', () => {
-  it('filtre la liste sur l\'étape cliquée, et la rend au clic suivant', async () => {
+  it('filtre la liste sur la tranche de silence cliquée, et la rend au clic suivant', async () => {
     mockApi({
-      stages: [{ id: 's1', name: 'Qualification', pipelineName: null }, { id: 's2', name: 'Proposition', pipelineName: null }],
       opportunities: [
-        { id: 'a1', name: 'Alice Qualif', status: 'interested', crm_stage_id: 's1', last_activity_at: iso(5) },
-        { id: 'b1', name: 'Bob Proposition', status: 'interested', crm_stage_id: 's2', last_activity_at: iso(6) },
+        // 30 et 60 jours pile sont les bornes : strictes, comme les libellés
+        // « plus de 30 jours ». À 30 j on est encore actif, à 61 j au point mort.
+        { id: 'a1', name: 'Alice Fraiche', status: 'interested', last_activity_at: iso(30) },
+        { id: 'b1', name: 'Bob Endormi', status: 'interested', last_activity_at: iso(45) },
+        { id: 'c1', name: 'Carl Immobile', status: 'interested', last_activity_at: iso(61) },
+        { id: 'd1', name: 'Diane Perdue', status: 'lost', last_activity_at: iso(90) },
       ],
     });
     renderDeals();
 
-    await screen.findByText('Alice Qualif');
-    expect(screen.getByText('Bob Proposition')).toBeTruthy();
+    await screen.findByText('Alice Fraiche');
+    expect(screen.getByText('Bob Endormi')).toBeTruthy();
 
-    fireEvent.click(screen.getByText('Qualification').closest('button'));
-    await waitFor(() => expect(screen.queryByText('Bob Proposition')).toBeNull());
-    expect(screen.getByText('Alice Qualif')).toBeTruthy();
+    fireEvent.click(screen.getByText('Dorment (30 j+)').closest('button'));
+    await waitFor(() => expect(screen.queryByText('Alice Fraiche')).toBeNull());
+    expect(screen.getByText('Bob Endormi')).toBeTruthy();
+    expect(screen.queryByText('Carl Immobile')).toBeNull();
 
-    fireEvent.click(screen.getByText('Qualification').closest('button'));
-    await screen.findByText('Bob Proposition');
+    fireEvent.click(screen.getByText('Dorment (30 j+)').closest('button'));
+    await screen.findByText('Alice Fraiche');
   });
 
-  it('remplace les étapes du pipeline par des segments clients sous Clients', async () => {
+  it('range le deal perdu dans sa seule tuile, jamais aussi dans une tranche de silence', async () => {
     mockApi({
-      stages: [{ id: 's1', name: 'Qualification', pipelineName: null }],
+      opportunities: [
+        { id: 'c1', name: 'Carl Immobile', status: 'interested', last_activity_at: iso(61) },
+        { id: 'd1', name: 'Diane Perdue', status: 'lost', last_activity_at: iso(90) },
+      ],
+    });
+    renderDeals();
+
+    await screen.findByText('Carl Immobile');
+    // Diane est muette depuis 90 jours : sans l'exclusion des perdus, elle
+    // apparaîtrait à la fois dans « Au point mort » et dans « Perdus ».
+    const countOf = (label) => screen.getByText(label).closest('button').textContent.replace(label, '');
+    expect(countOf('Au point mort (60 j+)')).toBe('1');
+    expect(countOf('Perdus')).toBe('1');
+  });
+
+  it('affiche les segments clients, pas les tranches de silence des deals, sous Clients', async () => {
+    mockApi({
       opportunities: [
         { id: 'c1', name: 'Claire Recente', status: 'won', won_date: iso(10), last_activity_at: iso(5) },
         { id: 'c2', name: 'Silvain Silence', status: 'won', won_date: iso(400), last_activity_at: iso(200) },
@@ -199,8 +240,8 @@ describe('ClientsPage · tuiles de tête cliquables', () => {
     renderClients();
 
     await screen.findByText('Claire Recente');
-    // Une étape de pipeline n'a rien à faire sur des clients signés.
-    expect(screen.queryByText('Qualification')).toBeNull();
+    // Un contrat signé ne « dort » pas au sens du pipeline : il est silencieux.
+    expect(screen.queryByText('Dorment (30 j+)')).toBeNull();
 
     fireEvent.click(screen.getByText('Silencieux (90 j+)').closest('button'));
     await waitFor(() => expect(screen.queryByText('Claire Recente')).toBeNull());
