@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const { callClaude } = require('../api/claude');
+const { fetchWebsiteText } = require('../lib/website-text');
 
 const router = Router();
 
@@ -44,53 +45,74 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// POST /api/profile/auto-fill · Extract profile fields from uploaded documents via Claude
+// POST /api/profile/auto-fill · Extract profile fields (+ product lines) from
+// uploaded documents AND the company website via Claude, in one pass. Website
+// is best-effort (fetchWebsiteText never throws) : ça ne bloque jamais
+// l'analyse si le site est down, mal formé, ou juste absent du profil.
 router.post('/auto-fill', async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const sources = [];
 
     // List ALL documents first to distinguish "no docs" vs "docs exist but parsing failed"
     const allUserDocs = await db.documents.listByUser(userId);
-    if (!allUserDocs || allUserDocs.length === 0) {
-      return res.status(400).json({ error: 'Aucun document uploadé. Uploadez votre présentation entreprise d\'abord.' });
+    let docs = [];
+    let docsParsingFailed = false;
+    if (allUserDocs && allUserDocs.length > 0) {
+      const parsedDocs = await db.documents.getParsedTextByUser(userId, 20);
+      if (!parsedDocs || parsedDocs.length === 0) {
+        docsParsingFailed = true;
+      } else {
+        // Prefer company-tagged docs, fallback to any doc with parsed text
+        docs = parsedDocs.filter(d => d.doc_type === 'company');
+        if (docs.length === 0) {
+          // Fallback: use any doc that isn't explicitly a prospect list
+          docs = parsedDocs.filter(d => d.doc_type !== 'prospects');
+        }
+      }
     }
 
-    // Get parsed text from uploaded documents
-    const parsedDocs = await db.documents.getParsedTextByUser(userId, 20);
-    if (!parsedDocs || parsedDocs.length === 0) {
-      const names = allUserDocs.map(d => d.original_name).join(', ');
+    const profile = await db.profiles.get(userId);
+    let websiteText = null;
+    if (profile?.website) {
+      websiteText = await fetchWebsiteText(profile.website);
+    }
+
+    if (docs.length === 0 && !websiteText) {
+      if (docsParsingFailed) {
+        const names = allUserDocs.map(d => d.original_name).join(', ');
+        return res.status(400).json({
+          error: `Vos documents (${names}) n'ont pas pu être analysés. Le parsing a échoué, essayez de re-uploader en PDF ou TXT.`,
+        });
+      }
       return res.status(400).json({
-        error: `Vos documents (${names}) n'ont pas pu être analysés. Le parsing a échoué, essayez de re-uploader en PDF ou TXT.`,
+        error: 'Aucune source exploitable. Uploadez un document (présentation entreprise) ou renseignez votre site web.',
       });
     }
 
-    // Prefer company-tagged docs, fallback to any doc with parsed text
-    let docs = parsedDocs.filter(d => d.doc_type === 'company');
-    if (docs.length === 0) {
-      // Fallback: use any doc that isn't explicitly a prospect list
-      docs = parsedDocs.filter(d => d.doc_type !== 'prospects');
+    if (docs.length > 0) {
+      sources.push(...docs.map(d => d.original_name));
     }
-    if (docs.length === 0) {
-      return res.status(400).json({
-        error: 'Aucun document exploitable trouvé. Taggez au moins un document comme "Présentation entreprise".',
-      });
+    let sourceText = docs
+      .map(d => `--- Document : ${d.original_name} ---\n${(d.parsed_text || '').slice(0, 3000)}`)
+      .join('\n\n');
+    if (websiteText) {
+      sources.push(profile.website);
+      sourceText += `${sourceText ? '\n\n' : ''}--- Site web : ${profile.website} ---\n${websiteText}`;
     }
-
-    const docText = docs
-      .map(d => `--- ${d.original_name} ---\n${(d.parsed_text || '').slice(0, 3000)}`)
-      .join('\n\n')
-      .slice(0, 10000);
+    sourceText = sourceText.slice(0, 12000);
 
     const result = await callClaude(
-      `Tu es un consultant senior en business development B2B avec 15 ans d'expérience en stratégie outbound. Tu analyses les documents d'une entreprise pour construire le profil de prospection le plus percutant possible.
+      `Tu es un consultant senior en business development B2B avec 15 ans d'expérience en stratégie outbound. Tu analyses les documents et/ou le site web d'une entreprise pour construire le profil de prospection le plus percutant possible.
 
 Ton approche :
-1. ANALYSE EN PROFONDEUR les documents, ne te contente pas de résumer, COMPRENDS le business model, le positionnement, et les avantages compétitifs
+1. ANALYSE EN PROFONDEUR les sources, ne te contente pas de résumer, COMPRENDS le business model, le positionnement, et les avantages compétitifs
 2. IDENTIFIE les pain points des CLIENTS de cette entreprise (pas de l'entreprise elle-même), pourquoi un prospect aurait besoin de leurs services
 3. FORMULE la proposition de valeur comme un pitch de 2 phrases qui donne envie d'en savoir plus, pas une description Wikipedia
 4. ANTICIPE les objections qu'un prospect pourrait avoir (prix, alternatives, timing, changement de process)
 5. DÉFINIS les personas avec leur titre exact, leurs responsabilités, et surtout leurs FRUSTRATIONS quotidiennes que l'entreprise peut résoudre
 6. RECOMMANDE les secteurs et tailles d'entreprise où l'offre aura le plus d'impact, sois spécifique, pas générique
+7. IDENTIFIE les produits/lignes de produits distincts de l'entreprise si les sources le permettent clairement (ex: une agence avec "Audit SEO" et "Gestion de campagnes Ads" sont 2 produits distincts) · NE JAMAIS inventer un produit qui ne ressort pas clairement des sources, un tableau vide est la bonne réponse si l'offre est unique ou pas assez détaillée pour distinguer plusieurs lignes
 
 Retourne un JSON. Sois précis, actionnable, et opinionné, comme un consultant qui facture 500€/h :
 
@@ -106,14 +128,17 @@ Retourne un JSON. Sois précis, actionnable, et opinionné, comme un consultant 
   "persona_secondary": "Deuxième décideur/influenceur dans le cycle d'achat",
   "target_sectors": "Secteurs spécifiques où l'offre a le plus d'impact (séparés par virgules)",
   "target_size": "Taille d'entreprise idéale avec justification (ex: 'PME 50-500 car...')",
-  "target_zones": "Zones géographiques prioritaires"
+  "target_zones": "Zones géographiques prioritaires",
+  "products": [{ "name": "Nom du produit/ligne", "description": "1-2 phrases sur ce produit précis" }]
 }`,
-      docText,
+      sourceText,
       4000
     );
 
     if (result.parsed) {
-      res.json({ profile: result.parsed, source: docs.map(d => d.original_name) });
+      const products = Array.isArray(result.parsed.products) ? result.parsed.products : [];
+      const { products: _omit, ...profileFields } = result.parsed;
+      res.json({ profile: profileFields, products, source: sources });
     } else {
       res.status(500).json({ error: 'Impossible d\'extraire les informations' });
     }
