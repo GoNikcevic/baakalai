@@ -5,23 +5,11 @@
    top companies · all from POST /api/crm/first-diagnostic.
    =============================================================================== */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../services/api-client';
-import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
 import Icon from './Icon';
-
-const ISSUE_META = {
-  duplicate_email: { icon: 'refresh', color: 'var(--danger)' },
-  duplicate_name: { icon: 'users', color: 'var(--warning)' },
-  missing_email: { icon: 'mail', color: 'var(--danger)' },
-  missing_name: { icon: 'user', color: 'var(--warning)' },
-  missing_company: { icon: 'building', color: 'var(--text-muted)' },
-  invalid_email: { icon: 'alert', color: 'var(--danger)' },
-  inactive: { icon: 'moon', color: 'var(--text-muted)' },
-  format_name_caps: { icon: 'edit', color: 'var(--blue)' },
-};
 
 const URGENCY_COLORS = {
   high: { bg: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'rgba(239,68,68,0.2)' },
@@ -59,8 +47,6 @@ export default function CRMDiagnosticReport({ onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [fixing, setFixing] = useState(null);
-  const [fixingAll, setFixingAll] = useState(false);
 
   useEffect(() => {
     request('/crm/first-diagnostic', { method: 'POST' })
@@ -68,63 +54,6 @@ export default function CRMDiagnosticReport({ onClose }) {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
-
-  const handleFix = useCallback(async (issue) => {
-    if (!data?.provider) return;
-    setFixing(issue.type);
-    try {
-      let fixes = [];
-      if (issue.type === 'format_name_caps') {
-        fixes = [{ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts }];
-      } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'archive') {
-        fixes = [{ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) }];
-      } else if ((issue.suggestedAction === 'merge' || issue.suggestedAction === 'review') && issue.contacts?.length >= 2) {
-        fixes = [{ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) }];
-      }
-      if (fixes.length > 0) {
-        await request(`/crm/clean/${data.provider}`, {
-          method: 'POST',
-          body: JSON.stringify({ fixes }),
-        });
-        showToast({ type: 'success', title: en ? 'Fixed' : 'Corrigé', message: `${issue.type.replace(/_/g, ' ')}` });
-        const fresh = await request('/crm/first-diagnostic', { method: 'POST' });
-        setData(fresh);
-      }
-    } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message || 'Fix failed' });
-    }
-    setFixing(null);
-  }, [data?.provider, en]);
-
-  const handleFixAll = useCallback(async () => {
-    const health = data?.health;
-    if (!data?.provider || !health?.issues) return;
-    setFixingAll(true);
-    try {
-      const fixes = [];
-      for (const issue of health.issues) {
-        if (issue.type === 'format_name_caps') {
-          fixes.push({ type: issue.type, action: 'auto_fix_caps', contacts: issue.contacts });
-        } else if (issue.suggestedAction === 'delete' || issue.suggestedAction === 'archive') {
-          fixes.push({ type: issue.type, action: 'delete', contactIds: issue.contacts.map(c => c.id) });
-        } else if ((issue.suggestedAction === 'merge' || issue.suggestedAction === 'review') && issue.contacts?.length >= 2) {
-          fixes.push({ type: issue.type, action: 'merge', contactIds: issue.contacts.map(c => c.id) });
-        }
-      }
-      if (fixes.length > 0) {
-        await request(`/crm/clean/${data.provider}`, {
-          method: 'POST',
-          body: JSON.stringify({ fixes }),
-        });
-        showToast({ type: 'success', title: en ? 'All fixed' : 'Tout corrigé', message: `${fixes.length} ${en ? 'issue(s) resolved' : 'problème(s) résolus'}` });
-        const fresh = await request('/crm/first-diagnostic', { method: 'POST' });
-        setData(fresh);
-      }
-    } catch (err) {
-      showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: err.message || 'Fix all failed' });
-    }
-    setFixingAll(false);
-  }, [data, en]);
 
   function handleNav(path) {
     localStorage.setItem('bakal_diagnostic_seen', 'true');
@@ -401,66 +330,6 @@ export default function CRMDiagnosticReport({ onClose }) {
               </div>
             )}
           </div>
-
-          {/* ── Health issues with fix buttons ── */}
-          {health?.issues && health.issues.length > 0 && (
-            <div style={styles.section}>
-              {health.issues.filter(i => i.suggestedAction && i.suggestedAction !== 'enrich').length > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <button
-                    className="btn btn-primary"
-                    style={{ fontSize: 11, padding: '6px 14px' }}
-                    disabled={fixingAll}
-                    onClick={handleFixAll}
-                  >
-                    {fixingAll ? '...' : t('diagnostic.fixAll')}
-                  </button>
-                </div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {health.issues.map((issue, i) => {
-                  const meta = ISSUE_META[issue.type] || { icon: 'alert', color: 'var(--text-muted)' };
-                  const isMergeable = issue.suggestedAction === 'merge'
-                    || (issue.suggestedAction === 'review' && issue.contacts?.length >= 2);
-                  const actionLabel = isMergeable ? t('diagnostic.merge')
-                    : issue.suggestedAction === 'archive' || issue.suggestedAction === 'delete' ? t('diagnostic.archive')
-                    : issue.suggestedAction === 'auto_fix' ? t('diagnostic.fix')
-                    : t('diagnostic.fix');
-                  const issueLabel = t(`diagnostic.issue_${issue.type}`) || issue.type.replace(/_/g, ' ');
-                  const showAction = issue.suggestedAction && issue.suggestedAction !== 'enrich';
-                  return (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                      background: 'var(--bg-elevated)', borderRadius: 8, fontSize: 13,
-                    }}>
-                      <Icon name={meta.icon} size={16} color={meta.color} />
-                      <span style={{ flex: 1, color: 'var(--text)', minWidth: 0 }}>
-                        {issue.count != null && (
-                          <strong style={{ color: meta.color }}>{issue.count} </strong>
-                        )}
-                        {issueLabel}
-                        {issue.key && (
-                          <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 6 }}>
-, {issue.key}
-                          </span>
-                        )}
-                      </span>
-                      {showAction && (
-                        <button
-                          className="btn btn-ghost"
-                          style={{ fontSize: 11, padding: '4px 10px', color: 'var(--primary)', flexShrink: 0 }}
-                          disabled={fixing === issue.type}
-                          onClick={() => handleFix(issue)}
-                        >
-                          {fixing === issue.type ? '...' : actionLabel}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* ── ROW 2: Churn risk + Top companies ── */}
           <div style={styles.row}>
