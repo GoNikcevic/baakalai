@@ -156,7 +156,12 @@ app.use('/api/public/diagnostic', require('./routes/public-diagnostic'));
 app.use('/api/public/contact', require('./routes/public-contact'));
 
 // Désinscription emails (public · le lien arrive en boîte mail, token HMAC, pas de login)
+// Deux mécanismes distincts, à ne pas confondre :
+//   email-prefs → un UTILISATEUR coupe les emails que baakalai lui envoie
+//   unsubscribe → un CONTACT refuse les relances partant de la boîte d'un
+//                 utilisateur. Le lecteur n'a pas de compte et n'en aura jamais.
 app.use('/api/public/email-prefs', require('./routes/email-prefs'));
+app.use('/api/public/unsubscribe', require('./routes/public-unsubscribe'));
 
 // OAuth email callbacks (public · user returns from Google/Microsoft redirect, no auth needed)
 const { gmailCallback, microsoftCallback, microsoftReadCallback } = require('./routes/nurture');

@@ -12,9 +12,24 @@ const nodemailer = require('nodemailer');
 const { decrypt } = require('../config/crypto');
 const db = require('../db');
 const logger = require('./logger');
+const contactOptout = require('./contact-optout');
 
 // Cache transports per email account to avoid creating new connections each time
 const _transportCache = new Map();
+
+/**
+ * Langue du compte, pour le pied de désinscription. Repli sur le français :
+ * l'utilisateur type est francophone, et un pied dans la mauvaise langue vaut
+ * mieux qu'un envoi qui échoue parce que le profil est absent.
+ */
+async function getUserLang(userId) {
+  try {
+    const { rows } = await db.query(`SELECT language FROM users WHERE id = $1`, [userId]);
+    return rows[0] && rows[0].language === 'en' ? 'en' : 'fr';
+  } catch {
+    return 'fr';
+  }
+}
 
 /**
  * Get or create a nodemailer transport for an email account.
@@ -272,6 +287,20 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo, a
   subject = humanize(subject);
   body = humanize(body);
 
+  // Opposition du destinataire (migration 120). Vérifiée ICI et non chez les
+  // appelants, pour la même raison que humanize() juste au-dessus : un
+  // appelant qui oublierait la règle ne doit pas pouvoir la contourner.
+  // Échec explicite plutôt que silencieux, pour que l'appelant puisse marquer
+  // la ligne et ne pas la reprogrammer indéfiniment.
+  if (await contactOptout.isOptedOut(userId, to)) {
+    logger.info('email-outbound', `Bloqué : ${to} s'est désinscrit des emails de ${userId}`);
+    return {
+      success: false,
+      code: 'recipient_unsubscribed',
+      error: 'Recipient opted out of your emails.',
+    };
+  }
+
   // `accountId` : expéditeur choisi pour cette campagne (migration 112). Sans
   // lui, la boîte par défaut · c'est le cas de toutes les relances CRM.
   let account = await resolveAccount(userId, accountId);
@@ -309,6 +338,29 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo, a
   // donc toujours « personnel ». L'image part en pièce inline CID (comme les
   // signatures Outlook) : pas d'hébergement externe, pas d'URL de tracking.
   applySignature(mailOptions, account, body);
+
+  // Désinscription. APRÈS la signature, qui réécrit `text` et `html` à partir
+  // du corps brut et effacerait un pied ajouté avant elle.
+  //
+  // La langue vient du compte de l'utilisateur, faute de mieux : on ne connaît
+  // pas celle du contact, et l'utilisateur écrit dans la langue de son marché.
+  const lang = await getUserLang(userId);
+  // `|| ''` et non une concaténation directe : un corps vide donnerait la
+  // chaîne « undefined » suivie du pied, envoyée telle quelle au destinataire.
+  mailOptions.text = (mailOptions.text || '') + contactOptout.footerText(userId, to, lang);
+  // `html` n'existe que si le compte a une signature. Sans elle, l'email reste
+  // texte seul, ce qui est justement ce qui le fait passer pour un vrai
+  // message personnel : on ne va pas le convertir en HTML pour un pied.
+  if (mailOptions.html) {
+    mailOptions.html += contactOptout.footerHtml(userId, to, lang);
+  }
+  // En-têtes RFC 8058. Exigés par Gmail et Yahoo au-dessus de leurs seuils de
+  // volume, et ils comptent comme moyen d'opposition à part entière : un
+  // destinataire peut se désinscrire depuis son client mail sans ouvrir.
+  mailOptions.headers = {
+    ...(mailOptions.headers || {}),
+    ...contactOptout.unsubscribeHeaders(userId, to),
+  };
 
   try {
     const info = await transport.sendMail(mailOptions);
@@ -430,6 +482,20 @@ async function sendNurtureEmail(userId, {
       `UPDATE nurture_emails SET status = 'failed', error = $1 WHERE id = $2`,
       [result.error, nurture.id]
     );
+
+    // Le contact s'est désinscrit (migration 120). Marquer la séquence comme
+    // arrêtée, sinon le cron du lendemain regénère un brouillon pour le même
+    // contact : des tokens brûlés pour un email qui sera rebloqué au
+    // transport, tous les jours, indéfiniment. C'est aussi ce qui fait
+    // remonter le motif dans l'interface.
+    if (result.code === 'recipient_unsubscribed' && opportunityId) {
+      await db.query(
+        `UPDATE opportunities
+         SET sequence_stopped_at = now(), sequence_stop_reason = 'unsubscribed'
+         WHERE id = $1`,
+        [opportunityId]
+      ).catch((err) => logger.warn('email-outbound', `Marquage désinscription échoué : ${err.message}`));
+    }
 
     // Bounce définitif : tamponner le contact · lu par le scan data quality
     // (issue email_bounced) et par le scoring churn (contact probablement parti).
