@@ -194,27 +194,47 @@ async function importCrmAccounts(userId, provider, creds) {
     }
     out.fetched = raw.length;
 
+    // Le commercial que le CRM déclare SUR LA SOCIÉTÉ · c'est le bon owner
+    // d'un compte, et il n'a aucune raison d'être celui d'un de ses contacts.
+    // Sans cette résolution on ne stocke qu'un identifiant CRM, illisible à
+    // l'écran. Best-effort : une carte vide laisse simplement l'email vide, et
+    // le repli sur le contact majoritaire (syncAccountsForUser) prend le
+    // relais.
+    let ownerMap = new Map();
+    try {
+      const { buildOwnerMap } = require('./crm-owner-resolver');
+      ownerMap = await buildOwnerMap(provider, creds, userId);
+    } catch { /* pas de carte d'owners : on garde l'identifiant brut */ }
+
     for (const a of raw) {
       const cle = normalizeAccountName(a.name);
       if (!cle) continue;
 
+      const crmOwnerId = a.ownerId ? String(a.ownerId) : null;
+      const info = crmOwnerId ? ownerMap.get(crmOwnerId) : null;
+
       const res = await db.query(
         `INSERT INTO accounts
            (user_id, crm_provider, crm_account_id, name, name_normalized,
-            industry, crm_owner_id, crm_created_at, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'crm')
+            industry, crm_owner_id, owner_email, owner_id, crm_created_at, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'crm')
          ON CONFLICT (user_id, crm_provider, crm_account_id) WHERE crm_account_id IS NOT NULL
          DO UPDATE SET
            name = EXCLUDED.name,
            name_normalized = EXCLUDED.name_normalized,
            industry = COALESCE(EXCLUDED.industry, accounts.industry),
            crm_owner_id = COALESCE(EXCLUDED.crm_owner_id, accounts.crm_owner_id),
+           -- L'owner déclaré par le CRM ÉCRASE celui déduit des contacts · ici
+           -- le CRM affirme, ailleurs baakalai supposait.
+           owner_email = COALESCE(EXCLUDED.owner_email, accounts.owner_email),
+           owner_id = COALESCE(EXCLUDED.owner_id, accounts.owner_id),
            crm_created_at = COALESCE(EXCLUDED.crm_created_at, accounts.crm_created_at),
            source = 'crm',
            updated_at = now()
          RETURNING id`,
         [userId, provider, String(a.id), a.name, cle,
-         a.industry || null, a.ownerId ? String(a.ownerId) : null, a.createdAt || null]
+         a.industry || null, crmOwnerId, info?.email || null, info?.baakalaiUserId || null,
+         a.createdAt || null]
       );
       const reel = res.rows[0]?.id;
       if (!reel) continue;
