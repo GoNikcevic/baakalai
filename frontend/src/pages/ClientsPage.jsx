@@ -854,6 +854,30 @@ export default function ClientsPage({ scope }) {
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {/* Le décideur, avant tout le reste · sur un compte à
+                            huit contacts, savoir à qui on parle vient avant de
+                            savoir depuis quand il se tait. Le badge ne dit rien
+                            quand le rôle est inconnu : une absence de marque se
+                            lit mieux qu'une étiquette « rôle inconnu » répétée
+                            sur la moitié de la liste. */}
+                        {!selectedClient && c.account_role === 'decision_maker' && (
+                          <span
+                            title={c.role_source === 'crm' ? t('clients.roleFromCrm') : t('clients.roleInferred')}
+                            style={{
+                              fontSize: 11, padding: '3px 10px', borderRadius: 6,
+                              background: 'var(--bg-elevated)', color: 'var(--accent)',
+                              fontWeight: 600, whiteSpace: 'nowrap',
+                              // Pointillé tant que c'est une déduction : la même
+                              // distinction visuelle que l'écran de relecture du
+                              // pipeline, où « le CRM le dit » et « baakalai a
+                              // supposé » n'appellent pas la même confiance.
+                              border: c.role_source === 'crm' ? '1px solid transparent' : '1px dashed var(--border)',
+                            }}
+                          >
+                            {t('clients.decisionMaker')}
+                          </span>
+                        )}
+
                         {/* Le silence est la raison d'être de la page : premier chip,
                             couleur avant chiffre. Il remplace la date de dernière
                             activité que personne n'allait chercher dans le panneau. */}

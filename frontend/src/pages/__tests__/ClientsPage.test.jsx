@@ -153,6 +153,34 @@ describe('ClientsPage · Vue globale Deals', () => {
     expect(screen.getByText(/Ahmed Ben Salah/)).toBeTruthy();
   });
 
+  /**
+   * Un compte a huit contacts et un seul qui signe. Savoir a qui on parle vient
+   * avant de savoir depuis quand il se tait, d'ou le badge en premier.
+   */
+  it('marque le décideur, et distingue le rôle déclaré du rôle déduit', async () => {
+    mockApi({ opportunities: [
+      { id: 'r1', name: 'Marie Signe', company: 'Acme', status: 'new', last_activity_at: new Date().toISOString(), account_role: 'decision_maker', role_source: 'crm' },
+      { id: 'r2', name: 'Paul Execute', company: 'Acme', status: 'new', last_activity_at: new Date().toISOString(), account_role: 'operational', role_source: 'inferred' },
+    ] });
+    renderDeals();
+    const badges = await screen.findAllByText('Décideur');
+    // Un seul des deux contacts est marqué · sinon le badge ne dit plus rien.
+    expect(badges).toHaveLength(1);
+    // Le rôle vient du CRM : trait plein, pas pointillé.
+    expect(badges[0].getAttribute('title')).toMatch(/déclaré dans votre CRM/);
+  });
+
+  it('ne marque rien quand le rôle est inconnu', async () => {
+    // Une absence de marque se lit mieux qu'une étiquette « rôle inconnu »
+    // répétée sur la moitié de la liste.
+    mockApi({ opportunities: [
+      { id: 'r3', name: 'Sans Role', company: 'Acme', status: 'new', last_activity_at: new Date().toISOString() },
+    ] });
+    renderDeals();
+    await screen.findByText('Acme');
+    expect(screen.queryByText('Décideur')).toBeNull();
+  });
+
   it('garde la personne en tête quand le CRM ne donne aucune société', async () => {
     // Cas réel du 29/09 : un Pipedrive dont aucun contact n'a d'organisation.
     // Sans repli, la ligne principale serait vide sur toute la liste.
