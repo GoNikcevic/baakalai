@@ -280,8 +280,21 @@ async function listDealsForDiagnostic(apiToken, { maxDeals = 2000 } = {}) {
 }
 
 async function getDeals(apiToken, limit = 100) {
-  const deals = await pdFetch(apiToken, `/deals?limit=${limit}&sort=add_time DESC`);
-  return (deals || []).map(d => ({
+  // Paginé comme /persons et comme listDealsForDiagnostic · un seul appel
+  // plafonné laissait tomber en silence tout ce qui dépassait, et le tri
+  // `sort=add_time DESC` ne servait à rien : lib/deal-lifecycle-sync.js
+  // réordonne lui-même les deals sur leur date de modification. Un paramètre
+  // qui n'apporte rien est un paramètre qui peut faire échouer l'appel.
+  const raw = [];
+  let start = 0;
+  for (;;) {
+    const page = await pdFetch(apiToken, `/deals?limit=500&start=${start}`);
+    if (!page || page.length === 0) break;
+    raw.push(...page);
+    if (raw.length >= limit || page.length < 500) break;
+    start += 500;
+  }
+  return raw.map(d => ({
     id: d.id,
     name: d.title,
     stage: d.stage_id,

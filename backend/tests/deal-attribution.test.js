@@ -239,8 +239,11 @@ function stubDb(rows) {
   return { state, released };
 }
 
-function loadSync(deals) {
-  stub('../api/salesforce', { async getDeals() { return deals; }, async getStages() { return []; } });
+function loadSync(deals, { throws = null } = {}) {
+  stub('../api/salesforce', {
+    async getDeals() { if (throws) throw new Error(throws); return deals; },
+    async getStages() { return []; },
+  });
   stub('../lib/stage-tracking', {
     async getStageLabelMap() { return new Map(); },
     extractStage(provider, deal) { return { id: deal.stage, label: deal.stage }; },
@@ -385,6 +388,42 @@ test('un rattachement affirmé par le CRM n\'est jamais libéré', async () => {
   assert.deepStrictEqual(released, []);
   assert.strictEqual(state.get('003C1').crm_deal_id, '006OLD');
   assert.strictEqual(Number(state.get('003C1').deal_value), 4000);
+});
+
+test('un connecteur qui refuse la lecture le dit, au lieu de passer pour un CRM vide', async () => {
+  // C'est ce qui a coûté deux enquêtes sur les 47 deals Pipedrive : le catch de
+  // fin couvrait aussi la lecture du CRM, donc un jeton refusé ou un endpoint
+  // changé se lisait exactement comme « ce CRM n'a pas de deals ».
+  const { state, released } = stubDb([
+    { id: 'opp1', crm_contact_id: '003C1', status: 'won', deal_value: 4000, crm_deal_id: '006X', crm_deal_attribution: 'inferred' },
+  ]);
+  const { syncDealLifecycle } = loadSync([], { throws: 'Pipedrive API 401' });
+
+  const result = await syncDealLifecycle('u1', {}, 'salesforce');
+
+  assert.match(result.error, /401/);
+  assert.strictEqual(result.fetched, 0);
+  // Et surtout : une lecture refusée ne libère aucun rattachement.
+  assert.deepStrictEqual(released, []);
+  assert.strictEqual(state.get('003C1').crm_deal_attribution, 'inferred');
+});
+
+test('un deal nommant une personne inconnue de nos contacts est compté à part', async () => {
+  // `unlinked` (le CRM ne nomme personne) et `unmatched` (la personne est
+  // nommée mais absente de l'import) n'appellent pas le même remède. Les
+  // confondre dans un continue muet, c'est chercher au mauvais endroit.
+  stubDb([{ id: 'opp1', crm_contact_id: '003C1', status: 'imported' }]);
+  const { syncDealLifecycle } = loadSync([
+    { id: '006A', personId: '003INCONNU', status: 'open', value: 1000, updatedAt: '2025-09-01T00:00:00Z' },
+    { id: '006B', status: 'open', value: 2000, updatedAt: '2025-09-02T00:00:00Z' },
+  ]);
+
+  const result = await syncDealLifecycle('u1', {}, 'salesforce');
+
+  assert.strictEqual(result.fetched, 2);
+  assert.strictEqual(result.unmatched, 1);
+  assert.strictEqual(result.unlinked, 1);
+  assert.strictEqual(result.processed, 0);
 });
 
 test('un appel CRM qui ne rend aucun deal ne libère rien', async () => {

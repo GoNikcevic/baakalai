@@ -40,13 +40,28 @@ const logger = require('./logger');
 const { setPlannedFollowupDate } = require('./reactivation-queue');
 
 async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
-  const result = { processed: 0, updated: 0, collisions: 0, released: 0 };
+  const result = {
+    fetched: 0, processed: 0, updated: 0,
+    unlinked: 0, unmatched: 0, collisions: 0, released: 0, error: null,
+  };
   try {
+    // Lecture du CRM isolée dans son propre catch · tout ce bloc était couvert
+    // par le catch de fin, donc un connecteur qui échouait (jeton refusé,
+    // endpoint changé, quota) se lisait exactement comme un CRM sans deals :
+    // zéro ligne touchée, zéro trace, et personne pour faire la différence.
+    // C'est ce qui a laissé 47 deals Pipedrive invisibles sans qu'aucun écran
+    // ni aucun journal ne le dise.
     let deals = [];
-    if (crmProvider === 'pipedrive') { const pipedrive = require('../api/pipedrive'); deals = await pipedrive.getDeals(token, 500); }
-    else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
-    else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token); }
-    else if (crmProvider === 'odoo') { const odooApi = require('../api/odoo'); deals = await odooApi.getDeals(token, { limit: 500 }); }
+    try {
+      if (crmProvider === 'pipedrive') { const pipedrive = require('../api/pipedrive'); deals = await pipedrive.getDeals(token, 500); }
+      else if (crmProvider === 'salesforce') { const sf = require('../api/salesforce'); deals = await sf.getDeals(token.instanceUrl, token.accessToken); }
+      else if (crmProvider === 'hubspot') { const hs = require('../api/hubspot'); deals = await hs.getDeals(token); }
+      else if (crmProvider === 'odoo') { const odooApi = require('../api/odoo'); deals = await odooApi.getDeals(token, { limit: 500 }); }
+    } catch (err) {
+      result.error = `getDeals: ${err.message}`;
+      logger.warn('deal-lifecycle-sync', `${crmProvider} · lecture des deals refusée pour ${userId} : ${err.message}`);
+    }
+    result.fetched = deals.length;
 
     // Étapes de pipeline (migration 092) : carte id → libellé résolue une fois
     // par sync pour les providers qui ne renvoient qu'un id d'étape.
@@ -93,13 +108,18 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
 
     for (const deal of ordered) {
       const personId = deal.personId ? String(deal.personId) : null;
-      if (!personId) continue;
+      // Deux façons de perdre un deal, et elles n'appellent pas le même
+      // remède : `unlinked` veut dire que le CRM ne nomme personne (repli de
+      // rattachement à écrire pour ce provider), `unmatched` que la personne
+      // est nommée mais absente de nos contacts (import incomplet). Les
+      // confondre dans un `continue` muet a coûté deux enquêtes.
+      if (!personId) { result.unlinked++; continue; }
 
       const opp = await db.query(
         `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason, crm_deal_id, crm_deal_attribution FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
         [userId, personId]
       );
-      if (!opp.rows[0]) continue;
+      if (!opp.rows[0]) { result.unmatched++; continue; }
       const o = opp.rows[0];
       if (claimed.has(o.id)) { result.collisions++; continue; }
       claimed.add(o.id);
@@ -270,8 +290,35 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
   } catch (err) {
     // Avant l'extraction ce catch était muet · c'est précisément ce qui rendait
     // les échecs de mapping won/lost invisibles. On trace, sans faire échouer.
+    result.error = result.error || err.message;
     logger.warn('deal-lifecycle-sync', `${crmProvider} deal sync failed for user ${userId}: ${err.message}`);
   }
+
+  // Le résultat part en base, pas seulement dans les journaux · un sync de
+  // deals qui ne rattache rien est indiscernable d'un CRM sans deals tant que
+  // personne ne peut lire, après coup, combien le connecteur en a vus. C'est
+  // ce qui manquait pour comprendre les 47 deals Pipedrive invisibles.
+  // Best-effort : track() ne lève jamais.
+  try {
+    const { track } = require('./track');
+    await track(userId, 'deal_sync_done', {
+      provider: crmProvider,
+      fetched: result.fetched,
+      attached: result.processed,
+      updated: result.updated,
+      unlinked: result.unlinked,
+      unmatched: result.unmatched,
+      collisions: result.collisions,
+      released: result.released,
+      error: result.error,
+    });
+  } catch { /* l'instrumentation ne doit jamais peser sur la synchro */ }
+
+  logger.info('deal-lifecycle-sync',
+    `${crmProvider} · ${result.fetched} deal(s) lus, ${result.processed} rattaché(s), ` +
+    `${result.unlinked} sans personne, ${result.unmatched} sans contact connu` +
+    (result.error ? ` · ERREUR ${result.error}` : ''));
+
   return result;
 }
 
