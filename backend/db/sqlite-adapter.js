@@ -359,6 +359,7 @@ function initSchema() {
       crm_contact_id TEXT,
       crm_created_at DATETIME,
       crm_deal_id TEXT,
+      crm_deal_attribution TEXT,
       crm_owner_id TEXT,
       crm_provider TEXT,
       crm_push_state TEXT,

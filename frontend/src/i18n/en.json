@@ -1274,6 +1274,15 @@
       "lost": "Lost"
     }
   },
+  "dealAttribution": {
+    "title": "Deals whose contact was inferred",
+    "subtitle": "{count} deal(s) in your CRM do not say which contact they belong to. baakalai picked the oldest contact on each account, one deal per contact.",
+    "confirm": "These are the right contacts",
+    "confirming": "Confirming...",
+    "confirmed": "{count} attribution(s) confirmed.",
+    "andMore": "and {count} more.",
+    "footnote": "Your totals, tiles and forecasts already count these deals. But until you confirm, no email will quote the value of an inferred deal to the contact it was pinned on."
+  },
   "analytics": {
     "subtitle": "Dig deeper into your CRM and campaign data",
     "groupDeals": "Deals",

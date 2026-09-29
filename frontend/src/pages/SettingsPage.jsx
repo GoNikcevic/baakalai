@@ -16,6 +16,7 @@ import EmailAccountSettings from '../components/EmailAccountSettings';
 import AutopilotSettings from '../components/AutopilotSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
 import StageMappingSettings from '../components/StageMappingSettings';
+import DealAttributionSettings from '../components/DealAttributionSettings';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
 
@@ -1072,6 +1073,11 @@ export default function SettingsPage() {
       {/* Ce que baakalai a compris du pipeline · au-dessus du mappage de
           champs : c'est la lecture automatique, le mappage manuel vient après. */}
       <StageMappingSettings />
+
+      {/* Les rattachements de deals devinés · juste sous le pipeline, même
+          famille de question : ce que baakalai a supposé de votre CRM. Ne
+          s'affiche que s'il y a quelque chose à confirmer. */}
+      <DealAttributionSettings />
 
       {/* CRM Field Mapping */}
       <FieldMappingSettings />

@@ -16,6 +16,7 @@ const claude = require('../../api/claude');
 const { getTimingContext, getCopyContext, getPatternContext, getTeamId } = require('../email-context');
 const { HUMAN_STYLE_RULES, humanize } = require('../human-style');
 const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
+const { assertableDealValue } = require('../deal-attribution');
 
 const DAY_MS = 86400000;
 
@@ -64,7 +65,7 @@ async function draftOne(userId, opportunityId, { angle } = {}) {
 
 CONTEXT:
 - Contact: ${opp.name} (${opp.title || 'N/A'}) at ${opp.company || 'N/A'}
-- Client (won deal)${opp.deal_value ? `, contract value ${opp.deal_value} €` : ''}
+- Client (won deal)${assertableDealValue(opp) ? `, contract value ${assertableDealValue(opp)} €` : ''}
 - Days since last activity: ${silentDays}
 - Churn risk score: ${opp.churn_score != null ? `${opp.churn_score}/100` : 'N/A'}
 - Warning signals detected: ${formatChurnFactors(opp.churn_factors)}

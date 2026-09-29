@@ -1274,6 +1274,15 @@
       "lost": "Perdu"
     }
   },
+  "dealAttribution": {
+    "title": "Les deals dont l'interlocuteur a été deviné",
+    "subtitle": "{count} deal(s) de votre CRM n'indiquent pas à quel contact ils appartiennent. baakalai a désigné le contact le plus ancien de chaque compte, un deal par contact.",
+    "confirm": "Ce sont les bons interlocuteurs",
+    "confirming": "Validation...",
+    "confirmed": "{count} rattachement(s) confirmé(s).",
+    "andMore": "et {count} autre(s).",
+    "footnote": "Vos totaux, vos tuiles et vos prévisions comptent déjà ces deals. En revanche, tant que vous n'avez pas confirmé, aucun email ne cite le montant d'un deal deviné à son porteur supposé."
+  },
   "analytics": {
     "subtitle": "Analysez plus finement les données de votre CRM et de vos campagnes",
     "groupDeals": "Deals",

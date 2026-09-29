@@ -1833,6 +1833,29 @@ router.put('/stage-mapping/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/crm/deal-attribution · les rattachements que baakalai a devinés
+//
+// Pendant de /stage-mapping dans Réglages / Configuration CRM : l'un dit ce que
+// baakalai a compris du pipeline, l'autre ce qu'il a supposé du rattachement
+// des deals. Les deux se relisent au même endroit, sinon aucun ne se relit.
+router.get('/deal-attribution', async (req, res, next) => {
+  try {
+    const { getInferredAttributions } = require('../lib/deal-attribution');
+    res.json(await getInferredAttributions(req.user.id));
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/deal-attribution/confirm · le user valide les porteurs devinés
+//
+// Tant qu'il ne l'a pas fait, aucun email ne cite le montant d'un deal deviné
+// (lib/deal-attribution.js). Après, si.
+router.post('/deal-attribution/confirm', async (req, res, next) => {
+  try {
+    const { confirmInferredAttributions } = require('../lib/deal-attribution');
+    res.json(await confirmInferredAttributions(req.user.id));
+  } catch (err) { next(err); }
+});
+
 // =============================================
 // Auto-import helper (used by first-diagnostic)
 // =============================================
