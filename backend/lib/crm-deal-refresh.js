@@ -81,20 +81,47 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
     }
   }
 
-  // Les COMPTES ensuite, et pour TOUS les providers · y compris Notion,
-  // Airtable et Folk, qui n'ont ni deal ni étape mais ont bien des sociétés.
-  // Avant le `return` plus bas, donc, sinon la moitié des CRM n'aurait jamais
-  // de comptes.
+  // 1. Les VRAIES sociétés du CRM · elles portent l'identifiant natif, la date
+  // de création et le secteur. En premier, parce que la synchro des deals a
+  // besoin qu'elles existent pour y rattacher un contact par cet identifiant.
   try {
-    const { syncAccountsForUser, importCrmAccounts } = require('./accounts');
-    // Les vraies sociétés d'abord quand on peut les lire : elles portent
-    // l'identifiant natif, la date de création et le secteur. Le regroupement
-    // par nom ensuite, qui rattache au compte réel s'il existe et ne dérive
-    // que le reste.
+    const { importCrmAccounts } = require('./accounts');
     if (creds) out.crmAccounts = await importCrmAccounts(userId, provider, creds);
-    out.accounts = await syncAccountsForUser(userId, { provider });
   } catch (err) {
     out.accountsError = err.message;
+    logger.warn('crm-deal-refresh', `sociétés non lues pour ${userId} : ${err.message}`);
+  }
+
+  // 2. Les DEALS · ils posent montants, dénouements, étapes, et rattachent au
+  // passage les contacts dont seul le deal connaît la société.
+  const avecDeals = WITH_DEALS.includes(provider) && !!creds;
+  if (avecDeals) {
+    try {
+      const { syncDealLifecycle } = require('./deal-lifecycle-sync');
+      // `report` suit jusqu'au bout : c'est lui qui recueille les réactivations
+      // attribuées à un email, le signal d'apprentissage le plus fort du produit.
+      out.lifecycle = await syncDealLifecycle(userId, creds, provider, opts.report || {});
+      out.ran = true;
+    } catch (err) {
+      out.error = out.error || err.message;
+      logger.warn('crm-deal-refresh', `${provider} deals échoués pour ${userId} : ${err.message}`);
+    }
+  }
+
+  // 3. Le REGROUPEMENT par société, APRÈS les deals et non avant · c'est la
+  // synchro des deals qui renseigne la société des contacts que seul le deal
+  // rattache à une organisation. Placé avant, ce regroupement travaillait sur
+  // un monde encore sans sociétés et annonçait « 169 sans société » alors que
+  // 26 venaient d'en recevoir une. Il fallait un second passage pour rattraper.
+  //
+  // Hors du `if` ci-dessus : Notion, Airtable et Folk n'ont ni deal ni étape,
+  // mais ont bien des sociétés, et les en priver réserverait le modèle de
+  // comptes aux quatre CRM structurés.
+  try {
+    const { syncAccountsForUser } = require('./accounts');
+    out.accounts = await syncAccountsForUser(userId, { provider });
+  } catch (err) {
+    out.accountsError = out.accountsError || err.message;
     logger.warn('crm-deal-refresh', `comptes non reconstruits pour ${userId} : ${err.message}`);
   }
 
@@ -120,15 +147,13 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
     });
   } catch { /* l'instrumentation ne doit jamais peser sur la synchro */ }
 
-  if (!WITH_DEALS.includes(provider) || !creds) return out;
+  if (!avecDeals) return out;
 
+  // 4. Le MAPPAGE d'étapes, en dernier · le cycle de vie tranche gagné et
+  // perdu sur les drapeaux natifs, celui-ci ne réécrit que les statuts
+  // ouverts. Dans cet ordre, un deal conclu ne repasse jamais par
+  // « négociation » le temps d'une synchro.
   try {
-    const { syncDealLifecycle } = require('./deal-lifecycle-sync');
-    // `report` suit jusqu'au bout : c'est lui qui recueille les réactivations
-    // attribuées à un email, le signal d'apprentissage le plus fort du produit.
-    out.lifecycle = await syncDealLifecycle(userId, creds, provider, opts.report || {});
-    out.ran = true;
-
     const { analyzeStageArchitecture, applyStageMapping } = require('./crm-stage-mapper');
     const arch = await analyzeStageArchitecture(userId, { provider, creds });
     const applied = await applyStageMapping(userId, provider);
@@ -137,7 +162,7 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
     out.repositioned = applied.updated || 0;
 
     logger.info('crm-deal-refresh',
-      `${provider} · ${out.lifecycle.updated}/${out.lifecycle.processed} opportunité(s) mise(s) à jour, ` +
+      `${provider} · ${out.lifecycle?.updated ?? 0}/${out.lifecycle?.processed ?? 0} opportunité(s) mise(s) à jour, ` +
       `${out.stages} étape(s) lue(s), ${out.repositioned} repositionnée(s)`);
   } catch (err) {
     out.error = err.message;

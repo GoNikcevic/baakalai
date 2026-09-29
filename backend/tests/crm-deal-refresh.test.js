@@ -61,7 +61,10 @@ test('le cycle de vie passe AVANT le mappage d\'étapes', async () => {
 
   // Les comptes d'abord : ils valent pour tous les CRM, les deals seulement
   // pour les quatre qui en ont.
-  assert.deepStrictEqual(ordre, ['societes', 'comptes', 'lifecycle', 'stages', 'apply']);
+  // Sociétés, deals, PUIS regroupement : c'est la synchro des deals qui
+  // renseigne la société des contacts que seul le deal rattache. Regrouper
+  // avant, c'est travailler sur un monde encore sans sociétés.
+  assert.deepStrictEqual(ordre, ['societes', 'lifecycle', 'comptes', 'stages', 'apply']);
   assert.strictEqual(out.ran, true);
 });
 
