@@ -1,4 +1,4 @@
--- 122 : d'où vient le lien entre un deal du CRM et un contact de baakalai.
+-- 123 : d'où vient le lien entre un deal du CRM et un contact de baakalai.
 --
 -- `opportunities` porte une ligne par CONTACT. Un deal du CRM s'y accroche par
 -- `crm_contact_id`, et c'est ce lien qui donne à la ligne son montant, son
@@ -33,7 +33,7 @@ ALTER TABLE opportunities
   CHECK (crm_deal_attribution IN ('crm_role', 'inferred', 'user'));
 
 COMMENT ON COLUMN opportunities.crm_deal_attribution IS
-  'Origine du rattachement deal -> contact : crm_role (le CRM le dit), inferred (baakalai a supposé), user (confirmé à la main). NULL = rattaché avant la migration 122.';
+  'Origine du rattachement deal -> contact : crm_role (le CRM le dit), inferred (baakalai a supposé), user (confirmé à la main). NULL = rattaché avant la migration 123.';
 
 -- Partiel : la seule question posée à cette colonne est « combien de
 -- rattachements restent à confirmer, pour ce user ». Les lignes réelles, qui

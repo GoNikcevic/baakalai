@@ -185,7 +185,7 @@ test('le montant sort quand le CRM nomme le contact, ou quand le user a confirm�
   assert.strictEqual(assertableDealValue({ deal_value: 45000, crm_deal_attribution: 'user' }), 45000);
 });
 
-test('une ligne antérieure à la migration 122 reste citable', () => {
+test('une ligne antérieure à la migration 123 reste citable', () => {
   // NULL veut dire « rattaché avant que la question se pose », sur des orgs qui
   // remplissaient leurs contact roles. Traiter ces lignes comme douteuses
   // ferait taire le montant chez tous les users existants.

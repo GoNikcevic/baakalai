@@ -27,7 +27,7 @@
  * compte/deal/contact, plan du 28/09) ; en attendant, mieux vaut une ligne
  * cohérente et un compteur que trois écritures qui se contredisent.
  *
- * `crm_deal_id` et `crm_deal_attribution` (migration 122) disent de quel deal
+ * `crm_deal_id` et `crm_deal_attribution` (migration 123) disent de quel deal
  * vient le chiffre, et si le lien vers le contact a été affirmé par le CRM ou
  * supposé par baakalai · voir api/salesforce.js pour la règle de déduction et
  * lib/deal-attribution.js pour ce qu'un lien supposé interdit de dire.

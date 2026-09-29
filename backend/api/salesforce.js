@@ -215,7 +215,7 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
   //     un montant, une étape. Doubler, c'est écraser en silence.
   //
   // `personIdInferred` dit que le lien est supposé. lib/deal-lifecycle-sync.js
-  // le persiste dans crm_deal_attribution (migration 122), et les agents n'ont
+  // le persiste dans crm_deal_attribution (migration 123), et les agents n'ont
   // pas le droit d'affirmer le montant d'un deal deviné à son porteur supposé.
   //
   // Best-effort : ne fait jamais échouer getDeals.
