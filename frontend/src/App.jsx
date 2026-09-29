@@ -32,6 +32,7 @@ const CampaignsList = lazyRetry(() => import('./pages/CampaignsList'))
 const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'))
 const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
 const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
+const AccountsPage = lazyRetry(() => import('./pages/AccountsPage'))
 const DealsToReactivatePage = lazyRetry(() => import('./pages/DealsToReactivatePage'))
 const ClientsToUpsellPage = lazyRetry(() => import('./pages/ClientsToUpsellPage'))
 const DealReactivationDetailRoute = lazyRetry(() => import('./pages/DealReactivationDetailRoute'))
@@ -210,6 +211,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/campaigns" element={<CampaignsList />} />
             <Route path="/campaigns/:id" element={<CampaignDetailRoute />} />
+            <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/deals" element={<ClientsPage scope="deals" />} />
             <Route path="/clients" element={<ClientsPage scope="clients" />} />
             <Route path="/deals-to-reactivate" element={<DealsToReactivatePage />} />

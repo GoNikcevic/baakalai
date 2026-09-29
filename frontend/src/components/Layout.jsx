@@ -31,6 +31,12 @@ const NAV_ITEMS = [
   // Activation est l'action qu'on leur applique, donc juste après ; CRM ferme
   // la liste comme couche d'analyse (qualité de données, analytics).
   { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
+  // Comptes avant Deals · une affaire appartient à une société, et c'est la
+  // société qu'on cherche quand on se demande avec qui on travaille. Ajouté au
+  // lot 2 sans rien retirer : la bascule de Clients en segment de Comptes
+  // (§12.2 du plan) est un remaniement de navigation à part entière, qui n'a
+  // pas sa place à deux jours d'une démo.
+  { i18nKey: 'nav.accounts',            to: '/accounts',            icon: 'clients' },
   {
     i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'pipeline',
     children: [

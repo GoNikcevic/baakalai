@@ -409,6 +409,7 @@
     "clientsToUpsell": "Clients à upseller",
     "churnRisk": "Clients à risque",
     "dataQuality": "Data Quality",
+    "accounts": "Comptes",
     "sectionDeals": "Deals",
     "sectionClients": "Clients",
     "sectionCrm": "CRM",
@@ -1282,6 +1283,18 @@
     "confirmed": "{count} rattachement(s) confirmé(s).",
     "andMore": "et {count} autre(s).",
     "footnote": "Vos totaux, vos tuiles et vos prévisions comptent déjà ces deals. En revanche, tant que vous n'avez pas confirmé, aucun email ne cite le montant d'un deal deviné à son porteur supposé."
+  },
+  "accounts": {
+    "title": "Comptes",
+    "subtitle": "{count} société(s) dans votre CRM, {value} de pipeline cumulé",
+    "empty": "Aucune société pour l'instant. Elles apparaîtront à la prochaine lecture de votre CRM, depuis le bouton Actualiser de la page Deals.",
+    "search": "Rechercher une société...",
+    "contacts": "{count} contact(s)",
+    "derived": "société reconstruite",
+    "won": "{count} gagné(s)",
+    "open": "{count} en cours",
+    "noActivity": "aucun contact connu",
+    "days": "{days} j sans contact"
   },
   "analytics": {
     "subtitle": "Analysez plus finement les données de votre CRM et de vos campagnes",

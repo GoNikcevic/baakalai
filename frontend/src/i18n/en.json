@@ -409,6 +409,7 @@
     "clientsToUpsell": "Clients to upsell",
     "churnRisk": "Clients at risk",
     "dataQuality": "Data Quality",
+    "accounts": "Accounts",
     "sectionDeals": "Deals",
     "sectionClients": "Clients",
     "sectionCrm": "CRM",
@@ -1282,6 +1283,18 @@
     "confirmed": "{count} attribution(s) confirmed.",
     "andMore": "and {count} more.",
     "footnote": "Your totals, tiles and forecasts already count these deals. But until you confirm, no email will quote the value of an inferred deal to the contact it was pinned on."
+  },
+  "accounts": {
+    "title": "Accounts",
+    "subtitle": "{count} company(ies) in your CRM, {value} of combined pipeline",
+    "empty": "No company yet. They will show up the next time your CRM is read, from the Refresh button on the Deals page.",
+    "search": "Search a company...",
+    "contacts": "{count} contact(s)",
+    "derived": "rebuilt company",
+    "won": "{count} won",
+    "open": "{count} open",
+    "noActivity": "no known contact",
+    "days": "{days}d without contact"
   },
   "analytics": {
     "subtitle": "Dig deeper into your CRM and campaign data",
