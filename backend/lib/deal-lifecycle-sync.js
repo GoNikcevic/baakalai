@@ -128,7 +128,7 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       if (!personId) { result.unlinked++; continue; }
 
       const opp = await db.query(
-        `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason, crm_deal_id, crm_deal_attribution, account_id, company FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+        `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason, crm_deal_id, crm_deal_attribution, account_id, company, account_role, role_source FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
         [userId, personId]
       );
       if (!opp.rows[0]) { result.unmatched++; continue; }
@@ -174,6 +174,18 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
           // Le nom ne s'écrase jamais · si le CRM a déjà dit où travaille
           // cette personne, c'est lui qui a raison, pas le deal.
           if (!o.company && compte.name) updates.company = compte.name;
+        }
+      }
+
+      // Le rôle que le CRM déclare sur ce contact · il passe devant toute
+      // déduction faite sur l'intitulé de poste, et une correction manuelle
+      // ('user') ne se fait jamais écraser par lui (lot 3, migration 125).
+      if (deal.personRole && o.role_source !== 'user') {
+        const { roleFromCrm } = require('./contact-role');
+        const role = roleFromCrm(deal.personRole);
+        if (role && (o.account_role !== role || o.role_source !== 'crm')) {
+          updates.account_role = role;
+          updates.role_source = 'crm';
         }
       }
 

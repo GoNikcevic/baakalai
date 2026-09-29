@@ -274,6 +274,80 @@ async function importCrmAccounts(userId, provider, creds) {
   return out;
 }
 
+/**
+ * Les RÔLES et l'interlocuteur principal · lot 3 (migration 125).
+ *
+ * Deux passes en une, parce qu'elles lisent les mêmes lignes :
+ *
+ *   · le rôle de chaque contact, déduit de son intitulé de poste quand le CRM
+ *     n'en déclare pas. Une ligne déjà marquée 'crm' ou 'user' n'est jamais
+ *     touchée : le CRM affirme, l'utilisateur tranche, baakalai comble.
+ *   · l'interlocuteur principal de chaque compte, un seul, élu selon des
+ *     critères ordonnés (voir lib/contact-role.js).
+ *
+ * À faire APRÈS le rattachement aux comptes, sinon il n'y a pas de compte sur
+ * lequel élire quoi que ce soit.
+ */
+async function syncContactRoles(userId, { provider = null } = {}) {
+  const out = { roles: 0, primaries: 0 };
+  try {
+    const { roleFromTitle, electPrimary } = require('./contact-role');
+
+    const rows = await db.query(
+      `SELECT id, account_id, title, last_activity_at, account_role, role_source, is_primary_contact
+         FROM opportunities
+        WHERE user_id = $1 AND ($2::text IS NULL OR crm_provider = $2)`,
+      [userId, provider]
+    );
+
+    // ── Les rôles ──
+    for (const c of rows.rows) {
+      // Ni le CRM ni l'utilisateur ne se font corriger par une déduction.
+      if (c.role_source === 'crm' || c.role_source === 'user') continue;
+      const role = roleFromTitle(c.title);
+      if (!role || role === c.account_role) continue;
+      await db.query(
+        `UPDATE opportunities SET account_role = $2, role_source = 'inferred' WHERE id = $1`,
+        [c.id, role]
+      );
+      c.account_role = role;
+      c.role_source = 'inferred';
+      out.roles++;
+    }
+
+    // ── Le principal, un par compte ──
+    const parCompte = new Map();
+    for (const c of rows.rows) {
+      if (!c.account_id) continue;
+      if (!parCompte.has(c.account_id)) parCompte.set(c.account_id, []);
+      parCompte.get(c.account_id).push(c);
+    }
+
+    for (const [accountId, contacts] of parCompte) {
+      const elu = electPrimary(contacts);
+      if (!elu) continue;
+      // Deux écritures ciblées plutôt qu'un UPDATE global : ne toucher que ce
+      // qui change évite de faire bouger updated_at sur tout le compte, ce que
+      // le scoring de récence relirait ensuite comme de l'activité.
+      const aRetirer = contacts.filter(c => c.is_primary_contact && c.id !== elu.id).map(c => c.id);
+      if (aRetirer.length > 0) {
+        await db.query(`UPDATE opportunities SET is_primary_contact = false WHERE id = ANY($1)`, [aRetirer]);
+      }
+      if (!elu.is_primary_contact) {
+        await db.query(`UPDATE opportunities SET is_primary_contact = true WHERE id = $1`, [elu.id]);
+        out.primaries++;
+      }
+      void accountId;
+    }
+
+    logger.info('accounts',
+      `${userId} · ${out.roles} rôle(s) déduit(s), ${out.primaries} interlocuteur(s) principal(aux) élu(s)`);
+  } catch (err) {
+    logger.warn('accounts', `Rôles non calculés pour ${userId} : ${err.message}`);
+  }
+  return out;
+}
+
 /** Les comptes d'un utilisateur, avec ce qu'ils portent. */
 async function listAccounts(userId, { limit = 500 } = {}) {
   const res = await db.query(
@@ -294,4 +368,4 @@ async function listAccounts(userId, { limit = 500 } = {}) {
   return res.rows;
 }
 
-module.exports = { syncAccountsForUser, importCrmAccounts, listAccounts };
+module.exports = { syncAccountsForUser, importCrmAccounts, syncContactRoles, listAccounts };

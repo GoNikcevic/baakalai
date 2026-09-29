@@ -165,7 +165,7 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
   // pagination laissait les opportunités anciennes des vrais orgs sans mapping
   // won/lost · donc invisibles comme clients.
   const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed, AccountId,
-    (SELECT ContactId FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
+    (SELECT ContactId, Role FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
     FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const deals = [];
   let result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
@@ -178,6 +178,12 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
         status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
         value: r.Amount,
         personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
+        // Le RÔLE était déjà rapatrié et jeté · la sous-requête ne servait que
+        // de booléen de rattachement. Salesforce est le seul des quatre à
+        // déclarer explicitement qui décide (Decision Maker, Economic Buyer,
+        // Influencer...), et c'est plus fiable que n'importe quelle déduction
+        // sur l'intitulé de poste.
+        personRole: r.OpportunityContactRoles?.records?.[0]?.Role || null,
         accountId: r.AccountId ? String(r.AccountId) : null,
         // Même forme normalisée que les trois autres connecteurs · le nom n'est
         // pas dans cette requête, mais déclarer le champ évite que l'appelant

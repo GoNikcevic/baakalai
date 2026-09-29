@@ -118,8 +118,11 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
   // mais ont bien des sociétés, et les en priver réserverait le modèle de
   // comptes aux quatre CRM structurés.
   try {
-    const { syncAccountsForUser } = require('./accounts');
+    const { syncAccountsForUser, syncContactRoles } = require('./accounts');
     out.accounts = await syncAccountsForUser(userId, { provider });
+    // Les RÔLES en dernier · élire l'interlocuteur principal d'un compte
+    // suppose que le compte existe et que ses contacts y soient rattachés.
+    out.roles = await syncContactRoles(userId, { provider });
   } catch (err) {
     out.accountsError = out.accountsError || err.message;
     logger.warn('crm-deal-refresh', `comptes non reconstruits pour ${userId} : ${err.message}`);
