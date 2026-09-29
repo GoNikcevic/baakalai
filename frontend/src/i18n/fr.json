@@ -1192,6 +1192,7 @@
     "dealsDormant": "{count} dorment depuis plus de 30 jours",
     "silenceDays": "{days} j sans contact",
     "silenceNever": "aucun contact connu",
+    "accountSummary": "{deals} affaire(s), {contacts} contact(s)",
     "decisionMaker": "Décideur",
     "roleFromCrm": "Rôle déclaré dans votre CRM",
     "roleInferred": "Rôle déduit de l'intitulé de poste",

@@ -31,12 +31,14 @@ const NAV_ITEMS = [
   // Activation est l'action qu'on leur applique, donc juste après ; CRM ferme
   // la liste comme couche d'analyse (qualité de données, analytics).
   { i18nKey: 'nav.campaigns',           to: '/campaigns',           icon: 'campaigns' },
-  // Comptes avant Deals · une affaire appartient à une société, et c'est la
-  // société qu'on cherche quand on se demande avec qui on travaille. Ajouté au
-  // lot 2 sans rien retirer : la bascule de Clients en segment de Comptes
-  // (§12.2 du plan) est un remaniement de navigation à part entière, qui n'a
-  // pas sa place à deux jours d'une démo.
-  { i18nKey: 'nav.accounts',            to: '/accounts',            icon: 'clients' },
+  // Pas d'entrée « Comptes » · Deals et Clients SONT la liste des comptes
+  // depuis le 29/09, chacune filtrée sur une question différente : les sociétés
+  // qui ont une affaire en cours, celles qui ont un deal gagné. Une quatrième
+  // liste qui montre les mêmes sociétés sans filtre n'apprendrait rien.
+  //
+  // La page /accounts et sa route existent toujours, et l'API qui la sert
+  // aussi : elles donnent la vue brute des comptes, utile pour vérifier ce que
+  // la reconstruction a produit. Elle n'a simplement rien à faire dans un menu.
   {
     i18nKey: 'nav.sectionDeals', section: 'deals', icon: 'pipeline',
     children: [

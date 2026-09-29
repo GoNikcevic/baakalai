@@ -126,6 +126,9 @@ export default function ClientsPage({ scope }) {
   const [connectedProviders, setConnectedProviders] = useState([]);
   const [owners, setOwners] = useState([]);
   const [ownerFilter, setOwnerFilter] = useState('all');
+  // Comptes dépliés · un Set et non un id unique, pour qu'on puisse en ouvrir
+  // plusieurs et les comparer sans perdre le premier.
+  const [expandedAccounts, setExpandedAccounts] = useState(() => new Set());
   const [crmFilter, setCrmFilter] = useState('all');
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [selected, setSelected] = useState(new Set());
@@ -336,6 +339,97 @@ export default function ClientsPage({ scope }) {
     }
     return 0;
   }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue, sortBy, activeTile]);
+
+  // ── Regroupement par COMPTE ─────────────────────────────────────────────
+  //
+  // Décision du 29/09 : une ligne est une SOCIÉTÉ, pas une personne. Le clic
+  // déplie ses affaires, chacune avec son interlocuteur, puis les contacts qui
+  // n'en portent aucune.
+  //
+  // Le regroupement se fait sur les lignes DÉJÀ filtrées, pas sur la liste
+  // complète : chercher « cheva » doit faire remonter le compte de Sandrine
+  // Chevalier, pas tous les comptes du CRM.
+  //
+  // Un contact sans société forme son propre groupe, sous son nom. Sans ça, un
+  // CRM dont les personnes n'ont pas d'organisation ferait disparaître presque
+  // tout le monde · mesuré le 29/09 sur un Pipedrive réel : 169 contacts, 26
+  // rattachés à une société.
+  const accountGroups = useMemo(() => {
+    const groupes = new Map();
+    for (const c of filtered) {
+      const cle = c.account_id || (c.company && c.company.trim()) || `personne:${c.id}`;
+      if (!groupes.has(cle)) {
+        groupes.set(cle, {
+          key: String(cle),
+          name: (c.company && c.company.trim()) || c.name || ' ',
+          // Vrai quand le groupe n'est qu'une personne sans société · l'écran
+          // le dit, pour ne pas faire passer un contact pour une entreprise.
+          orphan: !c.account_id && !(c.company && c.company.trim()),
+          rows: [],
+        });
+      }
+      groupes.get(cle).rows.push(c);
+    }
+
+    // Une « affaire » est une ligne qui porte un deal · montant, étape ou
+    // identifiant de deal. La clé est le DEAL et non l'étape : une affaire dont
+    // l'étape n'a pas encore été traduite reste une affaire.
+    const porteUneAffaire = (c) => !!(c.crm_deal_id || c.deal_value != null || c.crm_stage);
+
+    return [...groupes.values()].map(g => {
+      const deals = g.rows.filter(porteUneAffaire);
+      const sansAffaire = g.rows.filter(c => !porteUneAffaire(c));
+      const value = deals.reduce((s, c) => s + (Number(c.deal_value) || 0), 0);
+      // Silence du COMPTE : la dernière activité de N'IMPORTE LEQUEL de ses
+      // contacts (arbitrage 12.3). Un compte n'est pas silencieux parce qu'un
+      // de ses interlocuteurs l'est.
+      const jours = g.rows
+        .map(c => daysSince(c.last_activity_at))
+        .filter(d => d != null);
+      return {
+        ...g,
+        deals,
+        sansAffaire,
+        value,
+        silenceDays: jours.length > 0 ? Math.min(...jours) : null,
+        // Le décideur du compte, s'il y en a un : c'est lui qu'on met en avant.
+        decideur: g.rows.find(c => c.is_primary_contact) || g.rows.find(c => c.account_role === 'decision_maker') || null,
+      };
+    }).sort((a, b) => {
+      if (sortBy === 'value') return b.value - a.value;
+      // Tri par silence : le plus long d'abord, les comptes sans activité
+      // connue en dernier plutôt qu'en tête, une date absente n'étant pas une
+      // alerte.
+      const sa = a.silenceDays == null ? -1 : a.silenceDays;
+      const sb = b.silenceDays == null ? -1 : b.silenceDays;
+      return sb - sa;
+    });
+  }, [filtered, sortBy]);
+
+  // Ce que la liste rend réellement : un en-tête de compte, puis ses lignes de
+  // contact quand il est déplié. Une seule liste plate, pour que le rendu d'un
+  // contact reste exactement celui d'avant.
+  //
+  // Une recherche déplie tout : chercher quelqu'un et tomber sur une liste de
+  // sociétés fermées serait absurde. C'est ce qui permet de retrouver une
+  // personne depuis Deals ou Clients sans liste Contacts dédiée.
+  const renderList = useMemo(() => {
+    const out = [];
+    const toutDeplier = !!search || isDealQualityContext;
+    for (const g of accountGroups) {
+      // Un contact seul, sans société, n'a pas d'en-tête à lui : ce serait une
+      // ligne de compte qui n'en est pas une. Il se rend directement.
+      if (g.orphan && g.rows.length === 1) {
+        out.push({ type: 'row', row: g.rows[0] });
+        continue;
+      }
+      out.push({ type: 'account', group: g });
+      if (toutDeplier || expandedAccounts.has(g.key)) {
+        for (const c of [...g.deals, ...g.sansAffaire]) out.push({ type: 'row', row: c, nested: true });
+      }
+    }
+    return out;
+  }, [accountGroups, expandedAccounts, search, isDealQualityContext]);
 
   const statusCounts = useMemo(() => {
     const counts = {};
@@ -766,7 +860,65 @@ export default function ClientsPage({ scope }) {
                   <span>{t('clients.selectAll')} ({filtered.length})</span>
                 </div>
               )}
-              {filtered.map(c => {
+              {renderList.map(item => {
+                // ── En-tête de COMPTE ──
+                //
+                // La société d'abord, sa valeur ensuite, ses gens derrière le
+                // clic. C'est le sens de lecture décidé le 29/09 : on cherche
+                // une entreprise, pas un prénom.
+                if (item.type === 'account') {
+                  const g = item.group;
+                  const ouvert = !!search || expandedAccounts.has(g.key);
+                  return (
+                    <div
+                      key={`acc-${g.key}`}
+                      onClick={() => setExpandedAccounts(prev => {
+                        const suivant = new Set(prev);
+                        if (suivant.has(g.key)) suivant.delete(g.key); else suivant.add(g.key);
+                        return suivant;
+                      })}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        gap: 14, padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
+                        border: '1px solid var(--border)', background: 'var(--bg-card)',
+                        fontSize: 13, marginTop: 4,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 10, flexShrink: 0 }}>
+                          {ouvert ? '▾' : '▸'}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {g.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {t('clients.accountSummary', { deals: g.deals.length, contacts: g.rows.length })}
+                            {g.decideur ? ` · ${g.decideur.name}` : ''}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        {g.value > 0 && (
+                          <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {Math.round(g.value).toLocaleString('fr-FR')} {'€'}
+                          </span>
+                        )}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: silenceColor(g.silenceDays), flexShrink: 0 }} />
+                          <span style={{ color: g.silenceDays == null ? 'var(--text-muted)' : silenceColor(g.silenceDays) }}>
+                            {g.silenceDays == null
+                              ? t('clients.silenceNever')
+                              : t('clients.silenceDays', { days: g.silenceDays })}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const c = item.row;
                 const color = STATUS_COLORS[c.status] || 'var(--text-muted)';
                 const isSelected = selectedClient?.id === c.id;
                 const isChecked = selected.has(c.id);
@@ -807,7 +959,9 @@ export default function ClientsPage({ scope }) {
                 }
 
                 return (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  // Indentation quand la ligne appartient à un compte déplié :
+                  // c'est le seul signal qui dit qu'elle en dépend.
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: item.nested ? 22 : 0 }}>
                     {!selectedClient && (
                       <input type="checkbox" checked={isChecked}
                         onChange={() => toggleSelect(c.id)}
@@ -822,20 +976,23 @@ export default function ClientsPage({ scope }) {
                       transition: 'all 0.15s',
                     }}>
                       <div style={{ minWidth: 0 }}>
-                        {/* La SOCIÉTÉ en gras, la personne en dessous · Deals et
-                            Clients répondent tous deux à une question de compte,
-                            et la page affichait deux cents prénoms sans jamais
-                            montrer une entreprise. Repli sur la personne quand
-                            la société manque, pour ne jamais laisser la ligne
-                            principale vide. Règle unique dans ContactSubline. */}
+                        {/* Sous un compte déplié, la ligne montre la PERSONNE :
+                            répéter le nom de la société sur chacun de ses
+                            contacts, juste sous l'en-tête qui le porte déjà,
+                            n'apprend rien et noie l'interlocuteur.
+                            Hors regroupement, la société reprend la tête · c'est
+                            elle qu'on cherche, pas un prénom. Règle unique dans
+                            ContactSubline. */}
                         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {accountFirstLines(c).primary || ' '}
+                          {(item.nested ? (c.name || ' ') : accountFirstLines(c).primary) || ' '}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {/* Panneau ouvert, la ligne est étroite et la société est
                               déjà répétée dans l'en-tête du panneau : la fonction
                               seule est ce qui manque le plus à l'écran. */}
-                          {!selectedClient ? accountFirstLines(c).secondary : (c.title || c.email || '')}
+                          {item.nested
+                            ? (c.title || c.email || '')
+                            : (!selectedClient ? accountFirstLines(c).secondary : (c.title || c.email || ''))}
                           {/* Étape CRM et relance prévue en seconde ligne, seulement
                               quand elles existent : sur les données importées, la
                               majorité des deals n'a pas d'étape rapatriée, et une

@@ -62,6 +62,16 @@ beforeEach(() => {
 });
 
 /**
+ * Les listes sont desormais orientees COMPTE : une ligne est une societe, et
+ * ses contacts sont derriere le clic (decision du 29/09). Ouvrir un compte est
+ * donc un prealable a toute assertion portant sur une personne.
+ */
+async function ouvrirCompte(nom) {
+  fireEvent.click(await screen.findByText(nom));
+  return screen.findByText(nom);
+}
+
+/**
  * Deux ReferenceError silencieuses ont vécu onze jours dans cette page : un
  * `churnData` inexistant coupait loadData en route, et `crmProviderCounts`, lu
  * hors de sa portée, faisait planter le panneau de détail au clic. Les deux
@@ -75,7 +85,9 @@ describe('ClientsPage · chargement complet', () => {
     // `console.error` du catch, seul endroit où une exception atterrit.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     renderDeals();
-    await screen.findByText('Marie Dupont');
+    // La liste rend des societes · c'est elle qui prouve que loadData est alle
+    // au bout, la personne n'apparait qu'une fois le compte ouvert.
+    await screen.findByText('Groupe Belfort');
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
@@ -90,8 +102,8 @@ describe('ClientsPage · chargement complet', () => {
 
   it('ouvre le panneau de détail sans planter', async () => {
     renderDeals();
-    await screen.findByText('Marie Dupont');
-    fireEvent.click(screen.getByText('Marie Dupont'));
+    await ouvrirCompte('Groupe Belfort');
+    fireEvent.click(await screen.findByText('Marie Dupont'));
     // Le panneau charge le détail du contact cliqué : preuve qu'il a été rendu.
     await waitFor(() => {
       expect(request).toHaveBeenCalledWith('/crm/client/d3');
@@ -102,8 +114,9 @@ describe('ClientsPage · chargement complet', () => {
 describe('ClientsPage · Vue globale Deals', () => {
   it('classe le plus long silence en premier', async () => {
     const { container } = renderDeals();
-    await screen.findByText('Marie Dupont');
-    // L'ordre se lit sur les chips de silence, seule information ordonnée.
+    await screen.findByText('Groupe Belfort');
+    // L'ordre se lit sur les chips de silence des COMPTES · le silence d'un
+    // compte est celui de son contact le plus recent (arbitrage 12.3).
     // Feuilles seulement : le span extérieur du chip porte le même texte que
     // celui qu'il contient, et chaque valeur sortirait en double.
     const silences = [...container.querySelectorAll('span')]
@@ -121,13 +134,15 @@ describe('ClientsPage · Vue globale Deals', () => {
 
   it('exclut le client gagné de la portée Deals', async () => {
     renderDeals();
-    await screen.findByText('Marie Dupont');
+    await screen.findByText('Groupe Belfort');
+    // Ni la societe du client gagne, ni la personne.
+    expect(screen.queryByText('Deja Client')).toBeNull();
     expect(screen.queryByText('Paul Gagnant')).toBeNull();
   });
 
   it('bascule sur le montant quand on change le tri', async () => {
     const { container } = renderDeals();
-    await screen.findByText('Marie Dupont');
+    await screen.findByText('Groupe Belfort');
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'value' } });
     const rows = [...container.querySelectorAll('div')]
       .filter(el => el.style.fontWeight === '600' && el.textContent);
@@ -141,16 +156,27 @@ describe('ClientsPage · Vue globale Deals', () => {
    * personne en gras et la société en dessous, en gris. Sur deux cents lignes,
    * on lisait deux cents prénoms et pas une entreprise.
    */
-  it('met la société en tête de ligne et la personne en dessous', async () => {
+  it('met la société en tête de ligne et la personne derrière le clic', async () => {
     const { container } = renderDeals();
-    await screen.findByText('Marie Dupont');
+    await screen.findByText('Novatech');
     const gras = [...container.querySelectorAll('div')]
       .filter(el => el.style.fontWeight === '600' && el.textContent)
       .map(el => el.textContent);
     expect(gras).toContain('Novatech');
-    expect(gras).not.toContain('Ahmed Ben Salah');
-    // La personne n'a pas disparu pour autant : elle passe en seconde ligne.
-    expect(screen.getByText(/Ahmed Ben Salah/)).toBeTruthy();
+    // Compte ferme : la personne n'est pas encore la.
+    expect(screen.queryByText('Ahmed Ben Salah')).toBeNull();
+    // Elle apparait des qu'on ouvre le compte.
+    await ouvrirCompte('Novatech');
+    expect(await screen.findByText('Ahmed Ben Salah')).toBeTruthy();
+  });
+
+  it('la recherche retrouve une personne sans passer par son compte', async () => {
+    // Il n'y a plus de liste Contacts : la recherche est le seul chemin vers
+    // quelqu'un dont on ne connait pas la societe. Elle deplie donc tout.
+    renderDeals();
+    await screen.findByText('Novatech');
+    fireEvent.change(screen.getByPlaceholderText(/echerch/i), { target: { value: 'ahmed' } });
+    expect(await screen.findByText('Ahmed Ben Salah')).toBeTruthy();
   });
 
   /**
@@ -163,6 +189,7 @@ describe('ClientsPage · Vue globale Deals', () => {
       { id: 'r2', name: 'Paul Execute', company: 'Acme', status: 'new', last_activity_at: new Date().toISOString(), account_role: 'operational', role_source: 'inferred' },
     ] });
     renderDeals();
+    await ouvrirCompte('Acme');
     const badges = await screen.findAllByText('Décideur');
     // Un seul des deux contacts est marqué · sinon le badge ne dit plus rien.
     expect(badges).toHaveLength(1);
@@ -177,7 +204,7 @@ describe('ClientsPage · Vue globale Deals', () => {
       { id: 'r3', name: 'Sans Role', company: 'Acme', status: 'new', last_activity_at: new Date().toISOString() },
     ] });
     renderDeals();
-    await screen.findByText('Acme');
+    await ouvrirCompte('Acme');
     expect(screen.queryByText('Décideur')).toBeNull();
   });
 
@@ -209,7 +236,7 @@ describe('ClientsPage · Vue globale Deals', () => {
     mockApi({ stages: [{ id: 's1', name: 'Qualification', order: 0, pipelineName: null }] });
     renderDeals();
 
-    await screen.findByText('Marie Dupont');
+    await screen.findByText('Groupe Belfort');
     expect(screen.queryByText('Qualification')).toBeNull();
     for (const label of ['Actifs', 'Dorment (30 j+)', 'Au point mort (60 j+)', 'Perdus']) {
       expect(screen.getByText(label)).toBeTruthy();
@@ -218,7 +245,7 @@ describe('ClientsPage · Vue globale Deals', () => {
 
   it('ne compte pas le client gagné dans les tuiles de tête', async () => {
     renderDeals();
-    await screen.findByText('Marie Dupont');
+    await screen.findByText('Groupe Belfort');
     // Paul Gagnant est silencieux depuis 3 jours : sans la restriction à la
     // portée Deals, il gonflerait « Actifs », qui ne doit compter que Claire
     // Mercier (4 j). Ahmed (61 j) et Marie (142 j) sont au point mort.
