@@ -206,6 +206,11 @@ function stubDb(rows) {
   const released = [];
   stub('../db', {
     async query(sql, params) {
+      // Les comptes déjà importés, que la synchro lit une fois par passe pour
+      // rattacher les contacts par l'identifiant que porte le deal.
+      if (sql.includes('FROM accounts')) {
+        return { rows: [{ id: 'acc-77', crm_account_id: '77', name: 'Dunelia Systemes' }], rowCount: 1 };
+      }
       if (sql.includes('FROM opportunities WHERE user_id') && sql.includes('crm_contact_id')) {
         const row = state.get(String(params[1]));
         return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
@@ -388,6 +393,42 @@ test('un rattachement affirmé par le CRM n\'est jamais libéré', async () => {
   assert.deepStrictEqual(released, []);
   assert.strictEqual(state.get('003C1').crm_deal_id, '006OLD');
   assert.strictEqual(Number(state.get('003C1').deal_value), 4000);
+});
+
+test('la société portée par le deal rattache le contact au bon compte', async () => {
+  // Pipedrive a deux associations distinctes, deal -> organisation et
+  // personne -> organisation. Beaucoup d'équipes ne remplissent que la
+  // première. Sans ce repli, une base entièrement renseignée côté deals
+  // produit zéro compte · constaté le 29/09.
+  const { state } = stubDb([
+    { id: 'opp1', crm_contact_id: '003C1', status: 'imported', company: null, account_id: null },
+  ]);
+  const { syncDealLifecycle } = loadSync([
+    { id: '006A', personId: '003C1', accountId: '77', status: 'open', value: 1000, updatedAt: '2025-09-01T00:00:00Z' },
+  ]);
+
+  await syncDealLifecycle('u1', {}, 'salesforce');
+
+  const row = state.get('003C1');
+  assert.strictEqual(row.account_id, 'acc-77');
+  assert.strictEqual(row.company, 'Dunelia Systemes');
+});
+
+test('le deal n\'écrase jamais une société déjà affirmée par le CRM', async () => {
+  // Si le CRM a dit où travaille cette personne, c'est lui qui a raison.
+  const { state } = stubDb([
+    { id: 'opp1', crm_contact_id: '003C1', status: 'imported', company: 'Trivelo Technologies', account_id: null },
+  ]);
+  const { syncDealLifecycle } = loadSync([
+    { id: '006A', personId: '003C1', accountId: '77', status: 'open', value: 1000, updatedAt: '2025-09-01T00:00:00Z' },
+  ]);
+
+  await syncDealLifecycle('u1', {}, 'salesforce');
+
+  assert.strictEqual(state.get('003C1').company, 'Trivelo Technologies');
+  // Le rattachement au compte se fait quand même : c'est un identifiant, pas
+  // un nom, et il ne contredit rien.
+  assert.strictEqual(state.get('003C1').account_id, 'acc-77');
 });
 
 test('un connecteur qui refuse la lecture le dit, au lieu de passer pour un CRM vide', async () => {

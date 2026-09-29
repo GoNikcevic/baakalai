@@ -97,6 +97,18 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       if (sa !== sb) return sb - sa;
       return String(a.id ?? '').localeCompare(String(b.id ?? ''));
     });
+    // Les comptes déjà connus, indexés par leur identifiant CRM · sert au
+    // repli ci-dessous. Une seule lecture par synchro.
+    const comptesParCrmId = new Map();
+    try {
+      const rows = await db.query(
+        `SELECT id, crm_account_id, name FROM accounts
+          WHERE user_id = $1 AND crm_provider = $2 AND crm_account_id IS NOT NULL`,
+        [userId, crmProvider]
+      );
+      for (const a of rows.rows) comptesParCrmId.set(String(a.crm_account_id), a);
+    } catch { /* pas de comptes encore : le repli ne s'appliquera pas */ }
+
     const claimed = new Set();
     // Lignes qu'un deal DEVINÉ vient de réclamer · toute autre ligne dont le
     // rattachement n'est pas affirmé par le CRM a donc perdu son deal (voir
@@ -116,7 +128,7 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       if (!personId) { result.unlinked++; continue; }
 
       const opp = await db.query(
-        `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason, crm_deal_id, crm_deal_attribution FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+        `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason, crm_deal_id, crm_deal_attribution, account_id, company FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
         [userId, personId]
       );
       if (!opp.rows[0]) { result.unmatched++; continue; }
@@ -141,6 +153,30 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       // 'user' ne redescend jamais à 'inferred' : le user a dit que ce porteur
       // était le bon, une resynchro ne le contredit pas. Un contact role qui
       // apparaît vraiment, lui, promeut la ligne en 'crm_role'.
+      // La SOCIÉTÉ portée par le deal, quand le CRM ne l'a pas mise sur la
+      // personne · repli décidé avec Goran le 29/09.
+      //
+      // Pipedrive a deux associations distinctes : deal -> organisation et
+      // personne -> organisation. Beaucoup d'équipes ne remplissent que la
+      // première, parce que c'est celle qu'on voit sur le tableau des deals.
+      // Le regroupement des comptes lit `company`, qui vient de la seconde :
+      // sans ce repli, une base entièrement renseignée côté deals produit zéro
+      // compte, ce qui est exactement ce qui s'est passé ici.
+      //
+      // Ce n'est pas une supposition de même nature que le porteur deviné : un
+      // deal qui relie explicitement une personne ET une organisation dit bien
+      // où cette personne travaille. On rattache donc au compte RÉEL par son
+      // identifiant natif, sans passer par le nom.
+      if (deal.accountId) {
+        const compte = comptesParCrmId.get(String(deal.accountId));
+        if (compte) {
+          if (o.account_id !== compte.id) updates.account_id = compte.id;
+          // Le nom ne s'écrase jamais · si le CRM a déjà dit où travaille
+          // cette personne, c'est lui qui a raison, pas le deal.
+          if (!o.company && compte.name) updates.company = compte.name;
+        }
+      }
+
       const attribution = deal.personIdInferred ? 'inferred' : 'crm_role';
       if (o.crm_deal_attribution !== attribution
           && !(o.crm_deal_attribution === 'user' && attribution === 'inferred')) {

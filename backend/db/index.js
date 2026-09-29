@@ -1952,6 +1952,7 @@ const opportunities = {
       crm_contact_id: 'crm_contact_id', crmContactId: 'crm_contact_id',
       crm_deal_id: 'crm_deal_id', crmDealId: 'crm_deal_id',
       crm_deal_attribution: 'crm_deal_attribution', crmDealAttribution: 'crm_deal_attribution',
+      account_id: 'account_id', accountId: 'account_id',
       personalization: 'personalization',
       churn_score: 'churn_score', churnScore: 'churn_score',
       churn_factors: 'churn_factors', churnFactors: 'churn_factors',
