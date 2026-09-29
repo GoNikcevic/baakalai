@@ -507,7 +507,12 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
     // `CreatedDate` servait de clé de tri sans jamais être SELECTée : la date
     // de création était donc lue par Salesforce et jamais renvoyée. Elle
     // alimente `opportunities.crm_created_at` (migration 113).
-    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Phone, Title, Account.Name, OwnerId, MailingCountry, MailingCity, CreatedDate, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
+    // `AccountId` en plus de `Account.Name` : le nom sert à afficher, l'id sert
+    // à RATTACHER. Sans lui, deux contacts de la même société ne pouvaient être
+    // reconnus comme tels que par comparaison de chaînes, et un deal dont le
+    // CRM ne nomme personne n'avait aucun chemin vers ses interlocuteurs.
+    // C'est la colonne qui manquait au lot 2 (migration 124).
+    `/query?q=${encodeURIComponent('SELECT Id, FirstName, LastName, Email, Phone, Title, AccountId, Account.Name, OwnerId, MailingCountry, MailingCity, CreatedDate, LastModifiedDate, LastActivityDate FROM Contact WHERE Email != null ORDER BY CreatedDate DESC')}`
   );
   const mapRecords = (records) => {
     for (const c of (records || [])) {
@@ -518,6 +523,7 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
         phone: c.Phone || null,
         title: c.Title,
         company: c.Account?.Name || '',
+        accountId: c.AccountId ? String(c.AccountId) : null,
         ownerId: c.OwnerId,
         country: c.MailingCountry || null,
         city: c.MailingCity || null,

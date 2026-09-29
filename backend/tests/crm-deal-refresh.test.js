@@ -31,6 +31,9 @@ function stub(modulePath, exports) {
 /** Recharge le module sous test avec des doublures fraîches. */
 function load({ resolved, ordre = [], lifecycle = {}, arch = {}, applied = {} } = {}) {
   stub('../lib/crm-token', { async resolveCrmForUser() { return resolved; } });
+  stub('../lib/accounts', {
+    async syncAccountsForUser() { ordre.push('comptes'); return { accounts: 4, created: 4, linked: 9, skipped: 0 }; },
+  });
   stub('../lib/deal-lifecycle-sync', {
     async syncDealLifecycle(userId, creds, provider, report) {
       ordre.push('lifecycle');
@@ -55,7 +58,9 @@ test('le cycle de vie passe AVANT le mappage d\'étapes', async () => {
 
   const out = await refreshDealsAndStages('u1', 'pipedrive');
 
-  assert.deepStrictEqual(ordre, ['lifecycle', 'stages', 'apply']);
+  // Les comptes d'abord : ils valent pour tous les CRM, les deals seulement
+  // pour les quatre qui en ont.
+  assert.deepStrictEqual(ordre, ['comptes', 'lifecycle', 'stages', 'apply']);
   assert.strictEqual(out.ran, true);
 });
 
@@ -91,13 +96,17 @@ test('un CRM qui ne résout pas le même provider ne touche à rien', async () =
   const out = await refreshDealsAndStages('u1', 'pipedrive');
 
   assert.strictEqual(out.ran, false);
-  assert.deepStrictEqual(ordre, []);
+  // Les comptes, eux, ne dépendent d'aucun jeton : ils se reconstruisent
+  // depuis la base, donc ils passent quand même.
+  assert.deepStrictEqual(ordre, ['comptes']);
   assert.match(out.error, /creds indisponibles/);
 });
 
-test('un CRM sans notion de deal sort sans rien tenter', async () => {
+test('un CRM sans notion de deal a quand même des comptes', async () => {
   // Notion, Airtable et Folk n'ont qu'une propriété texte libre : il n'y a ni
-  // deal ni étape à lire, et échouer bruyamment serait pire que de s'abstenir.
+  // deal ni étape à lire. Mais ils ont bien des SOCIÉTÉS, et les comptes se
+  // reconstruisent depuis la base, pas depuis le CRM. Les en priver reviendrait
+  // à réserver le modèle compte aux quatre CRM structurés.
   const ordre = [];
   const { refreshDealsAndStages } = load({ resolved: { provider: 'notion', creds: {} }, ordre });
 
@@ -105,5 +114,6 @@ test('un CRM sans notion de deal sort sans rien tenter', async () => {
 
   assert.strictEqual(out.ran, false);
   assert.strictEqual(out.error, null);
-  assert.deepStrictEqual(ordre, []);
+  assert.deepStrictEqual(ordre, ['comptes']);
+  assert.strictEqual(out.accounts.created, 4);
 });

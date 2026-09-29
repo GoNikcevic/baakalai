@@ -1,10 +1,11 @@
 /**
- * Ce qu'il faut faire des DEALS après avoir importé des contacts.
+ * Ce qu'il faut faire APRÈS avoir importé des contacts : les comptes, puis les
+ * deals, puis les étapes.
  *
  * Importer des contacts ne suffit pas. Sans cette passe, une ligne
- * d'opportunité reste sur 'imported' pour toujours : pas de montant, pas
- * d'étape, pas de gagné, pas de perdu, et le mappage de pipeline n'a rien à
- * quoi s'appliquer.
+ * d'opportunité reste sur 'imported' pour toujours : pas de société, pas de
+ * montant, pas d'étape, pas de gagné, pas de perdu, et le mappage de pipeline
+ * n'a rien à quoi s'appliquer.
  *
  * ── Pourquoi ce module existe ───────────────────────────────────────────────
  *
@@ -54,7 +55,20 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
   // `stages` compte ce que le CRM expose, `mapped` ce que baakalai a su ranger :
   // deux nombres différents, et les confondre ferait dire « 16 étapes comprises »
   // à un pipeline dont la moitié est restée sans traduction.
-  const out = { ran: false, lifecycle: null, stages: 0, mapped: 0, repositioned: 0, error: null };
+  const out = { ran: false, lifecycle: null, accounts: null, stages: 0, mapped: 0, repositioned: 0, error: null };
+
+  // Les COMPTES d'abord, et pour TOUS les providers · y compris Notion,
+  // Airtable et Folk, qui n'ont ni deal ni étape mais ont bien des sociétés.
+  // Avant le `return` ci-dessous, donc, sinon la moitié des CRM n'aurait
+  // jamais de comptes. Reconstruit depuis opportunities.company, voir
+  // lib/accounts.js pour pourquoi ce n'est pas fait dans les connecteurs.
+  try {
+    const { syncAccountsForUser } = require('./accounts');
+    out.accounts = await syncAccountsForUser(userId, { provider });
+  } catch (err) {
+    logger.warn('crm-deal-refresh', `comptes non reconstruits pour ${userId} : ${err.message}`);
+  }
+
   if (!WITH_DEALS.includes(provider)) return out;
 
   try {
