@@ -2255,6 +2255,7 @@
     "rangeCap": "{count} opportunities found, {qualified} of qualified reserve.",
     "notQuantTitle": "Your CRM cannot be priced yet.",
     "notQuantBody": "{count} opportunities are genuinely dormant, but {missing} deals carry no amount. There is no way to say what they are worth.",
+    "notQuantNone": "No deal is dormant right now. Nothing to price, and that is good news.",
     "score": "Score",
     "confidence": "Confidence",
     "notEvaluated": "n/a",

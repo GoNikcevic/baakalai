@@ -2255,6 +2255,7 @@
     "rangeCap": "{count} opportunités identifiées, {qualified} de réserve qualifiée.",
     "notQuantTitle": "Votre CRM ne permet pas encore de chiffrer.",
     "notQuantBody": "{count} opportunités dorment bel et bien, mais {missing} deals n'ont aucun montant renseigné. Impossible de dire ce qu'ils valent.",
+    "notQuantNone": "Aucun deal ne dort pour l'instant. Il n'y a donc rien à chiffrer, et c'est une bonne nouvelle.",
     "score": "Score",
     "confidence": "Confiance",
     "notEvaluated": "n/a",

@@ -181,11 +181,17 @@ export default function CRMDiagnosticReport({ onClose }) {
                   <div style={{ fontSize: 17, fontWeight: 700, margin: '6px 0 4px', color: 'var(--text)' }}>
                     {t('hrs.notQuantTitle')}
                   </div>
+                  {/* Rien de dormant et « des montants manquent » ne sont pas
+                      la même nouvelle : une phrase unique disait les deux, et
+                      annonçait 0 opportunités dormantes dans la même ligne que
+                      les montants absents de ces 0 opportunités. */}
                   <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                    {t('hrs.notQuantBody', {
-                      count: hiddenRevenue.opportunityCount,
-                      missing: hiddenRevenue.context?.countWithoutValue ?? 0,
-                    })}
+                    {hiddenRevenue.opportunityCount > 0
+                      ? t('hrs.notQuantBody', {
+                          count: hiddenRevenue.opportunityCount,
+                          missing: hiddenRevenue.context?.countWithoutValue ?? 0,
+                        })
+                      : t('hrs.notQuantNone')}
                   </div>
                 </>
               )}
