@@ -1000,6 +1000,17 @@ router.post('/import/:provider', async (req, res, next) => {
 
     track(req.user.id, 'import_done', { provider, imported, updated, skipped });
 
+    // Les DEALS, que cet endpoint n'a jamais lus · c'est pourtant lui que
+    // l'utilisateur déclenche le plus souvent (« Actualiser » sur Deals, le
+    // wizard d'onboarding, les raccourcis du chat). Sans cet appel, les
+    // contacts arrivent et rien d'autre : aucun montant, aucune étape, aucun
+    // client gagné, et le mappage de pipeline n'a rien à quoi s'appliquer.
+    // Mesuré le 29/09 : 443 lignes sur 443 en production avec crm_deal_id à
+    // NULL, et 47 deals Pipedrive visibles dans le CRM mais absents ici.
+    // Best-effort, jamais bloquant : voir lib/crm-deal-refresh.js.
+    const { refreshDealsAndStages } = require('../lib/crm-deal-refresh');
+    const dealRefresh = await refreshDealsAndStages(req.user.id, provider);
+
     // Qualification ICP : les critères déductibles se recalculent sur les
     // données fraîchement importées. Volontairement attendu et non
     // fire-and-forget, l'opération est un seul agrégat SQL, et le wizard
@@ -1008,7 +1019,24 @@ router.post('/import/:provider', async (req, res, next) => {
     // import réussi.
     await computeIcpSignals(req.user.id);
 
-    res.json({ imported, updated, skipped, errors: errors.length > 0 ? errors : undefined });
+    // `deals` dans la réponse : un import qui rend 169 contacts et 0 deal
+    // n'est pas le même événement selon que le CRM n'a pas de deals ou que la
+    // lecture a été refusée. L'appelant doit pouvoir faire la différence.
+    res.json({
+      imported, updated, skipped,
+      deals: dealRefresh.ran
+        ? {
+            fetched: dealRefresh.lifecycle?.fetched ?? 0,
+            attached: dealRefresh.lifecycle?.processed ?? 0,
+            unlinked: dealRefresh.lifecycle?.unlinked ?? 0,
+            unmatched: dealRefresh.lifecycle?.unmatched ?? 0,
+            stages: dealRefresh.stages,
+            repositioned: dealRefresh.repositioned,
+            error: dealRefresh.lifecycle?.error || dealRefresh.error || null,
+          }
+        : { skipped: true, error: dealRefresh.error || null },
+      errors: errors.length > 0 ? errors : undefined,
+    });
   } catch (err) {
     track(req.user.id, 'import_failed', { provider: req.params.provider, error: String(err.message).slice(0, 200) });
     next(err);

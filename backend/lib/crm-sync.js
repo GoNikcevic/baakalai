@@ -174,31 +174,13 @@ async function syncCRM(userId) {
     // aucun client « won » visible (Clients à upseller vide) alors que le CRM
     // en contient. resolveCrmForUser fournit les creds au format attendu par
     // chaque provider ; on ne l'exécute que si elle résout le même provider.
-    if (['salesforce', 'hubspot', 'pipedrive', 'odoo'].includes(provider)) {
-      try {
-        const { resolveCrmForUser } = require('./crm-token');
-        const resolved = await resolveCrmForUser(userId);
-        if (resolved.provider === provider && resolved.creds) {
-          const { syncDealLifecycle } = require('./deal-lifecycle-sync');
-          const lifecycle = await syncDealLifecycle(userId, resolved.creds, provider);
-          console.log(`[crm-sync] Deal lifecycle: ${lifecycle.updated}/${lifecycle.processed} opportunities updated (${provider})`);
-
-          // Comprendre le pipeline du user, puis positionner ses deals dedans.
-          // APRÈS le lifecycle, jamais avant : celui-ci tranche gagné/perdu sur
-          // les drapeaux natifs du deal, et le mappage ne réécrit que les
-          // statuts ouverts. L'ordre garantit qu'un deal conclu ne repasse
-          // jamais par « négociation » le temps d'une synchro.
-          const { analyzeStageArchitecture, applyStageMapping } = require('./crm-stage-mapper');
-          const arch = await analyzeStageArchitecture(userId, { provider, creds: resolved.creds });
-          const applied = await applyStageMapping(userId, provider);
-          console.log(`[crm-sync] Stage mapping: ${arch.stages} stages read, ${applied.updated} opportunities repositioned (${provider})`);
-        }
-      } catch (err) {
-        // Couvre le lifecycle ET la lecture du pipeline : les deux sont des
-        // compléments du sync des contacts, aucun ne doit le faire échouer.
-        console.warn('[crm-sync] Deal lifecycle / stage mapping failed:', err.message);
-      }
-    }
+    // Ce bloc vivait ici en propre, et routes/crm.js /import/:provider ne
+    // l'avait jamais : l'utilisateur qui cliquait « Actualiser » sur Deals
+    // importait donc des contacts et rien d'autre. Il est désormais dans
+    // lib/crm-deal-refresh.js, partagé par les trois chemins d'import, pour
+    // qu'un quatrième ne rouvre pas le même trou.
+    const { refreshDealsAndStages } = require('./crm-deal-refresh');
+    await refreshDealsAndStages(userId, provider);
 
     notifyUser(userId, 'crm:sync', {
       status: 'fetching',

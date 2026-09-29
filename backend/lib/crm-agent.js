@@ -456,21 +456,13 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
         await applyFieldMappings(existing.id, existing.status);
       }
     }
-    // Sync deal values + lifecycle dates (won/lost, montants, stages) · factorisé
-    // dans lib/deal-lifecycle-sync.js pour être partagé avec le sync manuel des
-    // Settings (lib/crm-sync.js). Best-effort : ne throw jamais.
-    const { syncDealLifecycle } = require('./deal-lifecycle-sync');
-    await syncDealLifecycle(userId, token, crmProvider, report);
-
-    // Puis la lecture du pipeline lui-même : quelles étapes du CRM du user
-    // correspondent à quel statut baakalai. APRÈS le lifecycle, qui tranche
-    // gagné/perdu sur les drapeaux natifs · le mappage ne touche qu'aux
-    // statuts ouverts et ne doit jamais repasser devant lui.
-    const { analyzeStageArchitecture, applyStageMapping } = require('./crm-stage-mapper');
-    const arch = await analyzeStageArchitecture(userId, { provider: crmProvider, creds: token });
-    const applied = await applyStageMapping(userId, crmProvider);
-    report.sync.stagesMapped = arch.byRule + arch.byAi;
-    report.sync.repositioned = applied.updated;
+    // Deals et étapes · factorisé dans lib/crm-deal-refresh.js, partagé par les
+    // trois chemins d'import. Les creds sont déjà résolus ici, on les passe
+    // pour éviter un second resolveCrmForUser. Best-effort : ne throw jamais.
+    const { refreshDealsAndStages } = require('./crm-deal-refresh');
+    const refreshed = await refreshDealsAndStages(userId, crmProvider, { creds: token, report });
+    report.sync.stagesMapped = refreshed.mapped;
+    report.sync.repositioned = refreshed.repositioned;
   } catch (err) {
     report.errors.push(`Sync: ${err.message}`);
   }
