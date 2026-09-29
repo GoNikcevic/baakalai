@@ -88,6 +88,53 @@ async function listContacts(creds, { limit = 500, offset = 0 } = {}) {
   });
 }
 
+/**
+ * Les SOCIÉTÉS (lot 2, migration 124).
+ *
+ * Chez Odoo, société et personne sont le MÊME objet, `res.partner` : c'est
+ * `is_company` qui les sépare. `listContacts` filtre donc sur `false`, et
+ * celle-ci sur `true`.
+ *
+ * Forme normalisée commune aux quatre connecteurs, pour que lib/accounts.js
+ * n'ait pas à savoir quel CRM lui parle.
+ */
+async function listCompanies(creds, { limit = 500, offset = 0 } = {}) {
+  const ids = await call(creds, 'res.partner', 'search', [
+    [['is_company', '=', true]],
+  ], { limit, offset });
+  if (!ids || ids.length === 0) return [];
+
+  const raw = await call(creds, 'res.partner', 'read', [ids], {
+    fields: ['id', 'name', 'website', 'city', 'industry_id', 'user_id', 'create_date'],
+  });
+  return (raw || []).map(c => ({
+    id: String(c.id),
+    name: c.name || null,
+    // Odoo rend les relations sous forme de couple [id, libellé], et `false`
+    // quand le champ est vide · jamais null, ce qui piège tous les `||`.
+    industry: Array.isArray(c.industry_id) ? c.industry_id[1] : null,
+    website: c.website || null,
+    city: c.city || null,
+    ownerId: Array.isArray(c.user_id) ? String(c.user_id[0]) : null,
+    createdAt: c.create_date || null,
+  }));
+}
+
+async function listAllCompanies(creds) {
+  const all = [];
+  let offset = 0;
+  const LIMIT = 500;
+  for (;;) {
+    const batch = await listCompanies(creds, { limit: LIMIT, offset });
+    if (!batch || batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < LIMIT) break;
+    offset += LIMIT;
+    if (all.length >= 10000) break; // même garde-fou que listAllContacts
+  }
+  return all;
+}
+
 async function listAllContacts(creds) {
   const all = [];
   let offset = 0;
@@ -350,6 +397,7 @@ module.exports = {
   authenticate,
   listContacts,
   listAllContacts,
+  listAllCompanies,
   searchContactByEmail,
   contactExists,
   createContact,

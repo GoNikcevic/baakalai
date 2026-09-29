@@ -186,10 +186,21 @@ async function importCrmAccounts(userId, provider, creds) {
     } else if (provider === 'pipedrive') {
       const pd = require('../api/pipedrive');
       raw = await pd.listAllOrganizations(creds);
+    } else if (provider === 'hubspot') {
+      const hs = require('../api/hubspot');
+      raw = await hs.listAllCompanies(creds);
+    } else if (provider === 'odoo') {
+      const odooApi = require('../api/odoo');
+      // Les identifiants Odoo voyagent tantôt en objet, tantôt en JSON · les
+      // autres appelants font le même désencapsulage.
+      let parsed = creds;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); } catch { return out; }
+      }
+      raw = await odooApi.listAllCompanies(parsed);
     } else {
-      // HubSpot et Odoo exposent bien un objet société, mais leur lecture n'est
-      // pas encore écrite. Ne rien tenter vaut mieux qu'échouer bruyamment :
-      // les comptes dérivés continuent de fonctionner pour eux.
+      // Notion, Airtable et Folk n'ont aucun objet société : il n'y a rien à
+      // lire, et les comptes dérivés par nom restent la bonne réponse.
       return out;
     }
     out.fetched = raw.length;

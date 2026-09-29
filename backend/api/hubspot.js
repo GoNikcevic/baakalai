@@ -437,6 +437,40 @@ function formatPatternsAsNote(patterns) {
 // List all contacts (paginated)
 // =============================================
 
+/**
+ * Les SOCIÉTÉS (lot 2, migration 124).
+ *
+ * `hs_object_id` n'est pas demandé : l'identifiant est déjà `d.id` à la racine
+ * de l'objet, et le réclamer en propriété ne fait que grossir la réponse.
+ *
+ * Forme normalisée commune aux quatre connecteurs, pour que lib/accounts.js
+ * n'ait pas à savoir quel CRM lui parle.
+ */
+async function listAllCompanies(accessToken, { limit = 10000 } = {}) {
+  const all = [];
+  let after;
+  while (all.length < limit) {
+    let url = '/crm/v3/objects/companies?limit=100&properties=name,domain,industry,city,hubspot_owner_id,createdate';
+    if (after) url += `&after=${after}`;
+    const data = await hubspotFetch(accessToken, url);
+    for (const c of data.results || []) {
+      const p = c.properties || {};
+      all.push({
+        id: String(c.id),
+        name: p.name || null,
+        industry: p.industry || null,
+        website: p.domain || null,
+        city: p.city || null,
+        ownerId: p.hubspot_owner_id || null,
+        createdAt: p.createdate || null,
+      });
+    }
+    after = data.paging?.next?.after;
+    if (!after) break;
+  }
+  return all;
+}
+
 async function listAllContacts(accessToken, { limit = 10000 } = {}) {
   const all = [];
   let after;
@@ -544,6 +578,7 @@ module.exports = {
   getContact,
   searchContacts,
   listAllContacts,
+  listAllCompanies,
   archiveContact,
   // Deals
   createDeal,
