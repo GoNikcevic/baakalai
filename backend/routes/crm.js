@@ -1861,6 +1861,32 @@ router.put('/stage-mapping/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/crm/accounts · les SOCIÉTÉS de l'utilisateur (lot 2, migration 124)
+//
+// Chaque ligne agrège ce qu'un compte porte : ses contacts, ses deals gagnés et
+// ouverts, son montant cumulé, et sa dernière activité. Cette dernière est un
+// `max` sur les contacts, et c'est l'arbitrage du 29/09 (§12.3 du plan) : un
+// compte n'est pas silencieux parce qu'UN de ses contacts l'est.
+router.get('/accounts', async (req, res, next) => {
+  try {
+    const { listAccounts } = require('../lib/accounts');
+    const accounts = await listAccounts(req.user.id);
+    res.json({ accounts });
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/accounts/rebuild · reconstruit les comptes sans réimporter
+//
+// L'import les reconstruit déjà à chaque passage. Cette route existe pour les
+// bases déjà peuplées, qui n'ont pas à attendre une resynchro complète du CRM
+// pour voir leurs sociétés apparaître.
+router.post('/accounts/rebuild', async (req, res, next) => {
+  try {
+    const { syncAccountsForUser } = require('../lib/accounts');
+    res.json(await syncAccountsForUser(req.user.id));
+  } catch (err) { next(err); }
+});
+
 // GET /api/crm/deal-attribution · les rattachements que baakalai a devinés
 //
 // Pendant de /stage-mapping dans Réglages / Configuration CRM : l'un dit ce que
