@@ -147,6 +147,42 @@ async function upsertPerson(apiToken, data) {
 }
 
 /**
+ * Les ORGANISATIONS, c'est-à-dire les sociétés (lot 2, migration 124).
+ *
+ * Jusqu'ici baakalai ne lisait de Pipedrive que les personnes et les deals, et
+ * reconstruisait les sociétés à partir du texte `org_name` porté par chaque
+ * contact. Ça groupe correctement, mais ça ne donne aucune identité : un
+ * renommage crée un second compte, deux homonymes n'en font qu'un, et un deal
+ * ne peut pas se rattacher par son `org_id`.
+ *
+ * Forme normalisée commune aux quatre connecteurs, pour que lib/accounts.js
+ * n'ait pas à savoir quel CRM lui parle.
+ */
+async function listAllOrganizations(apiToken, { limit = 500 } = {}) {
+  const all = [];
+  let start = 0;
+  for (;;) {
+    const data = await pdFetch(apiToken, `/organizations?start=${start}&limit=${limit}`);
+    if (!data || !Array.isArray(data) || data.length === 0) break;
+    for (const o of data) {
+      all.push({
+        id: String(o.id),
+        name: o.name || null,
+        industry: null,
+        website: null,
+        city: o.address_locality || null,
+        ownerId: o.owner_id?.id != null ? String(o.owner_id.id) : (o.owner_id != null ? String(o.owner_id) : null),
+        createdAt: o.add_time || null,
+      });
+    }
+    if (data.length < limit) break;
+    start += limit;
+    if (all.length >= 10000) break; // même garde-fou que listAllPersons
+  }
+  return all;
+}
+
+/**
  * List all persons with pagination. Pipedrive returns max 500 per page.
  * Returns flat array of all persons.
  */
@@ -365,6 +401,7 @@ module.exports = {
   deletePerson,
   upsertPerson,
   listAllPersons,
+  listAllOrganizations,
   getPipelines,
   getStages,
   getPersonFields,

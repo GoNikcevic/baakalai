@@ -32,6 +32,7 @@ function stub(modulePath, exports) {
 function load({ resolved, ordre = [], lifecycle = {}, arch = {}, applied = {} } = {}) {
   stub('../lib/crm-token', { async resolveCrmForUser() { return resolved; } });
   stub('../lib/accounts', {
+    async importCrmAccounts() { ordre.push('societes'); return { fetched: 52, upserted: 52, absorbed: 3, error: null }; },
     async syncAccountsForUser() { ordre.push('comptes'); return { accounts: 4, created: 4, linked: 9, skipped: 0 }; },
   });
   stub('../lib/deal-lifecycle-sync', {
@@ -60,7 +61,7 @@ test('le cycle de vie passe AVANT le mappage d\'étapes', async () => {
 
   // Les comptes d'abord : ils valent pour tous les CRM, les deals seulement
   // pour les quatre qui en ont.
-  assert.deepStrictEqual(ordre, ['comptes', 'lifecycle', 'stages', 'apply']);
+  assert.deepStrictEqual(ordre, ['societes', 'comptes', 'lifecycle', 'stages', 'apply']);
   assert.strictEqual(out.ran, true);
 });
 
@@ -96,8 +97,8 @@ test('un CRM qui ne résout pas le même provider ne touche à rien', async () =
   const out = await refreshDealsAndStages('u1', 'pipedrive');
 
   assert.strictEqual(out.ran, false);
-  // Les comptes, eux, ne dépendent d'aucun jeton : ils se reconstruisent
-  // depuis la base, donc ils passent quand même.
+  // Sans jeton, les vraies sociétés ne peuvent pas être lues. Le regroupement
+  // par nom, lui, part de la base : il passe quand même.
   assert.deepStrictEqual(ordre, ['comptes']);
   assert.match(out.error, /creds indisponibles/);
 });

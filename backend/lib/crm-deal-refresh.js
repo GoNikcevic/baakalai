@@ -55,38 +55,51 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
   // `stages` compte ce que le CRM expose, `mapped` ce que baakalai a su ranger :
   // deux nombres différents, et les confondre ferait dire « 16 étapes comprises »
   // à un pipeline dont la moitié est restée sans traduction.
-  const out = { ran: false, lifecycle: null, accounts: null, stages: 0, mapped: 0, repositioned: 0, error: null };
+  const out = {
+    ran: false, lifecycle: null, crmAccounts: null, accounts: null,
+    stages: 0, mapped: 0, repositioned: 0, error: null,
+  };
 
-  // Les COMPTES d'abord, et pour TOUS les providers · y compris Notion,
+  // Les identifiants EN PREMIER · deux des trois chemins d'import ne les
+  // passent pas, et les résoudre plus bas priverait ces deux-là de la lecture
+  // des vraies sociétés. Un utilisateur peut avoir plusieurs CRM connectés :
+  // on n'agit que si le résolveur parle bien de celui qu'on vient d'importer,
+  // sinon on lirait les deals d'un CRM avec les identifiants d'un autre.
+  let creds = opts.creds || null;
+  if (!creds && WITH_DEALS.includes(provider)) {
+    try {
+      const { resolveCrmForUser } = require('./crm-token');
+      const resolved = await resolveCrmForUser(userId);
+      if (resolved.provider !== provider || !resolved.creds) {
+        out.error = `creds indisponibles pour ${provider} (résolu : ${resolved.provider || 'aucun'})`;
+        logger.warn('crm-deal-refresh', `${provider} · ${out.error} pour ${userId}`);
+      } else {
+        creds = resolved.creds;
+      }
+    } catch (err) {
+      out.error = err.message;
+    }
+  }
+
+  // Les COMPTES ensuite, et pour TOUS les providers · y compris Notion,
   // Airtable et Folk, qui n'ont ni deal ni étape mais ont bien des sociétés.
-  // Avant le `return` ci-dessous, donc, sinon la moitié des CRM n'aurait
-  // jamais de comptes. Reconstruit depuis opportunities.company, voir
-  // lib/accounts.js pour pourquoi ce n'est pas fait dans les connecteurs.
+  // Avant le `return` plus bas, donc, sinon la moitié des CRM n'aurait jamais
+  // de comptes.
   try {
-    const { syncAccountsForUser } = require('./accounts');
+    const { syncAccountsForUser, importCrmAccounts } = require('./accounts');
+    // Les vraies sociétés d'abord quand on peut les lire : elles portent
+    // l'identifiant natif, la date de création et le secteur. Le regroupement
+    // par nom ensuite, qui rattache au compte réel s'il existe et ne dérive
+    // que le reste.
+    if (creds) out.crmAccounts = await importCrmAccounts(userId, provider, creds);
     out.accounts = await syncAccountsForUser(userId, { provider });
   } catch (err) {
     logger.warn('crm-deal-refresh', `comptes non reconstruits pour ${userId} : ${err.message}`);
   }
 
-  if (!WITH_DEALS.includes(provider)) return out;
+  if (!WITH_DEALS.includes(provider) || !creds) return out;
 
   try {
-    let creds = opts.creds;
-    if (!creds) {
-      const { resolveCrmForUser } = require('./crm-token');
-      const resolved = await resolveCrmForUser(userId);
-      // Un utilisateur peut avoir plusieurs CRM connectés · n'agir que si le
-      // résolveur parle bien de celui qu'on vient d'importer, sinon on lirait
-      // les deals d'un autre CRM avec les mauvais identifiants de contact.
-      if (resolved.provider !== provider || !resolved.creds) {
-        out.error = `creds indisponibles pour ${provider} (résolu : ${resolved.provider || 'aucun'})`;
-        logger.warn('crm-deal-refresh', `${provider} · ${out.error} pour ${userId}`);
-        return out;
-      }
-      creds = resolved.creds;
-    }
-
     const { syncDealLifecycle } = require('./deal-lifecycle-sync');
     // `report` suit jusqu'au bout : c'est lui qui recueille les réactivations
     // attribuées à un email, le signal d'apprentissage le plus fort du produit.

@@ -16,21 +16,24 @@
  * d'elle fait donc marcher les comptes pour tous les CRM d'un coup, y compris
  * Notion, Airtable, Folk et les imports CSV qui n'ont aucun objet société.
  *
- * ── Ce qui est délibérément laissé à plus tard ──────────────────────────────
+ * ── Deux passes, et elles ne font pas la même chose ─────────────────────────
  *
- * `crm_account_id` reste NULL ici, et les comptes sont donc créés en source
- * 'derived'. Renseigner le vrai identifiant demande de le faire traverser les
- * quatorze branches, ce que le lot 2 fera quand les connecteurs auront tous
- * été alignés · Salesforce l'expose déjà (`listContacts` le remonte depuis
- * aujourd'hui). Un compte dérivé se laisse écraser par le compte réel au
- * premier import qui le fournit : l'index unique porte sur le nom normalisé
- * tant que l'identifiant est absent.
+ * `importCrmAccounts` lit les VRAIES sociétés du CRM, avec leur identifiant
+ * natif. C'est ce qui donne aux comptes une IDENTITÉ : un renommage reste le
+ * même compte, deux homonymes restent deux comptes, et surtout un deal pourra
+ * se rattacher par son identifiant de société au lieu d'être deviné. Elle
+ * apporte aussi `crm_created_at`, donc la vraie ancienneté de la relation, et
+ * répare au passage la sous-estimation d'`icp_crm_history_months`.
  *
- * `crm_created_at` reste NULL aussi, et c'est un choix. On pourrait y mettre la
- * date du contact le plus ancien, mais ce serait recopier précisément le chiffre
- * faux qu'`icp_crm_history_months` utilise déjà (lib/icp-signals.js) : un
- * contact naît en même temps que son compte ou après, jamais avant. Un NULL
- * honnête vaut mieux qu'une valeur qui a l'air juste.
+ * `syncAccountsForUser` regroupe les contacts et les rattache. Quand le CRM
+ * n'expose aucune société (Notion, Airtable, Folk, CSV) ou que sa lecture n'a
+ * pas encore été écrite, elle crée des comptes DÉRIVÉS, clés sur le nom
+ * normalisé. Ces comptes-là groupent sans identifier, et c'est assumé : ils se
+ * font absorber par le compte réel dès qu'il arrive, contacts compris.
+ *
+ * L'ordre importe : les vraies sociétés d'abord, le regroupement ensuite, pour
+ * que les contacts se rattachent directement au bon compte plutôt que de
+ * transiter par un dérivé.
  */
 
 const db = require('../db');
@@ -74,6 +77,20 @@ async function syncAccountsForUser(userId, { provider = null } = {}) {
     }
     out.accounts = groupes.size;
 
+    // Les comptes déjà connus, réels ET dérivés, indexés par nom normalisé. Un
+    // compte réel importé du CRM doit être RÉUTILISÉ, jamais doublé par un
+    // dérivé portant le même nom.
+    const connus = await db.query(
+      `SELECT id, name_normalized, owner_email, crm_account_id FROM accounts WHERE user_id = $1`,
+      [userId]
+    );
+    const parNom = new Map();
+    for (const a of connus.rows) {
+      const existant = parNom.get(a.name_normalized);
+      // À égalité de nom, le compte RÉEL gagne : c'est lui qui porte l'identité.
+      if (!existant || (!existant.crm_account_id && a.crm_account_id)) parNom.set(a.name_normalized, a);
+    }
+
     for (const [cle, g] of groupes) {
       // L'owner du COMPTE : le plus représenté parmi ses contacts, l'ordre
       // alphabétique pour départager afin que deux passes donnent le même
@@ -85,20 +102,34 @@ async function syncAccountsForUser(userId, { provider = null } = {}) {
       const owner = [...compte.entries()]
         .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))[0]?.[0] || null;
 
-      const res = await db.query(
-        `INSERT INTO accounts (user_id, crm_provider, name, name_normalized, owner_email, source)
-         VALUES ($1, $2, $3, $4, $5, 'derived')
-         ON CONFLICT (user_id, name_normalized) WHERE crm_account_id IS NULL
-         DO UPDATE SET
-           name = EXCLUDED.name,
-           owner_email = COALESCE(EXCLUDED.owner_email, accounts.owner_email),
-           updated_at = now()
-         RETURNING id, (xmax = 0) AS cree`,
-        [userId, g.contacts[0]?.crm_provider || provider, g.nom, cle, owner]
-      );
-      const accountId = res.rows[0]?.id;
+      let accountId = parNom.get(cle)?.id || null;
+
+      if (accountId) {
+        // Compte déjà connu · on ne complète que ce qui manque. Écraser
+        // l'owner d'un compte réel par une déduction faite sur ses contacts
+        // remplacerait une information du CRM par une supposition.
+        if (owner && !parNom.get(cle).owner_email) {
+          await db.query(
+            `UPDATE accounts SET owner_email = $2, updated_at = now() WHERE id = $1`,
+            [accountId, owner]
+          );
+        }
+      } else {
+        const res = await db.query(
+          `INSERT INTO accounts (user_id, crm_provider, name, name_normalized, owner_email, source)
+           VALUES ($1, $2, $3, $4, $5, 'derived')
+           ON CONFLICT (user_id, name_normalized) WHERE crm_account_id IS NULL
+           DO UPDATE SET
+             name = EXCLUDED.name,
+             owner_email = COALESCE(EXCLUDED.owner_email, accounts.owner_email),
+             updated_at = now()
+           RETURNING id, (xmax = 0) AS cree`,
+          [userId, g.contacts[0]?.crm_provider || provider, g.nom, cle, owner]
+        );
+        accountId = res.rows[0]?.id || null;
+        if (res.rows[0]?.cree) out.created++;
+      }
       if (!accountId) continue;
-      if (res.rows[0].cree) out.created++;
 
       // Ne réécrit que ce qui change · sans ce filtre, chaque passe toucherait
       // toutes les lignes et ferait bouger updated_at pour rien, ce que le
@@ -123,6 +154,95 @@ async function syncAccountsForUser(userId, { provider = null } = {}) {
   return out;
 }
 
+/**
+ * Importe les VRAIES sociétés du CRM, avec leur identifiant natif.
+ *
+ * C'est ce qui sépare un compte qui groupe d'un compte qui IDENTIFIE. Sans
+ * `crm_account_id` :
+ *   · un renommage côté CRM crée un second compte en silence, et l'ancien
+ *     reste là, vide, avec son historique ;
+ *   · deux sociétés homonymes fusionnent, et rien ne le signale ;
+ *   · surtout, un deal ne peut pas se rattacher par son identifiant de compte,
+ *     donc baakalai continue de deviner son interlocuteur (voir §12.7 du plan
+ *     et lib/deal-attribution.js). C'est toute la promesse du modèle.
+ *
+ * `crm_created_at` arrive avec, et c'est elle qui répare
+ * `icp_crm_history_months` : lib/icp-signals.js le calcule aujourd'hui sur le
+ * contact le plus ancien, alors qu'un contact naît en même temps que son compte
+ * ou après. L'ancienneté de la relation était donc sous-estimée, avec des faux
+ * négatifs sur le critère « au moins 12 mois ».
+ *
+ * Un compte DÉRIVÉ portant le même nom est absorbé : ses contacts déménagent
+ * vers le compte réel et il disparaît. C'est ce qui rend la reconstruction par
+ * nom sans regret, puisqu'elle se laisse remplacer dès que la vérité arrive.
+ */
+async function importCrmAccounts(userId, provider, creds) {
+  const out = { fetched: 0, upserted: 0, absorbed: 0, error: null };
+  try {
+    let raw = [];
+    if (provider === 'salesforce') {
+      const sf = require('../api/salesforce');
+      raw = await sf.listAccounts(creds.instanceUrl, creds.accessToken);
+    } else if (provider === 'pipedrive') {
+      const pd = require('../api/pipedrive');
+      raw = await pd.listAllOrganizations(creds);
+    } else {
+      // HubSpot et Odoo exposent bien un objet société, mais leur lecture n'est
+      // pas encore écrite. Ne rien tenter vaut mieux qu'échouer bruyamment :
+      // les comptes dérivés continuent de fonctionner pour eux.
+      return out;
+    }
+    out.fetched = raw.length;
+
+    for (const a of raw) {
+      const cle = normalizeAccountName(a.name);
+      if (!cle) continue;
+
+      const res = await db.query(
+        `INSERT INTO accounts
+           (user_id, crm_provider, crm_account_id, name, name_normalized,
+            industry, crm_owner_id, crm_created_at, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'crm')
+         ON CONFLICT (user_id, crm_provider, crm_account_id) WHERE crm_account_id IS NOT NULL
+         DO UPDATE SET
+           name = EXCLUDED.name,
+           name_normalized = EXCLUDED.name_normalized,
+           industry = COALESCE(EXCLUDED.industry, accounts.industry),
+           crm_owner_id = COALESCE(EXCLUDED.crm_owner_id, accounts.crm_owner_id),
+           crm_created_at = COALESCE(EXCLUDED.crm_created_at, accounts.crm_created_at),
+           source = 'crm',
+           updated_at = now()
+         RETURNING id`,
+        [userId, provider, String(a.id), a.name, cle,
+         a.industry || null, a.ownerId ? String(a.ownerId) : null, a.createdAt || null]
+      );
+      const reel = res.rows[0]?.id;
+      if (!reel) continue;
+      out.upserted++;
+
+      // Le jumeau dérivé, s'il existe, rend ses contacts et s'efface.
+      const jumeau = await db.query(
+        `SELECT id FROM accounts
+          WHERE user_id = $1 AND name_normalized = $2 AND crm_account_id IS NULL`,
+        [userId, cle]
+      );
+      if (jumeau.rows[0] && jumeau.rows[0].id !== reel) {
+        await db.query(`UPDATE opportunities SET account_id = $1 WHERE account_id = $2`,
+          [reel, jumeau.rows[0].id]);
+        await db.query(`DELETE FROM accounts WHERE id = $1`, [jumeau.rows[0].id]);
+        out.absorbed++;
+      }
+    }
+
+    logger.info('accounts',
+      `${provider} · ${out.fetched} société(s) lue(s), ${out.upserted} enregistrée(s), ${out.absorbed} compte(s) dérivé(s) absorbé(s)`);
+  } catch (err) {
+    out.error = err.message;
+    logger.warn('accounts', `Import des sociétés ${provider} échoué pour ${userId} : ${err.message}`);
+  }
+  return out;
+}
+
 /** Les comptes d'un utilisateur, avec ce qu'ils portent. */
 async function listAccounts(userId, { limit = 500 } = {}) {
   const res = await db.query(
@@ -143,4 +263,4 @@ async function listAccounts(userId, { limit = 500 } = {}) {
   return res.rows;
 }
 
-module.exports = { syncAccountsForUser, listAccounts };
+module.exports = { syncAccountsForUser, importCrmAccounts, listAccounts };
