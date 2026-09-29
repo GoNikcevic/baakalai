@@ -216,6 +216,15 @@ async function getDeals(creds, { limit = 100 } = {}) {
       name: d.name,
       personId: d.partner_id?.[0] || null,
       contactName: d.partner_id?.[1] || null,
+      // Odoo ne distingue pas société et personne : `res.partner` est les deux,
+      // et c'est `parent_id` sur le partenaire, pas sur la lead, qui dit
+      // laquelle. Le champ est déclaré ici pour que la forme normalisée soit la
+      // même sur les quatre CRM · le renseigner demande une lecture
+      // supplémentaire de res.partner, à faire quand un besoin réel le
+      // justifiera. Déclarer null vaut mieux que ne pas déclarer : l'appelant
+      // sait alors que la question a été posée.
+      accountId: null,
+      accountName: null,
       stage: d.stage_id?.[1] || null,
       stageId,
       status,

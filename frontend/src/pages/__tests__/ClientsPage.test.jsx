@@ -131,7 +131,38 @@ describe('ClientsPage · Vue globale Deals', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'value' } });
     const rows = [...container.querySelectorAll('div')]
       .filter(el => el.style.fontWeight === '600' && el.textContent);
-    expect(rows[0].textContent).toBe('Ahmed Ben Salah');
+    // La ligne de tête porte la SOCIÉTÉ, pas la personne · voir le test suivant.
+    expect(rows[0].textContent).toBe('Novatech');
+  });
+
+  /**
+   * Deals et Clients répondent tous deux à une question de compte : « quelles
+   * affaires dorment », « qui sont mes clients ». La page mettait pourtant la
+   * personne en gras et la société en dessous, en gris. Sur deux cents lignes,
+   * on lisait deux cents prénoms et pas une entreprise.
+   */
+  it('met la société en tête de ligne et la personne en dessous', async () => {
+    const { container } = renderDeals();
+    await screen.findByText('Marie Dupont');
+    const gras = [...container.querySelectorAll('div')]
+      .filter(el => el.style.fontWeight === '600' && el.textContent)
+      .map(el => el.textContent);
+    expect(gras).toContain('Novatech');
+    expect(gras).not.toContain('Ahmed Ben Salah');
+    // La personne n'a pas disparu pour autant : elle passe en seconde ligne.
+    expect(screen.getByText(/Ahmed Ben Salah/)).toBeTruthy();
+  });
+
+  it('garde la personne en tête quand le CRM ne donne aucune société', async () => {
+    // Cas réel du 29/09 : un Pipedrive dont aucun contact n'a d'organisation.
+    // Sans repli, la ligne principale serait vide sur toute la liste.
+    mockApi({ opportunities: [{ id: 'y', name: 'Sans Societe', company: null, status: 'new', last_activity_at: new Date().toISOString() }] });
+    const { container } = renderDeals();
+    await screen.findByText('Sans Societe');
+    const gras = [...container.querySelectorAll('div')]
+      .filter(el => el.style.fontWeight === '600' && el.textContent)
+      .map(el => el.textContent);
+    expect(gras).toContain('Sans Societe');
   });
 
   it('dit « aucun contact connu » plutôt que zéro jour quand la date manque', async () => {

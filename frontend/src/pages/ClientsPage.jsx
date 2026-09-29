@@ -11,7 +11,7 @@ import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
-import { contactSubline } from '../components/ContactSubline';
+import { accountFirstLines } from '../components/ContactSubline';
 import ProductLineTags from '../components/ProductLineTags';
 import Icon from '../components/Icon';
 
@@ -822,12 +822,20 @@ export default function ClientsPage({ scope }) {
                       transition: 'all 0.15s',
                     }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600 }}>{c.name || ' '}</div>
+                        {/* La SOCIÉTÉ en gras, la personne en dessous · Deals et
+                            Clients répondent tous deux à une question de compte,
+                            et la page affichait deux cents prénoms sans jamais
+                            montrer une entreprise. Repli sur la personne quand
+                            la société manque, pour ne jamais laisser la ligne
+                            principale vide. Règle unique dans ContactSubline. */}
+                        <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {accountFirstLines(c).primary || ' '}
+                        </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {/* Panneau ouvert, la ligne est étroite et la société est
                               déjà répétée dans l'en-tête du panneau : la fonction
                               seule est ce qui manque le plus à l'écran. */}
-                          {!selectedClient ? contactSubline(c) : (c.title || c.email || '')}
+                          {!selectedClient ? accountFirstLines(c).secondary : (c.title || c.email || '')}
                           {/* Étape CRM et relance prévue en seconde ligne, seulement
                               quand elles existent : sur les données importées, la
                               majorité des deals n'a pas d'étape rapatriée, et une

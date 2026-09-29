@@ -215,7 +215,12 @@ async function getDeals(accessToken, limit = 10000) {
   do {
     const params = new URLSearchParams({
       limit: String(Math.min(limit - deals.length, 100)),
-      associations: 'contacts',
+      // `companies` en plus de `contacts` · un deal HubSpot est très souvent
+      // associé à une société sans l'être à personne, et l'association company
+      // ne coûte rien de plus ici. Sans elle, ces deals restent orphelins pour
+      // toujours et rien ne permet d'écrire une règle de rattachement commune
+      // aux quatre CRM.
+      associations: 'contacts,companies',
       properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate,hs_next_activity_date',
     });
     if (after) params.set('after', after);
@@ -231,6 +236,8 @@ async function getDeals(accessToken, limit = 10000) {
         status: isWon ? 'won' : (isClosed ? 'lost' : 'open'),
         value: p.amount ? parseFloat(p.amount) : null,
         personId: d.associations?.contacts?.results?.[0]?.id || null,
+        accountId: d.associations?.companies?.results?.[0]?.id || null,
+        accountName: null,
         closeDate: p.closedate || null,
         updatedAt: p.hs_lastmodifieddate || null,
         nextActivityDate: p.hs_next_activity_date || null,

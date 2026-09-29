@@ -178,7 +178,11 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
         status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
         value: r.Amount,
         personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
-        accountId: r.AccountId || null,
+        accountId: r.AccountId ? String(r.AccountId) : null,
+        // Même forme normalisée que les trois autres connecteurs · le nom n'est
+        // pas dans cette requête, mais déclarer le champ évite que l'appelant
+        // ait à savoir quel CRM lui parle.
+        accountName: null,
         closeDate: r.CloseDate,
         createdAt: r.CreatedDate,
         updatedAt: r.LastModifiedDate,

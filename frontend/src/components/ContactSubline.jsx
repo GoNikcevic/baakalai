@@ -24,6 +24,32 @@ export function contactSubline(contact, { withEmail = true } = {}) {
   return withEmail ? (contact?.email || '') : '';
 }
 
+/**
+ * Les deux lignes d'une ligne de liste quand on regarde des AFFAIRES, pas des
+ * personnes.
+ *
+ * Sous Deals et sous Clients, on cherche une société : « qui sont mes clients »
+ * et « quelles affaires dorment » sont des questions de compte. La page mettait
+ * pourtant le nom de la personne en gras et la société en dessous, en gris.
+ * Sur une liste de deux cents lignes, on lit deux cents prénoms et aucune
+ * entreprise.
+ *
+ * La société passe donc devant, et la personne devient ce qu'elle est à ce
+ * niveau : l'interlocuteur. Repli sur la personne quand la société manque, pour
+ * qu'une ligne ne soit jamais vide en gras · c'est le cas d'un CRM dont les
+ * contacts n'ont pas d'organisation, et il est fréquent.
+ *
+ * @returns {{ primary: string, secondary: string }}
+ */
+export function accountFirstLines(contact) {
+  const company = contact?.company && String(contact.company).trim() ? contact.company : null;
+  if (!company) {
+    return { primary: contact?.name || '', secondary: contactSubline(contact) };
+  }
+  const who = [contact?.name, contact?.title].filter(p => p && String(p).trim()).join(' · ');
+  return { primary: company, secondary: who || contact?.email || '' };
+}
+
 export default function ContactSubline({ contact, withEmail = true, style }) {
   const text = contactSubline(contact, { withEmail });
   if (!text) return null;

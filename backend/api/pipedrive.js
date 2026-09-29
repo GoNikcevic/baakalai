@@ -301,6 +301,12 @@ async function getDeals(apiToken, limit = 100) {
     status: d.status,
     value: d.value,
     personId: d.person_id?.value || d.person_id,
+    // Société du deal · jetée jusqu'ici, alors que c'est la seule chose qui
+    // reste quand le CRM ne nomme aucune personne. Sans elle dans la forme
+    // normalisée, aucune règle de rattachement ne peut être écrite ailleurs
+    // que dans ce fichier, donc aucune règle commune aux quatre CRM.
+    accountId: d.org_id?.value != null ? String(d.org_id.value) : (d.org_id != null ? String(d.org_id) : null),
+    accountName: d.org_name || d.org_id?.name || null,
     createdAt: d.add_time,
     updatedAt: d.update_time || d.add_time,
     nextActivityDate: d.next_activity_date || null,
