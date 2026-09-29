@@ -1187,7 +1187,7 @@
     "tileClear": "Tout afficher",
     "title": "Clients",
     "contactsInCrm": "{count} contact(s) dans votre CRM",
-    "dealsInCrm": "{count} deal(s) en cours dans votre CRM",
+    "dealsInCrm": "{count} contact(s) suivi(s), {valued} avec un deal chiffré",
     "dealsDormant": "{count} dorment depuis plus de 30 jours",
     "silenceDays": "{days} j sans contact",
     "silenceNever": "aucun contact connu",

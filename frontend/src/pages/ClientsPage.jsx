@@ -473,7 +473,18 @@ export default function ClientsPage({ scope }) {
             {isDealQualityContext
               ? t('dataQuality.dealQuality.contextSubtitle', { count: filtered.length })
               : scope === 'deals'
-                ? t('clients.dealsInCrm', { count: scopedClients.length })
+                // Une ligne d'opportunité est un CONTACT, pas un deal · tant
+                // que le modèle compte/deal/contact n'existe pas, annoncer
+                // « N deals en cours » est faux dès que le CRM ne rattache pas
+                // ses deals : sur un Salesforce sans contact roles, la page
+                // annonçait 308 deals en listant 308 personnes qui n'en
+                // portaient aucun. On dit ce qui est listé, et combien portent
+                // vraiment un montant · le trou devient visible au lieu d'être
+                // masqué par un mot.
+                ? t('clients.dealsInCrm', {
+                    count: scopedClients.length,
+                    valued: scopedClients.filter(c => c.deal_value != null && c.deal_value !== '').length,
+                  })
                 : t('clients.contactsInCrm', { count: scopedClients.length })}
           </div>
         </div>

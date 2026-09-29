@@ -1187,7 +1187,7 @@
     "tileClear": "Show all",
     "title": "Clients",
     "contactsInCrm": "{count} contact(s) in your CRM",
-    "dealsInCrm": "{count} ongoing deal(s) in your CRM",
+    "dealsInCrm": "{count} contact(s) tracked, {valued} carrying a priced deal",
     "dealsDormant": "{count} asleep for over 30 days",
     "silenceDays": "{days}d without contact",
     "silenceNever": "no contact on record",
