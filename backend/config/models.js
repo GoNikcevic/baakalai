@@ -115,6 +115,11 @@ const ACTIONS = {
 
   // ---- Analyse de synchronisation CRM ----
   sync_analysis:           { tier: 'balanced' },
+  // Classement des étapes de pipeline dans le modèle baakalai · sortie JSON
+  // courte, une fois par analyse CRM. thinking désactivé : la réflexion par
+  // défaut d'Opus 5 (surcharge globale Settings) mangerait le budget et
+  // tronquerait le JSON au milieu de la liste d'étapes.
+  crm_stage_mapping:       { tier: 'balanced', thinking: 'disabled' },
 
   // ---- Chat analytique (page Analytics) ----
   analytics_ask:           { tier: 'balanced', thinking: 'disabled' },

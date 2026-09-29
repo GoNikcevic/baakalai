@@ -5,7 +5,7 @@
    Ported from CopyEditorPage.jsx (single-campaign features).
    ═══════════════════════════════════════════════════ */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../../../context/useApp';
 import api from '../../../services/api-client';
 import { sanitizeHtml } from '../../../services/sanitize';
@@ -49,17 +49,27 @@ function CharCounter({ bodyRef, maxChars = 300 }) {
     setCount(text.length);
   }, [bodyRef]);
 
-  // Recompute on mount + on every input
-  useState(() => {
-    setTimeout(recompute, 0);
-    return null;
-  });
+  // Au montage, puis à chaque frappe. Le corps arrive par
+  // dangerouslySetInnerHTML, il est donc déjà dans le DOM quand l'effet part,
+  // sans avoir à différer l'appel.
+  //
+  // Avant, cet effet de bord vivait dans un initialiseur useState. React ne
+  // garantit ni le nombre d'appels d'un initialiseur (deux fois en StrictMode)
+  // ni le moment, et rien n'écoutait la saisie : le compteur restait figé sur
+  // sa valeur de montage tant qu'on ne cliquait pas dessus, alors que sa seule
+  // raison d'être est la limite de 300 caractères d'une note de connexion
+  // LinkedIn, qu'on dépasse en tapant.
+  useEffect(() => {
+    recompute();
+    const el = bodyRef.current;
+    if (!el) return undefined;
+    el.addEventListener('input', recompute);
+    return () => el.removeEventListener('input', recompute);
+  }, [bodyRef, recompute]);
 
   const color = count > maxChars ? 'var(--danger)' : count > maxChars - 50 ? 'var(--warning)' : 'var(--text-muted)';
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, color }}
-      onClick={recompute}
-    >
+    <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, color }}>
       {count}/{maxChars}
       {count > maxChars && <Icon name="alert" size={11} style={{ display: 'inline-block', verticalAlign: '-2px', marginLeft: 4 }} />}
     </span>
@@ -115,6 +125,11 @@ function TouchpointEditCard({ tp, campaign, onChange }) {
         }
         if (bodyRef.current && msg.variantA.body) {
           bodyRef.current.innerHTML = highlightVars(msg.variantA.body).replace(/\n/g, '<br>');
+          // Une écriture directe de innerHTML n'émet aucun événement. Sans ce
+          // signal, le compteur de caractères resterait sur la longueur d'avant
+          // la régénération, alors que c'est justement le moment où la note
+          // LinkedIn risque de passer au-dessus de 300.
+          bodyRef.current.dispatchEvent(new Event('input', { bubbles: true }));
         }
         // Push the new content into parent state
         onChange(tp._backendId || tp.id, {

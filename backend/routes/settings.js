@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const { encrypt, decrypt, maskKey } = require('../config/crypto');
+const { connectionState, STATE_ABSENT } = require('../lib/crm-connection-state');
 
 const router = Router();
 
@@ -55,12 +56,22 @@ router.get('/keys', async (req, res, next) => {
         try {
           const plain = decrypt(row.access_token);
           const meta = row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null;
-          result[field] = { configured: true, masked: maskKey(plain), updatedAt: row.updated_at, metadata: meta };
+          // `configured` ne dit que « le token se déchiffre ». Un token lisible que le
+          // CRM refuse laissait la carte au vert pendant que la synchro échouait :
+          // `state` porte ce troisième cas (migration 122).
+          result[field] = {
+            configured: true,
+            masked: maskKey(plain),
+            updatedAt: row.updated_at,
+            metadata: meta,
+            state: connectionState(row),
+            invalidSince: row.invalid_since || null,
+          };
         } catch {
-          result[field] = { configured: false, masked: null, updatedAt: null };
+          result[field] = { configured: false, masked: null, updatedAt: null, state: STATE_ABSENT, invalidSince: null };
         }
       } else {
-        result[field] = { configured: false, masked: null, updatedAt: null };
+        result[field] = { configured: false, masked: null, updatedAt: null, state: STATE_ABSENT, invalidSince: null };
       }
     }
 

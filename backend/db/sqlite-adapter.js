@@ -359,6 +359,7 @@ function initSchema() {
       crm_contact_id TEXT,
       crm_created_at DATETIME,
       crm_deal_id TEXT,
+      crm_deal_attribution TEXT,
       crm_owner_id TEXT,
       crm_provider TEXT,
       crm_push_state TEXT,
@@ -473,6 +474,9 @@ function initSchema() {
       -- Colonnes ajoutées par migration, répliquées ici pour le miroir de test
       instance_url TEXT,
       team_id TEXT,
+      invalid_since DATETIME,
+      invalid_reason TEXT,
+      last_verified_at DATETIME,
       UNIQUE(user_id, provider)
     );
 

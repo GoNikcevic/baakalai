@@ -1,6 +1,6 @@
 /* ===============================================================================
    BAKAL · Clients Page
-   Import contacts from CRM, view pipeline stages, manage client relationships.
+   Import contacts from CRM, follow deals and clients, manage relationships.
    Click a client to open detail panel with timeline + emails + actions.
    =============================================================================== */
 
@@ -15,7 +15,7 @@ import { contactSubline } from '../components/ContactSubline';
 import ProductLineTags from '../components/ProductLineTags';
 import Icon from '../components/Icon';
 
-const STAGE_COLORS = [
+const TILE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
   'var(--warning)', 'var(--purple)', 'var(--success)',
 ];
@@ -46,6 +46,14 @@ const AT_RISK_THRESHOLD = 60;
 const CLIENT_SILENCE_DAYS = 90;
 const CLIENT_NEW_DAYS = 90;
 
+/** Seuils de silence d'un deal en cours. Une seule définition pour les trois
+ *  endroits qui les employaient chacun de leur côté : les tuiles de tête, la
+ *  ligne « X dorment depuis plus de 30 jours » et la couleur du compteur de
+ *  jours dans la liste. Un deal muet depuis un mois se relance, muet depuis
+ *  deux il est au point mort. */
+const DEAL_DORMANT_DAYS = 30;
+const DEAL_STALLED_DAYS = 60;
+
 // Jours écoulés depuis une date. null quand la date est absente ou illisible :
 // « on ne sait pas » ne doit jamais se confondre avec « contacté aujourd'hui ».
 function daysSince(dateStr) {
@@ -60,9 +68,20 @@ function daysSince(dateStr) {
 // pour ne pas transformer une donnée manquante en alerte.
 function silenceColor(days) {
   if (days == null) return 'var(--text-muted)';
-  if (days > 60) return 'var(--danger)';
-  if (days > 30) return 'var(--warning)';
+  if (days > DEAL_STALLED_DAYS) return 'var(--danger)';
+  if (days > DEAL_DORMANT_DAYS) return 'var(--warning)';
   return 'var(--success)';
+}
+
+// Tranche de silence d'un deal en cours. null quand la date d'activité est
+// absente : « on ne sait pas » n'est ni actif, ni endormi, ni au point mort.
+// Les bornes sont strictes, comme les libellés qui les accompagnent (« plus de
+// 30 jours ») : à 30 jours pile, un deal est encore actif.
+function silenceBucket(days) {
+  if (days == null) return null;
+  if (days > DEAL_STALLED_DAYS) return 'stalled';
+  if (days > DEAL_DORMANT_DAYS) return 'dormant';
+  return 'active';
 }
 
 // Rang de silence pour le tri. MAX_SAFE_INTEGER et non Infinity : deux contacts
@@ -102,7 +121,6 @@ export default function ClientsPage({ scope }) {
   const [importResult, setImportResult] = useState(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [stages, setStages] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [connectedCrm, setConnectedCrm] = useState(null);
   const [connectedProviders, setConnectedProviders] = useState([]);
@@ -163,18 +181,13 @@ export default function ClientsPage({ scope }) {
       setClients(opps);
       setTruncated(opps.length >= LIST_LIMIT);
       setOwners(ownersData.owners || []);
-
-      // Étapes du pipeline : une seule route pour tous les CRM. Le branchement
-      // par provider qui existait ici n'avait jamais été écrit pour HubSpot ni
-      // Salesforce · leurs étapes étaient collectées mais jamais affichées · 
-      // et il ne prenait que le premier pipeline de Pipedrive.
-      const stagesData = await request('/crm/stages').catch(() => ({ stages: [] }));
-      setStages(stagesData.stages || []);
+      // Plus d'appel à /crm/stages ici : la barre de tête n'affiche plus les
+      // étapes brutes du CRM. La route reste employée par routes/analytics.js.
     } catch (err) {
       // Surtout ne pas rester muet : un `catch {}` vide ici a masqué pendant onze
-      // jours une ReferenceError qui coupait le chargement juste avant les étapes
-      // de pipeline et les commerciaux, laissant la page à moitié remplie sans
-      // aucun signe visible. La page reste utilisable avec ce qui a été chargé.
+      // jours une ReferenceError qui coupait le chargement en route et laissait
+      // la page à moitié remplie, sans aucun signe visible. La page reste
+      // utilisable avec ce qui a été chargé.
       console.error('[ClientsPage] loadData', err);
     }
     setLoading(false);
@@ -223,26 +236,22 @@ export default function ClientsPage({ scope }) {
 
   // ── Tuiles de tête ──────────────────────────────────────────────────────
   //
-  // Sous Deals : les étapes du pipeline CRM, regroupées par pipeline (HubSpot
-  // et Pipedrive en exposent plusieurs, fondre « Closed Won » de deux
-  // pipelines dans une seule barre les rendrait indiscernables).
+  // Un jeu FIXE de quatre segments de chaque côté, jamais les étapes brutes du
+  // CRM. La barre affichait une tuile par étape de pipeline remontée par
+  // /crm/stages : sur un Salesforce standard, ça fait plus de seize tuiles qui
+  // débordent en scroll horizontal et noient la page (constaté le 28/09 sur le
+  // compte de William, 308 deals). Une vue globale doit tenir en un coup d'oeil,
+  // et le découpage qui répond à « lesquels sont en train de mourir » n'est pas
+  // le pipeline du CRM, c'est le silence.
   //
-  // Sous Clients : les étapes n'ont aucun sens (un client gagné n'est plus en
-  // « Qualification »), la page affichait pourtant la même barre. Remplacée
-  // par les segments qui valent pour un client déjà signé.
+  // Sous Deals : le temps écoulé depuis le dernier échange, aux seuils déjà
+  // employés par la page (30 j « dorment », 60 j rouge dans silenceColor), plus
+  // les perdus.
+  // Sous Clients : les segments qui valent pour un contrat déjà signé.
   //
   // Dans les deux cas, une tuile est un filtre : le chiffre se lit, puis se
   // clique pour voir qui est derrière.
   const tileGroups = useMemo(() => {
-    const matchStage = (stage) => (c) => (
-      c.crm_stage_id != null
-        ? String(c.crm_stage_id) === String(stage.id)
-        // Repli pour les contacts sans étape connue · `crm_stage` porte le
-        // libellé et `stage.id` l'identifiant natif, les comparer ne matchait
-        // jamais (compteur figé à 0 avant la migration 092).
-        : c.status === stage.name?.toLowerCase()
-    );
-
     if (scope === 'clients') {
       // Activité inconnue : ni actif ni silencieux. Les deux tuiles sont des
       // filtres, pas une répartition, donc mieux vaut ne compter personne à
@@ -258,23 +267,27 @@ export default function ClientsPage({ scope }) {
       return [['', segments.map(s => ({ ...s, count: scopedClients.filter(s.match).length }))]];
     }
 
-    const groups = new Map();
-    for (const stage of stages) {
-      const key = stage.pipelineName || '';
-      if (!groups.has(key)) groups.set(key, []);
-      const match = matchStage(stage);
-      groups.get(key).push({
-        key: `stage_${stage.id}`,
-        label: stage.name,
-        match,
-        // scopedClients et non clients : sous Deals, la barre comptait aussi
-        // les clients gagnés, donc un total qui ne correspondait à aucune
-        // ligne de la liste en dessous.
-        count: scopedClients.filter(match).length,
-      });
-    }
-    return [...groups.entries()];
-  }, [scope, stages, scopedClients, t]);
+    // Un deal perdu est sorti du pipeline : le compter aussi dans une tranche de
+    // silence le ferait apparaître dans deux tuiles à la fois, alors que chaque
+    // tuile sert de filtre exclusif. Les trois premières ne parlent donc que des
+    // deals encore ouverts. Activité inconnue : comptée nulle part, comme sous
+    // Clients · la ranger dans « au point mort » transformerait une donnée
+    // manquante en alerte.
+    const inBucket = (bucket) => (c) => c.status !== 'lost' && silenceBucket(daysSince(c.last_activity_at)) === bucket;
+    // Couleur explicite, et pas la palette par position : ces quatre tuiles
+    // disent la même chose que le compteur de jours de chaque ligne, elles
+    // doivent le dire de la même couleur (cf. silenceColor).
+    const segments = [
+      { key: 'deal_active', label: t('clients.dealSegActive'), color: 'var(--success)', match: inBucket('active') },
+      { key: 'deal_dormant', label: t('clients.dealSegDormant'), color: 'var(--warning)', match: inBucket('dormant') },
+      { key: 'deal_stalled', label: t('clients.dealSegStalled'), color: 'var(--danger)', match: inBucket('stalled') },
+      { key: 'deal_lost', label: t('clients.dealSegLost'), color: 'var(--text-muted)', match: (c) => c.status === 'lost' },
+    ];
+    // scopedClients et non clients : sous Deals, la barre comptait aussi les
+    // clients gagnés, donc un total qui ne correspondait à aucune ligne de la
+    // liste en dessous.
+    return [['', segments.map(s => ({ ...s, count: scopedClients.filter(s.match).length }))]];
+  }, [scope, scopedClients, t]);
 
   const activeTile = useMemo(
     () => tileGroups.flatMap(([, tiles]) => tiles).find(x => x.key === tileFilter) || null,
@@ -282,7 +295,7 @@ export default function ClientsPage({ scope }) {
   );
 
   // Passer de Deals à Clients garde le composant monté, mais les clés de
-  // tuiles ne se croisent pas (`stage_*` contre `seg_*`) : un filtre d'étape
+  // tuiles ne se croisent pas (`deal_*` contre `seg_*`) : un filtre de deal
   // ne trouve plus sa tuile côté clients, donc `activeTile` retombe à null et
   // rien n'est filtré. Aucun état à remettre à zéro à la main.
   const filtered = useMemo(() => clients.filter(c => {
@@ -339,7 +352,11 @@ export default function ClientsPage({ scope }) {
     let dormant = 0, valued = 0, value = 0;
     for (const c of scopedClients) {
       const d = daysSince(c.last_activity_at);
-      if (d != null && d > 30) dormant++;
+      // Perdus exclus, et mêmes bornes que les tuiles : sans ça la ligne
+      // annonçait un « dorment » que la somme des tuiles Dorment et Au point
+      // mort ne retrouvait pas.
+      const bucket = c.status !== 'lost' ? silenceBucket(d) : null;
+      if (bucket === 'dormant' || bucket === 'stalled') dormant++;
       if (c.deal_value != null) { valued++; value += Number(c.deal_value) || 0; }
     }
     return { dormant, valued, value };
@@ -456,7 +473,18 @@ export default function ClientsPage({ scope }) {
             {isDealQualityContext
               ? t('dataQuality.dealQuality.contextSubtitle', { count: filtered.length })
               : scope === 'deals'
-                ? t('clients.dealsInCrm', { count: scopedClients.length })
+                // Une ligne d'opportunité est un CONTACT, pas un deal · tant
+                // que le modèle compte/deal/contact n'existe pas, annoncer
+                // « N deals en cours » est faux dès que le CRM ne rattache pas
+                // ses deals : sur un Salesforce sans contact roles, la page
+                // annonçait 308 deals en listant 308 personnes qui n'en
+                // portaient aucun. On dit ce qui est listé, et combien portent
+                // vraiment un montant · le trou devient visible au lieu d'être
+                // masqué par un mot.
+                ? t('clients.dealsInCrm', {
+                    count: scopedClients.length,
+                    valued: scopedClients.filter(c => c.deal_value != null && c.deal_value !== '').length,
+                  })
                 : t('clients.contactsInCrm', { count: scopedClients.length })}
           </div>
         </div>
@@ -564,7 +592,10 @@ export default function ClientsPage({ scope }) {
               )}
               <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 0' }}>
                 {tiles.map((tile, i) => {
-                  const color = STAGE_COLORS[i % STAGE_COLORS.length];
+                  // Une tuile porte sa propre couleur quand elle a un sens
+                  // (vert actif, rouge au point mort) ; sinon la palette sert à
+                  // les distinguer les unes des autres, rien de plus.
+                  const color = tile.color || TILE_COLORS[i % TILE_COLORS.length];
                   const isActive = tileFilter === tile.key;
                   const empty = tile.count === 0;
                   return (

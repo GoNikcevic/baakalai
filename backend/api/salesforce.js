@@ -137,6 +137,24 @@ async function updateDeal(instanceUrl, accessToken, dealId, data) {
   });
 }
 
+/**
+ * Tri du plus ancien au plus récent, l'Id pour départager.
+ *
+ * Sert à apparier deals et contacts d'un même compte quand le CRM ne dit pas
+ * qui va avec qui. Le tri doit rendre le MÊME ordre à chaque synchro, sinon
+ * l'attribution change sans raison : une date absente ou illisible se range
+ * donc toujours au même endroit, et l'Id tranche les ex æquo (deux contacts
+ * créés dans la même seconde par un import en masse, cas courant).
+ */
+function oldestFirst(a, b) {
+  const ta = Date.parse(a.createdAt || '');
+  const tb = Date.parse(b.createdAt || '');
+  const sa = Number.isFinite(ta) ? ta : 0;
+  const sb = Number.isFinite(tb) ? tb : 0;
+  if (sa !== sb) return sa - sb;
+  return String(a.id ?? '').localeCompare(String(b.id ?? ''));
+}
+
 async function getDeals(instanceUrl, accessToken, limit = 10000) {
   // LastActivityDate / LastModifiedDate : sans elles, la récence d'un deal est
   // inconnue et rien ne peut être signalé comme dormant. Voir lib/crm-activity-date.js.
@@ -172,34 +190,78 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
     result = await sfFetch(instanceUrl, accessToken, result.nextRecordsUrl.replace('/services/data/v58.0', ''));
   }
 
-  // Fallback contact role manquant (décision Goran 15/09) : beaucoup d'orgs ne
-  // remplissent pas les OpportunityContactRoles · sans eux, personId reste null
-  // et le deal n'est jamais rattaché (donc jamais mappé won/lost côté app). Si
-  // le compte de l'opp n'a qu'UN seul contact emailable, on rattache le deal à
-  // ce contact : zéro ambiguïté. À 2 contacts ou plus, on s'abstient · on ne
-  // devine jamais qui est le bon interlocuteur. Best-effort : ne fait jamais
-  // échouer getDeals.
+  // Rattachement des deals sans contact role (arbitrage Goran 29/09, qui
+  // remplace celui du 15/09) · beaucoup d'orgs ne remplissent pas les
+  // OpportunityContactRoles. Sans eux personId reste null, et un deal non
+  // rattaché n'existe pas pour le produit : ni client, ni montant, ni étape, ni
+  // relance, et le mappage de pipeline n'a rien à classer.
+  //
+  // Le repli d'origine n'attribuait le deal que si le compte n'avait qu'UN seul
+  // contact emailable. Mesuré sur l'org d'un beta testeur : 52 comptes, tous à
+  // deux contacts ou plus, aucun à un seul contact emailable · 0 deal rattaché
+  // sur 308. Une prudence qui ne protégeait rien, puisqu'elle ne s'appliquait
+  // jamais.
+  //
+  // On répartit donc. Les contacts emailables du compte sont triés de façon
+  // STABLE (date de création, Id pour départager), les deals du compte aussi, et
+  // on apparie un pour un : le deal le plus ancien au contact le plus ancien.
+  //
+  // Deux propriétés portent tout le reste :
+  //   · la stabilité · « le contact le plus récemment actif » aurait paru plus
+  //     fin, mais l'attribution changeait à chaque email reçu, et avec elle le
+  //     statut client, le montant, l'étape, le score de churn et les relances.
+  //     Une attribution qui valse est pire qu'une attribution imparfaite.
+  //   · un contact ne porte jamais deux deals · la ligne n'a qu'un crm_deal_id,
+  //     un montant, une étape. Doubler, c'est écraser en silence.
+  //
+  // `personIdInferred` dit que le lien est supposé. lib/deal-lifecycle-sync.js
+  // le persiste dans crm_deal_attribution (migration 123), et les agents n'ont
+  // pas le droit d'affirmer le montant d'un deal deviné à son porteur supposé.
+  //
+  // Best-effort : ne fait jamais échouer getDeals.
   const orphans = deals.filter(d => !d.personId && d.accountId);
   if (orphans.length > 0) {
     try {
+      // CreatedDate est ce qui rend le tri reproductible · sans elle, l'ordre
+      // serait celui de l'API, qui ne garantit rien.
       const contactsByAccount = new Map();
       let res = await sfFetch(instanceUrl, accessToken,
-        `/query?q=${encodeURIComponent('SELECT Id, AccountId FROM Contact WHERE AccountId != null AND Email != null')}`);
+        `/query?q=${encodeURIComponent('SELECT Id, AccountId, CreatedDate FROM Contact WHERE AccountId != null AND Email != null')}`);
       for (;;) {
         for (const c of res.records || []) {
           const list = contactsByAccount.get(c.AccountId) || [];
-          list.push(c.Id);
+          list.push({ id: c.Id, createdAt: c.CreatedDate });
           contactsByAccount.set(c.AccountId, list);
         }
         if (res.done || !res.nextRecordsUrl) break;
         res = await sfFetch(instanceUrl, accessToken, res.nextRecordsUrl.replace('/services/data/v58.0', ''));
       }
+
+      // Un contact que le CRM désigne explicitement sur un autre deal garde son
+      // deal : une attribution devinée ne marche jamais sur une attribution réelle.
+      const taken = new Set(deals.filter(d => d.personId).map(d => String(d.personId)));
+
+      const byAccount = new Map();
       for (const d of orphans) {
-        const contacts = contactsByAccount.get(d.accountId);
-        if (contacts && contacts.length === 1) d.personId = contacts[0];
+        const list = byAccount.get(d.accountId) || [];
+        list.push(d);
+        byAccount.set(d.accountId, list);
+      }
+
+      for (const [accountId, accountDeals] of byAccount) {
+        const available = (contactsByAccount.get(accountId) || [])
+          .filter(c => !taken.has(String(c.id)))
+          .sort(oldestFirst);
+        const ordered = [...accountDeals].sort(oldestFirst);
+        // Plus de deals que de contacts emailables : le surplus reste orphelin.
+        // Doubler un porteur ferait disparaître un montant sans le dire.
+        for (let i = 0; i < ordered.length && i < available.length; i++) {
+          ordered[i].personId = available[i].id;
+          ordered[i].personIdInferred = true;
+        }
       }
     } catch (err) {
-      console.warn('[salesforce] Single-contact fallback failed:', err.message);
+      console.warn('[salesforce] Deal attribution fallback failed:', err.message);
     }
   }
 

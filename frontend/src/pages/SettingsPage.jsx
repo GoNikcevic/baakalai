@@ -15,6 +15,8 @@ import { useI18n } from '../i18n';
 import EmailAccountSettings from '../components/EmailAccountSettings';
 import AutopilotSettings from '../components/AutopilotSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
+import StageMappingSettings from '../components/StageMappingSettings';
+import DealAttributionSettings from '../components/DealAttributionSettings';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
 
@@ -645,16 +647,22 @@ export default function SettingsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             {MAIN_TOOLS.map(tool => {
               const isConnected = keyStatus[tool.field]?.configured;
+              // Token lisible mais refusé par le CRM : la carte doit le dire au lieu de
+              // rester au vert pendant que la synchro échoue. `isConnected` reste vrai,
+              // la connexion garde ses réglages, seul son état de santé change.
+              const needsReconnect = keyStatus[tool.field]?.state === 'needs_reconnect';
               const isEditing = editing[tool.field];
+              const accent = needsReconnect ? 'var(--warning)' : 'var(--success)';
               return (
                 <div key={tool.field} style={{
                   padding: '16px', borderRadius: 12,
-                  border: `1.5px solid ${isConnected ? 'var(--success)' : 'var(--border)'}`,
-                  background: isConnected ? 'rgba(0,214,143,0.04)' : 'var(--bg-elevated)',
+                  border: `1.5px solid ${isConnected ? accent : 'var(--border)'}`,
+                  background: needsReconnect ? 'var(--warning-soft)'
+                    : isConnected ? 'rgba(0,214,143,0.04)' : 'var(--bg-elevated)',
                   cursor: isEditing ? 'default' : 'pointer',
                   transition: 'all 0.2s',
                 }}
-                onClick={() => { if (!isEditing && !isConnected) startEdit(tool.field); }}
+                onClick={() => { if (!isEditing && (!isConnected || needsReconnect)) startEdit(tool.field); }}
                 >
                   {/* Icon */}
                   <div style={{
@@ -674,10 +682,25 @@ export default function SettingsPage() {
 
                   {/* Status / Actions */}
                   {isConnected && !isEditing && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>{`✓ ${t('settings.connected')}`}</span>
-                      <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }}
-                        onClick={(e) => { e.stopPropagation(); startEdit(tool.field); }}>{t('settings.edit')}</button>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: accent, fontWeight: 600 }}>
+                          {needsReconnect ? `⚠ ${t('settings.needsReconnect')}` : `✓ ${t('settings.connected')}`}
+                        </span>
+                        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }}
+                          onClick={(e) => { e.stopPropagation(); startEdit(tool.field); }}>
+                          {needsReconnect ? t('settings.reconnect') : t('settings.edit')}
+                        </button>
+                      </div>
+                      {needsReconnect && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4, marginTop: 4 }}>
+                          {keyStatus[tool.field]?.invalidSince
+                            ? t('settings.needsReconnectSince', {
+                                date: new Date(keyStatus[tool.field].invalidSince).toLocaleDateString(en ? 'en-GB' : 'fr-FR'),
+                              })
+                            : t('settings.needsReconnectHint')}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1046,6 +1069,15 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-group-title">{t('settings.groupCrmConfig')}</div>
+
+      {/* Ce que baakalai a compris du pipeline · au-dessus du mappage de
+          champs : c'est la lecture automatique, le mappage manuel vient après. */}
+      <StageMappingSettings />
+
+      {/* Les rattachements de deals devinés · juste sous le pipeline, même
+          famille de question : ce que baakalai a supposé de votre CRM. Ne
+          s'affiche que s'il y a quelque chose à confirmer. */}
+      <DealAttributionSettings />
 
       {/* CRM Field Mapping */}
       <FieldMappingSettings />

@@ -50,7 +50,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
   const startTime = Date.now();
   const report = {
     trigger,
-    sync: { imported: 0, updated: 0 },
+    sync: { imported: 0, updated: 0, stagesMapped: 0, repositioned: 0 },
     cleaning: { issues: 0, score: null },
     nurture: { evaluated: 0, sent: 0, queued: 0 },
     responses: { analyzed: 0, positive: 0, negative: 0 },
@@ -461,6 +461,16 @@ async function stepSync(userId, token, report, event, crmProvider = 'pipedrive')
     // Settings (lib/crm-sync.js). Best-effort : ne throw jamais.
     const { syncDealLifecycle } = require('./deal-lifecycle-sync');
     await syncDealLifecycle(userId, token, crmProvider, report);
+
+    // Puis la lecture du pipeline lui-même : quelles étapes du CRM du user
+    // correspondent à quel statut baakalai. APRÈS le lifecycle, qui tranche
+    // gagné/perdu sur les drapeaux natifs · le mappage ne touche qu'aux
+    // statuts ouverts et ne doit jamais repasser devant lui.
+    const { analyzeStageArchitecture, applyStageMapping } = require('./crm-stage-mapper');
+    const arch = await analyzeStageArchitecture(userId, { provider: crmProvider, creds: token });
+    const applied = await applyStageMapping(userId, crmProvider);
+    report.sync.stagesMapped = arch.byRule + arch.byAi;
+    report.sync.repositioned = applied.updated;
   } catch (err) {
     report.errors.push(`Sync: ${err.message}`);
   }

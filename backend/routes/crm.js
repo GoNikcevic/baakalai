@@ -17,7 +17,7 @@ const odoo = require('../api/odoo');
 const notionCrm = require('../api/notion-crm');
 const airtableCrm = require('../api/airtable-crm');
 const { decrypt, encrypt } = require('../config/crypto');
-const { getValidatedIntegrations } = require('../config');
+const { getConnectionStates, STATE_CONNECTED, STATE_ABSENT } = require('../lib/crm-connection-state');
 const { computeIcpSignals } = require('../lib/icp-signals');
 const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
@@ -336,18 +336,25 @@ router.get('/providers', async (req, res, next) => {
     // A row existing in user_integrations isn't enough on its own · only count providers whose
     // stored access_token actually decrypts (excludes stale/placeholder rows, e.g. test data
     // seeded directly in the DB, from silently appearing "connected" everywhere this is checked).
-    const [validated, userResult] = await Promise.all([
-      getValidatedIntegrations(req.user.id, providers),
+    // Ce déchiffrement ne prouve pourtant que la lisibilité du token, pas sa validité : `state`
+    // ajoute le cas du token lisible mais refusé par le CRM (migration 122). `connected` reste
+    // renvoyé tel quel pour les appelants existants.
+    const [states, userResult] = await Promise.all([
+      getConnectionStates(req.user.id, providers),
       db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [req.user.id]),
     ]);
-    const connectedSet = new Set(validated);
     const activeCrm = userResult.rows[0]?.active_crm_provider || null;
 
-    const statuses = providers.map(provider => ({
-      provider,
-      connected: connectedSet.has(provider),
-      label: labelMap[provider] || provider,
-    }));
+    const statuses = providers.map(provider => {
+      const s = states[provider] || {};
+      return {
+        provider,
+        connected: s.state === STATE_CONNECTED,
+        state: s.state || STATE_ABSENT,
+        invalidSince: s.invalidSince || null,
+        label: labelMap[provider] || provider,
+      };
+    });
 
     res.json({ providers: statuses, activeCrm });
   } catch (err) {
@@ -1051,58 +1058,24 @@ router.get('/stages', async (req, res, next) => {
     const token = await getUserCrmToken(req.user.id, provider);
     if (!token) return res.json({ provider, stages: [] });
 
-    let stages = [];
+    // La lecture par provider vit dans lib/crm-stage-mapper.js, qui en a
+    // besoin pour comprendre le pipeline. En garder une seconde copie ici
+    // ferait diverger les deux sur la règle la plus fragile du fichier :
+    // l'identifiant d'étape doit coller à ce que stage-tracking.js écrit.
+    const { fetchPipelineStages } = require('../lib/crm-stage-mapper');
 
-    if (provider === 'pipedrive') {
-      // Sans pipelineId, Pipedrive renvoie les étapes de TOUS les pipelines · 
-      // l'ancien code ne prenait que le premier et masquait donc les autres.
-      const [pipelines, raw] = await Promise.all([
-        pipedrive.getPipelines(token).catch(() => []),
-        pipedrive.getStages(token),
-      ]);
-      const pipelineNames = new Map((pipelines || []).map(p => [String(p.id), p.name]));
-      stages = (raw || []).map(st => ({
-        id: String(st.id),
-        name: st.name,
-        order: st.order ?? 0,
-        pipelineId: st.pipelineId != null ? String(st.pipelineId) : null,
-        pipelineName: pipelineNames.get(String(st.pipelineId)) || null,
-      }));
-    } else if (provider === 'hubspot') {
-      const pipelines = await hubspot.getDealPipelines(token);
-      for (const pl of pipelines) {
-        for (const st of pl.stages) {
-          stages.push({
-            id: st.id, name: st.name, order: st.order,
-            pipelineId: pl.id, pipelineName: pl.name,
-          });
-        }
-      }
-    } else if (provider === 'salesforce') {
+    let creds = token;
+    if (provider === 'salesforce') {
       const integration = await db.query(
         `SELECT instance_url FROM user_integrations WHERE user_id = $1 AND provider = 'salesforce'`,
         [req.user.id]
       );
       const instanceUrl = integration.rows[0]?.instance_url;
       if (!instanceUrl) return res.json({ provider, stages: [] });
-      const raw = await salesforce.getStages(instanceUrl, token);
-      stages = (raw || []).map(st => ({
-        // `name` fait office d'id : l'Opportunity ne porte que StageName.
-        id: st.name, name: st.name, order: st.order ?? 0,
-        pipelineId: null, pipelineName: null,
-      }));
-    } else if (provider === 'odoo') {
-      let creds = token;
-      if (typeof creds === 'string') {
-        try { creds = JSON.parse(creds); } catch { return res.json({ provider, stages: [] }); }
-      }
-      const raw = await odoo.getStages(creds);
-      stages = (raw || []).map(st => ({
-        id: String(st.id), name: st.name, order: st.order ?? 0,
-        pipelineId: null, pipelineName: null,
-      }));
+      creds = { accessToken: token, instanceUrl };
     }
 
+    const stages = await fetchPipelineStages(provider, creds);
     stages.sort((a, b) => (a.pipelineName || '').localeCompare(b.pipelineName || '') || a.order - b.order);
     res.json({ provider, stages });
   } catch (err) {
@@ -1796,6 +1769,90 @@ router.delete('/mappings/:id', async (req, res, next) => {
     const { deleteMapping } = require('../lib/crm-field-mapper');
     await deleteMapping(req.user.id, req.params.id);
     res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// =============================================
+// Étapes de pipeline · ce que baakalai a compris du CRM du user
+// =============================================
+
+// GET /api/crm/stage-mapping · le mappage tel qu'il est stocké
+router.get('/stage-mapping', async (req, res, next) => {
+  try {
+    const { getStageMappings, WITH_PIPELINE } = require('../lib/crm-stage-mapper');
+    const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [req.user.id]);
+    let provider = userRow.rows[0]?.active_crm_provider || null;
+    if (!provider || !WITH_PIPELINE.includes(provider)) {
+      // Même repli que /stages : sans CRM principal renseigné, la section
+      // disparaîtrait pour des comptes qui ont pourtant un pipeline.
+      const connected = await db.query(
+        'SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)',
+        [req.user.id, WITH_PIPELINE]
+      );
+      const found = new Set(connected.rows.map(r => r.provider));
+      provider = WITH_PIPELINE.find(p => found.has(p)) || null;
+    }
+    if (!provider) return res.json({ provider: null, mappings: [] });
+    const mappings = await getStageMappings(req.user.id, provider);
+    res.json({ provider, mappings });
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/stage-mapping/analyze · relit le pipeline et le remappe
+//
+// Le mappage se fait tout seul à chaque analyse CRM ; cette route existe pour
+// le rejouer après un changement de pipeline sans attendre la synchro
+// suivante. Les lignes corrigées à la main ne bougent pas.
+router.post('/stage-mapping/analyze', async (req, res, next) => {
+  try {
+    const { analyzeStageArchitecture, applyStageMapping, getStageMappings } = require('../lib/crm-stage-mapper');
+    const report = await analyzeStageArchitecture(req.user.id);
+    if (!report.provider) return res.status(400).json({ error: 'Aucun CRM avec pipeline connecté' });
+    const applied = await applyStageMapping(req.user.id, report.provider);
+    const mappings = await getStageMappings(req.user.id, report.provider);
+    res.json({ provider: report.provider, report, repositioned: applied.updated, mappings });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/crm/stage-mapping/:id · correction manuelle
+router.put('/stage-mapping/:id', async (req, res, next) => {
+  try {
+    const { setStageMapping, CANONICAL_STATUSES } = require('../lib/crm-stage-mapper');
+    const { status } = req.body;
+    if (!CANONICAL_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status doit valoir : ${CANONICAL_STATUSES.join(', ')}` });
+    }
+    const row = await setStageMapping(req.user.id, req.params.id, status);
+    if (!row) return res.status(404).json({ error: 'Mappage introuvable' });
+    // La correction vaut pour les deals déjà rangés dans cette étape, pas
+    // seulement pour les prochains : sans ça le user corrigerait l'écran sans
+    // rien voir changer dans ses listes.
+    const { applyStageMapping } = require('../lib/crm-stage-mapper');
+    const applied = await applyStageMapping(req.user.id, row.crm_provider);
+    res.json({ mapping: row, repositioned: applied.updated });
+  } catch (err) { next(err); }
+});
+
+// GET /api/crm/deal-attribution · les rattachements que baakalai a devinés
+//
+// Pendant de /stage-mapping dans Réglages / Configuration CRM : l'un dit ce que
+// baakalai a compris du pipeline, l'autre ce qu'il a supposé du rattachement
+// des deals. Les deux se relisent au même endroit, sinon aucun ne se relit.
+router.get('/deal-attribution', async (req, res, next) => {
+  try {
+    const { getInferredAttributions } = require('../lib/deal-attribution');
+    res.json(await getInferredAttributions(req.user.id));
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/deal-attribution/confirm · le user valide les porteurs devinés
+//
+// Tant qu'il ne l'a pas fait, aucun email ne cite le montant d'un deal deviné
+// (lib/deal-attribution.js). Après, si.
+router.post('/deal-attribution/confirm', async (req, res, next) => {
+  try {
+    const { confirmInferredAttributions } = require('../lib/deal-attribution');
+    res.json(await confirmInferredAttributions(req.user.id));
   } catch (err) { next(err); }
 });
 

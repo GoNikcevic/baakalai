@@ -12,6 +12,7 @@ const db = require('../../db');
 const claude = require('../../api/claude');
 const logger = require('../logger');
 const { onlyCrmContacts } = require('../crm-scope');
+const { assertableDealValue } = require('../deal-attribution');
 const { getStagnantDays } = require('../stagnation');
 const { safeParseClaudeJSON } = require('../utils/safe-json-parse');
 const { getTimingContext, getCopyContext, getPatternContext, getTeamId } = require('../email-context');
@@ -269,7 +270,7 @@ follow-up workflow for this CRM contact, an existing relationship, NOT a cold pr
 GOAL: ${goalBrief}
 
 Contact: ${deal.name} (${deal.title || 'N/A'}) at ${deal.company || 'N/A'}
-Deal status: ${deal.status || 'open'}${deal.deal_value ? `, value ${deal.deal_value} €` : ''}
+Deal status: ${deal.status || 'open'}${assertableDealValue(deal) ? `, value ${assertableDealValue(deal)} €` : ''}
 Days since last activity: ${daysSinceUpdate}
 Churn risk score: ${deal.churn_score || 'N/A'}/100
 Churn factors: ${formatChurnFactors(deal.churn_factors)}

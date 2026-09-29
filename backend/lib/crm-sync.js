@@ -182,9 +182,21 @@ async function syncCRM(userId) {
           const { syncDealLifecycle } = require('./deal-lifecycle-sync');
           const lifecycle = await syncDealLifecycle(userId, resolved.creds, provider);
           console.log(`[crm-sync] Deal lifecycle: ${lifecycle.updated}/${lifecycle.processed} opportunities updated (${provider})`);
+
+          // Comprendre le pipeline du user, puis positionner ses deals dedans.
+          // APRÈS le lifecycle, jamais avant : celui-ci tranche gagné/perdu sur
+          // les drapeaux natifs du deal, et le mappage ne réécrit que les
+          // statuts ouverts. L'ordre garantit qu'un deal conclu ne repasse
+          // jamais par « négociation » le temps d'une synchro.
+          const { analyzeStageArchitecture, applyStageMapping } = require('./crm-stage-mapper');
+          const arch = await analyzeStageArchitecture(userId, { provider, creds: resolved.creds });
+          const applied = await applyStageMapping(userId, provider);
+          console.log(`[crm-sync] Stage mapping: ${arch.stages} stages read, ${applied.updated} opportunities repositioned (${provider})`);
         }
       } catch (err) {
-        console.warn('[crm-sync] Deal lifecycle sync failed:', err.message);
+        // Couvre le lifecycle ET la lecture du pipeline : les deux sont des
+        // compléments du sync des contacts, aucun ne doit le faire échouer.
+        console.warn('[crm-sync] Deal lifecycle / stage mapping failed:', err.message);
       }
     }
 

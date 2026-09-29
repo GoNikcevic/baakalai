@@ -113,12 +113,19 @@ export default function HiddenRevenueCard({ onOpenDetail }) {
       value: latest.quantifiable
         ? `${money(latest.expectedLow)} ${t('hrs.to')} ${money(latest.expectedHigh)}`
         : t('hrs.notQuantShort'),
+      // Deux raisons de ne pas savoir chiffrer, et une seule phrase pour les
+      // deux donnait « 0 opportunités dorment bel et bien, mais 0 deals n'ont
+      // aucun montant renseigné » · une phrase qui affirme un constat dont elle
+      // dit elle-même qu'il porte sur rien. C'est ce que voit tout compte qui
+      // n'a encore rien de dormant, donc tout nouvel utilisateur.
       sub: latest.quantifiable
         ? t('hrs.rangeCap', { qualified: money(latest.qualifiedValue), count: latest.opportunityCount })
-        : t('hrs.notQuantBody', {
-            count: latest.opportunityCount,
-            missing: latest.context?.countWithoutValue ?? 0,
-          }),
+        : latest.opportunityCount > 0
+          ? t('hrs.notQuantBody', {
+              count: latest.opportunityCount,
+              missing: latest.context?.countWithoutValue ?? 0,
+            })
+          : t('hrs.notQuantNone'),
       strong: true,
     },
     {

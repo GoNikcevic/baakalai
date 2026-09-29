@@ -20,6 +20,7 @@ const claude = require('../api/claude');
 const linkedin = require('../api/linkedin');
 const { sendNurtureEmail } = require('./email-outbound');
 const { getPatternContext, getTeamId } = require('./email-context');
+const contactOptout = require('./contact-optout');
 const logger = require('./logger');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -227,7 +228,27 @@ async function evaluateTriggers(userId) {
         [trigger.id]
       );
       const recentSet = new Set(recentEmails.rows.map(r => r.to_email?.toLowerCase()));
-      const filtered = matched.filter(m => m.email && !recentSet.has(m.email.toLowerCase()));
+      let filtered = matched.filter(m => m.email && !recentSet.has(m.email.toLowerCase()));
+
+      // Contacts désinscrits (migration 120). Le blocage définitif est au
+      // transport, dans sendPersonalEmail : il ne peut pas être contourné, et
+      // c'est lui qui fait foi. Ce filtre-ci est en amont pour une autre
+      // raison : sans lui, on paierait à Claude la rédaction d'un email qui
+      // serait refusé à l'envoi, et on recommencerait le lendemain, tous les
+      // jours. Un seul point de filtrage ici couvre les dix chemins de
+      // `matched.push` ci-dessus.
+      if (filtered.length > 0) {
+        const hashes = filtered.map(m => contactOptout.hashEmail(m.email));
+        const optedOut = await db.query(
+          `SELECT email_hash FROM contact_optouts WHERE user_id = $1 AND email_hash = ANY($2)`,
+          [userId, hashes]
+        );
+        if (optedOut.rows.length > 0) {
+          const blocked = new Set(optedOut.rows.map(r => r.email_hash));
+          filtered = filtered.filter(m => !blocked.has(contactOptout.hashEmail(m.email)));
+          logger.info('nurture', `${blocked.size} contact(s) désinscrit(s) écarté(s) du trigger ${trigger.id}`);
+        }
+      }
 
       if (filtered.length > 0) {
         results.push({ trigger, contacts: filtered });
