@@ -94,8 +94,31 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
     if (creds) out.crmAccounts = await importCrmAccounts(userId, provider, creds);
     out.accounts = await syncAccountsForUser(userId, { provider });
   } catch (err) {
+    out.accountsError = err.message;
     logger.warn('crm-deal-refresh', `comptes non reconstruits pour ${userId} : ${err.message}`);
   }
+
+  // Les comptes aussi partent en base, pas seulement dans les journaux · la
+  // leçon du même jour, apprise sur les deals : un chiffre qu'on ne peut pas
+  // relire après coup ne permet pas de distinguer « rien à faire » de « ça a
+  // échoué ». Sans cet événement, zéro compte créé se lit exactement pareil
+  // que du code non déployé.
+  try {
+    const { track } = require('./track');
+    await track(userId, 'accounts_sync_done', {
+      provider,
+      credsPresent: !!creds,
+      societesLues: out.crmAccounts?.fetched ?? null,
+      societesEnregistrees: out.crmAccounts?.upserted ?? null,
+      derivesAbsorbes: out.crmAccounts?.absorbed ?? null,
+      erreurLecture: out.crmAccounts?.error ?? null,
+      comptes: out.accounts?.accounts ?? null,
+      crees: out.accounts?.created ?? null,
+      contactsRattaches: out.accounts?.linked ?? null,
+      sansSociete: out.accounts?.skipped ?? null,
+      erreur: out.accountsError || null,
+    });
+  } catch { /* l'instrumentation ne doit jamais peser sur la synchro */ }
 
   if (!WITH_DEALS.includes(provider) || !creds) return out;
 
