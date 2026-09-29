@@ -473,6 +473,9 @@ function initSchema() {
       -- Colonnes ajoutées par migration, répliquées ici pour le miroir de test
       instance_url TEXT,
       team_id TEXT,
+      invalid_since DATETIME,
+      invalid_reason TEXT,
+      last_verified_at DATETIME,
       UNIQUE(user_id, provider)
     );
 

@@ -17,7 +17,7 @@ const odoo = require('../api/odoo');
 const notionCrm = require('../api/notion-crm');
 const airtableCrm = require('../api/airtable-crm');
 const { decrypt, encrypt } = require('../config/crypto');
-const { getValidatedIntegrations } = require('../config');
+const { getConnectionStates, STATE_CONNECTED, STATE_ABSENT } = require('../lib/crm-connection-state');
 const { computeIcpSignals } = require('../lib/icp-signals');
 const { validateId, validateEnum } = require('../middleware/validate-params');
 const crypto = require('crypto');
@@ -336,18 +336,25 @@ router.get('/providers', async (req, res, next) => {
     // A row existing in user_integrations isn't enough on its own · only count providers whose
     // stored access_token actually decrypts (excludes stale/placeholder rows, e.g. test data
     // seeded directly in the DB, from silently appearing "connected" everywhere this is checked).
-    const [validated, userResult] = await Promise.all([
-      getValidatedIntegrations(req.user.id, providers),
+    // Ce déchiffrement ne prouve pourtant que la lisibilité du token, pas sa validité : `state`
+    // ajoute le cas du token lisible mais refusé par le CRM (migration 122). `connected` reste
+    // renvoyé tel quel pour les appelants existants.
+    const [states, userResult] = await Promise.all([
+      getConnectionStates(req.user.id, providers),
       db.query(`SELECT active_crm_provider FROM users WHERE id = $1`, [req.user.id]),
     ]);
-    const connectedSet = new Set(validated);
     const activeCrm = userResult.rows[0]?.active_crm_provider || null;
 
-    const statuses = providers.map(provider => ({
-      provider,
-      connected: connectedSet.has(provider),
-      label: labelMap[provider] || provider,
-    }));
+    const statuses = providers.map(provider => {
+      const s = states[provider] || {};
+      return {
+        provider,
+        connected: s.state === STATE_CONNECTED,
+        state: s.state || STATE_ABSENT,
+        invalidSince: s.invalidSince || null,
+        label: labelMap[provider] || provider,
+      };
+    });
 
     res.json({ providers: statuses, activeCrm });
   } catch (err) {

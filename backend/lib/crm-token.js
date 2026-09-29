@@ -7,6 +7,7 @@
 
 const { decrypt, encrypt } = require('../config/crypto');
 const db = require('../db');
+const { markInvalid, markValid } = require('./crm-connection-state');
 
 // Qui est le propriétaire d'un access token Salesforce en circulation.
 // api/salesforce.js ne reçoit qu'un token : sans ce registre il ne peut pas
@@ -63,7 +64,14 @@ async function refreshSalesforceToken(userId) {
     const tokenRes = await fetch(`https://${refreshHost}/services/oauth2/token`, {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: tokenBody,
     });
-    if (!tokenRes.ok) return null;
+    // Salesforce refuse le refresh token (révoqué, expiré, org désactivée) :
+    // aucune reprise automatique n'est possible, seul un nouvel OAuth répare.
+    // On le marque au lieu de le perdre, sinon l'écran reste au vert pendant
+    // que toutes les synchros échouent (cf. migration 122).
+    if (!tokenRes.ok) {
+      await markInvalid(userId, 'salesforce');
+      return null;
+    }
 
     const tokens = await tokenRes.json();
     await db.userIntegrations.upsert(userId, 'salesforce', {
@@ -71,6 +79,7 @@ async function refreshSalesforceToken(userId) {
       ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
       expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
     });
+    await markValid(userId, 'salesforce');
     return rememberSalesforceToken(tokens.access_token, userId);
   })().catch(() => null).finally(() => sfRefreshInflight.delete(userId));
 
@@ -140,13 +149,22 @@ async function getUserCrmToken(userId, provider) {
           && new Date(integration.expires_at).getTime() < Date.now() + 5 * 60 * 1000;
         if (shouldRefresh) {
           const { refreshTokens } = require('./crm-oauth');
-          const tokens = await refreshTokens(provider, decrypt(integration.refresh_token));
+          let tokens;
+          try {
+            tokens = await refreshTokens(provider, decrypt(integration.refresh_token));
+          } catch {
+            // Même raisonnement que pour Salesforce : le CRM refuse, seul un
+            // nouvel OAuth répare, et l'utilisateur doit le savoir.
+            await markInvalid(userId, provider);
+            return null;
+          }
           accessToken = tokens.access_token;
           await db.userIntegrations.upsert(userId, provider, {
             accessToken: encrypt(tokens.access_token),
             ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
             expiresAt: new Date(Date.now() + Math.max(60, (tokens.expires_in || 1800) - 60) * 1000).toISOString(),
           });
+          await markValid(userId, provider);
         }
 
         if (provider === 'pipedrive') {

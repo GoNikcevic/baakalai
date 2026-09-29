@@ -2163,6 +2163,12 @@ const userIntegrations = {
       if (data.accessToken !== undefined) {
         sets.push(`access_token = $${i++}`);
         values.push(data.accessToken);
+        // Un access token neuf vient forcément du CRM (nouvel OAuth ou refresh
+        // honoré) : la connexion n'est plus à reconnecter. Le faire ici plutôt
+        // que sur chaque appelant évite d'oublier un chemin de reconnexion et
+        // de laisser un « Reconnexion requise » collé sur une connexion saine.
+        // Une mise à jour de métadonnées seule ne déclenche rien (migration 122).
+        sets.push('invalid_since = NULL', 'invalid_reason = NULL');
       }
       if (data.refreshToken !== undefined) {
         sets.push(`refresh_token = $${i++}`);
