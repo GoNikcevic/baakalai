@@ -68,7 +68,20 @@ async function computeIcpSignals(userId) {
          count(DISTINCT lower(owner_email)) FILTER (
            WHERE crm_owner_id IS NULL AND owner_email IS NOT NULL
          )::int AS owner_email_only_count,
-         min(crm_created_at) AS crm_oldest
+         min(crm_created_at) AS crm_oldest,
+         -- Ancienneté de la RELATION, et non du plus ancien contact · un
+         -- contact naît en même temps que son compte ou après, jamais avant.
+         -- Calculée sur le contact, l'ancienneté était donc systématiquement
+         -- sous-estimée, avec des faux négatifs sur le critère « au moins 12
+         -- mois d'historique », qui est l'un des trois de l'ICP.
+         --
+         -- Sous-requete et non jointure : joindre accounts multiplierait les
+         -- lignes d opportunities et fausserait tous les comptages ci-dessus.
+         -- NULL tant que les comptes ne portent pas de date, et le repli sur
+         -- le contact reste alors en place.
+         -- (Pas d accent grave dans ce commentaire : il est a l interieur d un
+         --  gabarit JavaScript, un backtick y termine la chaine.)
+         (SELECT min(a.crm_created_at) FROM accounts a WHERE a.user_id = $1) AS account_oldest
        FROM opportunities
        WHERE user_id = $1`,
       [userId]
@@ -110,7 +123,9 @@ async function computeIcpSignals(userId) {
       dealsCount,
       wonCount,
       hasClientBase,
-      crmHistoryMonths: monthsSince(r.crm_oldest),
+      // La date du COMPTE d'abord, celle du contact en repli · voir la requête.
+      // Les deux sont des dates CRM, jamais des dates d'import.
+      crmHistoryMonths: monthsSince(r.account_oldest || r.crm_oldest),
       crmSeatCount,
     });
   } catch (err) {

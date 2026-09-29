@@ -392,6 +392,29 @@ function initSchema() {
       won_date DATETIME
     );
 
+    -- Les sociétés (migration 124). Répliquée ici parce que lib/icp-signals.js
+    -- lit désormais min(accounts.crm_created_at) : sans cette table, le calcul
+    -- ICP échoue en test alors qu'il passe en production.
+    CREATE TABLE IF NOT EXISTS accounts (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT REFERENCES users(id),
+      crm_provider TEXT,
+      crm_account_id TEXT,
+      name TEXT NOT NULL,
+      name_normalized TEXT NOT NULL,
+      domain TEXT,
+      industry TEXT,
+      size TEXT,
+      owner_id TEXT,
+      owner_email TEXT,
+      crm_owner_id TEXT,
+      crm_created_at DATETIME,
+      last_activity_at DATETIME,
+      source TEXT NOT NULL DEFAULT 'crm',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS reveal_usage (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
       user_id TEXT NOT NULL REFERENCES users(id),

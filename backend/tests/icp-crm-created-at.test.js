@@ -115,3 +115,50 @@ test('sans aucune date CRM, l anciennete ressort inconnue et jamais zero', async
   assert.strictEqual(signaux.crmSeatCount, null);
   assert.strictEqual(signaux.dealsCount, 1, 'la ligne existe bel et bien');
 });
+
+/**
+ * L'ancienneté de la RELATION, et non celle du plus ancien contact.
+ *
+ * Un contact naît en même temps que son compte ou après, jamais avant.
+ * Calculée sur le contact, l'ancienneté était donc systématiquement
+ * sous-estimée, et le critère ICP « au moins 12 mois d'historique » produisait
+ * des faux négatifs : un compte ouvert il y a trois ans dont on n'a importé
+ * que des contacts récents ressortait comme une relation neuve.
+ */
+test('l anciennete se prend sur le COMPTE quand il en porte une', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { computeIcpSignals } = require('../lib/icp-signals');
+  const { user } = await registerAndLogin();
+
+  // Un contact récent : six mois, donc sous le seuil ICP.
+  const recent = new Date();
+  recent.setUTCMonth(recent.getUTCMonth() - 6);
+  await db.opportunities.create({
+    userId: user.id,
+    name: 'Contact recent',
+    email: 'recent@acme.io',
+    status: 'won',
+    crmProvider: 'salesforce',
+    crmContactId: '10',
+    crmCreatedAt: recent.toISOString(),
+  });
+
+  // Son compte, lui, existe depuis trois ans.
+  const vieux = new Date();
+  vieux.setUTCFullYear(vieux.getUTCFullYear() - 3);
+  await db.query(
+    `INSERT INTO accounts (user_id, crm_provider, crm_account_id, name, name_normalized, crm_created_at, source)
+     VALUES ($1, 'salesforce', 'A1', 'Acme', 'acme', $2, 'crm')`,
+    [user.id, vieux.toISOString()]
+  );
+
+  const signaux = await computeIcpSignals(user.id);
+
+  assert.ok(
+    signaux.crmHistoryMonths >= 35,
+    `l anciennete doit venir du compte (~36 mois), pas du contact (6) · obtenu ${signaux.crmHistoryMonths}`
+  );
+});
