@@ -111,6 +111,9 @@ window.BAKAL_SUPABASE_ANON_KEY = ${JSON.stringify(supabase.anonKey)};
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
 app.use('/landing', express.static(path.join(__dirname, '..', 'landing')));
 
+/** Heure de démarrage de CE processus · voir le bloc `deploy` de /api/health. */
+const DEMARRE_LE = new Date().toISOString();
+
 // Health check (public) · includes DB pool stats
 app.get('/api/health', async (_req, res) => {
   const db = require('./db');
@@ -127,6 +130,20 @@ app.get('/api/health', async (_req, res) => {
   res.json({
     status: dbHealth.ok ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
+    // QUEL COMMIT TOURNE. Railway pose ces variables à chaque build, et sans
+    // elles il est impossible de distinguer « le correctif est déployé mais
+    // faux » de « le correctif n'est pas encore déployé ». La question s'est
+    // posée le 30/09 sur un écran blanc de staging, et il a fallu aller
+    // comparer des hash de bundle pour y répondre. Elle se reposera à chaque
+    // mise en production.
+    deploy: {
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
+      branch: process.env.RAILWAY_GIT_BRANCH || null,
+      // L'heure de démarrage du processus dit, à elle seule, si un
+      // redéploiement a bien eu lieu · même quand la variable de commit est
+      // absente parce que la plateforme ne la pose pas.
+      startedAt: DEMARRE_LE,
+    },
     services: {
       lemlist: !!config.lemlist.apiKey,
       notion: !!config.notion.token,
