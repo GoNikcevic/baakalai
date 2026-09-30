@@ -420,6 +420,15 @@ function initSchema() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Les deux index PARTIELS de la migration 124. Sans eux, tout upsert de
+    -- lib/accounts.js echoue ici avec « ON CONFLICT clause does not match any
+    -- PRIMARY KEY or UNIQUE constraint » : le rattachement des contacts a leur
+    -- societe, coeur du lot 2, n'etait garde par aucun test.
+    CREATE UNIQUE INDEX IF NOT EXISTS accounts_crm_unique
+      ON accounts (user_id, crm_provider, crm_account_id) WHERE crm_account_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS accounts_derived_unique
+      ON accounts (user_id, name_normalized) WHERE crm_account_id IS NULL;
+
     -- Les affaires (migration 126). Répliquée ici pour la même raison que la
     -- table accounts : lib/deals.js écrit dedans à chaque synchro, et sans elle
     -- les tests de synchro échouent alors que la production passe.

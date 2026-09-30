@@ -170,6 +170,11 @@ router.post('/contact/enrich', async (req, res, next) => {
         status: 'new',
         data: Object.keys(newData).length > 0 ? JSON.stringify(newData) : null,
       });
+      // Capturé depuis l'extension, donc hors de tout import : sans ce
+      // rattachement, sa société apparaîtrait en double dans les listes
+      // jusqu'à la prochaine synchro complète du CRM.
+      const { attachContactToAccount } = require('../lib/accounts');
+      await attachContactToAccount(req.user.id, { contactId: created?.id, company });
       res.status(201).json({ action: 'created', contact: created });
     }
   } catch (err) {

@@ -226,6 +226,12 @@ router.post('/opportunities', async (req, res, next) => {
       status: status || 'new', timing, linkedinUrl, campaignId,
     });
 
+    // Créé à la main, donc hors de tout import : sans ce rattachement, sa
+    // société apparaîtrait en double dans les listes, une fois pour les
+    // contacts rattachés au compte et une fois pour lui.
+    const { attachContactToAccount } = require('../lib/accounts');
+    await attachContactToAccount(req.user.id, { contactId: opportunity?.id, company });
+
     // Invalidate KPI cache for this user
     kpiCache.invalidate(`kpis:${req.user.id}`);
 

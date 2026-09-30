@@ -88,16 +88,25 @@ async function handlePersonEvent(userId, action, current, previous) {
   const existing = await db.opportunities.findByEmail(userId, email);
 
   if (action === 'added' && !existing) {
-    await db.opportunities.create({
+    const societe = current.org_name || current.org_id?.name || null;
+    const cree = await db.opportunities.create({
       userId,
       name: current.name || 'Unknown',
       email,
       title: current.job_title || null,
-      company: current.org_name || current.org_id?.name || null,
+      company: societe,
       status: 'imported',
       crmProvider: 'pipedrive',
       crmContactId: String(current.id),
       crmOwnerId: current.owner_id?.id ? String(current.owner_id.id) : null,
+    });
+    // Un contact né d'un webhook ne passe par aucun import, donc par aucune
+    // reconstruction de comptes : sans ce rattachement il resterait sans
+    // société jusqu'à la prochaine synchro complète, et sa société
+    // apparaîtrait en double dans les listes le temps que ça dure.
+    const { attachContactToAccount } = require('../lib/accounts');
+    await attachContactToAccount(userId, {
+      contactId: cree?.id, company: societe, crmProvider: 'pipedrive',
     });
     logger.info('webhook-pipedrive', `Imported new person: ${email}`);
   } else if (action === 'updated' && existing) {

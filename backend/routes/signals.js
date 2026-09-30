@@ -409,6 +409,11 @@ router.post('/:id/action', async (req, res, next) => {
         linkedinUrl: s.contact_linkedin || null,
       });
       opportunityId = opp.id;
+      // Né d'un signal, donc hors de tout import : sans ce rattachement, sa
+      // société apparaîtrait en double dans les listes jusqu'à la prochaine
+      // synchro complète du CRM.
+      const { attachContactToAccount } = require('../lib/accounts');
+      await attachContactToAccount(req.user.id, { contactId: opp?.id, company: s.company_name || null });
     } else if (action === 'send_email' && s.contact_email) {
       // Generate and queue a personalized email
       const claude = require('../api/claude');

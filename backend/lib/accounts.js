@@ -115,19 +115,30 @@ async function syncAccountsForUser(userId, { provider = null } = {}) {
           );
         }
       } else {
+        // `DO NOTHING` puis relecture, plutôt qu'un `DO UPDATE ... RETURNING
+        // (xmax = 0)` : `xmax` est une colonne système propre à Postgres, que
+        // le miroir sqlite des tests ne connaît pas. La distinction créé /
+        // existait se lit alors sur la présence d'une ligne rendue, ce qui est
+        // vrai partout. Un conflit ici ne peut venir que d'une passe
+        // concurrente, puisque `parNom` contenait déjà tous les comptes connus.
         const res = await db.query(
           `INSERT INTO accounts (user_id, crm_provider, name, name_normalized, owner_email, source)
            VALUES ($1, $2, $3, $4, $5, 'derived')
            ON CONFLICT (user_id, name_normalized) WHERE crm_account_id IS NULL
-           DO UPDATE SET
-             name = EXCLUDED.name,
-             owner_email = COALESCE(EXCLUDED.owner_email, accounts.owner_email),
-             updated_at = now()
-           RETURNING id, (xmax = 0) AS cree`,
+           DO NOTHING
+           RETURNING id`,
           [userId, g.contacts[0]?.crm_provider || provider, g.nom, cle, owner]
         );
-        accountId = res.rows[0]?.id || null;
-        if (res.rows[0]?.cree) out.created++;
+        if (res.rows[0]?.id) {
+          accountId = res.rows[0].id;
+          out.created++;
+        } else {
+          const existant = await db.query(
+            `SELECT id FROM accounts WHERE user_id = $1 AND name_normalized = $2`,
+            [userId, cle]
+          );
+          accountId = existant.rows[0]?.id || null;
+        }
       }
       if (!accountId) continue;
 
@@ -136,9 +147,16 @@ async function syncAccountsForUser(userId, { provider = null } = {}) {
       // scoring de récence lit ensuite comme de l'activité.
       const aLier = g.contacts.filter(c => c.account_id !== accountId).map(c => c.id);
       if (aLier.length > 0) {
+        // `IN (...)` et non `= ANY($n)` : ANY est du Postgres pur, et le miroir
+        // sqlite des tests s'arrête dessus avec « no such function: ANY ». Le
+        // catch de fin avalant l'erreur, la passe rendait silencieusement zéro
+        // rattachement, et AUCUN test ne pouvait le voir. Les identifiants
+        // restent des paramètres, rien n'est concaténé.
+        const params = [accountId, ...aLier];
+        const trous = aLier.map((_, i) => `$${i + 2}`).join(', ');
         const maj = await db.query(
-          `UPDATE opportunities SET account_id = $1 WHERE id = ANY($2)`,
-          [accountId, aLier]
+          `UPDATE opportunities SET account_id = $1 WHERE id IN (${trous})`,
+          params
         );
         out.linked += maj.rowCount || 0;
       }
@@ -152,6 +170,82 @@ async function syncAccountsForUser(userId, { provider = null } = {}) {
     logger.warn('accounts', `Reconstruction des comptes échouée pour ${userId} : ${err.message}`);
   }
   return out;
+}
+
+/**
+ * Rattache UN contact à sa société, à l'instant où il est créé.
+ *
+ * ── Pourquoi ça ne pouvait pas rester à la charge de l'import ───────────────
+ *
+ * `syncAccountsForUser` tourne à la fin de chaque import CRM, et les trois
+ * chemins d'import l'appellent. Mais cinq autres chemins créent des contacts
+ * sans jamais passer par là : le webhook Pipedrive, l'extension Chrome,
+ * l'import de campagne, la création manuelle depuis le tableau de bord et les
+ * signaux.
+ *
+ * Un contact né par l'un de ces chemins reste donc sans `account_id` jusqu'à
+ * la prochaine synchro complète du CRM, qui peut ne jamais venir. Et tant
+ * qu'il l'est, sa société apparaît DEUX FOIS dans les listes : une ligne pour
+ * les contacts rattachés au compte, une autre pour ceux qui ne le sont pas
+ * encore et se regroupent par leur nom de société. Mesuré sur staging le
+ * 30/09 : trois sociétés déjà coupées en deux.
+ *
+ * Rattacher à la création ferme la fenêtre à la source. C'est la seule façon
+ * de tenir l'invariant dont dépend le lot 5 : un contact qui porte un nom de
+ * société porte un `account_id`.
+ *
+ * Best-effort, et ça compte : un rattachement raté ne doit jamais empêcher la
+ * création du contact. Une ligne sans compte se comporte exactement comme
+ * avant ce lot.
+ *
+ * @returns {Promise<string|null>} l'id du compte, ou null
+ */
+async function attachContactToAccount(userId, { contactId, company, crmProvider = null } = {}) {
+  try {
+    const cle = normalizeAccountName(company);
+    // Pas de société exploitable : on ne rattache à rien, et surtout pas à un
+    // compte « inconnu » partagé, qui mettrait des dizaines d'entreprises sans
+    // lien dans le même dossier (écarté au §8.3 du plan).
+    if (!userId || !contactId || !cle) return null;
+
+    // Le compte RÉEL d'abord : à égalité de nom, c'est lui qui porte
+    // l'identité, et un dérivé homonyme finira absorbé par importCrmAccounts.
+    const connus = await db.query(
+      `SELECT id, crm_account_id FROM accounts WHERE user_id = $1 AND name_normalized = $2`,
+      [userId, cle]
+    );
+    let accountId = connus.rows.find(a => a.crm_account_id)?.id || connus.rows[0]?.id || null;
+
+    if (!accountId) {
+      const res = await db.query(
+        `INSERT INTO accounts (user_id, crm_provider, name, name_normalized, source)
+         VALUES ($1, $2, $3, $4, 'derived')
+         ON CONFLICT (user_id, name_normalized) WHERE crm_account_id IS NULL
+         DO NOTHING
+         RETURNING id`,
+        [userId, crmProvider, company, cle]
+      );
+      accountId = res.rows[0]?.id || null;
+      if (!accountId) {
+        // Conflit : une passe concurrente vient de le créer, on le relit.
+        const relu = await db.query(
+          `SELECT id FROM accounts WHERE user_id = $1 AND name_normalized = $2`,
+          [userId, cle]
+        );
+        accountId = relu.rows[0]?.id || null;
+      }
+    }
+    if (!accountId) return null;
+
+    await db.query(
+      `UPDATE opportunities SET account_id = $1 WHERE id = $2 AND account_id IS NULL`,
+      [accountId, contactId]
+    );
+    return accountId;
+  } catch (err) {
+    logger.warn('accounts', `Rattachement du contact ${contactId} échoué : ${err.message}`);
+    return null;
+  }
 }
 
 /**
@@ -368,4 +462,10 @@ async function listAccounts(userId, { limit = 500 } = {}) {
   return res.rows;
 }
 
-module.exports = { syncAccountsForUser, importCrmAccounts, syncContactRoles, listAccounts };
+module.exports = {
+  syncAccountsForUser,
+  attachContactToAccount,
+  importCrmAccounts,
+  syncContactRoles,
+  listAccounts,
+};

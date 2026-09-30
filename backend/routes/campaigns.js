@@ -528,6 +528,11 @@ router.post('/:id/prospects', async (req, res, next) => {
           linkedinUrl: c.linkedinUrl || null,
           status: 'new',
         });
+        // Importé dans une campagne, donc hors de tout import CRM : sans ce
+        // rattachement, sa société apparaîtrait en double dans les listes
+        // jusqu'à la prochaine synchro complète.
+        const { attachContactToAccount } = require('../lib/accounts');
+        await attachContactToAccount(req.user.id, { contactId: opp?.id, company: c.company || null });
         created.push(opp);
       } catch (err) {
         logger.warn('campaigns', `Failed to create prospect: ${err.message}`);
