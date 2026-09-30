@@ -248,6 +248,16 @@ export default function ClientsPage({ scope }) {
   // rien trouvé.
   useEffect(() => { setPage(1); }, [scope, filter, ownerFilter, crmFilter, tileFilter, searchQuery, sortBy]);
 
+  // Les contacts de la page, à plat. Le cadrage, les filtres et la recherche
+  // ont déjà été appliqués en base : il n'y a plus rien à retrancher ici.
+  //
+  // DÉCLARÉ AVANT `handleImport`, qui le lit dans son corps et dans son tableau
+  // de dépendances. Un `const` lu au-dessus de sa déclaration lève « Cannot
+  // access before initialization » au premier rendu, et la page entière tombe
+  // sur son écran d'erreur. Ni le build ni les tests backend ne voient ça :
+  // seul l'affichage réel le montre.
+  const clients = useMemo(() => groups.flatMap(g => g.contacts || []), [groups]);
+
   const handleImport = useCallback(async () => {
     if (!connectedCrm) return;
     const hadClientsBefore = clients.length > 0;
@@ -280,10 +290,6 @@ export default function ClientsPage({ scope }) {
     }
     setImporting(false);
   }, [loadData, connectedCrm, connectedProviders, clients.length, t]);
-
-  // Les contacts de la page, à plat. Le cadrage, les filtres et la recherche
-  // ont déjà été appliqués en base : il n'y a plus rien à retrancher ici.
-  const clients = useMemo(() => groups.flatMap(g => g.contacts || []), [groups]);
 
   // ── Tuiles de tête ──────────────────────────────────────────────────────
   //
