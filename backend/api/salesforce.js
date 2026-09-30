@@ -585,16 +585,66 @@ async function listContacts(instanceUrl, accessToken, { limit = 10000 } = {}) {
   return all;
 }
 
-// ── Get Contact Fields (for field mapping) ──
+// ── Introspection du schéma (mappage de champs, et moteur de découverte) ──
 
-async function getContactFields(instanceUrl, accessToken) {
-  const data = await sfFetch(instanceUrl, accessToken, '/sobjects/Contact/describe');
+/**
+ * Les champs d'un objet, quel qu'il soit.
+ *
+ * Généralise `getContactFields`, qui figeait Contact et dont lib/crm-field-mapper.js
+ * réimplémentait le même appel en ligne · le plan (§4) demandait de choisir
+ * entre supprimer et réutiliser, plutôt que de garder les deux.
+ */
+async function describeObject(instanceUrl, accessToken, objectName) {
+  const data = await sfFetch(instanceUrl, accessToken, `/sobjects/${objectName}/describe`);
   return (data.fields || []).map(f => ({
     key: f.name,
     name: f.label,
     type: f.type,
+    custom: !!f.custom,
+    // Vers quel objet pointe une relation · c'est ce qui permet de reconnaître
+    // le lien « cette personne appartient à cette société » sans le coder en dur.
+    referenceTo: Array.isArray(f.referenceTo) && f.referenceTo.length ? f.referenceTo[0] : null,
     options: (f.picklistValues || []).map(p => ({ id: p.value, label: p.label })),
   }));
+}
+
+async function getContactFields(instanceUrl, accessToken) {
+  return describeObject(instanceUrl, accessToken, 'Contact');
+}
+
+/**
+ * L'inventaire des objets de l'org, standards ET maison.
+ *
+ * Filtré sur ce qui est interrogeable et non technique : une org Salesforce
+ * déclare plusieurs centaines d'objets système (historiques de partage,
+ * métadonnées, files d'attente) dont aucun ne décrit le métier du client, et
+ * les profiler coûterait autant de describes pour zéro information.
+ */
+async function describeGlobal(instanceUrl, accessToken) {
+  const data = await sfFetch(instanceUrl, accessToken, '/sobjects');
+  return (data.sobjects || [])
+    .filter(o => o.queryable && !o.deprecatedAndHidden
+      && !/(History|Share|Feed|ChangeEvent|Tag|__mdt|__e)$/.test(o.name))
+    .map(o => ({
+      name: o.name,
+      label: o.label,
+      custom: !!o.custom,
+    }));
+}
+
+/**
+ * Un échantillon d'enregistrements, pour MESURER le remplissage réel.
+ *
+ * Le schéma dit ce qui peut exister, jamais ce qui existe. Un champ déclaré et
+ * rempli à 3 % est du bruit, et seul un comptage sur des lignes réelles le
+ * dit. L'échantillon est lu, agrégé côté serveur, puis jeté : il ne sort
+ * jamais, et ce sont les agrégats seuls qui partent à l'inférence.
+ */
+async function sampleRecords(instanceUrl, accessToken, objectName, fields, { limit = 200 } = {}) {
+  if (!fields || fields.length === 0) return [];
+  const soql = `SELECT ${fields.join(', ')} FROM ${objectName} ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  const data = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(soql)}`);
+  return data.records || [];
 }
 
 // ── Campaigns ──
@@ -1188,6 +1238,9 @@ module.exports = {
   getUsers,
   getActivities,
   getContactFields,
+  describeObject,
+  describeGlobal,
+  sampleRecords,
   createNote,
   listCampaigns,
   getCampaign,

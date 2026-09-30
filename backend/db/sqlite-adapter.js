@@ -470,6 +470,42 @@ function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS deals_crm_unique
       ON deals (user_id, crm_provider, crm_deal_id) WHERE crm_deal_id IS NOT NULL;
 
+    -- Ce que baakalai a mesuré puis deduit de l'architecture du CRM
+    -- (migration 127). Deux tables et pas une : la mesure est horodatee et
+    -- conservee, parce que c'est la comparaison de deux mesures qui detecte
+    -- une derive ; la deduction est corrigeable et gelee des qu'elle l'est.
+    CREATE TABLE IF NOT EXISTS crm_architecture_profiles (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT REFERENCES users(id),
+      crm_provider TEXT NOT NULL,
+      profile TEXT NOT NULL,
+      objects_seen INTEGER NOT NULL DEFAULT 0,
+      fields_seen INTEGER NOT NULL DEFAULT 0,
+      custom_objects INTEGER NOT NULL DEFAULT 0,
+      measured_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS crm_architecture_mappings (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT REFERENCES users(id),
+      crm_provider TEXT NOT NULL,
+      object_name TEXT NOT NULL,
+      object_label TEXT,
+      field_name TEXT,
+      field_label TEXT,
+      is_custom INTEGER NOT NULL DEFAULT 0,
+      baakalai_role TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'rule',
+      confidence REAL,
+      reasoning TEXT,
+      evidence TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_arch_mappings_unique
+      ON crm_architecture_mappings (user_id, crm_provider, object_name, COALESCE(field_name, ''));
+
     CREATE TABLE IF NOT EXISTS reveal_usage (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
       user_id TEXT NOT NULL REFERENCES users(id),

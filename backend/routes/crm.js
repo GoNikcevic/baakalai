@@ -1861,6 +1861,94 @@ router.put('/stage-mapping/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// =============================================
+// Architecture CRM · ce que baakalai a compris de la STRUCTURE (lot 1, 127)
+// =============================================
+//
+// Troisième écran de relecture de Réglages / Configuration CRM, et il répond à
+// une question que les deux autres ne posent pas. `/stage-mapping` dit ce que
+// baakalai a compris du pipeline, `/deal-attribution` ce qu'il a supposé du
+// rattachement des deals ; celui-ci dit quel OBJET joue la société, la
+// personne, l'affaire, et quel champ porte le cycle de vie. C'est la couche
+// en dessous des deux autres.
+
+/** Le CRM à profiler : le principal, sinon le premier connecté qui s'y prête. */
+async function resolveArchitectureProvider(userId) {
+  const { WITH_ARCHITECTURE } = require('../lib/crm-architecture');
+  const userRow = await db.query('SELECT active_crm_provider FROM users WHERE id = $1', [userId]);
+  const actif = userRow.rows[0]?.active_crm_provider || null;
+  if (actif && WITH_ARCHITECTURE.includes(actif)) return actif;
+  // Même repli que /stage-mapping : sans CRM principal renseigné, la section
+  // disparaîtrait pour des comptes qui ont pourtant un CRM introspectable.
+  const connected = await db.query(
+    'SELECT provider FROM user_integrations WHERE user_id = $1 AND provider = ANY($2)',
+    [userId, WITH_ARCHITECTURE]
+  );
+  const found = new Set(connected.rows.map(r => r.provider));
+  return WITH_ARCHITECTURE.find(p => found.has(p)) || null;
+}
+
+// GET /api/crm/architecture · les déductions telles qu'elles sont stockées
+router.get('/architecture', async (req, res, next) => {
+  try {
+    const { getArchitecture, getLatestProfile } = require('../lib/crm-architecture');
+    const provider = await resolveArchitectureProvider(req.user.id);
+    if (!provider) return res.json({ provider: null, mappings: [], profile: null });
+    const [mappings, profile] = await Promise.all([
+      getArchitecture(req.user.id, provider),
+      getLatestProfile(req.user.id, provider),
+    ]);
+    res.json({
+      provider,
+      mappings,
+      // La MESURE à côté de la conclusion · sans elle, l'écran affiche des
+      // déductions que personne ne peut vérifier, donc que personne ne
+      // corrigera.
+      profile: profile
+        ? {
+          measuredAt: profile.measured_at,
+          objectsSeen: profile.objects_seen,
+          fieldsSeen: profile.fields_seen,
+          customObjects: profile.custom_objects,
+        }
+        : null,
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /api/crm/architecture/analyze · remesure et redéduit
+//
+// Le profilage lit tout le schéma du CRM et échantillonne chaque objet : c'est
+// la passe la plus lourde du produit, et elle n'a aucune raison de tourner à
+// chaque synchro. Elle est donc déclenchée à la main, ou à la connexion d'un
+// CRM. Les lignes corrigées à la main ne bougent pas.
+router.post('/architecture/analyze', async (req, res, next) => {
+  try {
+    const { analyzeCrmArchitecture, getArchitecture } = require('../lib/crm-architecture');
+    const report = await analyzeCrmArchitecture(req.user.id);
+    if (!report.provider) return res.status(400).json({ error: 'Aucun CRM introspectable connecté' });
+    const mappings = await getArchitecture(req.user.id, report.provider);
+    res.json({ provider: report.provider, report, mappings });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/crm/architecture/:id · correction manuelle
+//
+// Elle GÈLE la ligne : plus aucune passe automatique ne la réécrira. Sans ça
+// la correction sauterait à l'analyse suivante.
+router.put('/architecture/:id', async (req, res, next) => {
+  try {
+    const { setArchitectureRole, ALL_ROLES } = require('../lib/crm-architecture');
+    const { role } = req.body;
+    if (!ALL_ROLES.includes(role)) {
+      return res.status(400).json({ error: `role doit valoir : ${ALL_ROLES.join(', ')}` });
+    }
+    const row = await setArchitectureRole(req.user.id, req.params.id, role);
+    if (!row) return res.status(404).json({ error: 'Déduction introuvable' });
+    res.json({ mapping: row });
+  } catch (err) { next(err); }
+});
+
 // GET /api/crm/accounts · les SOCIÉTÉS de l'utilisateur (lot 2, migration 124)
 //
 // Chaque ligne agrège ce qu'un compte porte : ses contacts, ses deals gagnés et

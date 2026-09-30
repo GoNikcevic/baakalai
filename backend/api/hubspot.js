@@ -586,7 +586,80 @@ async function listDealsForDiagnostic(accessToken, { maxDeals = 2000 } = {}) {
   }));
 }
 
+// =============================================
+// Introspection du schéma · moteur de découverte (lot 1)
+// =============================================
+
+/** Objets standards toujours présents sur un portail HubSpot. */
+const HUBSPOT_STANDARD_OBJECTS = [
+  { name: 'companies', label: 'Companies', custom: false },
+  { name: 'contacts', label: 'Contacts', custom: false },
+  { name: 'deals', label: 'Deals', custom: false },
+];
+
+/**
+ * Les objets du portail, standards et maison.
+ *
+ * `/crm/v3/schemas` ne renvoie QUE les objets personnalisés · les trois
+ * standards n'y figurent pas et sont donc ajoutés ici. Le endpoint est refusé
+ * sur les portails sans le scope `crm.schemas.custom.read` : on dégrade alors
+ * sur les seuls standards plutôt que de faire échouer toute l'analyse, parce
+ * qu'un portail sans objet maison est le cas courant.
+ */
+async function listObjectSchemas(accessToken) {
+  const out = [...HUBSPOT_STANDARD_OBJECTS];
+  try {
+    const data = await hubspotFetch(accessToken, '/crm/v3/schemas');
+    for (const s of data.results || []) {
+      out.push({
+        name: s.objectTypeId || s.fullyQualifiedName || s.name,
+        label: s.labels?.plural || s.name,
+        custom: true,
+      });
+    }
+  } catch { /* scope absent : les objets maison resteront invisibles, dit tel quel */ }
+  return out;
+}
+
+/** Les propriétés déclarées sur un objet. */
+async function getObjectProperties(accessToken, objectType) {
+  const data = await hubspotFetch(accessToken, `/crm/v3/properties/${objectType}`);
+  return (data.results || [])
+    // Les propriétés calculées par HubSpot lui-même décrivent son produit, pas
+    // le métier du client : les profiler noierait le signal.
+    .filter(p => !p.calculated && !/^hs_(all|object_id|created|lastmodified)/.test(p.name))
+    .map(p => ({
+      key: p.name,
+      name: p.label,
+      type: p.type,
+      custom: p.hubspotDefined === false,
+      referenceTo: null,
+      options: (p.options || []).map(o => ({ id: o.value, label: o.label })),
+    }));
+}
+
+/**
+ * Un échantillon d'enregistrements, pour mesurer le remplissage réel · lu,
+ * agrégé, puis jeté. Voir l'en-tête de lib/crm-architecture.js.
+ */
+async function sampleRecords(accessToken, objectType, properties, { limit = 100 } = {}) {
+  if (!properties || properties.length === 0) return [];
+  const params = new URLSearchParams({
+    limit: String(Math.min(limit, 100)),
+    // HubSpot plafonne l'URL : au delà d'une centaine de propriétés l'appel
+    // est refusé, et profiler les cent premières suffit à distinguer le
+    // structurant du décor.
+    properties: properties.slice(0, 100).join(','),
+  });
+  const data = await hubspotFetch(accessToken, `/crm/v3/objects/${objectType}?${params.toString()}`);
+  return (data.results || []).map(r => r.properties || {});
+}
+
 module.exports = {
+  // Introspection
+  listObjectSchemas,
+  getObjectProperties,
+  sampleRecords,
   // Contacts
   createContact,
   updateContact,

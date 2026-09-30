@@ -1279,6 +1279,39 @@
       "lost": "Lost"
     }
   },
+  "crmArchitecture": {
+    "title": "Your CRM, as baakalai reads it",
+    "subtitle": "What baakalai understood of your {provider} structure: which object is a company, a person, a deal, and which field carries what. Fix anything that looks wrong, your choice sticks.",
+    "reanalyze": "Re-read my structure",
+    "analyzing": "Reading...",
+    "analyzed": "{objects} object(s) and {fields} field(s) read.",
+    "measured": "Last read: {objects} object(s), {fields} field(s) profiled.",
+    "empty": "baakalai has not read your CRM structure yet. Start the read with the button above.",
+    "uncertain": "{count} inference(s) baakalai was unsure about. They are outlined in orange, those are the ones worth a look.",
+    "customObjects": "{count} object(s) specific to you. baakalai never interprets those on its own: tell it what they are.",
+    "showFields": "Show {count} fields",
+    "hideFields": "Hide fields",
+    "sourceRule": "Your CRM says so",
+    "sourceAi": "baakalai inferred",
+    "sourceUser": "You corrected it",
+    "footnote": "This reading does not change anything in your product yet: baakalai measures it and shows it to you, so you can correct it before it relies on it.",
+    "role": {
+      "account": "The company",
+      "person": "The person",
+      "deal": "The deal",
+      "activity": "An activity",
+      "lifecycle": "Where the relationship stands",
+      "amount": "The amount",
+      "currency": "The currency",
+      "close_date": "The close date",
+      "created_at": "The creation date",
+      "owner": "The rep",
+      "name": "The name",
+      "email": "The email",
+      "account_link": "The link to the company",
+      "unknown": "Not understood"
+    }
+  },
   "dealAttribution": {
     "title": "Deals whose contact was inferred",
     "subtitle": "{count} deal(s) in your CRM do not say which contact they belong to. baakalai picked the oldest contact on each account, one deal per contact.",

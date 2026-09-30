@@ -16,6 +16,7 @@ import EmailAccountSettings from '../components/EmailAccountSettings';
 import AutopilotSettings from '../components/AutopilotSettings';
 import FieldMappingSettings from '../components/FieldMappingSettings';
 import StageMappingSettings from '../components/StageMappingSettings';
+import CrmArchitectureSettings from '../components/CrmArchitectureSettings';
 import DealAttributionSettings from '../components/DealAttributionSettings';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
@@ -1069,6 +1070,11 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-group-title">{t('settings.groupCrmConfig')}</div>
+
+      {/* Ce que baakalai a compris de la STRUCTURE du CRM · en premier, parce
+          que c'est la couche en dessous des deux suivantes : savoir quel objet
+          joue la société précède de savoir ce que veut dire une étape. */}
+      <CrmArchitectureSettings />
 
       {/* Ce que baakalai a compris du pipeline · au-dessus du mappage de
           champs : c'est la lecture automatique, le mappage manuel vient après. */}

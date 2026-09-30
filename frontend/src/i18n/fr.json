@@ -1279,6 +1279,39 @@
       "lost": "Perdu"
     }
   },
+  "crmArchitecture": {
+    "title": "Votre CRM, vu par baakalai",
+    "subtitle": "Ce que baakalai a compris de la structure de votre {provider} : quel objet est une société, une personne, une affaire, et quel champ porte quoi. Corrigez ce qui ne colle pas, votre choix est définitif.",
+    "reanalyze": "Relire ma structure",
+    "analyzing": "Lecture...",
+    "analyzed": "{objects} objet(s) et {fields} champ(s) lus.",
+    "measured": "Dernière lecture : {objects} objet(s), {fields} champ(s) profilés.",
+    "empty": "baakalai n'a pas encore lu la structure de votre CRM. Lancez la lecture avec le bouton ci-dessus.",
+    "uncertain": "{count} déduction(s) sur lesquelles baakalai a hésité. Elles sont encadrées en orange, ce sont celles à relire.",
+    "customObjects": "{count} objet(s) qui vous sont propres. baakalai ne les interprète jamais seul : dites-lui ce qu'ils sont.",
+    "showFields": "Voir les {count} champs",
+    "hideFields": "Masquer les champs",
+    "sourceRule": "Votre CRM le dit",
+    "sourceAi": "baakalai a déduit",
+    "sourceUser": "Vous l'avez corrigé",
+    "footnote": "Cette lecture ne change encore rien à votre produit : baakalai la mesure et vous la montre, pour que vous puissiez la corriger avant qu'il s'en serve.",
+    "role": {
+      "account": "La société",
+      "person": "La personne",
+      "deal": "L'affaire",
+      "activity": "Une activité",
+      "lifecycle": "Où en est la relation",
+      "amount": "Le montant",
+      "currency": "La devise",
+      "close_date": "La date de clôture",
+      "created_at": "La date de création",
+      "owner": "Le commercial",
+      "name": "Le nom",
+      "email": "L'email",
+      "account_link": "Le lien vers la société",
+      "unknown": "Pas compris"
+    }
+  },
   "dealAttribution": {
     "title": "Les deals dont l'interlocuteur a été deviné",
     "subtitle": "{count} deal(s) de votre CRM n'indiquent pas à quel contact ils appartiennent. baakalai a désigné le contact le plus ancien de chaque compte, un deal par contact.",

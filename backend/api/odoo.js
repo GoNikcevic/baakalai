@@ -404,9 +404,62 @@ async function testConnection(creds) {
   }
 }
 
+// ── Introspection du schéma · moteur de découverte (lot 1) ──
+//
+// Odoo ne sépare pas société et personne : `res.partner` est les DEUX, et
+// c'est `is_company` sur l'enregistrement qui tranche. Un moteur qui cherche
+// deux objets distincts ne trouvera donc jamais son compte ici · l'inventaire
+// le déclare une fois pour toutes plutôt que de laisser chaque appelant s'y
+// casser les dents.
+const ODOO_OBJECTS = [
+  { name: 'res.partner', label: 'Contacts et sociétés', custom: false },
+  { name: 'crm.lead', label: 'Pistes et opportunités', custom: false },
+];
+
+async function listObjectSchemas() {
+  return ODOO_OBJECTS.map(o => ({ ...o }));
+}
+
+/** Les champs d'un modèle, forme normalisée commune aux quatre connecteurs. */
+async function getObjectFields(creds, model) {
+  const raw = await call(creds, model, 'fields_get', [], {
+    attributes: ['string', 'type', 'selection', 'relation', 'store'],
+  });
+  return Object.entries(raw || {})
+    // Les champs calculés non stockés ne décrivent pas l'usage : ils se
+    // recalculent à la lecture et sont toujours « remplis ».
+    .filter(([, f]) => f.store !== false)
+    .map(([key, f]) => ({
+      key,
+      name: f.string || key,
+      type: f.type,
+      // Un champ maison porte le préfixe x_ par convention Odoo, et les modules
+      // tiers n'en posent pas d'autre marqueur lisible ici.
+      custom: key.startsWith('x_'),
+      referenceTo: f.relation || null,
+      options: Array.isArray(f.selection)
+        ? f.selection.map(([id, label]) => ({ id: String(id), label: String(label) }))
+        : [],
+    }));
+}
+
+/** Un échantillon d'enregistrements, lu puis agrégé puis jeté. */
+async function sampleRecords(creds, model, fields, { limit = 200 } = {}) {
+  if (!fields || fields.length === 0) return [];
+  return await call(creds, model, 'search_read', [[]], {
+    fields, limit, order: 'write_date desc',
+    // Une piste perdue est ARCHIVÉE chez Odoo · sans ce contexte, l'échantillon
+    // ne verrait que les affaires vivantes et conclurait qu'aucune ne se perd.
+    context: { active_test: false },
+  });
+}
+
 module.exports = {
   isValidOdooUrl,
   authenticate,
+  listObjectSchemas,
+  getObjectFields,
+  sampleRecords,
   listContacts,
   listAllContacts,
   listAllCompanies,

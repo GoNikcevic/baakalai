@@ -240,6 +240,45 @@ async function getPersonFields(apiToken) {
   }));
 }
 
+// ── Introspection du schéma · moteur de découverte (lot 1) ──
+//
+// Pipedrive n'a pas d'objet maison : on personnalise des CHAMPS, jamais des
+// objets. L'inventaire est donc fixe, et c'est le profilage des champs qui
+// porte toute l'information. Déclaré ici plutôt que dans le moteur pour que
+// chaque connecteur réponde à la même question au même endroit.
+const PIPEDRIVE_OBJECTS = [
+  { name: 'organizations', label: 'Organisations', custom: false, fields: '/organizationFields' },
+  { name: 'persons', label: 'Personnes', custom: false, fields: '/personFields' },
+  { name: 'deals', label: 'Deals', custom: false, fields: '/dealFields' },
+];
+
+async function listObjectSchemas() {
+  return PIPEDRIVE_OBJECTS.map(({ name, label, custom }) => ({ name, label, custom }));
+}
+
+/** Les champs d'un des trois objets, forme normalisée commune aux connecteurs. */
+async function getObjectFields(apiToken, objectName) {
+  const meta = PIPEDRIVE_OBJECTS.find(o => o.name === objectName);
+  if (!meta) return [];
+  const data = await pdFetch(apiToken, meta.fields);
+  return (data || []).map(f => ({
+    key: f.key,
+    name: f.name,
+    type: f.field_type,
+    // `edit_flag` est ce qui distingue un champ maison d'un champ natif chez
+    // Pipedrive · il n'existe pas de drapeau `custom`.
+    custom: !!f.edit_flag,
+    referenceTo: f.field_type === 'org' ? 'organizations' : null,
+    options: (f.options || []).map(o => ({ id: String(o.id), label: o.label })),
+  }));
+}
+
+/** Un échantillon d'enregistrements, lu puis agrégé puis jeté. */
+async function sampleRecords(apiToken, objectName, _fields, { limit = 100 } = {}) {
+  const page = await pdFetch(apiToken, `/${objectName}?limit=${Math.min(limit, 500)}&start=0`);
+  return page || [];
+}
+
 async function getActivities(apiToken, personId) {
   const data = await pdFetch(apiToken, `/activities?person_id=${personId}&limit=50&sort=due_date DESC`);
   return (data || []).map(a => ({
@@ -418,6 +457,9 @@ module.exports = {
   getPipelines,
   getStages,
   getPersonFields,
+  listObjectSchemas,
+  getObjectFields,
+  sampleRecords,
   getActivities,
   createDeal,
   getDeal,
