@@ -2055,7 +2055,7 @@ body {
 /* ── Inline suggestion chips (after assistant messages) ── */
 .chat-inline-suggestions {
   display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; margin-bottom: 4px;
-  animation: chatFadeIn 0.3s ease 0.15s both;
+  animation: chatFadeIn 0.3s ease 0.15s backwards;
 }
 .chat-inline-chip {
   padding: 6px 12px; border-radius: 16px; border: 1px solid var(--border);
@@ -2071,7 +2071,7 @@ body {
 /* ── Quick reply buttons (in-message) ── */
 .chat-quick-replies {
   display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
-  animation: chatFadeIn 0.3s ease 0.1s both;
+  animation: chatFadeIn 0.3s ease 0.1s backwards;
 }
 .chat-quick-reply {
   display: inline-flex; align-items: center; gap: 6px;
@@ -2886,9 +2886,16 @@ body {
   animation: rise-in 0.8s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
 }
 
-/* Cards stagger animation */
+/* Cards stagger animation.
+   `backwards` et jamais `both` sur ces animations d'entree, ici comme sur les cinq
+   autres du fichier. `both` garde le transform des keyframes applique APRES la fin de
+   l'animation, et un element transforme devient le bloc conteneur de ses descendants en
+   `position: fixed`. Une fenetre modale posee dans une carte calculait alors son
+   `inset: 0` sur la carte au lieu de la fenetre : voile aux dimensions de la carte,
+   contenu rogne. Le rendu est identique entre les deux valeurs, rise-in finissant sur
+   translateY(0) et le style de base ne portant aucun transform. */
 .card {
-  animation: rise-in 0.8s cubic-bezier(0.2, 0.6, 0.2, 1) both;
+  animation: rise-in 0.8s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
 }
 
 .section-grid > .card:nth-child(1) { animation-delay: 0.05s; }
@@ -2898,7 +2905,7 @@ body {
 
 /* KPI cards stagger */
 .kpi-grid > .kpi-card {
-  animation: fadeInUp 0.3s ease-out both;
+  animation: fadeInUp 0.3s ease-out backwards;
 }
 .kpi-grid > .kpi-card:nth-child(1) { animation-delay: 0s; }
 .kpi-grid > .kpi-card:nth-child(2) { animation-delay: 0.05s; }
@@ -3022,7 +3029,7 @@ input:focus, select:focus, textarea:focus {
 
 /* CRM table rows stagger */
 .crm-table-row {
-  animation: listSlideIn 0.3s ease both;
+  animation: listSlideIn 0.3s ease backwards;
 }
 .crm-table-row:nth-child(1) { animation-delay: 0.02s; }
 .crm-table-row:nth-child(2) { animation-delay: 0.04s; }
@@ -3075,7 +3082,7 @@ input:focus, select:focus, textarea:focus {
   to { opacity: 1; transform: translateY(0); }
 }
 .kpi-value, .crm-kpi-value {
-  animation: countUp 0.5s cubic-bezier(0.2, 0.6, 0.2, 1) both;
+  animation: countUp 0.5s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
 }
 
 /* Modal overlay enhanced */
