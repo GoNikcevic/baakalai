@@ -395,7 +395,16 @@ body {
 
 /* ═══════════ MAIN ═══════════ */
 .mobile-nav { display: none; }
-.main { margin-left: 220px; padding: 32px 40px; min-height: 100vh; box-sizing: border-box; overflow-y: auto; transition: margin-left 0.2s ease; }
+/* Pas d'`overflow-y` ici, et c'est délibéré.
+   `.main` n'a qu'un `min-height` : sa hauteur n'est bornée nulle part, ni ici
+   ni dans les media queries. Un `overflow-y: auto` ne pouvait donc jamais
+   produire de barre de défilement, c'est la FENÊTRE qui scrolle. Son seul
+   effet réel était d'en faire un conteneur de défilement immobile, ce qui
+   neutralise `position: sticky` sur tous ses descendants : l'élément se cale
+   sur un conteneur qui ne bouge pas, donc il ne colle jamais. C'est ce qui
+   faisait s'ouvrir la fiche de contact tout en haut de la page au lieu de
+   suivre le regard (constaté le 30/09 sur Deals). */
+.main { margin-left: 220px; padding: 32px 40px; min-height: 100vh; box-sizing: border-box; transition: margin-left 0.2s ease; }
 
 .page-header {
   display: flex; align-items: center; justify-content: space-between;
