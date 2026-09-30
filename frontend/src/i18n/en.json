@@ -1927,7 +1927,8 @@
       "historyMergedNote": "Emails, exchanges, and other activity from removed contacts are automatically re-linked to the kept contact, nothing is lost.",
       "mergeSuccess": "Merge completed",
       "mergeError": "Merge failed",
-      "typoSuggestion": "Did you mean {fix}?"
+      "typoSuggestion": "Did you mean {fix}?",
+      "fixButton": "Fix"
     },
     "dealQuality": {
       "missingSector": "Sector not filled in",
@@ -2019,6 +2020,42 @@
       "view": "View",
       "affectedCount": "{count} affected",
       "lastScanAt": "Last scan: {date}"
+    },
+    "fixQueue": {
+      "loading": "Loading the list...",
+      "subtitle": "{remaining} contacts to handle, {suggested} with a proposed value.",
+      "truncated": "This scan shipped {listed} contacts out of {total}. Rescan after this batch to load the rest.",
+      "selectAll": "Select all ({n})",
+      "selectCrmOnly": "Only values already in your CRM ({n})",
+      "searchPlaceholder": "Filter by name, email or value",
+      "applySelection": "Apply selection ({n})",
+      "progress": "{done}/{total} handled",
+      "allDone": "Everything in this batch is handled.",
+      "noMatch": "No contact matches this filter.",
+      "unnamed": "No name",
+      "noEmail": "No email",
+      "openDeal": "Open deal, {amount} €",
+      "inputPlaceholder": "Type the value",
+      "sourceCrm": "Already used in your CRM for this domain",
+      "sourceDomain": "Derived from the email domain, worth a check",
+      "sourceTypo": "Proposed fix for this address",
+      "edited": "Value edited",
+      "save": "Save",
+      "saveHint": "Enter saves and moves to the next contact",
+      "ignore": "Set aside",
+      "ignoreHint": "This contact has no such data and never will: it leaves the check",
+      "handledTitle": "Just handled",
+      "ignoredLabel": "Set aside from the check",
+      "restore": "Put back",
+      "undoHint": "All of it is undoable from the History tab, in one go.",
+      "previous": "Previous",
+      "next": "Next",
+      "pageOf": "Page {page} of {pages}",
+      "appliedTitle": "Fix applied",
+      "appliedMessage": "{n} contacts updated.",
+      "partialTitle": "Partial fix",
+      "partialMessage": "{applied} contacts updated, {failed} failed.",
+      "interrupted": "{applied} contacts were updated before the interruption. {message}"
     }
   },
   "workflow": {

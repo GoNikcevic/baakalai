@@ -23,6 +23,45 @@ const dropcontact = require('../api/dropcontact');
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
+// Combien de contacts d'un problème sont joints au rapport. Les problèmes qui se
+// corrigent en saisissant une valeur (le panneau de correction de l'onglet
+// Général) en embarquent davantage : leur liste n'est pas une illustration, c'est
+// la file de travail. En rester à 50 sur un CRM qui en compte 169 revient à
+// annoncer 169 et à n'en donner que 50 à corriger, sans le dire.
+const FIXABLE_LIST_CAP = 200;
+const ILLUSTRATION_LIST_CAP = 50;
+
+// Types de problèmes qu'un utilisateur peut écarter contact par contact
+// (migration 126) : ceux où « il n'y a rien à corriger » est une réponse
+// légitime. Un indépendant n'a pas d'entreprise, une adresse de test n'a pas
+// vocation à devenir valide.
+const IGNORABLE_ISSUE_TYPES = [
+  'missing_company', 'missing_email', 'missing_name',
+  'invalid_email_format', 'invalid_email_domain', 'email_typo',
+];
+
+/**
+ * Contacts écartés par l'utilisateur, par type de problème.
+ * @returns {Promise<Map<string, Set<string>>>} type de problème → ids écartés
+ */
+async function loadIgnoredContacts(userId, provider) {
+  const byType = new Map();
+  try {
+    const result = await db.query(
+      `SELECT issue_type, crm_contact_id FROM data_quality_ignores WHERE user_id = $1 AND provider = $2`,
+      [userId, provider]
+    );
+    for (const row of result.rows) {
+      if (!byType.has(row.issue_type)) byType.set(row.issue_type, new Set());
+      byType.get(row.issue_type).add(String(row.crm_contact_id));
+    }
+  } catch {
+    // Table absente (migration 126 pas encore jouée sur cet environnement) · le
+    // scan doit continuer à tourner, simplement sans rien écarter.
+  }
+  return byType;
+}
+
 // Domaines jetables les plus répandus · liste statique volontairement courte
 // (les gros services) : un faux positif ici coûte plus cher qu'un raté.
 const DISPOSABLE_DOMAINS = new Set([
@@ -355,6 +394,15 @@ async function scanCRM(userId, provider) {
   const rawPersons = await adapter.listPersons(token, userId);
   const persons = (rawPersons || []).map(adapter.normalizePerson);
 
+  // Les contacts écartés sortent des listes AVANT que les compteurs soient pris :
+  // écarter puis continuer à compter ne réglerait rien, ni le compteur affiché ni
+  // le score, qui se calcule sur ces mêmes longueurs.
+  const ignoredByType = await loadIgnoredContacts(userId, provider);
+  const withoutIgnored = (issueType, list) => {
+    const ignored = ignoredByType.get(issueType);
+    return ignored && ignored.size > 0 ? list.filter(p => !ignored.has(String(p.id))) : list;
+  };
+
   const issues = [];
 
   // 1. Duplicates by email
@@ -408,46 +456,46 @@ async function scanCRM(userId, provider) {
   }
 
   // 3. Missing critical fields
-  const missingEmail = persons.filter(p => !p.email);
+  const missingEmail = withoutIgnored('missing_email', persons.filter(p => !p.email));
   if (missingEmail.length > 0) {
     issues.push({
       type: 'missing_email',
       severity: 'high',
-      contacts: missingEmail.slice(0, 50).map(p => ({ id: p.id, name: p.name, company: p.company })),
+      contacts: missingEmail.slice(0, FIXABLE_LIST_CAP).map(p => ({ id: p.id, name: p.name, company: p.company })),
       count: missingEmail.length,
       suggestedAction: 'enrich',
     });
   }
 
-  const missingName = persons.filter(p => !p.name || p.name.trim() === '');
+  const missingName = withoutIgnored('missing_name', persons.filter(p => !p.name || p.name.trim() === ''));
   if (missingName.length > 0) {
     issues.push({
       type: 'missing_name',
       severity: 'medium',
-      contacts: missingName.slice(0, 50).map(p => ({ id: p.id, email: p.email })),
+      contacts: missingName.slice(0, FIXABLE_LIST_CAP).map(p => ({ id: p.id, email: p.email })),
       count: missingName.length,
       suggestedAction: 'review',
     });
   }
 
-  const missingCompany = persons.filter(p => !p.company || p.company.trim() === '');
+  const missingCompany = withoutIgnored('missing_company', persons.filter(p => !p.company || p.company.trim() === ''));
   if (missingCompany.length > 0) {
     issues.push({
       type: 'missing_company',
       severity: 'low',
-      contacts: missingCompany.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email })),
+      contacts: missingCompany.slice(0, FIXABLE_LIST_CAP).map(p => ({ id: p.id, name: p.name, email: p.email })),
       count: missingCompany.length,
       suggestedAction: 'enrich',
     });
   }
 
   // 4a. Invalid email format (regex)
-  const invalidFormatEmails = persons.filter(p => p.email && !isValidEmail(p.email));
+  const invalidFormatEmails = withoutIgnored('invalid_email_format', persons.filter(p => p.email && !isValidEmail(p.email)));
   if (invalidFormatEmails.length > 0) {
     issues.push({
       type: 'invalid_email_format',
       severity: 'high',
-      contacts: invalidFormatEmails.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email })),
+      contacts: invalidFormatEmails.slice(0, FIXABLE_LIST_CAP).map(p => ({ id: p.id, name: p.name, email: p.email })),
       count: invalidFormatEmails.length,
       suggestedAction: 'fix',
     });
@@ -476,23 +524,24 @@ async function scanCRM(userId, provider) {
   }
   await Promise.allSettled(mxCheckPromises);
 
-  const invalidDomainContacts = [];
+  const invalidDomainFound = [];
   for (const [domain, contacts] of domainGroups) {
     const mx = mxCache.get(domain);
     if (mx === null) {
       // No MX records · domain cannot receive email
       for (const p of contacts) {
-        invalidDomainContacts.push({ id: p.id, name: p.name, email: p.email, domain });
+        invalidDomainFound.push({ id: p.id, name: p.name, email: p.email, domain });
       }
     }
     // 'timeout' or valid MX → skip (don't flag on timeout)
   }
+  const invalidDomainContacts = withoutIgnored('invalid_email_domain', invalidDomainFound);
 
   if (invalidDomainContacts.length > 0) {
     issues.push({
       type: 'invalid_email_domain',
       severity: 'high',
-      contacts: invalidDomainContacts.slice(0, 50),
+      contacts: invalidDomainContacts.slice(0, FIXABLE_LIST_CAP),
       count: invalidDomainContacts.length,
       suggestedAction: 'verify',
     });
@@ -504,7 +553,7 @@ async function scanCRM(userId, provider) {
     issues.push({
       type: 'disposable_email',
       severity: 'medium',
-      contacts: disposable.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email })),
+      contacts: disposable.slice(0, ILLUSTRATION_LIST_CAP).map(p => ({ id: p.id, name: p.name, email: p.email })),
       count: disposable.length,
       suggestedAction: 'archive',
     });
@@ -512,17 +561,18 @@ async function scanCRM(userId, provider) {
 
   // 4d. Typo'd provider domains (gmial.com…) · fixable in one click, so worth
   // its own issue type with the corrected address precomputed.
-  const typos = [];
+  const typosFound = [];
   for (const p of validFormatEmails) {
     const domain = p.email.split('@')[1].toLowerCase();
     const fixed = TYPO_DOMAINS[domain];
-    if (fixed) typos.push({ id: p.id, name: p.name, email: p.email, suggestedFix: p.email.split('@')[0] + '@' + fixed });
+    if (fixed) typosFound.push({ id: p.id, name: p.name, email: p.email, suggestedFix: p.email.split('@')[0] + '@' + fixed });
   }
+  const typos = withoutIgnored('email_typo', typosFound);
   if (typos.length > 0) {
     issues.push({
       type: 'email_typo',
       severity: 'high',
-      contacts: typos.slice(0, 50),
+      contacts: typos.slice(0, FIXABLE_LIST_CAP),
       count: typos.length,
       suggestedAction: 'fix',
     });
@@ -550,7 +600,7 @@ async function scanCRM(userId, provider) {
     issues.push({
       type: 'email_bounced',
       severity: 'high',
-      contacts: bounced.slice(0, 50),
+      contacts: bounced.slice(0, ILLUSTRATION_LIST_CAP),
       count: bounced.length,
       suggestedAction: 'verify',
     });
@@ -572,7 +622,7 @@ async function scanCRM(userId, provider) {
     issues.push({
       type: 'inactive',
       severity: 'low',
-      contacts: inactive.slice(0, 50).map(p => ({ id: p.id, name: p.name, email: p.email, lastUpdate: p.lastActivityAt || p.updatedAt })),
+      contacts: inactive.slice(0, ILLUSTRATION_LIST_CAP).map(p => ({ id: p.id, name: p.name, email: p.email, lastUpdate: p.lastActivityAt || p.updatedAt })),
       count: inactive.length,
       suggestedAction: 'archive',
     });
@@ -584,7 +634,7 @@ async function scanCRM(userId, provider) {
     issues.push({
       type: 'format_name_caps',
       severity: 'low',
-      contacts: allCaps.slice(0, 50).map(p => ({
+      contacts: allCaps.slice(0, ILLUSTRATION_LIST_CAP).map(p => ({
         id: p.id,
         name: p.name,
         suggested: p.name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
@@ -807,4 +857,4 @@ async function runWeeklyScans(userId) {
   return report;
 }
 
-module.exports = { scanCRM, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials, runWeeklyScans, computeScoreFactors };
+module.exports = { scanCRM, IGNORABLE_ISSUE_TYPES, applyFixes, getAdapter, computeMergeDiff, getProviderCredentials, runWeeklyScans, computeScoreFactors };

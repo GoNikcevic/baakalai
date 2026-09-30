@@ -1927,7 +1927,8 @@
       "historyMergedNote": "Les emails, échanges et autres activités des contacts supprimés sont automatiquement rattachés au contact conservé, rien n'est perdu.",
       "mergeSuccess": "Fusion effectuée",
       "mergeError": "Erreur lors de la fusion",
-      "typoSuggestion": "Vouliez-vous dire {fix} ?"
+      "typoSuggestion": "Vouliez-vous dire {fix} ?",
+      "fixButton": "Corriger"
     },
     "dealQuality": {
       "missingSector": "Secteur d'activité non renseigné",
@@ -2019,6 +2020,42 @@
       "view": "Voir",
       "affectedCount": "{count} concerné(s)",
       "lastScanAt": "Dernier scan : {date}"
+    },
+    "fixQueue": {
+      "loading": "Chargement de la liste...",
+      "subtitle": "{remaining} contacts à traiter, {suggested} avec une valeur proposée.",
+      "truncated": "Ce scan a joint {listed} contacts sur {total}. Relancez le scan après cette série pour charger les suivants.",
+      "selectAll": "Tout sélectionner ({n})",
+      "selectCrmOnly": "Seulement les valeurs déjà dans votre CRM ({n})",
+      "searchPlaceholder": "Filtrer par nom, email ou valeur",
+      "applySelection": "Appliquer la sélection ({n})",
+      "progress": "{done}/{total} traités",
+      "allDone": "Tout est traité sur ce lot.",
+      "noMatch": "Aucun contact ne correspond à ce filtre.",
+      "unnamed": "Sans nom",
+      "noEmail": "Pas d’email",
+      "openDeal": "Deal ouvert, {amount} €",
+      "inputPlaceholder": "Saisissez la valeur",
+      "sourceCrm": "Déjà utilisé dans votre CRM pour ce domaine",
+      "sourceDomain": "Déduit du domaine de l’email, à relire",
+      "sourceTypo": "Correction proposée pour cette adresse",
+      "edited": "Valeur modifiée",
+      "save": "Enregistrer",
+      "saveHint": "Entrée enregistre et passe au contact suivant",
+      "ignore": "Écarter",
+      "ignoreHint": "Ce contact n’a pas cette donnée et n’en aura pas : il sort du contrôle",
+      "handledTitle": "Traités à l’instant",
+      "ignoredLabel": "Écarté du contrôle",
+      "restore": "Remettre",
+      "undoHint": "Tout est annulable depuis l’onglet Historique, en une fois.",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "pageOf": "Page {page} sur {pages}",
+      "appliedTitle": "Correction appliquée",
+      "appliedMessage": "{n} contacts mis à jour.",
+      "partialTitle": "Correction partielle",
+      "partialMessage": "{applied} contacts mis à jour, {failed} en échec.",
+      "interrupted": "{applied} contacts ont été mis à jour avant l’interruption. {message}"
     }
   },
   "workflow": {

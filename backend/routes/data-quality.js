@@ -8,6 +8,11 @@
  * GET   /client-quality · client/upsell-data quality issues (Strate 3)
  * POST  /enrich-field · fill a missing field; pushes to the live CRM
  *                                                    too when that provider supports real writes
+ * POST  /fix-queue · the work list behind the General tab's fix panel: flagged contacts,
+ *                    a proposed value for each, and the order in which to handle them
+ * POST  /enrich-field/batch · apply many single-field fixes under one undo group
+ * POST  /ignore · set a contact aside for one check (it has no such data and never will)
+ * DELETE /ignore · put it back under the check
  * GET   /history?strate= · change history, grouped by user action
  * POST  /history/:groupId/undo · full undo of one change group
  *
@@ -22,9 +27,34 @@ const crmCleaning = require('../lib/crm-cleaning-agent');
 const dataQualityChecks = require('../lib/data-quality-checks');
 const audit = require('../lib/data-quality-audit');
 const { classifySector } = require('../lib/sector-classifier');
+const companyGuess = require('../lib/company-from-email');
 const { getValidatedIntegrations } = require('../config');
 
 const router = Router();
+
+// Problèmes que l'on corrige en saisissant la bonne valeur dans UN champ · le panneau de
+// correction de l'onglet Général. Doit rester aligné avec la table du même nom côté
+// frontend (components/dataQuality/DuplicatesStrate.jsx) : c'est elle qui décide quels
+// problèmes ouvrent le panneau, celle-ci décide ce que le serveur accepte de corriger.
+const FIXABLE_FIELD_BY_ISSUE_TYPE = {
+  missing_email: 'email',
+  missing_name: 'name',
+  missing_company: 'company',
+  invalid_email_format: 'email',
+  invalid_email_domain: 'email',
+  email_typo: 'email',
+};
+
+// Plafond d'une application groupée. Chaque contact déclenche une écriture locale, un appel
+// à l'API du CRM et une ligne d'audit, soit quelques centaines de millisecondes : au-delà de
+// cette taille la requête tiendrait plus longtemps que le proxy ne l'accepte. Le client
+// découpe une grosse correction en plusieurs requêtes de cette taille, cousues par un même
+// groupId pour rester annulables d'un seul geste.
+const MAX_BATCH_ITEMS = 25;
+
+const MAX_IGNORE_ITEMS = 500;
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CONNECTABLE_PROVIDERS = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable', 'folk'];
 const REAL_WRITE_PROVIDERS = ['pipedrive', 'hubspot', 'odoo', 'salesforce'];
@@ -340,6 +370,95 @@ router.get('/client-quality', async (req, res, next) => {
   }
 });
 
+const SUPPORTED_FIX_FIELDS = ['sector', 'email', 'company', 'dealValue', 'name'];
+
+/**
+ * Write one field on one contact: local mirror, live CRM when the provider supports
+ * real writes, audit entry, and cache invalidation of the scan that flagged it.
+ *
+ * `groupId` is what ties an undo together. Passed per call from /enrich-field (one
+ * contact, one group) and shared across a whole batch by /enrich-field/batch, so
+ * undoing a bulk apply is a single click in the history tab instead of 140.
+ *
+ * @returns {{ remoteAction: string, sector?: string, cacheProvider: string|null }}
+ */
+async function applyFieldFix(userId, { opp, field, value, provider, groupId }) {
+  const beforeLocal = { ...opp };
+  let afterLocal;
+  let classifiedSector;
+  if (field === 'sector') {
+    // Run through the same sector-classifier agent churn-scoring uses (scope 'client_industry')
+    // so opportunities.data.sector always holds a canonical sector name, not raw free text.
+    classifiedSector = await classifySector(value, 'client_industry');
+    const newData = { ...(opp.data || {}), sector: classifiedSector };
+    await db.query(`UPDATE opportunities SET data = $1 WHERE id = $2`, [JSON.stringify(newData), opp.id]);
+    afterLocal = { ...opp, data: newData };
+  } else {
+    const column = field === 'dealValue' ? 'deal_value' : field;
+    await db.query(`UPDATE opportunities SET ${column} = $1 WHERE id = $2`, [value, opp.id]);
+    afterLocal = { ...opp, [column]: value };
+  }
+
+  // Push to the live CRM too · only for providers with real write support, and only for
+  // fields the generic adapter interface actually recognizes (sector/dealValue are
+  // Baakalai-only concepts with no CRM-side field mapping in updatePerson).
+  const CRM_RECOGNIZED_FIELDS = { email: 'email', company: 'company', name: 'name' };
+  let remoteAction = 'none';
+  let beforeCrm = null;
+  if (opp.crm_provider && REAL_WRITE_PROVIDERS.includes(opp.crm_provider) && opp.crm_contact_id && CRM_RECOGNIZED_FIELDS[field]) {
+    const crmField = CRM_RECOGNIZED_FIELDS[field];
+    try {
+      const adapter = crmCleaning.getAdapter(opp.crm_provider);
+      const token = await crmCleaning.getProviderCredentials(userId, opp.crm_provider);
+      if (token) {
+        beforeCrm = { [crmField]: beforeLocal[crmField] };
+        await adapter.updatePerson(token, opp.crm_contact_id, { [crmField]: value });
+        remoteAction = 'updated';
+      }
+    } catch {
+      // Local save already succeeded · don't fail the whole request over the CRM push.
+      remoteAction = 'none';
+      beforeCrm = null;
+    }
+  }
+
+  // sector/dealValue are Deal/Client Quality concepts; name/email/company corrections come
+  // from the General tab's "other issues" · general CRM hygiene, same strate as duplicates.
+  const strate = (field === 'sector' || field === 'dealValue')
+    ? (opp.status === 'won' ? 'client_quality' : 'deal_quality')
+    : 'duplicates';
+  // opp.crm_provider can be null for locally-created/seeded contacts that still surfaced via a
+  // provider's General-tab scan (the Notion/Airtable local-scan adapter isn't itself filtered
+  // by provider · it lists every local opportunity). The request's own `provider` param
+  // unambiguously identifies which scan needs to be invalidated; when it's absent
+  // (opportunityId-based Deal/Client Quality calls) opp.crm_provider is used as before.
+  const scanProvider = provider || opp.crm_provider;
+  await audit.recordChange(userId, groupId, {
+    strate,
+    changeType: 'enrichment',
+    provider: scanProvider || null,
+    crmContactId: opp.crm_contact_id || null,
+    opportunityId: opp.id,
+    remoteAction,
+    beforeData: audit.snapshotContact(opp.crm_provider, beforeCrm, beforeLocal, null),
+    afterData: audit.snapshotContact(opp.crm_provider, null, afterLocal, null),
+  });
+
+  // Which cached scan now holds a stale issue list · the caller invalidates it once per
+  // request rather than once per contact, so a 140-contact batch doesn't fire 140 deletes.
+  const cacheProvider = strate === 'client_quality' ? '__client_quality__'
+    : strate === 'deal_quality' ? '__deal_quality__'
+    : scanProvider;
+
+  return { remoteAction, sector: classifiedSector, cacheProvider };
+}
+
+/** Invalidate a cached scan so fixed contacts stop showing up as still-flagged. */
+async function invalidateScanCache(userId, cacheProvider) {
+  if (!cacheProvider) return;
+  await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [userId, cacheProvider]);
+}
+
 // POST /api/data-quality/enrich-field
 // Accepts either { opportunityId } (Deal/Client Quality · id is already a Baakalai
 // opportunities.id) or { provider, crmContactId } (General tab's "other issues" · id there is
@@ -348,7 +467,7 @@ router.get('/client-quality', async (req, res, next) => {
 router.post('/enrich-field', async (req, res, next) => {
   try {
     const { opportunityId, provider, crmContactId, field, value } = req.body;
-    const SUPPORTED_FIELDS = ['sector', 'email', 'company', 'dealValue', 'name'];
+    const SUPPORTED_FIELDS = SUPPORTED_FIX_FIELDS;
     if ((!opportunityId && !(provider && crmContactId)) || !SUPPORTED_FIELDS.includes(field)) {
       return res.status(400).json({ error: `field must be one of: ${SUPPORTED_FIELDS.join(', ')}, and either opportunityId or provider+crmContactId is required` });
     }
@@ -358,79 +477,239 @@ router.post('/enrich-field', async (req, res, next) => {
       : await findLocalOpportunity(req.user.id, provider, crmContactId);
     if (!opp) return res.status(404).json({ error: 'Opportunity not found' });
 
-    const beforeLocal = { ...opp };
-    let afterLocal;
-    let classifiedSector;
-    if (field === 'sector') {
-      // Run through the same sector-classifier agent churn-scoring uses (scope 'client_industry')
-      // so opportunities.data.sector always holds a canonical sector name, not raw free text.
-      classifiedSector = await classifySector(value, 'client_industry');
-      const newData = { ...(opp.data || {}), sector: classifiedSector };
-      await db.query(`UPDATE opportunities SET data = $1 WHERE id = $2`, [JSON.stringify(newData), opp.id]);
-      afterLocal = { ...opp, data: newData };
-    } else {
-      const column = field === 'dealValue' ? 'deal_value' : field;
-      await db.query(`UPDATE opportunities SET ${column} = $1 WHERE id = $2`, [value, opp.id]);
-      afterLocal = { ...opp, [column]: value };
+    const groupId = randomUUID();
+    const { remoteAction, sector, cacheProvider } = await applyFieldFix(req.user.id, {
+      opp, field, value, provider, groupId,
+    });
+    await invalidateScanCache(req.user.id, cacheProvider);
+
+    res.json({ ok: true, remoteAction, sector });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Un deal encore en cours · 'won' et 'lost' sont les deux seuls dénouements.
+const CLOSED_STATUSES = new Set(['won', 'lost']);
+
+/**
+ * Construit la file de travail d'un type de problème : une proposition par contact quand
+ * elle est déductible, le contexte qui permet de la juger, et l'ordre dans lequel les
+ * traiter. Pure et exportée pour être testable · c'est la partie où une erreur ne se voit
+ * pas (une proposition plausible mais fausse, un ordre qui enterre les contacts qui
+ * comptent), et la seule que la requête SQL ne protège pas.
+ *
+ * @param {object[]} flagged · les contacts signalés par le scan
+ * @param {string} field · 'company' | 'name' | 'email'
+ * @param {Map<string,string>} domainMap · domaine → entreprise déjà écrite dans le CRM
+ * @param {Map<string,object>} contextById · id du contact → sa ligne opportunities
+ */
+function buildFixQueueRows({ flagged, field, domainMap, contextById }) {
+  const rows = (flagged || []).map(c => {
+    const ctx = contextById.get(String(c.id));
+    const email = c.email || ctx?.email || null;
+    const suggestion = field === 'company' ? companyGuess.suggestCompany(email, domainMap)
+      : field === 'name' ? companyGuess.suggestName(email)
+      // invalid_email_format / invalid_email_domain n'ont pas de correction déductible ;
+      // email_typo, si : le scan a déjà calculé l'adresse corrigée.
+      : (c.suggestedFix ? { value: c.suggestedFix, source: 'typo' } : null);
+
+    const dealValue = Number(ctx?.deal_value) || 0;
+    const hasOpenDeal = Boolean(ctx && dealValue > 0 && !CLOSED_STATUSES.has(ctx.status));
+    return {
+      id: c.id,
+      name: c.name || ctx?.name || null,
+      email,
+      company: c.company || ctx?.company || null,
+      currentValue: c[field] || ctx?.[field] || null,
+      suggestion: suggestion?.value || null,
+      suggestionSource: suggestion?.source || null,
+      hasOpenDeal,
+      dealValue,
+      lastActivityAt: ctx?.last_activity_at || null,
+      known: Boolean(ctx),
+    };
+  });
+
+  // Deal ouvert d'abord, puis montant, puis activité récente · calculé ici plutôt que dans
+  // le navigateur pour que la pagination porte sur le bon ordre. Corriger l'entreprise d'un
+  // contact qui porte un deal ouvert vaut le détour, celle d'une fiche morte depuis deux ans
+  // beaucoup moins, et sur 169 lignes personne ne descend jusqu'en bas.
+  rows.sort((a, b) => {
+    if (a.hasOpenDeal !== b.hasOpenDeal) return a.hasOpenDeal ? -1 : 1;
+    if (b.dealValue !== a.dealValue) return b.dealValue - a.dealValue;
+    const at = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+    const bt = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+    return bt - at;
+  });
+
+  return rows;
+}
+
+// POST /api/data-quality/fix-queue
+// The work list behind the General tab's "Corriger" panel: every contact flagged for one
+// issue type, with a proposed value, the context needed to judge it, and the most valuable
+// contacts first. The proposal never writes anything · it lands in an editable field.
+router.post('/fix-queue', async (req, res, next) => {
+  try {
+    const { provider, issueType } = req.body;
+    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    const field = FIXABLE_FIELD_BY_ISSUE_TYPE[issueType];
+    if (!field) return res.status(400).json({ error: `issueType ${issueType} is not fixable by typing a value` });
+
+    const cached = await db.crmCleaningReports.getLatestByProvider(req.user.id, provider);
+    if (!cached) return res.status(400).json({ error: 'No recent scan found for this provider, run a scan first' });
+
+    const issue = (cached.issues || []).find(i => i.type === issueType);
+    if (!issue) return res.json({ field, total: 0, listed: 0, rows: [] });
+
+    const flagged = issue.contacts || [];
+    // Une proposition d'entreprise vaut par l'orthographe déjà retenue dans le CRM. La carte
+    // domaine → entreprise se construit sur les contacts qui, eux, ont les deux.
+    const known = field === 'company'
+      ? await db.query(
+          `SELECT email, company FROM opportunities
+           WHERE user_id = $1 AND email IS NOT NULL AND email <> '' AND company IS NOT NULL AND company <> ''`,
+          [req.user.id]
+        )
+      : { rows: [] };
+    const domainMap = companyGuess.buildDomainCompanyMap(known.rows);
+
+    // Contexte local de chaque contact flaggé, en une requête · l'ordre de travail se décide
+    // dessus. Corriger l'entreprise d'un contact qui porte un deal ouvert vaut le détour,
+    // celle d'une fiche morte depuis deux ans beaucoup moins.
+    const ids = flagged.map(c => String(c.id));
+    const contextRows = ids.length === 0 ? [] : (await db.query(
+      LOCAL_SCAN_PROVIDERS.includes(provider)
+        ? `SELECT id::text AS key, id, status, deal_value, last_activity_at, company, email, name
+           FROM opportunities WHERE user_id = $1 AND id::text = ANY($2)`
+        : `SELECT crm_contact_id AS key, id, status, deal_value, last_activity_at, company, email, name
+           FROM opportunities WHERE user_id = $1 AND crm_provider = $3 AND crm_contact_id = ANY($2)`,
+      LOCAL_SCAN_PROVIDERS.includes(provider) ? [req.user.id, ids] : [req.user.id, ids, provider]
+    )).rows;
+    const contextById = new Map(contextRows.map(r => [String(r.key), r]));
+
+    const rows = buildFixQueueRows({ flagged, field, domainMap, contextById });
+
+    res.json({
+      field,
+      // `total` est le compte réel du scan, `listed` ce que le rapport embarque. Les deux
+      // sont renvoyés parce qu'ils peuvent différer (voir FIXABLE_LIST_CAP) et que
+      // l'écran doit le dire plutôt que de laisser croire à une liste complète.
+      total: issue.count || flagged.length,
+      listed: rows.length,
+      rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/data-quality/enrich-field/batch
+// Apply many single-field fixes at once: one cache invalidation instead of N, and one audit
+// group so the history tab undoes the whole apply in a single click.
+//
+// `groupId` est facultatif et vient du client. Une correction de 140 contacts part en
+// plusieurs requêtes (chaque contact déclenche un appel à l'API du CRM, tout passer en une
+// fois dépasserait le délai d'attente du proxy), et ces requêtes doivent malgré tout
+// composer UNE annulation. Le client les coud donc avec un identifiant de groupe commun.
+router.post('/enrich-field/batch', async (req, res, next) => {
+  try {
+    const { provider, field, items, groupId: clientGroupId } = req.body;
+    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    if (!SUPPORTED_FIX_FIELDS.includes(field)) {
+      return res.status(400).json({ error: `field must be one of: ${SUPPORTED_FIX_FIELDS.join(', ')}` });
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'items (1 or more) is required' });
+    }
+    if (items.length > MAX_BATCH_ITEMS) {
+      return res.status(400).json({ error: `items is limited to ${MAX_BATCH_ITEMS} per request` });
+    }
+    if (clientGroupId !== undefined && !UUID_PATTERN.test(String(clientGroupId))) {
+      return res.status(400).json({ error: 'groupId must be a UUID' });
     }
 
-    // Push to the live CRM too · only for providers with real write support, and only for
-    // fields the generic adapter interface actually recognizes (sector/dealValue are
-    // Baakalai-only concepts with no CRM-side field mapping in updatePerson).
-    const CRM_RECOGNIZED_FIELDS = { email: 'email', company: 'company', name: 'name' };
-    let remoteAction = 'none';
-    let beforeCrm = null;
-    if (opp.crm_provider && REAL_WRITE_PROVIDERS.includes(opp.crm_provider) && opp.crm_contact_id && CRM_RECOGNIZED_FIELDS[field]) {
-      const crmField = CRM_RECOGNIZED_FIELDS[field];
+    // Les entrées d'audit sont déjà cloisonnées par user_id · un groupe fourni par le client
+    // ne peut donc pas toucher l'historique de quelqu'un d'autre, au pire il regroupe deux
+    // de ses propres corrections.
+    const groupId = clientGroupId || randomUUID();
+    const applied = [];
+    const failed = [];
+    let cacheProvider = null;
+
+    for (const item of items) {
+      const value = typeof item?.value === 'string' ? item.value.trim() : '';
+      if (!item?.crmContactId || !value) {
+        failed.push({ crmContactId: item?.crmContactId ?? null, error: 'crmContactId and a non-empty value are required' });
+        continue;
+      }
       try {
-        const adapter = crmCleaning.getAdapter(opp.crm_provider);
-        const token = await crmCleaning.getProviderCredentials(req.user.id, opp.crm_provider);
-        if (token) {
-          beforeCrm = { [crmField]: beforeLocal[crmField] };
-          await adapter.updatePerson(token, opp.crm_contact_id, { [crmField]: value });
-          remoteAction = 'updated';
-        }
-      } catch {
-        // Local save already succeeded · don't fail the whole request over the CRM push.
-        remoteAction = 'none';
-        beforeCrm = null;
+        const opp = await findLocalOpportunity(req.user.id, provider, item.crmContactId);
+        if (!opp) { failed.push({ crmContactId: item.crmContactId, error: 'Opportunity not found' }); continue; }
+        const result = await applyFieldFix(req.user.id, { opp, field, value, provider, groupId });
+        cacheProvider = result.cacheProvider || cacheProvider;
+        applied.push({ crmContactId: item.crmContactId, value, remoteAction: result.remoteAction });
+      } catch (err) {
+        // Un contact qui échoue (supprimé du CRM entre le scan et l'application, droit
+        // refusé) ne doit pas annuler les 139 autres · il est rapporté, pas propagé.
+        failed.push({ crmContactId: item.crmContactId, error: err.message });
       }
     }
 
-    // sector/dealValue are Deal/Client Quality concepts; name/email/company corrections come
-    // from the General tab's "other issues" · general CRM hygiene, same strate as duplicates.
-    const strate = (field === 'sector' || field === 'dealValue')
-      ? (opp.status === 'won' ? 'client_quality' : 'deal_quality')
-      : 'duplicates';
-    // opp.crm_provider can be null for locally-created/seeded contacts that still surfaced via a
-    // provider's General-tab scan (the Notion/Airtable local-scan adapter isn't itself filtered
-    // by provider · it lists every local opportunity). The request's own `provider` param
-    // unambiguously identifies which scan needs to be invalidated; when it's absent
-    // (opportunityId-based Deal/Client Quality calls) opp.crm_provider is used as before.
-    const scanProvider = provider || opp.crm_provider;
-    const groupId = randomUUID();
-    await audit.recordChange(req.user.id, groupId, {
-      strate,
-      changeType: 'enrichment',
-      provider: scanProvider || null,
-      crmContactId: opp.crm_contact_id || null,
-      opportunityId: opp.id,
-      remoteAction,
-      beforeData: audit.snapshotContact(opp.crm_provider, beforeCrm, beforeLocal, null),
-      afterData: audit.snapshotContact(opp.crm_provider, null, afterLocal, null),
-    });
+    await invalidateScanCache(req.user.id, cacheProvider);
+    res.json({ ok: true, groupId, applied, failed });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    // Invalidate the cached issue list so the fixed contact stops showing up as still-flagged
-    // until the next scan (same gap this session already fixed for duplicates/merge). The
-    // 'duplicates' strate (General tab) is cached per real provider, not a sentinel.
-    const cacheProvider = strate === 'client_quality' ? '__client_quality__'
-      : strate === 'deal_quality' ? '__deal_quality__'
-      : scanProvider;
-    if (cacheProvider) {
-      await db.query(`DELETE FROM crm_cleaning_reports WHERE user_id = $1 AND provider = $2`, [req.user.id, cacheProvider]);
+// POST /api/data-quality/ignore
+// "Ce contact n'a pas d'entreprise, et c'est normal." Sort le contact du contrôle, sans
+// rien changer au contact lui-même. Réversible par DELETE sur la même route.
+router.post('/ignore', async (req, res, next) => {
+  try {
+    const { provider, issueType, contactIds } = req.body;
+    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    if (!crmCleaning.IGNORABLE_ISSUE_TYPES.includes(issueType)) {
+      return res.status(400).json({ error: `issueType must be one of: ${crmCleaning.IGNORABLE_ISSUE_TYPES.join(', ')}` });
     }
+    const ids = (Array.isArray(contactIds) ? contactIds : []).map(String).filter(Boolean);
+    if (ids.length === 0) return res.status(400).json({ error: 'contactIds (1 or more) is required' });
+    // Écarter, c'est une seule requête SQL et aucun appel au CRM · la borne n'est là que
+    // pour éviter une charge utile déraisonnable, pas pour tenir un délai.
+    if (ids.length > MAX_IGNORE_ITEMS) return res.status(400).json({ error: `contactIds is limited to ${MAX_IGNORE_ITEMS} per request` });
 
-    res.json({ ok: true, remoteAction, sector: classifiedSector });
+    await db.query(
+      `INSERT INTO data_quality_ignores (user_id, provider, crm_contact_id, issue_type)
+       SELECT $1, $2, unnest($3::text[]), $4
+       ON CONFLICT (user_id, provider, crm_contact_id, issue_type) DO NOTHING`,
+      [req.user.id, provider, ids, issueType]
+    );
+    // Le compteur du scan tient compte des contacts écartés · le rapport en cache ne le
+    // sait pas encore, il doit être refait.
+    await invalidateScanCache(req.user.id, provider);
+    res.json({ ok: true, ignored: ids.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/data-quality/ignore · remet les contacts dans le contrôle
+router.delete('/ignore', async (req, res, next) => {
+  try {
+    const { provider, issueType, contactIds } = req.body;
+    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    const ids = (Array.isArray(contactIds) ? contactIds : []).map(String).filter(Boolean);
+    if (ids.length === 0) return res.status(400).json({ error: 'contactIds (1 or more) is required' });
+
+    const result = await db.query(
+      `DELETE FROM data_quality_ignores
+       WHERE user_id = $1 AND provider = $2 AND issue_type = $3 AND crm_contact_id = ANY($4)`,
+      [req.user.id, provider, issueType, ids]
+    );
+    await invalidateScanCache(req.user.id, provider);
+    res.json({ ok: true, restored: result.rowCount });
   } catch (err) {
     next(err);
   }
@@ -627,3 +906,4 @@ router.post('/gdpr/purge', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.buildFixQueueRows = buildFixQueueRows;

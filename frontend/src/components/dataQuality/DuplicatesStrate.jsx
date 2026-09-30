@@ -12,6 +12,7 @@ import { request } from '../../services/api-client';
 import { showToast } from '../../services/notifications';
 import { useI18n, useT } from '../../i18n';
 import MergeReviewPanel from './MergeReviewPanel';
+import FixQueuePanel from './FixQueuePanel';
 import Icon from '../Icon';
 
 const PROVIDER_LABELS = {
@@ -33,9 +34,10 @@ function getOtherIssueConfig(en) { return {
 }; }
 
 // Issue types correctable by typing in the right value for one field · same mechanism as the
-// Deal Quality sector/deal value fix (a text field + "Enregistrer", calling POST /enrich-field,
-// with full audit + undo). No AI guessing: predictable, and works even for data an enrichment
-// agent could never find (test contacts, unlisted companies, etc).
+// Deal Quality sector/deal value fix (a text field, calling POST /enrich-field, with full audit
+// + undo). Ces types-là ouvrent le panneau de correction (FixQueuePanel) plutôt qu'une liste
+// dépliée : la liste posait 169 champs vides dans la page, sans contexte ni ordre de travail.
+// Doit rester aligné avec la table du même nom dans routes/data-quality.js.
 const FIXABLE_FIELD_BY_ISSUE_TYPE = {
   missing_email: 'email',
   missing_name: 'name',
@@ -45,76 +47,13 @@ const FIXABLE_FIELD_BY_ISSUE_TYPE = {
   email_typo: 'email',
 };
 
-function FieldFixRow({ provider, contact, field, en, t, onSaved, suggestedValue }) {
-  // For email_typo issues the input is pre-filled with the scan's suggested fix,
-  // so one click on "Enregistrer" applies it through the standard enrich-field circuit.
-  const [value, setValue] = useState(suggestedValue || contact[field] || '');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = async () => {
-    const v = value.trim();
-    if (!v) return;
-    setSaving(true);
-    try {
-      await request('/data-quality/enrich-field', {
-        method: 'POST',
-        body: JSON.stringify({ provider, crmContactId: contact.id, field, value: v }),
-      });
-      setSaved(true);
-      onSaved?.();
-    } catch (err) {
-      showToast({ type: 'error', title: t('common.error'), message: err.message });
-    }
-    setSaving(false);
-  };
-
-  if (saved) {
-    return (
-      <div style={{ fontSize: 12, color: 'var(--success)', padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="checkCircle" size={13} />
-        <span>{contact.name || contact.email || '?'}, {value}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ padding: '4px 0' }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, minWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {contact.name || contact.email || '?'}
-        </span>
-        <input
-          type="text"
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text-primary)' }}
-        />
-        <button
-          className="btn btn-primary"
-          style={{ fontSize: 11, padding: '5px 10px', whiteSpace: 'nowrap' }}
-          disabled={saving || !value.trim()}
-          onClick={handleSave}
-        >
-          {saving ? '…' : (en ? 'Save' : 'Enregistrer')}
-        </button>
-      </div>
-      {suggestedValue && (
-        <div style={{ fontSize: 11, color: 'var(--blue)', marginTop: 2, paddingLeft: 168 }}>
-          {t('dataQuality.duplicates.typoSuggestion', { fix: suggestedValue })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function OtherIssueCard({ provider, issue, onFixed }) {
   const { lang } = useI18n();
   const en = lang === 'en';
   const t = useT();
   const [fixing, setFixing] = useState(false);
   const [fixResult, setFixResult] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const config = getOtherIssueConfig(en)[issue.type] || { icon: 'alert', label: issue.type, color: 'var(--text-muted)' };
   const count = issue.count || issue.contacts?.length || 0;
   const fixField = FIXABLE_FIELD_BY_ISSUE_TYPE[issue.type];
@@ -158,33 +97,26 @@ function OtherIssueCard({ provider, issue, onFixed }) {
               <Icon name="checkCircle" size={12} />{fixResult.message}
             </span>
           ) : fixField ? (
-            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setExpanded(e => !e)}>
-              {en ? 'Fix' : 'Corriger'}
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setPanelOpen(true)}>
+              {t('dataQuality.duplicates.fixButton')}
             </button>
           ) : (issue.suggestedAction === 'review' || issue.suggestedAction === 'verify') ? null : (
             <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} disabled={fixing} onClick={handleFix}>
-              {fixing ? '…' : (en ? 'Fix' : 'Corriger')}
+              {fixing ? '…' : t('dataQuality.duplicates.fixButton')}
             </button>
           )}
         </div>
-
-        {expanded && fixField && (
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {(issue.contacts || []).map((c, i) => (
-              <FieldFixRow
-                key={c.id || i}
-                provider={provider}
-                contact={c}
-                field={fixField}
-                en={en}
-                t={t}
-                onSaved={onFixed}
-                suggestedValue={issue.type === 'email_typo' ? c.suggestedFix : undefined}
-              />
-            ))}
-          </div>
-        )}
       </div>
+
+      {panelOpen && fixField && (
+        <FixQueuePanel
+          provider={provider}
+          issueType={issue.type}
+          issueLabel={config.label}
+          onClose={() => setPanelOpen(false)}
+          onChanged={onFixed}
+        />
+      )}
     </div>
   );
 }
