@@ -40,6 +40,34 @@ const LIST_LIMIT = 500;
  *  autre nombre que le reste du produit pour la même question. */
 const AT_RISK_THRESHOLD = 60;
 
+/**
+ * La fiche de droite, commune aux deux panneaux de cette page.
+ *
+ * Elle est COLLANTE, et ce n'est pas un raffinement : le panneau vivait dans
+ * le flux normal, donc il se posait en haut du conteneur. Ouvrir un contact
+ * depuis le bas d'une longue liste ouvrait sa fiche hors de l'écran, et il
+ * fallait remonter tout en haut pour la lire, puis redescendre pour cliquer le
+ * suivant. Sur un compte à plusieurs interlocuteurs, c'est un aller-retour par
+ * personne.
+ *
+ * Deux conditions pour que ça marche, et l'oubli de l'une annule l'autre :
+ * le conteneur doit porter `alignItems: flex-start` (sinon flex étire le
+ * panneau sur toute la hauteur et sticky n'a plus de course), et la hauteur
+ * maximale doit se mesurer sur la FENÊTRE et non sur la liste, sinon une fiche
+ * plus haute que l'écran ne peut plus être lue jusqu'au bout.
+ */
+const DETAIL_PANEL_STYLE = {
+  flex: '0 0 44%',
+  background: 'var(--bg-card)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  padding: 20,
+  position: 'sticky',
+  top: 16,
+  maxHeight: 'calc(100vh - 32px)',
+  overflowY: 'auto',
+};
+
 /** Un client signé n'a pas de « pipeline » : ses segments sont le temps écoulé
  *  depuis la signature et depuis le dernier échange. 90 jours de silence, c'est
  *  un trimestre sans nouvelle, le moment où la relation commence à se perdre. */
@@ -832,8 +860,14 @@ export default function ClientsPage({ scope }) {
         </div>
       )}
 
-      {/* Main content: list + detail panel */}
-      <div style={{ display: 'flex', gap: 16 }}>
+      {/* Main content: list + detail panel
+          `alignItems: flex-start` n'est pas cosmétique : par défaut flex étire
+          ses enfants sur toute la hauteur du conteneur, donc le panneau de
+          droite faisait la hauteur de la liste et `position: sticky` n'avait
+          aucune course pour jouer. Sans cette ligne, le panneau reste collé en
+          haut et ouvrir une fiche depuis le bas de la liste oblige à remonter
+          tout en haut pour la lire. */}
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         {/* Client list */}
         <div style={{ flex: selectedClient ? '0 0 55%' : '1 1 100%', transition: 'flex 0.2s' }}>
           {loading ? (
@@ -1318,10 +1352,7 @@ function DealDetailPanel({ client, issueType, multiCrm, onClose, onFieldSaved })
   const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
 
   return (
-    <div style={{
-      flex: '0 0 44%', background: 'var(--bg-card)', border: '1px solid var(--border)',
-      borderRadius: 12, padding: 20, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto',
-    }}>
+    <div style={DETAIL_PANEL_STYLE}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
@@ -1456,10 +1487,7 @@ function ClientDetailPanel({ client, multiCrm, onClose }) {
   }, [timeline, client.status, client.planned_followup_date, client.planned_followup_reason]);
 
   return (
-    <div style={{
-      flex: '0 0 44%', background: 'var(--bg-card)', border: '1px solid var(--border)',
-      borderRadius: 12, padding: 20, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto',
-    }}>
+    <div style={DETAIL_PANEL_STYLE}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
