@@ -32,10 +32,114 @@ const DEALS = [
   { id: 'w1', name: 'Paul Gagnant', company: 'Deja Client', status: 'won', crm_provider: 'salesforce', last_activity_at: iso(3) },
 ];
 
+/**
+ * Le serveur de comptes, en miniature.
+ *
+ * La page ne charge plus une fenêtre de contacts qu'elle filtre elle-même :
+ * elle demande une PAGE DE COMPTES déjà filtrée, triée et comptée à
+ * `/crm/account-list` (backend/lib/account-list.js). Ces tests portent sur ce
+ * que la page RESTITUE, il leur faut donc un serveur crédible, pas un tableau
+ * brut.
+ *
+ * Ce stub reproduit les mêmes règles que le vrai, et seulement celles-là : la
+ * clé de regroupement, le cadrage, la tuile, la recherche, le tri, et des
+ * compteurs qui portent sur toute la base et non sur la page. Les règles
+ * elles-mêmes sont gardées côté serveur par backend/tests/account-list.test.js.
+ */
+function serveurDeComptes(lignes, url) {
+  const p = new URLSearchParams(url.split('?')[1] || '');
+  const scope = p.get('scope');
+  const jours = (d) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY) : null);
+
+  const dansLeCadrage = (c) => (scope === 'deals' ? c.status !== 'won'
+    : scope === 'clients' ? c.status === 'won' : true);
+
+  // Mêmes bornes que le serveur, donc mêmes que les libellés : « plus de 30
+  // jours » veut dire 31 jours révolus.
+  const TUILES = {
+    deal_active: (c) => c.status !== 'lost' && jours(c.last_activity_at) != null && jours(c.last_activity_at) <= 30,
+    deal_dormant: (c) => c.status !== 'lost' && jours(c.last_activity_at) > 30 && jours(c.last_activity_at) <= 60,
+    deal_stalled: (c) => c.status !== 'lost' && jours(c.last_activity_at) > 60,
+    deal_lost: (c) => c.status === 'lost',
+    seg_new: (c) => jours(c.won_date) != null && jours(c.won_date) < 90,
+    seg_active: (c) => jours(c.last_activity_at) != null && jours(c.last_activity_at) < 90,
+    seg_silent: (c) => jours(c.last_activity_at) != null && jours(c.last_activity_at) >= 90,
+    seg_risk: (c) => (c.churn_score || 0) >= 60,
+  };
+
+  const cadres = lignes.filter(dansLeCadrage);
+  const tuile = p.get('tile');
+  const recherche = (p.get('search') || '').toLowerCase();
+  const retenus = cadres.filter(c => {
+    if (tuile && !TUILES[tuile](c)) return false;
+    if (p.get('filter') && p.get('filter') !== 'all' && c.status !== p.get('filter')) return false;
+    if (p.get('crm') && p.get('crm') !== 'all' && c.crm_provider !== p.get('crm')) return false;
+    if (recherche) {
+      return [c.name, c.company, c.email].some(v => (v || '').toLowerCase().includes(recherche));
+    }
+    return true;
+  });
+
+  // La clé de l'écran : le compte, sinon la société, sinon la personne.
+  const parCle = new Map();
+  for (const c of retenus) {
+    const cle = c.account_id || (c.company || '').trim() || `personne:${c.id}`;
+    if (!parCle.has(cle)) {
+      parCle.set(cle, {
+        key: cle,
+        name: (c.company || '').trim() || c.name || ' ',
+        orphan: cle.startsWith('personne:'),
+        contacts: [],
+      });
+    }
+    parCle.get(cle).contacts.push(c);
+  }
+
+  const groups = [...parCle.values()].map(g => ({
+    ...g,
+    montant: g.contacts.reduce((s, c) => s + (Number(c.deal_value) || 0), 0),
+    // Le silence d'un compte est celui de son contact le plus RÉCENT
+    // (arbitrage 12.3) · côté serveur c'est `MAX(last_activity_at)`.
+    recence: Math.max(...g.contacts.map(c => new Date(c.last_activity_at || 0).getTime())),
+  })).sort((a, b) => (p.get('sort') === 'value' ? b.montant - a.montant : a.recence - b.recence));
+
+  // Les compteurs ignorent la tuile active, sinon on ne pourrait plus passer
+  // de l'une à l'autre.
+  const pourCompter = cadres;
+  const clesTuiles = scope === 'clients'
+    ? ['seg_new', 'seg_active', 'seg_silent', 'seg_risk']
+    : ['deal_active', 'deal_dormant', 'deal_stalled', 'deal_lost'];
+
+  const byStatus = {};
+  const byProvider = {};
+  for (const c of cadres) {
+    byStatus[c.status || 'unknown'] = (byStatus[c.status || 'unknown'] || 0) + 1;
+    if (c.crm_provider) byProvider[c.crm_provider] = (byProvider[c.crm_provider] || 0) + 1;
+  }
+
+  return {
+    groups,
+    total: groups.length,
+    page: 1,
+    pageSize: 25,
+    tiles: clesTuiles.map(k => ({ key: k, count: pourCompter.filter(TUILES[k]).length })),
+    stats: {
+      byStatus,
+      byProvider,
+      totalScope: cadres.length,
+      dormant: cadres.filter(c => TUILES.deal_dormant(c) || TUILES.deal_stalled(c)).length,
+      valued: cadres.filter(c => c.deal_value != null).length,
+      value: cadres.reduce((s, c) => s + (Number(c.deal_value) || 0), 0),
+      atRisk: cadres.filter(TUILES.seg_risk).length,
+    },
+  };
+}
+
 function mockApi(overrides = {}) {
+  const lignes = overrides.opportunities || DEALS;
   request.mockImplementation((url) => {
     if (url.startsWith('/crm/providers')) return Promise.resolve({ providers: [{ provider: 'salesforce', connected: true }], activeCrm: 'salesforce' });
-    if (url.startsWith('/dashboard/opportunities')) return Promise.resolve({ opportunities: overrides.opportunities || DEALS });
+    if (url.startsWith('/crm/account-list')) return Promise.resolve(serveurDeComptes(lignes, url));
     if (url.startsWith('/crm/team-owners')) return Promise.resolve({ owners: [] });
     if (url.startsWith('/crm/stages')) return Promise.resolve({ stages: overrides.stages || [] });
     if (url.includes('/timeline')) return Promise.resolve({ timeline: [] });
@@ -92,12 +196,20 @@ describe('ClientsPage · chargement complet', () => {
     spy.mockRestore();
   });
 
-  it('demande la fenêtre triée par silence, pas par date de création', async () => {
+  it('demande au serveur la page de comptes, triée par silence et cadrée', async () => {
     renderDeals();
     await waitFor(() => {
-      const call = request.mock.calls.find(([url]) => url.startsWith('/dashboard/opportunities'));
+      const call = request.mock.calls.find(([url]) => url.startsWith('/crm/account-list'));
+      // Le tri, le cadrage et la pagination partent au SERVEUR. La page ne
+      // charge plus une fenêtre de cinq cents contacts qu'elle trierait
+      // elle-même, et dans laquelle un client actif récemment était
+      // introuvable par la recherche.
       expect(call[0]).toContain('sort=silence');
+      expect(call[0]).toContain('scope=deals');
+      expect(call[0]).toContain('page=1');
     });
+    // Et surtout : plus aucun appel à l'ancienne fenêtre.
+    expect(request.mock.calls.some(([url]) => url.startsWith('/dashboard/opportunities'))).toBe(false);
   });
 
   it('ouvre le panneau de détail sans planter', async () => {
@@ -144,10 +256,15 @@ describe('ClientsPage · Vue globale Deals', () => {
     const { container } = renderDeals();
     await screen.findByText('Groupe Belfort');
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'value' } });
-    const rows = [...container.querySelectorAll('div')]
-      .filter(el => el.style.fontWeight === '600' && el.textContent);
-    // La ligne de tête porte la SOCIÉTÉ, pas la personne · voir le test suivant.
-    expect(rows[0].textContent).toBe('Novatech');
+    // Le tri est desormais un aller-retour serveur, plus un tri en memoire :
+    // l'ordre n'est juste qu'apres la reponse. La liste reste affichee pendant
+    // ce temps, elle ne disparait pas derriere un ecran de chargement.
+    await waitFor(() => {
+      const rows = [...container.querySelectorAll('div')]
+        .filter(el => el.style.fontWeight === '600' && el.textContent);
+      // La ligne de tête porte la SOCIÉTÉ, pas la personne · voir le test suivant.
+      expect(rows[0]?.textContent).toBe('Novatech');
+    });
   });
 
   /**

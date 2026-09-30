@@ -849,7 +849,13 @@ export default function ClientsPage({ scope }) {
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         {/* Client list */}
         <div style={{ flex: selectedClient ? '0 0 55%' : '1 1 100%', transition: 'flex 0.2s' }}>
-          {loading ? (
+          {/* L'écran de chargement ne remplace la liste qu'au PREMIER
+              chargement. Depuis que filtrer, chercher et trier sont des
+              allers-retours serveur, la remplacer à chaque fois ferait
+              clignoter la page à chaque frappe et à chaque clic de tuile, et
+              on perdrait de vue ce qu'on était en train de lire. Une liste qui
+              se rafraîchit s'estompe, elle ne disparaît pas. */}
+          {loading && groups.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
           ) : filtered.length === 0 ? (
             <div style={{
@@ -864,7 +870,13 @@ export default function ClientsPage({ scope }) {
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 4,
+              // Estompée pendant un rafraîchissement · on voit que quelque
+              // chose se recharge sans perdre des yeux ce qu'on lisait.
+              opacity: loading ? 0.5 : 1,
+              transition: 'opacity 0.15s ease',
+            }}>
               {/* Select all header · bulk actions don't apply to a focused deal-quality drill-down */}
               {!isDealQualityContext && !selectedClient && filtered.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', fontSize: 11, color: 'var(--text-muted)' }}>
