@@ -392,7 +392,9 @@ function initSchema() {
       sequence_stop_reason TEXT,
       sequence_stopped_at DATETIME,
       team_id TEXT,
-      won_date DATETIME
+      won_date DATETIME,
+      cooldown_until DATETIME,
+      close_date DATETIME
     );
 
     -- Les sociétés (migration 124). Répliquée ici parce que lib/icp-signals.js
@@ -417,6 +419,56 @@ function initSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Les affaires (migration 126). Répliquée ici pour la même raison que la
+    -- table accounts : lib/deals.js écrit dedans à chaque synchro, et sans elle
+    -- les tests de synchro échouent alors que la production passe.
+    CREATE TABLE IF NOT EXISTS deals (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT REFERENCES users(id),
+      team_id TEXT,
+      account_id TEXT,
+      primary_contact_id TEXT,
+      crm_provider TEXT,
+      crm_deal_id TEXT,
+      hubspot_deal_id TEXT,
+      name TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      deal_value REAL,
+      currency TEXT,
+      won_date DATETIME,
+      lost_date DATETIME,
+      lost_reason TEXT,
+      lost_reason_source TEXT,
+      close_date DATETIME,
+      renewal_date DATETIME,
+      crm_stage TEXT,
+      crm_stage_id TEXT,
+      crm_stage_changed_at DATETIME,
+      crm_pipeline_id TEXT,
+      crm_pipeline_name TEXT,
+      crm_created_at DATETIME,
+      crm_updated_at DATETIME,
+      last_activity_at DATETIME,
+      planned_followup_date DATETIME,
+      planned_followup_reason TEXT,
+      reactivated_at DATETIME,
+      reactivated_from_email_id TEXT,
+      reactivated_contact_id TEXT,
+      owner_id TEXT,
+      owner_email TEXT,
+      crm_owner_id TEXT,
+      crm_deal_attribution TEXT,
+      crm_push_state TEXT NOT NULL DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- L'index partiel de Postgres n'existe pas tel quel en sqlite, mais la
+    -- contrainte d'unicité compte : c'est elle que l'upsert de lib/deals.js
+    -- utilise comme cible de ON CONFLICT.
+    CREATE UNIQUE INDEX IF NOT EXISTS deals_crm_unique
+      ON deals (user_id, crm_provider, crm_deal_id) WHERE crm_deal_id IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS reveal_usage (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
@@ -594,6 +646,18 @@ function query(text, params = []) {
 
   // Handle RETURNING * for INSERT/UPDATE
   const isReturning = /RETURNING\s+\*/i.test(text);
+  // `RETURNING <colonnes>` n'était PAS reconnu : la requête retombait sur la
+  // branche muette du bas, qui rend { rows: [] }. Tout appelant écrit sur le
+  // modèle `res.rows[0].id` voyait donc undefined en test alors qu'il
+  // fonctionne en production. lib/accounts.js (lot 2) et lib/deals.js (lot 4)
+  // sont tous les deux dans ce cas : leur import était intestable, et un test
+  // qui ne peut pas échouer ne garde rien.
+  //
+  // SQLite sait faire RETURNING nativement depuis la 3.35, et la version
+  // embarquée ici est bien plus récente : on laisse donc la base répondre au
+  // lieu de reconstituer la ligne par son rowid. La branche `RETURNING *`
+  // historique n'est pas touchée, elle porte 484 tests.
+  const isReturningCols = !isReturning && /\bRETURNING\s+(?!\*)[\w.,\s"]+$/i.test(text.trim());
   const isInsert = /^\s*INSERT/i.test(text);
   const isUpdate = /^\s*UPDATE/i.test(text);
   const isDelete = /^\s*DELETE/i.test(text);
@@ -629,6 +693,12 @@ function query(text, params = []) {
     .replace(/EXCLUDED\./g, 'excluded.');
 
   if (isSelect) {
+    const stmt = d.prepare(adapted);
+    const rows = stmt.all(...params);
+    return { rows, rowCount: rows.length };
+  }
+
+  if (isReturningCols) {
     const stmt = d.prepare(adapted);
     const rows = stmt.all(...params);
     return { rows, rowCount: rows.length };

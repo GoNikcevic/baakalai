@@ -221,7 +221,14 @@ async function getDeals(accessToken, limit = 10000) {
       // toujours et rien ne permet d'écrire une règle de rattachement commune
       // aux quatre CRM.
       associations: 'contacts,companies',
-      properties: 'dealname,amount,dealstage,closedate,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate,hs_next_activity_date',
+      // `deal_currency_code`, `hubspot_owner_id`, `pipeline` et `createdate`
+      // sont des propriétés par défaut de tout portail HubSpot · elles ne
+      // coûtent rien de plus dans le même appel et il manquait sans elles la
+      // devise du montant (donc toute somme de CA était fausse dès qu'un
+      // portail n'était pas mono-devise), le commercial de l'affaire, le
+      // pipeline qui donne son sens à l'étape, et la date de naissance de
+      // l'affaire, qui est ce qui mesure la stagnation.
+      properties: 'dealname,amount,deal_currency_code,dealstage,pipeline,closedate,createdate,hubspot_owner_id,hs_is_closed,hs_is_closed_won,hs_lastmodifieddate,hs_next_activity_date',
     });
     if (after) params.set('after', after);
     const data = await hubspotFetch(accessToken, `/crm/v3/objects/deals?${params.toString()}`);
@@ -233,12 +240,20 @@ async function getDeals(accessToken, limit = 10000) {
         id: d.id,
         name: p.dealname || '',
         stage: p.dealstage || '',
+        stageId: p.dealstage || null,
+        pipelineId: p.pipeline || null,
         status: isWon ? 'won' : (isClosed ? 'lost' : 'open'),
         value: p.amount ? parseFloat(p.amount) : null,
+        // NULL et non 'EUR' · HubSpot codait la devise en dur côté diagnostic,
+        // ce qui passait tant qu'un montant vivait sur une ligne de contact.
+        // Au niveau compte on somme, et une devise supposée fausse un total.
+        currency: p.deal_currency_code || null,
+        ownerId: p.hubspot_owner_id || null,
         personId: d.associations?.contacts?.results?.[0]?.id || null,
         accountId: d.associations?.companies?.results?.[0]?.id || null,
         accountName: null,
         closeDate: p.closedate || null,
+        createdAt: p.createdate || null,
         updatedAt: p.hs_lastmodifieddate || null,
         nextActivityDate: p.hs_next_activity_date || null,
       });

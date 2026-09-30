@@ -334,8 +334,21 @@ async function getDeals(apiToken, limit = 100) {
     id: d.id,
     name: d.title,
     stage: d.stage_id,
+    stageId: d.stage_id != null ? String(d.stage_id) : null,
+    // Le PIPELINE, pas seulement l'étape · Pipedrive en autorise plusieurs par
+    // compte, et « Négociation » ne veut pas dire la même chose dans un
+    // pipeline « Nouveaux clients » et dans un pipeline « Renouvellements ».
+    pipelineId: d.pipeline_id != null ? String(d.pipeline_id) : null,
     status: d.status,
     value: d.value,
+    // La DEVISE, que Pipedrive est le seul des quatre à exposer proprement et
+    // que baakalai jetait. Au niveau compte on somme du chiffre d'affaires :
+    // sans elle, additionner EUR et USD produit un nombre faux et affiché
+    // (plan §9.5). Jamais de repli sur 'EUR' ici · NULL veut dire inconnu.
+    currency: d.currency || null,
+    // Le commercial de l'AFFAIRE, distinct de celui du contact et de celui de
+    // la société · un vrai CRM en porte trois, souvent différents.
+    ownerId: d.user_id?.id != null ? String(d.user_id.id) : (d.user_id != null ? String(d.user_id) : null),
     personId: d.person_id?.value || d.person_id,
     // Société du deal · jetée jusqu'ici, alors que c'est la seule chose qui
     // reste quand le CRM ne nomme aucune personne. Sans elle dans la forme

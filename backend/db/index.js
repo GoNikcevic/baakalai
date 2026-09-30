@@ -1966,6 +1966,15 @@ const opportunities = {
       won_date: 'won_date', wonDate: 'won_date',
       lost_date: 'lost_date', lostDate: 'lost_date',
       renewal_date: 'renewal_date', renewalDate: 'renewal_date',
+      // Migration 126 · date de clôture PRÉVUE, miroir de deals.close_date le
+      // temps de la double écriture. Absente de ce mapping, elle serait perdue
+      // sans erreur : le piège s'est déjà produit sur last_activity_at,
+      // deal_value, won_date et lost_date.
+      close_date: 'close_date', closeDate: 'close_date',
+      // Migration 126 · jusqu'à quand cette PERSONNE ne doit pas être
+      // recontactée. Moitié contact de planned_followup_date, indispensable au
+      // multi-threading du lot 6.
+      cooldown_until: 'cooldown_until', cooldownUntil: 'cooldown_until',
       last_activity_at: 'last_activity_at', lastActivityAt: 'last_activity_at',
       crm_created_at: 'crm_created_at', crmCreatedAt: 'crm_created_at',
       planned_followup_date: 'planned_followup_date', plannedFollowupDate: 'planned_followup_date',

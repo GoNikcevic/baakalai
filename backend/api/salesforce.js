@@ -164,19 +164,48 @@ async function getDeals(instanceUrl, accessToken, limit = 10000) {
   // Paginé via nextRecordsUrl (comme listContacts) : le plafond de 100 sans
   // pagination laissait les opportunités anciennes des vrais orgs sans mapping
   // won/lost · donc invisibles comme clients.
-  const query = `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed, AccountId,
+  // CurrencyIsoCode N'EXISTE PAS dans une org mono-devise · Salesforce ne
+  // crée le champ que si le multi-devise est activé, et l'interroger ailleurs
+  // fait échouer la requête entière avec INVALID_FIELD. Le demander d'office
+  // priverait donc de leurs deals toutes les orgs simples, c'est-à-dire la
+  // majorité. On tente avec, on retombe sans : deux requêtes au pire, une seule
+  // dans les deux cas courants.
+  //
+  // Sans devise, le montant reste NULL côté `deals.currency` plutôt que
+  // supposé 'EUR' · une org mono-devise n'est pas forcément en euros, et un
+  // total qui mélange sans le dire est pire qu'un total incomplet.
+  const buildQuery = (avecDevise) => `SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastModifiedDate, LastActivityDate, IsWon, IsClosed, AccountId, OwnerId${avecDevise ? ', CurrencyIsoCode' : ''},
     (SELECT ContactId, Role FROM OpportunityContactRoles WHERE IsPrimary = true LIMIT 1)
     FROM Opportunity ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const deals = [];
-  let result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(query)}`);
+  let result;
+  try {
+    result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(buildQuery(true))}`);
+  } catch (err) {
+    // On ne retombe que sur CE motif · un jeton refusé ou une org en
+    // maintenance doit remonter tel quel, pas se déguiser en org mono-devise.
+    if (!/INVALID_FIELD|No such column/i.test(err.message || '')) throw err;
+    result = await sfFetch(instanceUrl, accessToken, `/query?q=${encodeURIComponent(buildQuery(false))}`);
+  }
   for (;;) {
     for (const r of result.records || []) {
       deals.push({
         id: r.Id,
         name: r.Name,
         stage: r.StageName,
+        // Salesforce n'a ni identifiant d'étape ni pipeline · le libellé EST
+        // l'identifiant. Déclarés pour que la forme reste la même sur les
+        // quatre connecteurs, plutôt que de laisser l'appelant deviner.
+        stageId: r.StageName || null,
+        pipelineId: null,
         status: r.IsWon ? 'won' : (r.IsClosed ? 'lost' : 'open'),
         value: r.Amount,
+        // Absent d'une org mono-devise, et c'est voulu · voir buildQuery.
+        currency: r.CurrencyIsoCode || null,
+        // L'owner de l'AFFAIRE. Salesforce en porte trois (compte, affaire,
+        // contact), souvent différents, et baakalai n'affichait que celui du
+        // contact sur des écrans qui parlaient de deals.
+        ownerId: r.OwnerId ? String(r.OwnerId) : null,
         personId: r.OpportunityContactRoles?.records?.[0]?.ContactId || null,
         // Le RÔLE était déjà rapatrié et jeté · la sous-requête ne servait que
         // de booléen de rattachement. Salesforce est le seul des quatre à

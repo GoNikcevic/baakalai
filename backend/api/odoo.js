@@ -247,7 +247,11 @@ async function getDeals(creds, { limit = 100 } = {}) {
   const deals = await call(creds, 'crm.lead', 'read', [ids], {
     // activity_date_deadline vient du mixin mail.activity (hérité par crm.lead) ·
     // la date de la prochaine activité planifiée, telle qu'affichée dans Odoo.
-    fields: ['id', 'name', 'partner_id', 'stage_id', 'probability', 'expected_revenue', 'type', 'write_date', 'create_date', 'active', 'date_closed', 'activity_date_deadline'],
+    // `company_currency` et `user_id` complètent la forme normalisée commune
+    // aux quatre CRM : la devise du montant, sans laquelle toute somme de CA au
+    // niveau compte est fausse dès qu'une société travaille en deux monnaies,
+    // et le commercial de l'AFFAIRE, distinct de celui du contact.
+    fields: ['id', 'name', 'partner_id', 'stage_id', 'probability', 'expected_revenue', 'type', 'write_date', 'create_date', 'active', 'date_closed', 'activity_date_deadline', 'company_currency', 'user_id'],
   });
 
   // is_won lives on crm.stage, not crm.lead itself · resolve once and cross-reference.
@@ -277,6 +281,14 @@ async function getDeals(creds, { limit = 100 } = {}) {
       status,
       probability: d.probability,
       value: d.expected_revenue || 0,
+      // Odoo renvoie ses Many2one en [id, libellé] · le libellé d'une devise
+      // EST son code ISO ('EUR', 'USD'). NULL si le champ manque, jamais un
+      // repli : une devise supposée fausse une somme sans le dire.
+      currency: Array.isArray(d.company_currency) ? (d.company_currency[1] || null) : null,
+      ownerId: Array.isArray(d.user_id) ? (d.user_id[0] != null ? String(d.user_id[0]) : null) : null,
+      // Odoo n'a pas de pipeline au sens Pipedrive ou HubSpot · ses étapes sont
+      // globales. Déclaré à NULL pour que la forme reste la même sur les quatre.
+      pipelineId: null,
       type: d.type, // 'lead' or 'opportunity'
       updatedAt: d.write_date,
       createdAt: d.create_date,

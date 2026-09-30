@@ -42,7 +42,12 @@ const { setPlannedFollowupDate } = require('./reactivation-queue');
 async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
   const result = {
     fetched: 0, processed: 0, updated: 0,
-    unlinked: 0, unmatched: 0, collisions: 0, released: 0, error: null,
+    unlinked: 0, unmatched: 0, collisions: 0, released: 0,
+    // Lot 4 · ce que la table `deals` a reçu, à distinguer de ce que le miroir
+    // sur `opportunities` a su représenter. Les deux nombres diffèrent, et
+    // c'est exactement l'écart que le lot 4 vient combler.
+    dealsWritten: 0, dealsWithoutContact: 0,
+    error: null,
   };
   try {
     // Lecture du CRM isolée dans son propre catch · tout ce bloc était couvert
@@ -99,15 +104,14 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
     });
     // Les comptes déjà connus, indexés par leur identifiant CRM · sert au
     // repli ci-dessous. Une seule lecture par synchro.
-    const comptesParCrmId = new Map();
-    try {
-      const rows = await db.query(
-        `SELECT id, crm_account_id, name FROM accounts
-          WHERE user_id = $1 AND crm_provider = $2 AND crm_account_id IS NOT NULL`,
-        [userId, crmProvider]
-      );
-      for (const a of rows.rows) comptesParCrmId.set(String(a.crm_account_id), a);
-    } catch { /* pas de comptes encore : le repli ne s'appliquera pas */ }
+    const { loadAccountsByCrmId, writeDeals } = require('./deals');
+    const comptesParCrmId = await loadAccountsByCrmId(userId, crmProvider);
+
+    // Ce que chaque affaire a fini par trouver comme interlocuteur · alimente
+    // la table `deals` (migration 126) à la fin de la passe. AUCUNE affaire
+    // n'en est écartée, pas même celles que les trois `continue` ci-dessous
+    // laissent de côté : c'est tout l'objet du lot 4. Voir lib/deals.js.
+    const rattachements = [];
 
     const claimed = new Set();
     // Lignes qu'un deal DEVINÉ vient de réclamer · toute autre ligne dont le
@@ -125,15 +129,38 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       // rattachement à écrire pour ce provider), `unmatched` que la personne
       // est nommée mais absente de nos contacts (import incomplet). Les
       // confondre dans un `continue` muet a coûté deux enquêtes.
-      if (!personId) { result.unlinked++; continue; }
+      //
+      // Les trois sorties ci-dessous ne perdent plus l'affaire : elles la
+      // laissent seulement hors du MIROIR sur `opportunities`, qui ne sait
+      // représenter qu'un deal par contact. La ligne, elle, part dans `deals`
+      // avec ce qu'on a su rattacher, fût-ce la seule société.
+      if (!personId) {
+        result.unlinked++;
+        rattachements.push({ deal, contact: null });
+        continue;
+      }
 
       const opp = await db.query(
-        `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason, crm_deal_id, crm_deal_attribution, account_id, company, account_role, role_source FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
+        `SELECT id, status, won_date, lost_date, deal_value, planned_followup_date, last_activity_at, crm_stage, crm_stage_id, lost_reason, crm_deal_id, crm_deal_attribution, account_id, company, account_role, role_source, close_date FROM opportunities WHERE user_id = $1 AND crm_contact_id = $2 LIMIT 1`,
         [userId, personId]
       );
-      if (!opp.rows[0]) { result.unmatched++; continue; }
+      if (!opp.rows[0]) {
+        result.unmatched++;
+        rattachements.push({ deal, contact: null });
+        continue;
+      }
       const o = opp.rows[0];
-      if (claimed.has(o.id)) { result.collisions++; continue; }
+      if (claimed.has(o.id)) {
+        // Le contact est bien celui-ci, c'est la LIGNE d'opportunité qui est
+        // déjà prise. Avant le lot 4 cette affaire était perdue ; elle a
+        // désormais sa propre ligne, avec son montant et son étape à elle.
+        result.collisions++;
+        rattachements.push({
+          deal, contact: o,
+          attribution: deal.personIdInferred ? 'inferred' : 'crm_role',
+        });
+        continue;
+      }
       claimed.add(o.id);
       if (deal.personIdInferred) claimedGuessed.push(o.id);
       result.processed++;
@@ -196,6 +223,13 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       }
 
       const closeDate = safeDateISO(deal.closeDate);
+      // La date de clôture PRÉVUE, qui n'avait jusqu'ici aucune colonne où
+      // atterrir (migration 126). Salesforce et HubSpot la remontaient depuis
+      // toujours et elle était jetée · pendant ce temps
+      // routes/analytics.js:1193 lisait `o.close_date`, inexistante, donc
+      // l'export renouvellement retombait systématiquement sur won_date + 365
+      // jours. Le seul fait de la renseigner rend cette branche vivante.
+      if (closeDate && closeDate !== o.close_date) updates.close_date = closeDate;
       if (deal.status === 'won' && o.status !== 'won') {
         updates.status = 'won';
         updates.won_date = closeDate || new Date().toISOString();
@@ -286,7 +320,25 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
         await db.opportunities.update(o.id, updates);
         result.updated++;
       }
+
+      rattachements.push({ deal, contact: o, attribution });
     }
+
+    // ── La table `deals`, écrite en parallèle du miroir ci-dessus ───────────
+    //
+    // Une ligne par affaire, y compris pour les trois cas que le miroir ne
+    // sait pas représenter : deal sans interlocuteur nommé, interlocuteur
+    // inconnu de nos contacts, et deuxième deal sur un contact déjà pris.
+    // C'est la raison d'être du lot 4.
+    //
+    // Personne ne LIT encore cette table : `opportunities` reste la source de
+    // vérité de tous les écrans jusqu'au lot 5. Si les deux divergent
+    // aujourd'hui, c'est `opportunities` qui fait foi. Best-effort, comme le
+    // reste : une affaire qui refuse d'entrer ne fait pas échouer la synchro.
+    const ecriture = await writeDeals(userId, crmProvider, rattachements);
+    result.dealsWritten = ecriture.ecrits;
+    result.dealsWithoutContact = ecriture.sansContact;
+    if (ecriture.erreur) result.error = result.error || `deals: ${ecriture.erreur}`;
 
     // Rendre la main sur les rattachements devinés qui ne le sont plus.
     //
@@ -333,7 +385,7 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
 
     if (result.collisions > 0) {
       logger.info('deal-lifecycle-sync',
-        `${result.collisions} deal(s) non représentable(s) pour ${userId} · plusieurs deals sur un même contact, un seul tient dans la ligne`);
+        `${result.collisions} deal(s) non représentable(s) dans le miroir pour ${userId} · plusieurs deals sur un même contact, un seul tient dans la ligne d'opportunité. Ils ont bien leur ligne dans \`deals\` (lot 4)`);
     }
   } catch (err) {
     // Avant l'extraction ce catch était muet · c'est précisément ce qui rendait
@@ -358,13 +410,16 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
       unmatched: result.unmatched,
       collisions: result.collisions,
       released: result.released,
+      dealsWritten: result.dealsWritten,
+      dealsWithoutContact: result.dealsWithoutContact,
       error: result.error,
     });
   } catch { /* l'instrumentation ne doit jamais peser sur la synchro */ }
 
   logger.info('deal-lifecycle-sync',
     `${crmProvider} · ${result.fetched} deal(s) lus, ${result.processed} rattaché(s), ` +
-    `${result.unlinked} sans personne, ${result.unmatched} sans contact connu` +
+    `${result.unlinked} sans personne, ${result.unmatched} sans contact connu · ` +
+    `${result.dealsWritten} affaire(s) en base, dont ${result.dealsWithoutContact} sans interlocuteur` +
     (result.error ? ` · ERREUR ${result.error}` : ''));
 
   return result;
