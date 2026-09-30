@@ -1949,6 +1949,36 @@ router.put('/architecture/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/crm/account-list · la liste des comptes, paginée et filtrée EN BASE
+//
+// Ce que la page Deals et la page Clients lisent désormais. Avant, elles
+// chargeaient les 500 contacts les plus silencieux et faisaient tout dans le
+// navigateur : la recherche ne cherchait donc que dans ces 500, et un client
+// actif récemment était introuvable. Détails et mesures dans
+// lib/account-list.js.
+router.get('/account-list', async (req, res, next) => {
+  try {
+    const { listAccountPage } = require('../lib/account-list');
+    // `ids` sert les rappels d'un écran d'audit (« montre-moi ces 12 contacts »),
+    // qui passaient jusqu'ici par un paramètre d'URL filtré côté navigateur.
+    const ids = typeof req.query.ids === 'string' && req.query.ids.trim()
+      ? req.query.ids.split(',').map(s => s.trim()).filter(Boolean).slice(0, 500)
+      : null;
+    res.json(await listAccountPage(req.user.id, {
+      scope: req.query.scope,
+      filter: req.query.filter,
+      owner: req.query.owner,
+      crm: req.query.crm,
+      tile: req.query.tile,
+      search: req.query.search,
+      sort: req.query.sort,
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      ids,
+    }));
+  } catch (err) { next(err); }
+});
+
 // GET /api/crm/accounts · les SOCIÉTÉS de l'utilisateur (lot 2, migration 124)
 //
 // Chaque ligne agrège ce qu'un compte porte : ses contacts, ses deals gagnés et

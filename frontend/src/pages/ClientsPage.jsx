@@ -30,9 +30,6 @@ const CRM_DOT_COLORS = {
   pipedrive: '#2A2AA0', hubspot: '#FF7A59', salesforce: '#00A1E0',
   odoo: '#714B67', notion: '#37352F', airtable: '#F82B60',
 };
-// Plafond d'une page de liste. Au-delà, la fenêtre est annoncée à l'écran
-// (clients.listTruncated) plutôt que silencieusement tronquée.
-const LIST_LIMIT = 500;
 
 /** Seuil « à risque » du churn. Même valeur que le backend
  *  (lib/churn-scoring.js, AT_RISK_THRESHOLD), qui sert au badge de la nav et à
@@ -68,17 +65,12 @@ const DETAIL_PANEL_STYLE = {
   overflowY: 'auto',
 };
 
-/** Un client signé n'a pas de « pipeline » : ses segments sont le temps écoulé
- *  depuis la signature et depuis le dernier échange. 90 jours de silence, c'est
- *  un trimestre sans nouvelle, le moment où la relation commence à se perdre. */
-const CLIENT_SILENCE_DAYS = 90;
-const CLIENT_NEW_DAYS = 90;
-
-/** Seuils de silence d'un deal en cours. Une seule définition pour les trois
- *  endroits qui les employaient chacun de leur côté : les tuiles de tête, la
- *  ligne « X dorment depuis plus de 30 jours » et la couleur du compteur de
- *  jours dans la liste. Un deal muet depuis un mois se relance, muet depuis
- *  deux il est au point mort. */
+/** Seuils de silence d'un deal en cours. Ils ne servent plus qu'à COLORER la
+ *  liste : le découpage en tranches et les compteurs des tuiles sont calculés
+ *  en base (backend/lib/account-list.js), sur toute la base et non sur ce qui
+ *  est affiché. Les deux jeux de valeurs doivent rester identiques, sinon la
+ *  couleur d'une ligne et la tuile qui la compte se contrediraient. Un deal
+ *  muet depuis un mois se relance, muet depuis deux il est au point mort. */
 const DEAL_DORMANT_DAYS = 30;
 const DEAL_STALLED_DAYS = 60;
 
@@ -99,25 +91,6 @@ function silenceColor(days) {
   if (days > DEAL_STALLED_DAYS) return 'var(--danger)';
   if (days > DEAL_DORMANT_DAYS) return 'var(--warning)';
   return 'var(--success)';
-}
-
-// Tranche de silence d'un deal en cours. null quand la date d'activité est
-// absente : « on ne sait pas » n'est ni actif, ni endormi, ni au point mort.
-// Les bornes sont strictes, comme les libellés qui les accompagnent (« plus de
-// 30 jours ») : à 30 jours pile, un deal est encore actif.
-function silenceBucket(days) {
-  if (days == null) return null;
-  if (days > DEAL_STALLED_DAYS) return 'stalled';
-  if (days > DEAL_DORMANT_DAYS) return 'dormant';
-  return 'active';
-}
-
-// Rang de silence pour le tri. MAX_SAFE_INTEGER et non Infinity : deux contacts
-// sans activité donneraient Infinity - Infinity = NaN, et un comparateur qui
-// renvoie NaN rend le tri instable selon le moteur.
-function silenceRank(c) {
-  const d = daysSince(c.last_activity_at);
-  return d == null ? Number.MAX_SAFE_INTEGER : d;
 }
 
 function getStatusLabels(lang) {
@@ -143,7 +116,10 @@ function getStatusLabels(lang) {
  * transformerait le lien en page vide.
  */
 export default function ClientsPage({ scope }) {
-  const [clients, setClients] = useState([]);
+  // Une page de COMPTES, telle que le serveur la rend. `clients` en dérive :
+  // c'est la liste à plat des contacts de cette page, et tout ce que la page
+  // faisait déjà avec continue de marcher dessus.
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
@@ -161,7 +137,22 @@ export default function ClientsPage({ scope }) {
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [selected, setSelected] = useState(new Set());
   const [bulkAction, setBulkAction] = useState(null);
-  const [truncated, setTruncated] = useState(false);
+  // ── Ce que le serveur décide désormais ────────────────────────────────────
+  //
+  // La page chargeait les 500 contacts les plus silencieux et faisait tout
+  // dans le navigateur. Elle ne connaissait donc que cette fenêtre, et la
+  // recherche ne cherchait que là-dedans : un client actif récemment était
+  // introuvable. Le tri, les filtres, le regroupement par compte, la
+  // pagination et les compteurs vivent maintenant dans lib/account-list.js.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+  const [serverTiles, setServerTiles] = useState([]);
+  const [stats, setStats] = useState({ byStatus: {}, byProvider: {}, dormant: 0, valued: 0, value: 0 });
+  // La frappe ne doit pas déclencher une requête par caractère · `search` est
+  // ce que l'utilisateur voit dans le champ, `searchQuery` ce qui part au
+  // serveur une fois la frappe retombée.
+  const [searchQuery, setSearchQuery] = useState('');
   // Tri de la Vue globale Deals · « le plus long silence d'abord » répond à la
   // question pour laquelle on ouvre la page (lesquels sont en train de mourir),
   // le montant reste à un clic. Arbitrage Goran du 20/09.
@@ -174,10 +165,14 @@ export default function ClientsPage({ scope }) {
   const { lang } = useI18n();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const highlightIds = useMemo(() => {
-    const h = searchParams.get('highlight');
-    return h ? new Set(h.split(',')) : null;
-  }, [searchParams]);
+  // La chaîne brute sert de dépendance de chargement · le Set ne sert plus
+  // qu'au rendu. Une dépendance qui change d'identité à chaque rendu
+  // relancerait la requête en boucle.
+  const highlightParam = searchParams.get('highlight') || '';
+  const highlightIds = useMemo(
+    () => (highlightParam ? new Set(highlightParam.split(',')) : null),
+    [highlightParam]
+  );
   // Set only when arriving from Data Quality's "Qualité des deals" strate · a deal (not yet a
   // client) is never eligible for churn/upsell, so this drives a stripped-down, deal-only view
   // instead of reusing every client-oriented option this page otherwise exposes.
@@ -189,42 +184,69 @@ export default function ClientsPage({ scope }) {
   const user = getUser();
   const isAdmin = !user?.teamRole || user.teamRole === 'admin';
 
+  // Ce qui ne change pas d'une recherche à l'autre : les CRM connectés et les
+  // propriétaires. Chargé une fois, pas à chaque frappe.
+  const loadContext = useCallback(async () => {
+    try {
+      const [providersData, ownersData] = await Promise.all([
+        request('/crm/providers').catch(() => ({ providers: [] })),
+        request('/crm/team-owners').catch(() => ({ owners: [] })),
+      ]);
+      const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
+      const connected = (providersData.providers || []).filter(p => crmProviders.includes(p.provider) && p.connected);
+      setConnectedCrm(providersData.activeCrm || connected[0]?.provider || null);
+      setConnectedProviders(connected);
+      setOwners(ownersData.owners || []);
+    } catch (err) {
+      console.error('[ClientsPage] loadContext', err);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Parallel: providers + opportunities + owners
-      const [providersData, oppsData, ownersData] = await Promise.all([
-        request('/crm/providers').catch(() => ({ providers: [] })),
-        // sort=silence : la fenêtre reçue doit contenir les deals les plus
-        // silencieux, pas les plus récemment créés. Sans ce paramètre, un compte
-        // au-delà du plafond perdait précisément les deals endormis.
-        request(`/dashboard/opportunities?limit=${LIST_LIMIT}&sort=silence`).catch(() => ({ opportunities: [] })),
-        request('/crm/team-owners').catch(() => ({ owners: [] })),
-      ]);
+      const params = new URLSearchParams({ scope: scope || '', page: String(page), pageSize: String(pageSize) });
+      if (filter && filter !== 'all') params.set('filter', filter);
+      if (ownerFilter !== 'all') params.set('owner', ownerFilter);
+      if (crmFilter !== 'all') params.set('crm', crmFilter);
+      if (tileFilter) params.set('tile', tileFilter);
+      if (searchQuery) params.set('search', searchQuery);
+      if (sortBy) params.set('sort', sortBy);
+      // Le rappel d'un écran d'audit passe désormais au serveur : lui seul peut
+      // aller chercher ces contacts où qu'ils soient dans la base.
+      if (highlightParam) params.set('ids', highlightParam);
 
-      const crmProviders = ['pipedrive', 'hubspot', 'salesforce', 'odoo', 'notion', 'airtable'];
-      const connected = (providersData.providers || []).filter(p => crmProviders.includes(p.provider) && p.connected);
-      // Use active CRM from backend, fallback to first connected
-      const activeCrm = providersData.activeCrm || connected[0]?.provider || null;
-      setConnectedCrm(activeCrm);
-      setConnectedProviders(connected);
-      const opps = oppsData.opportunities || [];
-      setClients(opps);
-      setTruncated(opps.length >= LIST_LIMIT);
-      setOwners(ownersData.owners || []);
-      // Plus d'appel à /crm/stages ici : la barre de tête n'affiche plus les
-      // étapes brutes du CRM. La route reste employée par routes/analytics.js.
+      const data = await request(`/crm/account-list?${params.toString()}`);
+      setGroups(data.groups || []);
+      setTotal(data.total || 0);
+      setPageSize(data.pageSize || 25);
+      setServerTiles(data.tiles || []);
+      setStats(data.stats || { byStatus: {}, byProvider: {}, dormant: 0, valued: 0, value: 0 });
     } catch (err) {
       // Surtout ne pas rester muet : un `catch {}` vide ici a masqué pendant onze
       // jours une ReferenceError qui coupait le chargement en route et laissait
-      // la page à moitié remplie, sans aucun signe visible. La page reste
-      // utilisable avec ce qui a été chargé.
+      // la page à moitié remplie, sans aucun signe visible.
       console.error('[ClientsPage] loadData', err);
     }
     setLoading(false);
-  }, []);
+    // `highlightParam` et non le Set : une dépendance qui change d'identité à
+    // chaque rendu relancerait la requête en boucle. Une chaîne se compare.
+  }, [scope, page, pageSize, filter, ownerFilter, crmFilter, tileFilter, searchQuery, sortBy, highlightParam]);
 
+  useEffect(() => { loadContext(); }, [loadContext]);
   useEffect(() => { loadData(); }, [loadData]);
+
+  // La frappe attend 300 ms avant de partir au serveur. Sans ce délai, écrire
+  // « chevalier » lance neuf requêtes dont huit sont jetées.
+  useEffect(() => {
+    const id = setTimeout(() => setSearchQuery(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  // Tout changement de cadrage ramène à la première page. Sans ça, filtrer
+  // depuis la page 7 donne une liste vide et l'impression que le filtre n'a
+  // rien trouvé.
+  useEffect(() => { setPage(1); }, [scope, filter, ownerFilter, crmFilter, tileFilter, searchQuery, sortBy]);
 
   const handleImport = useCallback(async () => {
     if (!connectedCrm) return;
@@ -259,11 +281,9 @@ export default function ClientsPage({ scope }) {
     setImporting(false);
   }, [loadData, connectedCrm, connectedProviders, clients.length, t]);
 
-  const scopedClients = useMemo(() => {
-    if (scope === 'deals') return clients.filter(c => c.status !== 'won');
-    if (scope === 'clients') return clients.filter(c => c.status === 'won');
-    return clients;
-  }, [clients, scope]);
+  // Les contacts de la page, à plat. Le cadrage, les filtres et la recherche
+  // ont déjà été appliqués en base : il n'y a plus rien à retrancher ici.
+  const clients = useMemo(() => groups.flatMap(g => g.contacts || []), [groups]);
 
   // ── Tuiles de tête ──────────────────────────────────────────────────────
   //
@@ -282,20 +302,27 @@ export default function ClientsPage({ scope }) {
   //
   // Dans les deux cas, une tuile est un filtre : le chiffre se lit, puis se
   // clique pour voir qui est derrière.
+  // Les COMPTEURS viennent du serveur (lib/account-list.js), les libellés et
+  // les couleurs restent ici. Ils portent sur toute la base et non sur la page
+  // affichée : un compteur qui ne compte que ce qui est à l'écran annonce un
+  // nombre qui n'existe nulle part, et c'est exactement ce que faisait la
+  // fenêtre de 500. Les seuils ne sont plus définis qu'à un seul endroit, côté
+  // serveur, pour que les tuiles et la couleur de chaque ligne ne puissent
+  // plus se contredire d'un jour.
+  const countOfTile = useCallback(
+    (key) => serverTiles.find(x => x.key === key)?.count ?? 0,
+    [serverTiles]
+  );
+
   const tileGroups = useMemo(() => {
     if (scope === 'clients') {
-      // Activité inconnue : ni actif ni silencieux. Les deux tuiles sont des
-      // filtres, pas une répartition, donc mieux vaut ne compter personne à
-      // tort que transformer une date absente en « contacté récemment ».
-      const silent = (c) => { const d = daysSince(c.last_activity_at); return d != null && d >= CLIENT_SILENCE_DAYS; };
-      const active = (c) => { const d = daysSince(c.last_activity_at); return d != null && d < CLIENT_SILENCE_DAYS; };
       const segments = [
-        { key: 'seg_new', label: t('clients.segNew'), match: (c) => (daysSince(c.won_date) ?? Infinity) < CLIENT_NEW_DAYS },
-        { key: 'seg_active', label: t('clients.segActive'), match: active },
-        { key: 'seg_silent', label: t('clients.segSilent'), match: silent },
-        { key: 'seg_risk', label: t('clients.segRisk'), match: (c) => (c.churn_score || 0) >= AT_RISK_THRESHOLD },
+        { key: 'seg_new', label: t('clients.segNew') },
+        { key: 'seg_active', label: t('clients.segActive') },
+        { key: 'seg_silent', label: t('clients.segSilent') },
+        { key: 'seg_risk', label: t('clients.segRisk') },
       ];
-      return [['', segments.map(s => ({ ...s, count: scopedClients.filter(s.match).length }))]];
+      return [['', segments.map(s => ({ ...s, count: countOfTile(s.key) }))]];
     }
 
     // Un deal perdu est sorti du pipeline : le compter aussi dans une tranche de
@@ -303,22 +330,20 @@ export default function ClientsPage({ scope }) {
     // tuile sert de filtre exclusif. Les trois premières ne parlent donc que des
     // deals encore ouverts. Activité inconnue : comptée nulle part, comme sous
     // Clients · la ranger dans « au point mort » transformerait une donnée
-    // manquante en alerte.
-    const inBucket = (bucket) => (c) => c.status !== 'lost' && silenceBucket(daysSince(c.last_activity_at)) === bucket;
+    // manquante en alerte. Ces règles vivent maintenant dans
+    // lib/account-list.js, `conditionsDeTuile`.
+    //
     // Couleur explicite, et pas la palette par position : ces quatre tuiles
     // disent la même chose que le compteur de jours de chaque ligne, elles
     // doivent le dire de la même couleur (cf. silenceColor).
     const segments = [
-      { key: 'deal_active', label: t('clients.dealSegActive'), color: 'var(--success)', match: inBucket('active') },
-      { key: 'deal_dormant', label: t('clients.dealSegDormant'), color: 'var(--warning)', match: inBucket('dormant') },
-      { key: 'deal_stalled', label: t('clients.dealSegStalled'), color: 'var(--danger)', match: inBucket('stalled') },
-      { key: 'deal_lost', label: t('clients.dealSegLost'), color: 'var(--text-muted)', match: (c) => c.status === 'lost' },
+      { key: 'deal_active', label: t('clients.dealSegActive'), color: 'var(--success)' },
+      { key: 'deal_dormant', label: t('clients.dealSegDormant'), color: 'var(--warning)' },
+      { key: 'deal_stalled', label: t('clients.dealSegStalled'), color: 'var(--danger)' },
+      { key: 'deal_lost', label: t('clients.dealSegLost'), color: 'var(--text-muted)' },
     ];
-    // scopedClients et non clients : sous Deals, la barre comptait aussi les
-    // clients gagnés, donc un total qui ne correspondait à aucune ligne de la
-    // liste en dessous.
-    return [['', segments.map(s => ({ ...s, count: scopedClients.filter(s.match).length }))]];
-  }, [scope, scopedClients, t]);
+    return [['', segments.map(s => ({ ...s, count: countOfTile(s.key) }))]];
+  }, [scope, countOfTile, t]);
 
   const activeTile = useMemo(
     () => tileGroups.flatMap(([, tiles]) => tiles).find(x => x.key === tileFilter) || null,
@@ -329,44 +354,27 @@ export default function ClientsPage({ scope }) {
   // tuiles ne se croisent pas (`deal_*` contre `seg_*`) : un filtre de deal
   // ne trouve plus sa tuile côté clients, donc `activeTile` retombe à null et
   // rien n'est filtré. Aucun état à remettre à zéro à la main.
-  const filtered = useMemo(() => clients.filter(c => {
-    // If highlight param is set, only show those contacts · et, en contexte deal quality,
-    // seulement tant que le problème est ENCORE présent : un contact corrigé (secteur
-    // renseigné, valeur saisie…) sort de la liste immédiatement, sans attendre un re-scan.
-    // owner_not_mapped / zero_activity n'ont pas de re-test local fiable → URL seule.
-    if (highlightIds) {
-      if (!highlightIds.has(c.id)) return false;
-      if (isDealQualityContext) {
-        if (dealQualityIssue === 'missing_sector') return !c.data?.sector || c.data.sector === 'non_determine';
-        if (dealQualityIssue === 'missing_deal_value') return c.deal_value == null;
-        if (dealQualityIssue === 'missing_won_lost_date') {
-          return (c.status === 'won' && !c.won_date) || (c.status === 'lost' && !c.lost_date);
-        }
+  //
+  // Le cadrage, les filtres, la tuile, la recherche et le tri sont désormais
+  // appliqués EN BASE. Il ne reste ici qu'une chose, et elle ne peut pas y
+  // monter : en contexte qualité des deals, une ligne sort de la liste dès que
+  // le problème est corrigé, sans attendre un nouveau scan. C'est un retest
+  // LOCAL sur une valeur que l'utilisateur vient de saisir, le serveur ne la
+  // connaît pas encore.
+  //
+  // owner_not_mapped et zero_activity n'ont pas de retest local fiable : ils
+  // restent sur la seule liste d'identifiants.
+  const filtered = useMemo(() => {
+    if (!isDealQualityContext) return clients;
+    return clients.filter(c => {
+      if (dealQualityIssue === 'missing_sector') return !c.data?.sector || c.data.sector === 'non_determine';
+      if (dealQualityIssue === 'missing_deal_value') return c.deal_value == null;
+      if (dealQualityIssue === 'missing_won_lost_date') {
+        return (c.status === 'won' && !c.won_date) || (c.status === 'lost' && !c.lost_date);
       }
       return true;
-    }
-    if (scope === 'deals' && c.status === 'won') return false;
-    if (scope === 'clients' && c.status !== 'won') return false;
-    if (activeTile && !activeTile.match(c)) return false;
-    if (filter === 'churn_risk' && (c.status !== 'won' || c.churn_score == null || c.churn_score < AT_RISK_THRESHOLD)) return false;
-    else if (filter !== 'all' && filter !== 'churn_risk' && c.status !== filter) return false;
-    if (ownerFilter !== 'all' && c.owner_id !== ownerFilter) return false;
-    if (crmFilter !== 'all' && c.crm_provider !== crmFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (c.name || '').toLowerCase().includes(q)
-        || (c.company || '').toLowerCase().includes(q)
-        || (c.email || '').toLowerCase().includes(q);
-    }
-    return true;
-  }).sort((a, b) => {
-    if (filter === 'churn_risk') return (b.churn_score || 0) - (a.churn_score || 0);
-    if (scope === 'deals') {
-      if (sortBy === 'value') return (b.deal_value || 0) - (a.deal_value || 0);
-      return silenceRank(b) - silenceRank(a);
-    }
-    return 0;
-  }), [clients, scope, filter, ownerFilter, crmFilter, search, highlightIds, isDealQualityContext, dealQualityIssue, sortBy, activeTile]);
+    });
+  }, [clients, isDealQualityContext, dealQualityIssue]);
 
   // ── Regroupement par COMPTE ─────────────────────────────────────────────
   //
@@ -374,65 +382,51 @@ export default function ClientsPage({ scope }) {
   // déplie ses affaires, chacune avec son interlocuteur, puis les contacts qui
   // n'en portent aucune.
   //
-  // Le regroupement se fait sur les lignes DÉJÀ filtrées, pas sur la liste
-  // complète : chercher « cheva » doit faire remonter le compte de Sandrine
-  // Chevalier, pas tous les comptes du CRM.
+  // Les GROUPES et leur ordre viennent du serveur, qui seul peut trier et
+  // paginer sur toute la base. Ce qui reste ici est de la mise en forme : quels
+  // contacts du groupe portent une affaire, le montant, le silence, le
+  // décideur. Rien qui décide de la composition de la liste.
+  //
+  // Le serveur a filtré les CONTACTS puis regroupé, pas l'inverse : chercher
+  // « cheva » rend le compte de Sandrine Chevalier avec Sandrine dedans, pas
+  // le compte entier.
   //
   // Un contact sans société forme son propre groupe, sous son nom. Sans ça, un
   // CRM dont les personnes n'ont pas d'organisation ferait disparaître presque
-  // tout le monde · mesuré le 29/09 sur un Pipedrive réel : 169 contacts, 26
-  // rattachés à une société.
+  // tout le monde · mesuré le 30/09 sur staging : 26 contacts sur 565 portent
+  // un account_id.
   const accountGroups = useMemo(() => {
-    const groupes = new Map();
-    for (const c of filtered) {
-      const cle = c.account_id || (c.company && c.company.trim()) || `personne:${c.id}`;
-      if (!groupes.has(cle)) {
-        groupes.set(cle, {
-          key: String(cle),
-          name: (c.company && c.company.trim()) || c.name || ' ',
-          // Vrai quand le groupe n'est qu'une personne sans société · l'écran
-          // le dit, pour ne pas faire passer un contact pour une entreprise.
-          orphan: !c.account_id && !(c.company && c.company.trim()),
-          rows: [],
-        });
-      }
-      groupes.get(cle).rows.push(c);
-    }
-
     // Une « affaire » est une ligne qui porte un deal · montant, étape ou
     // identifiant de deal. La clé est le DEAL et non l'étape : une affaire dont
     // l'étape n'a pas encore été traduite reste une affaire.
     const porteUneAffaire = (c) => !!(c.crm_deal_id || c.deal_value != null || c.crm_stage);
+    // En contexte qualité des deals, `filtered` a pu retirer des lignes que le
+    // serveur avait rendues (correction faite à l'instant) : on repart donc de
+    // lui, et un groupe vidé disparaît.
+    const gardes = new Set(filtered.map(c => c.id));
 
-    return [...groupes.values()].map(g => {
-      const deals = g.rows.filter(porteUneAffaire);
-      const sansAffaire = g.rows.filter(c => !porteUneAffaire(c));
-      const value = deals.reduce((s, c) => s + (Number(c.deal_value) || 0), 0);
+    return groups.map(g => {
+      const rows = (g.contacts || []).filter(c => gardes.has(c.id));
+      const deals = rows.filter(porteUneAffaire);
+      const sansAffaire = rows.filter(c => !porteUneAffaire(c));
       // Silence du COMPTE : la dernière activité de N'IMPORTE LEQUEL de ses
       // contacts (arbitrage 12.3). Un compte n'est pas silencieux parce qu'un
       // de ses interlocuteurs l'est.
-      const jours = g.rows
-        .map(c => daysSince(c.last_activity_at))
-        .filter(d => d != null);
+      const jours = rows.map(c => daysSince(c.last_activity_at)).filter(d => d != null);
       return {
-        ...g,
+        key: g.key,
+        name: g.name,
+        orphan: !!g.orphan,
+        rows,
         deals,
         sansAffaire,
-        value,
+        value: deals.reduce((s, c) => s + (Number(c.deal_value) || 0), 0),
         silenceDays: jours.length > 0 ? Math.min(...jours) : null,
         // Le décideur du compte, s'il y en a un : c'est lui qu'on met en avant.
-        decideur: g.rows.find(c => c.is_primary_contact) || g.rows.find(c => c.account_role === 'decision_maker') || null,
+        decideur: rows.find(c => c.is_primary_contact) || rows.find(c => c.account_role === 'decision_maker') || null,
       };
-    }).sort((a, b) => {
-      if (sortBy === 'value') return b.value - a.value;
-      // Tri par silence : le plus long d'abord, les comptes sans activité
-      // connue en dernier plutôt qu'en tête, une date absente n'étant pas une
-      // alerte.
-      const sa = a.silenceDays == null ? -1 : a.silenceDays;
-      const sb = b.silenceDays == null ? -1 : b.silenceDays;
-      return sb - sa;
-    });
-  }, [filtered, sortBy]);
+    }).filter(g => g.rows.length > 0);
+  }, [groups, filtered]);
 
   // Ce que la liste rend réellement : un en-tête de compte, puis ses lignes de
   // contact quand il est déplié. Une seule liste plate, pour que le rendu d'un
@@ -459,38 +453,20 @@ export default function ClientsPage({ scope }) {
     return out;
   }, [accountGroups, expandedAccounts, search, isDealQualityContext]);
 
-  const statusCounts = useMemo(() => {
-    const counts = {};
-    for (const c of scopedClients) counts[c.status || 'unknown'] = (counts[c.status || 'unknown'] || 0) + 1;
-    return counts;
-  }, [scopedClients]);
+  // Les trois agrégats de tête viennent du serveur, sur tout le cadrage et non
+  // sur la page affichée. Ils gardent leur chiffre quand un filtre est actif :
+  // une liste déroulante dont chaque option annonce zéro empêche d'en sortir.
+  const statusCounts = stats.byStatus;
+  const crmProviderCounts = stats.byProvider;
 
   // Agrégats de tête de la Vue globale Deals. Le montant total est annoncé avec
   // le nombre de deals valorisés : sur les données réelles, la majorité des deals
   // importés n'ont pas de montant, et afficher la somme seule laisserait croire
   // que c'est tout le pipeline.
-  const dealStats = useMemo(() => {
-    if (scope !== 'deals') return null;
-    let dormant = 0, valued = 0, value = 0;
-    for (const c of scopedClients) {
-      const d = daysSince(c.last_activity_at);
-      // Perdus exclus, et mêmes bornes que les tuiles : sans ça la ligne
-      // annonçait un « dorment » que la somme des tuiles Dorment et Au point
-      // mort ne retrouvait pas.
-      const bucket = c.status !== 'lost' ? silenceBucket(d) : null;
-      if (bucket === 'dormant' || bucket === 'stalled') dormant++;
-      if (c.deal_value != null) { valued++; value += Number(c.deal_value) || 0; }
-    }
-    return { dormant, valued, value };
-  }, [scope, scopedClients]);
-
-  const crmProviderCounts = useMemo(() => {
-    const counts = {};
-    for (const c of clients) {
-      if (c.crm_provider) counts[c.crm_provider] = (counts[c.crm_provider] || 0) + 1;
-    }
-    return counts;
-  }, [clients]);
+  const dealStats = useMemo(
+    () => (scope === 'deals' ? { dormant: stats.dormant, valued: stats.valued, value: stats.value } : null),
+    [scope, stats]
+  );
 
   // Un seul CRM connecté : le badge provider ne distinguerait rien. Calculé ici et
   // passé aux panneaux de détail, qui lisaient `crmProviderCounts` hors de portée.
@@ -549,7 +525,7 @@ export default function ClientsPage({ scope }) {
   }, [selected, loadData, t]);
 
   const statusTabs = [
-    { key: 'all', label: t('clients.all'), count: scopedClients.length },
+    { key: 'all', label: t('clients.all'), count: stats.totalScope || 0 },
     { key: 'imported', label: STATUS_LABELS.imported, count: statusCounts.imported || 0 },
     { key: 'new', label: STATUS_LABELS.new, count: statusCounts.new || 0 },
     { key: 'interested', label: STATUS_LABELS.interested, count: statusCounts.interested || 0 },
@@ -558,7 +534,10 @@ export default function ClientsPage({ scope }) {
     // côté deals, et redondant avec la portée elle-même côté clients.
 ...(scope === 'deals' ? [] : [
       { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
-      { key: 'churn_risk', label: t('clients.churnRisk'), count: scopedClients.filter(c => c.status === 'won' && c.churn_score >= 50).length },
+      // Compté au seuil du PRODUIT par le serveur. Cet onglet comptait à 50 de
+      // son côté, donc annonçait un autre nombre que le badge de la navigation
+      // et que la page Clients à risque pour la même question.
+      { key: 'churn_risk', label: t('clients.churnRisk'), count: stats.atRisk || 0 },
     ]),
   ].filter(tab => tab.key === 'all' || tab.count > 0);
 
@@ -604,10 +583,10 @@ export default function ClientsPage({ scope }) {
                 // vraiment un montant · le trou devient visible au lieu d'être
                 // masqué par un mot.
                 ? t('clients.dealsInCrm', {
-                    count: scopedClients.length,
-                    valued: scopedClients.filter(c => c.deal_value != null && c.deal_value !== '').length,
+                    count: stats.totalScope || 0,
+                    valued: stats.valued || 0,
                   })
-                : t('clients.contactsInCrm', { count: scopedClients.length })}
+                : t('clients.contactsInCrm', { count: stats.totalScope || 0 })}
           </div>
         </div>
         {isAdmin && (connectedCrm ? (
@@ -662,7 +641,7 @@ export default function ClientsPage({ scope }) {
 
       {/* Bandeau de tête Deals · ce que la liste dit une fois lue en entier,
           dit d'emblée : combien dorment, et quel montant est réellement chiffré. */}
-      {!isDealQualityContext && dealStats && scopedClients.length > 0 && (
+      {!isDealQualityContext && dealStats && (stats.totalScope || 0) > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
           marginBottom: 16, fontSize: 12, color: 'var(--text-muted)',
@@ -688,16 +667,10 @@ export default function ClientsPage({ scope }) {
         </div>
       )}
 
-      {/* La fenêtre de liste est annoncée dès qu'elle est pleine · une liste
-          tronquée en silence se lit comme une liste complète. */}
-      {!isDealQualityContext && truncated && (
-        <div style={{
-          padding: '8px 14px', marginBottom: 12, borderRadius: 8, fontSize: 12,
-          background: 'var(--bg-elevated)', border: '1px dashed var(--border)', color: 'var(--text-muted)',
-        }}>
-          {t('clients.listTruncated', { count: LIST_LIMIT })}
-        </div>
-      )}
+      {/* Plus de bandeau « liste tronquée » : la liste n'est plus une fenêtre
+          de 500 lignes filtrée dans le navigateur, elle est paginée sur toute
+          la base. Ce qui n'est pas à l'écran est à la page suivante, et la
+          recherche va le chercher où qu'il soit. */}
 
       {/* Tuiles de tête · étapes du pipeline sous Deals, segments clients sous
           Clients. Chaque tuile filtre la liste : le chiffre se clique. */}
@@ -1141,6 +1114,49 @@ export default function ClientsPage({ scope }) {
               })}
             </div>
           )}
+
+          {/* Pagination · elle porte sur les COMPTES, l'unité de lecture de
+              cette page, pas sur les contacts. Un compte de douze
+              interlocuteurs reste entier, il ne se coupe pas en deux entre
+              deux pages.
+
+              Affichée dès qu'il y a plus d'une page. Le total est écrit en
+              toutes lettres à côté : « 1 à 25 sur 214 » dit combien il en
+              reste, ce qu'un simple « suivant » ne dit pas. */}
+          {!loading && total > pageSize && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, flexWrap: 'wrap', marginTop: 16, paddingTop: 12,
+              borderTop: '1px solid var(--border-light)', fontSize: 12, color: 'var(--text-muted)',
+            }}>
+              <span>
+                {t('clients.pageRange', {
+                  from: (page - 1) * pageSize + 1,
+                  to: Math.min(page * pageSize, total),
+                  total,
+                })}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12, padding: '4px 12px' }}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                >
+                  {t('clients.pagePrev')}
+                </button>
+                <span>{t('clients.pageOf', { page, pages: Math.max(1, Math.ceil(total / pageSize)) })}</span>
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12, padding: '4px 12px' }}
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page >= Math.ceil(total / pageSize)}
+                >
+                  {t('clients.pageNext')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Detail panel */}
@@ -1152,7 +1168,14 @@ export default function ClientsPage({ scope }) {
               multiCrm={multiCrm}
               onClose={() => setSelectedClient(null)}
               onFieldSaved={(id, patch) => {
-                setClients(prev => prev.map(c => c.id === id ? {...c,...patch } : c));
+                // La correction est appliquée SUR PLACE, sans recharger : c'est
+                // ce qui fait sortir la ligne de la liste dès qu'elle est
+                // réparée, sans attendre un nouveau scan. Le contact vit dans
+                // le compte qui le porte, d'où la mise à jour en profondeur.
+                setGroups(prev => prev.map(g => ({
+                  ...g,
+                  contacts: (g.contacts || []).map(c => (c.id === id ? { ...c, ...patch } : c)),
+                })));
                 setSelectedClient(prev => (prev && prev.id === id) ? {...prev,...patch } : prev);
               }}
             />

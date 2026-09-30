@@ -1,0 +1,391 @@
+/**
+ * La liste des comptes, paginée et filtrée CÔTÉ SERVEUR.
+ *
+ * ── Ce que ça remplace, et pourquoi ─────────────────────────────────────────
+ *
+ * `ClientsPage` chargeait `/dashboard/opportunities?limit=500&sort=silence`
+ * puis filtrait, regroupait et triait dans le navigateur. Trois conséquences,
+ * dont une seule se voit :
+ *
+ *   1. la page ne connaît que les 500 contacts LES PLUS SILENCIEUX. La
+ *      recherche ne cherche donc que là-dedans, et un client actif récemment
+ *      est introuvable. Sur les tenants actuels ça ne mord pas (le plus gros
+ *      en a 308), mais l'ICP visé est une PME avec au moins douze mois
+ *      d'historique CRM : elle en a des milliers, et elle le rencontre le
+ *      premier jour.
+ *   2. les compteurs des tuiles de tête se calculaient sur cette fenêtre, donc
+ *      annonçaient un nombre qui n'était pas celui de la base.
+ *   3. tout le corps du CRM traversait le réseau à chaque ouverture de page.
+ *
+ * ── La clé de regroupement est celle de l'écran, pas celle de la base ───────
+ *
+ * On ne pagine PAS sur la table `accounts`. Mesuré sur staging le 30/09 : 26
+ * contacts sur 565 portent un `account_id`, 380 ont un nom de société sans
+ * ligne compte, et 159 n'ont ni l'un ni l'autre. Paginer sur `accounts`
+ * montrerait 100 comptes et cacherait 539 contacts.
+ *
+ * La clé reproduit donc exactement ce que le front faisait :
+ *
+ *     account_id, sinon le nom de société, sinon le contact lui-même
+ *
+ * Un contact sans société reste sa propre ligne, sous son nom. Sans ce repli,
+ * un CRM dont les personnes n'ont pas d'organisation ferait disparaître
+ * presque tout le monde.
+ *
+ * ── On filtre les CONTACTS, puis on regroupe ────────────────────────────────
+ *
+ * Et pas l'inverse. Chercher « cheva » doit faire remonter le compte de
+ * Sandrine Chevalier avec Sandrine dedans, pas le compte entier ni tous les
+ * comptes du CRM. C'est le comportement d'aujourd'hui, et il est juste.
+ *
+ * ── Les seuils sont ceux du front, au jour près ─────────────────────────────
+ *
+ * Le front calcule `floor((maintenant - date) / 1 jour)` puis compare avec
+ * `>`. « Dort » veut donc dire strictement plus de 30 jours ENTIERS, c'est-à-dire
+ * un écart d'au moins 31 jours. D'où les `+ 1` plus bas : sans eux, les
+ * compteurs du serveur et les couleurs de la liste se contrediraient d'un jour,
+ * et c'est le genre d'écart qu'on met trois semaines à croire.
+ */
+
+const db = require('../db');
+
+/** Miroirs exacts des constantes de frontend/src/pages/ClientsPage.jsx. */
+const CLIENT_SILENCE_DAYS = 90;
+const CLIENT_NEW_DAYS = 90;
+const DEAL_DORMANT_DAYS = 30;
+const DEAL_STALLED_DAYS = 60;
+const AT_RISK_THRESHOLD = 60;
+
+/** Combien de comptes par page. */
+const PAGE_SIZE = 25;
+
+/**
+ * Une date ISO, il y a N jours.
+ *
+ * Calculée en JS et passée en paramètre plutôt qu'écrite en
+ * `now() - interval '30 days'` : le miroir sqlite compare des CHAÎNES, et sa
+ * traduction de `now()` produit « 2026-09-01 10:00:00 » quand les valeurs
+ * stockées sont des ISO « 2026-09-01T10:00:00.000Z ». Le « T » pèse plus lourd
+ * que l'espace dans une comparaison lexicale, et le test passerait à côté. Des
+ * deux côtés en ISO, la comparaison est juste partout.
+ */
+function ilYAJours(n) {
+  return new Date(Date.now() - n * 86400000).toISOString();
+}
+
+/**
+ * Les tuiles de tête, traduites en SQL.
+ *
+ * Une tuile est un FILTRE exclusif, pas une part de camembert : une activité
+ * inconnue n'est comptée nulle part, parce que ranger une date absente dans
+ * « au point mort » transformerait une donnée manquante en alerte.
+ */
+function conditionsDeTuile() {
+  const c90 = ilYAJours(CLIENT_SILENCE_DAYS);
+  const cNouveau = ilYAJours(CLIENT_NEW_DAYS);
+  // Voir l'en-tête pour les `+ 1` : le front compte en jours entiers révolus.
+  const cDormant = ilYAJours(DEAL_DORMANT_DAYS + 1);
+  const cStalled = ilYAJours(DEAL_STALLED_DAYS + 1);
+  return {
+    // Côté Clients
+    seg_new: { sql: 'o.won_date IS NOT NULL AND o.won_date > ?', params: [cNouveau] },
+    seg_active: { sql: 'o.last_activity_at IS NOT NULL AND o.last_activity_at > ?', params: [c90] },
+    seg_silent: { sql: 'o.last_activity_at IS NOT NULL AND o.last_activity_at <= ?', params: [c90] },
+    seg_risk: { sql: 'COALESCE(o.churn_score, 0) >= ?', params: [AT_RISK_THRESHOLD] },
+    // Côté Deals. Un deal perdu est sorti du pipeline : le compter aussi dans
+    // une tranche de silence le ferait apparaître dans deux tuiles à la fois.
+    deal_active: { sql: "o.status <> 'lost' AND o.last_activity_at IS NOT NULL AND o.last_activity_at > ?", params: [cDormant] },
+    deal_dormant: { sql: "o.status <> 'lost' AND o.last_activity_at IS NOT NULL AND o.last_activity_at <= ? AND o.last_activity_at > ?", params: [cDormant, cStalled] },
+    deal_stalled: { sql: "o.status <> 'lost' AND o.last_activity_at IS NOT NULL AND o.last_activity_at <= ?", params: [cStalled] },
+    deal_lost: { sql: "o.status = 'lost'", params: [] },
+  };
+}
+
+/** Les tuiles affichées de chaque côté, dans l'ordre de l'écran. */
+const TUILES_PAR_CADRAGE = {
+  clients: ['seg_new', 'seg_active', 'seg_silent', 'seg_risk'],
+  deals: ['deal_active', 'deal_dormant', 'deal_stalled', 'deal_lost'],
+};
+
+/** Statuts qu'un filtre a le droit de demander · liste blanche, jamais la
+ *  valeur brute de l'appelant, elle entre dans du SQL. */
+const STATUTS = ['new', 'imported', 'interested', 'meeting', 'negotiation', 'won', 'lost', 'stagnant'];
+
+/**
+ * Construit le WHERE commun, en numérotation `$n`.
+ *
+ * Retourne aussi `params`, dans l'ordre. Tout ce qui vient de l'appelant passe
+ * par un paramètre ; les seules chaînes concaténées sont des constantes de ce
+ * module ou des valeurs sorties d'une liste blanche.
+ */
+function construireFiltres(userId, opts = {}) {
+  const clauses = ['o.user_id = $1'];
+  const params = [userId];
+  const P = () => `$${params.length + 1}`;
+
+  // Le rappel d'un écran d'audit : une liste d'identifiants explicite. Elle
+  // prime sur le cadrage, sinon un contact gagné disparaîtrait d'un rappel
+  // ouvert depuis Deals.
+  if (Array.isArray(opts.ids) && opts.ids.length > 0) {
+    const trous = opts.ids.map(id => { params.push(id); return `$${params.length}`; });
+    clauses.push(`o.id IN (${trous.join(', ')})`);
+  } else {
+    if (opts.scope === 'deals') clauses.push("o.status <> 'won'");
+    else if (opts.scope === 'clients') clauses.push("o.status = 'won'");
+
+    if (opts.filter === 'churn_risk') {
+      clauses.push(`o.status = 'won' AND o.churn_score IS NOT NULL AND o.churn_score >= ${P()}`);
+      params.push(AT_RISK_THRESHOLD);
+    } else if (opts.filter && opts.filter !== 'all' && STATUTS.includes(opts.filter)) {
+      clauses.push(`o.status = ${P()}`);
+      params.push(opts.filter);
+    }
+
+    if (opts.owner && opts.owner !== 'all') {
+      clauses.push(`o.owner_id = ${P()}`);
+      params.push(opts.owner);
+    }
+    if (opts.crm && opts.crm !== 'all') {
+      clauses.push(`o.crm_provider = ${P()}`);
+      params.push(opts.crm);
+    }
+
+    const tuiles = conditionsDeTuile();
+    const tuile = opts.tile && tuiles[opts.tile];
+    if (tuile) {
+      // Les `?` de la définition deviennent des `$n` ici : la définition ne
+      // peut pas connaître sa position dans la requête finale.
+      let sql = tuile.sql;
+      for (const v of tuile.params) {
+        params.push(v);
+        sql = sql.replace('?', `$${params.length}`);
+      }
+      clauses.push(`(${sql})`);
+    }
+
+    if (opts.search && String(opts.search).trim()) {
+      const q = `%${String(opts.search).trim().toLowerCase()}%`;
+      // Trois colonnes, un seul paramètre répété : le miroir sqlite
+      // reconstruit la liste dans l'ordre d'apparition, donc répéter `$n` est
+      // sûr des deux côtés.
+      const p = P();
+      params.push(q);
+      clauses.push(
+        `(LOWER(COALESCE(o.name, '')) LIKE ${p}` +
+        ` OR LOWER(COALESCE(o.company, '')) LIKE ${p}` +
+        ` OR LOWER(COALESCE(o.email, '')) LIKE ${p})`
+      );
+    }
+  }
+
+  return { where: clauses.join(' AND '), params };
+}
+
+/**
+ * La clé de regroupement, identique à celle du front.
+ *
+ * `||` est la concaténation SQL standard, comprise par Postgres comme par
+ * sqlite. Le cast en texte est explicite côté Postgres, transparent côté
+ * sqlite, et l'adaptateur retire les `::text` qu'il ne connaît pas.
+ */
+const CLE_GROUPE = `COALESCE(CAST(o.account_id AS TEXT), NULLIF(TRIM(COALESCE(o.company, '')), ''), 'personne:' || CAST(o.id AS TEXT))`;
+
+/** Les tris proposés · liste blanche, la valeur entre dans du SQL. */
+const TRIS = {
+  silence: 'derniere_activite ASC',
+  value: 'montant DESC',
+  name: 'nom ASC',
+};
+
+/**
+ * Une page de comptes, avec leurs contacts.
+ *
+ * @returns {Promise<{groups, total, page, pageSize, tiles}>}
+ */
+async function listAccountPage(userId, opts = {}) {
+  const page = Math.max(1, parseInt(opts.page, 10) || 1);
+  const pageSize = Math.min(Math.max(parseInt(opts.pageSize, 10) || PAGE_SIZE, 1), 100);
+  const { where, params } = construireFiltres(userId, opts);
+
+  // Un tri par silence doit montrer les plus muets d'ABORD, et un compte sans
+  // activité connue n'est pas le plus actif : NULLS LAST le mettrait en queue
+  // alors qu'il est précisément ce qu'on cherche sous Deals.
+  const tri = TRIS[opts.sort] || TRIS.silence;
+
+  // 1. Les groupes de la page. Deux requêtes plutôt qu'une fenêtre
+  //    `COUNT(*) OVER ()` : le miroir sqlite des tests ne garantit pas les
+  //    fonctions de fenêtrage sur toutes les versions, et un total faux est
+  //    pire qu'un aller-retour de plus.
+  const groupes = await db.query(
+    `SELECT ${CLE_GROUPE} AS cle,
+            MAX(COALESCE(NULLIF(TRIM(COALESCE(o.company, '')), ''), o.name)) AS nom,
+            COUNT(*) AS contacts,
+            COALESCE(SUM(o.deal_value), 0) AS montant,
+            MAX(o.last_activity_at) AS derniere_activite
+       FROM opportunities o
+      WHERE ${where}
+      GROUP BY ${CLE_GROUPE}
+      ORDER BY ${tri}
+      LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
+    params
+  );
+
+  const total = await db.query(
+    `SELECT COUNT(*) AS n FROM (
+       SELECT ${CLE_GROUPE} AS cle FROM opportunities o WHERE ${where} GROUP BY ${CLE_GROUPE}
+     ) g`,
+    params
+  );
+
+  // 2. Les contacts des groupes de CETTE page, et d'eux seuls. C'est ce qui
+  //    fait tenir la promesse : la page ne transporte plus tout le CRM.
+  const cles = groupes.rows.map(g => String(g.cle));
+  let contacts = [];
+  if (cles.length > 0) {
+    const paramsContacts = [...params];
+    const trous = cles.map(c => { paramsContacts.push(c); return `$${paramsContacts.length}`; });
+    const res = await db.query(
+      `SELECT o.* FROM opportunities o
+        WHERE ${where} AND ${CLE_GROUPE} IN (${trous.join(', ')})`,
+      paramsContacts
+    );
+    contacts = res.rows;
+  }
+
+  // Le rattachement se refait en JS · une seule passe, et ça évite un
+  // `json_agg` dont la traduction sqlite ne garantit pas l'ordre.
+  const parCle = new Map(groupes.rows.map(g => [String(g.cle), {
+    key: String(g.cle),
+    name: g.nom || ' ',
+    contacts: [],
+    value: Number(g.montant) || 0,
+    lastActivityAt: g.derniere_activite || null,
+    // Un groupe qui n'est qu'une personne sans société · l'écran le dit, pour
+    // ne pas faire passer un contact pour une entreprise.
+    orphan: String(g.cle).startsWith('personne:'),
+  }]));
+  for (const c of contacts) {
+    const cle = c.account_id != null ? String(c.account_id)
+      : ((c.company || '').trim() || `personne:${c.id}`);
+    parCle.get(cle)?.contacts.push(c);
+  }
+
+  const [tiles, stats] = await Promise.all([
+    countTiles(userId, opts),
+    pageStats(userId, opts),
+  ]);
+
+  return {
+    groups: groupes.rows.map(g => parCle.get(String(g.cle))),
+    total: Number(total.rows[0]?.n) || 0,
+    page,
+    pageSize,
+    tiles,
+    stats,
+  };
+}
+
+/**
+ * Les agrégats de tête : répartition par statut, par CRM, et l'état du
+ * pipeline. Ils alimentent les listes déroulantes et la ligne de résumé.
+ *
+ * Calculés sur le CADRAGE SEUL (Deals ou Clients), sans les filtres actifs :
+ * une liste déroulante de statuts dont chaque option annonce zéro parce qu'un
+ * autre filtre est actif ne sert plus à rien, elle empêche d'en sortir.
+ *
+ * Ils ne peuvent plus être calculés dans le navigateur : celui-ci ne reçoit
+ * plus qu'une page. Un compteur de tête qui ne compterait que la page annonce
+ * un nombre qui n'existe nulle part, et c'est déjà ce que faisait la fenêtre
+ * de 500.
+ */
+async function pageStats(userId, opts = {}) {
+  const { where, params } = construireFiltres(userId, { scope: opts.scope, ids: opts.ids });
+  const tousParams = [...params];
+  tousParams.push(ilYAJours(DEAL_DORMANT_DAYS + 1));
+  const pDormant = `$${tousParams.length}`;
+
+  tousParams.push(AT_RISK_THRESHOLD);
+  const pRisque = `$${tousParams.length}`;
+
+  const res = await db.query(
+    `SELECT o.status AS statut, o.crm_provider AS crm, COUNT(*) AS n,
+            COUNT(*) FILTER (WHERE o.deal_value IS NOT NULL) AS valorises,
+            COALESCE(SUM(o.deal_value), 0) AS montant,
+            COUNT(*) FILTER (WHERE o.status <> 'lost' AND o.last_activity_at IS NOT NULL
+                               AND o.last_activity_at <= ${pDormant}) AS dorment,
+            COUNT(*) FILTER (WHERE o.status = 'won' AND o.churn_score IS NOT NULL
+                               AND o.churn_score >= ${pRisque}) AS a_risque
+       FROM opportunities o
+      WHERE ${where}
+      GROUP BY o.status, o.crm_provider`,
+    tousParams
+  );
+
+  const byStatus = {};
+  const byProvider = {};
+  let dormant = 0, valued = 0, value = 0, atRisk = 0, totalScope = 0;
+  for (const r of res.rows) {
+    const n = Number(r.n) || 0;
+    totalScope += n;
+    byStatus[r.statut || 'unknown'] = (byStatus[r.statut || 'unknown'] || 0) + n;
+    if (r.crm) byProvider[r.crm] = (byProvider[r.crm] || 0) + n;
+    dormant += Number(r.dorment) || 0;
+    valued += Number(r.valorises) || 0;
+    value += Number(r.montant) || 0;
+    atRisk += Number(r.a_risque) || 0;
+  }
+  // `atRisk` au seuil du PRODUIT (60), et non au 50 que l'onglet de la page
+  // employait de son côté : il annonçait donc un autre nombre que le badge de
+  // la navigation et que la page Clients à risque pour exactement la même
+  // question. Même correctif que celui déjà fait sur AT_RISK_THRESHOLD.
+  return { byStatus, byProvider, dormant, valued, value, atRisk, totalScope };
+}
+
+/**
+ * Les compteurs des tuiles, sur TOUT le périmètre filtré et pas sur la page.
+ *
+ * C'est la raison d'être de cette fonction : un compteur qui ne compte que la
+ * page affichée annonce un nombre qui n'existe nulle part, et c'est
+ * exactement ce que faisait la version navigateur avec sa fenêtre de 500.
+ *
+ * La tuile ACTIVE est retirée du filtre avant de compter, sinon cliquer une
+ * tuile mettrait les trois autres à zéro et il deviendrait impossible de
+ * passer de l'une à l'autre.
+ */
+async function countTiles(userId, opts = {}) {
+  const cadrage = opts.scope === 'clients' ? 'clients' : 'deals';
+  const cles = TUILES_PAR_CADRAGE[cadrage];
+  const defs = conditionsDeTuile();
+
+  const { where, params } = construireFiltres(userId, { ...opts, tile: null });
+  const morceaux = [];
+  const tousParams = [...params];
+  for (const cle of cles) {
+    let sql = defs[cle].sql;
+    for (const v of defs[cle].params) {
+      tousParams.push(v);
+      sql = sql.replace('?', `$${tousParams.length}`);
+    }
+    morceaux.push(`COUNT(*) FILTER (WHERE ${sql}) AS "${cle}"`);
+  }
+
+  const res = await db.query(
+    `SELECT ${morceaux.join(', ')} FROM opportunities o WHERE ${where}`,
+    tousParams
+  );
+  const ligne = res.rows[0] || {};
+  return cles.map(cle => ({ key: cle, count: Number(ligne[cle]) || 0 }));
+}
+
+module.exports = {
+  PAGE_SIZE,
+  CLIENT_SILENCE_DAYS,
+  CLIENT_NEW_DAYS,
+  DEAL_DORMANT_DAYS,
+  DEAL_STALLED_DAYS,
+  AT_RISK_THRESHOLD,
+  TUILES_PAR_CADRAGE,
+  listAccountPage,
+  countTiles,
+  pageStats,
+};
