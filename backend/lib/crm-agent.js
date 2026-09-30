@@ -900,9 +900,24 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
 
   // Pattern 2: Average deal velocity (time to won)
   if (won.length >= 3) {
+    // La date de fin est `won_date`, JAMAIS `updated_at`.
+    //
+    // `updated_at` est remis à maintenant par un trigger à chaque écriture interne, y
+    // compris celles du scoring churn. Un cycle de vente calculé dessus ne mesure pas le
+    // temps mis à conclure : il mesure l'âge de la fiche, et grandit d'un jour chaque
+    // jour. Constaté en production le 30/09 sur les mêmes 12 affaires gagnées, jamais
+    // rouvertes : « Cycle de vente moyen : 103 jours » le 2 septembre, puis 104, 105,
+    // et ainsi de suite jusqu'à 131 le 30. Vingt-neuf souvenirs pour un chiffre qui
+    // n'avait jamais rien mesuré.
+    //
+    // `won_date` est alimentée par deal-lifecycle-sync depuis la vraie date de clôture
+    // du CRM, et n'est pas touchée par le trigger. Une affaire qui n'en a pas est
+    // écartée du calcul plutôt que rattrapée par un repli : mieux vaut pas de pattern
+    // qu'un pattern faux, puisque celui-ci finit dans les prompts des agents.
     const velocities = won
-.filter(o => o.created_at && o.updated_at)
-.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
+.filter(o => o.created_at && o.won_date)
+.map(o => (new Date(o.won_date).getTime() - new Date(o.created_at).getTime()) / DAY_MS)
+.filter(d => d >= 0);
     if (velocities.length >= 3) {
       const avgDays = Math.round(velocities.reduce((s, v) => s + v, 0) / velocities.length);
       await createPattern({
@@ -918,9 +933,15 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
 
   // Pattern 3: Stagnation threshold · at what point do deals die?
   if (lost.length >= 3) {
+    // `lost_date` et non `updated_at`, pour la raison exposée au-dessus sur le cycle de
+    // vente : le trigger remet `updated_at` à maintenant, et le seuil de stagnation
+    // dériverait d'un jour par jour au lieu de mesurer quoi que ce soit. Or ce seuil est
+    // censé dire QUAND relancer avant qu'une affaire ne meure : faux, il conseille de
+    // relancer toujours plus tard, indéfiniment.
     const stagnation = lost
-.filter(o => o.created_at && o.updated_at)
-.map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
+.filter(o => o.created_at && o.lost_date)
+.map(o => (new Date(o.lost_date).getTime() - new Date(o.created_at).getTime()) / DAY_MS)
+.filter(d => d >= 0);
     if (stagnation.length >= 3) {
       const avgStagnation = Math.round(stagnation.reduce((s, v) => s + v, 0) / stagnation.length);
       await createPattern({
