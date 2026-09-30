@@ -1,4 +1,4 @@
--- 126 : « ce contact n'a pas d'entreprise, et c'est normal ».
+-- 129 : « ce contact n'a pas d'entreprise, et c'est normal ».
 --
 -- L'onglet Général de Qualité des données compte les contacts auxquels il
 -- manque un champ. Sur la base d'un beta testeur, 169 contacts sur Pipedrive

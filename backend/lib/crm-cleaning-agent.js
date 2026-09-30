@@ -32,7 +32,7 @@ const FIXABLE_LIST_CAP = 200;
 const ILLUSTRATION_LIST_CAP = 50;
 
 // Types de problèmes qu'un utilisateur peut écarter contact par contact
-// (migration 126) : ceux où « il n'y a rien à corriger » est une réponse
+// (migration 129) : ceux où « il n'y a rien à corriger » est une réponse
 // légitime. Un indépendant n'a pas d'entreprise, une adresse de test n'a pas
 // vocation à devenir valide.
 const IGNORABLE_ISSUE_TYPES = [
@@ -56,7 +56,7 @@ async function loadIgnoredContacts(userId, provider) {
       byType.get(row.issue_type).add(String(row.crm_contact_id));
     }
   } catch {
-    // Table absente (migration 126 pas encore jouée sur cet environnement) · le
+    // Table absente (migration 129 pas encore jouée sur cet environnement) · le
     // scan doit continuer à tourner, simplement sans rien écarter.
   }
   return byType;
