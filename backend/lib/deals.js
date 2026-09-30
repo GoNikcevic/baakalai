@@ -272,4 +272,147 @@ async function writeDeals(userId, provider, rattachements) {
   return out;
 }
 
-module.exports = { ATTRIBUTION, loadAccountsByCrmId, upsertDeal, writeDeals };
+// ═══════════════════════════════════════════════════════════════════════════
+// Les affaires DÉRIVÉES · migration 128, arbitrage Goran du 30/09
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** CRM qui exposent un vrai objet affaire. Miroir de WITH_DEALS
+ *  (lib/crm-deal-refresh.js), redéclaré ici pour ne pas créer de cycle. */
+const AVEC_OBJET_AFFAIRE = ['salesforce', 'hubspot', 'pipedrive', 'odoo'];
+
+/**
+ * Reconstruit une affaire pour les contacts des CRM qui n'en ont pas.
+ *
+ * Mesuré sur la production le 30/09 : 376 lignes sur 443 viennent d'un
+ * provider sans objet affaire (203 CSV, 173 Notion). Pour eux la table `deals`
+ * resterait vide pour toujours, et le jour où le lot 5 fera lire `deals` aux
+ * écrans, un utilisateur Notion perdrait d'un coup ses 61 montants et ses 12
+ * clients.
+ *
+ * ── On ne crée pas d'information, on la déménage ────────────────────────────
+ *
+ * Une affaire dérivée ne naît QUE d'un contact qui porte déjà un montant, une
+ * étape ou un dénouement. Un CSV de 203 contacts sans le moindre montant
+ * produit donc zéro affaire, et c'est la bonne réponse : une liste de contacts
+ * n'a pas d'affaires, et en fabriquer serait mentir.
+ *
+ * ── Pourquoi le dénouement compte, et pas seulement le montant ──────────────
+ *
+ * L'écran d'aujourd'hui (ClientsPage, `porteUneAffaire`) ne regarde que
+ * `crm_deal_id`, `deal_value` et `crm_stage`. Cette règle-là laisserait de
+ * côté 9 contacts Notion gagnés ou perdus sans montant : au lot 5, où « client »
+ * devient « compte portant une affaire gagnée », ces 9 clients disparaîtraient
+ * sans que personne ne comprenne pourquoi. La règle inclut donc le dénouement.
+ *
+ * ── Jamais sur un CRM qui a de vraies affaires ──────────────────────────────
+ *
+ * Chez Salesforce, un contact qui porte un montant le porte PARCE QU'une vraie
+ * Opportunity le lui a posé. Synthétiser en plus doublerait son chiffre
+ * d'affaires. La passe est donc strictement réservée aux providers sans objet
+ * affaire, `crm_provider` à NULL compris (les imports de fichier).
+ *
+ * @returns {Promise<{crees, mis_a_jour, absorbes, erreur}>}
+ */
+async function synthesizeDerivedDeals(userId, { provider = null } = {}) {
+  const out = { ecrits: 0, absorbes: 0, erreur: null };
+  try {
+    // Un vrai objet affaire a toujours raison : si une affaire réelle a fini
+    // par réclamer ce contact (l'équipe a migré de Notion vers HubSpot), la
+    // dérivée s'efface. Même geste que le compte dérivé absorbé par son
+    // homonyme réel au lot 2.
+    //
+    // Écrit sans alias de table : sqlite refuse `DELETE FROM deals d`, et le
+    // miroir des tests s'arrêtait dessus avec « near "d": syntax error ».
+    const absorbes = await db.query(
+      `DELETE FROM deals
+        WHERE user_id = $1 AND source = 'derived'
+          AND primary_contact_id IS NOT NULL
+          AND primary_contact_id IN (
+            SELECT r.primary_contact_id FROM deals r
+             WHERE r.user_id = $1 AND r.source = 'crm'
+               AND r.primary_contact_id IS NOT NULL
+          )`,
+      [userId]
+    );
+    out.absorbes = absorbes.rowCount || 0;
+
+    // Un provider qui a de vraies affaires n'a rien à synthétiser.
+    if (provider && AVEC_OBJET_AFFAIRE.includes(provider)) return out;
+
+    // Le filtre par provider sert la synchro d'UN connecteur ; sans lui, on
+    // balaie tout ce que l'utilisateur possède, ce que veut le rattrapage.
+    //
+    // Liste concaténée et non passée en paramètre tableau : `<> ALL($n)` est du
+    // Postgres pur, et le miroir sqlite des tests sérialise un tableau en
+    // chaîne JSON, donc la clause deviendrait silencieusement fausse et la
+    // passe ne serait testable nulle part. La liste est une constante de ce
+    // module, jamais une valeur d'appelant : rien à échapper.
+    const listeSql = AVEC_OBJET_AFFAIRE.map(p => `'${p}'`).join(', ');
+    const ciblage = provider
+      ? `AND o.crm_provider = $2`
+      : `AND (o.crm_provider IS NULL OR o.crm_provider NOT IN (${listeSql}))`;
+    const params = provider ? [userId, provider] : [userId];
+
+    const res = await db.query(
+      `INSERT INTO deals
+         (user_id, crm_provider, account_id, primary_contact_id, name, status,
+          deal_value, won_date, lost_date, crm_stage, crm_stage_id,
+          crm_created_at, last_activity_at, planned_followup_date,
+          crm_deal_attribution, source)
+       SELECT o.user_id, o.crm_provider, o.account_id, o.id,
+              COALESCE(NULLIF(o.company, ''), o.name),
+              o.status, o.deal_value, o.won_date, o.lost_date,
+              o.crm_stage, o.crm_stage_id,
+              o.crm_created_at, o.last_activity_at, o.planned_followup_date,
+              'derived', 'derived'
+         FROM opportunities o
+        WHERE o.user_id = $1
+          ${ciblage}
+          -- La règle : un montant, une étape, un identifiant de deal, ou un
+          -- dénouement. Voir l'en-tête pour le dénouement, qui ne va pas de soi.
+          AND (o.deal_value IS NOT NULL OR o.crm_stage IS NOT NULL
+               OR o.crm_deal_id IS NOT NULL OR o.status IN ('won', 'lost'))
+          -- Une affaire réelle sur ce contact rend la dérivée inutile.
+          AND NOT EXISTS (
+            SELECT 1 FROM deals r
+             WHERE r.user_id = o.user_id AND r.source = 'crm'
+               AND r.primary_contact_id = o.id
+          )
+       ON CONFLICT (user_id, primary_contact_id) WHERE source = 'derived' AND primary_contact_id IS NOT NULL
+       DO UPDATE SET
+         account_id = COALESCE(EXCLUDED.account_id, deals.account_id),
+         name = COALESCE(EXCLUDED.name, deals.name),
+         status = EXCLUDED.status,
+         deal_value = COALESCE(EXCLUDED.deal_value, deals.deal_value),
+         won_date = COALESCE(EXCLUDED.won_date, deals.won_date),
+         lost_date = COALESCE(EXCLUDED.lost_date, deals.lost_date),
+         crm_stage = COALESCE(EXCLUDED.crm_stage, deals.crm_stage),
+         crm_stage_id = COALESCE(EXCLUDED.crm_stage_id, deals.crm_stage_id),
+         crm_created_at = COALESCE(EXCLUDED.crm_created_at, deals.crm_created_at),
+         last_activity_at = COALESCE(EXCLUDED.last_activity_at, deals.last_activity_at),
+         planned_followup_date = COALESCE(EXCLUDED.planned_followup_date, deals.planned_followup_date),
+         updated_at = now()`,
+      params
+    );
+    out.ecrits = res.rowCount || 0;
+
+    if (out.ecrits > 0 || out.absorbes > 0) {
+      logger.info('deals',
+        `${provider || 'tous providers sans objet affaire'} · ${out.ecrits} affaire(s) dérivée(s)` +
+        (out.absorbes > 0 ? `, ${out.absorbes} absorbée(s) par une affaire réelle` : ''));
+    }
+  } catch (err) {
+    out.erreur = err.message;
+    logger.warn('deals', `synthèse des affaires dérivées échouée pour ${userId} : ${err.message}`);
+  }
+  return out;
+}
+
+module.exports = {
+  ATTRIBUTION,
+  AVEC_OBJET_AFFAIRE,
+  loadAccountsByCrmId,
+  upsertDeal,
+  writeDeals,
+  synthesizeDerivedDeals,
+};

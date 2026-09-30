@@ -181,6 +181,87 @@ test('la devise est celle du CRM, jamais un repli sur EUR', async (t) => {
   assert.strictEqual(lignes[1].currency, null, 'devise inconnue reste NULL, elle ne devient pas EUR');
 });
 
+test('un CRM sans objet affaire recoit des affaires DERIVEES, et seulement la ou il y a matiere', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { synthesizeDerivedDeals } = require('../lib/deals');
+  const { user } = await registerAndLogin();
+
+  // Notion : pas d'objet affaire, mais des montants et des denouements poses
+  // sur la ligne du contact. Mesure du 30/09 : 173 lignes en prod, 61 montants
+  // et 9 denouements SANS montant.
+  const avecMontant = await db.opportunities.create({
+    userId: user.id, name: 'Lea Martin', email: 'lea@acme.io', company: 'Acme',
+    status: 'negotiation', crmProvider: 'notion', crmContactId: 'n1', dealValue: 15000,
+  });
+  const gagneSansMontant = await db.opportunities.create({
+    userId: user.id, name: 'Paul Roy', email: 'paul@globex.io', company: 'Globex',
+    status: 'won', crmProvider: 'notion', crmContactId: 'n2',
+  });
+  // Un contact nu : ni montant, ni etape, ni denouement. Il ne doit RIEN
+  // produire · une liste de contacts n'a pas d'affaires, et en fabriquer
+  // serait mentir. C'est le cas des 203 lignes CSV de la prod.
+  await db.opportunities.create({
+    userId: user.id, name: 'Sans rien', email: 'rien@initech.io', company: 'Initech',
+    status: 'imported', crmProvider: null, crmContactId: null,
+  });
+
+  const res = await synthesizeDerivedDeals(user.id);
+  assert.strictEqual(res.ecrits, 2, 'deux contacts portaient de la matiere, deux affaires');
+
+  const lignes = (await db.query(
+    `SELECT primary_contact_id, status, deal_value, source FROM deals WHERE user_id = $1`, [user.id]
+  )).rows;
+  assert.strictEqual(lignes.length, 2);
+  assert.ok(lignes.every(l => l.source === 'derived'), 'toutes marquees derivees');
+
+  // Le denouement SEUL suffit · sans cette regle, ces 9 clients Notion
+  // disparaitraient au lot 5, ou « client » devient « compte portant une
+  // affaire gagnee ».
+  const gagne = lignes.find(l => l.primary_contact_id === gagneSansMontant.id);
+  assert.ok(gagne, 'un contact gagne sans montant produit quand meme une affaire');
+  assert.strictEqual(gagne.status, 'won');
+  assert.strictEqual(Number(lignes.find(l => l.primary_contact_id === avecMontant.id).deal_value), 15000);
+
+  // Rejouee, elle ne duplique pas.
+  await synthesizeDerivedDeals(user.id);
+  const apres = (await db.query('SELECT count(*)::int AS n FROM deals WHERE user_id = $1', [user.id])).rows[0];
+  assert.strictEqual(Number(apres.n), 2, 'une seconde passe ne duplique rien');
+});
+
+test('un CRM qui a de vraies affaires n en recoit aucune de derivee', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { writeDeals, synthesizeDerivedDeals } = require('../lib/deals');
+  const { user } = await registerAndLogin();
+
+  const contact = await db.opportunities.create({
+    userId: user.id, name: 'Client SF', email: 'sf@acme.io', company: 'Acme',
+    status: 'won', crmProvider: 'salesforce', crmContactId: 's1', dealValue: 40000,
+  });
+
+  // Chez Salesforce, ce montant vient d'une vraie Opportunity. Synthetiser en
+  // plus doublerait le chiffre d'affaires du compte.
+  await writeDeals(user.id, 'salesforce', [
+    { deal: { id: 'OPP1', status: 'won', value: 40000, currency: 'EUR' }, contact },
+  ]);
+
+  const cible = await synthesizeDerivedDeals(user.id, { provider: 'salesforce' });
+  assert.strictEqual(cible.ecrits, 0, 'un provider avec objet affaire est ecarte');
+
+  // Et meme le balayage sans provider ne doit pas le toucher.
+  await synthesizeDerivedDeals(user.id);
+  const lignes = (await db.query(
+    'SELECT source, deal_value FROM deals WHERE user_id = $1', [user.id]
+  )).rows;
+  assert.strictEqual(lignes.length, 1, 'une seule affaire, la vraie');
+  assert.strictEqual(lignes[0].source, 'crm');
+});
+
 test('double ecriture · opportunities garde l autorite et la date de cloture arrive', async (t) => {
   await setup();
   t.after(teardown);

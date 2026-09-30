@@ -1971,7 +1971,14 @@ router.get('/accounts', async (req, res, next) => {
 router.post('/accounts/rebuild', async (req, res, next) => {
   try {
     const { syncAccountsForUser } = require('../lib/accounts');
-    res.json(await syncAccountsForUser(req.user.id));
+    const accounts = await syncAccountsForUser(req.user.id);
+    // Et les affaires DÉRIVÉES dans la foulée (migration 128). Sans provider :
+    // c'est le chemin de rattrapage, il balaie tout ce que l'utilisateur
+    // possède, imports de fichier compris, dont `crm_provider` est NULL et
+    // qu'aucune synchro de connecteur ne visitera jamais.
+    const { synthesizeDerivedDeals } = require('../lib/deals');
+    const derivedDeals = await synthesizeDerivedDeals(req.user.id);
+    res.json({ ...accounts, derivedDeals });
   } catch (err) { next(err); }
 });
 

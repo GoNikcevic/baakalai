@@ -123,6 +123,18 @@ async function refreshDealsAndStages(userId, provider, opts = {}) {
     // Les RÔLES en dernier · élire l'interlocuteur principal d'un compte
     // suppose que le compte existe et que ses contacts y soient rattachés.
     out.roles = await syncContactRoles(userId, { provider });
+
+    // Les affaires DÉRIVÉES, pour les CRM qui n'ont pas d'objet affaire
+    // (migration 128). Hors du `if (avecDeals)` ci-dessus, et c'est tout
+    // l'intérêt : Notion, Airtable, Folk et les imports de fichier sont
+    // précisément ceux que la synchro de deals ne visite jamais. Mesuré le
+    // 30/09, ils pèsent 376 lignes de production sur 443.
+    //
+    // APRÈS le rattachement aux comptes, jamais avant : une affaire dérivée
+    // recopie l'`account_id` de son contact, et avant le regroupement ce
+    // champ est encore vide.
+    const { synthesizeDerivedDeals } = require('./deals');
+    out.derivedDeals = await synthesizeDerivedDeals(userId, { provider });
   } catch (err) {
     out.accountsError = out.accountsError || err.message;
     logger.warn('crm-deal-refresh', `comptes non reconstruits pour ${userId} : ${err.message}`);

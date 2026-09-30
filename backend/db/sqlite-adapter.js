@@ -460,9 +460,16 @@ function initSchema() {
       crm_owner_id TEXT,
       crm_deal_attribution TEXT,
       crm_push_state TEXT NOT NULL DEFAULT '{}',
+      source TEXT NOT NULL DEFAULT 'crm',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Une seule affaire derivee par contact (migration 128). L'index de la 126
+    -- ne les couvre pas : une affaire derivee n'a pas de crm_deal_id.
+    CREATE UNIQUE INDEX IF NOT EXISTS deals_derived_unique
+      ON deals (user_id, primary_contact_id)
+      WHERE source = 'derived' AND primary_contact_id IS NOT NULL;
 
     -- L'index partiel de Postgres n'existe pas tel quel en sqlite, mais la
     -- contrainte d'unicité compte : c'est elle que l'upsert de lib/deals.js
