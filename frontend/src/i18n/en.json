@@ -2055,7 +2055,10 @@
       "appliedMessage": "{n} contacts updated.",
       "partialTitle": "Partial fix",
       "partialMessage": "{applied} contacts updated, {failed} failed.",
-      "interrupted": "{applied} contacts were updated before the interruption. {message}"
+      "interrupted": "{applied} contacts were updated before the interruption. {message}",
+      "ignoreSelection": "Set aside selection ({n})",
+      "ignoredTitle": "Contacts set aside",
+      "ignoredMessage": "{n} contacts leave this check. Reversible from the list."
     }
   },
   "workflow": {

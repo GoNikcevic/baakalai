@@ -19,10 +19,16 @@
 
    Trois choses que l'écran précédent ne permettait pas et qui comptent autant
    que les propositions : appliquer une sélection d'un seul geste (découpée en
-   lots côté réseau, mais un seul groupe d'annulation), écarter un contact pour
-   de bon (un indépendant n'aura jamais d'entreprise), et travailler les
-   contacts qui portent un deal ouvert avant les fiches mortes · c'est l'ordre
-   dans lequel le serveur rend la liste.
+   lots côté réseau, mais un seul groupe d'annulation), écarter une sélection
+   d'un seul geste, et travailler les contacts qui portent un deal ouvert avant
+   les fiches mortes · c'est l'ordre dans lequel le serveur rend la liste.
+
+   Écarter en masse n'est pas une commodité, c'est parfois LA réponse. Sur
+   « domaine email invalide », 93 contacts portent un domaine qui n'existe pas :
+   il n'y a aucune valeur à deviner, et retaper 93 adresses ne veut rien dire.
+   Le seul geste juste est de dire que ces contacts-là ne sont pas rattrapables.
+   D'où une case à cocher sur CHAQUE ligne, y compris celles qui n'ont rien à
+   écrire : la sélection sert aux deux gestes, pas seulement à l'application.
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -128,14 +134,19 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     return Boolean(v) && v !== (row.currentValue || '').trim();
   }, [values]);
 
-  const selectableIds = useMemo(
-    () => pending.filter(isActionable).map(r => r.id),
-    [pending, isActionable]
+  // Une ligne se coche toujours, même sans valeur à écrire : la sélection sert aux deux
+  // gestes de masse, appliquer ET écarter. Sur « domaine email invalide », la plupart des
+  // lignes n'ont rien à appliquer et tout à écarter · les rendre non cochables les
+  // priverait du seul geste qui les concerne.
+  const applicableIds = useMemo(
+    () => pending.filter(r => selected.has(r.id) && isActionable(r)).map(r => r.id),
+    [pending, selected, isActionable]
   );
   const crmSourcedIds = useMemo(
     () => pending.filter(r => r.suggestionSource === 'crm' && isActionable(r)).map(r => r.id),
     [pending, isActionable]
   );
+  const suggestedCount = useMemo(() => pending.filter(isActionable).length, [pending, isActionable]);
   const selectedCount = selected.size;
   const doneCount = Object.keys(handled).length;
 
@@ -145,12 +156,7 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     return next;
   });
 
-  const setValue = (id, v) => {
-    setValues(prev => ({ ...prev, [id]: v }));
-    // Vider un champ retire la ligne de la sélection : appliquer une valeur
-    // vide effacerait le champ dans le CRM, ce que personne ne demande ici.
-    if (!v.trim()) setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
-  };
+  const setValue = (id, v) => setValues(prev => ({ ...prev, [id]: v }));
 
   const applyMany = async (ids) => {
     const items = ids
@@ -216,16 +222,36 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     setBusy(false);
   };
 
-  const ignore = async (id) => {
+  // Écarter en masse compte autant qu'appliquer en masse, et sur certains contrôles
+  // davantage : quand 93 contacts portent un domaine qui n'existe pas, il n'y a aucune
+  // valeur à deviner et retaper 93 adresses n'a aucun sens. La seule action juste est de
+  // dire « ces contacts-là ne sont pas rattrapables », d'un geste.
+  const ignoreMany = async (ids) => {
+    if (ids.length === 0) return;
     setBusy(true);
     try {
       await request('/data-quality/ignore', {
         method: 'POST',
-        body: JSON.stringify({ provider, issueType, contactIds: [id] }),
+        body: JSON.stringify({ provider, issueType, contactIds: ids }),
       });
       touched.current = true;
-      setHandled(prev => ({ ...prev, [id]: { kind: 'ignored' } }));
-      setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
+      setHandled(prev => {
+        const next = { ...prev };
+        for (const id of ids) next[id] = { kind: 'ignored' };
+        return next;
+      });
+      setSelected(prev => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+      if (ids.length > 1) {
+        showToast({
+          type: 'success',
+          title: t('dataQuality.fixQueue.ignoredTitle'),
+          message: t('dataQuality.fixQueue.ignoredMessage', { n: ids.length }),
+        });
+      }
     } catch (err) {
       showToast({ type: 'error', title: t('common.error'), message: err.message });
     }
@@ -281,7 +307,7 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
               {loading ? t('dataQuality.fixQueue.loading') : t('dataQuality.fixQueue.subtitle', {
                 remaining: pending.length,
-                suggested: selectableIds.length,
+                suggested: suggestedCount,
               })}
             </div>
             {truncated && (
@@ -301,13 +327,13 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
               <input
                 type="checkbox"
-                checked={selectedCount > 0 && selectedCount === selectableIds.length}
-                onChange={e => setSelected(e.target.checked ? new Set(selectableIds) : new Set())}
+                checked={selectedCount > 0 && selectedCount === pending.length}
+                onChange={e => setSelected(e.target.checked ? new Set(pending.map(r => r.id)) : new Set())}
               />
-              {t('dataQuality.fixQueue.selectAll', { n: selectableIds.length })}
+              {t('dataQuality.fixQueue.selectAll', { n: pending.length })}
             </label>
 
-            {crmSourcedIds.length > 0 && crmSourcedIds.length < selectableIds.length && (
+            {crmSourcedIds.length > 0 && crmSourcedIds.length < suggestedCount && (
               <button
                 className="btn btn-ghost"
                 style={{ fontSize: 11, padding: '4px 10px' }}
@@ -329,14 +355,25 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
             </div>
 
             <button
+              className="btn btn-ghost"
+              style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}
+              disabled={busy || selectedCount === 0}
+              onClick={() => ignoreMany([...selected])}
+              title={t('dataQuality.fixQueue.ignoreHint')}
+            >
+              {t('dataQuality.fixQueue.ignoreSelection', { n: selectedCount })}
+            </button>
+
+            <button
               className="btn btn-primary"
               style={{ fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap' }}
-              disabled={busy || selectedCount === 0}
-              // Filtré sur selectableIds et pas sur la sélection brute : une ligne cochée
-              // puis ramenée à sa valeur d'origine ne doit pas repartir en écriture.
-              onClick={() => applyMany(selectableIds.filter(id => selected.has(id)))}
+              // Compté et filtré sur applicableIds, pas sur la sélection brute : une ligne
+              // sans valeur à écrire, ou ramenée à sa valeur d'origine, est cochable pour
+              // être écartée mais ne doit pas repartir en écriture.
+              disabled={busy || applicableIds.length === 0}
+              onClick={() => applyMany(applicableIds)}
             >
-              {busy ? '…' : t('dataQuality.fixQueue.applySelection', { n: selectedCount })}
+              {busy ? '…' : t('dataQuality.fixQueue.applySelection', { n: applicableIds.length })}
             </button>
           </div>
         )}
@@ -384,7 +421,6 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
                 <input
                   type="checkbox"
                   checked={selected.has(row.id)}
-                  disabled={!actionable}
                   onChange={() => toggle(row.id)}
                   style={{ flexShrink: 0 }}
                 />
@@ -438,7 +474,7 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
                   className="btn btn-ghost"
                   style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--text-muted)' }}
                   disabled={busy}
-                  onClick={() => ignore(row.id)}
+                  onClick={() => ignoreMany([row.id])}
                   title={t('dataQuality.fixQueue.ignoreHint')}
                 >
                   {t('dataQuality.fixQueue.ignore')}

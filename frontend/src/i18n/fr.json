@@ -2055,7 +2055,10 @@
       "appliedMessage": "{n} contacts mis à jour.",
       "partialTitle": "Correction partielle",
       "partialMessage": "{applied} contacts mis à jour, {failed} en échec.",
-      "interrupted": "{applied} contacts ont été mis à jour avant l’interruption. {message}"
+      "interrupted": "{applied} contacts ont été mis à jour avant l’interruption. {message}",
+      "ignoreSelection": "Écarter la sélection ({n})",
+      "ignoredTitle": "Contacts écartés",
+      "ignoredMessage": "{n} contacts sortent de ce contrôle. Réversible depuis la liste."
     }
   },
   "workflow": {
