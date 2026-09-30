@@ -823,6 +823,36 @@ async function stepAnalysis(userId, report, teamId = null) {
  * Generate memory patterns from CRM deal data.
  * Only creates patterns when there's statistically meaningful signal.
  */
+/**
+ * Les phrases que cet agent écrit en mémoire, une fonction par fait observé.
+ *
+ * ⚠️ LES 30 PREMIERS CARACTÈRES SONT L'IDENTITÉ DU PATTERN, et c'est le piège de tout ce
+ * fichier. `db.memoryPatterns.replaceOrCreate` reconnaît un pattern déjà connu par égalité
+ * exacte, puis par préfixe de 30 caractères, puis par proximité vectorielle. Un chiffre
+ * placé dans ces 30 caractères donne une identité DIFFÉRENTE à chaque valeur : « taux de
+ * conversion 67 % » et « taux de conversion 65 % » deviennent deux souvenirs concurrents
+ * au lieu d'un seul fait qui évolue, la confiance ne monte jamais, et la mémoire enfle sans
+ * apprendre.
+ *
+ * D'où la règle, vérifiée par tests/crm-agent-patterns.test.js : la partie variable vient
+ * APRÈS le trentième caractère, toujours. Les libellés vivent ici, ensemble, plutôt que
+ * disséminés dans la fonction, précisément pour que cette règle soit vérifiable d'un coup.
+ */
+const CRM_PATTERN_TEXTS = {
+  winRate: ({ winRate, won, closed }) =>
+    `Taux de conversion du CRM sur les affaires conclues : ${winRate}% (${won} gagnés / ${closed} conclus)`,
+  velocity: ({ avgDays, sampleSize }) =>
+    `Cycle de vente moyen observé sur les affaires gagnées : ${avgDays} jours (sur ${sampleSize} deals)`,
+  stagnation: ({ avgStagnation, sampleSize }) =>
+    `Les deals perdus stagnent en moyenne ${avgStagnation} jours avant d'être clos, relancer avant ce seuil (sur ${sampleSize} deals)`,
+  companySize: ({ size, count }) =>
+    `La taille d'entreprise qui convertit le mieux : ${size} (${count} deals gagnés)`,
+  jobTitle: ({ title, count }) =>
+    `La fonction qui répond le mieux aux emails automatiques : ${title} (${count} réponses)`,
+  touches: ({ avgTouches, sampleSize }) =>
+    `Nombre moyen de touches avant une réponse : ${avgTouches} (sur ${sampleSize} contacts)`,
+};
+
 async function generateCrmPatterns(userId, opps, teamId = null) {
   // Wrap create to auto-inject the tenant. userId en repli quand l'utilisateur
   // n'a pas d'équipe : sans lui, le pattern naissait orphelin (ni team_id ni
@@ -830,14 +860,24 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // source au niveau colonne : c'est elle que lit la politique de partage du
   // DAO (agrégats business jamais auto-partagés) · le data JSON garde le
   // détail (crm_analysis / title_analysis / multitouch_analysis).
-  const createPattern = (data) => db.memoryPatterns.create({ source: 'crm_analysis',...data, teamId, userId: teamId ? null : userId });
-  // Les gardes anti-doublon doivent chercher dans la mémoire DU tenant.
-  // Historiquement list() sans tenant renvoyait les patterns de TOUS les
-  // clients : dès qu'un client avait son « taux de conversion CRM », plus
-  // aucun autre ne l'obtenait jamais. Avec le DAO scopé (audit 02/09), sans
-  // tenant on ne verrait plus que le pool global partagé · garde cassée dans
-  // l'autre sens (doublons quotidiens). D'où le tenant explicite ici.
-  const listExisting = (category) => db.memoryPatterns.list({ category, limit: 50, teamId, userId: teamId ? null : userId });
+  //
+  // `replaceOrCreate` et non `create` : c'est lui qui porte la déduplication (exacte,
+  // par préfixe, puis vectorielle), l'incrément des confirmations et le calcul de
+  // l'embedding. `create` est un INSERT nu.
+  //
+  // Ce fichier se protégeait auparavant des doublons avec des gardes maison du genre
+  // `existing.some(p => p.pattern.includes('taux de conversion CRM'))`, alors que la
+  // phrase écrite commençait par « Taux » avec une majuscule. `includes` est sensible à
+  // la casse : la garde n'a jamais matché, et le cron a réinséré la même phrase chaque
+  // jour · mesuré en production le 30/09, 29 lignes strictement identiques depuis le 2
+  // septembre. Trois gardes sur six étaient mortes de cette façon, deux par une
+  // majuscule, une par une formulation qui avait dérivé de son test.
+  //
+  // La leçon n'est pas « il fallait mettre un toLowerCase » : c'est qu'une garde qui
+  // répète à la main un morceau de la phrase qu'elle surveille finira toujours par
+  // diverger, sans que rien ne le signale. La déduplication appartient au DAO, à un
+  // seul endroit, où elle est testée.
+  const createPattern = (data) => db.memoryPatterns.replaceOrCreate({ source: 'crm_analysis',...data, teamId, userId: teamId ? null : userId });
   const now = Date.now();
   const won = opps.filter(o => o.status === 'won');
   const lost = opps.filter(o => o.status === 'lost');
@@ -848,18 +888,14 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
   // Pattern 1: Win rate
   if (won.length + lost.length >= 5) {
     const winRate = Math.round((won.length / (won.length + lost.length)) * 100);
-    const existing = await listExisting('Cible');
-    const hasWinRate = existing.some(p => p.pattern.includes('taux de conversion CRM'));
-    if (!hasWinRate) {
-      await createPattern({
-        pattern: `Taux de conversion CRM : ${winRate}% (${won.length} gagn\u00E9s / ${won.length + lost.length} conclus)`,
-        category: 'Cible',
-        data: JSON.stringify({ source: 'crm_analysis', won: won.length, lost: lost.length, total }),
-        confidence: total >= 50 ? 'Haute' : total >= 20 ? 'Moyenne' : 'Faible',
-        sectors: [],
-        targets: [],
-      });
-    }
+    await createPattern({
+      pattern: CRM_PATTERN_TEXTS.winRate({ winRate, won: won.length, closed: won.length + lost.length }),
+      category: 'Cible',
+      data: JSON.stringify({ source: 'crm_analysis', won: won.length, lost: lost.length, total }),
+      confidence: total >= 50 ? 'Haute' : total >= 20 ? 'Moyenne' : 'Faible',
+      sectors: [],
+      targets: [],
+    });
   }
 
   // Pattern 2: Average deal velocity (time to won)
@@ -869,18 +905,14 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
 .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (velocities.length >= 3) {
       const avgDays = Math.round(velocities.reduce((s, v) => s + v, 0) / velocities.length);
-      const existing = await listExisting('Timing');
-      const hasVelocity = existing.some(p => p.pattern.includes('cycle de vente moyen'));
-      if (!hasVelocity) {
-        await createPattern({
-          pattern: `Cycle de vente moyen : ${avgDays} jours (sur ${velocities.length} deals gagn\u00E9s)`,
-          category: 'Timing',
-          data: JSON.stringify({ source: 'crm_analysis', avgDays, sampleSize: velocities.length }),
-          confidence: velocities.length >= 10 ? 'Haute' : 'Moyenne',
-          sectors: [],
-          targets: [],
-        });
-      }
+      await createPattern({
+        pattern: CRM_PATTERN_TEXTS.velocity({ avgDays, sampleSize: velocities.length }),
+        category: 'Timing',
+        data: JSON.stringify({ source: 'crm_analysis', avgDays, sampleSize: velocities.length }),
+        confidence: velocities.length >= 10 ? 'Haute' : 'Moyenne',
+        sectors: [],
+        targets: [],
+      });
     }
   }
 
@@ -891,18 +923,14 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
 .map(o => (new Date(o.updated_at).getTime() - new Date(o.created_at).getTime()) / DAY_MS);
     if (stagnation.length >= 3) {
       const avgStagnation = Math.round(stagnation.reduce((s, v) => s + v, 0) / stagnation.length);
-      const existing = await listExisting('Timing');
-      const hasStagnation = existing.some(p => p.pattern.includes('deals perdus stagnent'));
-      if (!hasStagnation) {
-        await createPattern({
-          pattern: `Les deals perdus stagnent en moyenne ${avgStagnation} jours avant d'\u00EAtre clos, relancer avant ce seuil`,
-          category: 'Timing',
-          data: JSON.stringify({ source: 'crm_analysis', avgStagnation, sampleSize: stagnation.length }),
-          confidence: stagnation.length >= 10 ? 'Haute' : 'Moyenne',
-          sectors: [],
-          targets: [],
-        });
-      }
+      await createPattern({
+        pattern: CRM_PATTERN_TEXTS.stagnation({ avgStagnation, sampleSize: stagnation.length }),
+        category: 'Timing',
+        data: JSON.stringify({ source: 'crm_analysis', avgStagnation, sampleSize: stagnation.length }),
+        confidence: stagnation.length >= 10 ? 'Haute' : 'Moyenne',
+        sectors: [],
+        targets: [],
+      });
     }
   }
 
@@ -916,18 +944,14 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     }
     const topSize = Object.entries(sizeGroups).sort((a, b) => b[1] - a[1])[0];
     if (topSize && topSize[1] >= 3) {
-      const existing = await listExisting('Cible');
-      const hasSizePattern = existing.some(p => p.pattern.includes('taille d\'entreprise qui convertit'));
-      if (!hasSizePattern) {
-        await createPattern({
-          pattern: `La taille d'entreprise qui convertit le mieux : ${topSize[0]} (${topSize[1]} deals gagn\u00E9s)`,
-          category: 'Cible',
-          data: JSON.stringify({ source: 'crm_analysis', sizeGroups }),
-          confidence: topSize[1] >= 10 ? 'Haute' : 'Moyenne',
-          sectors: [],
-          targets: [],
-        });
-      }
+      await createPattern({
+        pattern: CRM_PATTERN_TEXTS.companySize({ size: topSize[0], count: topSize[1] }),
+        category: 'Cible',
+        data: JSON.stringify({ source: 'crm_analysis', sizeGroups }),
+        confidence: topSize[1] >= 10 ? 'Haute' : 'Moyenne',
+        sectors: [],
+        targets: [],
+      });
     }
   }
 
@@ -946,17 +970,13 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
     );
     if (responded.rows.length > 0) {
       const topTitle = responded.rows[0];
-      const existing = await listExisting('Cible');
-      const hasTitle = existing.some(p => p.pattern.includes('fonction qui r\u00E9pond le mieux'));
-      if (!hasTitle) {
-        await createPattern({
-          pattern: `La fonction qui r\u00E9pond le mieux aux emails automatiques : ${topTitle.title} (${topTitle.count} r\u00E9ponses)`,
-          category: 'Cible',
-          data: JSON.stringify({ source: 'title_analysis', title: topTitle.title, count: parseInt(topTitle.count, 10) }),
-          confidence: parseInt(topTitle.count, 10) >= 10 ? 'Haute' : 'Moyenne',
-          sectors: [], targets: [],
-        });
-      }
+      await createPattern({
+        pattern: CRM_PATTERN_TEXTS.jobTitle({ title: topTitle.title, count: topTitle.count }),
+        category: 'Cible',
+        data: JSON.stringify({ source: 'title_analysis', title: topTitle.title, count: parseInt(topTitle.count, 10) }),
+        confidence: parseInt(topTitle.count, 10) >= 10 ? 'Haute' : 'Moyenne',
+        sectors: [], targets: [],
+      });
     }
   } catch { /* optional */ }
 
@@ -974,17 +994,13 @@ async function generateCrmPatterns(userId, opps, teamId = null) {
       const withResponse = touchCounts.rows.filter(r => r.got_response);
       if (withResponse.length >= 3) {
         const avgTouches = Math.round(withResponse.reduce((s, r) => s + parseInt(r.touches, 10), 0) / withResponse.length * 10) / 10;
-        const existing = await listExisting('Timing');
-        const hasTouch = existing.some(p => p.pattern.includes('touches avant r\u00E9ponse'));
-        if (!hasTouch) {
-          await createPattern({
-            pattern: `En moyenne ${avgTouches} touches avant d'obtenir une r\u00E9ponse (sur ${withResponse.length} contacts)`,
-            category: 'Timing',
-            data: JSON.stringify({ source: 'multitouch_analysis', avgTouches, sampleSize: withResponse.length }),
-            confidence: withResponse.length >= 10 ? 'Haute' : 'Moyenne',
-            sectors: [], targets: [],
-          });
-        }
+        await createPattern({
+          pattern: CRM_PATTERN_TEXTS.touches({ avgTouches, sampleSize: withResponse.length }),
+          category: 'Timing',
+          data: JSON.stringify({ source: 'multitouch_analysis', avgTouches, sampleSize: withResponse.length }),
+          confidence: withResponse.length >= 10 ? 'Haute' : 'Moyenne',
+          sectors: [], targets: [],
+        });
       }
     }
   } catch { /* optional */ }
@@ -1010,4 +1026,4 @@ async function runAllAgents() {
   return results;
 }
 
-module.exports = { runAgent, runAllAgents };
+module.exports = { runAgent, runAllAgents, CRM_PATTERN_TEXTS };
