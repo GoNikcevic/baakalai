@@ -32,6 +32,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { request } from '../../services/api-client';
 import { showToast } from '../../services/notifications';
 import { useT } from '../../i18n';
@@ -283,7 +284,13 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
 
   const truncated = queue && queue.listed < queue.total;
 
-  return (
+  // Monté dans <body>, pas là où le composant est écrit, et ce n'est pas un détail de
+  // style : `.card` porte `animation: rise-in ... both` (index.css), donc le transform des
+  // keyframes lui reste appliqué après coup. Un élément transformé devient le bloc
+  // conteneur de ses descendants en `position: fixed`. Rendu dans la carte, le panneau
+  // calculait son `inset: 0` sur les 100 pixels de la carte au lieu de la fenêtre : le
+  // voile ne couvrait que la carte et tout le contenu sous l'en-tête était rogné.
+  return createPortal(
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 9998, display: 'flex',
@@ -296,7 +303,10 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--bg-card, #fff)', borderRadius: 12, width: '100%', maxWidth: 880,
-          maxHeight: '100%', display: 'flex', flexDirection: 'column',
+          // 100% d'un parent en `inset: 0` vaut la hauteur de la fenêtre moins le padding ·
+          // la hauteur minimale évite qu'un écran très court ne laisse voir que l'en-tête.
+          maxHeight: '100%', minHeight: 'min(420px, 100%)',
+          display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 32px rgba(0,0,0,0.18)', overflow: 'hidden',
         }}
       >
@@ -542,6 +552,7 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
