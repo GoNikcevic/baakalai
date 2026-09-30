@@ -119,6 +119,38 @@ async function buildOwnerMap(provider, credentials, userId) {
     logger.warn('crm-owner-resolver', `${provider} user fetch failed: ${err.message}`);
   }
 
+  // Les correspondances posées à la main (migration 130) sont appliquées EN DERNIER, et
+  // elles gagnent. Le rattachement automatique ci-dessus repose sur l'égalité des adresses
+  // email entre le CRM et l'équipe : ça échoue dès que les deux mondes n'emploient pas la
+  // même adresse, et ça échoue en silence. Quand l'utilisateur a pris la peine de désigner
+  // quelqu'un, aucune heuristique d'adresse n'a de raison de le contredire.
+  //
+  // Ajoutées même pour un identifiant absent de la liste des utilisateurs du CRM : un
+  // commercial parti garde ses affaires, et son identifiant ne figure plus parmi les
+  // utilisateurs actifs alors que ses affaires, elles, existent toujours.
+  try {
+    const manuelles = await db.query(
+      `SELECT m.crm_owner_id, m.team_user_id, u.email
+       FROM crm_owner_mappings m JOIN users u ON u.id = m.team_user_id
+       WHERE m.user_id = $1 AND m.provider = $2`,
+      [userId, provider]
+    );
+    for (const row of manuelles.rows) {
+      const existant = map.get(String(row.crm_owner_id));
+      map.set(String(row.crm_owner_id), {
+        email: existant?.email || row.email || null,
+        name: existant?.name || null,
+        baakalaiUserId: row.team_user_id,
+      });
+    }
+    if (manuelles.rows.length > 0) {
+      logger.info('crm-owner-resolver', `${provider}: ${manuelles.rows.length} manual owner mapping(s) applied`);
+    }
+  } catch {
+    // Table absente (migration 130 pas encore jouée) · la synchro continue sur le seul
+    // rattachement par email, comme avant.
+  }
+
   return map;
 }
 

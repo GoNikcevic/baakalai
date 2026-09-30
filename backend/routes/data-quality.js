@@ -1143,6 +1143,140 @@ router.delete('/ignore', async (req, res, next) => {
   }
 });
 
+// GET /api/data-quality/owner-mappings
+// Les owners du CRM qui ne correspondent à personne dans l'équipe, UNE LIGNE PAR OWNER.
+//
+// Le contrôle « owner non rattaché » compte des affaires, ce qui donne un nombre juste mais
+// un travail faux : la décision se prend une fois par personne, pas une fois par affaire.
+// Quelques owners portent des dizaines d'affaires, et les faire défiler dans une file de
+// saisie reviendrait à faire répéter N fois la même réponse.
+router.get('/owner-mappings', async (req, res, next) => {
+  try {
+    // Les owners tels qu'ils apparaissent dans les données, avec de quoi les reconnaître :
+    // leur poids en affaires et en montant, et un exemple de compte.
+    const owners = await db.query(
+      `SELECT crm_provider AS provider, crm_owner_id,
+              max(owner_email) AS owner_email,
+              count(*) AS deal_count,
+              COALESCE(sum(deal_value), 0) AS deal_value,
+              min(company) FILTER (WHERE company IS NOT NULL AND company <> '') AS sample_company
+       FROM opportunities
+       WHERE user_id = $1 AND owner_id IS NULL AND crm_owner_id IS NOT NULL
+       GROUP BY crm_provider, crm_owner_id
+       ORDER BY count(*) DESC`,
+      [req.user.id]
+    );
+
+    // L'équipe, plus l'utilisateur lui-même · en solo il n'y a pas de team_members, et
+    // c'est pourtant le cas le plus courant chez les utilisateurs visés.
+    const members = await db.query(
+      `SELECT DISTINCT u.id, u.email, u.name
+       FROM users u
+       WHERE u.id = $1
+          OR u.id IN (
+            SELECT tm.user_id FROM team_members tm
+            WHERE tm.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)
+          )
+       ORDER BY u.email`,
+      [req.user.id]
+    );
+
+    let existing = { rows: [] };
+    try {
+      existing = await db.query(
+        `SELECT provider, crm_owner_id, team_user_id FROM crm_owner_mappings WHERE user_id = $1`,
+        [req.user.id]
+      );
+    } catch {
+      // Migration 130 pas encore jouée · l'écran s'affiche, il n'a simplement rien à
+      // préremplir.
+    }
+
+    res.json({
+      owners: owners.rows.map(r => ({
+        provider: r.provider,
+        crmOwnerId: r.crm_owner_id,
+        email: r.owner_email,
+        dealCount: Number(r.deal_count),
+        dealValue: Number(r.deal_value) || 0,
+        sampleCompany: r.sample_company,
+      })),
+      members: members.rows.map(r => ({ id: r.id, email: r.email, name: r.name })),
+      mappings: existing.rows.map(r => ({
+        provider: r.provider, crmOwnerId: r.crm_owner_id, teamUserId: r.team_user_id,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/data-quality/owner-mappings
+// Enregistre les correspondances ET les applique tout de suite aux affaires concernées.
+// Sans ce rattrapage, rien ne bougerait à l'écran avant la prochaine synchronisation, et
+// l'utilisateur aurait toutes les raisons de croire que son geste n'a servi à rien.
+router.post('/owner-mappings', async (req, res, next) => {
+  try {
+    const { mappings } = req.body;
+    if (!Array.isArray(mappings) || mappings.length === 0) {
+      return res.status(400).json({ error: 'mappings (1 or more) is required' });
+    }
+    if (mappings.length > MAX_IGNORE_ITEMS) {
+      return res.status(400).json({ error: `mappings is limited to ${MAX_IGNORE_ITEMS} per request` });
+    }
+
+    // Les membres autorisés, relus côté serveur · un identifiant d'utilisateur venu du
+    // client ne doit jamais pouvoir rattacher des affaires à quelqu'un d'une autre équipe.
+    const allowed = await db.query(
+      `SELECT DISTINCT u.id FROM users u
+       WHERE u.id = $1
+          OR u.id IN (
+            SELECT tm.user_id FROM team_members tm
+            WHERE tm.team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)
+          )`,
+      [req.user.id]
+    );
+    const allowedIds = new Set(allowed.rows.map(r => String(r.id)));
+
+    const saved = [];
+    const rejected = [];
+    let reassigned = 0;
+
+    for (const m of mappings) {
+      if (!m?.provider || !m?.crmOwnerId || !m?.teamUserId) {
+        rejected.push({ crmOwnerId: m?.crmOwnerId ?? null, error: 'provider, crmOwnerId and teamUserId are required' });
+        continue;
+      }
+      if (!allowedIds.has(String(m.teamUserId))) {
+        rejected.push({ crmOwnerId: m.crmOwnerId, error: 'teamUserId is not a member of your team' });
+        continue;
+      }
+
+      await db.query(
+        `INSERT INTO crm_owner_mappings (user_id, provider, crm_owner_id, team_user_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, provider, crm_owner_id) DO UPDATE SET team_user_id = EXCLUDED.team_user_id`,
+        [req.user.id, m.provider, String(m.crmOwnerId), m.teamUserId]
+      );
+
+      const applied = await db.query(
+        `UPDATE opportunities SET owner_id = $1
+         WHERE user_id = $2 AND crm_provider = $3 AND crm_owner_id = $4 AND owner_id IS NULL`,
+        [m.teamUserId, req.user.id, m.provider, String(m.crmOwnerId)]
+      );
+      reassigned += applied.rowCount || 0;
+      saved.push({ crmOwnerId: m.crmOwnerId, deals: applied.rowCount || 0 });
+    }
+
+    // Le contrôle compte les affaires sans propriétaire · son rapport en cache ne sait pas
+    // encore qu'elles en ont un.
+    await invalidateScanCache(req.user.id, '__deal_quality__');
+    res.json({ ok: true, saved, rejected, reassigned });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/data-quality/history?strate=
 router.get('/history', async (req, res, next) => {
   try {

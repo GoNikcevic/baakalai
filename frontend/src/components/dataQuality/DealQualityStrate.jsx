@@ -25,6 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { request } from '../../services/api-client';
 import { useT } from '../../i18n';
 import FixQueuePanel from './FixQueuePanel';
+import OwnerMappingPanel from './OwnerMappingPanel';
 import Icon from '../Icon';
 
 const ISSUE_ICONS = {
@@ -46,6 +47,7 @@ export default function DealQualityStrate() {
   const [issues, setIssues] = useState(null);
   const [loading, setLoading] = useState(true);
   const [panelIssue, setPanelIssue] = useState(null);
+  const [ownerPanel, setOwnerPanel] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,6 +80,9 @@ export default function DealQualityStrate() {
           onChanged={load}
         />
       )}
+      {ownerPanel && (
+        <OwnerMappingPanel onClose={() => setOwnerPanel(false)} onChanged={load} />
+      )}
       {issues.map((issue, i) => {
         const label = t(`dataQuality.dealQuality.${issue.type.replace(/_([a-z])/g, (_, c) => c.toUpperCase())}`);
         const count = issue.count || issue.contacts?.length || 0;
@@ -105,6 +110,16 @@ export default function DealQualityStrate() {
                   onClick={() => setPanelIssue({ type: issue.type, label })}
                 >
                   {t('dataQuality.dealQuality.fixButton')}
+                </button>
+              ) : issue.type === 'owner_not_mapped' ? (
+                // Pas une file de saisie : une correspondance, prise une fois par
+                // personne et pas une fois par affaire.
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '4px 12px', whiteSpace: 'nowrap' }}
+                  onClick={() => setOwnerPanel(true)}
+                >
+                  {t('dataQuality.dealQuality.mapOwnersButton')}
                 </button>
               ) : (
                 <button

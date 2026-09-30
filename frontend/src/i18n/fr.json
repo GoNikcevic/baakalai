@@ -1955,7 +1955,8 @@
       "dealValueSaved": "Valeur du deal enregistrée : {value} €",
       "dealValueLocalOnlyNote": "Cette valeur est enregistrée dans Baakalai. Elle n'est pas encore synchronisée vers votre CRM.",
       "fixButton": "Corriger",
-      "viewButton": "Voir"
+      "viewButton": "Voir",
+      "mapOwnersButton": "Rattacher les owners"
     },
     "clientQuality": {
       "missingProductLines": "Aucune ligne de produit assignée",
@@ -2069,6 +2070,20 @@
       "noProductLines": "Aucune ligne produit configurée dans Réglages.",
       "noneAssigned": "Aucune ligne produit",
       "suggesting": "Propositions de secteur en cours..."
+    },
+    "ownerMapping": {
+      "title": "Rattacher les owners du CRM",
+      "subtitle": "{n} owners du CRM ne correspondent à aucun membre de votre équipe. Le rattachement se fait sur l’adresse email, et il échoue dès que les deux ne sont pas la même.",
+      "unknownOwner": "Owner {id}",
+      "deals": "{n} affaires",
+      "sample": "Par exemple {company}",
+      "choose": "Choisir un membre",
+      "hint": "Les affaires existantes sont rattachées immédiatement.",
+      "save": "Enregistrer ({n})",
+      "savedTitle": "Owners rattachés",
+      "savedMessage": "{owners} owners rattachés, {deals} affaires reprises.",
+      "noneToMap": "Tous les owners du CRM sont rattachés.",
+      "allMapped": "Tous les owners sont rattachés."
     }
   },
   "workflow": {

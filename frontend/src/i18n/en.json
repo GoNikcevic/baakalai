@@ -1955,7 +1955,8 @@
       "dealValueSaved": "Deal value saved: {value}",
       "dealValueLocalOnlyNote": "This value is saved in Baakalai. It isn't synced to your CRM yet.",
       "fixButton": "Fix",
-      "viewButton": "View"
+      "viewButton": "View",
+      "mapOwnersButton": "Map owners"
     },
     "clientQuality": {
       "missingProductLines": "No product line assigned",
@@ -2069,6 +2070,20 @@
       "noProductLines": "No product line configured in Settings.",
       "noneAssigned": "No product line",
       "suggesting": "Fetching sector proposals..."
+    },
+    "ownerMapping": {
+      "title": "Map your CRM owners",
+      "subtitle": "{n} CRM owners match no member of your team. Matching is done on the email address, and it fails as soon as the two differ.",
+      "unknownOwner": "Owner {id}",
+      "deals": "{n} deals",
+      "sample": "For instance {company}",
+      "choose": "Pick a member",
+      "hint": "Existing deals are reassigned right away.",
+      "save": "Save ({n})",
+      "savedTitle": "Owners mapped",
+      "savedMessage": "{owners} owners mapped, {deals} deals reassigned.",
+      "noneToMap": "Every CRM owner is mapped.",
+      "allMapped": "Every owner is mapped."
     }
   },
   "workflow": {
