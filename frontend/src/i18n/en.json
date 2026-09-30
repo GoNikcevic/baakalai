@@ -1953,13 +1953,16 @@
       "dealValuePlaceholder": "E.g. 15000",
       "dealValueSaveTitle": "Deal value",
       "dealValueSaved": "Deal value saved: {value}",
-      "dealValueLocalOnlyNote": "This value is saved in Baakalai. It isn't synced to your CRM yet."
+      "dealValueLocalOnlyNote": "This value is saved in Baakalai. It isn't synced to your CRM yet.",
+      "fixButton": "Fix",
+      "viewButton": "View"
     },
     "clientQuality": {
       "missingProductLines": "No product line assigned",
       "noProductLinesConfigured": "No product lines configured for your team",
       "configureProductLines": "Configure product lines",
-      "noneFound": "No quality issues detected on your clients."
+      "noneFound": "No quality issues detected on your clients.",
+      "fixButton": "Assign product lines"
     },
     "history": {
       "noneFound": "No history yet.",
@@ -2058,7 +2061,14 @@
       "interrupted": "{applied} contacts were updated before the interruption. {message}",
       "ignoreSelection": "Set aside selection ({n})",
       "ignoredTitle": "Contacts set aside",
-      "ignoredMessage": "{n} contacts leave this check. Reversible from the list."
+      "ignoredMessage": "{n} contacts leave this check. Reversible from the list.",
+      "sourceClassifier": "Sector proposed by baakalai, worth a check",
+      "noteAmount": "No amount is proposed: baakalai cannot guess it, and an invented amount would skew your totals and forecasts.",
+      "noteDate": "No date is proposed: it comes from your CRM. Run a sync first, it fills in the ones the CRM knows.",
+      "companyContacts": "{n} contacts",
+      "noProductLines": "No product line configured in Settings.",
+      "noneAssigned": "No product line",
+      "suggesting": "Fetching sector proposals..."
     }
   },
   "workflow": {

@@ -633,7 +633,12 @@ router.post('/fix-queue', async (req, res, next) => {
       ? await getOrComputeChecks(req.user.id, 'deal')
       : await getOrComputeChecks(req.user.id, 'client');
     const issue = (issues || []).find(i => i.type === issueType);
-    const base = { strate, issueType, field: kind.field, entity: kind.entity, editor: kind.editor };
+    const base = {
+      strate, issueType, field: kind.field, entity: kind.entity, editor: kind.editor,
+      // Dit au panneau d'aller chercher ses propositions page par page · elles coûtent un
+      // appel de modèle par ligne et ne peuvent pas voyager avec la liste.
+      suggestible: issueType === 'missing_sector',
+    };
 
     // Les lignes produit disponibles sont l'éditeur lui-même · sans elles le panneau n'a
     // rien à proposer, et l'onglet affiche de toute façon sa carte de configuration.
@@ -774,34 +779,89 @@ async function buildCompanyFixQueue(userId, issue) {
     }
   }
 
-  const rows = [];
-  for (const group of byCompany.values()) {
-    // Un domaine professionnel dit souvent plus qu'une raison sociale seule ("Astria" contre
-    // "astriaingenierie.eu") · il est donné au classifieur en plus du nom.
-    const domain = group.contacts
+  const rows = [...byCompany.values()].map(group => ({
+    id: group.company,
+    name: group.company,
+    email: null,
+    company: group.company,
+    // Un domaine professionnel dit souvent plus qu'une raison sociale seule ("Astria"
+    // contre "astriaingenierie.eu") · conservé ici pour nourrir le classifieur ensuite.
+    domain: group.contacts
       .map(c => companyGuess.domainOf(c.email))
-      .find(d => d && !companyGuess.isPersonalDomain(d));
-    const suggestion = await classifySector(domain ? `${group.company} (${domain})` : group.company, 'client_industry');
-
-    rows.push({
-      id: group.company,
-      name: group.company,
-      email: null,
-      company: group.company,
-      contactIds: group.contacts.map(c => c.id),
-      contactCount: group.contacts.length,
-      currentValue: null,
-      suggestion: suggestion && suggestion !== NON_DETERMINE ? suggestion : null,
-      suggestionSource: suggestion && suggestion !== NON_DETERMINE ? 'classifier' : null,
-      hasOpenDeal: group.hasOpenDeal,
-      dealValue: group.dealValue,
-      lastActivityAt: group.lastActivityAt,
-      known: true,
-    });
-  }
+      .find(d => d && !companyGuess.isPersonalDomain(d)) || null,
+    contactCount: group.contacts.length,
+    currentValue: null,
+    // Volontairement vide · les propositions arrivent par POST /fix-queue/suggest, page
+    // par page. Les calculer ici ferait UN appel au classifieur PAR SOCIÉTÉ avant le
+    // premier octet de réponse : sur 54 sociétés, la requête tiendrait une minute et le
+    // proxy la couperait avant. La liste doit s'afficher tout de suite ; une proposition
+    // qui arrive deux secondes plus tard sur la page qu'on regarde suffit largement.
+    suggestion: null,
+    suggestionSource: null,
+    hasOpenDeal: group.hasOpenDeal,
+    dealValue: group.dealValue,
+    lastActivityAt: group.lastActivityAt,
+    known: true,
+  }));
 
   return sortByImpact(rows);
 }
+
+// Combien de sociétés au plus par appel de propositions, et combien en parallèle. Une page
+// du panneau en compte 25 : le lot correspond donc à ce que l'utilisateur a sous les yeux.
+const MAX_SUGGEST_ITEMS = 25;
+const SUGGEST_CONCURRENCY = 6;
+
+// POST /api/data-quality/fix-queue/suggest
+// Les propositions de la page affichée, séparées de la liste parce qu'elles coûtent un appel
+// de modèle par ligne. Le cache du classifieur (sector_normalization_cache) rend gratuit tout
+// nom déjà vu, y compris d'un utilisateur à l'autre, donc le deuxième passage est instantané.
+router.post('/fix-queue/suggest', async (req, res, next) => {
+  try {
+    const { issueType, ids } = req.body;
+    // Seul le secteur a une proposition à calculer à la demande · le montant et la date n'en
+    // ont aucune qui soit honnête, l'entreprise et le nom se déduisent sans modèle.
+    if (issueType !== 'missing_sector') {
+      return res.status(400).json({ error: `issueType ${issueType} has no on-demand suggestion` });
+    }
+    const wanted = (Array.isArray(ids) ? ids : []).filter(Boolean).slice(0, MAX_SUGGEST_ITEMS);
+    if (wanted.length === 0) return res.json({ suggestions: {} });
+
+    // Le domaine professionnel est relu côté serveur · ne jamais classer sur un texte que le
+    // client a composé, il n'y a aucune raison de lui faire confiance pour ça.
+    const domains = await db.query(
+      `SELECT lower(trim(company)) AS key,
+              min(email) FILTER (WHERE email IS NOT NULL AND email <> '') AS email
+       FROM opportunities
+       WHERE user_id = $1 AND lower(trim(company)) = ANY($2)
+       GROUP BY lower(trim(company))`,
+      [req.user.id, wanted.map(c => String(c).trim().toLowerCase())]
+    );
+    const emailByCompany = new Map(domains.rows.map(r => [r.key, r.email]));
+
+    const suggestions = {};
+    for (let i = 0; i < wanted.length; i += SUGGEST_CONCURRENCY) {
+      const lot = wanted.slice(i, i + SUGGEST_CONCURRENCY);
+      await Promise.all(lot.map(async (company) => {
+        const domain = companyGuess.domainOf(emailByCompany.get(String(company).trim().toLowerCase()));
+        const texte = domain && !companyGuess.isPersonalDomain(domain) ? `${company} (${domain})` : String(company);
+        try {
+          const sector = await classifySector(texte, 'client_industry');
+          if (sector && sector !== NON_DETERMINE) {
+            suggestions[company] = { value: sector, source: 'classifier' };
+          }
+        } catch {
+          // Une classification ratée laisse le champ vide · l'utilisateur saisit, comme
+          // avant. Jamais de secteur inventé pour combler un trou.
+        }
+      }));
+    }
+
+    res.json({ suggestions });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * File par AFFAIRE (montant, date de clôture) ou par CLIENT (lignes produit).

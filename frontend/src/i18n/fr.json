@@ -1953,13 +1953,16 @@
       "dealValuePlaceholder": "Ex : 15000",
       "dealValueSaveTitle": "Valeur du deal",
       "dealValueSaved": "Valeur du deal enregistrée : {value} €",
-      "dealValueLocalOnlyNote": "Cette valeur est enregistrée dans Baakalai. Elle n'est pas encore synchronisée vers votre CRM."
+      "dealValueLocalOnlyNote": "Cette valeur est enregistrée dans Baakalai. Elle n'est pas encore synchronisée vers votre CRM.",
+      "fixButton": "Corriger",
+      "viewButton": "Voir"
     },
     "clientQuality": {
       "missingProductLines": "Aucune ligne de produit assignée",
       "noProductLinesConfigured": "Aucune ligne de produit configurée pour votre équipe",
       "configureProductLines": "Configurer les lignes de produits",
-      "noneFound": "Aucun problème de qualité détecté sur vos clients."
+      "noneFound": "Aucun problème de qualité détecté sur vos clients.",
+      "fixButton": "Affecter les lignes produit"
     },
     "history": {
       "noneFound": "Aucun historique pour l'instant.",
@@ -2058,7 +2061,14 @@
       "interrupted": "{applied} contacts ont été mis à jour avant l’interruption. {message}",
       "ignoreSelection": "Écarter la sélection ({n})",
       "ignoredTitle": "Contacts écartés",
-      "ignoredMessage": "{n} contacts sortent de ce contrôle. Réversible depuis la liste."
+      "ignoredMessage": "{n} contacts sortent de ce contrôle. Réversible depuis la liste.",
+      "sourceClassifier": "Secteur proposé par baakalai, à relire",
+      "noteAmount": "Aucun montant n’est proposé : baakalai ne peut pas le deviner, et un montant inventé fausserait vos totaux et vos prévisions.",
+      "noteDate": "Aucune date n’est proposée : elle vient de votre CRM. Relancez d’abord une synchronisation, elle remplira celles que le CRM connaît.",
+      "companyContacts": "{n} contacts",
+      "noProductLines": "Aucune ligne produit configurée dans Réglages.",
+      "noneAssigned": "Aucune ligne produit",
+      "suggesting": "Propositions de secteur en cours..."
     }
   },
   "workflow": {

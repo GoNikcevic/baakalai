@@ -1,12 +1,23 @@
 /* ===============================================================================
-   BAKAL · Fix Queue Panel (Data Quality's "Général" tab)
+   BAKAL · Fix Queue Panel · le panneau de correction des trois onglets
 
    Le panneau qui remplace la liste dépliée de champs vides. Il tient sur une
    idée : quand l'adresse d'un contact est laura@acme-industries.fr, son
    entreprise n'est pas une question posée à l'utilisateur, c'est une valeur que
    baakalai sait déduire. L'utilisateur relit et valide, il ne saisit plus.
 
-   Trois qualités de proposition, distinguées parce que la confiance n'est pas
+   UNE LIGNE N'EST PAS TOUJOURS UN CONTACT, et c'est le point le plus important
+   de cet écran. Le serveur dit ce qu'elle représente (`entity`) et comment elle
+   s'édite (`editor`) :
+     contact + texte           · entreprise, nom, email (onglet Général)
+     société + texte           · le secteur. Il se décide par SOCIÉTÉ : 110
+       contacts sans secteur ne font que 54 sociétés, et une file par contact
+       ferait saisir deux fois la même réponse tout en permettant d'attribuer
+       deux secteurs contradictoires à une même boîte.
+     affaire + montant / date  · le montant et la date de clôture
+     client + lignes produit   · une sélection de pastilles, pas un champ texte
+
+   Quatre qualités de proposition, distinguées parce que la confiance n'est pas
    la même et que l'utilisateur doit pouvoir régler son niveau de relecture :
      · « Déjà dans votre CRM » · un autre contact du même domaine porte cette
        entreprise. On reprend SON orthographe, ce qui évite d'écrire une
@@ -15,7 +26,13 @@
        temps, approximatif sur les sigles. À relire.
      · « Correction proposée » · l'adresse corrigée d'une faute de frappe,
        calculée par le scan.
+     · « Proposé par baakalai » · le secteur, par le classifieur.
    Aucune n'est écrite sans un clic : elles arrivent dans un champ modifiable.
+
+   Et deux contrôles ne proposent RIEN, ce qui se dit à l'écran plutôt que de
+   passer pour un oubli : un montant deviné fausse les totaux et les prévisions,
+   et une date de clôture vient du CRM, donc une resynchro vaut mieux qu'une
+   saisie à la main.
 
    Trois choses que l'écran précédent ne permettait pas et qui comptent autant
    que les propositions : appliquer une sélection d'un seul geste (découpée en
@@ -50,6 +67,16 @@ const SOURCE_STYLES = {
   crm: { color: 'var(--success)', labelKey: 'dataQuality.fixQueue.sourceCrm' },
   domain: { color: 'var(--blue)', labelKey: 'dataQuality.fixQueue.sourceDomain' },
   typo: { color: 'var(--blue)', labelKey: 'dataQuality.fixQueue.sourceTypo' },
+  classifier: { color: 'var(--blue)', labelKey: 'dataQuality.fixQueue.sourceClassifier' },
+};
+
+// Certains contrôles n'ont AUCUNE valeur déductible, et il vaut mieux le dire que laisser
+// croire à un oubli. Le montant n'existe nulle part ailleurs que dans la tête du commercial ;
+// la date de clôture, elle, vient du CRM et une resynchro la rapatrie, donc saisir à la main
+// n'est pas le premier réflexe à avoir.
+const NO_SUGGESTION_NOTE = {
+  amount: 'dataQuality.fixQueue.noteAmount',
+  date: 'dataQuality.fixQueue.noteDate',
 };
 
 function formatAmount(value) {
@@ -57,7 +84,37 @@ function formatAmount(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
 }
 
-export default function FixQueuePanel({ provider, issueType, issueLabel, onClose, onChanged }) {
+/** Valeur de départ d'une ligne, selon ce que son éditeur manipule. */
+function initialValue(row, editor) {
+  if (editor === 'productLines') return Array.isArray(row.currentValue) ? [...row.currentValue] : [];
+  if (row.suggestion !== null && row.suggestion !== undefined) return row.suggestion;
+  return row.currentValue ?? '';
+}
+
+/** Deux valeurs d'un même éditeur sont-elles la même chose ? */
+function sameValue(editor, a, b) {
+  if (editor === 'productLines') {
+    const x = [...(a || [])].map(String).sort();
+    const y = [...(b || [])].map(String).sort();
+    return x.length === y.length && x.every((v, i) => v === y[i]);
+  }
+  if (editor === 'amount') {
+    const n = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
+    return n(a) === n(b);
+  }
+  // Une date arrive du serveur en ISO complet et se saisit en AAAA-MM-JJ · comparer les
+  // deux formes brutes ferait passer une date inchangée pour une modification.
+  if (editor === 'date') return String(a || '').slice(0, 10) === String(b || '').slice(0, 10);
+  return String(a ?? '').trim() === String(b ?? '').trim();
+}
+
+/** Une valeur vide, donc rien à écrire. Une liste de lignes produit vide, elle, dit quelque chose. */
+function isEmptyValue(editor, v) {
+  if (editor === 'productLines') return false;
+  return String(v ?? '').trim() === '';
+}
+
+export default function FixQueuePanel({ strate = 'general', provider, issueType, issueLabel, onClose, onChanged }) {
   const t = useT();
   const [loading, setLoading] = useState(true);
   const [queue, setQueue] = useState(null);
@@ -77,7 +134,7 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     try {
       const data = await request('/data-quality/fix-queue', {
         method: 'POST',
-        body: JSON.stringify({ provider, issueType }),
+        body: JSON.stringify({ strate, provider, issueType }),
       });
       setQueue(data);
       // Le champ part de la proposition quand il y en a une, sinon de la valeur actuelle :
@@ -85,16 +142,18 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
       // existante vaut mieux que de la retaper entière. Une valeur inchangée n'est jamais
       // proposée à l'application, c'est ce que vérifie isActionable.
       const initial = {};
-      for (const row of data.rows || []) initial[row.id] = row.suggestion || row.currentValue || '';
+      for (const row of data.rows || []) initial[row.id] = initialValue(row, data.editor);
       setValues(initial);
       setSelected(new Set());
       setPage(0);
+      // Une nouvelle liste, de nouvelles propositions à demander.
+      suggestedFor.current = new Set();
     } catch (err) {
       showToast({ type: 'error', title: t('common.error'), message: err.message });
-      setQueue({ rows: [], total: 0, listed: 0 });
+      setQueue({ rows: [], total: 0, listed: 0, editor: 'text', entity: 'contact' });
     }
     setLoading(false);
-  }, [provider, issueType, t]);
+  }, [strate, provider, issueType, t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -110,6 +169,31 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [handleClose]);
+
+  const editor = queue?.editor || 'text';
+  const entity = queue?.entity || 'contact';
+  const options = queue?.options || [];
+
+  // Les lignes déjà passées au classifieur · une société ne s'y présente qu'une fois, même
+  // si l'utilisateur revient sur la page. Une ref et pas un état : la changer ne doit rien
+  // redessiner, elle ne sert qu'à ne pas redemander.
+  const suggestedFor = useRef(new Set());
+  const [suggesting, setSuggesting] = useState(false);
+
+  // Ce qui vient d'être écrit, dit en une ligne. Une valeur peut être un texte, un montant,
+  // une date ou une liste de lignes produit · et pour une société, le nombre de contacts
+  // réellement touchés compte autant que la valeur elle-même.
+  const describeHandledValue = (h) => {
+    const base = Array.isArray(h.value)
+      ? h.value.map(id => options.find(o => String(o.id) === String(id))?.label).filter(Boolean).join(', ')
+        || t('dataQuality.fixQueue.noneAssigned')
+      : editor === 'date' ? String(h.value || '').slice(0, 10)
+      : editor === 'amount' ? `${formatAmount(Number(h.value)) ?? h.value} €`
+      : String(h.value ?? '');
+    return entity === 'company' && h.contacts
+      ? `${base} · ${t('dataQuality.fixQueue.companyContacts', { n: h.contacts })}`
+      : base;
+  };
 
   const rows = useMemo(() => queue?.rows || [], [queue]);
   const pending = useMemo(() => rows.filter(r => !handled[r.id]), [rows, handled]);
@@ -127,13 +211,62 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
   const safePage = Math.min(page, pageCount - 1);
   const pageRows = visible.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
-  // Une ligne n'est applicable que si sa valeur est non vide ET différente de celle qui est
-  // déjà en base : réécrire une adresse invalide à l'identique produirait une ligne
+  // Les propositions de la page affichée, demandées après coup. Le secteur coûte un appel
+  // de modèle par société : les calculer toutes avant d'afficher quoi que ce soit ferait
+  // attendre une minute devant un écran vide. La liste arrive tout de suite, les
+  // propositions se posent ensuite, et seulement sur ce que l'utilisateur regarde.
+  useEffect(() => {
+    if (!queue?.suggestible || pageRows.length === 0) return;
+    const manquants = pageRows
+      .filter(r => !r.suggestion && !suggestedFor.current.has(String(r.id)))
+      .map(r => r.id);
+    if (manquants.length === 0) return;
+
+    let annule = false;
+    manquants.forEach(id => suggestedFor.current.add(String(id)));
+    setSuggesting(true);
+    request('/data-quality/fix-queue/suggest', {
+      method: 'POST',
+      body: JSON.stringify({ strate, issueType, ids: manquants }),
+    })
+      .then(({ suggestions }) => {
+        if (annule || !suggestions) return;
+        setQueue(prev => prev && ({
+          ...prev,
+          rows: prev.rows.map(r => (suggestions[r.id]
+            ? { ...r, suggestion: suggestions[r.id].value, suggestionSource: suggestions[r.id].source }
+            : r)),
+        }));
+        // La proposition ne se pose QUE dans un champ que l'utilisateur n'a pas touché ·
+        // écraser une valeur qu'il vient de taper pendant qu'il la tape serait pire que
+        // de ne rien proposer du tout.
+        setValues(prev => {
+          const next = { ...prev };
+          for (const [id, s] of Object.entries(suggestions)) {
+            if (!String(next[id] ?? '').trim()) next[id] = s.value;
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        // Une proposition qui n'arrive pas laisse le champ vide · l'utilisateur saisit,
+        // comme avant. Pas de message : ce n'est pas une erreur de sa part.
+      })
+      .finally(() => { if (!annule) setSuggesting(false); });
+
+    return () => { annule = true; };
+    // pageRows change d'identité à chaque rendu · la dépendance porte sur les ids affichés.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queue?.suggestible, strate, issueType, pageRows.map(r => r.id).join(',')]);
+
+  // Une ligne n'est applicable que si sa valeur porte quelque chose ET diffère de celle qui
+  // est déjà en base : réécrire une adresse invalide à l'identique produirait une ligne
   // d'historique pour un changement qui n'en est pas un.
   const isActionable = useCallback((row) => {
-    const v = (values[row.id] || '').trim();
-    return Boolean(v) && v !== (row.currentValue || '').trim();
-  }, [values]);
+    const v = values[row.id];
+    if (isEmptyValue(editor, v)) return false;
+    return !sameValue(editor, v, row.currentValue);
+  }, [values, editor]);
 
   // Une ligne se coche toujours, même sans valeur à écrire : la sélection sert aux deux
   // gestes de masse, appliquer ET écarter. Sur « domaine email invalide », la plupart des
@@ -161,8 +294,8 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
 
   const applyMany = async (ids) => {
     const items = ids
-      .map(id => ({ crmContactId: id, value: (values[id] || '').trim() }))
-      .filter(it => it.value);
+      .map(id => ({ id, value: editor === 'productLines' ? (values[id] || []) : String(values[id] ?? '').trim() }))
+      .filter(it => !isEmptyValue(editor, it.value));
     if (items.length === 0) return;
 
     // Un identifiant de groupe pour toute la correction, même découpée en plusieurs
@@ -175,23 +308,23 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     try {
       for (let i = 0; i < items.length; i += BATCH_SIZE) {
         const chunk = items.slice(i, i + BATCH_SIZE);
-        const result = await request('/data-quality/enrich-field/batch', {
+        const result = await request('/data-quality/fix-queue/apply', {
           method: 'POST',
-          body: JSON.stringify({ provider, field: queue.field, items: chunk, groupId }),
+          body: JSON.stringify({ strate, provider, issueType, items: chunk, groupId }),
         });
         touched.current = true;
         applied += (result.applied || []).length;
         failed += (result.failed || []).length;
-        // Marqué lot par lot : sur 140 contacts, la barre de progression avance pendant
+        // Marqué lot par lot : sur 140 lignes, la barre de progression avance pendant
         // l'opération au lieu de sauter d'un coup à la fin.
         setHandled(prev => {
           const next = { ...prev };
-          for (const a of result.applied || []) next[a.crmContactId] = { value: a.value, kind: 'saved' };
+          for (const a of result.applied || []) next[a.id] = { value: a.value, kind: 'saved', contacts: a.contacts };
           return next;
         });
         setSelected(prev => {
           const next = new Set(prev);
-          for (const a of result.applied || []) next.delete(a.crmContactId);
+          for (const a of result.applied || []) next.delete(a.id);
           return next;
         });
       }
@@ -233,7 +366,7 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     try {
       await request('/data-quality/ignore', {
         method: 'POST',
-        body: JSON.stringify({ provider, issueType, contactIds: ids }),
+        body: JSON.stringify({ strate, provider, issueType, contactIds: ids }),
       });
       touched.current = true;
       setHandled(prev => {
@@ -263,7 +396,7 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
     try {
       await request('/data-quality/ignore', {
         method: 'DELETE',
-        body: JSON.stringify({ provider, issueType, contactIds: [id] }),
+        body: JSON.stringify({ strate, provider, issueType, contactIds: [id] }),
       });
       setHandled(prev => { const n = { ...prev }; delete n[id]; return n; });
     } catch (err) {
@@ -323,6 +456,16 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
             {truncated && (
               <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
                 {t('dataQuality.fixQueue.truncated', { listed: queue.listed, total: queue.total })}
+              </div>
+            )}
+            {!loading && NO_SUGGESTION_NOTE[editor] && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                {t(NO_SUGGESTION_NOTE[editor])}
+              </div>
+            )}
+            {suggesting && (
+              <div style={{ fontSize: 11, color: 'var(--blue)', marginTop: 4 }}>
+                {t('dataQuality.fixQueue.suggesting')}
               </div>
             )}
           </div>
@@ -416,10 +559,12 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
               {t('dataQuality.fixQueue.noMatch')}
             </div>
           ) : pageRows.map((row, i) => {
-            const value = values[row.id] || '';
+            const value = values[row.id] ?? (editor === 'productLines' ? [] : '');
             const sourceStyle = row.suggestionSource ? SOURCE_STYLES[row.suggestionSource] : null;
-            const edited = row.suggestion && value.trim() !== row.suggestion;
+            const edited = row.suggestion !== null && row.suggestion !== undefined
+              && !sameValue(editor, value, row.suggestion);
             const actionable = isActionable(row);
+            const inputBorder = sourceStyle && !edited ? sourceStyle.color : 'var(--border)';
             return (
               <div
                 key={row.id}
@@ -440,7 +585,11 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
                     {row.name || t('dataQuality.fixQueue.unnamed')}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {row.email || t('dataQuality.fixQueue.noEmail')}
+                    {/* Une ligne de société ne porte pas d'email · elle porte des contacts,
+                        et savoir combien dit à l'utilisateur ce que sa saisie va toucher. */}
+                    {entity === 'company'
+                      ? t('dataQuality.fixQueue.companyContacts', { n: row.contactCount || 0 })
+                      : (row.email || row.company || t('dataQuality.fixQueue.noEmail'))}
                   </div>
                   {row.hasOpenDeal && (
                     <div style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2 }}>
@@ -450,19 +599,57 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <input
-                    ref={el => { inputRefs.current[row.id] = el; }}
-                    type="text"
-                    value={value}
-                    onChange={e => setValue(row.id, e.target.value)}
-                    onKeyDown={e => onRowKeyDown(e, i)}
-                    placeholder={t('dataQuality.fixQueue.inputPlaceholder')}
-                    style={{
-                      width: '100%', padding: '5px 8px', fontSize: 12, borderRadius: 6,
-                      border: `1px solid ${sourceStyle && !edited ? sourceStyle.color : 'var(--border)'}`,
-                      background: 'var(--bg-card)', color: 'var(--text-primary)',
-                    }}
-                  />
+                  {editor === 'productLines' ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {options.length === 0 ? (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {t('dataQuality.fixQueue.noProductLines')}
+                        </span>
+                      ) : options.map(option => {
+                        const on = (value || []).map(String).includes(String(option.id));
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setValue(
+                              row.id,
+                              on
+                                ? (value || []).filter(v => String(v) !== String(option.id))
+                                : [...(value || []), option.id]
+                            )}
+                            style={{
+                              fontSize: 11, padding: '3px 9px', borderRadius: 999, cursor: 'pointer',
+                              border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
+                              background: on ? 'var(--accent-glow)' : 'transparent',
+                              color: on ? 'var(--accent)' : 'var(--text-muted)',
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <input
+                      ref={el => { inputRefs.current[row.id] = el; }}
+                      // Un montant en champ numérique et une date en champ date : le clavier
+                      // mobile change, et le navigateur refuse lui-même ce qui n'entre pas.
+                      type={editor === 'amount' ? 'number' : editor === 'date' ? 'date' : 'text'}
+                      {...(editor === 'amount' ? { min: 0, step: 'any' } : {})}
+                      // Une affaire ne se clôt pas dans le futur · le serveur le refuse déjà,
+                      // autant que le sélecteur de date ne le propose même pas.
+                      {...(editor === 'date' ? { max: new Date().toISOString().slice(0, 10) } : {})}
+                      value={editor === 'date' ? String(value || '').slice(0, 10) : value}
+                      onChange={e => setValue(row.id, e.target.value)}
+                      onKeyDown={e => onRowKeyDown(e, i)}
+                      placeholder={t('dataQuality.fixQueue.inputPlaceholder')}
+                      style={{
+                        width: '100%', padding: '5px 8px', fontSize: 12, borderRadius: 6,
+                        border: `1px solid ${inputBorder}`,
+                        background: 'var(--bg-card)', color: 'var(--text-primary)',
+                      }}
+                    />
+                  )}
                   {sourceStyle && (
                     <div style={{ fontSize: 10, color: edited ? 'var(--text-muted)' : sourceStyle.color, marginTop: 2 }}>
                       {edited ? t('dataQuality.fixQueue.edited') : t(sourceStyle.labelKey)}
@@ -506,7 +693,9 @@ export default function FixQueuePanel({ provider, issueType, issueLabel, onClose
                     <Icon name={h.kind === 'ignored' ? 'ban' : 'checkCircle'} size={12} color={h.kind === 'ignored' ? 'var(--text-muted)' : 'var(--success)'} />
                     <span style={{ minWidth: 180 }}>{row.name || row.email || '?'}</span>
                     <span style={{ flex: 1, color: h.kind === 'ignored' ? 'var(--text-muted)' : 'var(--success)' }}>
-                      {h.kind === 'ignored' ? t('dataQuality.fixQueue.ignoredLabel') : h.value}
+                      {h.kind === 'ignored'
+                        ? t('dataQuality.fixQueue.ignoredLabel')
+                        : describeHandledValue(h)}
                     </span>
                     {h.kind === 'ignored' && (
                       <button
