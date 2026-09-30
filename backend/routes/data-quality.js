@@ -8,10 +8,12 @@
  * GET   /client-quality · client/upsell-data quality issues (Strate 3)
  * POST  /enrich-field · fill a missing field; pushes to the live CRM
  *                                                    too when that provider supports real writes
- * POST  /fix-queue · the work list behind the General tab's fix panel: flagged contacts,
- *                    a proposed value for each, and the order in which to handle them
- * POST  /enrich-field/batch · apply many single-field fixes under one undo group
- * POST  /ignore · set a contact aside for one check (it has no such data and never will)
+ * POST  /fix-queue · the work list behind every fix panel of the page, across the three
+ *                    strates: flagged rows, a proposed value where one is deducible, and
+ *                    the order to work in. Une ligne vaut un contact, une SOCIÉTÉ (le
+ *                    secteur) ou une affaire, selon le contrôle.
+ * POST  /fix-queue/apply · apply many fixes at once under one undo group
+ * POST  /ignore · set a row aside for one check (it has no such data and never will)
  * DELETE /ignore · put it back under the check
  * GET   /history?strate= · change history, grouped by user action
  * POST  /history/:groupId/undo · full undo of one change group
@@ -26,7 +28,7 @@ const db = require('../db');
 const crmCleaning = require('../lib/crm-cleaning-agent');
 const dataQualityChecks = require('../lib/data-quality-checks');
 const audit = require('../lib/data-quality-audit');
-const { classifySector } = require('../lib/sector-classifier');
+const { classifySector, NON_DETERMINE } = require('../lib/sector-classifier');
 const companyGuess = require('../lib/company-from-email');
 const { getValidatedIntegrations } = require('../config');
 
@@ -43,6 +45,23 @@ const FIXABLE_FIELD_BY_ISSUE_TYPE = {
   invalid_email_format: 'email',
   invalid_email_domain: 'email',
   email_typo: 'email',
+};
+
+// Les problèmes corrigibles des onglets Qualité des deals et Qualité clients, avec ce que
+// chaque ligne de file représente et comment elle s'édite. Ce qui n'est pas ici ne se corrige
+// pas en saisissant une valeur, et c'est volontaire :
+//
+//   owner_not_mapped · une correspondance owner CRM vers membre d'équipe, pas une saisie par
+//                      affaire. Mesuré : un owner distinct pour des dizaines d'affaires.
+//                      Le mettre dans une file ferait répéter N fois une décision unique.
+//   zero_activity    · rien à saisir. Une affaire sans activité n'est pas une donnée fausse,
+//                      c'est une affaire à travailler, ce qui relève de la prospection.
+//   stage_mapping    · un réglage, déjà remonté en bandeau par DataQualityBanners.
+const FIX_QUEUE_KINDS = {
+  missing_sector: { strate: 'deal', field: 'sector', entity: 'company', editor: 'text' },
+  missing_deal_value: { strate: 'deal', field: 'dealValue', entity: 'opportunity', editor: 'amount' },
+  missing_won_lost_date: { strate: 'deal', field: 'wonLostDate', entity: 'opportunity', editor: 'date' },
+  missing_product_lines: { strate: 'client', field: 'productLines', entity: 'opportunity', editor: 'productLines' },
 };
 
 // Plafond d'une application groupée. Chaque contact déclenche une écriture locale, un appel
@@ -370,15 +389,15 @@ router.get('/client-quality', async (req, res, next) => {
   }
 });
 
-const SUPPORTED_FIX_FIELDS = ['sector', 'email', 'company', 'dealValue', 'name'];
+const SUPPORTED_FIX_FIELDS = ['sector', 'email', 'company', 'dealValue', 'name', 'wonLostDate', 'productLines'];
 
 /**
  * Write one field on one contact: local mirror, live CRM when the provider supports
  * real writes, audit entry, and cache invalidation of the scan that flagged it.
  *
  * `groupId` is what ties an undo together. Passed per call from /enrich-field (one
- * contact, one group) and shared across a whole batch by /enrich-field/batch, so
- * undoing a bulk apply is a single click in the history tab instead of 140.
+ * contact, one group) and shared across a whole batch by /fix-queue/apply, so undoing a
+ * bulk apply is a single click in the history tab instead of 140.
  *
  * @returns {{ remoteAction: string, sector?: string, cacheProvider: string|null }}
  */
@@ -386,6 +405,12 @@ async function applyFieldFix(userId, { opp, field, value, provider, groupId }) {
   const beforeLocal = { ...opp };
   let afterLocal;
   let classifiedSector;
+  // Seul un changement qui TOUCHE les lignes produit renseigne ce couple · partout
+  // ailleurs il reste null, et snapshotContact omet alors la clé pour que l'annulation
+  // n'aille pas effacer des affectations que le changement n'avait jamais vues.
+  let productLinesBefore = null;
+  let productLinesAfter = null;
+
   if (field === 'sector') {
     // Run through the same sector-classifier agent churn-scoring uses (scope 'client_industry')
     // so opportunities.data.sector always holds a canonical sector name, not raw free text.
@@ -393,6 +418,35 @@ async function applyFieldFix(userId, { opp, field, value, provider, groupId }) {
     const newData = { ...(opp.data || {}), sector: classifiedSector };
     await db.query(`UPDATE opportunities SET data = $1 WHERE id = $2`, [JSON.stringify(newData), opp.id]);
     afterLocal = { ...opp, data: newData };
+  } else if (field === 'wonLostDate') {
+    // Une affaire gagnée date dans won_date, une perdue dans lost_date · la colonne se
+    // déduit du statut, jamais du client, sinon une date de gain atterrirait sur une
+    // affaire perdue et les déclencheurs d'automatisation compteraient à côté.
+    const column = opp.status === 'won' ? 'won_date' : 'lost_date';
+    if (opp.status !== 'won' && opp.status !== 'lost') {
+      throw new Error('Only won or lost deals carry a close date');
+    }
+    await db.query(`UPDATE opportunities SET ${column} = $1 WHERE id = $2`, [value, opp.id]);
+    afterLocal = { ...opp, [column]: value };
+  } else if (field === 'productLines') {
+    // `value` est la liste complète voulue, pas un ajout · l'état avant est relu pour que
+    // l'annulation le rétablisse exactement, y compris quand il était vide.
+    const before = await db.query(
+      `SELECT product_line_id FROM opportunity_product_lines WHERE opportunity_id = $1`,
+      [opp.id]
+    );
+    productLinesBefore = before.rows.map(r => r.product_line_id);
+    const wanted = [...new Set((Array.isArray(value) ? value : []).filter(Boolean))];
+    await db.query(`DELETE FROM opportunity_product_lines WHERE opportunity_id = $1`, [opp.id]);
+    for (const plId of wanted) {
+      await db.query(
+        `INSERT INTO opportunity_product_lines (opportunity_id, product_line_id)
+         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [opp.id, plId]
+      );
+    }
+    productLinesAfter = wanted;
+    afterLocal = { ...opp };
   } else {
     const column = field === 'dealValue' ? 'deal_value' : field;
     await db.query(`UPDATE opportunities SET ${column} = $1 WHERE id = $2`, [value, opp.id]);
@@ -422,11 +476,14 @@ async function applyFieldFix(userId, { opp, field, value, provider, groupId }) {
     }
   }
 
-  // sector/dealValue are Deal/Client Quality concepts; name/email/company corrections come
-  // from the General tab's "other issues" · general CRM hygiene, same strate as duplicates.
-  const strate = (field === 'sector' || field === 'dealValue')
-    ? (opp.status === 'won' ? 'client_quality' : 'deal_quality')
-    : 'duplicates';
+  // sector/dealValue/wonLostDate are Deal/Client Quality concepts; name/email/company
+  // corrections come from the General tab's "other issues" · general CRM hygiene, same
+  // strate as duplicates. Les lignes produit sont par construction un sujet client : le
+  // contrôle ne porte que sur des affaires gagnées.
+  const strate = field === 'productLines' ? 'client_quality'
+    : (field === 'sector' || field === 'dealValue' || field === 'wonLostDate')
+      ? (opp.status === 'won' ? 'client_quality' : 'deal_quality')
+      : 'duplicates';
   // opp.crm_provider can be null for locally-created/seeded contacts that still surfaced via a
   // provider's General-tab scan (the Notion/Airtable local-scan adapter isn't itself filtered
   // by provider · it lists every local opportunity). The request's own `provider` param
@@ -440,8 +497,8 @@ async function applyFieldFix(userId, { opp, field, value, provider, groupId }) {
     crmContactId: opp.crm_contact_id || null,
     opportunityId: opp.id,
     remoteAction,
-    beforeData: audit.snapshotContact(opp.crm_provider, beforeCrm, beforeLocal, null),
-    afterData: audit.snapshotContact(opp.crm_provider, null, afterLocal, null),
+    beforeData: audit.snapshotContact(opp.crm_provider, beforeCrm, beforeLocal, productLinesBefore),
+    afterData: audit.snapshotContact(opp.crm_provider, null, afterLocal, productLinesAfter),
   });
 
   // Which cached scan now holds a stale issue list · the caller invalidates it once per
@@ -547,56 +604,51 @@ function buildFixQueueRows({ flagged, field, domainMap, contextById }) {
 }
 
 // POST /api/data-quality/fix-queue
-// The work list behind the General tab's "Corriger" panel: every contact flagged for one
-// issue type, with a proposed value, the context needed to judge it, and the most valuable
-// contacts first. The proposal never writes anything · it lands in an editable field.
+// The work list behind every "Corriger" panel of the page, across the three strates. Returns
+// the flagged rows, a proposed value where one is honestly deducible, the context needed to
+// judge it, and the order to work in. A proposal never writes anything · it lands in an
+// editable field.
+//
+// Trois strates, trois entités, et c'est là que tient l'essentiel :
+//
+//   général · une ligne par CONTACT. Entreprise, nom, email : des attributs de personne.
+//   deal    · le secteur est une ligne par SOCIÉTÉ, pas par contact. Mesuré sur un tenant :
+//             110 contacts sans secteur pour 54 sociétés. Une file par contact ferait saisir
+//             deux fois la même réponse et permettrait de se contredire sur une même boîte.
+//             Le montant et la date de clôture restent, eux, par affaire.
+//   client  · une ligne par CLIENT GAGNÉ, éditeur à choix multiple sur les lignes produit.
 router.post('/fix-queue', async (req, res, next) => {
   try {
-    const { provider, issueType } = req.body;
-    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
-    const field = FIXABLE_FIELD_BY_ISSUE_TYPE[issueType];
-    if (!field) return res.status(400).json({ error: `issueType ${issueType} is not fixable by typing a value` });
+    const { strate = 'general', issueType } = req.body;
+    const kind = FIX_QUEUE_KINDS[issueType];
 
-    const cached = await db.crmCleaningReports.getLatestByProvider(req.user.id, provider);
-    if (!cached) return res.status(400).json({ error: 'No recent scan found for this provider, run a scan first' });
+    if (strate === 'general') {
+      return await generalFixQueue(req, res);
+    }
+    if (!kind || kind.strate !== strate) {
+      return res.status(400).json({ error: `issueType ${issueType} is not fixable in strate ${strate}` });
+    }
 
-    const issue = (cached.issues || []).find(i => i.type === issueType);
-    if (!issue) return res.json({ field, total: 0, listed: 0, rows: [] });
+    const issues = strate === 'deal'
+      ? await getOrComputeChecks(req.user.id, 'deal')
+      : await getOrComputeChecks(req.user.id, 'client');
+    const issue = (issues || []).find(i => i.type === issueType);
+    const base = { strate, issueType, field: kind.field, entity: kind.entity, editor: kind.editor };
 
-    const flagged = issue.contacts || [];
-    // Une proposition d'entreprise vaut par l'orthographe déjà retenue dans le CRM. La carte
-    // domaine → entreprise se construit sur les contacts qui, eux, ont les deux.
-    const known = field === 'company'
-      ? await db.query(
-          `SELECT email, company FROM opportunities
-           WHERE user_id = $1 AND email IS NOT NULL AND email <> '' AND company IS NOT NULL AND company <> ''`,
-          [req.user.id]
-        )
-      : { rows: [] };
-    const domainMap = companyGuess.buildDomainCompanyMap(known.rows);
+    // Les lignes produit disponibles sont l'éditeur lui-même · sans elles le panneau n'a
+    // rien à proposer, et l'onglet affiche de toute façon sa carte de configuration.
+    const options = kind.editor === 'productLines' ? await listProductLines(req.user.id) : undefined;
 
-    // Contexte local de chaque contact flaggé, en une requête · l'ordre de travail se décide
-    // dessus. Corriger l'entreprise d'un contact qui porte un deal ouvert vaut le détour,
-    // celle d'une fiche morte depuis deux ans beaucoup moins.
-    const ids = flagged.map(c => String(c.id));
-    const contextRows = ids.length === 0 ? [] : (await db.query(
-      LOCAL_SCAN_PROVIDERS.includes(provider)
-        ? `SELECT id::text AS key, id, status, deal_value, last_activity_at, company, email, name
-           FROM opportunities WHERE user_id = $1 AND id::text = ANY($2)`
-        : `SELECT crm_contact_id AS key, id, status, deal_value, last_activity_at, company, email, name
-           FROM opportunities WHERE user_id = $1 AND crm_provider = $3 AND crm_contact_id = ANY($2)`,
-      LOCAL_SCAN_PROVIDERS.includes(provider) ? [req.user.id, ids] : [req.user.id, ids, provider]
-    )).rows;
-    const contextById = new Map(contextRows.map(r => [String(r.key), r]));
+    if (!issue) return res.json({ ...base, options, total: 0, listed: 0, rows: [] });
 
-    const rows = buildFixQueueRows({ flagged, field, domainMap, contextById });
+    const rows = kind.entity === 'company'
+      ? await buildCompanyFixQueue(req.user.id, issue)
+      : await buildOpportunityFixQueue(req.user.id, issue, kind);
 
     res.json({
-      field,
-      // `total` est le compte réel du scan, `listed` ce que le rapport embarque. Les deux
-      // sont renvoyés parce qu'ils peuvent différer (voir FIXABLE_LIST_CAP) et que
-      // l'écran doit le dire plutôt que de laisser croire à une liste complète.
-      total: issue.count || flagged.length,
+      ...base,
+      options,
+      total: kind.entity === 'company' ? rows.length : (issue.count || (issue.contacts || []).length),
       listed: rows.length,
       rows,
     });
@@ -605,20 +657,242 @@ router.post('/fix-queue', async (req, res, next) => {
   }
 });
 
-// POST /api/data-quality/enrich-field/batch
-// Apply many single-field fixes at once: one cache invalidation instead of N, and one audit
-// group so the history tab undoes the whole apply in a single click.
+/** La file de l'onglet Général · une ligne par contact signalé par le scan du CRM. */
+async function generalFixQueue(req, res) {
+  const { provider, issueType } = req.body;
+  if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
+  const field = FIXABLE_FIELD_BY_ISSUE_TYPE[issueType];
+  if (!field) return res.status(400).json({ error: `issueType ${issueType} is not fixable by typing a value` });
+
+  const base = { strate: 'general', issueType, field, entity: 'contact', editor: 'text' };
+
+  const cached = await db.crmCleaningReports.getLatestByProvider(req.user.id, provider);
+  if (!cached) return res.status(400).json({ error: 'No recent scan found for this provider, run a scan first' });
+
+  const issue = (cached.issues || []).find(i => i.type === issueType);
+  if (!issue) return res.json({ ...base, total: 0, listed: 0, rows: [] });
+
+  const flagged = issue.contacts || [];
+  // Une proposition d'entreprise vaut par l'orthographe déjà retenue dans le CRM. La carte
+  // domaine → entreprise se construit sur les contacts qui, eux, ont les deux.
+  const known = field === 'company'
+    ? await db.query(
+        `SELECT email, company FROM opportunities
+         WHERE user_id = $1 AND email IS NOT NULL AND email <> '' AND company IS NOT NULL AND company <> ''`,
+        [req.user.id]
+      )
+    : { rows: [] };
+  const domainMap = companyGuess.buildDomainCompanyMap(known.rows);
+
+  // Contexte local de chaque contact flaggé, en une requête · l'ordre de travail se décide
+  // dessus. Corriger l'entreprise d'un contact qui porte un deal ouvert vaut le détour,
+  // celle d'une fiche morte depuis deux ans beaucoup moins.
+  const ids = flagged.map(c => String(c.id));
+  const contextRows = ids.length === 0 ? [] : (await db.query(
+    LOCAL_SCAN_PROVIDERS.includes(provider)
+      ? `SELECT id::text AS key, id, status, deal_value, last_activity_at, company, email, name
+         FROM opportunities WHERE user_id = $1 AND id::text = ANY($2)`
+      : `SELECT crm_contact_id AS key, id, status, deal_value, last_activity_at, company, email, name
+         FROM opportunities WHERE user_id = $1 AND crm_provider = $3 AND crm_contact_id = ANY($2)`,
+    LOCAL_SCAN_PROVIDERS.includes(provider) ? [req.user.id, ids] : [req.user.id, ids, provider]
+  )).rows;
+  const contextById = new Map(contextRows.map(r => [String(r.key), r]));
+
+  const rows = buildFixQueueRows({ flagged, field, domainMap, contextById });
+
+  return res.json({
+    ...base,
+    // `total` est le compte réel du scan, `listed` ce que le rapport embarque. Les deux
+    // sont renvoyés parce qu'ils peuvent différer (voir FIXABLE_LIST_CAP) et que
+    // l'écran doit le dire plutôt que de laisser croire à une liste complète.
+    total: issue.count || flagged.length,
+    listed: rows.length,
+    rows,
+  });
+}
+
+/** Lit les contrôles deal/client, du cache s'il est frais, sinon en les recalculant. */
+async function getOrComputeChecks(userId, which) {
+  const sentinel = which === 'client' ? '__client_quality__' : '__deal_quality__';
+  const cached = await db.crmCleaningReports.getLatestByProvider(userId, sentinel);
+  if (cached) return cached.issues;
+  const issues = which === 'client'
+    ? await dataQualityChecks.computeClientQualityIssues(userId)
+    : await dataQualityChecks.computeDealQualityIssues(userId);
+  await db.crmCleaningReports.create({ userId, provider: sentinel, score: 0, totalContacts: 0, summary: {}, issues });
+  return issues;
+}
+
+/** Les lignes produit de l'équipe · les options de l'éditeur à choix multiple. */
+async function listProductLines(userId) {
+  const result = await db.query(
+    `SELECT id, name FROM product_lines
+     WHERE team_id = (SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1)
+     ORDER BY name`,
+    [userId]
+  );
+  return result.rows.map(r => ({ id: r.id, label: r.name }));
+}
+
+/**
+ * File par SOCIÉTÉ (secteur). Les contacts signalés sont regroupés sur le nom de société, et
+ * chaque ligne porte les identifiants de tous ses contacts : appliquer écrit une fois la même
+ * valeur sur toute la société, ce qui est la seule façon de ne pas produire deux secteurs
+ * contradictoires pour une même boîte.
+ *
+ * La proposition vient de classifySector, le même agent que le scoring churn, donc un secteur
+ * canonique et pas du texte libre. Son cache (sector_normalization_cache) rend gratuits les
+ * appels suivants sur un nom déjà vu, y compris d'un utilisateur à l'autre.
+ */
+async function buildCompanyFixQueue(userId, issue) {
+  const ids = (issue.contacts || []).map(c => String(c.id));
+  if (ids.length === 0) return [];
+
+  const result = await db.query(
+    `SELECT id, name, company, email, status, deal_value, last_activity_at
+     FROM opportunities WHERE user_id = $1 AND id::text = ANY($2)`,
+    [userId, ids]
+  );
+
+  const byCompany = new Map();
+  for (const row of result.rows) {
+    // Un contact sans société n'a pas de secteur de société à recevoir · il relève de
+    // « entreprise manquante », dans l'onglet Général, et c'est par là qu'il faut passer.
+    const company = (row.company || '').trim();
+    if (!company) continue;
+    const key = company.toLowerCase();
+    if (!byCompany.has(key)) {
+      byCompany.set(key, { company, contacts: [], dealValue: 0, hasOpenDeal: false, lastActivityAt: null });
+    }
+    const group = byCompany.get(key);
+    group.contacts.push(row);
+    const value = Number(row.deal_value) || 0;
+    group.dealValue += value;
+    if (value > 0 && !CLOSED_STATUSES.has(row.status)) group.hasOpenDeal = true;
+    if (row.last_activity_at && (!group.lastActivityAt || row.last_activity_at > group.lastActivityAt)) {
+      group.lastActivityAt = row.last_activity_at;
+    }
+  }
+
+  const rows = [];
+  for (const group of byCompany.values()) {
+    // Un domaine professionnel dit souvent plus qu'une raison sociale seule ("Astria" contre
+    // "astriaingenierie.eu") · il est donné au classifieur en plus du nom.
+    const domain = group.contacts
+      .map(c => companyGuess.domainOf(c.email))
+      .find(d => d && !companyGuess.isPersonalDomain(d));
+    const suggestion = await classifySector(domain ? `${group.company} (${domain})` : group.company, 'client_industry');
+
+    rows.push({
+      id: group.company,
+      name: group.company,
+      email: null,
+      company: group.company,
+      contactIds: group.contacts.map(c => c.id),
+      contactCount: group.contacts.length,
+      currentValue: null,
+      suggestion: suggestion && suggestion !== NON_DETERMINE ? suggestion : null,
+      suggestionSource: suggestion && suggestion !== NON_DETERMINE ? 'classifier' : null,
+      hasOpenDeal: group.hasOpenDeal,
+      dealValue: group.dealValue,
+      lastActivityAt: group.lastActivityAt,
+      known: true,
+    });
+  }
+
+  return sortByImpact(rows);
+}
+
+/**
+ * File par AFFAIRE (montant, date de clôture) ou par CLIENT (lignes produit).
+ *
+ * Aucune proposition n'est faite ici, et c'est une décision, pas un manque :
+ *
+ *   montant · un montant deviné se propage dans les totaux, les classements et les
+ *             prévisions. Il n'existe aucune source locale qui le connaisse.
+ *   date    · deal-lifecycle-sync la remplit déjà depuis la vraie date du CRM. Qu'elle
+ *             manque veut dire que le CRM ne l'a pas, ou que la synchro n'a pas tourné.
+ *             `crm_stage_changed_at` NE convient PAS : il vaut l'instant où baakalai a
+ *             observé le changement, ce qui sur une affaire reprise d'un historique est
+ *             faux de plusieurs mois.
+ */
+async function buildOpportunityFixQueue(userId, issue, kind) {
+  const ids = (issue.contacts || []).map(c => String(c.id));
+  if (ids.length === 0) return [];
+
+  const result = await db.query(
+    `SELECT o.id, o.name, o.company, o.email, o.status, o.deal_value, o.last_activity_at,
+            o.won_date, o.lost_date,
+            COALESCE(
+              (SELECT array_agg(opl.product_line_id) FROM opportunity_product_lines opl
+               WHERE opl.opportunity_id = o.id),
+              ARRAY[]::uuid[]
+            ) AS product_line_ids
+     FROM opportunities o WHERE o.user_id = $1 AND o.id::text = ANY($2)`,
+    [userId, ids]
+  );
+
+  const rows = result.rows.map(row => {
+    const dealValue = Number(row.deal_value) || 0;
+    const currentValue = kind.field === 'dealValue' ? (row.deal_value ?? null)
+      : kind.field === 'wonLostDate' ? (row.status === 'won' ? row.won_date : row.lost_date)
+      : kind.field === 'productLines' ? (row.product_line_ids || [])
+      : null;
+
+    return {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      company: row.company,
+      status: row.status,
+      currentValue,
+      suggestion: null,
+      suggestionSource: null,
+      hasOpenDeal: dealValue > 0 && !CLOSED_STATUSES.has(row.status),
+      dealValue,
+      lastActivityAt: row.last_activity_at,
+      known: true,
+    };
+  });
+
+  return sortByImpact(rows);
+}
+
+/**
+ * Deal ouvert d'abord, puis montant, puis activité récente · calculé côté serveur pour que la
+ * pagination porte sur le bon ordre. Sur une liste à plat de 110 lignes, personne ne descend
+ * jusqu'en bas : ce qui n'est pas remonté ne sera pas traité.
+ */
+function sortByImpact(rows) {
+  return rows.sort((a, b) => {
+    if (a.hasOpenDeal !== b.hasOpenDeal) return a.hasOpenDeal ? -1 : 1;
+    if (b.dealValue !== a.dealValue) return b.dealValue - a.dealValue;
+    const at = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+    const bt = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+    return bt - at;
+  });
+}
+
+// POST /api/data-quality/fix-queue/apply
+// Apply many fixes at once, whatever the strate: one cache invalidation instead of N, and one
+// audit group so the history tab undoes the whole apply in a single click.
 //
-// `groupId` est facultatif et vient du client. Une correction de 140 contacts part en
-// plusieurs requêtes (chaque contact déclenche un appel à l'API du CRM, tout passer en une
-// fois dépasserait le délai d'attente du proxy), et ces requêtes doivent malgré tout
-// composer UNE annulation. Le client les coud donc avec un identifiant de groupe commun.
-router.post('/enrich-field/batch', async (req, res, next) => {
+// `groupId` est facultatif et vient du client. Une correction de 140 lignes part en plusieurs
+// requêtes (chaque ligne déclenche un appel à l'API du CRM, tout passer en une fois dépasserait
+// le délai d'attente du proxy), et ces requêtes doivent malgré tout composer UNE annulation.
+// Le client les coud donc avec un identifiant de groupe commun.
+router.post('/fix-queue/apply', async (req, res, next) => {
   try {
-    const { provider, field, items, groupId: clientGroupId } = req.body;
-    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
-    if (!SUPPORTED_FIX_FIELDS.includes(field)) {
-      return res.status(400).json({ error: `field must be one of: ${SUPPORTED_FIX_FIELDS.join(', ')}` });
+    const { strate = 'general', provider, issueType, items, groupId: clientGroupId } = req.body;
+
+    const kind = strate === 'general'
+      ? { field: FIXABLE_FIELD_BY_ISSUE_TYPE[issueType], entity: 'contact' }
+      : FIX_QUEUE_KINDS[issueType];
+    if (!kind?.field || (strate !== 'general' && kind.strate !== strate)) {
+      return res.status(400).json({ error: `issueType ${issueType} is not fixable in strate ${strate}` });
+    }
+    if (strate === 'general' && !validateProvider(provider)) {
+      return res.status(400).json({ error: `Unknown provider: ${provider}` });
     }
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'items (1 or more) is required' });
@@ -636,43 +910,133 @@ router.post('/enrich-field/batch', async (req, res, next) => {
     const groupId = clientGroupId || randomUUID();
     const applied = [];
     const failed = [];
-    let cacheProvider = null;
+    // Un ENSEMBLE, pas une variable : une société dont un contact est gagné et un autre en
+    // cours salit les deux caches, deal ET client. N'en retenir qu'un laissait l'autre
+    // afficher son problème comme non résolu jusqu'à expiration.
+    const cacheProviders = new Set();
 
     for (const item of items) {
-      const value = typeof item?.value === 'string' ? item.value.trim() : '';
-      if (!item?.crmContactId || !value) {
-        failed.push({ crmContactId: item?.crmContactId ?? null, error: 'crmContactId and a non-empty value are required' });
+      const value = normalizeFixValue(kind.field, item?.value);
+      if (item?.id === undefined || item?.id === null || value === null) {
+        failed.push({ id: item?.id ?? null, error: 'id and a usable value are required' });
         continue;
       }
       try {
-        const opp = await findLocalOpportunity(req.user.id, provider, item.crmContactId);
-        if (!opp) { failed.push({ crmContactId: item.crmContactId, error: 'Opportunity not found' }); continue; }
-        const result = await applyFieldFix(req.user.id, { opp, field, value, provider, groupId });
-        cacheProvider = result.cacheProvider || cacheProvider;
-        applied.push({ crmContactId: item.crmContactId, value, remoteAction: result.remoteAction });
+        // Une ligne de société porte plusieurs contacts · la même valeur est écrite sur
+        // chacun, sous le même groupe d'annulation.
+        const opps = await resolveFixTargets(req.user.id, { strate, provider, kind, item });
+        if (opps.length === 0) { failed.push({ id: item.id, error: 'Opportunity not found' }); continue; }
+        for (const opp of opps) {
+          const result = await applyFieldFix(req.user.id, { opp, field: kind.field, value, provider, groupId });
+          if (result.cacheProvider) cacheProviders.add(result.cacheProvider);
+        }
+        applied.push({ id: item.id, value, contacts: opps.length });
       } catch (err) {
-        // Un contact qui échoue (supprimé du CRM entre le scan et l'application, droit
-        // refusé) ne doit pas annuler les 139 autres · il est rapporté, pas propagé.
-        failed.push({ crmContactId: item.crmContactId, error: err.message });
+        // Une ligne qui échoue (contact supprimé du CRM entre le scan et l'application, droit
+        // refusé) ne doit pas annuler les autres · elle est rapportée, pas propagée.
+        failed.push({ id: item.id, error: err.message });
       }
     }
 
-    await invalidateScanCache(req.user.id, cacheProvider);
+    for (const cacheProvider of cacheProviders) {
+      await invalidateScanCache(req.user.id, cacheProvider);
+    }
     res.json({ ok: true, groupId, applied, failed });
   } catch (err) {
     next(err);
   }
 });
 
+/**
+ * Valeur utilisable pour ce champ, ou null si elle ne l'est pas. Le refus est aussi
+ * important que l'acceptation : un montant vide écraserait un chiffre par du néant, et une
+ * date bancale partirait dans les déclencheurs d'automatisation qui comptent des jours.
+ */
+function normalizeFixValue(field, raw) {
+  if (field === 'productLines') {
+    // Une liste vide est légitime ici : elle veut dire « retirer toutes les lignes ».
+    return Array.isArray(raw) ? raw.filter(Boolean) : null;
+  }
+  if (field === 'dealValue') {
+    if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0 ? raw : null;
+    // Le vide se teste AVANT la conversion : Number('') vaut 0, pas NaN. Sans cette garde,
+    // un champ montant laissé vide s'écrivait « 0 € » sur l'affaire, ce qui n'est pas une
+    // absence de montant mais un montant nul, et se propage dans les totaux et le tri par
+    // impact comme un chiffre que quelqu'un aurait affirmé.
+    const texte = String(raw ?? '').replace(/\s/g, '').replace(',', '.');
+    if (texte === '') return null;
+    const n = Number(texte);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  if (field === 'wonLostDate') {
+    const d = new Date(String(raw ?? ''));
+    if (Number.isNaN(d.getTime())) return null;
+    // Une affaire ne se clôt pas dans le futur · accepter une date en avant fausserait
+    // « gagné il y a N jours », sur quoi reposent l'upsell et les relances de rétention.
+    if (d.getTime() > Date.now()) return null;
+    return d.toISOString();
+  }
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  return s || null;
+}
+
+/** Les lignes opportunities que cette ligne de file doit écrire. */
+async function resolveFixTargets(userId, { strate, provider, kind, item }) {
+  if (strate === 'general') {
+    const opp = await findLocalOpportunity(userId, provider, item.id);
+    return opp ? [opp] : [];
+  }
+  if (kind.entity === 'company') {
+    // Résolu côté serveur à partir du nom de société, jamais à partir de la liste d'ids que
+    // le client a reçue : elle peut dater, et une société qui a gagné un contact depuis le
+    // scan doit le recevoir aussi plutôt que de rester à moitié renseignée.
+    const result = await db.query(
+      `SELECT * FROM opportunities
+       WHERE user_id = $1 AND lower(trim(company)) = lower(trim($2))`,
+      [userId, String(item.id)]
+    );
+    return result.rows;
+  }
+  const result = await db.query(
+    `SELECT * FROM opportunities WHERE user_id = $1 AND id = $2`,
+    [userId, item.id]
+  );
+  return result.rows;
+}
+
+/**
+ * Sous quelle clé `provider` un contrôle range ses lignes écartées.
+ *
+ * L'onglet Général scanne CRM par CRM, donc le vrai nom du provider. Les contrôles deal et
+ * client, eux, portent sur les lignes locales sans distinction d'origine : ils rangent sous
+ * un pseudo-provider, le même que celui de leur cache de scan. Deux contrôles différents ne
+ * partagent donc jamais leurs exclusions, ce qui est le comportement voulu : écarter un
+ * client du contrôle « lignes produit » ne l'écarte pas du contrôle « email invalide ».
+ */
+function ignoreScopeFor(strate, provider) {
+  if (strate === 'deal') return '__deal_quality__';
+  if (strate === 'client') return '__client_quality__';
+  return provider;
+}
+
+/** Les types de problèmes qu'un utilisateur peut écarter, toutes strates confondues. */
+function isIgnorableIssue(strate, issueType) {
+  if (strate === 'general') return crmCleaning.IGNORABLE_ISSUE_TYPES.includes(issueType);
+  const kind = FIX_QUEUE_KINDS[issueType];
+  return Boolean(kind) && kind.strate === strate;
+}
+
 // POST /api/data-quality/ignore
-// "Ce contact n'a pas d'entreprise, et c'est normal." Sort le contact du contrôle, sans
-// rien changer au contact lui-même. Réversible par DELETE sur la même route.
+// "Ce contact n'a pas d'entreprise, et c'est normal." Sort la ligne du contrôle, sans rien
+// changer à la donnée elle-même. Réversible par DELETE sur la même route.
 router.post('/ignore', async (req, res, next) => {
   try {
-    const { provider, issueType, contactIds } = req.body;
-    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
-    if (!crmCleaning.IGNORABLE_ISSUE_TYPES.includes(issueType)) {
-      return res.status(400).json({ error: `issueType must be one of: ${crmCleaning.IGNORABLE_ISSUE_TYPES.join(', ')}` });
+    const { strate = 'general', provider, issueType, contactIds } = req.body;
+    if (strate === 'general' && !validateProvider(provider)) {
+      return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    }
+    if (!isIgnorableIssue(strate, issueType)) {
+      return res.status(400).json({ error: `issueType ${issueType} cannot be set aside in strate ${strate}` });
     }
     const ids = (Array.isArray(contactIds) ? contactIds : []).map(String).filter(Boolean);
     if (ids.length === 0) return res.status(400).json({ error: 'contactIds (1 or more) is required' });
@@ -680,35 +1044,39 @@ router.post('/ignore', async (req, res, next) => {
     // pour éviter une charge utile déraisonnable, pas pour tenir un délai.
     if (ids.length > MAX_IGNORE_ITEMS) return res.status(400).json({ error: `contactIds is limited to ${MAX_IGNORE_ITEMS} per request` });
 
+    const scope = ignoreScopeFor(strate, provider);
     await db.query(
       `INSERT INTO data_quality_ignores (user_id, provider, crm_contact_id, issue_type)
        SELECT $1, $2, unnest($3::text[]), $4
        ON CONFLICT (user_id, provider, crm_contact_id, issue_type) DO NOTHING`,
-      [req.user.id, provider, ids, issueType]
+      [req.user.id, scope, ids, issueType]
     );
-    // Le compteur du scan tient compte des contacts écartés · le rapport en cache ne le
+    // Le compteur du contrôle tient compte des lignes écartées · le rapport en cache ne le
     // sait pas encore, il doit être refait.
-    await invalidateScanCache(req.user.id, provider);
+    await invalidateScanCache(req.user.id, scope);
     res.json({ ok: true, ignored: ids.length });
   } catch (err) {
     next(err);
   }
 });
 
-// DELETE /api/data-quality/ignore · remet les contacts dans le contrôle
+// DELETE /api/data-quality/ignore · remet les lignes dans le contrôle
 router.delete('/ignore', async (req, res, next) => {
   try {
-    const { provider, issueType, contactIds } = req.body;
-    if (!validateProvider(provider)) return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    const { strate = 'general', provider, issueType, contactIds } = req.body;
+    if (strate === 'general' && !validateProvider(provider)) {
+      return res.status(400).json({ error: `Unknown provider: ${provider}` });
+    }
     const ids = (Array.isArray(contactIds) ? contactIds : []).map(String).filter(Boolean);
     if (ids.length === 0) return res.status(400).json({ error: 'contactIds (1 or more) is required' });
 
+    const scope = ignoreScopeFor(strate, provider);
     const result = await db.query(
       `DELETE FROM data_quality_ignores
        WHERE user_id = $1 AND provider = $2 AND issue_type = $3 AND crm_contact_id = ANY($4)`,
-      [req.user.id, provider, issueType, ids]
+      [req.user.id, scope, issueType, ids]
     );
-    await invalidateScanCache(req.user.id, provider);
+    await invalidateScanCache(req.user.id, scope);
     res.json({ ok: true, restored: result.rowCount });
   } catch (err) {
     next(err);
@@ -907,3 +1275,5 @@ router.post('/gdpr/purge', async (req, res, next) => {
 
 module.exports = router;
 module.exports.buildFixQueueRows = buildFixQueueRows;
+module.exports.normalizeFixValue = normalizeFixValue;
+module.exports.sortByImpact = sortByImpact;

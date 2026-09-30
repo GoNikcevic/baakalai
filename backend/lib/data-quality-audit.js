@@ -16,16 +16,28 @@ const crmCleaning = require('./crm-cleaning-agent');
 
 /**
  * Build the { crm, local, productLineIds } snapshot shape shared by before_data/after_data.
- * `productLineIds` must be the contact's REAL current set (or [] if genuinely none) · passing
- * null/undefined here and letting it default to [] would make undo wipe out product lines that
- * existed before the change but were never captured (this bit a merge_keep contact's own
- * pre-merge assignments before relinkedChildren was introduced · see confirm-merge).
+ *
+ * `productLineIds` distingue TROIS cas, et la distinction porte une perte de données :
+ *
+ *   [1, 2]    · le contact portait ces lignes produit, l'annulation les rétablit
+ *   []        · le contact n'en portait aucune, l'annulation le laisse à zéro
+ *   null      · ce changement ne touchait pas aux lignes produit, l'annulation n'y touche pas
+ *
+ * Le troisième cas est le piège. La clé est OMISE du snapshot, parce que `undoGroup` teste
+ * `before.productLineIds !== undefined` et que `restoreProductLines` commence par un DELETE :
+ * un `[]` écrit là où il fallait « ne rien dire » fait effacer à l'annulation des lignes
+ * produit que le changement n'avait jamais touchées. Concrètement, corriger l'email d'un
+ * client puis annuler depuis l'onglet Historique lui retirait toutes ses lignes produit, donc
+ * le sortait définitivement du détecteur d'upsell, sans que rien ne relie la cause à l'effet.
+ * L'ancien `productLineIds || []` écrasait précisément la distinction que ce commentaire
+ * demandait de tenir.
  */
 function snapshotContact(provider, normalizedCrmContact, opportunityRow, productLineIds, extra) {
   return {
     crm: normalizedCrmContact || null,
     local: opportunityRow || null,
-    productLineIds: productLineIds || [],
+    // JSON.stringify retire les clés à undefined · c'est exactement l'effet recherché.
+    productLineIds: Array.isArray(productLineIds) ? productLineIds : undefined,
     ...(extra || {}),
   };
 }
