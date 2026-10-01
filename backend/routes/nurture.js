@@ -29,6 +29,7 @@ const { encrypt } = require('../config/crypto');
 const { sendPersonalEmail, sendNurtureEmail, testEmailAccount } = require('../lib/email-outbound');
 const { runNurtureEngine, generateEmail } = require('../lib/nurture-engine');
 const { matchContacts } = require('../lib/trigger-matching');
+const { loadAccountChurn } = require('../lib/churn-scoring');
 const { getStagnantDays } = require('../lib/stagnation');
 const logger = require('../lib/logger');
 
@@ -891,13 +892,18 @@ router.post('/preview', async (req, res, next) => {
     // partira réellement (cf. lib/stagnation.js).
     const stagnantDays = await getStagnantDays(req.user.id);
 
+    // Même chargement que le cron (lib/crm-agent.js stepNurture) : sans lui, la
+    // preview compterait les huit interlocuteurs d'une société quand le cron
+    // n'en relancerait qu'un.
+    const accountChurn = await loadAccountChurn(req.user.id);
+
     const previews = [];
 
     for (const trigger of triggers.rows) {
-      // Même logique de matching que le cron (lib/trigger-matching.js) · 
+      // Même logique de matching que le cron (lib/trigger-matching.js) ·
       // la preview affichait des contacts calculés sur updated_at alors que
       // le cron déclenchait sur last_activity_at.
-      let matched = matchContacts(trigger, opps, now, { stagnantDays });
+      let matched = matchContacts(trigger, opps, now, { stagnantDays, accountChurn });
 
       // Types évalués uniquement en run manuel (newsletter_*) : signaler
       // plutôt que d'ignorer silencieusement.

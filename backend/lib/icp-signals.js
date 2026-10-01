@@ -91,7 +91,54 @@ async function computeIcpSignals(userId) {
     const dealsCount = r.deals_count || 0;
     const wonCount = r.won_count || 0;
     const outcomeMapped = r.outcome_mapped_count || 0;
-    const seatRaw = (r.owner_id_count || 0) + (r.owner_email_only_count || 0);
+
+    // ── Les sièges se comptent sur les TROIS niveaux (lot 5) ──
+    //
+    // Compté sur les seuls contacts, ce signal est resté NULL sur 100 % des
+    // lignes de production : aucun des connecteurs ne remontait l'owner du
+    // contact. Or un Salesforce porte trois owners souvent distincts, et le
+    // commercial qu'on cherche à compter est celui de l'AFFAIRE ou du COMPTE,
+    // pas celui de la personne. Les migrations 124 et 126 ont créé les deux
+    // colonnes manquantes ; les lire est ce qui rend le signal calculable.
+    //
+    // Les deux registres restent SÉPARÉS, exactement comme sur la requête
+    // ci-dessus : selon le connecteur une personne est un id CRM ou une simple
+    // adresse, et les mélanger dans un COALESCE comptait « 12 » aussi bien
+    // qu'un email. Une requête à part et non une jointure : joindre accounts ou
+    // deals multiplierait les lignes d'opportunities et fausserait tous les
+    // comptages d'issue calculés plus haut.
+    let seatRaw = (r.owner_id_count || 0) + (r.owner_email_only_count || 0);
+    try {
+      const seats = await db.query(
+        `WITH tous AS (
+           SELECT crm_owner_id, owner_email FROM opportunities WHERE user_id = $1
+           UNION ALL
+           SELECT crm_owner_id, owner_email FROM accounts WHERE user_id = $1
+           UNION ALL
+           SELECT crm_owner_id, owner_email FROM deals WHERE user_id = $1
+         )
+         SELECT
+           count(DISTINCT crm_owner_id) FILTER (
+             WHERE crm_owner_id IS NOT NULL
+           )::int AS owner_id_count,
+           count(DISTINCT lower(owner_email)) FILTER (
+             WHERE crm_owner_id IS NULL AND owner_email IS NOT NULL
+           )::int AS owner_email_only_count
+         FROM tous`,
+        [userId]
+      );
+      const s = seats.rows[0] || {};
+      const elargi = (s.owner_id_count || 0) + (s.owner_email_only_count || 0);
+      // Jamais à la baisse : si les trois niveaux voient moins de monde que les
+      // contacts seuls, c'est une anomalie de lecture, pas une équipe qui a
+      // rétréci. On garde alors le comptage historique.
+      if (elargi > seatRaw) seatRaw = elargi;
+    } catch (err) {
+      // Les tables du chantier comptes peuvent manquer sur un environnement en
+      // retard de migration : le signal retombe sur le comptage par contact
+      // plutôt que de faire échouer tout le calcul ICP.
+      logger.warn('icp-signals', `Comptage des sieges sur comptes et affaires indisponible pour ${userId}`, { error: err.message });
+    }
 
     // Aucun deal : rien n'est mesurable, tout reste inconnu. On horodate
     // quand même, pour distinguer « jamais calculé » de « calculé, vide ».

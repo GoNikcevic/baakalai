@@ -28,6 +28,7 @@ const { extractActivityDate } = require('./crm-activity-date');
 const { extractCreatedDate } = require('./crm-origin');
 const { applyMappings } = require('./crm-field-mapper');
 const { matchContacts } = require('./trigger-matching');
+const { loadAccountChurn } = require('./churn-scoring');
 const { getStagnantDays } = require('./stagnation');
 const logger = require('./logger');
 
@@ -150,7 +151,7 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
 
     // ── Step 5: Churn Scoring ──
     try {
-      const { scoreAllForUser } = require('./churn-scoring');
+      const { scoreAllForUser, scoreAccountsForUser, AT_RISK_THRESHOLD } = require('./churn-scoring');
       let deals = [];
       try {
         if (crmProvider === 'pipedrive') deals = await pipedrive.getDeals(crmCreds, 500);
@@ -158,11 +159,32 @@ async function runAgent(userId, { trigger = 'scheduled', event = null } = {}) {
       } catch { /* ok */ }
       const churnReport = await scoreAllForUser(userId, { deals });
       report.churn = churnReport;
+
+      // Lot 5 : le compte est scoré À CÔTÉ du contact, pas à la place. Tant que
+      // les écrans lisent `opportunities.churn_score`, ils voient exactement ce
+      // qu'ils voyaient hier. Un échec ici ne doit donc pas emporter le scoring
+      // de contact, qui est encore la source de vérité de la page.
+      try {
+        const accountChurn = await scoreAccountsForUser(userId);
+        report.churnAccounts = accountChurn;
+        if (accountChurn.atRisk > 0) {
+          report.alerts.push({
+            type: 'churn_risk_accounts',
+            severity: accountChurn.atRisk >= 5 ? 'high' : 'warning',
+            message: `${accountChurn.atRisk} client(s) à risque de churn (score >= ${AT_RISK_THRESHOLD})`,
+          });
+        }
+      } catch (err) {
+        report.errors.push(`Churn comptes: ${err.message}`);
+      }
+
       if (churnReport.atRisk > 0) {
         report.alerts.push({
           type: 'churn_risk',
+          // Le seuil annoncé était 50 alors que AT_RISK_THRESHOLD vaut 60 : le
+          // compte affiché n'a jamais correspondu au chiffre écrit à côté.
+          message: `${churnReport.atRisk} contact(s) à risque de churn (score >= ${AT_RISK_THRESHOLD})`,
           severity: churnReport.atRisk >= 5 ? 'high' : 'warning',
-          message: `${churnReport.atRisk} contact(s) à risque de churn (score >= 50)`,
         });
       }
       // Real-time notification for high churn contacts (70+)
@@ -582,11 +604,16 @@ async function stepNurture(userId, token, report, { teamId = null, crmProvider =
     // réactivation (cf. lib/stagnation.js).
     const stagnantDays = await getStagnantDays(userId);
 
+    // Le signalement de churn au niveau COMPTE (migration 131). Chargé ici et
+    // passé au matcher pour que le cron et la preview voient exactement la même
+    // population : c'est leur divergence passée qui faisait mentir la preview.
+    const accountChurn = await loadAccountChurn(userId);
+
     for (const trigger of triggersResult.rows) {
-      // Logique de matching partagée avec la preview (routes/nurture.js) · 
+      // Logique de matching partagée avec la preview (routes/nurture.js) ·
       // toute divergence faisait mentir la preview. null = type évaluable
       // uniquement en run manuel (newsletter_* via nurture-engine).
-      let matched = matchContacts(trigger, opps, now, { stagnantDays });
+      let matched = matchContacts(trigger, opps, now, { stagnantDays, accountChurn });
       if (matched === null) continue;
 
       // Filter already-emailed

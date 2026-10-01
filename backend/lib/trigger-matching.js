@@ -26,6 +26,39 @@ const DAY_MS = 86400000;
 const MANUAL_ONLY_TYPES = ['newsletter_inactive', 'newsletter_engaged'];
 
 /**
+ * Un seul interlocuteur par société (lot 5).
+ *
+ * L'ordre de préférence est celui du produit, pas un hasard : l'interlocuteur
+ * principal élu par la migration 125 d'abord, et à défaut le plus récemment
+ * actif, parce que c'est celui dont on sait qu'il lit encore.
+ *
+ * Les contacts sans compte rattaché sortent tous : `account_id` NULL veut dire
+ * « société inconnue », pas « même société ». Les regrouper n'en garderait
+ * qu'un seul pour tout le reste de la base.
+ */
+function unParCompte(opps) {
+  const parCompte = new Map();
+  const sansCompte = [];
+
+  for (const o of opps) {
+    if (!o.account_id) { sansCompte.push(o); continue; }
+    const tenant = parCompte.get(o.account_id);
+    if (!tenant) { parCompte.set(o.account_id, o); continue; }
+
+    if (o.is_primary_contact && !tenant.is_primary_contact) {
+      parCompte.set(o.account_id, o);
+      continue;
+    }
+    if (tenant.is_primary_contact) continue;
+
+    const dateDe = x => new Date(x.last_activity_at || x.updated_at || x.created_at || 0).getTime();
+    if (dateDe(o) > dateDe(tenant)) parCompte.set(o.account_id, o);
+  }
+
+  return [...sansCompte, ...parCompte.values()];
+}
+
+/**
  * Retourne les opportunités qui matchent un trigger à l'instant `now`.
  * `defaults.stagnantDays` fournit le repli du trigger deal_stagnant quand il ne
  * porte pas de seuil explicite (cf. lib/stagnation.js).
@@ -106,7 +139,7 @@ function matchContacts(trigger, allOpps, now = Date.now(), defaults = {}) {
         return age !== null && age >= days;
       });
 
-    case 'churn_risk':
+    case 'churn_risk': {
       // Le churn est un état : sans date de franchissement, la règle
       // reproposerait la même population tous les jours. On matche donc sur
       // l'ÉVÉNEMENT « ce client vient de passer à risque » (churn_flagged_at,
@@ -116,12 +149,27 @@ function matchContacts(trigger, allOpps, now = Date.now(), defaults = {}) {
       // NB : `churn_flagged_at` doit être testée explicitement · ageDays()
       // retombe sur created_at quand la date est absente, ce qui ferait matcher
       // de vieux clients jamais signalés.
-      return opps.filter(o =>
-        o.status === 'won' &&
-        o.churn_flagged_at &&
-        (o.churn_score || 0) >= AT_RISK_THRESHOLD &&
-        inWindow(ageDays(o, o.churn_flagged_at), conditions.days || 0, 7)
-      );
+      //
+      // Lot 5 · `defaults.accountChurn` est la Map des comptes scorés
+      // (migration 131). Quand elle est fournie, c'est le signalement du COMPTE
+      // qui fait foi : un client qui part est une société, pas une personne.
+      // Absente, le comportement est exactement celui d'avant.
+      const parCompte = defaults.accountChurn;
+      const retenus = opps.filter(o => {
+        if (o.status !== 'won') return false;
+        const compte = parCompte && o.account_id ? parCompte.get(o.account_id) : null;
+        const flaggedAt = compte ? compte.flaggedAt : o.churn_flagged_at;
+        const score = compte ? compte.score : o.churn_score;
+        if (!flaggedAt) return false;
+        if ((score || 0) < AT_RISK_THRESHOLD) return false;
+        return inWindow(ageDays(o, flaggedAt), conditions.days || 0, 7);
+      });
+      // Un client à risque est UNE société, et on ne lui écrit qu'une fois. Sans
+      // ce repli, une société à huit interlocuteurs déclenchait huit relances le
+      // même jour, toutes vers le même domaine : le motif de spam exact que le
+      // lot 6 cherche à éviter.
+      return parCompte ? unParCompte(retenus) : retenus;
+    }
 
     case 'upsell_opportunity':
       return opps.filter(o => {

@@ -78,7 +78,14 @@ function scoreOpportunity(opp, {
   );
   const openDeals = oppDeals.filter(d => d.status === 'open');
 
-  if (oppDeals.length === 0 && opp.status === 'open' && opp.created_at) {
+  // Ce repli ne vaut QUE pour un contact. Au niveau compte, `created_at` est la
+  // date à laquelle la société est entrée dans le CRM, pas l'âge d'une affaire :
+  // l'appliquer donnait « Deal ouvert depuis 400d » à tout compte un peu ancien
+  // sans affaire, soit +25 points permanents et indifférenciés. Et le repli n'a
+  // plus de raison d'être ici : depuis la migration 128, un provider sans objet
+  // affaire reçoit des affaires dérivées. Un compte à zéro affaire n'en a
+  // réellement aucune en cours.
+  if (!opp.isAccount && oppDeals.length === 0 && opp.status === 'open' && opp.created_at) {
     const dealAge = (now - new Date(opp.created_at).getTime()) / DAY_MS;
     if (dealAge >= 90) {
       score += 25;
@@ -116,9 +123,16 @@ function scoreOpportunity(opp, {
   }
 
   // ── 3. Email engagement drop (max 20 pts) ──
-  const oppEmails = emails.filter(e =>
-    e.to_email?.toLowerCase() === opp.email?.toLowerCase()
-  );
+  // `emailSet` est posé par le scoring de COMPTE (scoreAccountsForUser) : un
+  // compte n'a pas une adresse mais celles de tous ses contacts, et sans ça la
+  // comparaison à `opp.email` undefined ne matcherait jamais rien, ce qui
+  // retirerait silencieusement 20 points sur 100 au score de tout compte.
+  // Absent pour un contact : le comportement ne change pas d'une virgule.
+  const oppEmails = emails.filter(e => {
+    const to = e.to_email?.toLowerCase();
+    if (!to) return false;
+    return opp.emailSet ? opp.emailSet.has(to) : to === opp.email?.toLowerCase();
+  });
 
   if (oppEmails.length > 0) {
     const recent = oppEmails.filter(e =>
@@ -162,14 +176,28 @@ function scoreOpportunity(opp, {
     factors.push({ signal: 'email_bounced', weight: 10, detail: `Email invalide depuis le ${new Date(opp.email_bounced_at).toLocaleDateString('fr-FR')}, contact probablement parti` });
   }
 
-  // ── 4. Contact completeness (max 10 pts) ──
-  let missingFields = 0;
-  if (!opp.email) missingFields++;
-  if (!opp.company) missingFields++;
-  if (!opp.title) missingFields++;
-  if (missingFields >= 2) {
-    score += 10;
-    factors.push({ signal: 'incomplete_profile', weight: 10, detail: `${missingFields} champ(s) manquant(s)` });
+  // ── 4. Complétude (max 10 pts) ──
+  // Un COMPTE n'a ni intitulé de poste ni adresse à lui : appliquer le compte
+  // de champs manquants du contact lui donnerait 2 manquants sur 3 et donc
+  // +10 points à TOUS les comptes, un décalage constant qui ne mesure rien.
+  // L'équivalent honnête au niveau société est l'injoignabilité du plan §8.1 :
+  // plus un seul interlocuteur porteur d'une adresse valide. C'est à la fois un
+  // précurseur de churn (le champion est parti) et le drapeau que tout job
+  // d'envoi doit filtrer.
+  if (opp.isAccount) {
+    if (opp.unreachable) {
+      score += 10;
+      factors.push({ signal: 'account_unreachable', weight: 10, detail: 'Aucun contact joignable dans ce compte' });
+    }
+  } else {
+    let missingFields = 0;
+    if (!opp.email) missingFields++;
+    if (!opp.company) missingFields++;
+    if (!opp.title) missingFields++;
+    if (missingFields >= 2) {
+      score += 10;
+      factors.push({ signal: 'incomplete_profile', weight: 10, detail: `${missingFields} champ(s) manquant(s)` });
+    }
   }
 
   // ── 5. Status-based adjustment (max 15 pts) ──
@@ -406,6 +434,323 @@ async function scoreAllForUser(userId, { deals = [], emails = [] } = {}) {
 }
 
 /**
+ * Score les COMPTES d'un utilisateur. Lot 5 du plan comptes.
+ *
+ * Réutilise `scoreOpportunity` plutôt que de dupliquer un barème : c'est la
+ * traduction directe de l'arbitrage du 2026-10-01, « les seuils ne bougent
+ * pas ». Deux barèmes qui dérivent l'un de l'autre, c'est la garantie qu'un
+ * contact et son compte finissent par se contredire à l'écran sans que personne
+ * ne sache lequel croire.
+ *
+ * Ce qui change, ce sont les ENTRÉES : un compte n'a pas une adresse mais
+ * celles de tous ses contacts, pas une date d'activité mais la plus récente des
+ * leurs, pas un statut mais celui que ses affaires dessinent.
+ */
+async function scoreAccountsForUser(userId, { emails = [] } = {}) {
+  const accountsRes = await db.query(
+    `SELECT id, name, industry, crm_created_at, created_at FROM accounts WHERE user_id = $1`,
+    [userId]
+  );
+  const accounts = accountsRes.rows;
+  if (accounts.length === 0) return { scored: 0, atRisk: 0 };
+
+  // Seuls les contacts RATTACHÉS comptent. Un contact dont `account_id` est NULL
+  // n'a pas encore de société connue (import antérieur au lot 2, ou CRM sans
+  // objet compte non encore dérivé) : le compter nulle part est juste, l'imputer
+  // à un compte au hasard ne le serait pas.
+  const contactsRes = await db.query(
+    `SELECT id, account_id, email, last_activity_at, created_at, status,
+            is_primary_contact, email_bounced_at, data
+       FROM opportunities
+      WHERE user_id = $1 AND account_id IS NOT NULL`,
+    [userId]
+  );
+
+  const dealsRes = await db.query(
+    `SELECT id, account_id, status, crm_created_at, crm_updated_at, created_at, updated_at
+       FROM deals
+      WHERE user_id = $1 AND account_id IS NOT NULL`,
+    [userId]
+  );
+
+  let allEmails = emails;
+  if (allEmails.length === 0) {
+    try {
+      const emailResult = await db.query(
+        `SELECT to_email, status, sentiment, replied_at, created_at, opportunity_id, metadata FROM nurture_emails WHERE user_id = $1`,
+        [userId]
+      );
+      allEmails = emailResult.rows;
+    } catch { allEmails = []; }
+  }
+
+  const contactsByAccount = new Map();
+  const accountByContact = new Map();
+  for (const c of contactsRes.rows) {
+    if (!contactsByAccount.has(c.account_id)) contactsByAccount.set(c.account_id, []);
+    contactsByAccount.get(c.account_id).push(c);
+    accountByContact.set(c.id, c.account_id);
+  }
+
+  const dealsByAccount = new Map();
+  for (const d of dealsRes.rows) {
+    if (!dealsByAccount.has(d.account_id)) dealsByAccount.set(d.account_id, []);
+    dealsByAccount.get(d.account_id).push(d);
+  }
+
+  // Les emails d'upsell se regroupent par COMPTE en passant par le contact
+  // destinataire : une proposition faite à un interlocuteur engage la société.
+  const upsellByAccount = new Map();
+  for (const e of allEmails) {
+    if (e.metadata?.chain !== 'auto_upsell' || !e.opportunity_id) continue;
+    const accId = accountByContact.get(e.opportunity_id);
+    if (!accId) continue;
+    if (!upsellByAccount.has(accId)) upsellByAccount.set(accId, []);
+    upsellByAccount.get(accId).push(e);
+  }
+
+  // Les signaux externes et de registre sont par nature des faits d'ENTREPRISE :
+  // une liquidation judiciaire ne frappe pas un interlocuteur. Ils étaient posés
+  // sur le contact faute de table compte ; ici ils rejoignent enfin leur objet.
+  const externalByAccount = new Map();
+  const registryByAccount = new Map();
+  try {
+    const sigResult = await db.query(
+      `SELECT opportunity_id, signal_type, source, detail, detected_at FROM churn_external_signals
+       WHERE user_id = $1 AND detected_at > now() - interval '90 days'`,
+      [userId]
+    );
+    const DAY30 = 30 * DAY_MS;
+    for (const s of sigResult.rows) {
+      const accId = accountByContact.get(s.opportunity_id);
+      if (!accId) continue;
+      const isRegistry = (s.source || '').startsWith('registry_');
+      const target = isRegistry ? registryByAccount : externalByAccount;
+      if (!isRegistry && Date.now() - new Date(s.detected_at).getTime() > DAY30) continue;
+      if (!target.has(accId)) target.set(accId, []);
+      target.get(accId).push(s);
+    }
+  } catch { /* table vide, cas normal */ }
+
+  let ownSectorMultiplier = 1.0;
+  try {
+    const profile = await db.query('SELECT sector FROM user_profiles WHERE user_id = $1', [userId]);
+    const ownSectorText = profile.rows[0]?.sector;
+    if (ownSectorText) {
+      const resolved = await getSectorMultiplier(ownSectorText, 'own_business');
+      ownSectorMultiplier = resolved.multiplier;
+    }
+  } catch { /* neutre */ }
+
+  // Le secteur se lit sur le COMPTE (accounts.industry), pas sur le contact.
+  // C'est plus juste et moins cher : une société a un secteur, ses huit
+  // interlocuteurs en avaient huit copies parfois divergentes.
+  const sectorMap = new Map();
+  const distinctSectors = [...new Set(accounts.map(a => a.industry).filter(Boolean))];
+  for (const raw of distinctSectors) {
+    try {
+      sectorMap.set(raw, await getSectorMultiplier(raw, 'client_industry'));
+    } catch {
+      sectorMap.set(raw, { multiplier: 1.0, sector: null });
+    }
+  }
+
+  const now = Date.now();
+  const results = [];
+  let atRisk = 0;
+
+  for (const account of accounts) {
+    const contacts = contactsByAccount.get(account.id) || [];
+    const accountDeals = dealsByAccount.get(account.id) || [];
+
+    // ── L'arbitrage du 2026-10-01, en une ligne ──
+    // La date d'activité du compte est la PLUS RÉCENTE de ses contacts. Les
+    // affaires n'y entrent volontairement pas : leur ancienneté est déjà
+    // mesurée par le facteur 2 (stagnation). La faire entrer ici aussi
+    // reviendrait à compter la même preuve deux fois, en sens inverse.
+    let lastActivity = null;
+    for (const c of contacts) {
+      const d = c.last_activity_at || c.created_at;
+      if (!d) continue;
+      const t = new Date(d).getTime();
+      if (!isNaN(t) && (lastActivity === null || t > lastActivity)) lastActivity = t;
+    }
+
+    // Statut du compte : ce que ses affaires dessinent, l'ouvert primant sur le
+    // gagné et le gagné sur le perdu. Une société qui a une affaire en cours
+    // n'est pas un client perdu, même si dix autres ont été perdues avant.
+    const statuses = new Set([
+      ...accountDeals.map(d => d.status),
+      ...(accountDeals.length === 0 ? contacts.map(c => c.status) : []),
+    ]);
+    const accountStatus = statuses.has('open') ? 'open'
+      : statuses.has('won') ? 'won'
+      : statuses.has('lost') ? 'lost'
+      : null;
+
+    const emailSet = new Set(
+      contacts.map(c => c.email?.toLowerCase()).filter(Boolean)
+    );
+
+    // Injoignable au sens du plan §8.1 : plus un seul interlocuteur porteur
+    // d'une adresse qui n'a pas définitivement rebondi. Dérivé à chaque passage,
+    // jamais stocké : la vérité reste le rattachement des contacts.
+    const unreachable = !contacts.some(c => c.email && !c.email_bounced_at);
+
+    // Le rebond ne compte que s'il frappe l'interlocuteur PRINCIPAL (migration
+    // 125) : c'est le départ du champion, le précurseur. Un opérationnel qui
+    // s'en va n'est pas le même événement, et le compte entier devenu
+    // injoignable est déjà couvert juste au-dessus.
+    const primary = contacts.find(c => c.is_primary_contact);
+    const bouncedAt = primary?.email_bounced_at || null;
+
+    // Sentinelle de rattachement : `scoreOpportunity` apparie les affaires par
+    // `person_id === crm_contact_id`. On lui donne un identifiant de compte des
+    // deux côtés pour que ses affaires lui reviennent toutes, plutôt que de
+    // dupliquer le facteur de stagnation ici.
+    const sentinel = `__account__${account.id}`;
+    const shapedDeals = accountDeals.map(d => ({
+      status: d.status,
+      person_id: sentinel,
+      updatedAt: d.crm_updated_at || d.updated_at,
+      created_at: d.crm_created_at || d.created_at,
+    }));
+
+    const sector = account.industry ? sectorMap.get(account.industry) : null;
+
+    const synthetic = {
+      isAccount: true,
+      unreachable,
+      emailSet,
+      crm_contact_id: sentinel,
+      company: account.name,
+      last_activity_at: lastActivity ? new Date(lastActivity).toISOString() : null,
+      created_at: account.crm_created_at || account.created_at,
+      status: accountStatus,
+      email_bounced_at: bouncedAt,
+    };
+
+    const { score, factors } = scoreOpportunity(synthetic, {
+      deals: shapedDeals,
+      activities: [],
+      emails: allEmails,
+      ownSectorMultiplier,
+      clientSectorMultiplier: sector?.multiplier ?? 1.0,
+      clientSectorLabel: sector?.sector ?? null,
+      upsellEmails: upsellByAccount.get(account.id) || [],
+      externalSignals: externalByAccount.get(account.id) || [],
+      registrySignals: registryByAccount.get(account.id) || [],
+    });
+
+    // Qui a maintenu ce compte en vie. C'est ce qui rend l'arbitrage révisable
+    // sans migration : le jour où un compte « sain » se révèle perdu, on peut
+    // lire que seul un opérationnel répondait encore.
+    if (lastActivity !== null) {
+      const keeper = contacts.find(c =>
+        new Date(c.last_activity_at || c.created_at).getTime() === lastActivity
+      );
+      factors.push({
+        signal: 'activity_source',
+        weight: 0,
+        detail: keeper
+          ? `Dernière activité portée par ${keeper.email || keeper.id}, ${Math.round((now - lastActivity) / DAY_MS)}d`
+          : `Dernière activité il y a ${Math.round((now - lastActivity) / DAY_MS)}d`,
+      });
+    }
+
+    results.push({
+      id: account.id,
+      score,
+      factors: JSON.stringify(factors),
+      lastActivity: lastActivity ? new Date(lastActivity).toISOString() : null,
+    });
+    if (score >= AT_RISK_THRESHOLD) atRisk++;
+  }
+
+  const BATCH_SIZE = 500;
+  for (let i = 0; i < results.length; i += BATCH_SIZE) {
+    const batch = results.slice(i, i + BATCH_SIZE);
+    try {
+      const values = batch.map((r, idx) =>
+        `($${idx * 4 + 1}::uuid, $${idx * 4 + 2}::int, $${idx * 4 + 3}::jsonb, $${idx * 4 + 4}::timestamptz)`
+      ).join(', ');
+      const params = batch.flatMap(r => [r.id, r.score, r.factors, r.lastActivity]);
+      await db.query(
+        // Même garde que sur le contact (migration 109) : `churn_flagged_at`
+        // date le FRANCHISSEMENT vers le haut. Dans un UPDATE, `a.churn_score`
+        // à droite du SET est l'ANCIENNE valeur, donc la comparaison oppose
+        // bien l'avant et l'après.
+        `UPDATE accounts AS a SET
+           churn_score = v.score,
+           churn_factors = v.factors,
+           churn_scored_at = now(),
+           last_activity_at = COALESCE(v.last_activity, a.last_activity_at),
+           churn_flagged_at = CASE
+             WHEN v.score < ${AT_RISK_THRESHOLD} THEN NULL
+             WHEN a.churn_score IS NULL OR a.churn_score < ${AT_RISK_THRESHOLD} THEN now()
+             ELSE a.churn_flagged_at
+           END
+         FROM (VALUES ${values}) AS v(id, score, factors, last_activity)
+         WHERE a.id = v.id`,
+        params
+      );
+    } catch (err) {
+      logger.error('churn-scoring', `Account batch update failed (batch ${Math.floor(i / BATCH_SIZE)}): ${err.message}`);
+    }
+
+    try {
+      const historyValues = batch.map((r, idx) =>
+        `($1, $${idx * 3 + 2}::uuid, $${idx * 3 + 3}::int, $${idx * 3 + 4}::jsonb)`
+      ).join(', ');
+      const historyParams = [userId, ...batch.flatMap(r => [r.id, r.score, r.factors])];
+      await db.query(
+        `INSERT INTO churn_score_history (user_id, account_id, score, factors) VALUES ${historyValues}`,
+        historyParams
+      );
+    } catch (err) {
+      logger.error('churn-scoring', `Account history insert failed (batch ${Math.floor(i / BATCH_SIZE)}): ${err.message}`);
+    }
+  }
+
+  logger.info('churn-scoring', `User ${userId}: scored ${results.length} comptes, ${atRisk} à risque`);
+
+  return { scored: results.length, atRisk };
+}
+
+/**
+ * Le signalement de churn par COMPTE, prêt pour lib/trigger-matching.js.
+ *
+ * Chargé une fois par run et passé au matcher plutôt que relu par trigger :
+ * un utilisateur a une poignée de règles mais peut avoir des centaines de
+ * comptes, et c'est surtout ce qui garantit que le cron et la preview évaluent
+ * la même population au même instant.
+ *
+ * Map vide si le lot 5 n'a jamais tourné pour cet utilisateur : le matcher
+ * retombe alors sur le signalement par contact, à l'identique d'avant.
+ *
+ * @returns {Promise<Map<string, {flaggedAt: string, score: number}>>}
+ */
+async function loadAccountChurn(userId) {
+  const map = new Map();
+  try {
+    const { rows } = await db.query(
+      `SELECT id, churn_flagged_at, churn_score
+         FROM accounts
+        WHERE user_id = $1 AND churn_flagged_at IS NOT NULL AND churn_score >= $2`,
+      [userId, AT_RISK_THRESHOLD]
+    );
+    for (const r of rows) {
+      map.set(r.id, { flaggedAt: r.churn_flagged_at, score: r.churn_score });
+    }
+  } catch (err) {
+    // Environnement en retard de migration : on rend une Map vide plutôt que de
+    // faire échouer l'évaluation des règles. Le matcher repasse sur le contact.
+    logger.warn('churn-scoring', `Signalement de churn par compte indisponible pour ${userId}`, { error: err.message });
+  }
+  return map;
+}
+
+/**
  * Get churn score band label and color
  */
 function getChurnBand(score) {
@@ -415,4 +760,7 @@ function getChurnBand(score) {
   return { band: 'low', color: 'var(--success)' };
 }
 
-module.exports = { scoreOpportunity, scoreAllForUser, getChurnBand, AT_RISK_THRESHOLD };
+module.exports = {
+  scoreOpportunity, scoreAllForUser, scoreAccountsForUser,
+  loadAccountChurn, getChurnBand, AT_RISK_THRESHOLD,
+};

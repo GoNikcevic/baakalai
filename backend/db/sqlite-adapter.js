@@ -416,6 +416,13 @@ function initSchema() {
       crm_created_at DATETIME,
       last_activity_at DATETIME,
       source TEXT NOT NULL DEFAULT 'crm',
+      -- Colonnes ajoutees par la migration 131 (lot 5) : le churn se score au
+      -- niveau du compte. churn_flagged_at date le FRANCHISSEMENT du seuil, pas
+      -- l'etat, meme role que sur opportunities (migration 109).
+      churn_score INTEGER,
+      churn_factors TEXT,
+      churn_scored_at DATETIME,
+      churn_flagged_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
