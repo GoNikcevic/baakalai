@@ -1219,18 +1219,25 @@ router.get('/stages', async (req, res, next) => {
     // null = pas de filtre actif (le prédicat $2::uuid[] IS NULL court-circuite)
     const oppIds = await filteredOppIds(userId, req.query);
 
-    const dist = await db.query(
-      `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
-       FROM opportunities
-       WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won', 'lost')
-         AND ($2::uuid[] IS NULL OR id = ANY($2))
-       GROUP BY crm_stage`,
-      [userId, oppIds]
-    );
+    // Lu sur `deals` (lib/deal-reads.js) : portée par un contact, l'étape ne
+    // pouvait décrire qu'une affaire sur N, et un contact à deux affaires dans
+    // deux étapes différentes n'apparaissait que dans une seule. Le repli sur
+    // `opportunities` est dans le module, pour les tenants dont la synchro du
+    // lot 4 n'est jamais passée : un pipeline qui tombe à zéro serait pire
+    // qu'un pipeline incomplet.
+    const { openDealsByStage } = require('../lib/deal-reads');
+    const parEtape = await openDealsByStage(userId, { contactIds: oppIds, limit: 100 });
+    const dist = { rows: parEtape.stages };
 
     if (dist.rows.length === 0) {
+      // « Aucune étape ouverte » et « ce CRM n'expose pas d'étapes » sont deux
+      // réponses différentes, et l'écran ne doit pas confondre les deux. La
+      // question se pose sur la MÊME source que le comptage, sinon un tenant
+      // basculé sur `deals` pourrait s'entendre dire que les étapes ne sont pas
+      // disponibles alors qu'elles le sont.
+      const table = parEtape.source === 'deals' ? 'deals' : 'opportunities';
       const any = await db.query(
-        `SELECT 1 FROM opportunities WHERE user_id = $1 AND crm_stage IS NOT NULL LIMIT 1`,
+        `SELECT 1 FROM ${table} WHERE user_id = $1 AND crm_stage IS NOT NULL LIMIT 1`,
         [userId]
       );
       if (!any.rows[0]) return res.json({ available: false });
@@ -1643,37 +1650,39 @@ async function buildAnalyticsContext(userId, filterQuery = null) {
     }
   }
 
-  const totals = await db.query(
+  // ── Les chiffres de CONTACT restent ici, ceux d'AFFAIRE passent sur `deals` ──
+  //
+  // Bascule des lecteurs due au lot 5 (lib/deal-reads.js). Mesure du 2026-10-01
+  // sur staging, au même instant : `opportunities` ne voyait que 109 affaires et
+  // 2 644 400 €, là où `deals` en voit 121 pour 3 008 000 €. 12 affaires et
+  // 13,8 % du pipeline étaient donc absents de tout ce que l'assistant
+  // analytique affirmait, parce que deux affaires ne tiennent pas sur la ligne
+  // d'une seule personne.
+  //
+  // `contacts` et `clients_at_churn_risk` comptent des PERSONNES et restent sur
+  // `opportunities` : les y mélanger était justement la confusion d'origine.
+  const contactTotals = await db.query(
     `SELECT
        COUNT(*)::int AS contacts,
-       COUNT(*) FILTER (WHERE status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals,
-       COALESCE(SUM(deal_value) FILTER (WHERE status NOT IN ('won','lost')), 0)::float AS open_value,
-       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '365 days')::int AS won_365d,
-       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '365 days')::int AS lost_365d,
-       COUNT(*) FILTER (WHERE status = 'won' AND won_date > now() - interval '90 days')::int AS won_90d,
-       COUNT(*) FILTER (WHERE status = 'lost' AND lost_date > now() - interval '90 days')::int AS lost_90d,
-       COUNT(*) FILTER (WHERE reactivated_at IS NOT NULL)::int AS deals_reactivated,
-       ROUND(AVG(EXTRACT(EPOCH FROM (won_date - created_at)) / 86400)
-         FILTER (WHERE status = 'won' AND won_date > created_at))::int AS avg_cycle_days,
-       COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS clients_at_churn_risk,
-       COUNT(*) FILTER (WHERE last_activity_at < now() - interval '30 days'
-         AND status NOT IN ('won','lost') AND deal_value > 0)::int AS open_deals_quiet_30d
+       COUNT(*) FILTER (WHERE status = 'won' AND churn_score >= 60)::int AS clients_at_churn_risk
      FROM opportunities WHERE user_id = $1 AND ($2::uuid[] IS NULL OR id = ANY($2))`,
     [userId, oppIds]
   );
-  ctx.totals = totals.rows[0];
+
+  const { dealTotals, openDealsByStage } = require('../lib/deal-reads');
+  const affaires = await dealTotals(userId, { contactIds: oppIds });
+  const { source: _src, deals_total: _dt, ...agregats } = affaires;
+
+  ctx.totals = { ...contactTotals.rows[0], ...agregats };
+  // D'où viennent les chiffres d'affaire. Sans ça, impossible de savoir en
+  // lisant une réponse de l'assistant si elle porte sur le pipeline complet ou
+  // sur la vue tronquée d'avant la bascule.
+  ctx.totals.deals_source = affaires.source;
   const w = ctx.totals.won_365d, l = ctx.totals.lost_365d;
   ctx.totals.win_rate_365d = (w + l) > 0 ? Math.round((w / (w + l)) * 100) : null;
 
-  const stages = await db.query(
-    `SELECT crm_stage AS stage, COUNT(*)::int AS count, COALESCE(SUM(deal_value), 0)::float AS value
-     FROM opportunities
-     WHERE user_id = $1 AND crm_stage IS NOT NULL AND status NOT IN ('won','lost')
-       AND ($2::uuid[] IS NULL OR id = ANY($2))
-     GROUP BY crm_stage ORDER BY count DESC LIMIT 15`,
-    [userId, oppIds]
-  );
-  if (stages.rows.length > 0) ctx.open_deals_by_crm_stage = stages.rows;
+  const parEtape = await openDealsByStage(userId, { contactIds: oppIds });
+  if (parEtape.stages.length > 0) ctx.open_deals_by_crm_stage = parEtape.stages;
 
   if (oppIds !== null) return ctx;
 
