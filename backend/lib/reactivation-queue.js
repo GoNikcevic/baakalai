@@ -70,17 +70,34 @@ async function listDealsToReactivate(userId, sort = 'overdue') {
 
   const failedIds = await failedSendIds(userId, 'deal_reactivation', result.rows.map(o => o.id));
 
+  // Lot 5 · le risque affiche a cote d'une affaire a relancer est celui de la
+  // SOCIETE, pas de la personne : c'est elle qui part. Le score du contact reste
+  // le repli tant qu'un compte n'a pas ete score.
+  const churnParCompte = new Map();
+  try {
+    const acc = await db.query(
+      `SELECT id, churn_score FROM accounts WHERE user_id = $1 AND churn_score IS NOT NULL`,
+      [userId]
+    );
+    for (const a of acc.rows) churnParCompte.set(a.id, a.churn_score);
+  } catch { /* environnement en retard de migration : repli sur le contact */ }
+
   const candidates = result.rows.map(o => {
     const overdue = computeOverdue(o);
+    const churnCompte = o.account_id ? churnParCompte.get(o.account_id) : undefined;
     return {
       id: o.id,
+      accountId: o.account_id || null,
       name: o.name,
       company: o.company,
       title: o.title,
       email: o.email,
       status: o.status,
       dealValue: o.deal_value,
-      churnScore: o.churn_score,
+      churnScore: churnCompte != null ? churnCompte : o.churn_score,
+      // D'ou vient le chiffre affiche. Sans cette distinction, impossible de
+      // savoir a l'ecran si on lit la sante d'une societe ou celle d'un contact.
+      churnScope: churnCompte != null ? 'account' : 'contact',
       ...overdue,
       reason: overdue.overdueLabel,
       hasFailedSend: failedIds.has(o.id),

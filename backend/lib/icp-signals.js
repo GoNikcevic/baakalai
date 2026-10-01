@@ -110,21 +110,24 @@ async function computeIcpSignals(userId) {
     let seatRaw = (r.owner_id_count || 0) + (r.owner_email_only_count || 0);
     try {
       const seats = await db.query(
-        `WITH tous AS (
-           SELECT crm_owner_id, owner_email FROM opportunities WHERE user_id = $1
-           UNION ALL
-           SELECT crm_owner_id, owner_email FROM accounts WHERE user_id = $1
-           UNION ALL
-           SELECT crm_owner_id, owner_email FROM deals WHERE user_id = $1
-         )
-         SELECT
+        // Sous-requete et non CTE : le miroir SQLite des tests reconnait une
+        // LECTURE au prefixe `SELECT` et aurait execute un `WITH` comme un ordre
+        // d ecriture, en rendant zero ligne sans la moindre erreur. Le comptage
+        // serait alors reste nul en silence, exactement le defaut qu on repare.
+        `SELECT
            count(DISTINCT crm_owner_id) FILTER (
              WHERE crm_owner_id IS NOT NULL
            )::int AS owner_id_count,
            count(DISTINCT lower(owner_email)) FILTER (
              WHERE crm_owner_id IS NULL AND owner_email IS NOT NULL
            )::int AS owner_email_only_count
-         FROM tous`,
+         FROM (
+           SELECT crm_owner_id, owner_email FROM opportunities WHERE user_id = $1
+           UNION ALL
+           SELECT crm_owner_id, owner_email FROM accounts WHERE user_id = $1
+           UNION ALL
+           SELECT crm_owner_id, owner_email FROM deals WHERE user_id = $1
+         ) AS tous`,
         [userId]
       );
       const s = seats.rows[0] || {};

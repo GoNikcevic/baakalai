@@ -59,17 +59,89 @@ async function run(userId) {
       positiveByOpp.set(r.opportunity_id, parseInt(r.count));
     }
 
+    // ── Lot 5 : l'upsell se raisonne par SOCIÉTÉ ──
+    //
+    // Trois choses fausses tant qu'on raisonne par contact :
+    //
+    //   · une société à huit interlocuteurs gagnés produisait huit propositions
+    //     d'upsell, donc huit emails au même domaine.
+    //   · le cross-sell se calculait par personne : si Paul porte la ligne A et
+    //     Marie la ligne B, chacun paraissait à qui il manque l'autre. La
+    //     société, elle, possède déjà les deux.
+    //   · « risque de churn faible » lisait le score du contact, qui ne dit rien
+    //     de la santé de la relation commerciale.
+    //
+    // Et surtout, le signal canonique du produit devient enfin lisible : un
+    // compte qui porte À LA FOIS une affaire gagnée et une affaire ouverte,
+    // c'est la définition même de l'upsell (plan, en-tête de la migration 124).
+    // Il était invisible par construction, puisque deux affaires ne tenaient pas
+    // sur la ligne d'une seule personne.
+    const comptes = new Map();
+    try {
+      const accRes = await db.query(
+        `SELECT id, churn_score FROM accounts WHERE user_id = $1`, [userId]
+      );
+      for (const a of accRes.rows) comptes.set(a.id, { churnScore: a.churn_score, statuses: new Set() });
+
+      const dealRes = await db.query(
+        `SELECT account_id, status FROM deals WHERE user_id = $1 AND account_id IS NOT NULL`, [userId]
+      );
+      for (const d of dealRes.rows) comptes.get(d.account_id)?.statuses.add(d.status);
+    } catch (err) {
+      // Environnement en retard de migration : on retombe sur le raisonnement
+      // par contact plutôt que de priver l'utilisateur de tout upsell.
+      logger.warn('upsell-detector', `Lecture des comptes indisponible pour ${userId}: ${err.message}`);
+    }
+
+    // Un sujet = une société, ou un contact encore sans société rattachée.
+    // `account_id` NULL veut dire « société inconnue », pas « même société » :
+    // les regrouper n'en garderait qu'un pour toute la base.
+    const sujets = [];
+    const parCompte = new Map();
+    for (const c of won) {
+      if (!c.account_id || !comptes.has(c.account_id)) { sujets.push({ contacts: [c] }); continue; }
+      if (!parCompte.has(c.account_id)) {
+        const s = { accountId: c.account_id, contacts: [] };
+        parCompte.set(c.account_id, s);
+        sujets.push(s);
+      }
+      parCompte.get(c.account_id).contacts.push(c);
+    }
+
     const now = Date.now();
 
-    for (const client of won) {
+    for (const sujet of sujets) {
+      // L'email part vers une PERSONNE : l'interlocuteur principal élu par la
+      // migration 125, sinon celui dont on sait qu'il lit encore.
+      const client = sujet.contacts.find(c => c.is_primary_contact)
+        || [...sujet.contacts].sort((a, b) =>
+             new Date(b.last_activity_at || b.won_date || b.created_at || 0)
+             - new Date(a.last_activity_at || a.won_date || a.created_at || 0))[0];
+
+      const compte = sujet.accountId ? comptes.get(sujet.accountId) : null;
       // won_date is the precise signal (set by CRM sync at the moment a deal transitions to
       // won); last_activity_at is a reasonable fallback for legacy won deals that predate it.
       // `updated_at` is reset to now() by a DB trigger on every internal write and must
       // never be used to measure maturity.
-      const wonReference = client.won_date || client.last_activity_at || client.created_at;
+      // Maturité : le gain le PLUS RÉCENT de la société. Prendre le plus ancien
+      // ferait passer pour mature une relation relancée le mois dernier.
+      const wonReference = sujet.contacts
+        .map(c => c.won_date || c.last_activity_at || c.created_at)
+        .filter(Boolean)
+        .sort((a, b) => new Date(b) - new Date(a))[0] || client.created_at;
       const daysSinceWon = (now - new Date(wonReference).getTime()) / DAY_MS;
-      const assignedPLs = new Set(assignsByOpp.get(client.id) || []);
-      const positiveCount = positiveByOpp.get(client.id) || 0;
+
+      // Union des lignes produit sur toute la société, pas sur une personne :
+      // c'est le compte qui possède un produit, pas son interlocuteur.
+      const assignedPLs = new Set();
+      for (const c of sujet.contacts) {
+        for (const pl of (assignsByOpp.get(c.id) || [])) assignedPLs.add(pl);
+      }
+
+      // Les interactions positives de tous les interlocuteurs comptent : la
+      // relation est bonne avec la société, pas avec une seule personne.
+      const positiveCount = sujet.contacts
+        .reduce((n, c) => n + (positiveByOpp.get(c.id) || 0), 0);
 
       // Score upsell potential. `factors` mirrors churn-scoring.js's
       // {signal, weight, detail} shape so the frontend can render the same
@@ -108,8 +180,18 @@ async function run(userId) {
         score += weight; reasons.push(detail); factors.push({ signal: 'cross_sell', weight, detail });
       }
 
-      // Low churn risk = good candidate
-      if (client.churn_score != null && client.churn_score < 30) {
+      // LE signal d'upsell du produit : la société a déjà acheté, et quelque
+      // chose est en cours chez elle. Invisible avant le lot 4, puisque deux
+      // affaires ne tenaient pas sur la ligne d'une seule personne.
+      if (compte && compte.statuses.has('won') && compte.statuses.has('open')) {
+        const detail = 'Affaire en cours chez un client deja gagne';
+        score += 25; reasons.push(detail); factors.push({ signal: 'open_deal_alongside_won', weight: 25, detail });
+      }
+
+      // Risque de churn faible = bon candidat. Lu sur le COMPTE quand il existe :
+      // le score d'une personne ne dit rien de la sante de la relation.
+      const churnScore = compte && compte.churnScore != null ? compte.churnScore : client.churn_score;
+      if (churnScore != null && churnScore < 30) {
         const detail = 'Risque churn faible';
         score += 15; reasons.push(detail); factors.push({ signal: 'low_churn', weight: 15, detail });
       }
@@ -121,6 +203,11 @@ async function run(userId) {
 
         report.opportunities.push({
           contactId: client.id,
+          // La société derrière la proposition, et le nombre d'interlocuteurs
+          // qu'elle porte. NULL tant que le contact n'est rattaché à aucun
+          // compte : l'écran du lot 7 doit pouvoir distinguer les deux.
+          accountId: sujet.accountId || null,
+          contactsInAccount: sujet.contacts.length,
           name: client.name,
           company: client.company,
           email: client.email,

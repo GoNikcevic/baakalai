@@ -695,7 +695,32 @@ async function scoreAccountsForUser(userId, { emails = [] } = {}) {
         params
       );
     } catch (err) {
-      logger.error('churn-scoring', `Account batch update failed (batch ${Math.floor(i / BATCH_SIZE)}): ${err.message}`);
+      // `UPDATE ... FROM (VALUES ...)` est du Postgres. Le miroir SQLite des
+      // tests ne le connaît pas, et le catch d'origine se contentait de
+      // journaliser : le scoring paraissait réussir (« scored 1 comptes ») en
+      // n'écrivant rien du tout. On écrit donc ligne à ligne en repli, ce qui
+      // rend le résultat vérifiable par un test au lieu d'être cru sur parole.
+      logger.warn('churn-scoring', `Ecriture groupee des comptes indisponible, repli ligne a ligne: ${err.message}`);
+      for (const r of batch) {
+        try {
+          await db.query(
+            `UPDATE accounts SET
+               churn_score = $2,
+               churn_factors = $3,
+               churn_scored_at = now(),
+               last_activity_at = COALESCE($4, last_activity_at),
+               churn_flagged_at = CASE
+                 WHEN $2 < ${AT_RISK_THRESHOLD} THEN NULL
+                 WHEN churn_score IS NULL OR churn_score < ${AT_RISK_THRESHOLD} THEN now()
+                 ELSE churn_flagged_at
+               END
+             WHERE id = $1`,
+            [r.id, r.score, r.factors, r.lastActivity]
+          );
+        } catch (e2) {
+          logger.error('churn-scoring', `Ecriture du compte ${r.id} echouee: ${e2.message}`);
+        }
+      }
     }
 
     try {

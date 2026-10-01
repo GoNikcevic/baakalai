@@ -493,6 +493,28 @@ function initSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS deals_crm_unique
       ON deals (user_id, crm_provider, crm_deal_id) WHERE crm_deal_id IS NOT NULL;
 
+    -- L'historique des scores de churn. Absent du miroir jusqu'au lot 5, ce qui
+    -- rendait tout le scoring invisible aux tests : l'insertion echouait sur
+    -- « no such table », le catch se contentait de journaliser, et le run
+    -- annoncait quand meme son nombre de lignes scorees.
+    --
+    -- opportunity_id est NULLABLE depuis la migration 131 : une ligne porte sur
+    -- un contact OU sur un compte. Y glisser le contact principal d'un compte
+    -- serait un mensonge qui polluerait son propre historique.
+    -- (Pas d accent grave ici : ce bloc vit dans un gabarit JavaScript, un
+    --  backtick y terminerait la chaine.)
+    CREATE TABLE IF NOT EXISTS churn_score_history (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      opportunity_id TEXT,
+      account_id TEXT,
+      deal_id TEXT,
+      score INTEGER NOT NULL,
+      factors TEXT,
+      scored_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK (opportunity_id IS NOT NULL OR account_id IS NOT NULL)
+    );
+
     -- Ce que baakalai a mesuré puis deduit de l'architecture du CRM
     -- (migration 127). Deux tables et pas une : la mesure est horodatee et
     -- conservee, parce que c'est la comparaison de deux mesures qui detecte
