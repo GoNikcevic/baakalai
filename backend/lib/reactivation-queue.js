@@ -12,6 +12,7 @@ const upsellDetector = require('./agents/upsell-detector');
 
 const DAY_MS = 86400000;
 const { getStagnantDays } = require('./stagnation');
+const logger = require('./logger');
 
 // `last_activity_at` (populated from real CRM changes) is the trustworthy staleness signal · 
 // `updated_at` gets reset to now() by a DB trigger on every internal write (churn scoring,
@@ -55,6 +56,24 @@ function isDue(opp, stagnantDays) {
  */
 async function listDealsToReactivate(userId, sort = 'overdue') {
   const stagnantDays = await getStagnantDays(userId);
+
+  // ── Les deux dates sont calculées en JS et passées en paramètre ────────────
+  //
+  // La requête employait `now() - ($2 || ' days')::interval`. C'est du Postgres
+  // pur, et l'adaptateur SQLite des tests n'efface pas `::interval` : il ne
+  // connaît que les casts scalaires. La requête échouait donc sur
+  // « unrecognized token: ":" », ce qui veut dire que cette file n'a JAMAIS pu
+  // s'exécuter sous le miroir, donc n'a jamais été couverte par un test.
+  // Decouvert en ecrivant les tests du lot 7.
+  //
+  // `now()` posait le second piège, celui que lib/account-list.js documente
+  // deja : traduit en `datetime('now')`, il produit « 2026-10-01 12:00:00 »
+  // quand les valeurs stockées sont des ISO « 2026-10-01T12:00:00.000Z », et le
+  // « T » pèse plus lourd que l'espace dans une comparaison lexicale. Des deux
+  // côtés en ISO, la comparaison est juste partout.
+  const seuilStagnation = new Date(Date.now() - stagnantDays * DAY_MS).toISOString();
+  const maintenant = new Date().toISOString();
+
   const result = await db.query(
     `SELECT * FROM opportunities
      WHERE user_id = $1 AND status NOT IN ('won', 'lost')
@@ -62,45 +81,134 @@ async function listDealsToReactivate(userId, sort = 'overdue') {
        -- eu d'échange à « réactiver » (cf. lib/crm-scope.js).
        AND campaign_id IS NULL
        AND (
-         (planned_followup_date IS NULL AND COALESCE(last_activity_at, created_at) < now() - ($2 || ' days')::interval)
-         OR (planned_followup_date IS NOT NULL AND planned_followup_date <= now())
+         (planned_followup_date IS NULL AND COALESCE(last_activity_at, created_at) < $2)
+         OR (planned_followup_date IS NOT NULL AND planned_followup_date <= $3)
        )`,
-    [userId, String(stagnantDays)]
+    [userId, seuilStagnation, maintenant]
   );
 
   const failedIds = await failedSendIds(userId, 'deal_reactivation', result.rows.map(o => o.id));
 
-  // Lot 5 · le risque affiche a cote d'une affaire a relancer est celui de la
-  // SOCIETE, pas de la personne : c'est elle qui part. Le score du contact reste
-  // le repli tant qu'un compte n'a pas ete score.
+  // ── Une carte par SOCIETE, ses affaires listees dedans (lot 7) ──
+  //
+  // La file rendait un CONTACT par ligne. Une societe a trois interlocuteurs
+  // dormants y apparaissait donc trois fois, et un envoi groupe faisait partir
+  // trois messages au meme domaine le meme jour · le motif de spam exact que la
+  // regle du lot 5 interdit.
+  //
+  // Arbitrage : une ligne par AFFAIRE, parce que c'est l'affaire qu'on relance
+  // et c'est elle qui porte le montant, mais GROUPEES par societe avec un seul
+  // envoi. Masquer les affaires derriere un total aurait cache ce qu'on va
+  // relancer ; les lister a plat aurait fait partir trois emails.
+  //
+  // La SELECTION ne change pas : une societe entre dans la file si l'un de ses
+  // contacts est du, exactement comme avant. Seule l'unite d'affichage et
+  // d'action change.
   const churnParCompte = new Map();
+  const affairesParCompte = new Map();
   try {
     const acc = await db.query(
       `SELECT id, churn_score FROM accounts WHERE user_id = $1 AND churn_score IS NOT NULL`,
       [userId]
     );
     for (const a of acc.rows) churnParCompte.set(a.id, a.churn_score);
-  } catch { /* environnement en retard de migration : repli sur le contact */ }
 
-  const candidates = result.rows.map(o => {
-    const overdue = computeOverdue(o);
-    const churnCompte = o.account_id ? churnParCompte.get(o.account_id) : undefined;
+    // Les affaires OUVERTES de ces comptes : ce sont elles qu'on relance. Une
+    // affaire gagnee ou perdue n'a plus rien a relancer.
+    const comptes = [...new Set(result.rows.map(o => o.account_id).filter(Boolean))];
+    if (comptes.length > 0) {
+      const trous = comptes.map((_, i) => `$${i + 2}`).join(', ');
+      const aff = await db.query(
+        `SELECT id, account_id, name, deal_value, currency, crm_stage,
+                crm_updated_at, updated_at, last_activity_at
+           FROM deals
+          WHERE user_id = $1 AND account_id IN (${trous})
+            AND status NOT IN ('won', 'lost')
+          ORDER BY deal_value DESC NULLS LAST`,
+        [userId, ...comptes]
+      );
+      for (const d of aff.rows) {
+        if (!affairesParCompte.has(d.account_id)) affairesParCompte.set(d.account_id, []);
+        affairesParCompte.get(d.account_id).push(d);
+      }
+    }
+  } catch (err) {
+    // Environnement en retard de migration : la file retombe sur le contact,
+    // ce qui est le comportement d'avant le lot 7 plutot qu'une page vide.
+    logger.warn('reactivation-queue', `Affaires par compte indisponibles pour ${userId}: ${err.message}`);
+  }
+
+  // Regroupement. Un contact sans societe rattachee reste son propre groupe :
+  // `account_id` NULL veut dire « societe inconnue », pas « meme societe », et
+  // les fusionner n'en garderait qu'un pour tout le reste de la base.
+  const groupes = new Map();
+  for (const o of result.rows) {
+    const cle = o.account_id ? `compte:${o.account_id}` : `personne:${o.id}`;
+    if (!groupes.has(cle)) groupes.set(cle, []);
+    groupes.get(cle).push(o);
+  }
+
+  const jours = (d) => d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY_MS) : null;
+
+  const candidates = [...groupes.values()].map(membres => {
+    // La cible de l'envoi : le principal d'abord, puis le plus recemment actif,
+    // et jamais une adresse qui a definitivement rebondi.
+    const joignables = membres.filter(m => m.email && !m.email_bounced_at);
+    const cible = joignables.find(m => m.is_primary_contact)
+      || joignables.sort((a, b) =>
+           new Date(b.last_activity_at || 0) - new Date(a.last_activity_at || 0))[0]
+      || membres.find(m => m.is_primary_contact)
+      || membres[0];
+
+    const accountId = cible.account_id || null;
+    const affaires = accountId ? (affairesParCompte.get(accountId) || []) : [];
+
+    // Le groupe est du depuis le contact le PLUS en retard : c'est lui qui a
+    // fait entrer la societe dans la file.
+    const overdue = membres
+      .map(computeOverdue)
+      .sort((a, b) => b.overdueDays - a.overdueDays)[0];
+
+    const churnCompte = accountId ? churnParCompte.get(accountId) : undefined;
+
+    // Montant : la somme des affaires ouvertes de la societe quand on les
+    // connait, sinon la ligne du contact. Deux affaires sur une personne ne
+    // tiennent pas sur sa ligne, c'est tout l'objet de la bascule.
+    const montantAffaires = affaires.reduce((s, d) => s + Number(d.deal_value || 0), 0);
+    const montantContacts = membres.reduce((s, m) => s + Number(m.deal_value || 0), 0);
+
     return {
-      id: o.id,
-      accountId: o.account_id || null,
-      name: o.name,
-      company: o.company,
-      title: o.title,
-      email: o.email,
-      status: o.status,
-      dealValue: o.deal_value,
-      churnScore: churnCompte != null ? churnCompte : o.churn_score,
+      // Sujet des actions : une personne, parce qu'on ecrit a une personne. Le
+      // contrat de /reactivation/:opportunityId/draft est donc inchange.
+      id: cible.id,
+      accountId,
+      name: cible.name,
+      company: cible.company,
+      title: cible.title,
+      email: joignables.length > 0 ? cible.email : null,
+      status: cible.status,
+      dealValue: affaires.length > 0 ? montantAffaires : montantContacts,
+      // Les AFFAIRES a relancer, listees dans la carte. Vide quand la societe
+      // n'est pas rattachee ou que `deals` n'a rien : l'ecran n'affiche alors
+      // rien de plus, au lieu d'un cadre vide.
+      deals: affaires.map(d => ({
+        id: d.id,
+        name: d.name,
+        value: d.deal_value,
+        currency: d.currency,
+        stage: d.crm_stage,
+        stalledDays: jours(d.crm_updated_at || d.last_activity_at || d.updated_at),
+      })),
+      contactsCount: membres.length,
+      // L'ecran doit pouvoir dire POURQUOI rien ne partira.
+      injoignable: joignables.length === 0,
+      churnScore: churnCompte != null ? churnCompte : cible.churn_score,
       // D'ou vient le chiffre affiche. Sans cette distinction, impossible de
       // savoir a l'ecran si on lit la sante d'une societe ou celle d'un contact.
       churnScope: churnCompte != null ? 'account' : 'contact',
       ...overdue,
       reason: overdue.overdueLabel,
-      hasFailedSend: failedIds.has(o.id),
+      hasFailedSend: membres.some(m => failedIds.has(m.id)),
     };
   });
 
@@ -206,14 +314,33 @@ async function postponeOpportunity(userId, opportunityId, date) {
  */
 async function failedSendIds(userId, kind, opportunityIds) {
   if (opportunityIds.length === 0) return new Set();
+
+  // `SELECT DISTINCT ON (...)` et `= ANY($2)` sont du Postgres pur, que le
+  // miroir SQLite des tests ne connaît ni l'un ni l'autre : la requête
+  // échouait sur « near "ON" », donc cette fonction n'a jamais pu s'exécuter
+  // sous le miroir et le badge « envoi échoué » n'a jamais été couvert.
+  //
+  // La sémantique est conservée au mot près : on ne retient que le DERNIER
+  // email de chaque contact, et on ne signale que s'il a échoué. Un contact
+  // dont le dernier envoi a réussi après un échec n'est pas en échec.
+  const trous = opportunityIds.map((_, i) => `$${i + 3}`).join(', ');
   const result = await db.query(
-    `SELECT DISTINCT ON (opportunity_id) opportunity_id, status
-     FROM nurture_emails
-     WHERE user_id = $1 AND opportunity_id = ANY($2) AND metadata ->> 'chain' = $3
-     ORDER BY opportunity_id, created_at DESC`,
-    [userId, opportunityIds, kind]
+    `SELECT opportunity_id, status, created_at
+       FROM nurture_emails
+      WHERE user_id = $1 AND metadata ->> 'chain' = $2
+        AND opportunity_id IN (${trous})
+      ORDER BY opportunity_id, created_at DESC`,
+    [userId, kind, ...opportunityIds]
   );
-  return new Set(result.rows.filter(r => r.status === 'failed').map(r => r.opportunity_id));
+
+  const vus = new Set();
+  const echoues = new Set();
+  for (const r of result.rows) {
+    if (vus.has(r.opportunity_id)) continue;
+    vus.add(r.opportunity_id);
+    if (r.status === 'failed') echoues.add(r.opportunity_id);
+  }
+  return echoues;
 }
 
 /**

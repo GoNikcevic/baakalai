@@ -2211,7 +2211,12 @@
     "ctxCrossSell": "Products to pitch:",
     "urgency_high": "High urgency",
     "urgency_medium": "Medium urgency",
-    "urgency_low": "Low urgency"
+    "urgency_low": "Low urgency",
+    "oneContactOf": "{count} contacts, the follow-up will go to {name}",
+    "allBounced": "Every address on this company has bounced: nobody is reachable anymore.",
+    "unnamedDeal": "Unnamed deal",
+    "stalled": "no movement for {days}d",
+    "noAmount": "amount unknown"
   },
   "churn": {
     "title": "Clients at churn risk",

@@ -6,7 +6,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT, useI18n } from '../i18n';
@@ -427,11 +427,36 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                       aria-label={t('reactivation.selectOne', { name: c.name || c.company || c.email })}
                       style={{ marginTop: 3, marginRight: 12, flexShrink: 0, cursor: bulk ? 'default' : 'pointer' }}
                     />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name || c.company || c.email}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* L'identité de la carte est la SOCIÉTÉ (lot 7), et son
+                          nom ouvre sa fiche. Le contact passe en dessous : c'est
+                          le destinataire de l'envoi, pas le sujet de la
+                          relance. Un contact sans société rattachée garde son
+                          propre nom en tête, faute de société à nommer. */}
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>
+                        {c.accountId ? (
+                          <Link to={`/accounts/${c.accountId}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                            {c.company || c.name || c.email}
+                          </Link>
+                        ) : (c.company || c.name || c.email)}
+                      </div>
                       <ContactSubline contact={c} withEmail={false} />
                       {!c.factors && (
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{c.reason}</div>
+                      )}
+                      {/* Une seule relance par société, et l'écran dit vers qui.
+                          Sans ce plafond, trois interlocuteurs dormants
+                          faisaient partir trois messages au même domaine le
+                          même jour, ce qui fait classer en spam. */}
+                      {c.contactsCount > 1 && c.name && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {t('reactivation.oneContactOf', { count: c.contactsCount, name: c.name })}
+                        </div>
+                      )}
+                      {c.injoignable && (
+                        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
+                          {t('reactivation.allBounced')}
+                        </div>
                       )}
                       {c.hasFailedSend && (
                         <div style={{ fontSize: 11, color: 'var(--danger, #d64545)', marginTop: 4, fontWeight: 600 }}>
@@ -456,6 +481,43 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
                       )}
                     </div>
                   </div>
+
+                  {/* ── Les AFFAIRES à relancer, dans la carte de leur société ──
+                      Une ligne par affaire, parce que c'est l'affaire qu'on
+                      relance et qu'elle porte le montant. Les masquer derrière
+                      le total aurait caché ce qu'on va relancer ; les lister à
+                      plat aurait fait partir un email par affaire.
+                      Absent pour l'upsell et pour un contact sans société : on
+                      n'affiche alors rien, plutôt qu'un cadre vide. */}
+                  {c.deals && c.deals.length > 0 && (
+                    <div style={{
+                      border: '1px solid var(--border)', borderRadius: 8,
+                      padding: '4px 12px', marginTop: 10,
+                    }}>
+                      {c.deals.map(d => (
+                        <div
+                          key={d.id}
+                          style={{
+                            display: 'flex', alignItems: 'baseline', gap: 10,
+                            padding: '6px 0', fontSize: 12,
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <span style={{ fontWeight: 600 }}>{d.name || t('reactivation.unnamedDeal')}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              {[d.stage, d.stalledDays != null ? t('reactivation.stalled', { days: d.stalledDays }) : null]
+                                .filter(Boolean).map(x => ` · ${x}`).join('')}
+                            </span>
+                          </div>
+                          <span style={{ marginLeft: 'auto', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {d.value == null
+                              ? t('reactivation.noAmount')
+                              : `${Math.round(d.value).toLocaleString(dateLocale)} ${d.currency && d.currency !== 'EUR' ? d.currency : '€'}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Score breakdown, même présentation que la section "À risque"
                       (liste de facteurs + poids coloré), seulement pour les
