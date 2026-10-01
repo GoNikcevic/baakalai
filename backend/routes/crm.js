@@ -1993,6 +1993,20 @@ router.get('/accounts', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/crm/accounts/at-risk · les SOCIÉTÉS à risque (lot 7)
+//
+// Déclarée AVANT /accounts/:id, sinon Express ferait de « at-risk » un
+// identifiant de compte et répondrait 404 sur une route qui existe. C'est le
+// piège classique du segment littéral après un paramètre, et il ne se voit
+// qu'à l'exécution.
+router.get('/accounts/at-risk', async (req, res, next) => {
+  try {
+    const { listAtRiskAccounts } = require('../lib/accounts');
+    const accounts = await listAtRiskAccounts(req.user.id);
+    res.json({ accounts });
+  } catch (err) { next(err); }
+});
+
 // GET /api/crm/accounts/:id · la FICHE d'une société (lot 7)
 //
 // L'écran de détail qui manquait. Les affaires viennent de `deals`, donc un

@@ -226,3 +226,109 @@ test('la route rend la fiche complete a son proprietaire', async (t) => {
   // L'etape est un libelle, pas un identifiant.
   assert.strictEqual(r.body.affaires[0].crm_stage, 'Negociation');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Les SOCIETES a risque · une ligne par societe, plus une par personne
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('une societe a trois interlocuteurs ne fait QU UNE ligne a risque', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAtRiskAccounts } = require('../lib/accounts');
+  const { user } = await registerAndLogin();
+
+  const id = await creerCompte(db, user.id, 'Dunelia Systemes');
+  await db.query('UPDATE accounts SET churn_score = 82, churn_factors = $2 WHERE id = $1',
+    [id, JSON.stringify([{ signal: 'inactivity', weight: 30, detail: '128d sans activite' }])]);
+
+  await creerContact(db, user.id, id, { name: 'Operationnel', lastActivityAt: ago(3) });
+  await creerContact(db, user.id, id, { name: 'Decideur', primary: true, lastActivityAt: ago(60) });
+  await creerContact(db, user.id, id, { name: 'Autre', lastActivityAt: ago(10) });
+
+  const lignes = await listAtRiskAccounts(user.id);
+  assert.strictEqual(lignes.length, 1, 'trois interlocuteurs, une seule ligne');
+  assert.strictEqual(lignes[0].company, 'Dunelia Systemes');
+  assert.strictEqual(lignes[0].contactsCount, 3);
+  // Le sujet des actions est le principal, parce qu'on ecrit a une personne.
+  assert.strictEqual(lignes[0].name, 'Decideur');
+  assert.strictEqual(lignes[0].churn_score, 82);
+  assert.strictEqual(lignes[0].churn_factors.length, 1);
+});
+
+test('un compte sous le seuil n est pas a risque', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAtRiskAccounts } = require('../lib/accounts');
+  const { user } = await registerAndLogin();
+
+  const sain = await creerCompte(db, user.id, 'Sain');
+  await db.query('UPDATE accounts SET churn_score = 40 WHERE id = $1', [sain]);
+  await creerContact(db, user.id, sain);
+
+  const jamais = await creerCompte(db, user.id, 'Jamais Score');
+  await creerContact(db, user.id, jamais);
+
+  assert.deepStrictEqual(await listAtRiskAccounts(user.id), [],
+    'un score sous le seuil et un score NULL sortent tous les deux');
+});
+
+test('une adresse qui a rebondi ne devient pas la cible de l envoi', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAtRiskAccounts } = require('../lib/accounts');
+  const { user } = await registerAndLogin();
+
+  const id = await creerCompte(db, user.id, 'Adresses Mortes');
+  await db.query('UPDATE accounts SET churn_score = 70 WHERE id = $1', [id]);
+  // Le principal a rebondi, un autre est encore joignable : c'est lui la cible.
+  await creerContact(db, user.id, id, { name: 'Principal Parti', primary: true, bouncedAt: ago(20) });
+  await creerContact(db, user.id, id, { name: 'Encore La', lastActivityAt: ago(30) });
+
+  const [l] = await listAtRiskAccounts(user.id);
+  assert.strictEqual(l.name, 'Encore La', 'on n ecrit pas a une adresse morte');
+  assert.strictEqual(l.injoignable, false);
+});
+
+test('un compte a risque sans aucun interlocuteur est rendu quand meme', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAtRiskAccounts } = require('../lib/accounts');
+  const { user } = await registerAndLogin();
+
+  const id = await creerCompte(db, user.id, 'Fantome');
+  await db.query('UPDATE accounts SET churn_score = 90 WHERE id = $1', [id]);
+
+  const [l] = await listAtRiskAccounts(user.id);
+  // Le masquer ferait disparaitre un client qui part. L'ecran doit pouvoir dire
+  // pourquoi rien ne peut partir.
+  assert.ok(l, 'la ligne existe');
+  assert.strictEqual(l.id, null, 'aucun sujet d action, et ce null est la reponse juste');
+  assert.strictEqual(l.sansInterlocuteur, true);
+  assert.strictEqual(l.company, 'Fantome');
+});
+
+test('la route at-risk n est pas avalee par /accounts/:id', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { user, token } = await registerAndLogin();
+  const id = await creerCompte(db, user.id, 'ARisque');
+  await db.query('UPDATE accounts SET churn_score = 75 WHERE id = $1', [id]);
+  await creerContact(db, user.id, id, { name: 'Claire', primary: true });
+
+  // Sans l'ordre de declaration, Express prendrait « at-risk » pour un
+  // identifiant de compte et repondrait 404 sur une route qui existe.
+  const r = await request('GET', '/api/crm/accounts/at-risk', { token });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.body.accounts.length, 1);
+  assert.strictEqual(r.body.accounts[0].company, 'ARisque');
+});

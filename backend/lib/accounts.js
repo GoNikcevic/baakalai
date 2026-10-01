@@ -587,6 +587,96 @@ async function getAccountSheet(userId, accountId) {
   };
 }
 
+/**
+ * Les SOCIÉTÉS à risque · lot 7.
+ *
+ * La page Clients à risque lisait `/dashboard/opportunities` et affichait donc
+ * une ligne par CONTACT : une société à huit interlocuteurs y apparaissait huit
+ * fois, avec huit scores dont sept étaient élevés en permanence puisque sept
+ * personnes sur huit ne sont jamais celle à qui on parle.
+ *
+ * Une ligne par société, donc, et le score est celui du compte (migration 131).
+ *
+ * ── Pourquoi `id` reste un identifiant de CONTACT ───────────────────────────
+ *
+ * Les actions de la page (workflow de rétention, dénouement constaté, envoi)
+ * portent sur une personne, parce qu'on écrit à une personne. La ligne expose
+ * donc l'interlocuteur PRINCIPAL comme sujet des actions, et le nom de la
+ * société comme identité de la ligne. C'est la même règle que le déclencheur
+ * `churn_risk` du lot 5 : un client à risque est une société, et on ne lui
+ * écrit qu'une fois.
+ *
+ * Un compte à risque sans aucun interlocuteur joignable est RENDU quand même,
+ * avec `id` à null : le masquer ferait disparaître un client qui part, et
+ * l'écran a besoin de pouvoir dire pourquoi rien ne peut partir.
+ */
+async function listAtRiskAccounts(userId, { threshold = 60, limit = 500 } = {}) {
+  const { rows } = await db.query(
+    `SELECT a.id AS account_id, a.name AS company, a.churn_score, a.churn_factors,
+            a.churn_flagged_at, a.last_activity_at,
+            (SELECT COUNT(*) FROM opportunities o WHERE o.account_id = a.id)::int AS contacts_count
+       FROM accounts a
+      WHERE a.user_id = $1 AND a.churn_score IS NOT NULL AND a.churn_score >= $2
+      ORDER BY a.churn_score DESC, a.name
+      LIMIT $3`,
+    [userId, threshold, limit]
+  );
+  if (rows.length === 0) return [];
+
+  // Les interlocuteurs des comptes retenus, en une passe. L'ordre de préférence
+  // est celui du produit : le principal élu par la migration 125 d'abord, puis
+  // le plus récemment actif, et jamais une adresse qui a définitivement rebondi.
+  const ids = rows.map(r => r.account_id);
+  const trous = ids.map((_, i) => `$${i + 2}`).join(', ');
+  const contacts = await db.query(
+    `SELECT id, account_id, name, email, linkedin_url, title, is_primary_contact,
+            last_activity_at, email_bounced_at
+       FROM opportunities
+      WHERE user_id = $1 AND account_id IN (${trous})
+      ORDER BY is_primary_contact DESC, last_activity_at DESC NULLS LAST`,
+    [userId, ...ids]
+  );
+
+  const parCompte = new Map();
+  for (const c of contacts.rows) {
+    if (!parCompte.has(c.account_id)) parCompte.set(c.account_id, []);
+    parCompte.get(c.account_id).push(c);
+  }
+
+  return rows.map(r => {
+    const liste = parCompte.get(r.account_id) || [];
+    // Joignable d'abord : écrire à une adresse morte n'est pas une action, et
+    // la liste est déjà triée par préférence.
+    const cible = liste.find(c => c.email && !c.email_bounced_at) || liste[0] || null;
+
+    let facteurs = r.churn_factors;
+    if (typeof facteurs === 'string') {
+      try { facteurs = JSON.parse(facteurs); } catch { facteurs = null; }
+    }
+
+    return {
+      // Sujet des actions : une personne, parce qu'on écrit à une personne.
+      id: cible ? cible.id : null,
+      accountId: r.account_id,
+      // Identité de la ligne : la SOCIÉTÉ.
+      company: r.company,
+      name: cible ? cible.name : null,
+      email: cible && !cible.email_bounced_at ? cible.email : null,
+      linkedin_url: cible ? cible.linkedin_url : null,
+      title: cible ? cible.title : null,
+      churn_score: r.churn_score,
+      churn_factors: Array.isArray(facteurs) ? facteurs : [],
+      churn_flagged_at: r.churn_flagged_at,
+      last_activity_at: r.last_activity_at,
+      contactsCount: r.contacts_count,
+      // L'écran doit pouvoir dire POURQUOI rien ne partira, au lieu de
+      // présenter une ligne sans action et sans explication.
+      sansInterlocuteur: liste.length === 0,
+      injoignable: liste.length > 0 && !liste.some(c => c.email && !c.email_bounced_at),
+    };
+  });
+}
+
 module.exports = {
   syncAccountsForUser,
   attachContactToAccount,
@@ -594,4 +684,5 @@ module.exports = {
   syncContactRoles,
   listAccounts,
   getAccountSheet,
+  listAtRiskAccounts,
 };

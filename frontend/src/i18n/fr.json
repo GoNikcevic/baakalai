@@ -2239,7 +2239,10 @@
     "bulkDone": "{sent} email(s) envoyé(s)",
     "bulkQueued": "{queued} brouillon(s) en attente d'approbation",
     "bulkNone": "Aucun client éligible : déjà relancés récemment, ou sans adresse email",
-    "bulkSkipped": "{skipped} client(s) ignoré(s)"
+    "bulkSkipped": "{skipped} client(s) ignoré(s)",
+    "oneContactOf": "{count} interlocuteurs, la relance partira vers {name}",
+    "noContactAttached": "Aucun interlocuteur rattache : rien ne peut partir tant qu'un contact n'est pas lie a cette societe.",
+    "allBounced": "Toutes les adresses de cette societe ont rebondi : plus personne n est joignable."
   },
   "assistant": {
     "conversations": "Conversations",

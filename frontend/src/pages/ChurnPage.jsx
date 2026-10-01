@@ -11,7 +11,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { request, runChurnScoring, getChurnSummary } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { useT } from '../i18n';
@@ -56,10 +56,20 @@ function OutcomeForm({ t, onSubmit, onCancel }) {
 // la sélection part par tranches successives.
 const SCOPED_RUN_MAX = 25;
 
-// Seuil de signalement de la page (surlignage rouge, boutons d'issue, case de
-// sélection groupée). NB : la file de priorités, le digest et la population
-// churn_risk du backend retiennent 60 (lib/churn-scoring.AT_RISK_THRESHOLD).
-const FLAG_THRESHOLD = 50;
+// Seuil « à risque » du PRODUIT, le même que lib/churn-scoring.AT_RISK_THRESHOLD,
+// la file de priorités, le digest et le badge de navigation. La page portait un
+// 50 local : elle annonçait donc un autre nombre que le reste du produit pour
+// exactement la même question.
+//
+// Depuis le lot 7 le serveur ne rend QUE les sociétés au-dessus de ce seuil
+// (GET /crm/accounts/at-risk), donc toute ligne affichée est à risque. Ce
+// constante ne sert plus à trier la liste, seulement à l'énoncer.
+const AT_RISK_THRESHOLD = 60;
+
+// Bande CRITIQUE. C'est elle qui mérite le surlignage rouge maintenant que
+// toutes les lignes sont à risque : souligner « au-dessus du seuil » sur une
+// liste qui ne contient que ça ne distingue plus rien.
+const CRITICAL_THRESHOLD = 76;
 
 export default function ChurnPage() {
   const t = useT();
@@ -80,15 +90,27 @@ export default function ChurnPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [oppsData, summary] = await Promise.all([
-        request('/dashboard/opportunities?limit=500').catch(() => ({ opportunities: [] })),
+      // ── Une ligne par SOCIÉTÉ, plus une par personne (lot 7) ──
+      //
+      // La page lisait `/dashboard/opportunities?limit=500` et affichait donc un
+      // contact par ligne : une société à huit interlocuteurs y apparaissait
+      // huit fois, avec huit scores dont sept étaient élevés en permanence,
+      // puisque sept personnes sur huit ne sont jamais celle à qui on parle.
+      //
+      // Le serveur rend maintenant des sociétés scorées au niveau du compte
+      // (migration 131), deja triees par risque. Chaque ligne porte l'identifiant
+      // de son interlocuteur PRINCIPAL comme sujet des actions, parce qu'on
+      // ecrit a une personne : les workflows et les denouements ci-dessous
+      // continuent donc de fonctionner inchanges.
+      //
+      // Le tri et le filtrage ne se font plus ici : la fenetre de 500 contacts
+      // les plus silencieux cachait les clients actifs recemment, et c'est le
+      // meme defaut que `account-list` a corrige sous Deals et Clients.
+      const [atRisk, summary] = await Promise.all([
+        request('/crm/accounts/at-risk').catch(() => ({ accounts: [] })),
         getChurnSummary().catch(() => null),
       ]);
-      const all = oppsData.opportunities || [];
-      // "Clients à risque de churn" is a retention concept · it only applies to won clients,
-      // never to still-active deals (churn_score is computed for every status internally, but
-      // this page must not mix the deal/client approaches: an active deal isn't a client yet).
-      setClients(all.filter(c => c.status === 'won' && c.churn_score != null).sort((a, b) => (b.churn_score || 0) - (a.churn_score || 0)));
+      setClients(atRisk.accounts || []);
       setChurnSummary(summary);
     } catch {
       setClients([]);
@@ -122,11 +144,11 @@ export default function ChurnPage() {
   // ses facteurs valent d'être lus), mais il n'est pas sélectionnable, sinon le
   // backend le retournerait en « ignoré » à chaque envoi.
   const reachable = clients.filter(c => c.email);
-  // La page liste tous les clients scorés, y compris ceux qui vont bien : la
-  // case globale ne coche donc que les clients signalés (même seuil que le
-  // surlignage de la liste), jamais toute la base. Un client sain reste
-  // sélectionnable à la main.
-  const atRisk = reachable.filter(c => (c.churn_score || 0) >= FLAG_THRESHOLD);
+  // Le serveur ne rend que les sociétés à risque, donc la case globale coche
+  // bien toute la liste joignable. Le filtre reste écrit : il documente la
+  // garantie au lieu de la supposer, et il protège si l'endpoint changeait de
+  // périmètre un jour.
+  const atRisk = reachable.filter(c => (c.churn_score || 0) >= AT_RISK_THRESHOLD);
   const allAtRiskSelected = atRisk.length > 0 && atRisk.every(c => selected.has(c.id));
 
   const toggleSelect = (id) => {
@@ -307,7 +329,8 @@ export default function ChurnPage() {
             </div>
           )}
           {clients.map(client => {
-            const flagged = (client.churn_score || 0) >= FLAG_THRESHOLD;
+            // Rouge = critique, plus « au-dessus du seuil » : voir CRITICAL_THRESHOLD.
+            const flagged = (client.churn_score || 0) >= CRITICAL_THRESHOLD;
             const color = client.churn_score >= 76 ? 'var(--danger)' : client.churn_score >= 51 ? 'var(--warning)' : client.churn_score >= 26 ? '#D97706' : 'var(--success)';
             return (
               <div key={client.id} className="card">
@@ -325,12 +348,38 @@ export default function ChurnPage() {
                     ) : (
                       <span style={{ width: 13, marginRight: 12, flexShrink: 0 }} />
                     )}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{client.name || client.company || client.email}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* L'identité de la ligne est la SOCIÉTÉ, et son nom ouvre
+                          la fiche. Le contact passe en dessous : c'est le sujet
+                          des actions, pas le sujet du risque. */}
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>
+                        {client.accountId ? (
+                          <Link to={`/accounts/${client.accountId}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                            {client.company || client.name || client.email}
+                          </Link>
+                        ) : (client.company || client.name || client.email)}
+                      </div>
                       <ContactSubline contact={client} withEmail={false} />
-                      {!client.email && (
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('churn.noEmail')}</div>
+                      {/* Une seule relance par société, et l'écran dit vers qui.
+                          Sans ça, huit interlocuteurs feraient huit messages au
+                          même domaine le même jour, ce qui fait classer en spam. */}
+                      {client.contactsCount > 1 && client.name && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {t('churn.oneContactOf', { count: client.contactsCount, name: client.name })}
+                        </div>
                       )}
+                      {/* Trois raisons distinctes de ne pas pouvoir écrire, et
+                          l'écran ne doit pas les confondre : aucun contact
+                          rattaché est un trou de l'import, des adresses mortes
+                          sont une équipe partie, et pas d'email est un contact
+                          incomplet. */}
+                      {client.sansInterlocuteur ? (
+                        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{t('churn.noContactAttached')}</div>
+                      ) : client.injoignable ? (
+                        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>{t('churn.allBounced')}</div>
+                      ) : !client.email ? (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('churn.noEmail')}</div>
+                      ) : null}
                     </div>
                     <span style={{ fontSize: 14, fontWeight: 700, color }}>
                       {client.churn_score}<span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>/100</span>
