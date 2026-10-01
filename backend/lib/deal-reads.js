@@ -163,37 +163,23 @@ async function dealTotals(userId, { contactIds = null } = {}) {
  * deux affaires dans deux étapes différentes n'apparaissait que dans une seule.
  */
 /**
- * Les étapes de `deals` sont-elles des LIBELLÉS, ou des identifiants bruts ?
+ * Le pipeline ouvert par étape.
  *
- * Constaté sur staging le 2026-10-01 : `deals.crm_stage` vaut « 1 », « 2 »,
- * « 3 », strictement identique à `crm_stage_id`, là où `opportunities.crm_stage`
- * porte « Qualified », « Proposal Made ». La cause est dans la normalisation du
- * connecteur (api/pipedrive.js écrit `stage: d.stage_id`), donc en amont du lot
- * 5 : c'est une dette du lot 4.
+ * Il y a eu ici, le temps d'une journée, un garde-fou qui ne lisait les étapes
+ * sur `deals` que lorsqu'elles différaient de `crm_stage_id`. Motif : la table
+ * contenait « 1 », « 2 », « 3 » au lieu de « Qualified », parce que
+ * api/pipedrive.js normalise `stage: d.stage_id` et que lib/deals.js recopiait
+ * cette valeur dans une colonne de libellé.
  *
- * Basculer l'écran sans ce garde-fou aurait remplacé « Négociation » par « 2 »
- * sous les yeux de l'utilisateur. On lit donc les étapes sur `deals` uniquement
- * quand elles disent quelque chose, et le jour où le connecteur sera corrigé ce
- * test deviendra vrai tout seul, sans qu'on ait à repasser ici.
+ * Le garde-fou est RETIRÉ, et pour deux raisons. La cause est corrigée à la
+ * source : `upsertDeal` passe maintenant par `extractStage()`, le même résolveur
+ * que le contact. Et surtout l'heuristique était fausse chez Salesforce, où
+ * `StageName` est à la fois le libellé et l'identifiant : le garde-fou aurait
+ * conclu « ce ne sont pas des libellés » et serait retombé sur le contact pour
+ * le seul provider qui n'a jamais eu le problème.
  */
-async function stagesArePresentable(userId) {
-  try {
-    const { rows } = await db.query(
-      `SELECT EXISTS(
-         SELECT 1 FROM deals
-          WHERE user_id = $1 AND crm_stage IS NOT NULL
-            AND (crm_stage_id IS NULL OR crm_stage <> crm_stage_id)
-       ) AS lisibles`,
-      [userId]
-    );
-    return Boolean(rows[0]?.lisibles);
-  } catch {
-    return false;
-  }
-}
-
 async function openDealsByStage(userId, { contactIds = null, limit = 15 } = {}) {
-  const surDeals = await hasDeals(userId) && await stagesArePresentable(userId);
+  const surDeals = await hasDeals(userId);
   const table = surDeals ? 'deals' : 'opportunities';
   const colonne = surDeals ? 'primary_contact_id' : 'id';
 

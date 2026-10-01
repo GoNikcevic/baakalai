@@ -71,6 +71,51 @@ test('une affaire sans interlocuteur existe quand meme, rattachee a sa societe',
   assert.strictEqual(Number(ligne.deal_value), 12000);
 });
 
+test('l etape est enregistree en LIBELLE, pas en identifiant', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { writeDeals } = require('../lib/deals');
+  const { user } = await registerAndLogin();
+
+  await creerCompte(db, user.id, { crmAccountId: '10', name: 'Acme' });
+
+  // api/pipedrive.js normalise `stage: d.stage_id`, donc ce 2 EST ce que le
+  // connecteur fournit. Mesure du 01/10 sur staging : les 121 affaires portaient
+  // « 1 », « 2 », « 3 » dans crm_stage, et l ecran aurait affiche ces numeros.
+  await writeDeals(user.id, 'pipedrive', [
+    {
+      deal: { id: 601, name: 'Extension', status: 'open', value: 8000, accountId: '10', stage: 2, stageId: 2 },
+      contact: null,
+    },
+  ], { stageLabelMap: new Map([['1', 'Qualified'], ['2', 'Negociation']]) });
+
+  const l = (await db.query('SELECT crm_stage, crm_stage_id FROM deals WHERE user_id = $1', [user.id])).rows[0];
+  assert.strictEqual(l.crm_stage, 'Negociation', 'crm_stage porte le libelle lisible');
+  assert.strictEqual(l.crm_stage_id, '2', 'crm_stage_id garde l identifiant natif');
+});
+
+test('sans carte de libelles, l etape reste lisible au lieu d un nombre nu', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { writeDeals } = require('../lib/deals');
+  const { user } = await registerAndLogin();
+
+  await creerCompte(db, user.id, { crmAccountId: '10', name: 'Acme' });
+
+  // L appel d API qui construit la carte est best-effort : s il echoue, mieux
+  // vaut « Stage 2 » qu un « 2 » nu, qu un utilisateur ne peut pas interpreter.
+  await writeDeals(user.id, 'pipedrive', [
+    { deal: { id: 602, name: 'Extension', status: 'open', value: 8000, accountId: '10', stage: 2, stageId: 2 }, contact: null },
+  ]);
+
+  const l = (await db.query('SELECT crm_stage FROM deals WHERE user_id = $1', [user.id])).rows[0];
+  assert.strictEqual(l.crm_stage, 'Stage 2');
+});
+
 test('deux affaires sur la meme personne ont chacune leur ligne', async (t) => {
   await setup();
   t.after(teardown);

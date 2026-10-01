@@ -95,6 +95,12 @@ async function upsertDeal(userId, provider, deal, ctx = {}) {
     ? (ctx.accountsByCrmId?.get(String(deal.accountId)) || null)
     : null;
 
+  // Étape résolue en LIBELLÉ, pas en identifiant. `ctx.stageLabelMap` vient de
+  // getStageLabelMap() côté appelant ; absente, extractStage se replie sur
+  // « Stage 2 » plutôt que sur un « 2 » nu, ce qui reste lisible.
+  const { extractStage } = require('./stage-tracking');
+  const etape = extractStage(provider, deal, ctx.stageLabelMap || null);
+
   // Le compte de l'affaire d'abord, celui du contact en secours. L'ordre est
   // l'inverse de ce que faisait le produit : c'est le deal qui sait à quelle
   // société il appartient, le contact ne fait que l'habiter.
@@ -137,8 +143,21 @@ async function upsertDeal(userId, provider, deal, ctx = {}) {
     deal.lostReason || null,
     deal.lostReason ? 'crm' : null,
     dateCloture,
-    deal.stage != null ? String(deal.stage) : null,
-    deal.stageId != null ? String(deal.stageId) : null,
+    // L'ÉTAPE passe par extractStage, elle n'est plus recopiée telle quelle.
+    //
+    // Mesuré sur staging le 01/10 : `deals.crm_stage` valait « 1 », « 2 », « 3 »,
+    // strictement identique à `crm_stage_id`, là où `opportunities.crm_stage`
+    // portait « Qualified » et « Proposal Made ». La cause est dans la
+    // normalisation du connecteur, api/pipedrive.js écrit `stage: d.stage_id`,
+    // et HubSpot remonte de même une clé interne. Recopier `deal.stage` dans une
+    // colonne de libellé rendait donc l'étape illisible pour deux des quatre
+    // providers, et aurait affiché « 2 » à l'écran à la place de « Négociation ».
+    //
+    // extractStage() faisait déjà ce travail pour le contact (ligne 276 de
+    // deal-lifecycle-sync.js). L'affaire passe maintenant par le même chemin,
+    // avec la même carte de libellés : une seule façon de nommer une étape.
+    etape.stageLabel,
+    etape.stageId,
     deal.pipelineId != null ? String(deal.pipelineId) : null,
     deal.pipelineName || null,
     safeDateISO(deal.createdAt),
@@ -238,7 +257,7 @@ async function upsertDeal(userId, provider, deal, ctx = {}) {
  *   nomme personne ou quand la personne nommée n'est pas dans nos contacts.
  * @returns {Promise<{ecrits, sansId, sansContact, erreur}>}
  */
-async function writeDeals(userId, provider, rattachements) {
+async function writeDeals(userId, provider, rattachements, { stageLabelMap = null } = {}) {
   const out = { ecrits: 0, sansId: 0, sansContact: 0, erreur: null, parId: new Map() };
   try {
     const accountsByCrmId = await loadAccountsByCrmId(userId, provider);
@@ -246,6 +265,9 @@ async function writeDeals(userId, provider, rattachements) {
       try {
         const id = await upsertDeal(userId, provider, r.deal, {
           accountsByCrmId,
+          // La carte des libellés d'étape, calculée une seule fois par l'appelant
+          // (un appel d'API par provider) et partagée par toutes les affaires.
+          stageLabelMap,
           contact: r.contact || null,
           attribution: r.attribution || null,
           ownerEmail: r.ownerEmail || null,

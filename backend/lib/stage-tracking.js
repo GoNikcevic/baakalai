@@ -45,7 +45,12 @@ function extractStage(provider, deal, labelMap) {
   if (provider === 'pipedrive') {
     const id = deal.stage != null ? String(deal.stage) : null;
     if (!id) return { stageId: null, stageLabel: null };
-    return { stageId: id, stageLabel: labelMap?.get(id) || `Stage ${id}` };
+    // Le repli « Stage N » ne vaut que pour un IDENTIFIANT NU, c'est-à-dire un
+    // nombre : c'est la seule valeur qu'un utilisateur ne peut pas interpréter.
+    // Préfixer sans regarder produisait « Stage Negociation » dès qu'un appelant
+    // fournissait déjà un libellé, et la carte des libellés est best-effort donc
+    // ce cas arrive vraiment.
+    return { stageId: id, stageLabel: labelMap?.get(id) || (/^\d+$/.test(id) ? `Stage ${id}` : id) };
   }
   if (provider === 'hubspot') {
     const id = deal.stage ? String(deal.stage) : null;

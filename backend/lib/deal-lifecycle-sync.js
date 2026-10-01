@@ -335,7 +335,10 @@ async function syncDealLifecycle(userId, token, crmProvider, report = {}) {
     // vérité de tous les écrans jusqu'au lot 5. Si les deux divergent
     // aujourd'hui, c'est `opportunities` qui fait foi. Best-effort, comme le
     // reste : une affaire qui refuse d'entrer ne fait pas échouer la synchro.
-    const ecriture = await writeDeals(userId, crmProvider, rattachements);
+    // La même carte de libellés que celle qui sert au contact (ligne 276) : une
+    // étape ne peut pas s'appeler « Négociation » sur une ligne et « 2 » sur
+    // l'autre.
+    const ecriture = await writeDeals(userId, crmProvider, rattachements, { stageLabelMap });
     result.dealsWritten = ecriture.ecrits;
     result.dealsWithoutContact = ecriture.sansContact;
     if (ecriture.erreur) result.error = result.error || `deals: ${ecriture.erreur}`;

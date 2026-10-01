@@ -97,7 +97,7 @@ test('les etapes se comptent par affaire, pas par personne', async (t) => {
   assert.strictEqual(parNom.get('Proposition'), 25000);
 });
 
-test('des etapes qui ne sont que des identifiants ne remontent PAS a l ecran', async (t) => {
+test('une etape chez Salesforce, ou le libelle EST l identifiant, remonte bien', async (t) => {
   await setup();
   t.after(teardown);
 
@@ -105,42 +105,20 @@ test('des etapes qui ne sont que des identifiants ne remontent PAS a l ecran', a
   const { openDealsByStage } = require('../lib/deal-reads');
   const { user } = await registerAndLogin();
 
-  // Le cas reel de staging : api/pipedrive.js normalise `stage: d.stage_id`,
-  // donc deals.crm_stage vaut « 2 » quand opportunities.crm_stage vaut
-  // « Negociation ». Basculer sans garde-fou remplacait le libelle par un
-  // numero sous les yeux de l utilisateur.
+  // Le piege qui a fait retirer un garde-fou : chez Salesforce, StageName sert
+  // a la fois de libelle et d identifiant. Une heuristique du type « ce n est un
+  // libelle que s il differe de l id » aurait donc retrograde le seul provider
+  // qui n a jamais eu le probleme.
   const contactId = await poserContact(db, user.id, { dealValue: 10000, stage: 'Negociation' });
   await db.query(
     `INSERT INTO deals (user_id, primary_contact_id, status, deal_value, crm_stage, crm_stage_id)
-     VALUES ($1, $2, 'open', 10000, '2', '2')`,
-    [user.id, contactId]
-  );
-
-  const r = await openDealsByStage(user.id);
-  assert.strictEqual(r.source, 'opportunities',
-    'tant que les etapes de deals sont des identifiants, on lit le libelle du contact');
-  assert.strictEqual(r.stages[0].stage, 'Negociation');
-});
-
-test('des etapes qui portent un vrai libelle remontent bien de deals', async (t) => {
-  await setup();
-  t.after(teardown);
-
-  const db = require('../db');
-  const { openDealsByStage } = require('../lib/deal-reads');
-  const { user } = await registerAndLogin();
-
-  // Le jour ou le connecteur sera corrige, ce chemin doit s activer SEUL.
-  const contactId = await poserContact(db, user.id, { dealValue: 10000, stage: 'Negociation' });
-  await db.query(
-    `INSERT INTO deals (user_id, primary_contact_id, status, deal_value, crm_stage, crm_stage_id)
-     VALUES ($1, $2, 'open', 10000, 'Negociation', '2'), ($1, $2, 'open', 25000, 'Proposition', '3')`,
+     VALUES ($1, $2, 'open', 10000, 'Negociation', 'Negociation')`,
     [user.id, contactId]
   );
 
   const r = await openDealsByStage(user.id);
   assert.strictEqual(r.source, 'deals');
-  assert.strictEqual(r.stages.length, 2);
+  assert.strictEqual(r.stages[0].stage, 'Negociation');
 });
 
 test('les affaires closes sortent du pipeline ouvert', async (t) => {
