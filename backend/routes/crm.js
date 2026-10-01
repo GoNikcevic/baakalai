@@ -1993,6 +1993,27 @@ router.get('/accounts', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/crm/accounts/:id · la FICHE d'une société (lot 7)
+//
+// L'écran de détail qui manquait. Les affaires viennent de `deals`, donc un
+// compte peut enfin montrer un gagné et un ouvert ensemble, ce qui est la
+// définition de l'upsell et restait invisible par construction.
+//
+// Déclarée AVANT /accounts/rebuild : Express prend la première route qui matche,
+// et un `:id` placé plus haut avalerait le mot « rebuild ». Celle-ci est en GET
+// et l'autre en POST, donc il n'y a pas de collision aujourd'hui, mais la régle
+// se respecte quand même pour que l'ajout d'un futur GET littéral ne casse rien.
+router.get('/accounts/:id', async (req, res, next) => {
+  try {
+    const { getAccountSheet } = require('../lib/accounts');
+    const fiche = await getAccountSheet(req.user.id, req.params.id);
+    // Compte inexistant et compte d'un autre utilisateur donnent la MÊME
+    // réponse : distinguer les deux dirait à un tiers que l'identifiant existe.
+    if (!fiche) return res.status(404).json({ error: 'Account not found' });
+    res.json(fiche);
+  } catch (err) { next(err); }
+});
+
 // POST /api/crm/accounts/rebuild · reconstruit les comptes sans réimporter
 //
 // L'import les reconstruit déjà à chaque passage. Cette route existe pour les

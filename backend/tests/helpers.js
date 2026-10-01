@@ -72,6 +72,12 @@ async function setup() {
   // colonnes une par une, et une colonne disparue y passe inaperçue jusqu'au
   // 500 en production. C'est arrivé avec `phone` sur opportunities.
   app.use('/api/export', requireAuth, require('../routes/export'));
+  // Monté pour que le CLOISONNEMENT par tenant soit testable à travers HTTP.
+  // Sans ce montage, une requête vers /api/crm/... ne touche aucune route et
+  // retombe sur le 404 du gestionnaire d'erreurs : un test qui attend 404 pour
+  // « ce compte n'est pas le vôtre » passe alors même si le contrôle d'accès
+  // est absent. Constaté sur la fiche compte du lot 7.
+  app.use('/api/crm', requireAuth, require('../routes/crm'));
   app.use(errorHandler);
 
   return new Promise((resolve) => {

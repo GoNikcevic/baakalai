@@ -5,7 +5,7 @@
    =============================================================================== */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
 import { getUser } from '../services/auth';
@@ -915,7 +915,23 @@ export default function ClientsPage({ scope }) {
                         </span>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {g.name}
+                            {/* Le nom ouvre la fiche de la société (lot 7), mais
+                                seulement quand le groupe EST une société : un
+                                groupe formé sur un nom en texte libre ou sur une
+                                personne sans entreprise n'a pas de fiche.
+                                `stopPropagation` parce que la ligne entière
+                                déplie le groupe · sans ça, un clic sur le lien
+                                ferait les deux à la fois. */}
+                            {g.accountId ? (
+                              <Link
+                                to={`/accounts/${g.accountId}`}
+                                onClick={e => e.stopPropagation()}
+                                style={{ color: 'inherit', textDecoration: 'none' }}
+                                title={t('clients.openAccount')}
+                              >
+                                {g.name}
+                              </Link>
+                            ) : g.name}
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                             {t('clients.accountSummary', { deals: g.deals.length, contacts: g.rows.length })}

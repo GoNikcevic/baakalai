@@ -462,10 +462,136 @@ async function listAccounts(userId, { limit = 500 } = {}) {
   return res.rows;
 }
 
+/**
+ * La FICHE d'une société · lot 7.
+ *
+ * L'écran qui manquait : jusqu'ici une société n'existait qu'en ligne dans une
+ * liste, et cliquer dessus ne menait nulle part. Tout ce qui est vrai d'une
+ * entreprise était donc introuvable ou répété autant de fois qu'elle a
+ * d'interlocuteurs.
+ *
+ * Les affaires viennent de `deals` (migration 126), jamais de la ligne du
+ * contact. C'est la seule façon de montrer un gagné et un ouvert ensemble, ce
+ * qui est la définition même de l'upsell et restait invisible par construction.
+ *
+ * Renvoie null si le compte n'existe pas OU n'appartient pas à cet utilisateur :
+ * l'appelant répond 404 dans les deux cas, sans dire lequel des deux.
+ *
+ * @returns {Promise<object|null>}
+ */
+async function getAccountSheet(userId, accountId) {
+  const compte = await db.query(
+    `SELECT id, name, domain, industry, size, source, crm_provider, crm_account_id,
+            owner_id, owner_email, crm_owner_id, crm_created_at, last_activity_at,
+            churn_score, churn_factors, churn_scored_at, churn_flagged_at, created_at
+       FROM accounts WHERE id = $1 AND user_id = $2`,
+    [accountId, userId]
+  );
+  const a = compte.rows[0];
+  if (!a) return null;
+
+  const affaires = await db.query(
+    `SELECT id, name, status, deal_value, currency, crm_stage, crm_pipeline_name,
+            won_date, lost_date, lost_reason, close_date, renewal_date,
+            last_activity_at, crm_created_at, crm_updated_at, updated_at, source,
+            crm_deal_attribution
+       FROM deals
+      WHERE account_id = $1 AND user_id = $2
+      ORDER BY status = 'open' DESC, deal_value DESC NULLS LAST`,
+    [accountId, userId]
+  );
+
+  const contacts = await db.query(
+    `SELECT id, name, email, title, status, account_role, role_source,
+            is_primary_contact, last_activity_at, email_bounced_at, cooldown_until,
+            churn_score
+       FROM opportunities
+      WHERE account_id = $1 AND user_id = $2
+      ORDER BY is_primary_contact DESC, last_activity_at DESC NULLS LAST`,
+    [accountId, userId]
+  );
+
+  // ── Les agrégats, calculés ici et pas à l'écran ──
+  // Un montant qui se recalcule dans le composant est un montant qui finira par
+  // différer de celui de la liste. Une seule source pour les deux.
+  const somme = (filtre) => affaires.rows
+    .filter(filtre)
+    .reduce((n, d) => n + Number(d.deal_value || 0), 0);
+
+  const ouvertes = affaires.rows.filter(d => d.status !== 'won' && d.status !== 'lost');
+  const gagnees = affaires.rows.filter(d => d.status === 'won');
+
+  // Les devises ne s'additionnent JAMAIS (arbitrage du 30/09) : on dit laquelle
+  // domine et on signale les autres au lieu de produire un total qui mente.
+  const devises = [...new Set(affaires.rows.map(d => d.currency).filter(Boolean))];
+
+  // Injoignable au sens du plan §8.1, dérivé et jamais stocké. La distinction
+  // compte : « aucun contact rattaché » est un trou de notre import, « des
+  // contacts dont les adresses sont mortes » est une équipe qui a quitté la
+  // société.
+  const joignables = contacts.rows.filter(c => c.email && !c.email_bounced_at);
+
+  let facteurs = a.churn_factors;
+  if (typeof facteurs === 'string') {
+    try { facteurs = JSON.parse(facteurs); } catch { facteurs = null; }
+  }
+
+  return {
+    compte: {
+      id: a.id,
+      name: a.name,
+      domain: a.domain,
+      industry: a.industry,
+      size: a.size,
+      source: a.source,
+      crmProvider: a.crm_provider,
+      ownerEmail: a.owner_email,
+      crmCreatedAt: a.crm_created_at,
+      lastActivityAt: a.last_activity_at,
+      churnScore: a.churn_score,
+      churnFactors: Array.isArray(facteurs) ? facteurs : [],
+      churnScoredAt: a.churn_scored_at,
+      churnFlaggedAt: a.churn_flagged_at,
+    },
+    affaires: affaires.rows,
+    // `is_primary_contact` est normalisé en booléen : Postgres rend `true`,
+    // le miroir SQLite rend `1`. Laisser passer les deux obligerait l'écran à
+    // gérer la différence, et c'est exactement le genre d'écart qui se découvre
+    // en production sur un `=== true` silencieusement faux.
+    contacts: contacts.rows.map(c => ({ ...c, is_primary_contact: Boolean(c.is_primary_contact) })),
+    resume: {
+      ouvert: somme(d => d.status !== 'won' && d.status !== 'lost'),
+      gagne: somme(d => d.status === 'won'),
+      perdu: somme(d => d.status === 'lost'),
+      affairesOuvertes: ouvertes.length,
+      affairesGagnees: gagnees.length,
+      // L'upsell n'est pas une opinion : un compte qui porte à la fois un gagné
+      // et un ouvert, c'est exactement ça.
+      upsell: gagnees.length > 0 && ouvertes.length > 0,
+      devises,
+      devisesMelangees: devises.length > 1,
+      contacts: contacts.rows.length,
+      joignables: joignables.length,
+      // NULL et non false quand il n'y a aucun contact : « personne n'est
+      // joignable » et « personne n'est rattaché » sont deux faits différents.
+      injoignable: contacts.rows.length === 0 ? null : joignables.length === 0,
+      sansInterlocuteur: contacts.rows.length === 0,
+      // Les champs vides de la SOCIÉTÉ. Se corrigent une fois pour tous ses
+      // interlocuteurs, au lieu d'une fois par contact.
+      champsManquants: [
+        !a.industry && 'industry',
+        !a.domain && 'domain',
+        !a.owner_email && !a.crm_owner_id && 'owner',
+      ].filter(Boolean),
+    },
+  };
+}
+
 module.exports = {
   syncAccountsForUser,
   attachContactToAccount,
   importCrmAccounts,
   syncContactRoles,
   listAccounts,
+  getAccountSheet,
 };

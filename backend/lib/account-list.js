@@ -263,11 +263,21 @@ async function listAccountPage(userId, opts = {}) {
     // Un groupe qui n'est qu'une personne sans société · l'écran le dit, pour
     // ne pas faire passer un contact pour une entreprise.
     orphan: String(g.cle).startsWith('personne:'),
+    // L'identifiant de la SOCIÉTÉ, quand le groupe en est vraiment une, pour
+    // que l'écran puisse ouvrir sa fiche (lot 7). Renseigné plus bas à partir
+    // des contacts : la clé de groupe vaut soit un `account_id`, soit un nom de
+    // société en texte libre, soit `personne:<id>`, et les distinguer par la
+    // forme de la chaîne serait une heuristique qui casserait au premier compte
+    // dont le nom ressemble à un identifiant. Le serveur le DIT.
+    accountId: null,
   }]));
   for (const c of contacts) {
     const cle = c.account_id != null ? String(c.account_id)
       : ((c.company || '').trim() || `personne:${c.id}`);
-    parCle.get(cle)?.contacts.push(c);
+    const groupe = parCle.get(cle);
+    if (!groupe) continue;
+    groupe.contacts.push(c);
+    if (c.account_id != null) groupe.accountId = String(c.account_id);
   }
 
   const [tiles, stats] = await Promise.all([

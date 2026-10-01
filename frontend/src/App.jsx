@@ -33,6 +33,7 @@ const CampaignDetailRoute = lazyRetry(() => import('./pages/CampaignDetailRoute'
 const RecosPage = lazyRetry(() => import('./pages/RecosPage'))
 const ClientsPage = lazyRetry(() => import('./pages/ClientsPage'))
 const AccountsPage = lazyRetry(() => import('./pages/AccountsPage'))
+const AccountSheetPage = lazyRetry(() => import('./pages/AccountSheetPage'))
 const DealsToReactivatePage = lazyRetry(() => import('./pages/DealsToReactivatePage'))
 const ClientsToUpsellPage = lazyRetry(() => import('./pages/ClientsToUpsellPage'))
 const DealReactivationDetailRoute = lazyRetry(() => import('./pages/DealReactivationDetailRoute'))
@@ -212,6 +213,12 @@ export default function App() {
             <Route path="/campaigns" element={<CampaignsList />} />
             <Route path="/campaigns/:id" element={<CampaignDetailRoute />} />
             <Route path="/accounts" element={<AccountsPage />} />
+            {/* La fiche d'une société (lot 7). Déclarée après /accounts, qui est
+                un segment littéral : React Router 7 classe par spécificité, mais
+                garder l'ordre lisible évite de faire dépendre le routage d'une
+                règle implicite. Pas d'entrée de menu, on y arrive en cliquant
+                une société depuis Deals ou Clients. */}
+            <Route path="/accounts/:id" element={<AccountSheetPage />} />
             <Route path="/deals" element={<ClientsPage scope="deals" />} />
             <Route path="/clients" element={<ClientsPage scope="clients" />} />
             <Route path="/deals-to-reactivate" element={<DealsToReactivatePage />} />

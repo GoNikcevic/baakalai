@@ -1259,7 +1259,8 @@
       "fit_component": "Fit ICP (max 30)",
       "pipeline_status": "Position pipeline (max 30)"
     },
-    "error": "Erreur"
+    "error": "Erreur",
+    "openAccount": "Ouvrir la fiche de la société"
   },
   "stageMapping": {
     "title": "Votre pipeline, vu par baakalai",
@@ -2396,6 +2397,60 @@
       "customer_reactivation": "Réactivation client",
       "customer_expansion": "Expansion client",
       "lead_reactivation": "Réactivation de leads"
+    }
+  },
+  "accountSheet": {
+    "notFoundTitle": "Société introuvable",
+    "notFoundBody": "Cette société n'existe pas, ou elle n'est pas dans votre CRM.",
+    "backToClients": "Retour aux clients",
+    "deals": "AFFAIRES",
+    "dealsSource": "lues sur les affaires du CRM",
+    "noDeals": "Aucune affaire sur cette société. Elle apparaîtra à la prochaine lecture de votre CRM.",
+    "unnamedDeal": "Affaire sans nom",
+    "open": "En cours",
+    "won": "Gagnée",
+    "lost": "Perdue",
+    "stalled": "sans mouvement depuis {days} j",
+    "noAmount": "montant inconnu",
+    "upsellExplain": "Une affaire gagnée et une affaire en cours sur la même société : c'est ça, une opportunité d'upsell.",
+    "mixedCurrencies": "Deux devises sur ce compte ({list}) : les montants ne sont pas additionnés.",
+    "contacts": "INTERLOCUTEURS",
+    "contactsSource": "rôle déduit du CRM ou du poste",
+    "noContactsBody": "Aucun interlocuteur rattaché. Sans contact, cette société n'est ni scorable ni démarchable : ajoutez-en un depuis votre CRM.",
+    "unnamedContact": "Contact sans nom",
+    "primary": "interlocuteur principal",
+    "bounced": "adresse invalide",
+    "oneSendExplain": "Une seule relance partira, vers l'interlocuteur principal : plusieurs messages au même domaine le même jour font classer en spam.",
+    "summary": "RÉSUMÉ",
+    "openValue": "En cours",
+    "wonValue": "Gagné",
+    "contactCount": "Interlocuteurs",
+    "reachableOf": "{reachable} joignable(s) sur {total}",
+    "churn": "RISQUE DE PERTE",
+    "threshold": "seuil {threshold}",
+    "churnBasis": "mesuré sur l'activité la plus récente, tous interlocuteurs confondus",
+    "riskScore": "Risque {score}",
+    "noFactors": "Aucun signal enregistré au dernier calcul.",
+    "notScored": "Non scoré",
+    "notScoredWhy": "Le risque n'a pas encore été calculé pour cette société.",
+    "notScoredYet": "Pas encore scorée. Le calcul passe une fois par jour.",
+    "notScoredNoContact": "Non scorable : sans interlocuteur rattaché, le silence de cette société est inconnu, et inconnu ne vaut pas zéro.",
+    "upsellPossible": "Upsell possible",
+    "unreachable": "Injoignable",
+    "unreachableWhy": "Des interlocuteurs existent, mais plus aucun ne porte d'adresse valide.",
+    "dataQuality": "QUALITÉ DES DONNÉES",
+    "missingFields": "Manquant sur cette société : {fields}.",
+    "missingFieldsOnce": "À corriger une seule fois, pour les {count} interlocuteurs.",
+    "field": {
+      "industry": "secteur",
+      "domain": "domaine web",
+      "owner": "propriétaire"
+    },
+    "role": {
+      "decision_maker": "décideur",
+      "influencer": "influenceur",
+      "operational": "opérationnel",
+      "other": "autre rôle"
     }
   }
 }

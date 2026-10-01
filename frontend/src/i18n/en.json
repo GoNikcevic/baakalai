@@ -1259,7 +1259,8 @@
       "fit_component": "ICP fit (max 30)",
       "pipeline_status": "Pipeline position (max 30)"
     },
-    "error": "Error"
+    "error": "Error",
+    "openAccount": "Open the company sheet"
   },
   "stageMapping": {
     "title": "Your pipeline, as baakalai reads it",
@@ -2396,6 +2397,60 @@
       "customer_reactivation": "Customer reactivation",
       "customer_expansion": "Customer expansion",
       "lead_reactivation": "Lead reactivation"
+    }
+  },
+  "accountSheet": {
+    "notFoundTitle": "Company not found",
+    "notFoundBody": "This company does not exist, or it is not in your CRM.",
+    "backToClients": "Back to clients",
+    "deals": "DEALS",
+    "dealsSource": "read from your CRM deals",
+    "noDeals": "No deal on this company yet. It will show up the next time your CRM is read.",
+    "unnamedDeal": "Unnamed deal",
+    "open": "Open",
+    "won": "Won",
+    "lost": "Lost",
+    "stalled": "no movement for {days}d",
+    "noAmount": "amount unknown",
+    "upsellExplain": "A won deal and an open deal on the same company: that is what an upsell opportunity looks like.",
+    "mixedCurrencies": "Two currencies on this account ({list}): amounts are not summed.",
+    "contacts": "CONTACTS",
+    "contactsSource": "role inferred from the CRM or job title",
+    "noContactsBody": "No contact attached. Without one, this company can be neither scored nor contacted: add one from your CRM.",
+    "unnamedContact": "Unnamed contact",
+    "primary": "primary contact",
+    "bounced": "invalid address",
+    "oneSendExplain": "Only one follow-up will go out, to the primary contact: several messages to the same domain on the same day get flagged as spam.",
+    "summary": "SUMMARY",
+    "openValue": "Open",
+    "wonValue": "Won",
+    "contactCount": "Contacts",
+    "reachableOf": "{reachable} reachable of {total}",
+    "churn": "CHURN RISK",
+    "threshold": "threshold {threshold}",
+    "churnBasis": "measured on the most recent activity, across all contacts",
+    "riskScore": "Risk {score}",
+    "noFactors": "No signal recorded at the last run.",
+    "notScored": "Not scored",
+    "notScoredWhy": "Risk has not been computed for this company yet.",
+    "notScoredYet": "Not scored yet. The run happens once a day.",
+    "notScoredNoContact": "Not scorable: with no contact attached, this company silence is unknown, and unknown is not zero.",
+    "upsellPossible": "Upsell possible",
+    "unreachable": "Unreachable",
+    "unreachableWhy": "Contacts exist, but none carries a valid address anymore.",
+    "dataQuality": "DATA QUALITY",
+    "missingFields": "Missing on this company: {fields}.",
+    "missingFieldsOnce": "Fix once, for all {count} contacts.",
+    "field": {
+      "industry": "industry",
+      "domain": "web domain",
+      "owner": "owner"
+    },
+    "role": {
+      "decision_maker": "decision maker",
+      "influencer": "influencer",
+      "operational": "operational",
+      "other": "other role"
     }
   }
 }
