@@ -559,9 +559,34 @@ async function scoreAccountsForUser(userId, { emails = [] } = {}) {
   const results = [];
   let atRisk = 0;
 
+  let sansContact = 0;
+
   for (const account of accounts) {
     const contacts = contactsByAccount.get(account.id) || [];
     const accountDeals = dealsByAccount.get(account.id) || [];
+
+    // ── Un compte SANS AUCUN contact rattaché n'est pas scoré ──
+    //
+    // Mesuré sur staging au premier passage réel du 01/10 : 54 comptes sur 103
+    // n'ont aucun contact rattaché, dette de rattachement du lot 2 et non fait
+    // commercial. Les scorer quand même produisait deux mensonges :
+    //
+    //   · ils portaient tous `account_unreachable` et ses 10 points, alors que
+    //     « personne n'est joignable » et « personne n'est rattaché » sont deux
+    //     choses opposées, l'une sur le client et l'autre sur notre import.
+    //   · faute de date d'activité, le score retombait sur la date de création
+    //     DU COMPTE, donc un compte importé la semaine derniere passait pour
+    //     actif. La moyenne affichée (13,1) était diluée par 54 inconnus
+    //     comptés comme sains.
+    //
+    // On laisse donc `churn_score` à NULL, et c'est la règle de toute la base :
+    // inconnu ne vaut pas zéro (cf. lib/icp-signals.js). Le compteur remonte
+    // dans le rapport pour que le trou de rattachement se voie au lieu de se
+    // déguiser en bonne santé.
+    if (contacts.length === 0) {
+      sansContact++;
+      continue;
+    }
 
     // ── L'arbitrage du 2026-10-01, en une ligne ──
     // La date d'activité du compte est la PLUS RÉCENTE de ses contacts. Les
@@ -592,9 +617,12 @@ async function scoreAccountsForUser(userId, { emails = [] } = {}) {
       contacts.map(c => c.email?.toLowerCase()).filter(Boolean)
     );
 
-    // Injoignable au sens du plan §8.1 : plus un seul interlocuteur porteur
-    // d'une adresse qui n'a pas définitivement rebondi. Dérivé à chaque passage,
-    // jamais stocké : la vérité reste le rattachement des contacts.
+    // Injoignable au sens du plan §8.1 : le compte A des interlocuteurs (le cas
+    // zéro contact est sorti plus haut) mais plus un seul ne porte d'adresse
+    // valide. La distinction est tout l'intérêt du signal : des contacts qui
+    // existent et dont les adresses sont mortes, c'est une équipe qui a quitté
+    // la société. Zéro contact rattaché, c'est notre import qui n'a pas fait son
+    // travail. Dérivé à chaque passage, jamais stocké.
     const unreachable = !contacts.some(c => c.email && !c.email_bounced_at);
 
     // Le rebond ne compte que s'il frappe l'interlocuteur PRINCIPAL (migration
@@ -737,9 +765,12 @@ async function scoreAccountsForUser(userId, { emails = [] } = {}) {
     }
   }
 
-  logger.info('churn-scoring', `User ${userId}: scored ${results.length} comptes, ${atRisk} à risque`);
+  logger.info('churn-scoring', `User ${userId}: scored ${results.length} comptes, ${atRisk} à risque, ${sansContact} non scorés faute de contact rattaché`);
 
-  return { scored: results.length, atRisk };
+  // `notScored` n'est pas un détail de journal : c'est la mesure de la dette de
+  // rattachement du lot 2, et elle doit remonter jusqu'à l'écran du lot 7
+  // (« N comptes sans interlocuteur, ajoutez un contact », plan §8.1).
+  return { scored: results.length, atRisk, notScored: sansContact };
 }
 
 /**

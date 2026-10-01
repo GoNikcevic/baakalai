@@ -168,6 +168,35 @@ test('loadAccountChurn ne rend que les comptes reellement signales', async (t) =
   assert.ok(map.get(aRisque).flaggedAt && map.get(aRisque).score >= 60);
 });
 
+test('un compte sans aucun contact rattache n est PAS score', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { scoreAccountsForUser } = require('../lib/churn-scoring');
+  const { user } = await registerAndLogin();
+
+  // Le cas mesure sur staging le 01/10 : 54 comptes sur 103 sans contact
+  // rattache, dette du lot 2. Les scorer les faisait passer pour sains (score
+  // calcule sur la date de creation du compte) tout en leur collant +10 de
+  // « injoignable ». Inconnu ne vaut pas zero.
+  const orphelin = await poserCompte(db, user.id, 'SansPersonne');
+  const peuple = await poserCompte(db, user.id, 'AvecDuMonde');
+  await poserContact(db, user.id, peuple, { lastActivityAt: ago(5) });
+
+  const rapport = await scoreAccountsForUser(user.id);
+
+  assert.strictEqual(rapport.scored, 1, 'un seul compte est scorable');
+  assert.strictEqual(rapport.notScored, 1, 'le compte orphelin doit etre compte a part');
+
+  const o = (await db.query('SELECT churn_score, churn_factors FROM accounts WHERE id = $1', [orphelin])).rows[0];
+  assert.strictEqual(o.churn_score, null, 'un compte sans contact reste a NULL, jamais a un chiffre');
+  assert.strictEqual(o.churn_factors, null);
+
+  const p = (await db.query('SELECT churn_score FROM accounts WHERE id = $1', [peuple])).rows[0];
+  assert.notStrictEqual(p.churn_score, null, 'le compte peuple, lui, est bien score');
+});
+
 test('le comptage des sieges lit les trois niveaux', async (t) => {
   await setup();
   t.after(teardown);
