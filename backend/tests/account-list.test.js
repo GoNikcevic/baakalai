@@ -269,3 +269,109 @@ test('le cadrage separe les deals des clients', async (t) => {
   assert.ok(clients.tiles.some(x => x.key === 'seg_new'));
   assert.strictEqual(clients.tiles.find(x => x.key === 'seg_new').count, 1);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Le MONTANT vient des affaires, plus de la ligne du contact (lot 7)
+//
+// Mesure du 2026-10-01 sur staging, au meme instant : `opportunities` voyait 32
+// affaires ouvertes pour 936 700 EUR, `deals` 47 pour 1 396 400 EUR. Une ligne
+// de contact ne porte qu'UN montant : deux affaires sur la meme personne n'y
+// tiennent pas, la plus recemment modifiee reclame la ligne et les autres sont
+// jetees.
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('deux affaires sur un meme compte sont toutes deux dans le montant', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  const compte = await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source)
+     VALUES ($1, 'Dunelia', 'dunelia', 'crm') RETURNING id`, [user.id]
+  );
+  const compteId = compte.rows[0].id;
+
+  // La ligne du contact ne porte que 10 000 : c'est la limite structurelle.
+  const c = await contact(db, user.id, { name: 'Paul', company: 'Dunelia', dealValue: 10000, lastActivityAt: ilYA(5) });
+  await db.query('UPDATE opportunities SET account_id = $1 WHERE id = $2', [compteId, c.id]);
+
+  await db.query(
+    `INSERT INTO deals (user_id, account_id, primary_contact_id, status, deal_value)
+     VALUES ($1, $2, $3, 'open', 10000), ($1, $2, $3, 'open', 25000)`,
+    [user.id, compteId, c.id]
+  );
+
+  const page = await listAccountPage(user.id, {});
+  const g = page.groups.find(x => x.name === 'Dunelia');
+  assert.ok(g, 'le groupe existe');
+  assert.strictEqual(g.value, 35000,
+    'le montant est la somme des affaires, pas celui de la ligne du contact');
+  // La ligne de resume doit dire la MEME chose, sinon l'ecran se contredit.
+  assert.strictEqual(page.stats.value, 35000);
+});
+
+test('un groupe sans societe garde le montant de son contact', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  // Un compte existe ailleurs, donc `deals` est peuplee pour ce tenant : le
+  // chemin « affaires » est bien actif. Mais ce contact-ci n'est rattache a
+  // aucune societe, il n'a donc aucune affaire a quoi se raccrocher.
+  const compte = await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source)
+     VALUES ($1, 'Autre', 'autre', 'crm') RETURNING id`, [user.id]
+  );
+  await db.query(
+    `INSERT INTO deals (user_id, account_id, status, deal_value) VALUES ($1, $2, 'open', 999)`,
+    [user.id, compte.rows[0].id]
+  );
+
+  await contact(db, user.id, { name: 'Solo', company: 'Maison Solo', dealValue: 7000, lastActivityAt: ilYA(3) });
+
+  const page = await listAccountPage(user.id, {});
+  const g = page.groups.find(x => x.name === 'Maison Solo');
+  assert.strictEqual(g.value, 7000,
+    'sans societe rattachee, le repli sur la ligne du contact est la seule reponse possible');
+});
+
+test('le montant des affaires ne compte pas les comptes hors perimetre', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  const faire = async (nom) => (await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source)
+     VALUES ($1, $2, $3, 'crm') RETURNING id`, [user.id, nom, nom.toLowerCase()]
+  )).rows[0].id;
+
+  const client = await faire('Client Gagne');
+  const prospect = await faire('Prospect Ouvert');
+
+  const cc = await contact(db, user.id, { name: 'Clio', company: 'Client Gagne', status: 'won', wonDate: ilYA(30), lastActivityAt: ilYA(4) });
+  await db.query('UPDATE opportunities SET account_id = $1 WHERE id = $2', [client, cc.id]);
+  const cp = await contact(db, user.id, { name: 'Prosper', company: 'Prospect Ouvert', status: 'interested', lastActivityAt: ilYA(4) });
+  await db.query('UPDATE opportunities SET account_id = $1 WHERE id = $2', [prospect, cp.id]);
+
+  await db.query(
+    `INSERT INTO deals (user_id, account_id, status, deal_value)
+     VALUES ($1, $2, 'won', 50000), ($1, $3, 'open', 8000)`,
+    [user.id, client, prospect]
+  );
+
+  // Cadrage Clients : seul le compte gagne entre, donc seul son montant compte.
+  const cote = await listAccountPage(user.id, { scope: 'clients' });
+  assert.strictEqual(cote.stats.value, 50000);
+  // Cadrage Deals : l'inverse.
+  const autre = await listAccountPage(user.id, { scope: 'deals' });
+  assert.strictEqual(autre.stats.value, 8000);
+});

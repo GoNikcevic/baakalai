@@ -48,6 +48,11 @@
  */
 
 const db = require('../db');
+// Le point de passage unique de la bascule vers `deals` (lot 5). On lui demande
+// seulement si la table est PEUPLÉE pour ce tenant : une seule façon de poser
+// cette question dans tout le produit.
+const { hasDeals } = require('./deal-reads');
+const logger = require('./logger');
 
 /** Miroirs exacts des constantes de frontend/src/pages/ClientsPage.jsx. */
 const CLIENT_SILENCE_DAYS = 90;
@@ -216,13 +221,45 @@ async function listAccountPage(userId, opts = {}) {
   //    `COUNT(*) OVER ()` : le miroir sqlite des tests ne garantit pas les
   //    fonctions de fenêtrage sur toutes les versions, et un total faux est
   //    pire qu'un aller-retour de plus.
+  // ── Le montant vient des AFFAIRES, plus de la ligne du contact ──
+  //
+  // Mesuré sur staging le 2026-10-01, au même instant : `opportunities` voyait
+  // 32 affaires ouvertes pour 936 700 €, `deals` en voit 47 pour 1 396 400 €.
+  // La cause est structurelle : une ligne de contact porte UN montant, donc
+  // deux affaires sur la même personne n'y tiennent pas et la plus récemment
+  // modifiée réclame la ligne.
+  //
+  // La correction se fait en SQL et non en JS après coup, parce que `montant`
+  // est aussi une CLÉ DE TRI (`TRIS.value`) : corrigé seulement à l'affichage,
+  // le classement par montant resterait celui des chiffres faux.
+  //
+  // `MAX(da.total)` et non `SUM` : la jointure est au plus 1 pour 1, `da` ayant
+  // une ligne par compte, et toutes les lignes d'un groupe partagent le même
+  // `account_id`. Un groupe formé sur un nom de société en texte libre ou sur
+  // une personne sans entreprise a `account_id` NULL, donc `da.total` NULL,
+  // donc le COALESCE retombe sur la somme des contacts · ces groupes n'ont
+  // aucune affaire dans `deals` à quoi se raccrocher.
+  const surDeals = await hasDeals(userId);
+
+  const jointureDeals = surDeals
+    ? `LEFT JOIN (
+         SELECT account_id, SUM(deal_value) AS total FROM deals
+          WHERE user_id = $1 AND account_id IS NOT NULL
+          GROUP BY account_id
+       ) da ON CAST(da.account_id AS TEXT) = CAST(o.account_id AS TEXT)`
+    : '';
+  const colonneMontant = surDeals
+    ? `COALESCE(MAX(da.total), COALESCE(SUM(o.deal_value), 0)) AS montant`
+    : `COALESCE(SUM(o.deal_value), 0) AS montant`;
+
   const groupes = await db.query(
     `SELECT ${CLE_GROUPE} AS cle,
             MAX(COALESCE(NULLIF(TRIM(COALESCE(o.company, '')), ''), o.name)) AS nom,
             COUNT(*) AS contacts,
-            COALESCE(SUM(o.deal_value), 0) AS montant,
+            ${colonneMontant},
             MAX(o.last_activity_at) AS derniere_activite
        FROM opportunities o
+       ${jointureDeals}
       WHERE ${where}
       GROUP BY ${CLE_GROUPE}
       ORDER BY ${tri}
@@ -343,6 +380,47 @@ async function pageStats(userId, opts = {}) {
     valued += Number(r.valorises) || 0;
     value += Number(r.montant) || 0;
     atRisk += Number(r.a_risque) || 0;
+  }
+
+  // ── Le montant de tête vient des AFFAIRES, comme celui des lignes ──
+  //
+  // Les comptages ci-dessus portent sur des CONTACTS et restent justes : c'est
+  // bien une répartition de personnes par statut et par CRM. Le MONTANT, lui,
+  // doit sortir de `deals`, sinon la tuile de tête annoncerait moins que la
+  // somme des lignes visibles sous elle · deux chiffres faux de la même façon
+  // valent mieux qu'un seul corrigé, et deux chiffres qui se contredisent sont
+  // le plus sûr moyen de faire douter de tout l'écran.
+  //
+  // Le périmètre est défini par un filtre de CONTACTS : une affaire y entre si
+  // sa société est celle d'un contact du périmètre, ou, à défaut de société, si
+  // son interlocuteur en fait partie. Les affaires rattachées à une société
+  // dont aucun contact n'est dans le périmètre en sortent, ce qui est la même
+  // règle que pour les lignes.
+  if (await hasDeals(userId)) {
+    try {
+      const vd = await db.query(
+        `SELECT COALESCE(SUM(d.deal_value), 0) AS montant,
+                COUNT(*) FILTER (WHERE d.deal_value IS NOT NULL) AS valorisees
+           FROM deals d
+          WHERE d.user_id = $1
+            AND (
+              d.account_id IN (
+                SELECT o.account_id FROM opportunities o
+                 WHERE ${where} AND o.account_id IS NOT NULL
+              )
+              OR (d.account_id IS NULL AND d.primary_contact_id IN (
+                SELECT o.id FROM opportunities o WHERE ${where}
+              ))
+            )`,
+        params
+      );
+      value = Number(vd.rows[0]?.montant) || 0;
+      valued = Number(vd.rows[0]?.valorisees) || 0;
+    } catch (err) {
+      // Environnement en retard de migration : on garde les chiffres lus sur le
+      // contact plutôt que de vider la ligne de résumé.
+      logger.warn('account-list', `Montant des affaires indisponible pour ${userId}: ${err.message}`);
+    }
   }
   // `atRisk` au seuil du PRODUIT (60), et non au 50 que l'onglet de la page
   // employait de son côté : il annonçait donc un autre nombre que le badge de
