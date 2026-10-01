@@ -78,6 +78,10 @@ async function setup() {
   // « ce compte n'est pas le vôtre » passe alors même si le contrôle d'accès
   // est absent. Constaté sur la fiche compte du lot 7.
   app.use('/api/crm', requireAuth, require('../routes/crm'));
+  // Monté pour la même raison : sans lui, une requête vers /api/analytics/...
+  // retombe sur le 404 du gestionnaire d'erreurs, et un test ne distingue plus
+  // « la route répond mal » de « la route n'existe pas ».
+  app.use('/api/analytics', requireAuth, require('../routes/analytics'));
   app.use(errorHandler);
 
   return new Promise((resolve) => {

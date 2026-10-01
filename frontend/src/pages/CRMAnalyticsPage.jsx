@@ -10,6 +10,7 @@ import { useSocket } from '../context/SocketContext';
 import api from '../services/api-client';
 import { useI18n, useT } from '../i18n';
 import EngagementChart from '../components/charts/EngagementChart';
+import AnalyticsAccountsSection from '../components/AnalyticsAccountsSection';
 import FunnelChart from '../components/charts/FunnelChart';
 import LoadingTips from '../components/LoadingTips';
 import Icon from '../components/Icon';
@@ -102,6 +103,7 @@ function getTabs(t, vocab) { return [
   { key: 'attribution', label: 'Attribution', desc: t('analytics.tabDescAttribution') },
   { key: 'forecast', label: 'Forecast', desc: t('analytics.tabDescForecast') },
   { key: 'lostReasons', label: t('analytics.lostReasonsTab'), desc: t('analytics.tabDescLostReasons') },
+  { key: 'accounts', label: t('analytics.accountsTab'), desc: t('analytics.tabDescAccounts') },
   { key: 'membership', label: t('analytics.membershipTab'), desc: t('analytics.tabDescMembership') },
   { key: 'upsell-performance', label: t('analytics.upsellPerformanceTab'), desc: t('analytics.tabDescUpsellPerformance') },
   { key: 'churn-risk-performance', label: t('analytics.churnRiskTab'), desc: t('analytics.tabDescChurnRisk') },
@@ -116,7 +118,7 @@ function getTabs(t, vocab) { return [
 // Prospection. Voir le rendu conditionnel sur activeGroup plus bas.
 const GROUPS = [
   { key: 'deals', labelKey: 'analytics.groupDeals', tabs: ['pipeline', 'attribution', 'forecast', 'lostReasons'] },
-  { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['membership', 'upsell-performance', 'churn-risk-performance'] },
+  { key: 'clients', labelKey: 'analytics.groupClients', tabs: ['accounts', 'membership', 'upsell-performance', 'churn-risk-performance'] },
   { key: 'activation', labelKey: 'analytics.groupActivation', tabs: ['trends'] },
   { key: 'prospection', labelKey: 'analytics.groupProspection', tabs: ['channels', 'attribution'] },
 ];
@@ -331,7 +333,7 @@ export default function CRMAnalyticsPage() {
 
       {/* Filtres produit / secteur, Deals / Clients / Prospection (Attribution y respecte
           ces filtres, contrairement à Canaux qui reste campagne-only, cf. avertissement plus bas) */}
-      {(activeGroup === 'deals' || activeGroup === 'clients' || activeGroup === 'prospection') && backendAvailable && hasData && (productLines.length > 1 || sectors.length > 1) && (
+      {(activeGroup === 'deals' || activeGroup === 'clients' || activeGroup === 'prospection') && activeTab !== 'accounts' && backendAvailable && hasData && (productLines.length > 1 || sectors.length > 1) && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{t('analytics.filterLabel')}</span>
           {productLines.length > 1 && (
@@ -496,6 +498,7 @@ export default function CRMAnalyticsPage() {
       {!loading && activeTab === 'trends' && tabData && <TrendsSection data={tabData} />}
       {!loading && activeTab === 'channels' && tabData && <ChannelsSection data={tabData} />}
       {!loading && activeTab === 'forecast' && tabData && <ForecastSection data={tabData} statusLabels={STATUS_LABELS} vocab={vocab} />}
+      {!loading && activeTab === 'accounts' && tabData && <AnalyticsAccountsSection data={tabData} />}
       {!loading && activeTab === 'membership' && tabData && <MembershipSection data={tabData} en={en} filterQs={filterQs} />}
       {!loading && activeTab === 'upsell-performance' && tabData && <UpsellPerformanceSection data={tabData} en={en} />}
       {!loading && activeTab === 'churn-risk-performance' && tabData && <AtRiskPerformanceSection data={tabData} en={en} />}

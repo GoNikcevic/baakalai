@@ -1213,6 +1213,127 @@ router.get('/renewals/csv', async (req, res, next) => {
 // rapatriées par le delta sync. L'historique des transitions ne démarre qu'à
 // l'installation du tracking · le front doit l'afficher honnêtement.
 
+// GET /api/analytics/accounts · l'analytics au niveau SOCIÉTÉ (lot 7)
+//
+// Tout le reste de cette page compte des CONTACTS, et c'est juste pour un
+// funnel de personnes. Mais le pipeline, le cycle de vente et le risque sont des
+// faits d'entreprise : les lire sur la ligne du contact, c'est ce qui rendait
+// 659 800 € invisibles sous Deals (mesuré sur staging le 2026-10-01).
+//
+// Les montants passent par lib/deal-reads.js, le point de passage unique de la
+// bascule, qui dit dans sa réponse de quelle table il a répondu. L'écran peut
+// donc annoncer honnêtement qu'il lit encore le contact quand c'est le cas.
+router.get('/accounts', async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { dealTotals, openDealsByStage } = require('../lib/deal-reads');
+    const { AT_RISK_THRESHOLD } = require('../lib/churn-scoring');
+
+    const [affaires, parEtape] = await Promise.all([
+      dealTotals(userId),
+      openDealsByStage(userId, { limit: 15 }),
+    ]);
+
+    // Les bandes de risque, aux MÊMES seuils que getChurnBand (lib/churn-scoring)
+    // et que la fiche compte. Une bande qui change de frontière selon l'écran
+    // est une bande à laquelle personne ne croit.
+    const comptes = await db.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(churn_score)::int AS scores,
+         COUNT(*) FILTER (WHERE churn_score IS NULL)::int AS non_scores,
+         COUNT(*) FILTER (WHERE churn_score < 26)::int AS sains,
+         COUNT(*) FILTER (WHERE churn_score >= 26 AND churn_score < 51)::int AS moyens,
+         COUNT(*) FILTER (WHERE churn_score >= 51 AND churn_score < 76)::int AS eleves,
+         COUNT(*) FILTER (WHERE churn_score >= 76)::int AS critiques,
+         COUNT(*) FILTER (WHERE churn_score >= $2)::int AS a_risque
+       FROM accounts WHERE user_id = $1`,
+      [userId, AT_RISK_THRESHOLD]
+    );
+
+    // Un compte « en situation d'upsell » porte À LA FOIS un gagné et un ouvert.
+    // Ce n'est pas une heuristique, c'est la définition, et elle était invisible
+    // avant que `deals` existe : deux affaires ne tenaient pas sur la ligne
+    // d'une personne.
+    let upsell = 0;
+    let contactsParCompte = [];
+    try {
+      const u = await db.query(
+        `SELECT COUNT(*)::int AS n FROM accounts a
+          WHERE a.user_id = $1
+            AND EXISTS(SELECT 1 FROM deals d WHERE d.account_id = a.id AND d.status = 'won')
+            AND EXISTS(SELECT 1 FROM deals d WHERE d.account_id = a.id AND d.status NOT IN ('won','lost'))`,
+        [userId]
+      );
+      upsell = u.rows[0]?.n || 0;
+
+      const c = await db.query(
+        `SELECT COUNT(o.id)::int AS n FROM accounts a
+           LEFT JOIN opportunities o ON o.account_id = a.id
+          WHERE a.user_id = $1 GROUP BY a.id`,
+        [userId]
+      );
+      contactsParCompte = c.rows.map(r => Number(r.n) || 0);
+    } catch { /* environnement en retard de migration : ces deux-là restent à 0 */ }
+
+    // Médiane calculée en JS : les fonctions de percentile ne sont pas portables
+    // vers le miroir des tests, et un chiffre non vérifiable ne vaut pas mieux
+    // que pas de chiffre.
+    const tries = [...contactsParCompte].sort((a, b) => a - b);
+    const mediane = tries.length === 0 ? null
+      : tries.length % 2 === 1 ? tries[(tries.length - 1) / 2]
+      : Math.round((tries[tries.length / 2 - 1] + tries[tries.length / 2]) / 2);
+
+    const r = comptes.rows[0] || {};
+    const gagnes = affaires.won_365d || 0;
+    const perdus = affaires.lost_365d || 0;
+
+    res.json({
+      // De quelle table viennent les montants. Sans ça, impossible de savoir en
+      // lisant l'écran s'il montre le pipeline complet ou la vue tronquée.
+      source: affaires.source,
+      pipeline: {
+        openValue: affaires.open_value || 0,
+        openDeals: affaires.open_deals || 0,
+        // NULL et non 0 quand rien n'est mesurable : inconnu ne vaut pas zéro.
+        winRate365d: (gagnes + perdus) > 0 ? Math.round((gagnes / (gagnes + perdus)) * 100) : null,
+        won365d: gagnes,
+        lost365d: perdus,
+        avgCycleDays: affaires.avg_cycle_days,
+        avgTicket: affaires.open_deals > 0
+          ? Math.round((affaires.open_value || 0) / affaires.open_deals)
+          : null,
+        quiet30d: affaires.open_deals_quiet_30d || 0,
+      },
+      stages: parEtape.stages,
+      stagesSource: parEtape.source,
+      risk: {
+        threshold: AT_RISK_THRESHOLD,
+        scored: r.scores || 0,
+        notScored: r.non_scores || 0,
+        atRisk: r.a_risque || 0,
+        bands: {
+          healthy: r.sains || 0,
+          medium: r.moyens || 0,
+          high: r.eleves || 0,
+          critical: r.critiques || 0,
+        },
+      },
+      accounts: {
+        total: r.total || 0,
+        withContact: contactsParCompte.filter(n => n > 0).length,
+        withoutContact: contactsParCompte.filter(n => n === 0).length,
+        upsell,
+        avgContacts: contactsParCompte.length > 0
+          ? Math.round((contactsParCompte.reduce((s, n) => s + n, 0) / contactsParCompte.length) * 10) / 10
+          : null,
+        medianContacts: mediane,
+        maxContacts: tries.length > 0 ? tries[tries.length - 1] : null,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 router.get('/stages', async (req, res, next) => {
   try {
     const userId = req.user.id;
