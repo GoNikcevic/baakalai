@@ -68,11 +68,16 @@ const PAGE_SIZE = 25;
  * Une date ISO, il y a N jours.
  *
  * Calculée en JS et passée en paramètre plutôt qu'écrite en
- * `now() - interval '30 days'` : le miroir sqlite compare des CHAÎNES, et sa
- * traduction de `now()` produit « 2026-09-01 10:00:00 » quand les valeurs
- * stockées sont des ISO « 2026-09-01T10:00:00.000Z ». Le « T » pèse plus lourd
- * que l'espace dans une comparaison lexicale, et le test passerait à côté. Des
- * deux côtés en ISO, la comparaison est juste partout.
+ * `now() - interval '30 days'`. Le motif d'origine : le miroir sqlite compare
+ * des CHAÎNES, et sa traduction de `now()` produisait « 2026-09-01 10:00:00 »
+ * quand les valeurs stockées sont des ISO « 2026-09-01T10:00:00.000Z ». Le
+ * « T » pèse plus lourd que l'espace dans une comparaison lexicale, et le test
+ * passait à côté.
+ *
+ * Ce piège est refermé depuis le 2026-10-02 : le miroir rend désormais le même
+ * ISO-8601 en Z partout (voir MAINTENANT_ISO dans db/sqlite-adapter.js), et le
+ * contournement n'est plus nécessaire. Il reste en place parce qu'il est juste
+ * et explicite, pas parce qu'il est obligatoire.
  */
 function ilYAJours(n) {
   return new Date(Date.now() - n * 86400000).toISOString();

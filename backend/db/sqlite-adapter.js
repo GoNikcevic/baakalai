@@ -27,9 +27,32 @@ function getDb() {
 // Les identifiants doivent avoir la forme d'un UUID (8-4-4-4-12) : les routes
 // passent par middleware/validate-params.js, qui rejette en 400 tout id qui n'est
 // ni un UUID ni un nombre. Un hex de 32 caractères sans tirets ne passe pas.
+/**
+ * Format de date CANONIQUE du miroir : l'ISO-8601 en Z, exactement celui que
+ * `Date.prototype.toISOString()` produit et que l'application ecrit partout.
+ *
+ * Pourquoi ca compte : SQLite n'a pas de type date, il compare des CHAINES.
+ * `CURRENT_TIMESTAMP` et `datetime('now')` rendent « 2026-10-02 18:00:00 »,
+ * l'application ecrit « 2026-10-02T17:00:00.000Z », et le « T » (0x54) pese
+ * plus lourd que l'espace (0x20). Une date PASSEE paraissait donc FUTURE.
+ *
+ * Constate sur lib/db-lock.js : un bail expire n'etait jamais reprenable sous
+ * le miroir, parce que `expires_at < now()` rendait faux. Le meme piege est
+ * documente a la main dans lib/account-list.js, qui calcule ses bornes en JS
+ * pour le contourner · il n'a plus a le faire.
+ *
+ * Sur des ISO-8601 en Z, l'ordre lexical EST l'ordre chronologique. Les deux
+ * cotes de toute comparaison sont donc dans ce format : les defauts du schema
+ * ci-dessous, et la traduction de `now()` plus bas.
+ */
+const MAINTENANT_ISO = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+
 function initSchema() {
   const d = getDb();
-  d.exec(`
+  d.exec(SCHEMA_SQL.replace(/DEFAULT CURRENT_TIMESTAMP/g, `DEFAULT (${MAINTENANT_ISO})`));
+}
+
+const SCHEMA_SQL = `
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
       email TEXT UNIQUE NOT NULL,
@@ -503,6 +526,19 @@ function initSchema() {
     -- serait un mensonge qui polluerait son propre historique.
     -- (Pas d accent grave ici : ce bloc vit dans un gabarit JavaScript, un
     --  backtick y terminerait la chaine.)
+    -- Le bail d'exclusion mutuelle des taches planifiees (migration 066).
+    -- Absent du miroir, donc lib/db-lock.js etait intestable de bout en bout :
+    -- c'est pourtant lui qui serialise les ecritures de memoire (regle 3 du
+    -- CLAUDE.md), et la regle interdit explicitement pg_advisory_lock parce que
+    -- le pooler est en mode transaction. Un verrou qu'aucun test ne couvre est
+    -- un verrou dont on apprend les defauts en production.
+    CREATE TABLE IF NOT EXISTS cron_locks (
+      name TEXT PRIMARY KEY,
+      instance_id TEXT NOT NULL,
+      locked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS churn_score_history (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
       user_id TEXT NOT NULL REFERENCES users(id),
@@ -690,8 +726,7 @@ function initSchema() {
       pattern_ids TEXT,
       metadata TEXT
     );
-  `);
-}
+`;
 
 /** Ramène une valeur acceptée par pg vers un type que SQLite sait lier. */
 function toSqliteValue(p) {
@@ -700,6 +735,139 @@ function toSqliteValue(p) {
   if (p instanceof Date) return p.toISOString();
   if (p !== null && typeof p === 'object' && !Buffer.isBuffer(p)) return JSON.stringify(p);
   return p;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ce que ce miroir ne traduit PAS, et c'est un choix
+
+   Mesure du 2026-10-02 : environ 127 occurrences de SQL Postgres que le miroir
+   ignorait, d'ou des pans entiers du backend intestables. Les quatre familles
+   mecaniques sont desormais traduites (`= ANY($n)`, `::interval`, `EXTRACT`,
+   `ILIKE`, plus les casts de tableaux), et des tests les couvrent.
+
+   Deux familles restent volontairement non traduites :
+
+   · `SELECT DISTINCT ON (...)` · 12 occurrences, toutes de la meme forme « la
+     derniere ligne par groupe ». La reecriture en `ROW_NUMBER() OVER
+     (PARTITION BY ...)` est possible, les fonctions de fenetrage marchant
+     nativement ici. Mais elle demande de couper le `ORDER BY` entre le prefixe
+     de groupe et le reste, et une coupe fausse rendrait LA MAUVAISE LIGNE sans
+     rien signaler. Une requete qui refuse de demarrer coute une heure ; une
+     requete qui rend la mauvaise ligne coute une enquete. Ces appels se
+     corrigent donc un par un a la source, comme l'a ete `failedSendIds` dans
+     lib/reactivation-queue.js, ou chaque correction est verifiable.
+
+   · `array_agg` · 1 occurrence (routes/data-quality.js). Postgres rend un
+     TABLEAU, `json_group_array` rendrait une chaine JSON : l'appelant qui
+     itere dessus se tromperait en silence au lieu d'echouer. Meme raisonnement.
+
+   Verifie natif, sans traduction : les fonctions de fenetrage (`OVER (...)`) et
+   `IS DISTINCT FROM`.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Coupe `A - B` au niveau SUPERIEUR, en ignorant ce qui est entre parentheses
+ * ou entre apostrophes.
+ *
+ * Un simple `split('-')` couperait au milieu de `datetime('now','-7 days')` ou
+ * de `COALESCE(a, b - c)`, et produirait deux moities invalides.
+ *
+ * @returns {[string, string]|null} les deux membres, ou null si pas de
+ *   soustraction au niveau superieur.
+ */
+function couperSoustraction(expr) {
+  let niveau = 0;
+  let dansChaine = false;
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i];
+    if (c === "'") { dansChaine = !dansChaine; continue; }
+    if (dansChaine) continue;
+    if (c === '(') niveau++;
+    else if (c === ')') niveau--;
+    else if (c === '-' && niveau === 0) {
+      return [expr.slice(0, i).trim(), expr.slice(i + 1).trim()];
+    }
+  }
+  return null;
+}
+
+/** Une unite d'EXTRACT, traduite pour SQLite. */
+function extraireUnite(unite, arg) {
+  const heure = (f) => `CAST(strftime('${f}', ${arg}) AS INTEGER)`;
+
+  if (unite === 'EPOCH' || unite === 'DAY' || unite === 'DAYS') {
+    // Une soustraction de dates se traduit en difference de jours juliens. Sans
+    // ce cas, `EXTRACT(EPOCH FROM (won_date - created_at))` deviendrait un
+    // strftime sur une soustraction de chaines, qui rend NULL en silence · le
+    // cycle de vente aurait ete nul sans que rien ne le signale.
+    const membres = couperSoustraction(arg.replace(/^\((.*)\)$/s, '$1'));
+    if (membres) {
+      const [a, b] = membres;
+      const jours = `(julianday(${a}) - julianday(${b}))`;
+      return unite === 'EPOCH' ? `(${jours} * 86400)` : jours;
+    }
+    return unite === 'EPOCH' ? `CAST(strftime('%s', ${arg}) AS INTEGER)` : heure('%d');
+  }
+  if (unite === 'HOUR') return heure('%H');
+  if (unite === 'MINUTE') return heure('%M');
+  if (unite === 'MONTH') return heure('%m');
+  if (unite === 'YEAR') return heure('%Y');
+  // DOW de Postgres : 0 = dimanche, comme le %w de SQLite.
+  if (unite === 'DOW') return heure('%w');
+  // ISODOW : 1 = lundi a 7 = dimanche. Le %w de SQLite met dimanche a 0, il
+  // faut donc le remonter a 7 au lieu de laisser un decalage d'un jour sur
+  // toute analyse hebdomadaire.
+  //
+  // En arithmetique et non en CASE : un CASE devrait repeter l'argument, et
+  // quand cet argument est un parametre (`EXTRACT(ISODOW FROM $1)`) le `?` se
+  // retrouve deux fois dans le SQL pour une seule valeur liee · « Too few
+  // parameter values were provided ». L'argument ne doit apparaitre qu'UNE fois.
+  if (unite === 'ISODOW') return `((${heure('%w')} + 6) % 7 + 1)`;
+  // Unite inconnue : on laisse l'expression telle quelle, elle echouera
+  // bruyamment plutot que de rendre un chiffre faux.
+  return `EXTRACT(${unite} FROM ${arg})`;
+}
+
+/**
+ * `EXTRACT(unite FROM expr)` · SQLite ne connait pas EXTRACT.
+ *
+ * Ecrit avec un scanner de parentheses et non une expression reguliere :
+ * l'argument est souvent lui-meme parenthese, et aucune regex ne compte les
+ * parentheses. Une regex gourmande avalerait la parenthese fermante de la
+ * requete entiere ; une regex paresseuse couperait l'argument en deux.
+ *
+ * 27 occurrences dans le backend, dont 15 EPOCH : aucune de ces requetes
+ * n'avait jamais pu s'executer sous le miroir, donc aucune n'etait couverte.
+ */
+function traduireExtract(sql) {
+  const RE = /EXTRACT\s*\(\s*([A-Za-z]+)\s+FROM\s+/gi;
+  let sortie = '';
+  let i = 0;
+  for (;;) {
+    RE.lastIndex = i;
+    const m = RE.exec(sql);
+    if (!m) { sortie += sql.slice(i); break; }
+    sortie += sql.slice(i, m.index);
+
+    const debutArg = m.index + m[0].length;
+    let p = debutArg;
+    let niveau = 1;
+    let dansChaine = false;
+    while (p < sql.length) {
+      const c = sql[p];
+      if (c === "'") dansChaine = !dansChaine;
+      else if (!dansChaine && c === '(') niveau++;
+      else if (!dansChaine && c === ')') { niveau--; if (niveau === 0) break; }
+      p++;
+    }
+    // Parenthese jamais fermee : SQL deja invalide, on rend la chaine intacte
+    // plutot que d'en fabriquer une autre.
+    if (niveau !== 0) { sortie += sql.slice(m.index); break; }
+
+    sortie += extraireUnite(m[1].toUpperCase(), sql.slice(debutArg, p).trim());
+    i = p + 1;
+  }
+  return sortie;
 }
 
 /**
@@ -714,8 +882,44 @@ function query(text, params = []) {
   // donc la liste dans l'ordre d'apparition au lieu de la reprendre telle quelle,
   // sinon ces requêtes échouent avec « Too few parameter values were provided ».
   const positional = [];
-  const sqliteText = text.replace(/\$(\d+)/g, (_, n) => {
-    positional.push(params[Number(n) - 1]);
+  // UNE seule passe, et c'est essentiel : `= ANY($2)` doit etre developpe en
+  // `IN (?, ?)` et pousser ses elements, mais l'idiome courant du code repete le
+  // meme parametre · `($2::uuid[] IS NULL OR id = ANY($2))`. Deux passes
+  // separees pousseraient les elements du tableau avant la valeur brute, alors
+  // que le SQL final les attend dans l'autre ordre, et chaque requete de ce type
+  // lirait des parametres decales. Une alternance unique preserve l'ordre
+  // d'apparition.
+  const RE_PARAMS = /(=|<>|!=)\s*ANY\s*\(\s*\$(\d+)\s*(?:::[a-z_]+(?:\[\])?)?\s*\)|\$(\d+)/gi;
+  const sqliteText = text.replace(RE_PARAMS, (m, op, nAny, nPlain) => {
+    if (nAny !== undefined) {
+      const v = params[Number(nAny) - 1];
+      const dedans = op === '=' ? 'IN' : 'NOT IN';
+      // `IN ()` est une erreur de syntaxe en SQLite. Un ensemble vide
+      // syntaxiquement valide est donc necessaire, et il doit garder la place
+      // de l'operande : `1 = 0` ne peut PAS servir, seule l'expression
+      // `= ANY($n)` est remplacee et l'operande de gauche reste, ce qui
+      // donnerait « id 1 = 0 ».
+      const ensembleVide = `${dedans} (SELECT NULL WHERE 0)`;
+
+      // NULL se traite comme un ensemble VIDE, et surtout pas en rendant
+      // l'expression intacte : `$n` ne serait alors pas converti en `?` et
+      // `ANY` resterait, d'ou « no such function: ANY ».
+      //
+      // C'est le cas courant de l'idiome de perimetre du code :
+      // `($2::uuid[] IS NULL OR id = ANY($2))` appele sans filtre. Avec un
+      // ensemble vide, « NULL IS NULL OU rien » vaut vrai, soit exactement ce
+      // que Postgres rend.
+      if (v == null) return ensembleVide;
+
+      // Un scalaire est un ensemble a un element · c'est la lecture naturelle
+      // de `= ANY(x)`, et mieux vaut l'honorer que d'echouer.
+      const liste = Array.isArray(v) ? v : [v];
+      if (liste.length === 0) return ensembleVide;
+
+      for (const x of liste) positional.push(x);
+      return `${dedans} (${liste.map(() => '?').join(', ')})`;
+    }
+    positional.push(params[Number(nPlain) - 1]);
     return '?';
   });
 
@@ -753,11 +957,46 @@ function query(text, params = []) {
     // plus fréquent : en pg il sert à récupérer un nombre plutôt qu'une chaîne,
     // ce que SQLite fait déjà nativement. Liste explicite plutôt que `::\w+`
     // pour ne pas massacrer une chaîne littérale qui contiendrait « :: ».
-    .replace(/::(int|integer|bigint|numeric|float|real|text|uuid|boolean|bool|date|timestamptz|timestamp|jsonb|json|vector)\b/gi, '')
+    // `(\[\])?` ajoute : l'idiome de perimetre du code est
+    // `($2::uuid[] IS NULL OR id = ANY($2))`, et retirer `::uuid` en laissant
+    // les crochets donnait « near "[]" ». Les deux moities de l'idiome sont
+    // donc traitees, celle-ci ici et le `ANY` dans la passe des parametres.
+    // Le `\b` est AVANT les crochets, pas apres : place en fin de motif il ne
+    // peut pas matcher, « ] » suivi d'une espace n'etant pas une frontiere de
+    // mot, et la branche tableau ne se declenchait jamais. Entre le type et les
+    // crochets il matche (« d » puis « [ »), et il empeche toujours `::int` de
+    // mordre sur `::integer` grace au retour arriere du moteur.
+    .replace(/::(int|integer|bigint|numeric|float|real|text|uuid|boolean|bool|date|timestamptz|timestamp|jsonb|json|vector)\b(\[\])?/gi, '')
+    // `X ± ($n || ' days')::interval` · l'idiome d'arithmetique de dates du
+    // code. Le cast `::interval` n'etait PAS dans la liste ci-dessus, et il ne
+    // peut pas y etre : le retirer laisserait `X - (? || ' days')`, qui est une
+    // soustraction de chaine. Il faut traduire l'expression entiere.
+    //
+    // Trois fichiers en dependaient et leurs requetes n'avaient donc jamais pu
+    // s'executer sous le miroir : lib/reactivation-queue.js (corrige a la
+    // source), lib/db-lock.js et lib/hidden-revenue/detect.js.
+    .replace(
+      /(now\(\)|\?|[\w."]+)\s*([-+])\s*\(\s*\?\s*\|\|\s*'([^']*)'\s*\)::interval/gi,
+      // Meme regle : format canonique en sortie, sinon `expires_at` serait
+      // stocke a l'espace et compare a un `now()` en ISO · un bail en cours
+      // paraitrait expire, et l'exclusion mutuelle ne tiendrait plus.
+      (_, base, signe, unite) =>
+        `strftime('%Y-%m-%dT%H:%M:%fZ', ${base}, '${signe}' || ? || ' ${unite.trim()}')`
+    )
+    // SQLite n'a pas ILIKE. Son LIKE est deja insensible a la casse sur
+    // l'ASCII, ce qui couvre les usages du code (recherche de nom, de domaine).
+    // Nuance a connaitre : sur des caracteres accentues, SQLite reste sensible
+    // a la casse la ou Postgres ne l'est pas. Ne pas ecrire de test qui
+    // depende de « É » == « é ».
+    .replace(/\bILIKE\b/gi, 'LIKE')
     // Les fenêtres temporelles s'écrivent « now() - interval '7 days' » en pg ;
     // SQLite ne connaît pas interval et attend datetime('now','-7 days').
     .replace(/now\(\)\s*([-+])\s*interval\s*'(\d+)\s*(\w+)'/gi,
-      (_, sign, amount, unit) => `datetime('now','${sign}${amount} ${unit}')`)
+      // Rend le format CANONIQUE, pas celui de datetime() : `datetime()`
+      // retourne « 2026-10-02 18:00:00 », sans T ni millisecondes, et toute
+      // comparaison avec une date ISO stockee par l'application repartirait
+      // dans le piege lexical que MAINTENANT_ISO vient de refermer.
+      (_, sign, amount, unit) => `strftime('%Y-%m-%dT%H:%M:%fZ','now','${sign}${amount} ${unit}')`)
     // Agrégats JSON · pg dit json_agg / json_build_object, SQLite dit
     // json_group_array / json_object. Sans cette traduction, l'export RGPD
     // n'était pas testable du tout : sa requête sur les fils de discussion
@@ -770,8 +1009,12 @@ function query(text, params = []) {
     .replace(/json_build_object\(/gi, 'json_object(')
     .replace(/json_group_array\((.*?)\s+ORDER BY\s+[\w.]+(\s+(?:ASC|DESC))?\)/gis, 'json_group_array($1)')
     .replace(/ON CONFLICT\((\w+)\) DO UPDATE SET/g, 'ON CONFLICT($1) DO UPDATE SET')
-    .replace(/now\(\)/g, "datetime('now')")
+    .replace(/now\(\)/g, MAINTENANT_ISO)
     .replace(/EXCLUDED\./g, 'excluded.');
+
+  // EXTRACT en dernier : ses traductions produisent des `julianday(...)` et des
+  // `strftime(...)` qui ne doivent plus repasser dans les regles ci-dessus.
+  adapted = traduireExtract(adapted);
 
   if (isSelect) {
     const stmt = d.prepare(adapted);
