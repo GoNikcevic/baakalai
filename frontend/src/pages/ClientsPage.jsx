@@ -20,6 +20,68 @@ const TILE_COLORS = [
   'var(--warning)', 'var(--purple)', 'var(--success)',
 ];
 
+/**
+ * Largeurs des colonnes de la ligne de SOCIÉTÉ · lot 7, écran 1.
+ *
+ * Partagées entre l'en-tête et les lignes, et c'est tout l'intérêt de les
+ * sortir ici : deux litéraux séparés se désalignent au premier ajustement, et
+ * un désalignement d'une colonne de montants se lit comme une erreur de
+ * chiffre. La liste imbrique des lignes de contact sous chaque société, donc un
+ * <table> HTML ne convenait pas · d'où des largeurs fixes plutôt qu'un vrai
+ * tableau.
+ */
+const COL = { ouvert: 104, gagne: 104, silence: 88, risque: 124, proprietaire: 104 };
+
+/**
+ * Le risque d'une société, nommé avant d'être coloré.
+ *
+ * « Jamais la couleur seule » : une bande de sévérité DONNE la forme, le mot
+ * donne le sens, et le chiffre vient après. Un écran lu en noir et blanc, ou
+ * par quelqu'un qui distingue mal le rouge du vert, doit rester lisible.
+ *
+ * ── Les seuils sont ceux du PRODUIT ─────────────────────────────────────────
+ *
+ * 60 pour « à risque », 76 pour « critique » · les mêmes que
+ * `lib/churn-scoring.AT_RISK_THRESHOLD` et que la page Clients à risque. La
+ * ligne de CONTACT, plus bas dans ce fichier, colore encore sur une échelle à
+ * 26/51/76 : c'est une divergence connue et antérieure, qui porte sur le score
+ * d'un contact et non d'une société. Je ne l'aligne pas ici pour ne pas
+ * changer en passant ce que la ligne de contact affiche.
+ *
+ * ── « Non scorable » n'est pas « sain » ─────────────────────────────────────
+ *
+ * Un compte sans score ne vaut PAS zéro. Un compte muet, sans interlocuteur
+ * rattaché, n'est pas un compte en bonne santé : il est hors de portée du
+ * scoring et de tout envoi. Les confondre ferait passer un angle mort pour un
+ * bon résultat, et c'est exactement ce qu'un écran de pilotage ne doit pas
+ * faire.
+ */
+function BandeRisque({ score, sansFiche, t }) {
+  const bande = (couleur, libelle, chiffre, aide) => (
+    <span
+      title={aide}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}
+    >
+      <span style={{ width: 3, height: 12, borderRadius: 2, background: couleur, flexShrink: 0 }} />
+      <span style={{ color: couleur === 'var(--border)' ? 'var(--text-muted)' : couleur }}>
+        {libelle}{chiffre == null ? '' : ` ${chiffre}`}
+      </span>
+    </span>
+  );
+
+  if (score == null) {
+    return bande(
+      'var(--border)',
+      t('clients.riskNotScorable'),
+      null,
+      sansFiche ? t('clients.riskNotScorableNoAccount') : t('clients.riskNotScorableYet')
+    );
+  }
+  if (score >= 76) return bande('var(--danger)', t('clients.riskCritical'), score);
+  if (score >= 60) return bande('var(--warning)', t('clients.riskHigh'), score);
+  return bande('var(--success)', t('clients.riskHealthy'), score);
+}
+
 const STATUS_COLORS = {
   new: 'var(--text-muted)', imported: 'var(--blue)', interested: 'var(--accent)',
   meeting: 'var(--warning)', negotiation: 'var(--purple)', won: 'var(--success)', lost: 'var(--danger)',
@@ -463,6 +525,21 @@ export default function ClientsPage({ scope }) {
         // atteignable que par URL directe. Le serveur l'envoyait bien · c'est
         // l'écran qui le jetait. Constaté le 2026-10-02.
         accountId: g.accountId || null,
+        // Les colonnes de la société · lot 7, écran 1.
+        //
+        // Reprises EXPLICITEMENT, comme `accountId` juste au-dessus et pour la
+        // même raison : ce remappage reconstruit un objet littéral, donc tout
+        // champ qu'on n'écrit pas ici disparaît sans erreur. C'est le défaut
+        // qui a rendu la fiche compte inatteignable pendant deux jours, et il
+        // se reproduit à chaque nouveau champ. Si on en ajoute un au serveur,
+        // il faut l'ajouter ICI aussi.
+        openValue: Number(g.openValue) || 0,
+        wonValue: Number(g.wonValue) || 0,
+        // `?? null` et non `|| null` : un score de 0 est une valeur, pas une
+        // absence. Les confondre afficherait « Non scorable » sur un compte
+        // mesuré sain, donc perdrait une information juste.
+        churnScore: g.churnScore ?? null,
+        owner: g.owner || null,
         orphan: !!g.orphan,
         rows,
         deals,
@@ -595,10 +672,16 @@ export default function ClientsPage({ scope }) {
     // côté deals, et redondant avec la portée elle-même côté clients.
 ...(scope === 'deals' ? [] : [
       { key: 'won', label: STATUS_LABELS.won, count: statusCounts.won || 0 },
-      // Compté au seuil du PRODUIT par le serveur. Cet onglet comptait à 50 de
-      // son côté, donc annonçait un autre nombre que le badge de la navigation
-      // et que la page Clients à risque pour la même question.
-      { key: 'churn_risk', label: t('clients.churnRisk'), count: stats.atRisk || 0 },
+      // Plus d'onglet « À risque » ici · arbitrage Goran du 2026-10-02.
+      //
+      // Il faisait le MEME filtre, au MEME seuil, que la tuile du même nom
+      // posée dix centimètres plus haut sur le même écran. Deux contrôles pour
+      // une seule question, et la tuile porte en plus la bande de sévérité.
+      //
+      // Ce qui disparaît est un doublon de filtre, pas une capacité : ni la
+      // tuile ni l'onglet n'ont jamais offert d'ACTION sur un client à risque.
+      // Préparer un workflow, envoyer en groupe, qualifier l'issue · tout ça
+      // vit sur la page dédiée Clients à risque, et y reste.
     ]),
   ].filter(tab => tab.key === 'all' || tab.count > 0);
 
@@ -989,6 +1072,33 @@ export default function ClientsPage({ scope }) {
                   <span>{t('clients.selectAll')} ({filtered.length})</span>
                 </div>
               )}
+              {/* ── En-tête de colonnes · lot 7, écran 1 ────────────────────
+                  Posé seulement quand la liste montre vraiment des sociétés :
+                  dans le détail d'un contact ou le focus Qualité des données,
+                  les lignes n'ont pas ces colonnes et un en-tête annoncerait
+                  des colonnes vides. Les largeurs viennent de COL, partagées
+                  avec les lignes · deux litéraux séparés se désaligneraient. */}
+              {!isDealQualityContext && !selectedClient && renderList.some(i => i.type === 'account') && (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: 14, padding: '6px 14px', marginTop: 8,
+                    fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em',
+                    color: 'var(--text-muted)', borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  <div style={{ minWidth: 0, paddingLeft: 20 }}>{t('clients.colCompany')}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                    <div style={{ width: COL.ouvert, textAlign: 'right' }}>{t('clients.colOpen')}</div>
+                    <div style={{ width: COL.gagne, textAlign: 'right' }}>{t('clients.colWon')}</div>
+                    <div style={{ width: COL.silence, textAlign: 'right' }}>{t('clients.colSilence')}</div>
+                    <div style={{ width: COL.risque, textAlign: 'right' }}>{t('clients.colRisk')}</div>
+                    <div style={{ width: COL.proprietaire, textAlign: 'right' }}>{t('clients.colOwner')}</div>
+                  </div>
+                </div>
+              )}
+
               {renderList.map(item => {
                 // ── En-tête de COMPTE ──
                 //
@@ -1044,20 +1154,48 @@ export default function ClientsPage({ scope }) {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                        {g.value > 0 && (
-                          <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            {Math.round(g.value).toLocaleString('fr-FR')} {'€'}
+                      {/* ── Les colonnes de la société · lot 7, écran 1 ──────
+                          OUVERT et GAGNÉ côte à côte, parce que les voir
+                          ensemble EST la définition de l'upsell : une société
+                          qui a signé et qui a encore une affaire en cours. Un
+                          montant unique agrégé ne le disait pas.
+
+                          Chaque colonne a une largeur FIXE et se retrouve à
+                          l'identique dans l'en-tête, qui est la seule façon
+                          d'aligner sans tableau HTML · la liste imbrique des
+                          lignes de contact sous chaque société, et un <table>
+                          ne le permettrait pas proprement. */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
+                        <div style={{ width: COL.ouvert, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {g.openValue > 0
+                            ? `${Math.round(g.openValue).toLocaleString('fr-FR')} €`
+                            : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>0 €</span>}
+                        </div>
+                        <div style={{ width: COL.gagne, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {g.wonValue > 0
+                            ? <span style={{ fontWeight: 600, color: 'var(--success)' }}>{Math.round(g.wonValue).toLocaleString('fr-FR')} €</span>
+                            : <span style={{ color: 'var(--text-muted)' }}>0 €</span>}
+                        </div>
+                        <div style={{ width: COL.silence, textAlign: 'right' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: silenceColor(g.silenceDays), flexShrink: 0 }} />
+                            <span style={{ color: g.silenceDays == null ? 'var(--text-muted)' : silenceColor(g.silenceDays) }}>
+                              {g.silenceDays == null
+                                ? t('clients.silenceUnknown')
+                                : t('clients.silenceDays', { days: g.silenceDays })}
+                            </span>
                           </span>
-                        )}
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: silenceColor(g.silenceDays), flexShrink: 0 }} />
-                          <span style={{ color: g.silenceDays == null ? 'var(--text-muted)' : silenceColor(g.silenceDays) }}>
-                            {g.silenceDays == null
-                              ? t('clients.silenceNever')
-                              : t('clients.silenceDays', { days: g.silenceDays })}
-                          </span>
-                        </span>
+                        </div>
+                        <div style={{ width: COL.risque, textAlign: 'right' }}>
+                          <BandeRisque score={g.churnScore} sansFiche={!g.accountId} t={t} />
+                        </div>
+                        <div style={{
+                          width: COL.proprietaire, textAlign: 'right', fontSize: 11,
+                          color: g.owner ? 'var(--text-secondary)' : 'var(--text-muted)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {g.owner ? g.owner.split('@')[0] : t('clients.ownerNone')}
+                        </div>
                       </div>
                     </div>
                   );

@@ -102,6 +102,18 @@ function serveurDeComptes(lignes, url) {
   const groups = [...parCle.values()].map(g => ({
     ...g,
     montant: g.contacts.reduce((s, c) => s + (Number(c.deal_value) || 0), 0),
+    // Les colonnes de la société · lot 7, écran 1.
+    //
+    // Posées EXPLICITEMENT par la fixture (`account_open` / `account_won`), et
+    // non dérivées du statut des contacts. C'est fidèle au vrai serveur, qui
+    // les calcule sur `deals` indépendamment du statut de la ligne de contact ·
+    // les dériver ici rendrait un gagné impossible à afficher sous le cadrage
+    // « deals », qui exclut justement les contacts gagnés. Le CALCUL est testé
+    // côté backend (tests/account-list.test.js), ici on teste l'AFFICHAGE.
+    openValue: g.contacts.find(c => c.account_open != null)?.account_open ?? 0,
+    wonValue: g.contacts.find(c => c.account_won != null)?.account_won ?? 0,
+    churnScore: g.contacts.find(c => c.account_churn != null)?.account_churn ?? null,
+    owner: g.contacts.find(c => c.owner_email)?.owner_email || null,
     // Le silence d'un compte est celui de son contact le plus RÉCENT
     // (arbitrage 12.3) · côté serveur c'est `MAX(last_activity_at)`.
     recence: Math.max(...g.contacts.map(c => new Date(c.last_activity_at || 0).getTime())),
@@ -526,5 +538,96 @@ describe('ClientsPage · accès à la fiche de société', () => {
 
     expect(await screen.findByText('Sans Societe')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Reconstruire les sociétés/ })).toBeNull();
+  });
+});
+
+describe('ClientsPage · les colonnes de la société', () => {
+  // L'écran affichait UN montant agrégé. Or voir l'OUVERT et le GAGNÉ ensemble
+  // EST la définition de l'upsell : une société qui a déjà signé et qui a
+  // encore une affaire en cours. Un total unique ne le dit pas.
+  it('affiche l ouvert et le gagné séparément', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'u2', name: 'En cours', company: 'Verdoux', account_id: 'acc-v', status: 'negotiation',
+          account_open: 24200, account_won: 35900, last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    await screen.findByRole('link', { name: 'Verdoux' });
+    // Les deux montants coexistent sur la ligne · c'est ce qui rend l'upsell
+    // lisible sans colonne dédiée.
+    expect(screen.getByText(/24\s?200\s?€/)).toBeTruthy();
+    expect(screen.getByText(/35\s?900\s?€/)).toBeTruthy();
+  });
+
+  it('nomme le risque, et ne le laisse jamais à la couleur seule', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'r1', name: 'A B', company: 'Critique SA', account_id: 'acc-c', account_churn: 82, status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    // Un écran lu en noir et blanc doit rester lisible : le mot porte le sens,
+    // la bande porte la forme, le chiffre vient après.
+    expect(await screen.findByText(/Critique 82/)).toBeTruthy();
+  });
+
+  it('un compte sans score affiche « Non scorable », jamais « Sain 0 »', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'n1', name: 'C D', company: 'Muette SA', account_id: 'acc-m', status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    // LE point qui compte. Un compte muet n'est pas un compte en bonne santé :
+    // afficher « Sain 0 » présenterait un angle mort comme un bon résultat.
+    expect(await screen.findByText('Non scorable')).toBeTruthy();
+    expect(screen.queryByText(/Sain 0/)).toBeNull();
+  });
+
+  it('un silence inconnu s écrit « inconnu », pas zéro jour', async () => {
+    mockApi({
+      opportunities: [
+        { id: 's1', name: 'E F', company: 'Jamais Vue', account_id: 'acc-j', status: 'negotiation', last_activity_at: null },
+      ],
+    });
+    renderDeals();
+
+    // « 0 j » se lirait comme « active aujourd'hui », soit l'inverse de la
+    // vérité : on ne sait pas quand on lui a parlé pour la dernière fois.
+    await screen.findByRole('link', { name: 'Jamais Vue' });
+    expect(screen.getByText('inconnu')).toBeTruthy();
+  });
+
+  it('l en-tête de colonnes accompagne la liste des sociétés', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'h1', name: 'G H', company: 'Acme', account_id: 'acc-1', status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    await screen.findByRole('link', { name: 'Acme' });
+    // Des colonnes de montants sans en-tête obligent à deviner lequel est
+    // lequel, et deviner sur de l'argent se paie.
+    expect(screen.getByText('Ouvert')).toBeTruthy();
+    expect(screen.getByText('Gagné')).toBeTruthy();
+    expect(screen.getByText('Risque du compte')).toBeTruthy();
+    expect(screen.getByText('Propriétaire')).toBeTruthy();
+  });
+
+  it('l onglet « À risque » ne double plus la tuile du même nom', async () => {
+    mockApi();
+    renderClients();
+
+    // Arbitrage Goran du 02/10 : la tuile et l'onglet faisaient le MEME filtre
+    // au MEME seuil, à dix centimètres l'un de l'autre. L'onglet part, la
+    // tuile reste · elle porte en plus la bande de sévérité.
+    await screen.findByText('Clients');
+    const onglets = screen.queryAllByRole('button', { name: /^À risque/ });
+    expect(onglets.length).toBeLessThanOrEqual(1);
   });
 });

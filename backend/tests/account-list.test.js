@@ -375,3 +375,144 @@ test('le montant des affaires ne compte pas les comptes hors perimetre', async (
   const autre = await listAccountPage(user.id, { scope: 'deals' });
   assert.strictEqual(autre.stats.value, 8000);
 });
+
+/* ═══════ Les colonnes de la societe · lot 7, ecran 1 ═══════
+ *
+ * L'ecran affichait UN montant agrege par societe. Or voir l'OUVERT et le
+ * GAGNE ensemble EST la definition de l'upsell : une societe qui a deja signe
+ * et qui a encore une affaire en cours est la cible du deuxieme job du produit.
+ * Un total unique ne le dit pas.
+ *
+ * Et « non scorable » n'est pas « sain ». Un compte sans score ne vaut pas
+ * zero : un compte muet n'est pas un compte en bonne sante, et les confondre
+ * ferait passer un angle mort pour un bon resultat.
+ */
+
+async function societeAvecAffaires(db, userId, nom, affaires, { churnScore = null, owner = null } = {}) {
+  const a = await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source, churn_score, owner_email)
+     VALUES ($1, $2, $3, 'crm', $4, $5) RETURNING id`,
+    [userId, nom, nom.toLowerCase(), churnScore, owner]
+  );
+  const accountId = a.rows[0].id;
+  // Statut `won` et date de gain : le cadrage « clients » ne retient que les
+  // societes qui ont au moins un gagne (`o.status = 'won'`), et c'est bien de
+  // clients qu'on parle ici.
+  const c = await contact(db, userId, {
+    name: `Contact ${nom}`, company: nom, email: `c@${nom.toLowerCase()}.fr`,
+    status: 'won', wonDate: ilYA(20), lastActivityAt: ilYA(10),
+  });
+  await db.query('UPDATE opportunities SET account_id = $1 WHERE id = $2', [accountId, c.id]);
+  for (const [statut, montant] of affaires) {
+    await db.query(
+      `INSERT INTO deals (user_id, account_id, name, status, deal_value, crm_provider)
+       VALUES ($1, $2, $3, $4, $5, 'pipedrive')`,
+      [userId, accountId, `${nom} ${statut}`, statut, montant]
+    );
+  }
+  return accountId;
+}
+
+test('l ouvert et le gagne sont separes, pas additionnes', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  // Le cas exact de Verdoux Benali sur staging : un gagne ET un ouvert.
+  await societeAvecAffaires(db, user.id, 'Verdoux', [['won', 35900], ['open', 24200]]);
+
+  const page = await listAccountPage(user.id, { scope: 'clients', pageSize: 10 });
+  const g = page.groups.find(x => x.name === 'Verdoux');
+  assert.ok(g, 'la societe doit etre listee');
+  assert.strictEqual(g.openValue, 24200, 'l ouvert seul');
+  assert.strictEqual(g.wonValue, 35900, 'le gagne seul');
+  // Et le total reste disponible : le tri par valeur s'appuie dessus.
+  assert.strictEqual(g.value, 60100);
+});
+
+test('une affaire PERDUE ne compte ni dans l ouvert ni dans le gagne', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  // Une affaire perdue est sortie du pipeline. La compter dans l'ouvert
+  // gonflerait un pipeline qui n'existe plus, et c'est precisement le genre de
+  // chiffre faux qui fait perdre confiance a tout l'ecran.
+  await societeAvecAffaires(db, user.id, 'Perdante', [['lost', 99000], ['open', 1000]]);
+
+  const page = await listAccountPage(user.id, { scope: 'clients', pageSize: 10 });
+  const g = page.groups.find(x => x.name === 'Perdante');
+  assert.strictEqual(g.openValue, 1000);
+  assert.strictEqual(g.wonValue, 0);
+});
+
+test('le risque et le proprietaire viennent de la SOCIETE', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  await societeAvecAffaires(db, user.id, 'Risquee', [['open', 5000]], {
+    churnScore: 82, owner: 'goran@baakal.ai',
+  });
+
+  const page = await listAccountPage(user.id, { scope: 'clients', pageSize: 10 });
+  const g = page.groups.find(x => x.name === 'Risquee');
+  assert.strictEqual(g.churnScore, 82);
+  assert.strictEqual(g.owner, 'goran@baakal.ai');
+});
+
+test('un compte NON SCORE rend null, jamais zero', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  // LE test qui compte. Replier sur zero ferait afficher « Sain 0 » sur un
+  // compte dont on ne sait rien, donc presenter un angle mort comme un bon
+  // resultat. L'ecran doit pouvoir dire « Non scorable », et il ne peut le
+  // faire que si le serveur distingue l'absence de score de la valeur zero.
+  await societeAvecAffaires(db, user.id, 'Inconnue', [['open', 7000]], { churnScore: null });
+
+  const page = await listAccountPage(user.id, { scope: 'clients', pageSize: 10 });
+  const g = page.groups.find(x => x.name === 'Inconnue');
+  assert.strictEqual(g.churnScore, null, 'null et non 0');
+  assert.notStrictEqual(g.churnScore, 0);
+});
+
+test('un groupe sans societe n a ni risque ni proprietaire de societe', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  // Un groupe forme sur un nom d'entreprise en texte libre : pas de fiche,
+  // donc rien a lire sur la societe. Le montant retombe sur la ligne du
+  // contact, ce qui reste faux des qu'une personne porte deux affaires · c'est
+  // la limite connue d'`opportunities`, pas une nouvelle.
+  await contact(db, user.id, {
+    name: 'Paul Libre', company: 'Sans Fiche', email: 'p@sansfiche.fr',
+    status: 'negotiation', dealValue: 3000, lastActivityAt: ilYA(5),
+  });
+
+  // Cadrage « deals » : ce groupe n'a aucun gagne, donc il n'existe pas sous
+  // « clients ». C'est le filtre du cadrage, pas un effet de ce lot.
+  const page = await listAccountPage(user.id, { scope: 'deals', pageSize: 10 });
+  const g = page.groups.find(x => x.name === 'Sans Fiche');
+  assert.ok(g);
+  assert.strictEqual(g.accountId, null);
+  assert.strictEqual(g.churnScore, null);
+  assert.strictEqual(g.openValue, 3000, 'repli sur la ligne du contact');
+});

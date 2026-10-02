@@ -1268,7 +1268,21 @@
     "accountsToRebuild": "{count} société(s) ne sont pas encore reconnues : leurs contacts portent un nom d'entreprise, sans fiche rattachée.",
     "rebuildAccounts": "Reconstruire les sociétés",
     "rebuilding": "Reconstruction...",
-    "rebuildResult": "{created} société(s) créée(s), {linked} contact(s) rattaché(s), {deals} affaire(s) déduite(s)."
+    "rebuildResult": "{created} société(s) créée(s), {linked} contact(s) rattaché(s), {deals} affaire(s) déduite(s).",
+    "colCompany": "Société",
+    "colOpen": "Ouvert",
+    "colWon": "Gagné",
+    "colSilence": "Silence",
+    "colRisk": "Risque du compte",
+    "colOwner": "Propriétaire",
+    "riskCritical": "Critique",
+    "riskHigh": "Élevé",
+    "riskHealthy": "Sain",
+    "riskNotScorable": "Non scorable",
+    "riskNotScorableNoAccount": "Ce groupe n'est pas rattaché à une société : il ne peut pas être scoré.",
+    "riskNotScorableYet": "Cette société n'a pas encore été scorée, ou n'a aucun interlocuteur rattaché. Un compte muet n'est pas un compte sain.",
+    "ownerNone": "non rattaché",
+    "silenceUnknown": "inconnu"
   },
   "stageMapping": {
     "title": "Votre pipeline, vu par baakalai",

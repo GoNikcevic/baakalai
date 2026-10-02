@@ -246,25 +246,68 @@ async function listAccountPage(userId, opts = {}) {
   // aucune affaire dans `deals` à quoi se raccrocher.
   const surDeals = await hasDeals(userId);
 
+  // ── OUVERT et GAGNÉ séparés, pas un seul total ──────────────────────────
+  //
+  // Les voir ENSEMBLE est la définition de l'upsell : une société qui a déjà
+  // signé et qui a encore une affaire en cours est exactement la cible du job
+  // numéro deux du produit. Un montant unique agrégé ne le dit pas, et c'est
+  // pourtant ce que l'écran affichait.
+  //
+  // `CASE WHEN` et non `FILTER (WHERE ...)` : l'agrégat filtré est du SQL
+  // standard que Postgres connaît, mais s'appuyer dessus ferait dépendre la
+  // testabilité de la version de sqlite embarquée. Le `CASE` marche partout.
   const jointureDeals = surDeals
     ? `LEFT JOIN (
-         SELECT account_id, SUM(deal_value) AS total FROM deals
+         SELECT account_id,
+                SUM(deal_value) AS total,
+                SUM(CASE WHEN status NOT IN ('won', 'lost') THEN deal_value ELSE 0 END) AS ouvert,
+                SUM(CASE WHEN status = 'won' THEN deal_value ELSE 0 END) AS gagne
+           FROM deals
           WHERE user_id = $1 AND account_id IS NOT NULL
           GROUP BY account_id
        ) da ON CAST(da.account_id AS TEXT) = CAST(o.account_id AS TEXT)`
     : '';
+
   const colonneMontant = surDeals
     ? `COALESCE(MAX(da.total), COALESCE(SUM(o.deal_value), 0)) AS montant`
     : `COALESCE(SUM(o.deal_value), 0) AS montant`;
+
+  // Le repli quand `deals` est vide est calculé sur la ligne du contact, avec
+  // la même coupure de statut. Il reste FAUX dès qu'une personne porte deux
+  // affaires · c'est la limite connue d'`opportunities`, pas une nouvelle. Mais
+  // il vaut mieux qu'un zéro, qui se lirait comme « rien de gagné ».
+  const colonnesOuvertGagne = surDeals
+    ? `COALESCE(MAX(da.ouvert), SUM(CASE WHEN o.status NOT IN ('won', 'lost') THEN COALESCE(o.deal_value, 0) ELSE 0 END)) AS ouvert,
+       COALESCE(MAX(da.gagne),  SUM(CASE WHEN o.status = 'won' THEN COALESCE(o.deal_value, 0) ELSE 0 END)) AS gagne`
+    : `SUM(CASE WHEN o.status NOT IN ('won', 'lost') THEN COALESCE(o.deal_value, 0) ELSE 0 END) AS ouvert,
+       SUM(CASE WHEN o.status = 'won' THEN COALESCE(o.deal_value, 0) ELSE 0 END) AS gagne`;
+
+  // ── Le risque et le propriétaire viennent de la SOCIÉTÉ ─────────────────
+  //
+  // `MAX()` sur les deux, pour la raison déjà écrite plus haut à propos de
+  // `da.total` : toutes les lignes d'un groupe partagent le même `account_id`,
+  // donc la jointure est au plus 1 pour 1 et `MAX` rend la valeur, pas un
+  // maximum. Un groupe sans `account_id` les reçoit NULL, ce qui est juste ·
+  // il n'a pas de société, donc ni score ni propriétaire de société.
+  //
+  // Le propriétaire retombe sur celui des contacts quand la société n'en porte
+  // pas : c'est la dette d'import du §6 du CLAUDE.md, et tant qu'elle n'est pas
+  // soldée, afficher « non rattaché » partout serait plus faux que le repli.
+  const jointureComptes = `LEFT JOIN accounts ac ON CAST(ac.id AS TEXT) = CAST(o.account_id AS TEXT)`;
+  const colonnesCompte = `MAX(ac.churn_score) AS risque,
+       COALESCE(MAX(ac.owner_email), MAX(o.owner_email)) AS proprietaire`;
 
   const groupes = await db.query(
     `SELECT ${CLE_GROUPE} AS cle,
             MAX(COALESCE(NULLIF(TRIM(COALESCE(o.company, '')), ''), o.name)) AS nom,
             COUNT(*) AS contacts,
             ${colonneMontant},
+            ${colonnesOuvertGagne},
+            ${colonnesCompte},
             MAX(o.last_activity_at) AS derniere_activite
        FROM opportunities o
        ${jointureDeals}
+       ${jointureComptes}
       WHERE ${where}
       GROUP BY ${CLE_GROUPE}
       ORDER BY ${tri}
@@ -301,6 +344,16 @@ async function listAccountPage(userId, opts = {}) {
     name: g.nom || ' ',
     contacts: [],
     value: Number(g.montant) || 0,
+    // Ouvert et gagné côte à côte · lot 7, écran 1.
+    openValue: Number(g.ouvert) || 0,
+    wonValue: Number(g.gagne) || 0,
+    // Le score de la SOCIÉTÉ, et `null` quand elle n'est pas scorée · un compte
+    // sans interlocuteur n'est pas « sain à 0 », il est NON SCORABLE, et
+    // confondre les deux ferait passer un compte muet pour un compte en bonne
+    // santé. L'écran doit pouvoir faire la différence, donc on ne replie pas
+    // sur zéro ici.
+    churnScore: g.risque == null ? null : Number(g.risque),
+    owner: g.proprietaire || null,
     lastActivityAt: g.derniere_activite || null,
     // Un groupe qui n'est qu'une personne sans société · l'écran le dit, pour
     // ne pas faire passer un contact pour une entreprise.

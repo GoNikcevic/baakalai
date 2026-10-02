@@ -1268,7 +1268,21 @@
     "accountsToRebuild": "{count} company/companies aren't recognised yet: their contacts carry a company name with no linked record.",
     "rebuildAccounts": "Rebuild companies",
     "rebuilding": "Rebuilding...",
-    "rebuildResult": "{created} company/companies created, {linked} contact(s) linked, {deals} deal(s) inferred."
+    "rebuildResult": "{created} company/companies created, {linked} contact(s) linked, {deals} deal(s) inferred.",
+    "colCompany": "Company",
+    "colOpen": "Open",
+    "colWon": "Won",
+    "colSilence": "Silence",
+    "colRisk": "Account risk",
+    "colOwner": "Owner",
+    "riskCritical": "Critical",
+    "riskHigh": "High",
+    "riskHealthy": "Healthy",
+    "riskNotScorable": "Not scorable",
+    "riskNotScorableNoAccount": "This group isn't linked to a company, so it can't be scored.",
+    "riskNotScorableYet": "This company hasn't been scored yet, or has no linked contact. A silent account isn't a healthy one.",
+    "ownerNone": "unassigned",
+    "silenceUnknown": "unknown"
   },
   "stageMapping": {
     "title": "Your pipeline, as baakalai reads it",
