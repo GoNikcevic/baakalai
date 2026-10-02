@@ -13,6 +13,8 @@ const { decrypt } = require('../config/crypto');
 const db = require('../db');
 const logger = require('./logger');
 const contactOptout = require('./contact-optout');
+// Plafond par societe (lot 6). Au transport, comme le desabonnement.
+const accountCadence = require('./account-cadence');
 
 // Cache transports per email account to avoid creating new connections each time
 const _transportCache = new Map();
@@ -278,7 +280,7 @@ function applySignature(mailOptions, account, body) {
  * @param {{ to, toName, subject, body, replyTo }} options
  * @returns {{ success, messageId, error, code }}
  */
-async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo, accountId }) {
+async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo, accountId, manual = false }) {
   // Règle produit : aucun contenu généré ne part avec un tiret cadratin
   // (marqueur IA). Appliqué ici, au transport, pour couvrir tous les
   // appelants ; la signature du compte (texte de l'utilisateur) est ajoutée
@@ -299,6 +301,35 @@ async function sendPersonalEmail(userId, { to, toName, subject, body, replyTo, a
       code: 'recipient_unsubscribed',
       error: 'Recipient opted out of your emails.',
     };
+  }
+
+  // Plafond d'envoi par SOCIÉTÉ (lot 6, arbitrage du 29/09 §8.2). Posé ici pour
+  // la même raison que le désabonnement juste au-dessus : un plafond place dans
+  // le moteur de séquence serait contourné par le premier nouveau chemin
+  // d'envoi, et c'est la réputation du domaine de l'utilisateur qui paierait.
+  //
+  // FERMÉ PAR DÉFAUT : un appelant qui ne dit rien est plafonné. Seul un envoi
+  // explicitement déclaré `manual` y échappe, parce qu'un humain qui écrit à un
+  // troisième interlocuteur sait ce qu'il fait. Les deux appelants actuels sont
+  // automatiques, donc tous les deux plafonnés.
+  //
+  // Attention au nom : le `accountId` de cette fonction est la BOÎTE D'ENVOI
+  // (migration 112), pas la société. Deux notions, deux mots.
+  if (!manual) {
+    const cadence = await accountCadence.check(userId, to);
+    if (!cadence.allowed) {
+      logger.info('email-outbound',
+        `Bloqué : ${cadence.sent} envoi(s) déjà partis vers cette société sur 7 jours, plafond ${cadence.cap}`,
+        { userId, accountId: cadence.accountId });
+      return {
+        success: false,
+        code: 'account_cadence_exceeded',
+        error: `Weekly cap of ${cadence.cap} message(s) per company already reached.`,
+        // Remontés pour que l'appelant puisse REPORTER au lieu de reprogrammer
+        // le même envoi tous les jours.
+        cadence: { accountId: cadence.accountId, sent: cadence.sent, cap: cadence.cap },
+      };
+    }
   }
 
   // `accountId` : expéditeur choisi pour cette campagne (migration 112). Sans

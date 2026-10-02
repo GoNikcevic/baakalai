@@ -19,6 +19,7 @@
  */
 
 const db = require('../db');
+const { readJsonb } = require('./jsonb');
 
 /** Valeur de départ : 30 jours, arbitrage de Goran (2026-09-10).
  *
@@ -44,7 +45,10 @@ function clampDays(value) {
 /** Seuil de dormance de cet utilisateur, en jours. */
 async function getStagnantDays(userId) {
   const result = await db.query('SELECT settings FROM users WHERE id = $1', [userId]);
-  const raw = result.rows[0]?.settings?.stagnant_days;
+  // `readJsonb` et non un acces direct : sous le miroir SQLite la colonne est
+  // une CHAINE, et `?.stagnant_days` y valait undefined · cette fonction
+  // rendait donc toujours 30 en test, quel que soit le reglage enregistre.
+  const raw = readJsonb(result.rows[0]?.settings).stagnant_days;
   return raw === undefined || raw === null ? DEFAULT_STAGNANT_DAYS : clampDays(raw);
 }
 

@@ -532,6 +532,57 @@ const SCHEMA_SQL = `
     -- CLAUDE.md), et la regle interdit explicitement pg_advisory_lock parce que
     -- le pooler est en mode transaction. Un verrou qu'aucun test ne couvre est
     -- un verrou dont on apprend les defauts en production.
+    -- Les desabonnements (migration 120). Absente du miroir, donc la garde
+    -- d'opposition de sendPersonalEmail levait « no such table » et TOUT le
+    -- transport etait intestable : aucun test ne pouvait verifier qu'un
+    -- desinscrit n'est pas recontacte, alors que c'est une obligation RGPD.
+    --
+    -- La colonne email est NULLABLE et c'est le cas NORMAL : le lien de
+    -- desinscription ne porte que le hache, donc au moment du clic on ne
+    -- connait pas l'adresse. (Pas d'accent grave ici : ce bloc vit dans un
+    -- gabarit JavaScript, un backtick y terminerait la chaine.)
+    -- Les boites d'envoi (migration 031, is_default par la 112). Absente du
+    -- miroir, donc resolveAccount levait « no such table » et le transport ne
+    -- pouvait pas repondre son refus structure « no_email_account ». Le repli
+    -- deliberement documente dans email-outbound (une campagne lancee depuis une
+    -- boite supprimee doit continuer a partir) n'etait couvert par rien.
+    CREATE TABLE IF NOT EXISTS email_accounts (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      provider TEXT NOT NULL,
+      email_address TEXT NOT NULL,
+      access_token TEXT,
+      refresh_token TEXT,
+      token_expiry DATETIME,
+      smtp_host TEXT,
+      smtp_port INTEGER,
+      smtp_user TEXT,
+      smtp_pass TEXT,
+      is_default INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'active',
+      -- Colonnes ajoutees par migration : Microsoft Graph (lecture des reponses
+      -- Outlook), signature par boite, et appartenance d'equipe.
+      graph_access_token TEXT,
+      graph_refresh_token TEXT,
+      graph_token_expiry DATETIME,
+      signature_text TEXT,
+      signature_image TEXT,
+      team_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS contact_optouts (
+      id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(2)) || '-' || hex(randomblob(6)))),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      email TEXT,
+      email_hash TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'link',
+      user_agent TEXT,
+      ip_hash TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS cron_locks (
       name TEXT PRIMARY KEY,
       instance_id TEXT NOT NULL,
