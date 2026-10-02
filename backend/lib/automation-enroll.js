@@ -201,6 +201,49 @@ async function runEnrollment({ userId, trigger, workflow, source, resolve, ratio
     return { ok: false, reason: 'contact_in_other_workflow', consumed: true };
   }
 
+  // ── WORKFLOW MULTI-DESTINATAIRES · lot 6, opt-in ─────────────────────────
+  //
+  // Quand l'interrupteur du workflow est allume ET que le contact est rattache
+  // a une societe, on inscrit LA SOCIETE : plusieurs interlocuteurs, un seul
+  // parcours, avec l'espacement et le silence sur reponse que ca implique.
+  //
+  // Eteint par defaut (migration 132). Rendre tous les workflows
+  // multi-destinataires d'un coup aurait change ce que recoivent les contacts
+  // des utilisateurs existants sans que personne le demande, et du cote ou
+  // l'erreur coute le plus cher.
+  //
+  // Un contact sans `account_id` retombe sur le chemin mono-contact : inventer
+  // une societe pour pouvoir fan-outer serait pire que de ne pas fan-outer.
+  if (wf.multi_thread && opp.account_id) {
+    const accountSequences = require('./account-sequences');
+    let cree;
+    try {
+      cree = await accountSequences.enrollAccount(userId, {
+        accountId: opp.account_id,
+        goal: 'automation',
+        rationale: rationale || null,
+        createdBy: 'trigger',
+        enrollmentSource: source,
+        status: 'active',
+        triggerId: trigger.id,
+        workflowId: wf.id,
+        signalId: signalId || null,
+        dedupKey: dedupKeyFor(wf, opp.id),
+      });
+    } catch (err) {
+      if (err.code === '23505') return { ok: false, reason: 'recently_enrolled', consumed: true };
+      throw err;
+    }
+    // Aucun interlocuteur joignable sur la societe · on ne retombe PAS sur le
+    // chemin mono-contact, parce que `listCandidates` vient precisement
+    // d'ecarter ce contact (desabonne, rebondi, ou deja dans un parcours).
+    if (!cree) return { ok: false, reason: 'no_reachable_contact', consumed: true };
+
+    await copySteps(wf.id, cree.enrollmentId);
+    await db.automationTriggers.markFired(trigger.id);
+    return { ok: true, enrollmentId: cree.enrollmentId, opportunityId: opp.id, recipients: cree.recipients.length };
+  }
+
   let enrollment;
   try {
     enrollment = await db.sequenceEnrollments.create({

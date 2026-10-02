@@ -96,7 +96,7 @@ async function processReply(userId, opts) {
   // Le contact est chargé avant les réglages : c'est lui qui dit de quelle
   // population relève la conversation, donc quel interrupteur consulter.
   const opp = await db.query(
-    'SELECT autopilot_enabled, status, campaign_id FROM opportunities WHERE id = $1 AND user_id = $2',
+    'SELECT autopilot_enabled, status, campaign_id, account_id FROM opportunities WHERE id = $1 AND user_id = $2',
     [opportunityId, userId]
   );
   if (!opp.rows[0]) {
@@ -108,6 +108,40 @@ async function processReply(userId, opts) {
   const autopilotOn = opp.rows[0].autopilot_enabled !== false && !!settings[population];
   const maxTurns = autopilotOn ? settings.maxTurns[population] : 0;
   const campaignId = opp.rows[0].campaign_id || null;
+  const accountId = opp.rows[0].account_id || null;
+
+  // ── UNE RÉPONSE FAIT TAIRE LES AUTRES FILS DE LA SOCIÉTÉ · lot 6 ──────────
+  //
+  // Depuis le lot 6, baakalai peut écrire à plusieurs interlocuteurs d'une même
+  // société. Dès que l'un répond, continuer à relancer ses collègues donne
+  // l'image d'un système qui ne lit pas ses propres réponses · et c'est
+  // exactement ce que ça serait.
+  //
+  // C'est posé ICI, et pas plus loin, pour trois raisons :
+  //   - c'est le seul endroit que TOUTE réponse traverse, quels que soient
+  //     l'intention et le réglage d'autopilot ;
+  //   - c'est avant l'alerte, donc l'utilisateur est prévenu d'un état déjà
+  //     cohérent ;
+  //   - le silence ne dépend pas de l'autopilot. Même autopilot éteint, la
+  //     société a répondu : les relances automatiques aux collègues doivent
+  //     s'arrêter, sinon l'utilisateur répond à la main pendant que baakalai
+  //     continue de solliciter à côté.
+  //
+  // Best-effort et jamais bloquant : une réponse qui arrive compte plus qu'une
+  // suspension qui échoue, et le module log son propre échec.
+  if (accountId) {
+    const accountSequences = require('./account-sequences');
+    await accountSequences.markReplied(userId, opportunityId);
+    await accountSequences.suspendSiblings(userId, {
+      accountId,
+      exceptOpportunityId: opportunityId,
+      reason: 'colleague_replied',
+    });
+    // Les réponses DÉJÀ en file vers les collègues : elles ont été planifiées 2
+    // à 4 heures plus tôt et partiraient malgré la suspension, puisque la file
+    // ne relit pas l'état des destinataires.
+    await cancelQueuedForSiblings(userId, accountId, opportunityId);
+  }
 
   // L'alerte part sur CHAQUE réponse, avant toute décision d'autopilot : c'est
   // le seul signal de l'utilisateur quand baakalai ne répond pas, et il doit
@@ -306,12 +340,50 @@ async function scheduleReply(userId, opportunityId, toEmail, toName, reply, chan
 }
 
 /**
+ * Annule les reponses deja en file vers les COLLEGUES du contact qui vient de
+ * repondre · lot 6.
+ *
+ * Une reponse d'autopilot attend 2 a 4 heures en file avant de partir, pour ne
+ * pas repondre en trois secondes comme une machine. Pendant ce delai, un autre
+ * interlocuteur peut repondre. Suspendre les destinataires ne suffit alors
+ * pas : ce qui est deja en file part quand meme, parce que la file ne relit pas
+ * l'etat des destinataires.
+ *
+ * Le meme raisonnement que pour le reglage d'autopilot relu a l'envoi (voir
+ * `scopeAllows` plus bas) : ce qui compte, c'est l'etat au moment ou le message
+ * PART, pas au moment ou il a ete ecrit.
+ */
+async function cancelQueuedForSiblings(userId, accountId, exceptOpportunityId) {
+  if (!accountId) return 0;
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE autopilot_queue
+          SET status = 'cancelled'
+        WHERE user_id = $1
+          AND status = 'pending'
+          AND opportunity_id <> $3
+          AND opportunity_id IN (
+            SELECT id FROM opportunities WHERE user_id = $1 AND account_id = $2
+          )`,
+      [userId, accountId, exceptOpportunityId]
+    );
+    if (rowCount > 0) {
+      logger.info('autopilot', `${rowCount} reponse(s) en file annulee(s) : un collegue a repondu (compte ${accountId})`);
+    }
+    return rowCount || 0;
+  } catch (err) {
+    logger.warn('autopilot', `Annulation de file impossible (${accountId}): ${err.message}`);
+    return 0;
+  }
+}
+
+/**
  * Send all pending scheduled replies that are due.
  * Called by CRM agent or a dedicated cron.
  */
 async function sendScheduledReplies() {
   const pending = await db.query(`
-    SELECT aq.*, u.name as user_name, o.campaign_id
+    SELECT aq.*, u.name as user_name, o.campaign_id, o.account_id
     FROM autopilot_queue aq
     JOIN users u ON u.id = aq.user_id
     LEFT JOIN opportunities o ON o.id = aq.opportunity_id
@@ -334,12 +406,44 @@ async function sendScheduledReplies() {
     return !!settingsByUser.get(item.user_id)[populationOf(item)];
   };
 
+  // Ce destinataire a-t-il ete mis en silence depuis que sa reponse a ete
+  // planifiee ? On lit `sequence_recipients`, qui porte l'etat par personne.
+  const siblingIsSilenced = async (item) => {
+    if (!item.account_id) return false;
+    try {
+      const { rows } = await db.query(
+        `SELECT 1 FROM sequence_recipients
+          WHERE user_id = $1 AND opportunity_id = $2 AND status = 'suspended'
+          LIMIT 1`,
+        [item.user_id, item.opportunity_id]
+      );
+      return rows.length > 0;
+    } catch (err) {
+      // Illisible : on laisse partir. Bloquer une reponse attendue par le
+      // client sur une panne de lecture serait pire que le risque qu'on couvre.
+      logger.warn('autopilot', `Etat du destinataire illisible (${item.opportunity_id}): ${err.message}`);
+      return false;
+    }
+  };
+
   let sent = 0;
   for (const item of pending.rows) {
     try {
       if (!await scopeAllows(item)) {
         await db.query(`UPDATE autopilot_queue SET status = 'cancelled' WHERE id = $1`, [item.id]);
         logger.info('autopilot', `reply ${item.id} annulée, portée ${populationOf(item)} désactivée entre-temps`);
+        continue;
+      }
+
+      // Troisième verrou du lot 6, et il n'est pas redondant avec
+      // `cancelQueuedForSiblings` : celle-ci ne voit que les files existantes au
+      // moment d'une réponse. Si un collègue répond par un chemin qui ne passe
+      // pas par `processReply` (analyse de réponses, geste manuel, reprise), la
+      // file garde un message destiné à quelqu'un qu'on a décidé de laisser
+      // tranquille. On relit donc l'état du destinataire à l'instant d'envoyer.
+      if (await siblingIsSilenced(item)) {
+        await db.query(`UPDATE autopilot_queue SET status = 'cancelled' WHERE id = $1`, [item.id]);
+        logger.info('autopilot', `reply ${item.id} annulée, ce destinataire a été mis en silence (un collègue a répondu)`);
         continue;
       }
 
@@ -505,6 +609,7 @@ module.exports = {
   sendScheduledReplies,
   getAutopilotSettings,
   getConversationHistory,
+  cancelQueuedForSiblings,
   clampTurns,
   TURNS_CEILING,
   DEFAULT_MAX_TURNS,

@@ -297,3 +297,213 @@ test('fermé par defaut : un appelant qui ne dit rien est plafonne', async (t) =
   const r = await sendPersonalEmail(user.id, { to: 'c@dunelia.fr', subject: 'S', body: 'B' });
   assert.strictEqual(r.code, 'account_cadence_exceeded');
 });
+
+/* ═══════════════ Le trou du 2026-10-02 : deux journaux d'envoi ═══════════════
+ *
+ * Le plafond ne comptait que `nurture_emails`. Or le MOTEUR DE SEQUENCE, qui
+ * est precisement le chemin que le lot 6 etend pour ecrire a plusieurs
+ * interlocuteurs, ne journalise pas la : `recordSend` ecrit dans
+ * `campaign_sends`.
+ *
+ * Consequence exacte : chaque envoi du moteur etait bien VERIFIE contre le
+ * plafond, mais n'y comptait jamais. Le compteur restait a zero, donc le
+ * plafond autorisait tout · decoratif sur le seul chemin ou il compte.
+ *
+ * C'est le genre de panne qu'un test de bout en bout ne voit pas : la garde est
+ * appelee, elle repond « autorise », et elle a raison vu ce qu'elle regarde.
+ */
+
+async function envoiDeSequence(db, userId, opportunityId, joursAvant = 1, canal = 'email') {
+  // Le journal du moteur de sequence · une ligne par (contact, touchpoint).
+  const tp = await db.query(
+    `INSERT INTO touchpoints (campaign_id, step, type) VALUES (NULL, 1, 'email') RETURNING id`
+  );
+  await db.query(
+    `INSERT INTO campaign_sends (user_id, opportunity_id, touchpoint_id, channel, status, sent_at)
+     VALUES ($1, $2, $3, $4, 'sent', $5)`,
+    [userId, opportunityId, tp.rows[0].id, canal, ago(joursAvant)]
+  );
+}
+
+test('les envois du moteur de sequence comptent dans le plafond', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { check } = require('../lib/account-cadence');
+  const { user } = await registerAndLogin();
+
+  const acme = await societe(db, user.id, 'Acme');
+  const anne = await contact(db, user.id, acme, 'anne@acme.fr');
+  const bruno = await contact(db, user.id, acme, 'bruno@acme.fr');
+  // Chloe doit etre un contact RATTACHE, sinon le plafond repond « non
+  // attribuable » et sort avant de compter quoi que ce soit.
+  await contact(db, user.id, acme, 'chloe@acme.fr');
+
+  // Deux messages deja partis vers Acme, mais par le moteur de sequence.
+  await envoiDeSequence(db, user.id, anne, 2);
+  await envoiDeSequence(db, user.id, bruno, 1);
+
+  const r = await check(user.id, 'chloe@acme.fr');
+  assert.strictEqual(r.sent, 2, 'les deux envois du moteur doivent etre comptes');
+  assert.strictEqual(r.allowed, false, 'le plafond de 2 est atteint, le troisieme doit etre refuse');
+  assert.strictEqual(r.reason, 'account_weekly_cap');
+});
+
+test('les deux journaux s additionnent', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { check } = require('../lib/account-cadence');
+  const { user } = await registerAndLogin();
+
+  const acme = await societe(db, user.id, 'Acme');
+  const anne = await contact(db, user.id, acme, 'anne@acme.fr');
+  const bruno = await contact(db, user.id, acme, 'bruno@acme.fr');
+  await contact(db, user.id, acme, 'chloe@acme.fr');
+
+  // Un par journal : le total fait deux, donc le plafond est atteint.
+  await envoiParti(db, user.id, anne, 'anne@acme.fr', 2);
+  await envoiDeSequence(db, user.id, bruno, 1);
+
+  const r = await check(user.id, 'chloe@acme.fr');
+  assert.strictEqual(r.sent, 2, 'un envoi de chaque journal, et ils s additionnent');
+  assert.strictEqual(r.allowed, false);
+});
+
+test('un contact LinkedIn ne compte pas dans un plafond d emails', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { check } = require('../lib/account-cadence');
+  const { user } = await registerAndLogin();
+
+  const acme = await societe(db, user.id, 'Acme');
+  const anne = await contact(db, user.id, acme, 'anne@acme.fr');
+  const bruno = await contact(db, user.id, acme, 'bruno@acme.fr');
+  await contact(db, user.id, acme, 'chloe@acme.fr');
+
+  // `campaign_sends` journalise aussi les touches LinkedIn. Les compter dans un
+  // plafond d'EMAILS melangerait deux canaux dont la delivrabilite n'a rien a
+  // voir : une invitation LinkedIn ne brule pas une reputation d'expediteur.
+  await envoiDeSequence(db, user.id, anne, 2, 'linkedin');
+  await envoiDeSequence(db, user.id, bruno, 1, 'linkedin');
+
+  const r = await check(user.id, 'chloe@acme.fr');
+  assert.strictEqual(r.sent, 0, 'aucun email parti, donc rien a compter');
+  assert.strictEqual(r.allowed, true);
+});
+
+/* ═══════════ La fenetre anti-rafale · le dedup 2h passe au compte ═══════════
+ *
+ * La regle 4 impose deux fenetres de deduplication, 2 heures et 7 jours, et le
+ * lot 6 demande de les faire passer du contact au compte. Les DEUX ne peuvent
+ * pas : « pas deux messages a la meme societe en 7 jours » plafonnerait a UN
+ * par semaine et annulerait silencieusement l'arbitrage des deux par semaine.
+ *
+ * C'est donc la fenetre de 2 heures qui passe au compte · elle decrit le risque
+ * propre au multi-destinataires · et celle de 7 jours qui reste sur le contact.
+ */
+
+test('deux messages a la meme societe dans l heure : le second est refuse', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { check } = require('../lib/account-cadence');
+  const { user } = await registerAndLogin();
+
+  const acme = await societe(db, user.id, 'Acme');
+  const anne = await contact(db, user.id, acme, 'anne@acme.fr');
+  await contact(db, user.id, acme, 'bruno@acme.fr');
+
+  // Un seul envoi, donc le plafond de deux n'est PAS atteint. C'est la rafale
+  // qui doit refuser, et sa raison doit le dire : « reviens plus tard », pas
+  // « quota epuise ».
+  await db.query(
+    `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, subject, body, status, sent_at)
+     VALUES ($1, $2, 'anne@acme.fr', 'Relance', 'Corps', 'sent', $3)`,
+    [user.id, anne, new Date(Date.now() - 30 * 60000).toISOString()]
+  );
+
+  const r = await check(user.id, 'bruno@acme.fr');
+  assert.strictEqual(r.allowed, false);
+  assert.strictEqual(r.reason, 'account_burst_window');
+  assert.strictEqual(r.sent, 1, 'le plafond hebdomadaire n est pas en cause');
+});
+
+test('passe deux heures, la rafale ne bloque plus', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { check, FENETRE_RAFALE_HEURES } = require('../lib/account-cadence');
+  const { user } = await registerAndLogin();
+
+  assert.strictEqual(FENETRE_RAFALE_HEURES, 2);
+
+  const acme = await societe(db, user.id, 'Acme');
+  const anne = await contact(db, user.id, acme, 'anne@acme.fr');
+  await contact(db, user.id, acme, 'bruno@acme.fr');
+
+  await db.query(
+    `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, subject, body, status, sent_at)
+     VALUES ($1, $2, 'anne@acme.fr', 'Relance', 'Corps', 'sent', $3)`,
+    [user.id, anne, new Date(Date.now() - 3 * 3600000).toISOString()]
+  );
+
+  const r = await check(user.id, 'bruno@acme.fr');
+  assert.strictEqual(r.allowed, true, 'un seul envoi, vieux de trois heures : plus rien ne bloque');
+  assert.strictEqual(r.reason, null);
+});
+
+test('un envoi de sequence recent declenche aussi la rafale', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { check } = require('../lib/account-cadence');
+  const { user } = await registerAndLogin();
+
+  const acme = await societe(db, user.id, 'Acme');
+  const anne = await contact(db, user.id, acme, 'anne@acme.fr');
+  await contact(db, user.id, acme, 'bruno@acme.fr');
+
+  // Le moteur de sequence journalise dans l'autre table · la rafale doit la
+  // lire aussi, sinon elle est aveugle au chemin que le lot 6 etend.
+  const tp = await db.query(`INSERT INTO touchpoints (campaign_id, step, type) VALUES (NULL, 1, 'email') RETURNING id`);
+  await db.query(
+    `INSERT INTO campaign_sends (user_id, opportunity_id, touchpoint_id, channel, status, sent_at)
+     VALUES ($1, $2, $3, 'email', 'sent', $4)`,
+    [user.id, anne, tp.rows[0].id, new Date(Date.now() - 10 * 60000).toISOString()]
+  );
+
+  const r = await check(user.id, 'bruno@acme.fr');
+  assert.strictEqual(r.allowed, false);
+  assert.strictEqual(r.reason, 'account_burst_window');
+});
+
+test('un envoi manuel echappe aussi a la rafale', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { user } = await registerAndLogin();
+
+  const acme = await societe(db, user.id, 'Acme');
+  const anne = await contact(db, user.id, acme, 'anne@acme.fr');
+  await contact(db, user.id, acme, 'bruno@acme.fr');
+  await db.query(
+    `INSERT INTO nurture_emails (user_id, opportunity_id, to_email, subject, body, status, sent_at)
+     VALUES ($1, $2, 'anne@acme.fr', 'Relance', 'Corps', 'sent', $3)`,
+    [user.id, anne, new Date(Date.now() - 5 * 60000).toISOString()]
+  );
+
+  // Un humain qui ecrit a un second interlocuteur dans la demi-heure sait ce
+  // qu'il fait · c'est le propre d'une relance a chaud.
+  const { sendPersonalEmail } = require('../lib/email-outbound');
+  const r = await sendPersonalEmail(user.id, { to: 'bruno@acme.fr', subject: 'S', body: 'B', manual: true });
+  assert.notStrictEqual(r.code, 'account_cadence_exceeded');
+});

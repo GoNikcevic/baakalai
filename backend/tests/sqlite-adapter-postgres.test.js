@@ -265,3 +265,119 @@ test('ILIKE devient un LIKE insensible a la casse', async (t) => {
   );
   assert.strictEqual(r.rows.length, 1, 'la recherche ne doit pas dependre de la casse');
 });
+
+/* ═══════════ make_interval · l'argument nomme de Postgres ═══════════
+ *
+ * `make_interval(days => $1)` est la troisieme facon dont ce code ecrit une
+ * arithmetique de dates, apres `interval 'N unit'` et `($n || ' days')::interval`.
+ * C'est la seule qui utilise la syntaxe d'argument nomme `=>`, que SQLite
+ * rejette des l'analyse avec un « near ">" » muet sur la cause.
+ *
+ * Dix-sept occurrences dans quatre fichiers. Celle qui a fait decouvrir le
+ * probleme tient la DEDUPLICATION DE REINSCRIPTION (`enrolledRecently` dans
+ * lib/automation-enroll.js) : le garde-fou qui empeche un contact d'entrer deux
+ * fois dans le meme workflow n'avait jamais pu s'executer en test.
+ */
+
+test('make_interval en soustraction rend une date passee', async (t) => {
+  await setup();
+  t.after(teardown);
+  const db = require('../db');
+
+  const r = await db.query(
+    `SELECT now() - make_interval(days => $1::int) AS avant,
+            now() AS maintenant`,
+    [7]
+  );
+  const avant = new Date(r.rows[0].avant).getTime();
+  const maintenant = new Date(r.rows[0].maintenant).getTime();
+  const ecart = (maintenant - avant) / 86400000;
+  assert.ok(Math.abs(ecart - 7) < 0.01, `7 jours attendus, ${ecart} obtenus`);
+});
+
+test('make_interval en addition rend une date future', async (t) => {
+  await setup();
+  t.after(teardown);
+  const db = require('../db');
+
+  const r = await db.query(
+    `SELECT now() + make_interval(days => $1::int) AS apres, now() AS maintenant`,
+    [30]
+  );
+  const ecart = (new Date(r.rows[0].apres).getTime() - new Date(r.rows[0].maintenant).getTime()) / 86400000;
+  assert.ok(Math.abs(ecart - 30) < 0.01, `30 jours attendus, ${ecart} obtenus`);
+});
+
+test('make_interval accepte une expression, pas seulement un parametre', async (t) => {
+  await setup();
+  t.after(teardown);
+  const db = require('../db');
+
+  // L'idiome reel de lib/automation-state-triggers.js : une borne de fenetre
+  // ecrite comme `$2::int + 7`. Une traduction qui ne prendrait que le
+  // parametre rendrait 7 jours au lieu de 14, donc une fenetre deux fois trop
+  // courte · et personne ne le verrait.
+  const r = await db.query(
+    `SELECT now() - make_interval(days => $1::int + 7) AS borne, now() AS maintenant`,
+    [7]
+  );
+  const ecart = (new Date(r.rows[0].maintenant).getTime() - new Date(r.rows[0].borne).getTime()) / 86400000;
+  assert.ok(Math.abs(ecart - 14) < 0.01, `14 jours attendus, ${ecart} obtenus`);
+});
+
+test('make_interval traduit aussi les minutes', async (t) => {
+  await setup();
+  t.after(teardown);
+  const db = require('../db');
+
+  // `mins` chez Postgres, `minutes` chez SQLite · db/index.js s'en sert pour
+  // le disjoncteur horaire des automatisations.
+  const r = await db.query(
+    `SELECT now() - make_interval(mins => $1::int) AS avant, now() AS maintenant`,
+    [90]
+  );
+  const ecart = (new Date(r.rows[0].maintenant).getTime() - new Date(r.rows[0].avant).getTime()) / 60000;
+  assert.ok(Math.abs(ecart - 90) < 1, `90 minutes attendues, ${ecart} obtenues`);
+});
+
+test('la deduplication de reinscription s execute enfin', async (t) => {
+  await setup();
+  t.after(teardown);
+  const db = require('../db');
+  const { user } = await registerAndLogin();
+
+  const wf = await db.query(
+    `INSERT INTO workflows (user_id, name, reenroll_policy, reenroll_days)
+     VALUES ($1, 'Relance', 'period', 90) RETURNING id`, [user.id]
+  );
+  const o = await db.query(
+    `INSERT INTO opportunities (user_id, name, email, status)
+     VALUES ($1, 'Contact', 'c@x.fr', 'open') RETURNING id`, [user.id]
+  );
+
+  // Une inscription vieille de 10 jours : dans la fenetre de 90, donc la
+  // reinscription doit etre refusee.
+  await db.query(
+    `INSERT INTO sequence_enrollments (user_id, opportunity_id, workflow_id, goal, status, created_at)
+     VALUES ($1, $2, $3, 'automation', 'completed', $4)`,
+    [user.id, o.rows[0].id, wf.rows[0].id, new Date(Date.now() - 10 * 86400000).toISOString()]
+  );
+
+  const dedans = await db.query(
+    `SELECT 1 FROM sequence_enrollments
+      WHERE workflow_id = $1 AND opportunity_id = $2
+        AND created_at > now() - make_interval(days => $3::int)
+      LIMIT 1`,
+    [wf.rows[0].id, o.rows[0].id, 90]
+  );
+  assert.strictEqual(dedans.rows.length, 1, 'inscrit il y a 10 jours, fenetre de 90 : trouve');
+
+  const dehors = await db.query(
+    `SELECT 1 FROM sequence_enrollments
+      WHERE workflow_id = $1 AND opportunity_id = $2
+        AND created_at > now() - make_interval(days => $3::int)
+      LIMIT 1`,
+    [wf.rows[0].id, o.rows[0].id, 5]
+  );
+  assert.strictEqual(dehors.rows.length, 0, 'fenetre de 5 jours : hors fenetre, donc absent');
+});

@@ -45,6 +45,7 @@
 
 const db = require('../db');
 const logger = require('./logger');
+const accountSequences = require('./account-sequences');
 const { withLock } = require('./db-lock');
 const emailOutbound = require('./email-outbound');
 
@@ -209,6 +210,35 @@ async function stopEnrollment(enrollmentId, reason) {
 }
 
 /**
+ * Une reponse arrive sur une inscription · lot 6.
+ *
+ * Sur une inscription MONO-CONTACT, repondre met fin au parcours : il n'y a
+ * plus personne a qui ecrire. C'est le comportement d'avant, et il est conserve.
+ *
+ * Sur une inscription DE COMPTE, non. Les collegues du repondeur viennent
+ * d'etre mis en silence (`suspended` par conversation-autopilot), et `suspended`
+ * veut dire « pas maintenant », pas « jamais ». Arreter l'inscription les
+ * gelerait pour de bon : une inscription `stopped` ne repasse plus dans le
+ * moteur, donc la suspension deviendrait definitive sous un nom qui dit le
+ * contraire. On met donc l'inscription en PAUSE, qui est un etat vivant.
+ *
+ * LIMITE ASSUMEE : rien ne reprend automatiquement une inscription en pause.
+ * Decider que « la conversation est retombee, on peut relancer les collegues »
+ * est un arbitrage produit qui merite sa propre conception · le choix fait ici
+ * est seulement de ne pas rendre cette reprise IMPOSSIBLE. En attendant,
+ * personne ne recoit rien, ce qui est le bon cote de l'erreur.
+ */
+async function onEnrollmentReply(enrollmentId, reason = 'replied') {
+  const enrollment = await db.sequenceEnrollments.get(enrollmentId);
+  if (enrollment?.account_id) {
+    await db.sequenceEnrollments.setStatus(enrollmentId, 'paused');
+    return 'paused';
+  }
+  await stopEnrollment(enrollmentId, reason);
+  return 'stopped';
+}
+
+/**
  * Cookie li_at expiré : les steps LinkedIn sont silencieusement reportés à
  * chaque passage · sans signal, l'utilisateur ne s'en aperçoit jamais.
  * Notification persistée + socket (lib/notify), au plus une par 24 h.
@@ -266,7 +296,7 @@ async function emailsSentTodayByAccount(userId) {
  * `ids` = { campaignId } ou { enrollmentId } selon le conteneur ;
  * `onBounce(reason)` arrête la séquence du bon côté (opportunité ou enrollment).
  */
-async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report, onBounce }) {
+async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report, onBounce, role = null, siblings = [] }) {
   const userId = ctx.userId;
 
   // Prochain step : premier touchpoint du chemin sans ligne sent/skipped.
@@ -321,6 +351,10 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
         prospect,
         previous,
         isFirst: previous.length === 0,
+        // Lot 6 : l'angle depend du ROLE du destinataire dans son compte, et le
+        // message doit rester coherent avec ce que ses collegues ont recu.
+        role,
+        siblings,
       });
       if (!written) {
         await recordSend({ ...base, status: 'skipped', error: 'generation_failed' });
@@ -487,20 +521,50 @@ async function processEnrollments(enrollments, ctx) {
   for (const enrollment of enrollments) {
     if (ctx.budgetFor(ctx.accountId) <= 0 && ctx.linkedinExhausted) break;
 
-    const [touchpoints, prospect, sends] = await Promise.all([
+    const [touchpoints, recipients, sends] = await Promise.all([
       db.touchpoints.listByEnrollment(enrollment.id),
-      db.opportunities.get(enrollment.opportunity_id),
+      // Les destinataires de l'inscription · lot 6. Pour une inscription d'avant
+      // ce lot, `recipientsOf` en fabrique un seul depuis `opportunity_id`,
+      // donc le comportement est identique a celui d'avant.
+      accountSequences.recipientsOf(ctx.userId, enrollment),
       db.query(`SELECT * FROM campaign_sends WHERE enrollment_id = $1`, [enrollment.id]).then(r => r.rows),
     ]);
-    if (!prospect || touchpoints.length === 0) continue;
+    if (recipients.length === 0 || touchpoints.length === 0) continue;
+
+    // QUI servir a ce passage. Un seul destinataire, meme quand plusieurs sont
+    // dus : le moteur tourne plusieurs fois par jour, et en servir deux d'un
+    // coup annulerait l'espacement qui empeche deux messages au meme domaine
+    // dans la meme journee.
+    const dernierEnvoiCompte = enrollment.account_id
+      ? await accountSequences.lastSendToAccount(ctx.userId, enrollment.account_id)
+      : 0;
+    const recipient = accountSequences.chooseNext(recipients, dernierEnvoiCompte);
+    if (!recipient) {
+      // Aucun destinataire a servir. Si plus aucun n'est vivant, l'inscription
+      // est finie · sinon c'est l'espacement qui attend, et on repassera.
+      if (enrollment.account_id && await accountSequences.allRecipientsDone(enrollment.id)) {
+        await db.sequenceEnrollments.setStatus(enrollment.id, 'completed');
+        report.completed++;
+      }
+      continue;
+    }
+    const prospect = recipient.prospect;
+    if (!prospect) continue;
 
     const accepted = hasAcceptedBranch(touchpoints) && await ctx.isAccepted(prospect);
     const path = buildMainPath(touchpoints, { accepted });
     if (path.length === 0) continue;
 
+    // `done` est indexe PAR DESTINATAIRE et pas seulement par touchpoint.
+    //
+    // C'est le piege central de ce lot : avec plusieurs destinataires sur une
+    // meme inscription, la ligne « etape 1 envoyee » d'Anne aurait fait croire
+    // au moteur que l'etape 1 de Bruno etait faite, et Bruno aurait saute
+    // directement a l'etape 2 · ou aurait ete declare « parcours termine » sans
+    // avoir jamais rien recu.
     const done = new Map();
     for (const s of sends) {
-      if (s.touchpoint_id) done.set(s.touchpoint_id, s);
+      if (s.touchpoint_id && s.opportunity_id === prospect.id) done.set(s.touchpoint_id, s);
     }
 
     const baseTime = new Date(enrollment.started_at || enrollment.approved_at || enrollment.created_at).getTime();
@@ -520,6 +584,12 @@ async function processEnrollments(enrollments, ctx) {
       }
     }
 
+    // Ce que les COLLEGUES ont deja recu, pour ne pas leur redire la meme
+    // chose. Inutile sur une inscription mono-contact, d'ou l'appel conditionnel.
+    const siblings = enrollment.account_id
+      ? await accountSequences.siblingContext(ctx.userId, enrollment.account_id, prospect.id)
+      : [];
+
     const outcome = await advanceOneStep({
       prospect,
       path,
@@ -528,12 +598,42 @@ async function processEnrollments(enrollments, ctx) {
       ctx,
       ids: { enrollmentId: enrollment.id },
       report,
-      onBounce: (reason) => stopEnrollment(enrollment.id, reason),
+      role: recipient.role || prospect.account_role || null,
+      siblings,
+      // UN REBOND N'ARRETE QUE CE DESTINATAIRE.
+      //
+      // Avant ce lot, une inscription valait un contact, donc arreter
+      // l'inscription et arreter le contact etaient la meme chose. Avec
+      // plusieurs destinataires ce n'est plus vrai : l'adresse d'Anne qui
+      // rebondit ne dit rien de celle de Bruno, et arreter tout le monde pour
+      // une adresse morte ferait perdre le compte entier.
+      onBounce: async (reason) => {
+        if (recipient.recipientId) {
+          await accountSequences.stopRecipient(recipient.recipientId, reason);
+          if (await accountSequences.allRecipientsDone(enrollment.id)) {
+            await stopEnrollment(enrollment.id, reason);
+          }
+        } else {
+          await stopEnrollment(enrollment.id, reason);
+        }
+      },
     });
 
+    if (outcome === 'sent') await accountSequences.markSent(recipient.recipientId);
+
     if (outcome === 'sequence_done') {
-      await db.sequenceEnrollments.setStatus(enrollment.id, 'completed');
-      report.completed++;
+      if (recipient.recipientId) {
+        // Ce destinataire a fini SON parcours. L'inscription ne se termine que
+        // quand plus personne n'est vivant dessus.
+        await accountSequences.stopRecipient(recipient.recipientId, 'sequence_done');
+        if (await accountSequences.allRecipientsDone(enrollment.id)) {
+          await db.sequenceEnrollments.setStatus(enrollment.id, 'completed');
+          report.completed++;
+        }
+      } else {
+        await db.sequenceEnrollments.setStatus(enrollment.id, 'completed');
+        report.completed++;
+      }
     }
   }
 
@@ -630,7 +730,9 @@ async function checkReplies(userId, campaigns, enrollments) {
     replied.add(prospect.id);
 
     if (candidate.enrollmentId) {
-      await stopEnrollment(candidate.enrollmentId, 'replied');
+      // Pas `stopEnrollment` : sur une inscription de compte, arreter tuerait la
+      // reprise des collegues mis en silence. Voir onEnrollmentReply.
+      await onEnrollmentReply(candidate.enrollmentId, 'replied');
     } else {
       await stopSequence(userId, prospect.id, 'replied');
     }
@@ -935,6 +1037,14 @@ module.exports = {
   run,
   runForUser,
   // Exposés pour les tests
+  //
+  // `processEnrollments` y figure depuis le lot 6, et ce n'est pas une
+  // commodité : c'est la seule façon de prouver que l'étape 1 d'un destinataire
+  // ne fait pas sauter l'étape 1 de son collègue. `runForUser` demanderait une
+  // boîte connectée, un bail et un budget pour vérifier une règle d'indexation
+  // de journal, et le test parlerait alors d'autre chose que de ce qu'il mesure.
+  processEnrollments,
+  onEnrollmentReply,
   buildMainPath,
   hasAcceptedBranch,
   parseTiming,

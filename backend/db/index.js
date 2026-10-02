@@ -577,7 +577,7 @@ const workflows = {
     return result.rows;
   },
 
-  async update(id, { name, maxDurationDays, reenrollPolicy, reenrollDays }) {
+  async update(id, { name, maxDurationDays, reenrollPolicy, reenrollDays, multiThread }) {
     const sets = [];
     const values = [];
     let i = 1;
@@ -585,6 +585,10 @@ const workflows = {
     if (maxDurationDays !== undefined) { sets.push(`max_duration_days = $${i++}`); values.push(maxDurationDays); }
     if (reenrollPolicy !== undefined) { sets.push(`reenroll_policy = $${i++}`); values.push(reenrollPolicy); }
     if (reenrollDays !== undefined) { sets.push(`reenroll_days = $${i++}`); values.push(reenrollDays); }
+    // Lot 6 · ce workflow aborde-t-il plusieurs interlocuteurs d'une meme
+    // societe. Booleen force : un `undefined` venu du corps de requete ne doit
+    // pas s'ecrire, et un `'false'` en chaine ne doit pas valoir vrai.
+    if (multiThread !== undefined) { sets.push(`multi_thread = $${i++}`); values.push(multiThread === true || multiThread === 'true'); }
     if (sets.length === 0) return null;
     sets.push('updated_at = now()');
     values.push(id);

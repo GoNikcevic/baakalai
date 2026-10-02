@@ -861,9 +861,16 @@ function toSqliteValue(p) {
    Ce que ce miroir ne traduit PAS, et c'est un choix
 
    Mesure du 2026-10-02 : environ 127 occurrences de SQL Postgres que le miroir
-   ignorait, d'ou des pans entiers du backend intestables. Les quatre familles
-   mecaniques sont desormais traduites (`= ANY($n)`, `::interval`, `EXTRACT`,
-   `ILIKE`, plus les casts de tableaux), et des tests les couvrent.
+   ignorait, d'ou des pans entiers du backend intestables. Les familles
+   mecaniques sont desormais traduites (`= ANY($n)`, `::interval`,
+   `make_interval(unite => ...)`, `EXTRACT`, `ILIKE`, plus les casts de
+   tableaux), et des tests les couvrent.
+
+   `make_interval` s'est ajoutee a la liste le meme jour, en construisant la
+   bascule multi-destinataires du lot 6 : 17 occurrences dans quatre fichiers,
+   dont celle qui tient la DEDUPLICATION DE REINSCRIPTION. La lecon se repete ·
+   on ne decouvre une construction non traduite qu'en ecrivant le test qui
+   refuse de demarrer, et son message (« near ">" ») ne nomme pas la cause.
 
    Deux familles ne sont volontairement PAS traduites ici, et leurs appels ont
    ete reecrits A LA SOURCE le 2026-10-02 · il n'en reste aucun dans le backend :
@@ -1106,6 +1113,37 @@ function query(text, params = []) {
       (_, base, signe, unite) =>
         `strftime('%Y-%m-%dT%H:%M:%fZ', ${base}, '${signe}' || ? || ' ${unite.trim()}')`
     )
+    // `X ± make_interval(days => EXPR)` · la troisieme facon dont ce code ecrit
+    // une arithmetique de dates, et la seule qui utilise la syntaxe d'ARGUMENT
+    // NOMME de Postgres (`=>`). SQLite la rejette des l'analyse, avec un
+    // « near ">" » qui ne dit pas de quoi il parle.
+    //
+    // DIX-SEPT occurrences dans quatre fichiers, donc une famille et pas un cas
+    // isole · d'ou une traduction ici plutot qu'une reecriture par appel.
+    // Trouve le 2026-10-02 en testant la bascule multi-destinataires :
+    // `enrolledRecently` (lib/automation-enroll.js) n'avait jamais pu
+    // s'executer sous le miroir, et c'est elle qui tient la deduplication de
+    // reinscription · le garde-fou qui empeche un contact d'entrer deux fois
+    // dans le meme workflow.
+    //
+    // A ce stade de la chaine, les casts sont deja retires et les `$n` sont
+    // devenus des `?` : le texte lu ici est `now() - make_interval(days => ? + 7)`.
+    .replace(
+      /(now\(\)|\?|[\w."]+)\s*([-+])\s*make_interval\s*\(\s*(\w+)\s*=>\s*([^)]+)\)/gi,
+      (entier, base, signe, unite, expr) => {
+        // SQLite nomme ses unites autrement que make_interval. Une unite
+        // inconnue n'est PAS devinee : on rend l'expression telle quelle, ce
+        // qui produit une erreur SQL explicite plutot qu'un calcul faux et
+        // silencieux sur une duree.
+        const UNITES = {
+          secs: 'seconds', mins: 'minutes', hours: 'hours',
+          days: 'days', months: 'months', years: 'years',
+        };
+        const u = UNITES[unite.toLowerCase()];
+        if (!u) return entier;
+        return `strftime('%Y-%m-%dT%H:%M:%fZ', ${base}, '${signe}' || (${expr}) || ' ${u}')`;
+      }
+    )
     // SQLite n'a pas ILIKE. Son LIKE est deja insensible a la casse sur
     // l'ASCII, ce qui couvre les usages du code (recherche de nom, de domaine).
     // Nuance a connaitre : sur des caracteres accentues, SQLite reste sensible
@@ -1210,8 +1248,7 @@ function query(text, params = []) {
  * et c'est la que les deux exceptions apparaissent : sur les 38 noms de
  * colonnes JSONB du schema, 36 ne portent que ce type, mais
  *
- *   - `content` est JSONB dans conversation_messages et TEXT dans
- *     chat_messages et memory_embeddings ;
+ *   - `content` est JSONB dans autopilot_queue et TEXT dans chat_messages ;
  *   - `result` est JSONB dans agent_chain_executions et strategic_results, et
  *     TEXT dans versions.
  *

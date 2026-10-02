@@ -49,6 +49,35 @@ const MAX_CAP = 20;
 
 const FENETRE_JOURS = 7;
 
+/**
+ * La fenêtre anti-rafale, et pourquoi elle vaut DEUX HEURES et pas sept jours.
+ *
+ * ── Le dedup email passait du contact au compte (règle 4, lot 6) ────────────
+ *
+ * La règle 4 du CLAUDE.md impose deux fenêtres de déduplication avant d'écrire
+ * à quelqu'un : 2 heures et 7 jours. Elles étaient posées sur le CONTACT, à
+ * onze endroits différents et de façon inégale (un seul site les portait toutes
+ * les deux). Le lot 6 demande de les faire passer au compte.
+ *
+ * Les deux ne peuvent pas suivre ce chemin, et il faut le dire :
+ *
+ *   - la fenêtre de 7 JOURS reste sur le contact. La passer au compte la
+ *     rendrait CONTRADICTOIRE avec le plafond : « pas deux messages à la même
+ *     société en 7 jours » plafonnerait de fait à un seul par semaine, alors
+ *     que l'arbitrage du 29/09 en autorise deux. Une garde qui annule
+ *     silencieusement un réglage produit est pire que pas de garde.
+ *   - la fenêtre de 2 HEURES passe au compte. C'est elle qui décrit le risque
+ *     propre à l'envoi multi-destinataires : deux messages au même domaine dans
+ *     la même heure est le motif qu'un filtre reconnaît, et il respecterait un
+ *     plafond de deux par semaine.
+ *
+ * Posée ICI et pas sur les onze sites d'appel, pour le motif déjà écrit dans ce
+ * fichier : un appelant qui oublierait la règle ne doit pas pouvoir la
+ * contourner. Les sites d'appel gardent leur dedup par contact, qui dit autre
+ * chose (« pas deux fois la même personne ») et reste utile.
+ */
+const FENETRE_RAFALE_HEURES = 2;
+
 function clampCap(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return DEFAULT_WEEKLY_CAP;
@@ -120,18 +149,65 @@ async function check(userId, email) {
   // société, sur la fenêtre. Un brouillon en attente ne compte pas : il peut
   // ne jamais partir, et bloquer sur une intention rendrait le plafond
   // dépendant de l'ordre dans lequel on rédige.
+  //
+  // ── DEUX journaux d'envoi, et il faut les deux ──────────────────────────
+  //
+  // baakalai écrit ses envois à deux endroits selon le chemin emprunté :
+  // `nurture_emails` pour les relances, `campaign_sends` pour le moteur de
+  // séquence (`recordSend` dans lib/native-sequence-engine.js).
+  //
+  // Cette fonction ne lisait que le premier. Chaque envoi du moteur était donc
+  // bien VÉRIFIÉ contre le plafond, mais n'y comptait jamais : le compteur
+  // restait à zéro et le plafond autorisait tout. Autrement dit il était
+  // décoratif sur le SEUL chemin où il compte vraiment, puisque c'est celui que
+  // le lot 6 étend pour écrire à plusieurs interlocuteurs. Trouvé et corrigé le
+  // 2026-10-02, avec les trois tests qui le prouvent.
+  //
+  // `campaign_sends` journalise aussi les touches LinkedIn, d'où le filtre sur
+  // le canal : une invitation LinkedIn ne consomme pas une réputation
+  // d'expéditeur, et la mêler à un plafond d'emails plafonnerait le mauvais
+  // risque.
   const depuis = new Date(Date.now() - FENETRE_JOURS * 86400000).toISOString();
+  const depuisRafale = new Date(Date.now() - FENETRE_RAFALE_HEURES * 3600000).toISOString();
   let sent = 0;
+  let rafale = 0;
   try {
     const { rows } = await db.query(
-      `SELECT COUNT(*) AS n
-         FROM nurture_emails ne
-         JOIN opportunities o ON o.id = ne.opportunity_id
-        WHERE ne.user_id = $1 AND o.account_id = $2
-          AND ne.status = 'sent' AND ne.sent_at > $3`,
+      `SELECT COUNT(*) AS n FROM (
+         SELECT ne.id
+           FROM nurture_emails ne
+           JOIN opportunities o ON o.id = ne.opportunity_id
+          WHERE ne.user_id = $1 AND o.account_id = $2
+            AND ne.status = 'sent' AND ne.sent_at > $3
+         UNION ALL
+         SELECT cs.id
+           FROM campaign_sends cs
+           JOIN opportunities oc ON oc.id = cs.opportunity_id
+          WHERE cs.user_id = $1 AND oc.account_id = $2
+            AND cs.status = 'sent' AND cs.channel = 'email' AND cs.sent_at > $3
+       ) tous_les_envois`,
       [userId, accountId, depuis]
     );
     sent = Number(rows[0]?.n) || 0;
+
+    // La fenêtre anti-rafale, sur le même périmètre et les mêmes deux journaux.
+    const r2 = await db.query(
+      `SELECT COUNT(*) AS n FROM (
+         SELECT ne.id
+           FROM nurture_emails ne
+           JOIN opportunities o ON o.id = ne.opportunity_id
+          WHERE ne.user_id = $1 AND o.account_id = $2
+            AND ne.status = 'sent' AND ne.sent_at > $3
+         UNION ALL
+         SELECT cs.id
+           FROM campaign_sends cs
+           JOIN opportunities oc ON oc.id = cs.opportunity_id
+          WHERE cs.user_id = $1 AND oc.account_id = $2
+            AND cs.status = 'sent' AND cs.channel = 'email' AND cs.sent_at > $3
+       ) envois_recents`,
+      [userId, accountId, depuisRafale]
+    );
+    rafale = Number(r2.rows[0]?.n) || 0;
   } catch (err) {
     // On ne sait pas compter : on laisse passer, en le DISANT. Bloquer sur une
     // panne de lecture arrêterait toute la prospection d'un utilisateur sans
@@ -140,6 +216,12 @@ async function check(userId, email) {
     return { allowed: true, accountId, sent: 0, cap, reason: 'count_failed' };
   }
 
+  // L'anti-rafale AVANT le plafond : il est plus specifique, et sa raison dit a
+  // l'appelant « reviens plus tard » la ou le plafond dit « pas cette semaine ».
+  // Les confondre ferait croire a un quota epuise alors qu'il suffit d'attendre.
+  if (rafale > 0) {
+    return { allowed: false, accountId, sent, cap, reason: 'account_burst_window' };
+  }
   if (sent >= cap) {
     return { allowed: false, accountId, sent, cap, reason: 'account_weekly_cap' };
   }
@@ -147,6 +229,6 @@ async function check(userId, email) {
 }
 
 module.exports = {
-  DEFAULT_WEEKLY_CAP, MIN_CAP, MAX_CAP, FENETRE_JOURS,
+  DEFAULT_WEEKLY_CAP, MIN_CAP, MAX_CAP, FENETRE_JOURS, FENETRE_RAFALE_HEURES,
   clampCap, getWeeklyCap, resolveAccountId, check,
 };

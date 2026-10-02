@@ -206,6 +206,10 @@ router.get('/', async (req, res, next) => {
         maxDurationDays: w.max_duration_days,
         reenrollPolicy: w.reenroll_policy,
         reenrollDays: w.reenroll_days,
+        // Lot 6 · remonte a l'UI pour que l'etat de l'interrupteur soit VISIBLE.
+        // Un reglage qui change ce que recoivent les contacts et qu'on ne peut
+        // pas lire depuis l'app serait pire que pas de reglage du tout.
+        multiThread: w.multi_thread === true || w.multi_thread === 1,
         triggers: w.triggers || [],
       })),
     });
@@ -226,6 +230,7 @@ router.get('/workflows/:id', async (req, res, next) => {
         maxDurationDays: workflow.max_duration_days,
         reenrollPolicy: workflow.reenroll_policy,
         reenrollDays: workflow.reenroll_days,
+        multiThread: workflow.multi_thread === true || workflow.multi_thread === 1,
       },
       steps: touchpointsToSteps(rows),
       triggers: triggers.map(t => ({
@@ -643,7 +648,7 @@ router.put('/workflows/:id', async (req, res, next) => {
     const workflow = await ownedWorkflow(req, res);
     if (!workflow) return;
 
-    const { name, steps, reenrollPolicy, reenrollDays, maxDurationDays } = req.body;
+    const { name, steps, reenrollPolicy, reenrollDays, maxDurationDays, multiThread } = req.body;
 
     if (steps !== undefined) {
       const invalid = validateSteps(steps);
@@ -651,10 +656,13 @@ router.put('/workflows/:id', async (req, res, next) => {
     }
 
     if (name !== undefined || reenrollPolicy !== undefined
-        || reenrollDays !== undefined || maxDurationDays !== undefined) {
+        || reenrollDays !== undefined || maxDurationDays !== undefined
+        || multiThread !== undefined) {
       await db.workflows.update(workflow.id, {
         name: name !== undefined ? String(name).trim() : undefined,
         reenrollPolicy, reenrollDays, maxDurationDays,
+        // Lot 6 · eteint par defaut, ne s'allume que sur demande explicite.
+        multiThread,
       });
     }
 

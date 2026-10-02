@@ -42,9 +42,49 @@ function historyBlock(previous) {
 }
 
 /**
+ * Ce que le RÔLE du destinataire change dans le message.
+ *
+ * Lot 6, migration 125 : « un envoi multi-threadé qui ne distingue pas le
+ * décideur de l'utilisateur final envoie le même message aux deux, ce qui est
+ * la meilleure façon de perdre les deux ». Le décideur veut l'enjeu, pas le
+ * mode d'emploi ; l'opérationnel vit le problème au quotidien et n'a pas la
+ * main sur le budget. Leur écrire la même chose se voit.
+ *
+ * Vocabulaire fixé par la migration 125. Un rôle inconnu ne reçoit AUCUNE
+ * consigne d'angle plutôt qu'une consigne moyenne : inventer un angle pour
+ * quelqu'un dont on ignore la fonction est pire que de ne pas en avoir.
+ */
+const ANGLE_PAR_ROLE = {
+  decision_maker: "Ce destinataire décide. Parler de l'enjeu et du résultat, pas du fonctionnement. Une seule décision à prendre.",
+  influencer: "Ce destinataire conseille sans décider. Lui donner de quoi défendre le sujet en interne.",
+  operational: "Ce destinataire vit le problème au quotidien mais n'a pas la main sur le budget. Parler du concret, ne rien demander qui engage de l'argent.",
+};
+
+/**
+ * Ce que les COLLÈGUES du destinataire ont déjà reçu.
+ *
+ * C'est la contrainte la plus importante de l'envoi multi-threadé, et la moins
+ * évidente : deux personnes d'une même société qui reçoivent la même accroche
+ * se le disent, et le procédé devient visible. On passe donc les objets déjà
+ * envoyés, sans les corps · il s'agit d'éviter la redite, pas de recopier.
+ */
+function colleaguesBlock(siblings) {
+  if (!siblings || siblings.length === 0) return '';
+  const lignes = siblings
+    .filter(s => String(s.subject || '').trim())
+    .slice(0, 3)
+    .map(s => `  - ${s.collegue || 'un collègue'}${s.titre ? ` (${s.titre})` : ''} a reçu un message intitulé « ${String(s.subject).slice(0, 120)} »`);
+  if (lignes.length === 0) return '';
+  return `\n\nDes collègues de cette même société ont déjà été contactés :\n${lignes.join('\n')}\nÉcrire quelque chose de cohérent avec ça mais de différent : ni la même accroche, ni le même objet. Ne jamais mentionner qu'un collègue a été contacté.`;
+}
+
+/**
+ * @param {object} p
+ * @param {string} [p.role] rôle du destinataire dans son compte (migration 125)
+ * @param {Array} [p.siblings] ce que ses collègues ont déjà reçu
  * @returns {Promise<{subject, body} | null>} null si la génération a échoué.
  */
-async function generateStepEmail({ consigne, prospect, previous, isFirst }) {
+async function generateStepEmail({ consigne, prospect, previous, isFirst, role = null, siblings = [] }) {
   const instruction = String(consigne || '').trim();
   if (!instruction) return null;
 
@@ -62,13 +102,14 @@ Contexte :
 - ${who}
 
 Ce que cet email doit faire :
-${instruction}${historyBlock(previous)}
+${instruction}${historyBlock(previous)}${colleaguesBlock(siblings)}
 
 Contraintes :
 - Six lignes maximum, pas de header ni de footer
 - Vouvoyer
 - ${isFirst ? "C'est le premier message de ce parcours." : "C'est une relance : plus court que le précédent, une seule question."}
 - L'objet ne doit pas ressembler à une newsletter
+${ANGLE_PAR_ROLE[role] ? `- ${ANGLE_PAR_ROLE[role]}` : ''}
 ${require('./human-style').HUMAN_STYLE_RULES_FR}
 
 Retourne uniquement un JSON : { "subject": "...", "body": "..." }`;
@@ -96,4 +137,4 @@ Retourne uniquement un JSON : { "subject": "...", "body": "..." }`;
   }
 }
 
-module.exports = { CONSIGNE_MARKER, isConsigneStep, generateStepEmail };
+module.exports = { CONSIGNE_MARKER, isConsigneStep, generateStepEmail, ANGLE_PAR_ROLE, colleaguesBlock };
