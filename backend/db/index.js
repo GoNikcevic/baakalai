@@ -799,10 +799,18 @@ const versions = {
     if (campaignIds.length === 0) return {};
     const placeholders = campaignIds.map((_, idx) => `$${idx + 1}`).join(',');
     const result = await query(`
-      SELECT DISTINCT ON (campaign_id) *
-      FROM versions
-      WHERE campaign_id IN (${placeholders})
-      ORDER BY campaign_id, version DESC
+      SELECT * FROM (
+         -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+         -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+         -- meme chose : la derniere ligne par groupe.
+         -- Le SELECT * exterieur ramene AUSSI la colonne rn. C'est assume :
+         -- l appelant lit des proprietes nommees (row.campaign_id), une cle de
+         -- plus ne le gene pas, et enumerer les colonnes de versions serait un
+         -- piege au prochain ajout de colonne.
+         SELECT v.*, ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY version DESC) AS rn
+           FROM versions v
+          WHERE campaign_id IN (${placeholders})
+      ) dernier WHERE rn = 1
     `, campaignIds);
     const map = {};
     for (const row of result.rows) {

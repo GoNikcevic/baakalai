@@ -158,13 +158,23 @@ const MIN_SIGNAL_OUTCOMES = 5;
 async function learnFromRegistrySignals() {
   // Signaux assez vieux pour que l'issue soit observable (30 j), fenêtre 180 j.
   const rows = await db.query(
-    `SELECT DISTINCT ON (s.opportunity_id) s.opportunity_id, o.status,
-       EXISTS (SELECT 1 FROM churn_outcomes co WHERE co.opportunity_id = s.opportunity_id
-               AND co.outcome_type = 'true_positive' AND co.created_at > s.detected_at) AS confirmed_churn
-     FROM churn_external_signals s
-     JOIN opportunities o ON o.id = s.opportunity_id
-     WHERE s.source LIKE 'registry_%'
-       AND s.detected_at BETWEEN now() - interval '180 days' AND now() - interval '30 days'`
+    `SELECT opportunity_id, status, confirmed_churn FROM (
+       -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+       -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+       -- meme chose : la derniere ligne par groupe.
+       -- L original n avait AUCUN ORDER BY : Postgres y prenait donc une ligne
+       -- arbitraire par opportunite, et deux executions pouvaient ne pas donner
+       -- le meme echantillon. On ordonne sur le signal le plus recent, ce qui
+       -- rend le resultat deterministe et non plus seulement portable.
+       SELECT s.opportunity_id, o.status,
+              EXISTS (SELECT 1 FROM churn_outcomes co WHERE co.opportunity_id = s.opportunity_id
+                      AND co.outcome_type = 'true_positive' AND co.created_at > s.detected_at) AS confirmed_churn,
+              ROW_NUMBER() OVER (PARTITION BY s.opportunity_id ORDER BY s.detected_at DESC) AS rn
+         FROM churn_external_signals s
+         JOIN opportunities o ON o.id = s.opportunity_id
+        WHERE s.source LIKE 'registry_%'
+          AND s.detected_at BETWEEN now() - interval '180 days' AND now() - interval '30 days'
+    ) dernier WHERE rn = 1`
   );
   if (rows.rows.length < MIN_SIGNAL_OUTCOMES) return null;
 

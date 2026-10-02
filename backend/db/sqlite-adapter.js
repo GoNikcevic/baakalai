@@ -796,21 +796,24 @@ function toSqliteValue(p) {
    mecaniques sont desormais traduites (`= ANY($n)`, `::interval`, `EXTRACT`,
    `ILIKE`, plus les casts de tableaux), et des tests les couvrent.
 
-   Deux familles restent volontairement non traduites :
+   Deux familles ne sont volontairement PAS traduites ici, et leurs appels ont
+   ete reecrits A LA SOURCE le 2026-10-02 · il n'en reste aucun dans le backend :
 
-   · `SELECT DISTINCT ON (...)` · 12 occurrences, toutes de la meme forme « la
-     derniere ligne par groupe ». La reecriture en `ROW_NUMBER() OVER
-     (PARTITION BY ...)` est possible, les fonctions de fenetrage marchant
-     nativement ici. Mais elle demande de couper le `ORDER BY` entre le prefixe
-     de groupe et le reste, et une coupe fausse rendrait LA MAUVAISE LIGNE sans
-     rien signaler. Une requete qui refuse de demarrer coute une heure ; une
-     requete qui rend la mauvaise ligne coute une enquete. Ces appels se
-     corrigent donc un par un a la source, comme l'a ete `failedSendIds` dans
-     lib/reactivation-queue.js, ou chaque correction est verifiable.
+   · `SELECT DISTINCT ON (...)` · 11 requetes, toutes de la meme forme « la
+     derniere ligne par groupe », passees en `ROW_NUMBER() OVER (PARTITION BY
+     ...)`, qui marche nativement des deux cotes. Traduire dans l'adaptateur
+     aurait demande de couper le `ORDER BY` entre le prefixe de groupe et le
+     reste, et une coupe fausse rendrait LA MAUVAISE LIGNE sans rien signaler.
+     Une requete qui refuse de demarrer coute une heure ; une requete qui rend
+     la mauvaise ligne coute une enquete. D'ou la reecriture une par une, ou
+     chaque correction est verifiable · voir tests/distinct-on-rewrite.test.js.
 
-   · `array_agg` · 1 occurrence (routes/data-quality.js). Postgres rend un
-     TABLEAU, `json_group_array` rendrait une chaine JSON : l'appelant qui
-     itere dessus se tromperait en silence au lieu d'echouer. Meme raisonnement.
+   · `array_agg` · 1 requete (routes/data-quality.js), devenue une seconde
+     requete recollee en JS. Postgres rend un TABLEAU et `json_group_array`
+     rendrait une chaine JSON : l'appelant qui itere dessus se tromperait en
+     silence au lieu d'echouer.
+
+   Si l'une des deux reapparait, la reecrire a la source · ne pas l'ajouter ici.
 
    Verifie natif, sans traduction : les fonctions de fenetrage (`OVER (...)`) et
    `IS DISTINCT FROM`.

@@ -106,11 +106,23 @@ router.get('/types', async (req, res, next) => {
       SELECT signal_type, company_name FROM (
         SELECT signal_type, company_name, detected_at,
                ROW_NUMBER() OVER (PARTITION BY signal_type ORDER BY detected_at DESC) AS rn
-          FROM (SELECT DISTINCT ON (signal_type, company_name)
-                       signal_type, company_name, detected_at
-                  FROM signals
-                 WHERE user_id = $1 AND status = 'new' AND company_name IS NOT NULL
-                 ORDER BY signal_type, company_name, detected_at DESC) d
+          FROM (
+                 -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+                 -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+                 -- meme chose : la derniere ligne par groupe.
+                 -- Les deux etages restent, parce qu'ils ne disent pas la meme
+                 -- chose : l interne garde la ligne la plus recente de chaque
+                 -- couple (type, societe), l externe prend ensuite les trois
+                 -- premieres societes de chaque type. Sans le filtre
+                 -- rn_couple = 1 juste apres, les doublons remonteraient dans
+                 -- l etage externe et une meme societe pourrait occuper les
+                 -- trois places.
+                 SELECT signal_type, company_name, detected_at,
+                        ROW_NUMBER() OVER (PARTITION BY signal_type, company_name
+                                           ORDER BY detected_at DESC) AS rn_couple
+                   FROM signals
+                  WHERE user_id = $1 AND status = 'new' AND company_name IS NOT NULL) d
+         WHERE d.rn_couple = 1
       ) t WHERE rn <= 3
     `, [req.user.id]);
 

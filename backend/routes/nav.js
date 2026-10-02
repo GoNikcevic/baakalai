@@ -33,10 +33,16 @@ router.get('/counts', async (req, res, next) => {
       // Latest cached report per provider · includes the __deal_quality__ /
       // __client_quality__ sentinel rows written by routes/data-quality.js.
       db.query(
-        `SELECT DISTINCT ON (provider) provider, issues
-         FROM crm_cleaning_reports
-         WHERE user_id = $1 AND created_at > now() - interval '24 hours'
-         ORDER BY provider, created_at DESC`,
+        `SELECT provider, issues FROM (
+           -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+           -- connait pas : cette requete n'avait jamais pu s'y executer, donc
+           -- n'etait couverte par rien. ROW_NUMBER() marche nativement DES DEUX
+           -- cotes, et dit la meme chose : la derniere ligne par groupe.
+           SELECT provider, issues,
+                  ROW_NUMBER() OVER (PARTITION BY provider ORDER BY created_at DESC) AS rn
+             FROM crm_cleaning_reports
+            WHERE user_id = $1 AND created_at > now() - interval '24 hours'
+        ) dernier WHERE rn = 1`,
         [userId]
       ),
     ]);

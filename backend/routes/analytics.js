@@ -1644,10 +1644,15 @@ router.get('/churn-risk-performance', async (req, res, next) => {
     if (enoughHistory) {
       const result = await db.query(
         `WITH past_at_risk AS (
-           SELECT DISTINCT ON (opportunity_id) opportunity_id, score AS past_score
-           FROM churn_score_history
-           WHERE user_id = $1 AND scored_at BETWEEN now() - interval '75 days' AND now() - interval '45 days'
-           ORDER BY opportunity_id, scored_at DESC
+           SELECT opportunity_id, past_score FROM (
+              -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+              -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+              -- meme chose : la derniere ligne par groupe.
+              SELECT opportunity_id, score AS past_score,
+                     ROW_NUMBER() OVER (PARTITION BY opportunity_id ORDER BY scored_at DESC) AS rn
+                FROM churn_score_history
+               WHERE user_id = $1 AND scored_at BETWEEN now() - interval '75 days' AND now() - interval '45 days'
+           ) dernier WHERE rn = 1
          )
          SELECT
            COUNT(*) FILTER (WHERE o.status = 'lost') AS churned,

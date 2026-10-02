@@ -882,15 +882,34 @@ async function buildOpportunityFixQueue(userId, issue, kind) {
 
   const result = await db.query(
     `SELECT o.id, o.name, o.company, o.email, o.status, o.deal_value, o.last_activity_at,
-            o.won_date, o.lost_date,
-            COALESCE(
-              (SELECT array_agg(opl.product_line_id) FROM opportunity_product_lines opl
-               WHERE opl.opportunity_id = o.id),
-              ARRAY[]::uuid[]
-            ) AS product_line_ids
+            o.won_date, o.lost_date
      FROM opportunities o WHERE o.user_id = $1 AND o.id::text = ANY($2)`,
     [userId, ids]
   );
+
+  // Les lignes produit en une SECONDE requete, recollees en JS.
+  //
+  // L original agregait avec `array_agg(...)` et un repli `ARRAY[]::uuid[]`.
+  // Les deux sont du Postgres pur : le miroir SQLite des tests ne connait pas
+  // array_agg, et traduire vers json_group_array rendrait une CHAINE JSON la ou
+  // l appelant attend un tableau · il se tromperait en silence au lieu
+  // d echouer. Deux requetes et une passe de regroupement disent la meme chose
+  // des deux cotes, et c'est le patron que lib/account-list.js emploie deja.
+  const parContact = new Map();
+  try {
+    const pl = await db.query(
+      `SELECT opportunity_id, product_line_id FROM opportunity_product_lines
+        WHERE opportunity_id::text = ANY($1)`,
+      [ids]
+    );
+    for (const r of pl.rows) {
+      if (!parContact.has(String(r.opportunity_id))) parContact.set(String(r.opportunity_id), []);
+      parContact.get(String(r.opportunity_id)).push(r.product_line_id);
+    }
+  } catch { /* aucune ligne produit rattachee : tableau vide, comme le repli d origine */ }
+  for (const row of result.rows) {
+    row.product_line_ids = parContact.get(String(row.id)) || [];
+  }
 
   const rows = result.rows.map(row => {
     const dealValue = Number(row.deal_value) || 0;
@@ -1319,10 +1338,16 @@ router.get('/score-history', async (req, res, next) => {
     // Déductions du dernier rapport par provider · recalculées depuis summary +
     // total_contacts stockés (même formule que le score), rien n'est migré.
     const latest = await db.query(
-      `SELECT DISTINCT ON (provider) provider, score, total_contacts, summary
-       FROM crm_cleaning_reports
-       WHERE user_id = $1 AND provider NOT LIKE '\\_\\_%'
-       ORDER BY provider, created_at DESC`,
+      `SELECT provider, score, total_contacts, summary FROM (
+         -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+         -- connait pas : cette requete n'avait jamais pu s'y executer, donc
+         -- n'etait couverte par rien. ROW_NUMBER() marche nativement DES DEUX
+         -- cotes, et dit la meme chose : la derniere ligne par groupe.
+         SELECT provider, score, total_contacts, summary,
+                ROW_NUMBER() OVER (PARTITION BY provider ORDER BY created_at DESC) AS rn
+           FROM crm_cleaning_reports
+          WHERE user_id = $1 AND provider NOT LIKE '\_\_%'
+      ) dernier WHERE rn = 1`,
       [req.user.id]
     );
     const factorsByProvider = new Map();
@@ -1367,10 +1392,16 @@ router.get('/score-history', async (req, res, next) => {
 router.get('/dashboard-summary', async (req, res, next) => {
   try {
     const r = await db.query(
-      `SELECT DISTINCT ON (provider) provider, issues
-       FROM crm_cleaning_reports
-       WHERE user_id = $1 AND created_at > now() - interval '24 hours'
-       ORDER BY provider, created_at DESC`,
+      `SELECT provider, issues FROM (
+         -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+         -- connait pas : cette requete n'avait jamais pu s'y executer, donc
+         -- n'etait couverte par rien. ROW_NUMBER() marche nativement DES DEUX
+         -- cotes, et dit la meme chose : la derniere ligne par groupe.
+         SELECT provider, issues,
+                ROW_NUMBER() OVER (PARTITION BY provider ORDER BY created_at DESC) AS rn
+           FROM crm_cleaning_reports
+          WHERE user_id = $1 AND created_at > now() - interval '24 hours'
+      ) dernier WHERE rn = 1`,
       [req.user.id]
     );
 

@@ -393,15 +393,20 @@ async function loadCrmWatchRecentSet(userId) {
  */
 async function loadCompanyAccount(userId, companyName) {
   const r = await db.query(
-    `SELECT DISTINCT ON (company)
-       company, id AS opportunity_id, name AS contact_name, email AS contact_email,
-       title AS contact_title, status, deal_value,
-       (EXTRACT(EPOCH FROM (now() - COALESCE(last_activity_at, created_at))) / 86400)::int AS days_dormant
-     FROM opportunities
-     WHERE user_id = $1 AND lower(company) = lower($2) AND status <> 'lost'
-     ORDER BY company, (status = 'won') ASC, deal_value DESC NULLS LAST
-     LIMIT 1`,
-    [userId, companyName]
+    `SELECT company, opportunity_id, contact_name, contact_email, contact_title, status, deal_value, days_dormant FROM (
+       -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+       -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+       -- meme chose : la derniere ligne par groupe.
+       -- Le classement est celui d origine : un contact NON gagne passe
+       -- devant (false avant true), puis le plus gros montant.
+       SELECT company, id AS opportunity_id, name AS contact_name, email AS contact_email,
+              title AS contact_title, status, deal_value,
+              (EXTRACT(EPOCH FROM (now() - COALESCE(last_activity_at, created_at))) / 86400)::int AS days_dormant,
+              ROW_NUMBER() OVER (PARTITION BY company ORDER BY (status = 'won') ASC, deal_value DESC NULLS LAST) AS rn
+         FROM opportunities
+        WHERE user_id = $1 AND lower(company) = lower($2) AND status <> 'lost'
+    ) dernier WHERE rn = 1
+    LIMIT 1`,
   );
   return r.rows[0] || null;
 }
@@ -421,14 +426,18 @@ async function runCrmWatch(userId, { ignoreDayBucket = false, limit = CRM_WATCH_
     // Meilleure opportunité par société (ouverte avant won, puis valeur) · 
     // c'est elle qui porte le contact et recevra le rattachement du signal.
     const companies = await db.query(
-      `SELECT DISTINCT ON (company)
-         company, id AS opportunity_id, name AS contact_name, email AS contact_email,
-         title AS contact_title, status, deal_value,
-         (EXTRACT(EPOCH FROM (now() - COALESCE(last_activity_at, created_at))) / 86400)::int AS days_dormant
-       FROM opportunities
-       WHERE user_id = $1 AND company IS NOT NULL AND TRIM(company) <> '' AND status <> 'lost'
-       ORDER BY company, (status = 'won') ASC, deal_value DESC NULLS LAST`,
-      [userId]
+      `SELECT company, opportunity_id, contact_name, contact_email, contact_title, status, deal_value, days_dormant FROM (
+         -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+         -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+         -- meme chose : la derniere ligne par groupe.
+         SELECT company, id AS opportunity_id, name AS contact_name, email AS contact_email,
+                title AS contact_title, status, deal_value,
+                (EXTRACT(EPOCH FROM (now() - COALESCE(last_activity_at, created_at))) / 86400)::int AS days_dormant,
+                ROW_NUMBER() OVER (PARTITION BY company ORDER BY (status = 'won') ASC, deal_value DESC NULLS LAST) AS rn
+           FROM opportunities
+          WHERE user_id = $1 AND company IS NOT NULL AND TRIM(company) <> '' AND status <> 'lost'
+      ) dernier WHERE rn = 1
+      ORDER BY company`,
     );
     if (companies.rows.length === 0) return report;
 

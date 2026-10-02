@@ -583,25 +583,36 @@ async function checkReplies(userId, campaigns, enrollments) {
   const candidates = [];
   if (campaigns.length > 0) {
     const r = await db.query(
-      `SELECT DISTINCT ON (o.id) o.*
-       FROM opportunities o
-       JOIN campaign_sends cs ON cs.opportunity_id = o.id AND cs.channel = 'email' AND cs.status = 'sent'
-       WHERE o.user_id = $1 AND o.campaign_id = ANY($2)
-         AND o.sequence_stopped_at IS NULL AND o.email IS NOT NULL
-       ORDER BY o.id, cs.sent_at DESC`,
-      [userId, campaigns.map(c => c.id)]
+      `SELECT * FROM (
+         -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+         -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+         -- meme chose : la derniere ligne par groupe.
+         SELECT o.*,
+                ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY cs.sent_at DESC) AS rn
+           FROM opportunities o
+           JOIN campaign_sends cs ON cs.opportunity_id = o.id AND cs.channel = 'email' AND cs.status = 'sent'
+          WHERE o.user_id = $1 AND o.campaign_id = ANY($2)
+            AND o.sequence_stopped_at IS NULL AND o.email IS NOT NULL
+      ) dernier WHERE rn = 1`,
     );
     for (const row of r.rows) candidates.push({ prospect: row, enrollmentId: null });
   }
   if (enrollments.length > 0) {
     const r = await db.query(
-      `SELECT DISTINCT ON (o.id) o.*, se.id AS live_enrollment_id
-       FROM sequence_enrollments se
-       JOIN opportunities o ON o.id = se.opportunity_id
-       JOIN campaign_sends cs ON cs.enrollment_id = se.id AND cs.channel = 'email' AND cs.status = 'sent'
-       WHERE se.user_id = $1 AND se.id = ANY($2) AND o.email IS NOT NULL
-       ORDER BY o.id, cs.sent_at DESC`,
-      [userId, enrollments.map(e => e.id)]
+      `SELECT * FROM (
+         -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+         -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+         -- meme chose : la derniere ligne par groupe.
+         -- Le SELECT * exterieur ramene aussi rn : assume, l appelant lit des
+         -- proprietes nommees et enumerer les colonnes d opportunities serait un
+         -- piege au prochain ajout.
+         SELECT o.*, se.id AS live_enrollment_id,
+                ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY cs.sent_at DESC) AS rn
+           FROM sequence_enrollments se
+           JOIN opportunities o ON o.id = se.opportunity_id
+           JOIN campaign_sends cs ON cs.enrollment_id = se.id AND cs.channel = 'email' AND cs.status = 'sent'
+          WHERE se.user_id = $1 AND se.id = ANY($2) AND o.email IS NOT NULL
+      ) dernier WHERE rn = 1`,
     );
     for (const row of r.rows) candidates.push({ prospect: row, enrollmentId: row.live_enrollment_id });
   }

@@ -84,8 +84,14 @@ async function fetchLastRuns(db) {
 async function healthSummary(db) {
   try {
     const { rows } = await db.query(
-      `SELECT DISTINCT ON (job) job, started_at, finished_at, ok
-         FROM cron_runs ORDER BY job, started_at DESC`
+      `SELECT job, started_at, finished_at, ok FROM (
+         -- DISTINCT ON est du Postgres pur, que le miroir SQLite des tests ne
+         -- connait pas. ROW_NUMBER() marche nativement DES DEUX cotes et dit la
+         -- meme chose : la derniere ligne par groupe.
+         SELECT job, started_at, finished_at, ok,
+                ROW_NUMBER() OVER (PARTITION BY job ORDER BY started_at DESC) AS rn
+           FROM cron_runs
+      ) dernier WHERE rn = 1`
     );
     const stale = findStaleJobs(rows.map(r => ({ job: r.job, last_started: r.started_at })));
     const staleSet = new Set(stale.map(s => s.job));
