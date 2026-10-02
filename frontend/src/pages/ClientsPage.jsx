@@ -123,6 +123,8 @@ export default function ClientsPage({ scope }) {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildResult, setRebuildResult] = useState(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
@@ -257,6 +259,36 @@ export default function ClientsPage({ scope }) {
   // sur son écran d'erreur. Ni le build ni les tests backend ne voient ça :
   // seul l'affichage réel le montre.
   const clients = useMemo(() => groups.flatMap(g => g.contacts || []), [groups]);
+
+  /**
+   * Reconstruire les SOCIETES sans reimporter le CRM.
+   *
+   * Un contact porte souvent un nom de societe en texte libre sans etre
+   * rattache a une societe (`account_id` NULL). Tant qu'il l'est, son groupe
+   * n'a pas de fiche : le nom n'est pas cliquable, et la vue par compte reste
+   * une vue par nom. La route existait depuis le lot 2 mais AUCUN bouton ne
+   * l'appelait · c'etait du code mort, et c'est ce qui rendait la fiche compte
+   * invisible dans l'app.
+   *
+   * Volontairement separe de « Actualiser » : celui-la rappelle le CRM, celui-ci
+   * ne touche qu'aux donnees deja la. Un utilisateur dont le CRM est lent ou
+   * deconnecte doit pouvoir reconstruire ses societes sans l'attendre, et le
+   * chemin marche aussi pour les imports de fichier, dont aucun connecteur ne
+   * fera jamais la synchro.
+   */
+  const handleRebuildAccounts = useCallback(async () => {
+    setRebuilding(true);
+    setRebuildResult(null);
+    try {
+      const r = await request('/crm/accounts/rebuild', { method: 'POST' });
+      setRebuildResult(r);
+      await loadData();
+    } catch (err) {
+      setRebuildResult({ error: err.message });
+    } finally {
+      setRebuilding(false);
+    }
+  }, [loadData]);
 
   const handleImport = useCallback(async () => {
     if (!connectedCrm) return;
@@ -422,6 +454,15 @@ export default function ClientsPage({ scope }) {
       return {
         key: g.key,
         name: g.name,
+        // L'identifiant de la SOCIÉTÉ, recopié depuis le groupe du serveur.
+        //
+        // Il était perdu ici : ce remappage reconstruit un objet littéral sans
+        // reprendre `accountId`, alors que l'affichage plus bas en dépend
+        // (`g.accountId ? <Link> : g.name`). Le nom de société n'était donc
+        // JAMAIS cliquable, sur aucune ligne, et la fiche compte n'était
+        // atteignable que par URL directe. Le serveur l'envoyait bien · c'est
+        // l'écran qui le jetait. Constaté le 2026-10-02.
+        accountId: g.accountId || null,
         orphan: !!g.orphan,
         rows,
         deals,
@@ -433,6 +474,20 @@ export default function ClientsPage({ scope }) {
       };
     }).filter(g => g.rows.length > 0);
   }, [groups, filtered]);
+
+  /**
+   * Les groupes qui N'ONT PAS de fiche, et qui pourraient en avoir une.
+   *
+   * Un groupe formé sur un nom de société en texte libre : ses contacts portent
+   * le nom de l'entreprise mais aucun `account_id`, donc le nom ne s'ouvre pas.
+   * Les contacts isolés (une personne sans entreprise) sont exclus du compte :
+   * eux n'auront jamais de fiche, et les annoncer comme réparables serait
+   * promettre un résultat que le bouton ne peut pas donner.
+   */
+  const groupesSansFiche = useMemo(
+    () => accountGroups.filter(g => !g.accountId && !g.orphan).length,
+    [accountGroups]
+  );
 
   // Ce que la liste rend réellement : un en-tête de compte, puis ses lignes de
   // contact quand il est déplié. Une seule liste plate, pour que le rendu d'un
@@ -642,6 +697,55 @@ export default function ClientsPage({ scope }) {
               : t('clients.importResult', { imported: importResult.imported, skipped: importResult.skipped })}
           </span>
           <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setImportResult(null)}>{'\u2715'}</button>
+        </div>
+      )}
+
+      {/* Des sociétés restent à reconnaître.
+          Contextuel et non permanent : un bouton toujours affiché pour une
+          action qui n'a rien à faire est du bruit, et il n'apprend pas à quoi
+          il sert. Celui-ci dit combien de lignes y gagneraient une fiche. */}
+      {isAdmin && !isDealQualityContext && groupesSansFiche > 0 && (
+        <div style={{
+          background: 'var(--bg-subtle)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+        }}>
+          <span style={{ color: 'var(--text-secondary)' }}>
+            {t('clients.accountsToRebuild', { count: groupesSansFiche })}
+          </span>
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: 12, padding: '6px 14px', whiteSpace: 'nowrap' }}
+            onClick={handleRebuildAccounts}
+            disabled={rebuilding}
+          >
+            <Icon name={rebuilding ? 'clock' : 'refinement'} size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+            {rebuilding ? t('clients.rebuilding') : t('clients.rebuildAccounts')}
+          </button>
+        </div>
+      )}
+
+      {rebuildResult && (
+        <div style={{
+          background: rebuildResult.error ? 'var(--danger-bg)' : 'rgba(0, 214, 143, 0.1)',
+          border: `1px solid ${rebuildResult.error ? 'rgba(255,107,107,0.3)' : 'rgba(0, 214, 143, 0.3)'}`,
+          borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12,
+          color: rebuildResult.error ? 'var(--danger)' : 'var(--success)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+        }}>
+          <span>
+            {rebuildResult.error
+              ? `${t('common.error')} : ${rebuildResult.error}`
+              : t('clients.rebuildResult', {
+                // Les noms viennent de la route : syncAccountsForUser rend
+                // { accounts, created, linked, skipped } et
+                // synthesizeDerivedDeals rend { ecrits, absorbes }.
+                created: rebuildResult.created || 0,
+                linked: rebuildResult.linked || 0,
+                deals: rebuildResult.derivedDeals?.ecrits || 0,
+              })}
+          </span>
+          <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setRebuildResult(null)}>{String.fromCharCode(10005)}</button>
         </div>
       )}
 

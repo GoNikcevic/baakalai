@@ -146,6 +146,61 @@ function hasAcceptedBranch(touchpoints) {
   return touchpoints.some((tp) => tp.condition_type === 'accepted');
 }
 
+/**
+ * Les rôles d'achat, en mots lisibles dans une phrase.
+ *
+ * En français seulement, et c'est assumé : tout le contenu sortant de baakalai
+ * est écrit en français (`HUMAN_STYLE_RULES_FR`, vouvoiement imposé), donc une
+ * variable qui s'insère DANS une phrase d'email n'a pas de version anglaise à
+ * choisir. Le jour où l'outbound devient bilingue, c'est tout le pipeline de
+ * rédaction qui aura besoin d'une locale, pas cette table seule.
+ */
+const LIBELLE_ROLE = {
+  decision_maker: 'décideur',
+  influencer: 'relais',
+  operational: 'utilisateur',
+  other: '',
+};
+
+/**
+ * Les SEGMENTS CONDITIONNELS par rôle · lot 6.
+ *
+ * ── Pourquoi une variable `{{role}}` seule ne suffisait pas ─────────────────
+ *
+ * L'envoi multi-destinataires écrit à plusieurs interlocuteurs d'une même
+ * société. Sur une étape « consigne », l'angle est adapté au rôle par le
+ * rédacteur (lib/workflow-step-email.js). Sur une étape écrite À LA MAIN,
+ * rien ne l'adaptait : Anne la décideuse et Bruno l'opérationnel recevaient le
+ * MÊME texte avec deux prénoms différents, et deux collègues qui comparent le
+ * voient immédiatement.
+ *
+ * Une simple substitution `{{role}}` n'y change rien : elle insère le mot
+ * « décideur » dans une phrase, elle ne change pas l'angle. Ce qu'il faut, c'est
+ * qu'un seul gabarit puisse porter deux angles :
+ *
+ *   {{#decision_maker}}Le sujet remonte chez vous tous les trimestres.{{/decision_maker}}
+ *   {{#operational}}Vous le vivez au quotidien, et ça n'avance pas.{{/operational}}
+ *
+ * Les clés sont les valeurs CANONIQUES de `opportunities.account_role`
+ * (migration 125), pas des alias français : ce sont elles qui sont en base, et
+ * un alias traduit se désynchroniserait du jour où un rôle est renommé.
+ *
+ * UN RÔLE INCONNU NE DÉCLENCHE AUCUN SEGMENT · pas même `other`. Un contact de
+ * campagne de prospection n'a pas de rôle de compte, et lui servir le texte
+ * destiné à un décideur serait une affirmation que rien ne soutient. Le gabarit
+ * doit donc garder une phrase hors segment pour ce cas, ce que le test vérifie.
+ */
+const ROLES_CONNUS = ['decision_maker', 'influencer', 'operational', 'other'];
+
+function appliquerSegmentsRole(texte, role) {
+  let sortie = texte;
+  for (const r of ROLES_CONNUS) {
+    const bloc = new RegExp(`\\{\\{#\\s*${r}\\s*\\}\\}([\\s\\S]*?)\\{\\{/\\s*${r}\\s*\\}\\}`, 'g');
+    sortie = sortie.replace(bloc, (_, contenu) => (role === r ? contenu : ''));
+  }
+  return sortie;
+}
+
 /** Substitue les variables {{firstName}} etc. avec les champs du prospect. */
 function renderTemplate(text, prospect) {
   if (!text) return '';
@@ -153,6 +208,7 @@ function renderTemplate(text, prospect) {
   const personalization = typeof prospect.personalization === 'string'
     ? (() => { try { return JSON.parse(prospect.personalization); } catch { return {}; } })()
     : (prospect.personalization || {});
+  const role = prospect.account_role || null;
   const vars = {
     firstName: firstName || '',
     lastName: rest.join(' '),
@@ -161,8 +217,11 @@ function renderTemplate(text, prospect) {
     jobTitle: prospect.title || '',
     title: prospect.title || '',
     icebreaker: personalization.icebreaker || '',
+    // Le rôle en mot lisible · vide quand il est inconnu ou `other`, pour que
+    // la phrase se referme proprement plutôt que d'annoncer « autre ».
+    role: (role && LIBELLE_ROLE[role]) || '',
   };
-  return text
+  return appliquerSegmentsRole(text, role)
     .replace(/\{\{\s*(\w+)\s*\}\}/g, (m, key) => (vars[key] !== undefined ? vars[key] : ''))
     // Les substitutions vides laissent parfois des doubles espaces ou des
     // lignes orphelines · on nettoie sans toucher à la mise en forme voulue.
@@ -1049,6 +1108,9 @@ module.exports = {
   hasAcceptedBranch,
   parseTiming,
   renderTemplate,
+  appliquerSegmentsRole,
+  LIBELLE_ROLE,
+  ROLES_CONNUS,
   createEmailBudget,
   NATIVE_EMAIL_DAILY_CAP,
   NATIVE_EMAILS_PER_RUN,

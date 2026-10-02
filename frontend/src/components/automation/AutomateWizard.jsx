@@ -62,6 +62,9 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
   const [steps, setSteps] = useState(emptySteps);
   const [backfill, setBackfill] = useState({});
   const [reenroll, setReenroll] = useState('period');
+  // Lot 6 · ce workflow aborde-t-il plusieurs interlocuteurs d'une même société.
+  // Faux par défaut, comme en base : le multi-destinataires est un choix.
+  const [multiThread, setMultiThread] = useState(false);
   const [busy, setBusy] = useState(false);
 
   // Un appel qui échoue ne doit JAMAIS se traduire par une liste vide et
@@ -144,6 +147,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
         arm: !asDraft,
         backfill: backfillIds,
         reenrollPolicy: reenroll,
+        multiThread,
       };
       if (pick === 'new') {
         body.workflowName = name.trim();
@@ -602,6 +606,43 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                 <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
                   {t('automation.wizard.reenrollHint')}
                 </div>
+              </div>
+
+              {/* ── Plusieurs interlocuteurs par société · lot 6 ──────────────
+                  Éteint par défaut, et c'est délibéré : écrire à trois
+                  personnes d'une même société la même semaine est un motif de
+                  spam, et une réputation d'expéditeur met des mois à revenir.
+                  L'utilisateur doit le demander, pas le découvrir. */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {t('automation.wizard.multiThreadTitle')}
+                </div>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={multiThread}
+                    onChange={e => setMultiThread(e.target.checked)}
+                    style={{ marginTop: 3 }}
+                  />
+                  <span>{t('automation.wizard.multiThreadLabel')}</span>
+                </label>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {t('automation.wizard.multiThreadHint')}
+                </div>
+                {/* L'avertissement qui compte, et il n'est pas décoratif : sur
+                    une étape écrite à la main, les variables personnalisent le
+                    prénom mais pas l'angle. Deux collègues reçoivent alors le
+                    même texte, ce qui est précisément ce qu'on cherche à
+                    éviter. Les segments par rôle sont la réponse. */}
+                {multiThread && (
+                  <div style={{
+                    fontSize: 11.5, marginTop: 8, padding: '8px 10px', borderRadius: 'var(--r-md)',
+                    background: 'var(--warning-soft)', border: '1px solid var(--warning)',
+                    color: 'var(--text-secondary)',
+                  }}>
+                    {t('automation.wizard.multiThreadRoleWarning')}
+                  </div>
+                )}
               </div>
 
               {meta && !meta.hasMailbox && (

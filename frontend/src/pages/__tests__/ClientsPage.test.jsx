@@ -89,10 +89,14 @@ function serveurDeComptes(lignes, url) {
         key: cle,
         name: (c.company || '').trim() || c.name || ' ',
         orphan: cle.startsWith('personne:'),
+        // L'identifiant de la SOCIÉTÉ, comme le vrai serveur l'envoie
+        // (lib/account-list.js) · c'est lui qui rend le nom cliquable.
+        accountId: null,
         contacts: [],
       });
     }
     parCle.get(cle).contacts.push(c);
+    if (c.account_id) parCle.get(cle).accountId = String(c.account_id);
   }
 
   const groups = [...parCle.values()].map(g => ({
@@ -449,5 +453,78 @@ describe('ClientsPage · tuiles de tête cliquables', () => {
     fireEvent.click(screen.getByText('Silencieux (90 j+)').closest('button'));
     await waitFor(() => expect(screen.queryByText('Claire Recente')).toBeNull());
     expect(screen.getByText('Silvain Silence')).toBeTruthy();
+  });
+});
+
+describe('ClientsPage · accès à la fiche de société', () => {
+  // Le nom de société doit OUVRIR sa fiche. Ça n'a jamais marché : le
+  // remappage des groupes reconstruisait un objet sans reprendre `accountId`,
+  // alors que l'affichage en dépend. Le serveur l'envoyait, l'écran le jetait,
+  // et la fiche compte n'était atteignable que par URL directe.
+  it('le nom d une société rattachée ouvre sa fiche', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'c1', name: 'Marie Signe', company: 'Acme', account_id: 'acc-1', status: 'new', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    const lien = await screen.findByRole('link', { name: 'Acme' });
+    expect(lien.getAttribute('href')).toBe('/accounts/acc-1');
+  });
+
+  it('un groupe formé sur un nom en texte libre n est PAS un lien', async () => {
+    // Pas de `account_id` : le groupe porte un nom d'entreprise sans fiche.
+    // En faire un lien mènerait à /accounts/undefined.
+    mockApi({
+      opportunities: [
+        { id: 'c2', name: 'Paul Libre', company: 'Societe Sans Fiche', status: 'new', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    expect(await screen.findByText('Societe Sans Fiche')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Societe Sans Fiche' })).toBeNull();
+  });
+
+  it('propose de reconstruire les sociétés quand il en reste à reconnaître', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'c3', name: 'A B', company: 'Sans Fiche Un', status: 'new', last_activity_at: new Date().toISOString() },
+        { id: 'c4', name: 'C D', company: 'Sans Fiche Deux', status: 'new', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    // Contextuel : le bandeau dit COMBIEN de sociétés y gagneraient une fiche,
+    // pour qu'un bouton d'action ne reste pas une énigme.
+    expect(await screen.findByText(/2 société\(s\) ne sont pas encore reconnues/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Reconstruire les sociétés/ })).toBeTruthy();
+  });
+
+  it('ne propose rien quand toutes les sociétés ont leur fiche', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'c5', name: 'E F', company: 'Acme', account_id: 'acc-1', status: 'new', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    await screen.findByRole('link', { name: 'Acme' });
+    expect(screen.queryByRole('button', { name: /Reconstruire les sociétés/ })).toBeNull();
+  });
+
+  it('un contact isolé ne compte pas comme une société à reconstruire', async () => {
+    // Une personne sans entreprise n'aura jamais de fiche · l'annoncer comme
+    // réparable promettrait un résultat que le bouton ne peut pas donner.
+    mockApi({
+      opportunities: [
+        { id: 'c6', name: 'Sans Societe', company: null, status: 'new', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    expect(await screen.findByText('Sans Societe')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Reconstruire les sociétés/ })).toBeNull();
   });
 });

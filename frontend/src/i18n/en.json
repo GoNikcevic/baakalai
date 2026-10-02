@@ -174,7 +174,11 @@
         "last_activity_at": "No contact matches right now.",
         "renewal_date": "No contact matches: no renewal date comes back from your CRM.",
         "churn_flagged_at": "No customer is above the risk threshold right now."
-      }
+      },
+      "multiThreadTitle": "Multiple contacts",
+      "multiThreadLabel": "Reach up to three contacts per company, one at a time",
+      "multiThreadHint": "One message per company per day, two per week at most. As soon as someone replies, the other threads at their company go quiet.",
+      "multiThreadRoleWarning": "In a hand-written step, variables personalise the first name but not the message: two colleagues would get the same text. To differentiate, use role segments such as {{#decision_maker}}...{{/decision_maker}}, or let baakalai write the step from an instruction."
     },
     "editor": {
       "workflowName": "Workflow name",
@@ -1260,7 +1264,11 @@
       "pipeline_status": "Pipeline position (max 30)"
     },
     "error": "Error",
-    "openAccount": "Open the company sheet"
+    "openAccount": "Open the company sheet",
+    "accountsToRebuild": "{count} company/companies aren't recognised yet: their contacts carry a company name with no linked record.",
+    "rebuildAccounts": "Rebuild companies",
+    "rebuilding": "Rebuilding...",
+    "rebuildResult": "{created} company/companies created, {linked} contact(s) linked, {deals} deal(s) inferred."
   },
   "stageMapping": {
     "title": "Your pipeline, as baakalai reads it",

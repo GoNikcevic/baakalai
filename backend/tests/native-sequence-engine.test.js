@@ -117,3 +117,90 @@ test('renderTemplate tolère personalization en chaîne JSON (colonne JSONB sér
   });
   assert.strictEqual(out, 'Vu votre post.');
 });
+
+/* ═══════════ Les segments conditionnels par role · lot 6 ═══════════
+ *
+ * L'envoi multi-destinataires ecrit a plusieurs interlocuteurs d'une meme
+ * societe. Sur une etape « consigne », l'angle est adapte au role par le
+ * redacteur. Sur une etape ecrite A LA MAIN, rien ne l'adaptait : Anne la
+ * decideuse et Bruno l'operationnel recevaient le MEME texte avec deux prenoms
+ * differents, et deux collegues qui comparent le voient immediatement.
+ *
+ * Une variable `{{role}}` seule n'y change rien · elle insere un mot, elle ne
+ * change pas l'angle. D'ou des segments, pour qu'un seul gabarit porte deux
+ * angles.
+ */
+
+const GABARIT = [
+  'Bonjour {{firstName}},',
+  '{{#decision_maker}}Le sujet remonte chez vous tous les trimestres.{{/decision_maker}}',
+  '{{#operational}}Vous le vivez au quotidien, et ca n avance pas.{{/operational}}',
+  'Un echange de quinze minutes ?',
+].join('\n');
+
+test('chaque role ne recoit QUE son segment', () => {
+  const { renderTemplate } = require('../lib/native-sequence-engine');
+
+  const chefTexte = renderTemplate(GABARIT, { name: 'Anne Dupont', account_role: 'decision_maker' });
+  assert.match(chefTexte, /remonte chez vous tous les trimestres/);
+  assert.doesNotMatch(chefTexte, /au quotidien/, 'le segment de l operationnel ne doit pas fuiter');
+  assert.match(chefTexte, /Bonjour Anne/);
+  assert.match(chefTexte, /quinze minutes/, 'le texte hors segment est servi a tous');
+
+  const opTexte = renderTemplate(GABARIT, { name: 'Bruno Martin', account_role: 'operational' });
+  assert.match(opTexte, /au quotidien/);
+  assert.doesNotMatch(opTexte, /trimestres/);
+});
+
+test('un role INCONNU ne declenche aucun segment', () => {
+  const { renderTemplate } = require('../lib/native-sequence-engine');
+
+  // Le cas d'un contact de campagne de prospection, qui n'a pas de role de
+  // compte. Lui servir le texte destine a un decideur serait une affirmation
+  // que rien ne soutient · le gabarit doit garder une phrase hors segment.
+  const texte = renderTemplate(GABARIT, { name: 'Chloe Blanc' });
+  assert.doesNotMatch(texte, /trimestres/);
+  assert.doesNotMatch(texte, /au quotidien/);
+  assert.match(texte, /Bonjour Chloe/);
+  assert.match(texte, /quinze minutes/);
+});
+
+test('les balises de segment ne restent jamais dans le texte envoye', () => {
+  const { renderTemplate } = require('../lib/native-sequence-engine');
+
+  // Le pire resultat possible : un email qui part avec « {{#decision_maker}} »
+  // sous les yeux d'un client.
+  for (const role of ['decision_maker', 'influencer', 'operational', 'other', null]) {
+    const texte = renderTemplate(GABARIT, { name: 'X Y', account_role: role });
+    assert.doesNotMatch(texte, /\{\{/, `balise restante pour le role ${role}`);
+    assert.doesNotMatch(texte, /\}\}/, `balise restante pour le role ${role}`);
+  }
+});
+
+test('{{role}} rend un mot lisible, et rien quand le role est inconnu', () => {
+  const { renderTemplate } = require('../lib/native-sequence-engine');
+
+  assert.strictEqual(
+    renderTemplate('En tant que {{role}}, vous arbitrez.', { name: 'A B', account_role: 'decision_maker' }),
+    'En tant que décideur, vous arbitrez.'
+  );
+  // `other` et l'inconnu rendent une chaine vide : annoncer « autre » dans une
+  // phrase serait pire que de ne rien dire.
+  assert.strictEqual(
+    renderTemplate('Vous {{role}} arbitrez.', { name: 'A B', account_role: 'other' }).replace(/\s+/g, ' '),
+    'Vous arbitrez.'
+  );
+  assert.strictEqual(
+    renderTemplate('Vous {{role}} arbitrez.', { name: 'A B' }).replace(/\s+/g, ' '),
+    'Vous arbitrez.'
+  );
+});
+
+test('un segment multiligne garde sa mise en forme', () => {
+  const { renderTemplate } = require('../lib/native-sequence-engine');
+
+  const g = '{{#decision_maker}}Premiere ligne.\nSeconde ligne.{{/decision_maker}}\nFin.';
+  const texte = renderTemplate(g, { name: 'A B', account_role: 'decision_maker' });
+  assert.match(texte, /Premiere ligne\.\nSeconde ligne\./);
+  assert.match(texte, /Fin\./);
+});

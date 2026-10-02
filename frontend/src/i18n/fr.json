@@ -174,7 +174,11 @@
         "last_activity_at": "Aucun contact concerné pour l'instant.",
         "renewal_date": "Aucun contact concerné : aucune date de renouvellement n'est remontée de ton CRM.",
         "churn_flagged_at": "Aucun client au-dessus du seuil de risque pour l'instant."
-      }
+      },
+      "multiThreadTitle": "Plusieurs interlocuteurs",
+      "multiThreadLabel": "Aborder jusqu'à trois interlocuteurs par société, un à la fois",
+      "multiThreadHint": "Un seul message part par jour et par société, deux au maximum par semaine. Dès qu'une personne répond, les autres fils de sa société se taisent.",
+      "multiThreadRoleWarning": "Sur une étape écrite à la main, les variables personnalisent le prénom mais pas le propos : deux collègues recevraient le même texte. Pour différencier, utilisez des segments par rôle, par exemple {{#decision_maker}}...{{/decision_maker}}, ou laissez baakalai rédiger l'étape depuis une consigne."
     },
     "editor": {
       "workflowName": "Nom du workflow",
@@ -1260,7 +1264,11 @@
       "pipeline_status": "Position pipeline (max 30)"
     },
     "error": "Erreur",
-    "openAccount": "Ouvrir la fiche de la société"
+    "openAccount": "Ouvrir la fiche de la société",
+    "accountsToRebuild": "{count} société(s) ne sont pas encore reconnues : leurs contacts portent un nom d'entreprise, sans fiche rattachée.",
+    "rebuildAccounts": "Reconstruire les sociétés",
+    "rebuilding": "Reconstruction...",
+    "rebuildResult": "{created} société(s) créée(s), {linked} contact(s) rattaché(s), {deals} affaire(s) déduite(s)."
   },
   "stageMapping": {
     "title": "Votre pipeline, vu par baakalai",

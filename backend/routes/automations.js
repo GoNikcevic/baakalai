@@ -417,7 +417,7 @@ router.post('/', async (req, res, next) => {
   try {
     const {
       signalTypes, crmEvents, stateEvents, workflowId, workflowName, steps,
-      backfill, arm, reenrollPolicy, reenrollDays, maxDurationDays,
+      backfill, arm, reenrollPolicy, reenrollDays, maxDurationDays, multiThread,
     } = req.body;
 
     const types = Array.isArray(signalTypes) ? signalTypes.filter(Boolean) : [];
@@ -491,6 +491,12 @@ router.post('/', async (req, res, next) => {
         reenrollPolicy,
         reenrollDays,
       });
+      // Lot 6 · posé en second geste et non dans `create`, pour que `create`
+      // garde une signature stable : il est appelé ailleurs, et un paramètre de
+      // plus y passerait `undefined`, donc faux, ce qui est déjà le défaut.
+      if (multiThread === true || multiThread === 'true') {
+        await db.workflows.update(workflow.id, { multiThread: true });
+      }
       await replaceWorkflowSteps(workflow.id, steps);
     }
 
