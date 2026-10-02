@@ -10,9 +10,22 @@
  * l'original : ils échouaient sur « no such column », loin de toute vraie
  * régression.
  *
- * Ce test compare les deux et échoue dès qu'une colonne manque. Il ne réclame
- * pas que le miroir contienne TOUTES les tables · il ne réplique que celles que
- * les tests utilisent · mais toute table qu'il réplique doit être complète.
+ * Ce test compare les deux et échoue dès qu'une colonne manque.
+ *
+ * ── Ce qu'il ne voyait pas, et qui le voit maintenant ───────────────────────
+ *
+ * Il disait aussi : « il ne réclame pas que le miroir contienne TOUTES les
+ * tables, il ne réplique que celles que les tests utilisent ». Cette phrase
+ * était la dette : mesuré le 2026-10-02, le miroir couvrait 33 tables sur 78,
+ * et les 45 absentes étaient toutes lues ou écrites par du code qui tourne en
+ * production. Une fonction dont la table manque n'est pas mal testée, elle est
+ * intestable, et ce test-ci ne pouvait pas le dire.
+ *
+ * C'est `tests/mirror-coverage.test.js` qui tient désormais la COUVERTURE, en
+ * comparant le miroir vivant au schéma réel dérivé du socle et des migrations.
+ * Les deux gardes se complètent et aucune ne remplace l'autre : celle-ci lit le
+ * bloc de schéma ECRIT A LA MAIN et le confronte aux migrations sur le texte,
+ * l'autre interroge la base REELLEMENT construite.
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');

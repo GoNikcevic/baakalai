@@ -7,6 +7,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { genererDDL, lireSchema } = require('./mirror-from-migrations');
 
 let db;
 
@@ -47,9 +48,77 @@ function getDb() {
  */
 const MAINTENANT_ISO = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
 
+/**
+ * Le schema du miroir : le bloc ecrit a la main, puis TOUT le reste du schema
+ * reel, derive des migrations.
+ *
+ * Avant le 2026-10-02 il n'y avait que le bloc ci-dessous, et il couvrait 33
+ * tables sur les 78 que le schema reel declare. Les 45 absentes n'etaient pas
+ * « mal testees », elles etaient INTESTABLES : prospect_activities est touchee
+ * par 17 fichiers, signals par 8, notifications par 6,
+ * opportunity_product_lines par 9, et aucune requete qui les nommait ne pouvait
+ * demarrer. On l'apprenait un test a la fois.
+ *
+ * L'ordre des deux etapes est ce qui rend le branchement sans risque : tout est
+ * en `CREATE TABLE IF NOT EXISTS`, donc le bloc ecrit a la main garde la main
+ * sur ses 33 tables et aucun test existant ne change de base sous lui. Le
+ * generateur n'ajoute que ce qui manquait. Les details du choix (70 NOT NULL,
+ * 32 defauts, refresh_tokens.id) sont dans db/mirror-from-migrations.js.
+ */
 function initSchema() {
   const d = getDb();
   d.exec(SCHEMA_SQL.replace(/DEFAULT CURRENT_TIMESTAMP/g, `DEFAULT (${MAINTENANT_ISO})`));
+  d.exec(genererDDL());
+  completerColonnes(d);
+}
+
+/**
+ * Ajoute aux tables DEJA declarees les colonnes que le schema reel leur donne.
+ *
+ * ── Pourquoi cette etape existe ─────────────────────────────────────────────
+ *
+ * Les deux etapes precedentes sont en `CREATE TABLE IF NOT EXISTS`. C'est ce
+ * qui rend le branchement sans risque, mais ca a un revers qu'il a fallu se
+ * faire montrer par un test : pour les 33 tables du bloc ecrit a la main, c'est
+ * le bloc qui gagne, DONC ELLES SONT GELEES. Une migration qui ajouterait
+ * demain une colonne a `opportunities` ne l'atteindrait pas, et on serait
+ * revenu exactement a la dette qu'on vient de combler · en pire, puisqu'on
+ * croirait le probleme regle.
+ *
+ * Constate sur `memory_patterns.embedding`, la seule colonne dans ce cas
+ * aujourd'hui. Une sur une, mais le mecanisme comptait plus que le compte.
+ *
+ * ── La limite de ALTER TABLE en SQLite ──────────────────────────────────────
+ *
+ * SQLite n'accepte pas `ADD COLUMN IF NOT EXISTS`, d'ou l'introspection par
+ * `pragma_table_info` plutot qu'un essai rattrape · un `catch` muet ici
+ * rendrait cette etape indistinguable d'une etape qui ne fait rien.
+ *
+ * Et il refuse une colonne ajoutee dont le defaut n'est pas une CONSTANTE : ni
+ * UUID genere, ni horloge. Ces defauts sont donc retires a l'ajout. Ca ne gene
+ * pas : une colonne qui arrive par ALTER n'est jamais une cle primaire, et la
+ * seule consequence est qu'elle vaut NULL quand l'appelant ne l'alimente pas,
+ * ce qui est deja le cas de toute colonne qu'il ignore.
+ */
+function completerColonnes(d) {
+  const reel = lireSchema();
+  const existantes = new Set(
+    d.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      .all().map(r => r.name)
+  );
+
+  for (const [table, def] of reel.tables) {
+    if (!existantes.has(table) || def.colonnes.size === 0) continue;
+    const presentes = new Set(d.prepare('SELECT name FROM pragma_table_info(?)').all(table).map(c => c.name));
+    for (const colonne of def.colonnes.values()) {
+      if (presentes.has(colonne.nom)) continue;
+      // Defaut non constant et contraintes retires : seul le nom et le type
+      // comptent pour qu'une requete qui nomme la colonne puisse partir.
+      let sql = colonne.sql.replace(/\s+PRIMARY KEY/i, '').replace(/\s+UNIQUE/i, '');
+      sql = sql.replace(/\s+DEFAULT\s+\(.*\)$/i, '');
+      d.exec(`ALTER TABLE ${table} ADD COLUMN ${sql}`);
+    }
+  }
 }
 
 const SCHEMA_SQL = `
@@ -1072,13 +1141,13 @@ function query(text, params = []) {
 
   if (isSelect) {
     const stmt = d.prepare(adapted);
-    const rows = stmt.all(...params);
+    const rows = decoderJson(stmt.all(...params));
     return { rows, rowCount: rows.length };
   }
 
   if (isReturningCols) {
     const stmt = d.prepare(adapted);
-    const rows = stmt.all(...params);
+    const rows = decoderJson(stmt.all(...params));
     return { rows, rowCount: rows.length };
   }
 
@@ -1095,7 +1164,7 @@ function query(text, params = []) {
         const table = tableMatch[1];
         // Try to find by rowid
         const row = d.prepare(`SELECT * FROM ${table} WHERE rowid = ?`).get(info.lastInsertRowid);
-        return { rows: row ? [row] : [], rowCount: 1 };
+        return { rows: decoderJson(row ? [row] : []), rowCount: 1 };
       }
     }
 
@@ -1106,7 +1175,7 @@ function query(text, params = []) {
         const table = tableMatch[1];
         const lastParam = params[params.length - 1];
         const row = d.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(lastParam);
-        return { rows: row ? [row] : [], rowCount: info.changes };
+        return { rows: decoderJson(row ? [row] : []), rowCount: info.changes };
       }
     }
 
@@ -1115,6 +1184,90 @@ function query(text, params = []) {
 
   const info = d.prepare(adapted).run(...params);
   return { rows: [], rowCount: info.changes };
+}
+
+/**
+ * Les colonnes JSONB qu'on sait decoder sans ambiguite, et les deux qu'on ne
+ * sait pas.
+ *
+ * ── Le piege qu'on ferme ────────────────────────────────────────────────────
+ *
+ * Postgres rend une colonne JSONB DEJA DECODEE : `row.settings.stagnant_days`
+ * marche. SQLite n'a pas de type JSON et la rend en CHAINE, donc le meme acces
+ * vaut `undefined`, SANS erreur, et le code retombe sur son defaut.
+ *
+ * C'est la pire forme de divergence possible, parce qu'elle est verte :
+ * `lib/stagnation.js` rendait toujours 30 jours sous le miroir quelle que soit
+ * la valeur enregistree. Le test passait, le defaut etait celui qu'on
+ * attendait, et personne n'apprenait que le reglage de l'utilisateur n'etait
+ * jamais lu.
+ *
+ * ── Pourquoi par le NOM de colonne ──────────────────────────────────────────
+ *
+ * Le resultat d'un SELECT ne dit pas de quelle table vient chaque colonne, et
+ * une jointure ou un alias rend la question insoluble en general. Le nom, lui,
+ * est dans le resultat. Reste a verifier qu'un nom designe TOUJOURS du JSONB,
+ * et c'est la que les deux exceptions apparaissent : sur les 38 noms de
+ * colonnes JSONB du schema, 36 ne portent que ce type, mais
+ *
+ *   - `content` est JSONB dans conversation_messages et TEXT dans
+ *     chat_messages et memory_embeddings ;
+ *   - `result` est JSONB dans agent_chain_executions et strategic_results, et
+ *     TEXT dans versions.
+ *
+ * Decoder ces deux-la par le nom transformerait un message de conversation en
+ * objet des qu'il ressemble a du JSON. On les laisse donc en chaine : c'est le
+ * comportement d'aujourd'hui, donc aucune regression, et `lib/jsonb.js`
+ * (`readJsonb`) reste la facon de les lire. La liste des ambigus est VERIFIEE
+ * par tests/mirror-coverage.test.js · si une migration rend un troisieme nom
+ * ambigu, le test echoue au lieu de laisser le decodage se tromper.
+ */
+const COLONNES_JSON_AMBIGUES = new Set(['content', 'result']);
+
+let colonnesJsonCache = null;
+function colonnesJson() {
+  if (!colonnesJsonCache) {
+    colonnesJsonCache = new Set();
+    for (const nom of lireSchema().colonnesJson) {
+      if (!COLONNES_JSON_AMBIGUES.has(nom)) colonnesJsonCache.add(nom);
+    }
+  }
+  return colonnesJsonCache;
+}
+
+/**
+ * Decode en place les colonnes JSONB des lignes rendues.
+ *
+ * Ne touche QUE des chaines qui s'analysent en objet ou en tableau : une valeur
+ * deja decodee, nulle, numerique ou illisible est laissee telle quelle. Un JSON
+ * scalaire valide (« 3 », « "texte" ») n'est pas decode non plus · ce n'est pas
+ * ce qu'une colonne JSONB de ce schema contient, et le decoder changerait un
+ * type sans rien y gagner.
+ */
+function decoderJson(rows) {
+  if (!rows || rows.length === 0) return rows;
+  const aDecoder = colonnesJson();
+  // Les noms a decoder sont calcules une fois pour tout le jeu de lignes : les
+  // lignes d'un meme resultat ont les memes colonnes.
+  const noms = Object.keys(rows[0]).filter(n => aDecoder.has(n));
+  if (noms.length === 0) return rows;
+  for (const row of rows) {
+    for (const nom of noms) {
+      const v = row[nom];
+      if (typeof v !== 'string') continue;
+      const t = v.trim();
+      if (!t.startsWith('{') && !t.startsWith('[')) continue;
+      try {
+        const parsed = JSON.parse(t);
+        if (parsed !== null && typeof parsed === 'object') row[nom] = parsed;
+      } catch {
+        // Une chaine qui commence par une accolade sans etre du JSON reste une
+        // chaine · c'est ce que l'appelant verrait de Postgres pour une colonne
+        // TEXT, et on ne cherche pas a deviner mieux que lui.
+      }
+    }
+  }
+  return rows;
 }
 
 function closeDb() {

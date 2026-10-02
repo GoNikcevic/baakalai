@@ -14,16 +14,25 @@
  * `getStagnantDays` rendait toujours 30 sous le miroir quelle que soit la
  * valeur enregistrée, et sur le plafond de cadence du lot 6.
  *
- * ── Pourquoi ici et pas dans l'adaptateur ───────────────────────────────────
+ * ── L'adaptateur décode maintenant, et ce module reste ──────────────────────
  *
- * Faire décoder l'adaptateur demanderait de deviner quelles colonnes sont du
- * JSON, soit en testant « cette chaîne ressemble à du JSON » (et un corps
- * d'email qui contiendrait des accolades changerait de type en silence), soit
- * en déclarant les types dans le miroir et en introspectant `table_info`. La
- * seconde est la bonne réponse, mais elle touche une vingtaine de déclarations
- * et mérite son propre lot.
+ * Depuis le 2026-10-02, `db/sqlite-adapter.js` décode les colonnes JSONB
+ * lui-même : il tire la liste des 38 noms du schéma réel et les reconnaît dans
+ * les lignes qu'il rend. Ce module n'est donc plus le seul rempart, et
+ * `getStagnantDays` lit enfin le réglage de l'utilisateur sous le miroir.
  *
- * En attendant, tout code qui lit une colonne JSONB passe par ici.
+ * Il reste nécessaire pour deux raisons, pas une :
+ *
+ *   1. DEUX noms de colonnes sont ambigus, parce que le décodage se fait par
+ *      nom (un résultat de SELECT ne dit pas de quelle table vient chaque
+ *      colonne). `content` est JSONB dans conversation_messages et TEXT dans
+ *      chat_messages ; `result` est JSONB dans strategic_results et TEXT dans
+ *      versions. L'adaptateur les écarte volontairement, donc il faut lire
+ *      ces deux-là par ici.
+ *   2. Un pilote peut toujours rendre une chaîne là où on attend un objet · un
+ *      JSONB passé par une couche de sérialisation, par exemple. Appeler
+ *      `readJsonb` reste gratuit et ne peut pas nuire : il rend l'objet
+ *      inchangé quand il en reçoit déjà un.
  */
 
 /**
