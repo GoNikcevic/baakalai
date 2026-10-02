@@ -102,6 +102,15 @@ function serveurDeComptes(lignes, url) {
   const groups = [...parCle.values()].map(g => ({
     ...g,
     montant: g.contacts.reduce((s, c) => s + (Number(c.deal_value) || 0), 0),
+    // Les noms du VRAI serveur (`lib/account-list.js`), pas seulement ceux que
+    // ce faux utilise pour trier. Sans eux, une régression sur `value` ou
+    // `lastActivityAt` passerait tous les tests : le composant étale désormais
+    // le groupe du serveur, donc ce faux doit avoir la même forme que lui.
+    value: g.contacts.reduce((s, c) => s + (Number(c.deal_value) || 0), 0),
+    lastActivityAt: g.contacts.reduce(
+      (max, c) => (c.last_activity_at && (!max || c.last_activity_at > max) ? c.last_activity_at : max),
+      null
+    ),
     // Les colonnes de la société · lot 7, écran 1.
     //
     // Posées EXPLICITEMENT par la fixture (`account_open` / `account_won`), et

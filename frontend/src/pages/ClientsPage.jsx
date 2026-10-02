@@ -513,38 +513,37 @@ export default function ClientsPage({ scope }) {
       // contacts (arbitrage 12.3). Un compte n'est pas silencieux parce qu'un
       // de ses interlocuteurs l'est.
       const jours = rows.map(c => daysSince(c.last_activity_at)).filter(d => d != null);
+      // ── TOUT CE QUE LE SERVEUR ENVOIE PASSE, par défaut ─────────────────
+      //
+      // Ce remappage construisait un objet littéral champ par champ, donc tout
+      // ce qui n'y était pas recopié à la main disparaissait SANS ERREUR. Ça a
+      // coûté deux fois :
+      //
+      //   · `accountId` était perdu, donc le nom de société n'était cliquable
+      //     sur AUCUNE ligne et la fiche compte n'était atteignable que par URL
+      //     directe · le serveur l'envoyait, l'écran le jetait ;
+      //   · les quatre colonnes du lot 7 (ouvert, gagné, risque, propriétaire)
+      //     ont disparu de la même façon au premier jet, le jour même où le
+      //     premier défaut venait d'être corrigé.
+      //
+      // Un défaut qui se reproduit n'est pas une étourderie, c'est la forme du
+      // code qui le provoque. Le défaut est donc INVERSÉ : on étale le groupe
+      // du serveur, et on ne surcharge que ce qui est calculé ici. Un champ
+      // ajouté côté serveur arrive désormais tout seul.
+      const base = { ...g };
+
+      // `contacts` est la SEULE chose qu'on retire, et volontairement : c'est
+      // la liste brute du serveur, alors que `rows` est la liste filtrée par
+      // la recherche et les filtres. Les laisser cohabiter installerait le
+      // piège inverse · quelqu'un lirait `contacts` et travaillerait sur des
+      // lignes que l'écran n'affiche pas.
+      delete base.contacts;
+
       return {
-        key: g.key,
-        name: g.name,
-        // L'identifiant de la SOCIÉTÉ, recopié depuis le groupe du serveur.
-        //
-        // Il était perdu ici : ce remappage reconstruit un objet littéral sans
-        // reprendre `accountId`, alors que l'affichage plus bas en dépend
-        // (`g.accountId ? <Link> : g.name`). Le nom de société n'était donc
-        // JAMAIS cliquable, sur aucune ligne, et la fiche compte n'était
-        // atteignable que par URL directe. Le serveur l'envoyait bien · c'est
-        // l'écran qui le jetait. Constaté le 2026-10-02.
-        accountId: g.accountId || null,
-        // Les colonnes de la société · lot 7, écran 1.
-        //
-        // Reprises EXPLICITEMENT, comme `accountId` juste au-dessus et pour la
-        // même raison : ce remappage reconstruit un objet littéral, donc tout
-        // champ qu'on n'écrit pas ici disparaît sans erreur. C'est le défaut
-        // qui a rendu la fiche compte inatteignable pendant deux jours, et il
-        // se reproduit à chaque nouveau champ. Si on en ajoute un au serveur,
-        // il faut l'ajouter ICI aussi.
-        openValue: Number(g.openValue) || 0,
-        wonValue: Number(g.wonValue) || 0,
-        // `?? null` et non `|| null` : un score de 0 est une valeur, pas une
-        // absence. Les confondre afficherait « Non scorable » sur un compte
-        // mesuré sain, donc perdrait une information juste.
-        churnScore: g.churnScore ?? null,
-        owner: g.owner || null,
-        orphan: !!g.orphan,
+        ...base,
         rows,
         deals,
         sansAffaire,
-        value: deals.reduce((s, c) => s + (Number(c.deal_value) || 0), 0),
         silenceDays: jours.length > 0 ? Math.min(...jours) : null,
         // Le décideur du compte, s'il y en a un : c'est lui qu'on met en avant.
         decideur: rows.find(c => c.is_primary_contact) || rows.find(c => c.account_role === 'decision_maker') || null,
