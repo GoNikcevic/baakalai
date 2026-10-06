@@ -553,15 +553,17 @@ describe('ClientsPage · accès à la fiche de société', () => {
 describe('ClientsPage · les colonnes de la société', () => {
   // L'écran affichait UN montant agrégé. Or voir l'OUVERT et le GAGNÉ ensemble
   // EST la définition de l'upsell : une société qui a déjà signé et qui a
-  // encore une affaire en cours. Un total unique ne le dit pas.
+  // encore une affaire en cours. Un total unique ne le dit pas. Sous Clients
+  // uniquement depuis que la colonne Gagné est masquée en scope deals (un
+  // deal de cette liste n'est par définition pas encore gagné).
   it('affiche l ouvert et le gagné séparément', async () => {
     mockApi({
       opportunities: [
-        { id: 'u2', name: 'En cours', company: 'Verdoux', account_id: 'acc-v', status: 'negotiation',
+        { id: 'u2', name: 'En cours', company: 'Verdoux', account_id: 'acc-v', status: 'won',
           account_open: 24200, account_won: 35900, last_activity_at: new Date().toISOString() },
       ],
     });
-    renderDeals();
+    renderClients();
 
     await screen.findByRole('link', { name: 'Verdoux' });
     // Les deux montants coexistent sur la ligne · c'est ce qui rend l'upsell
@@ -570,13 +572,31 @@ describe('ClientsPage · les colonnes de la société', () => {
     expect(screen.getByText(/35\s?900\s?€/)).toBeTruthy();
   });
 
-  it('nomme le risque, et ne le laisse jamais à la couleur seule', async () => {
+  it('masque la colonne Gagné en scope deals, un deal n est pas encore gagné', async () => {
     mockApi({
       opportunities: [
-        { id: 'r1', name: 'A B', company: 'Critique SA', account_id: 'acc-c', account_churn: 82, status: 'negotiation', last_activity_at: new Date().toISOString() },
+        { id: 'u3', name: 'M N', company: 'PasEncoreGagne SA', account_id: 'acc-p', status: 'negotiation',
+          account_open: 24200, account_won: 35900, last_activity_at: new Date().toISOString() },
       ],
     });
     renderDeals();
+
+    await screen.findByRole('link', { name: 'PasEncoreGagne SA' });
+    expect(screen.getByText(/24\s?200\s?€/)).toBeTruthy();
+    expect(screen.queryByText(/35\s?900\s?€/)).toBeNull();
+  });
+
+  // Le churn score est un concept post-vente (compte déjà client) : ces deux
+  // tests vivent donc sous Clients, pas sous Deals, depuis que la colonne
+  // Risque est masquée en scope deals (elle ne s'applique pas à un deal
+  // encore ouvert · cf. tests juste en dessous).
+  it('nomme le risque, et ne le laisse jamais à la couleur seule', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'r1', name: 'A B', company: 'Critique SA', account_id: 'acc-c', account_churn: 82, status: 'won', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderClients();
 
     // Un écran lu en noir et blanc doit rester lisible : le mot porte le sens,
     // la bande porte la forme, le chiffre vient après.
@@ -586,15 +606,31 @@ describe('ClientsPage · les colonnes de la société', () => {
   it('un compte sans score affiche « Non scorable », jamais « Sain 0 »', async () => {
     mockApi({
       opportunities: [
-        { id: 'n1', name: 'C D', company: 'Muette SA', account_id: 'acc-m', status: 'negotiation', last_activity_at: new Date().toISOString() },
+        { id: 'n1', name: 'C D', company: 'Muette SA', account_id: 'acc-m', status: 'won', last_activity_at: new Date().toISOString() },
       ],
     });
-    renderDeals();
+    renderClients();
 
     // LE point qui compte. Un compte muet n'est pas un compte en bonne santé :
     // afficher « Sain 0 » présenterait un angle mort comme un bon résultat.
     expect(await screen.findByText('Non scorable')).toBeTruthy();
     expect(screen.queryByText(/Sain 0/)).toBeNull();
+  });
+
+  // Un deal encore ouvert n'a pas de churn score à montrer : la colonne elle-
+  // même disparaît en scope deals (demande du 06/10), plutôt que d'afficher
+  // « Non scorable » sur chaque ligne sans rien y faire.
+  it('masque la colonne Risque en scope deals, elle ne s applique qu aux clients', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'd1', name: 'I J', company: 'Deal SA', account_id: 'acc-d', status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    await screen.findByRole('link', { name: 'Deal SA' });
+    expect(screen.queryByText('Risque du compte')).toBeNull();
+    expect(screen.queryByText('Non scorable')).toBeNull();
   });
 
   it('un silence inconnu s écrit « inconnu », pas zéro jour', async () => {
@@ -611,7 +647,7 @@ describe('ClientsPage · les colonnes de la société', () => {
     expect(screen.getByText('inconnu')).toBeTruthy();
   });
 
-  it('l en-tête de colonnes accompagne la liste des sociétés', async () => {
+  it('l en-tête de colonnes accompagne la liste des sociétés, sans Risque ni Gagné sous Deals', async () => {
     mockApi({
       opportunities: [
         { id: 'h1', name: 'G H', company: 'Acme', account_id: 'acc-1', status: 'negotiation', last_activity_at: new Date().toISOString() },
@@ -623,9 +659,25 @@ describe('ClientsPage · les colonnes de la société', () => {
     // Des colonnes de montants sans en-tête obligent à deviner lequel est
     // lequel, et deviner sur de l'argent se paie.
     expect(screen.getByText('Ouvert')).toBeTruthy();
-    expect(screen.getByText('Gagné')).toBeTruthy();
-    expect(screen.getByText('Risque du compte')).toBeTruthy();
     expect(screen.getByText('Propriétaire')).toBeTruthy();
+    // Pas de colonne Risque ici : un deal ouvert n'a pas de churn score.
+    expect(screen.queryByText('Risque du compte')).toBeNull();
+    // Pas de colonne Gagné non plus (demande du 06/10) : un deal de cette
+    // liste est par définition pas encore gagné, l'info n'y apporte rien.
+    expect(screen.queryByText('Gagné')).toBeNull();
+  });
+
+  it('l en-tête de colonnes affiche Risque et Gagné sous Clients, où les deux s appliquent', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'h2', name: 'K L', company: 'Clientele SA', account_id: 'acc-2', status: 'won', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderClients();
+
+    await screen.findByRole('link', { name: 'Clientele SA' });
+    expect(screen.getByText('Risque du compte')).toBeTruthy();
+    expect(screen.getByText('Gagné')).toBeTruthy();
   });
 
   it('l onglet « À risque » ne double plus la tuile du même nom', async () => {

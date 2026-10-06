@@ -116,7 +116,12 @@ const AT_RISK_THRESHOLD = 60;
  * plus haute que l'écran ne peut plus être lue jusqu'au bout.
  */
 const DETAIL_PANEL_STYLE = {
-  flex: '0 0 44%',
+  // 36 % et non 44 % : à 44 % la liste n'avait plus assez de largeur pour ses
+  // colonnes fixes (cf. COL) et les noms de société tronquaient à quelques
+  // lettres ("Nov...") dès que la fiche était ouverte. La fiche elle-même n'a
+  // pas besoin d'autant de largeur, son contenu (timeline, lignes de
+  // produits) tient très bien en colonne plus étroite.
+  flex: '0 0 36%',
   background: 'var(--bg-card)',
   border: '1px solid var(--border)',
   borderRadius: 12,
@@ -1033,8 +1038,23 @@ export default function ClientsPage({ scope }) {
           haut et ouvrir une fiche depuis le bas de la liste oblige à remonter
           tout en haut pour la lire. */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        {/* Client list */}
-        <div style={{ flex: selectedClient ? '0 0 55%' : '1 1 100%', transition: 'flex 0.2s' }}>
+        {/* Client list
+            `calc(64% - 16px)` : la liste et la fiche (DETAIL_PANEL_STYLE,
+            36 %) doivent sommer à 100 % moins le `gap: 16` du conteneur flex
+            parent, sinon la fiche déborde de l'écran et masque son propre
+            bord droit ainsi que son bouton de fermeture.
+
+            `minWidth: 0` est tout aussi nécessaire : un flex-item vaut par
+            défaut `min-width: auto`, donc il refuse de rétrécir sous la
+            largeur minimale de son contenu. Les colonnes à largeur fixe des
+            lignes de société (COL.ouvert/gagne/silence/proprietaire, ~400px)
+            imposaient ce plancher. Vérifié en Playwright à
+            1920/1440/1366/1280/1024px. La fiche était encore à 44 % à ce
+            moment-là (99 → 100 % côté somme, mais déjà trop large pour la
+            liste) : les noms de société tronquaient à quelques lettres
+            ("Nov..."). Passée à 36 % pour laisser assez de place aux
+            colonnes de la liste, qui priment sur la largeur de la fiche. */}
+        <div style={{ flex: selectedClient ? '0 0 calc(64% - 16px)' : '1 1 100%', minWidth: 0, transition: 'flex 0.2s' }}>
           {/* L'écran de chargement ne remplace la liste qu'au PREMIER
               chargement. Depuis que filtrer, chercher et trier sont des
               allers-retours serveur, la remplacer à chaque fois ferait
@@ -1088,11 +1108,19 @@ export default function ClientsPage({ scope }) {
                   }}
                 >
                   <div style={{ minWidth: 0, paddingLeft: 20 }}>{t('clients.colCompany')}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, gap: isDealsScope ? 20 : 0 }}>
                     <div style={{ width: COL.ouvert, textAlign: 'right' }}>{t('clients.colOpen')}</div>
-                    <div style={{ width: COL.gagne, textAlign: 'right' }}>{t('clients.colWon')}</div>
+                    {/* Gagné : sans intérêt sur la vue Deals, un deal y est par
+                        définition pas encore gagné. Reste en scope Clients. */}
+                    {!isDealsScope && (
+                      <div style={{ width: COL.gagne, textAlign: 'right' }}>{t('clients.colWon')}</div>
+                    )}
                     <div style={{ width: COL.silence, textAlign: 'right' }}>{t('clients.colSilence')}</div>
-                    <div style={{ width: COL.risque, textAlign: 'right' }}>{t('clients.colRisk')}</div>
+                    {/* Le churn score est un concept post-vente (cf. BandeRisque ci-dessus) :
+                        hors de propos sur un deal encore ouvert, donc masqué en scope deals. */}
+                    {!isDealsScope && (
+                      <div style={{ width: COL.risque, textAlign: 'right' }}>{t('clients.colRisk')}</div>
+                    )}
                     <div style={{ width: COL.proprietaire, textAlign: 'right' }}>{t('clients.colOwner')}</div>
                   </div>
                 </div>
@@ -1122,10 +1150,17 @@ export default function ClientsPage({ scope }) {
                         fontSize: 13, marginTop: 4,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 60 }}>
                         <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 10, flexShrink: 0 }}>
                           {ouvert ? '▾' : '▸'}
                         </span>
+                        {/* minWidth: 60, pas 0 : les colonnes à droite (fixes,
+                            flexShrink: 0) ne cèdent jamais de la place, donc à
+                            largeur d'écran réduite tout le rétrécissement
+                            retombait ici. Avec minWidth: 0 ce bloc pouvait
+                            s'écraser à 0px pile et le nom de société
+                            disparaissait entièrement plutôt que de tronquer
+                            avec l'ellipse déjà prévue juste en dessous. */}
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {/* Le nom ouvre la fiche de la société (lot 7), mais
@@ -1164,17 +1199,19 @@ export default function ClientsPage({ scope }) {
                           d'aligner sans tableau HTML · la liste imbrique des
                           lignes de contact sous chaque société, et un <table>
                           ne le permettrait pas proprement. */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: isDealsScope ? 20 : 0, flexShrink: 0 }}>
                         <div style={{ width: COL.ouvert, textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {g.openValue > 0
                             ? `${Math.round(g.openValue).toLocaleString('fr-FR')} €`
                             : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>0 €</span>}
                         </div>
-                        <div style={{ width: COL.gagne, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          {g.wonValue > 0
-                            ? <span style={{ fontWeight: 600, color: 'var(--success)' }}>{Math.round(g.wonValue).toLocaleString('fr-FR')} €</span>
-                            : <span style={{ color: 'var(--text-muted)' }}>0 €</span>}
-                        </div>
+                        {!isDealsScope && (
+                          <div style={{ width: COL.gagne, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            {g.wonValue > 0
+                              ? <span style={{ fontWeight: 600, color: 'var(--success)' }}>{Math.round(g.wonValue).toLocaleString('fr-FR')} €</span>
+                              : <span style={{ color: 'var(--text-muted)' }}>0 €</span>}
+                          </div>
+                        )}
                         <div style={{ width: COL.silence, textAlign: 'right' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
                             <span style={{ width: 7, height: 7, borderRadius: '50%', background: silenceColor(g.silenceDays), flexShrink: 0 }} />
@@ -1185,9 +1222,13 @@ export default function ClientsPage({ scope }) {
                             </span>
                           </span>
                         </div>
-                        <div style={{ width: COL.risque, textAlign: 'right' }}>
-                          <BandeRisque score={g.churnScore} sansFiche={!g.accountId} t={t} />
-                        </div>
+                        {/* Le churn score ne s'applique qu'aux comptes clients (post-vente),
+                            pas à un deal encore ouvert · cf. le commentaire sur BandeRisque. */}
+                        {!isDealsScope && (
+                          <div style={{ width: COL.risque, textAlign: 'right' }}>
+                            <BandeRisque score={g.churnScore} sansFiche={!g.accountId} t={t} />
+                          </div>
+                        )}
                         <div style={{
                           width: COL.proprietaire, textAlign: 'right', fontSize: 11,
                           color: g.owner ? 'var(--text-secondary)' : 'var(--text-muted)',
@@ -2017,7 +2058,7 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
           const sourceLabel = getTimelineSourceLabel(item);
 
           return (
-            <div key={item.id || idx} style={{ position: 'relative', paddingBottom: idx < visible.length - 1 ? 12 : 0 }}>
+            <div key={item.id || idx} style={{ position: 'relative', paddingBottom: idx < visible.length - 1 ? 8 : 0 }}>
               {/* Dot */}
               <div style={{
                 position: 'absolute', left: -20, top: 3, width: 12, height: 12,
@@ -2027,10 +2068,10 @@ function UnifiedTimeline({ timeline, loading, expanded, onToggleExpand, lang, t 
 
               {/* Content */}
               <div style={{
-                padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)',
                 borderLeft: `3px solid ${color}`,
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', marginBottom: 1 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Icon name={icon} size={12} color={color} />
                     <span style={{
