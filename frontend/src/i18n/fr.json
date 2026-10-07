@@ -2511,7 +2511,9 @@
       "influencer": "influenceur",
       "operational": "opérationnel",
       "other": "autre rôle"
-    }
+    },
+    "fullPage": "Page entière",
+    "openFullPage": "Ouvrir la fiche dans une page, pour la partager ou la mettre en favori"
   },
   "composer": {
     "title": "Écrire à {name}",

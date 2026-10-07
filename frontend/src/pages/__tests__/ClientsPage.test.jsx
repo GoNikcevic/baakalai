@@ -169,6 +169,23 @@ function mockApi(overrides = {}) {
     if (url.startsWith('/crm/stages')) return Promise.resolve({ stages: overrides.stages || [] });
     if (url.includes('/timeline')) return Promise.resolve({ timeline: [] });
     if (url.startsWith('/crm/client/')) return Promise.resolve({});
+    // La fiche d'une societe, servie au panneau lateral (07/10). La forme est
+    // celle de `GET /crm/accounts/:id` · voir lib/accounts.getAccountSheet.
+    if (url.startsWith('/crm/accounts/')) return Promise.resolve(overrides.accountSheet || {
+      compte: {
+        id: 'acc-1', name: 'Acme', industry: 'Industrie', crmProvider: 'salesforce',
+        ownerEmail: 'goran@baakal.ai', source: 'crm', churnScore: 64,
+        churnFactors: [{ signal: 'inactivity', weight: 30, detail: '74 j sans activite' }],
+        lastActivityAt: new Date().toISOString(),
+      },
+      affaires: [],
+      contacts: [],
+      resume: {
+        ouvert: 24200, gagne: 35900, contacts: 2, joignables: 2,
+        upsell: true, injoignable: false, sansInterlocuteur: false,
+        devisesMelangees: false, devises: [], champsManquants: [],
+      },
+    });
     if (url.startsWith('/crm/product-lines')) return Promise.resolve({ productLines: [] });
     return Promise.resolve({});
   });
@@ -690,5 +707,71 @@ describe('ClientsPage · les colonnes de la société', () => {
     await screen.findByText('Clients');
     const onglets = screen.queryAllByRole('button', { name: /^À risque/ });
     expect(onglets.length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('ClientsPage · la société s ouvre comme un contact', () => {
+  // Cliquer un contact ouvrait un panneau à droite, cliquer une société
+  // emmenait sur une page entière. Deux objets du même tableau, deux modèles
+  // d'interaction, et un aller-retour obligatoire pour comparer deux sociétés.
+  it('le nom d une société ouvre le panneau, sans quitter la liste', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'p1', name: 'A B', company: 'Acme', account_id: 'acc-1', account_churn: 64, status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    const lien = await screen.findByRole('link', { name: 'Acme' });
+    // Il reste un vrai lien : un Ctrl-clic doit pouvoir ouvrir un onglet.
+    expect(lien.getAttribute('href')).toBe('/accounts/acc-1');
+
+    fireEvent.click(lien);
+
+    // Le panneau apparaît, avec le contenu de la fiche...
+    expect(await screen.findByText('RISQUE DE PERTE')).toBeTruthy();
+    expect(screen.getByText(/74 j sans activite/)).toBeTruthy();
+    // ...et la liste est toujours là.
+    expect(screen.getByRole('link', { name: 'Acme' })).toBeTruthy();
+  });
+
+  it('un clic avec Ctrl laisse le lien faire son travail', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'p2', name: 'C D', company: 'Acme', account_id: 'acc-1', status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    const lien = await screen.findByRole('link', { name: 'Acme' });
+    fireEvent.click(lien, { ctrlKey: true });
+
+    // Rien n'est intercepté : pas de panneau, le navigateur ouvre l'onglet.
+    // C'est la raison pour laquelle ça reste un <Link> et non un <button>.
+    expect(screen.queryByText('RISQUE DE PERTE')).toBeNull();
+  });
+
+  it('ouvrir un contact ferme le panneau de la société', async () => {
+    mockApi({
+      opportunities: [
+        { id: 'p3', name: 'Claire Benali', company: 'Acme', account_id: 'acc-1', status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    // Déplier le groupe D'ABORD, en cliquant la sous-ligne du compte : le nom
+    // lui-même est un lien, et son clic est intercepté pour ouvrir le panneau.
+    const sousLigne = await screen.findByText(/affaire\(s\)/);
+    fireEvent.click(sousLigne);
+    const contact = await screen.findByText('Claire Benali');
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Acme' }));
+    await screen.findByText('RISQUE DE PERTE');
+
+    // Un seul panneau à la fois · sinon le clic suivant ne dit plus ce qu'il
+    // remplace.
+    fireEvent.click(contact);
+
+    await waitFor(() => expect(screen.queryByText('RISQUE DE PERTE')).toBeNull());
   });
 });

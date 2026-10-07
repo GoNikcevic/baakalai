@@ -2511,7 +2511,9 @@
       "influencer": "influencer",
       "operational": "operational",
       "other": "other role"
-    }
+    },
+    "fullPage": "Full page",
+    "openFullPage": "Open the record as a page, to share or bookmark it"
   },
   "composer": {
     "title": "Write to {name}",

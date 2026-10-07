@@ -15,6 +15,7 @@ import { accountFirstLines } from '../components/ContactSubline';
 import ProductLineTags from '../components/ProductLineTags';
 import Icon from '../components/Icon';
 import EmailComposer from '../components/EmailComposer';
+import AccountSheet from '../components/AccountSheet';
 
 const TILE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
@@ -203,6 +204,13 @@ export default function ClientsPage({ scope }) {
   // Comptes dépliés · un Set et non un id unique, pour qu'on puisse en ouvrir
   // plusieurs et les comparer sans perdre le premier.
   const [expandedAccounts, setExpandedAccounts] = useState(() => new Set());
+  // La SOCIETE ouverte dans le panneau de droite.
+  //
+  // Exclusive du contact : un seul panneau a la fois, sinon le clic suivant ne
+  // dit plus ce qu'il remplace. Cliquer une societe ferme donc le contact
+  // ouvert, et reciproquement · c'est fait dans les deux poseurs ci-dessous
+  // plutot que par un effet, pour que la cause soit lisible la ou on clique.
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [crmFilter, setCrmFilter] = useState('all');
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [selected, setSelected] = useState(new Set());
@@ -1174,7 +1182,19 @@ export default function ClientsPage({ scope }) {
                             {g.accountId ? (
                               <Link
                                 to={`/accounts/${g.accountId}`}
-                                onClick={e => e.stopPropagation()}
+                                onClick={e => {
+                                  e.stopPropagation();   // la ligne entiere deplie le groupe
+                                  // Un clic MODIFIE (Ctrl, Cmd, molette, Maj)
+                                  // garde son sens de lien : nouvel onglet,
+                                  // nouvelle fenetre. C'est la raison pour
+                                  // laquelle ca reste un <Link> et non un
+                                  // <button> · on ouvre dans le panneau, sans
+                                  // retirer la possibilite d'ouvrir a cote.
+                                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+                                  e.preventDefault();
+                                  setSelectedClient(null);
+                                  setSelectedAccountId(g.accountId);
+                                }}
                                 style={{ color: 'inherit', textDecoration: 'none' }}
                                 title={t('clients.openAccount')}
                               >
@@ -1256,7 +1276,7 @@ export default function ClientsPage({ scope }) {
                 if (isDealQualityContext) {
                   return (
                     <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div onClick={() => setSelectedClient(c)} style={{
+                      <div onClick={() => { setSelectedAccountId(null); setSelectedClient(c); }} style={{
                         flex: 1, display: 'grid',
                         gridTemplateColumns: selectedClient ? '2fr 80px' : (owners.length > 1 ? '2fr 1fr 0.8fr 60px' : '2fr 1.2fr 1fr'),
                         padding: '10px 14px', background: isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
@@ -1292,7 +1312,7 @@ export default function ClientsPage({ scope }) {
                         onClick={e => e.stopPropagation()}
                         style={{ cursor: 'pointer', flexShrink: 0 }} />
                     )}
-                    <div onClick={() => setSelectedClient(c)} style={{
+                    <div onClick={() => { setSelectedAccountId(null); setSelectedClient(c); }} style={{
                       flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14,
                       padding: '10px 14px', background: isChecked ? 'rgba(110,87,250,0.06)' : isSelected ? 'rgba(99,102,241,0.08)' : 'var(--bg-card)',
                       border: `1px solid ${isChecked ? 'rgba(110,87,250,0.2)' : isSelected ? 'var(--accent)' : 'var(--border)'}`,
@@ -1476,6 +1496,18 @@ export default function ClientsPage({ scope }) {
           )}
         </div>
 
+        {/* Panneau de SOCIETE · meme geste que pour un contact (07/10).
+            Cliquer une societe emmenait sur une page entiere alors que cliquer
+            un contact ouvrait ce panneau : deux objets du meme tableau, deux
+            modeles d'interaction, et un aller-retour obligatoire pour comparer
+            deux societes. */}
+        {selectedAccountId && !selectedClient && (
+          <AccountDetailPanel
+            accountId={selectedAccountId}
+            onClose={() => setSelectedAccountId(null)}
+          />
+        )}
+
         {/* Detail panel */}
         {selectedClient && (
           isDealQualityContext ? (
@@ -1501,6 +1533,78 @@ export default function ClientsPage({ scope }) {
           )
         )}
       </div>
+    </div>
+  );
+}
+
+/* ═══ Panneau de SOCIETE ═══
+   Meme enveloppe que le panneau de contact (DETAIL_PANEL_STYLE), meme contenu
+   que la page `/accounts/:id` · `components/AccountSheet.jsx` est partage par
+   les deux, donc un bloc ajoute apparait des deux cotes sans qu'on y pense.
+
+   `compact` passe la fiche sur une seule colonne : a 36 % de large, la grille a
+   deux colonnes de la page donnerait des montants coupes et des libelles sur
+   trois lignes. */
+function AccountDetailPanel({ accountId, onClose }) {
+  const t = useT();
+  const [fiche, setFiche] = useState(null);
+  const [etat, setEtat] = useState('chargement');
+
+  useEffect(() => {
+    let vivant = true;
+    // `etat` n'est PAS remis a « chargement » de facon synchrone ici : la regle
+    // `react-hooks/set-state-in-effect` l'interdit, et le panneau se demonte
+    // entre deux societes de toute facon (la cle change avec l'identifiant).
+    request(`/crm/accounts/${accountId}`)
+      .then(data => { if (vivant) { setFiche(data); setEtat('ok'); } })
+      .catch(() => { if (vivant) setEtat('introuvable'); });
+    return () => { vivant = false; };
+  }, [accountId]);
+
+  return (
+    <div style={DETAIL_PANEL_STYLE}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {fiche?.compte?.name || ''}
+          </div>
+          {fiche && (
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              {[
+                fiche.compte.industry,
+                fiche.compte.crmProvider,
+                fiche.compte.ownerEmail ? fiche.compte.ownerEmail.split('@')[0] : null,
+              ].filter(Boolean).join(' · ')}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {/* Le lien vers la page entiere reste accessible : une adresse se
+              partage et se met en favori, ce qu'un panneau ne sait pas faire. */}
+          {fiche && (
+            <Link
+              to={`/accounts/${accountId}`}
+              style={{ fontSize: 11, color: 'var(--text-muted)' }}
+              title={t('accountSheet.openFullPage')}
+            >
+              {t('accountSheet.fullPage')}
+            </Link>
+          )}
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 14, padding: '2px 8px' }}
+            onClick={onClose}
+            aria-label={t('common.close')}
+          >
+            {'✕'}
+          </button>
+        </div>
+      </div>
+
+      {etat === 'introuvable' && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('accountSheet.notFoundBody')}</div>
+      )}
+      {etat === 'ok' && <AccountSheet fiche={fiche} compact />}
     </div>
   );
 }
