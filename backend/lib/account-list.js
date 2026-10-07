@@ -326,8 +326,15 @@ async function listAccountPage(userId, opts = {}) {
     || opts.tile
   );
 
+  // Deux requêtes ont besoin de cette branche avec des colonnes DIFFÉRENTES :
+  // la page veut les dix colonnes de l'union, le total n'en veut qu'une. D'où
+  // une fonction qui prend la liste de colonnes, plutôt qu'une chaîne qu'on
+  // réécrirait ensuite : réécrire du SQL par expression régulière est la façon
+  // la plus sûre de le casser en silence le jour où on touche aux colonnes.
+  // Elle rend '' quand un filtre de contact est actif, donc les deux requêtes
+  // retombent d'elles-mêmes sur l'ancien comportement.
   const paramsUnion = [...params];
-  let brancheSansContact = '';
+  let brancheSansContact = () => '';
   if (!filtreDeContactActif) {
     const condAgence = [];
     if (opts.owner && opts.owner !== 'all') {
@@ -352,9 +359,14 @@ async function listAccountPage(userId, opts = {}) {
                      FROM deals d WHERE d.account_id = a.id), 0)`
       : '0';
 
-    brancheSansContact = `
-      UNION ALL
-      SELECT CAST(a.id AS TEXT) AS cle,
+    const whereCompte = `a.user_id = $1
+         AND NOT EXISTS (SELECT 1 FROM opportunities o2 WHERE o2.account_id = a.id)
+         ${condAgence.length ? 'AND ' + condAgence.join(' AND ') : ''}`;
+
+    // L'ordre de ces colonnes doit suivre celui de la branche des contacts : une
+    // UNION apparie par POSITION, pas par nom, et échanger deux colonnes de même
+    // type mettrait un montant dans la mauvaise case sans la moindre erreur.
+    const colonnesPage = `CAST(a.id AS TEXT) AS cle,
              a.name AS nom,
              0 AS contacts,
              ${montantsCompte} + ${gagnesCompte} AS montant,
@@ -363,11 +375,13 @@ async function listAccountPage(userId, opts = {}) {
              a.churn_score AS risque,
              a.owner_email AS proprietaire,
              a.last_activity_at AS derniere_activite,
-             1 AS sans_interlocuteur
+             1 AS sans_interlocuteur`;
+
+    brancheSansContact = (quoi) => `
+      UNION ALL
+      SELECT ${quoi === 'cle' ? 'CAST(a.id AS TEXT) AS cle' : colonnesPage}
         FROM accounts a
-       WHERE a.user_id = $1
-         AND NOT EXISTS (SELECT 1 FROM opportunities o2 WHERE o2.account_id = a.id)
-         ${condAgence.length ? 'AND ' + condAgence.join(' AND ') : ''}`;
+       WHERE ${whereCompte}`;
   }
 
   const groupes = await db.query(
@@ -385,7 +399,7 @@ async function listAccountPage(userId, opts = {}) {
          ${jointureComptes}
         WHERE ${where}
         GROUP BY ${CLE_GROUPE}
-       ${brancheSansContact}
+       ${brancheSansContact('page')}
      ) tous
      ORDER BY ${tri}
      LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
@@ -395,7 +409,7 @@ async function listAccountPage(userId, opts = {}) {
   const total = await db.query(
     `SELECT COUNT(*) AS n FROM (
        SELECT ${CLE_GROUPE} AS cle FROM opportunities o WHERE ${where} GROUP BY ${CLE_GROUPE}
-       ${brancheSansContact ? brancheSansContact.replace(/SELECT CAST\(a\.id AS TEXT\) AS cle,[\s\S]*?FROM accounts a/, 'SELECT CAST(a.id AS TEXT) AS cle FROM accounts a') : ''}
+       ${brancheSansContact('cle')}
      ) g`,
     paramsUnion
   );
