@@ -297,29 +297,107 @@ async function listAccountPage(userId, opts = {}) {
   const colonnesCompte = `MAX(ac.churn_score) AS risque,
        COALESCE(MAX(ac.owner_email), MAX(o.owner_email)) AS proprietaire`;
 
+  // ── LES SOCIETES SANS AUCUN INTERLOCUTEUR ────────────────────────────────
+  //
+  // La liste part d'`opportunities`, donc une societe a laquelle aucun contact
+  // n'est rattache n'y apparaissait PAS DU TOUT. Mesure sur staging le
+  // 2026-10-07 : 54 comptes dans ce cas, tous importes de Pipedrive et tous
+  // porteurs d'un `crm_account_id` · ce sont de vraies organisations, pas des
+  // comptes que baakalai aurait derives.
+  //
+  // Le cas est courant dans un vrai CRM : une organisation existe
+  // independamment des personnes, et on en cree tous les jours avant de
+  // connaitre l'interlocuteur. Les cacher revient a cacher de l'argent · l'une
+  // d'elles porte 15 600 € de pipeline ouvert que personne ne voyait.
+  //
+  // Elles sont montrees dans LES DEUX cadrages, et c'est volontaire : sans
+  // contact, on ne peut pas savoir si c'est un client ou un prospect. Les
+  // ranger d'un cote serait une affirmation que rien ne soutient ; les cacher
+  // des deux est le defaut qu'on corrige.
+  //
+  // En revanche elles disparaissent des qu'un FILTRE de contact est actif
+  // (statut, tuile, rappel d'identifiants) : une tuile « Silencieux 90 j »
+  // se calcule sur des contacts, et une societe qui n'en a aucun ne peut ni
+  // la satisfaire ni la contredire. L'y faire figurer rendrait le compteur de
+  // la tuile faux.
+  const filtreDeContactActif = Boolean(
+    (Array.isArray(opts.ids) && opts.ids.length > 0)
+    || (opts.filter && opts.filter !== 'all')
+    || opts.tile
+  );
+
+  const paramsUnion = [...params];
+  let brancheSansContact = '';
+  if (!filtreDeContactActif) {
+    const condAgence = [];
+    if (opts.owner && opts.owner !== 'all') {
+      paramsUnion.push(opts.owner);
+      condAgence.push(`a.owner_id = $${paramsUnion.length}`);
+    }
+    if (opts.crm && opts.crm !== 'all') {
+      paramsUnion.push(opts.crm);
+      condAgence.push(`a.crm_provider = $${paramsUnion.length}`);
+    }
+    if (opts.search) {
+      paramsUnion.push(`%${String(opts.search).trim().toLowerCase()}%`);
+      condAgence.push(`LOWER(a.name) LIKE $${paramsUnion.length}`);
+    }
+
+    const montantsCompte = surDeals
+      ? `COALESCE((SELECT SUM(CASE WHEN d.status NOT IN ('won','lost') THEN d.deal_value ELSE 0 END)
+                     FROM deals d WHERE d.account_id = a.id), 0)`
+      : '0';
+    const gagnesCompte = surDeals
+      ? `COALESCE((SELECT SUM(CASE WHEN d.status = 'won' THEN d.deal_value ELSE 0 END)
+                     FROM deals d WHERE d.account_id = a.id), 0)`
+      : '0';
+
+    brancheSansContact = `
+      UNION ALL
+      SELECT CAST(a.id AS TEXT) AS cle,
+             a.name AS nom,
+             0 AS contacts,
+             ${montantsCompte} + ${gagnesCompte} AS montant,
+             ${montantsCompte} AS ouvert,
+             ${gagnesCompte} AS gagne,
+             a.churn_score AS risque,
+             a.owner_email AS proprietaire,
+             a.last_activity_at AS derniere_activite,
+             1 AS sans_interlocuteur
+        FROM accounts a
+       WHERE a.user_id = $1
+         AND NOT EXISTS (SELECT 1 FROM opportunities o2 WHERE o2.account_id = a.id)
+         ${condAgence.length ? 'AND ' + condAgence.join(' AND ') : ''}`;
+  }
+
   const groupes = await db.query(
-    `SELECT ${CLE_GROUPE} AS cle,
-            MAX(COALESCE(NULLIF(TRIM(COALESCE(o.company, '')), ''), o.name)) AS nom,
-            COUNT(*) AS contacts,
-            ${colonneMontant},
-            ${colonnesOuvertGagne},
-            ${colonnesCompte},
-            MAX(o.last_activity_at) AS derniere_activite
-       FROM opportunities o
-       ${jointureDeals}
-       ${jointureComptes}
-      WHERE ${where}
-      GROUP BY ${CLE_GROUPE}
-      ORDER BY ${tri}
-      LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
-    params
+    `SELECT * FROM (
+       SELECT ${CLE_GROUPE} AS cle,
+              MAX(COALESCE(NULLIF(TRIM(COALESCE(o.company, '')), ''), o.name)) AS nom,
+              COUNT(*) AS contacts,
+              ${colonneMontant},
+              ${colonnesOuvertGagne},
+              ${colonnesCompte},
+              MAX(o.last_activity_at) AS derniere_activite,
+              0 AS sans_interlocuteur
+         FROM opportunities o
+         ${jointureDeals}
+         ${jointureComptes}
+        WHERE ${where}
+        GROUP BY ${CLE_GROUPE}
+       ${brancheSansContact}
+     ) tous
+     ORDER BY ${tri}
+     LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
+    paramsUnion
   );
 
   const total = await db.query(
     `SELECT COUNT(*) AS n FROM (
        SELECT ${CLE_GROUPE} AS cle FROM opportunities o WHERE ${where} GROUP BY ${CLE_GROUPE}
+       ${brancheSansContact ? brancheSansContact.replace(/SELECT CAST\(a\.id AS TEXT\) AS cle,[\s\S]*?FROM accounts a/, 'SELECT CAST(a.id AS TEXT) AS cle FROM accounts a') : ''}
      ) g`,
-    params
+    paramsUnion
   );
 
   // 2. Les contacts des groupes de CETTE page, et d'eux seuls. C'est ce qui
@@ -358,13 +436,18 @@ async function listAccountPage(userId, opts = {}) {
     // Un groupe qui n'est qu'une personne sans société · l'écran le dit, pour
     // ne pas faire passer un contact pour une entreprise.
     orphan: String(g.cle).startsWith('personne:'),
+    // Une SOCIETE a laquelle aucun contact n'est rattache. Distinct d'`orphan`,
+    // qui designe l'inverse · une personne sans societe. L'ecran doit pouvoir
+    // dire « aucun interlocuteur », parce que ca explique d'un coup pourquoi
+    // elle n'est ni scorable ni demarchable.
+    sansInterlocuteur: Number(g.sans_interlocuteur) === 1,
     // L'identifiant de la SOCIÉTÉ, quand le groupe en est vraiment une, pour
     // que l'écran puisse ouvrir sa fiche (lot 7). Renseigné plus bas à partir
     // des contacts : la clé de groupe vaut soit un `account_id`, soit un nom de
     // société en texte libre, soit `personne:<id>`, et les distinguer par la
     // forme de la chaîne serait une heuristique qui casserait au premier compte
     // dont le nom ressemble à un identifiant. Le serveur le DIT.
-    accountId: null,
+    accountId: Number(g.sans_interlocuteur) === 1 ? String(g.cle) : null,
   }]));
   for (const c of contacts) {
     const cle = c.account_id != null ? String(c.account_id)

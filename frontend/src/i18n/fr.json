@@ -1287,7 +1287,8 @@
     "riskNotScorableYet": "Cette société n'a pas encore été scorée, ou n'a aucun interlocuteur rattaché. Un compte muet n'est pas un compte sain.",
     "ownerNone": "non rattaché",
     "silenceUnknown": "inconnu",
-    "noEmailForSend": "Ce contact n'a pas d'adresse email."
+    "noEmailForSend": "Ce contact n'a pas d'adresse email.",
+    "noContactAttached": "aucun interlocuteur rattaché"
   },
   "stageMapping": {
     "title": "Votre pipeline, vu par baakalai",
@@ -2269,7 +2270,7 @@
     "urgency_medium": "Urgence moyenne",
     "urgency_low": "Urgence faible",
     "oneContactOf": "{count} interlocuteurs, la relance partira vers {name}",
-    "allBounced": "Toutes les adresses de cette societe ont rebondi : plus personne n est joignable.",
+    "allBounced": "Toutes les adresses de cette société ont rebondi : plus personne n'est joignable.",
     "unnamedDeal": "Affaire sans nom",
     "stalled": "immobile depuis {days} j",
     "noAmount": "montant inconnu",
@@ -2305,7 +2306,7 @@
     "bulkNone": "Aucun client éligible : déjà relancés récemment, ou sans adresse email",
     "bulkSkipped": "{skipped} client(s) ignoré(s)",
     "oneContactOf": "{count} interlocuteurs, la relance partira vers {name}",
-    "noContactAttached": "Aucun interlocuteur rattache : rien ne peut partir tant qu'un contact n'est pas lie a cette societe.",
+    "noContactAttached": "Aucun interlocuteur rattaché : rien ne peut partir tant qu'un contact n'est pas lié à cette société.",
     "allBounced": "Toutes les adresses de cette societe ont rebondi : plus personne n est joignable."
   },
   "assistant": {

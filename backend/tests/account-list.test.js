@@ -516,3 +516,126 @@ test('un groupe sans societe n a ni risque ni proprietaire de societe', async (t
   assert.strictEqual(g.churnScore, null);
   assert.strictEqual(g.openValue, 3000, 'repli sur la ligne du contact');
 });
+
+/* ═══ Les societes SANS aucun interlocuteur ═══
+ *
+ * La liste part d'`opportunities`, donc une societe a laquelle aucun contact
+ * n'est rattache n'y apparaissait PAS DU TOUT. Mesure sur staging le
+ * 2026-10-07 : 54 comptes dans ce cas, tous importes de Pipedrive et tous
+ * porteurs d'un `crm_account_id` · de vraies organisations, pas des comptes
+ * derives par baakalai.
+ *
+ * Le cas est courant dans un vrai CRM, ou une organisation existe
+ * independamment des personnes. Les cacher revient a cacher de l'argent :
+ * l'une d'elles portait 15 600 € de pipeline ouvert que personne ne voyait.
+ */
+
+test('une societe sans aucun contact apparait quand meme', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  const a = await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source, crm_provider, crm_account_id, owner_email)
+     VALUES ($1, 'Ternova Benali', 'ternova benali', 'crm', 'pipedrive', '42', 'goran@baakal.ai')
+     RETURNING id`,
+    [user.id]
+  );
+  await db.query(
+    `INSERT INTO deals (user_id, account_id, name, status, deal_value, crm_provider)
+     VALUES ($1, $2, 'Equipement atelier', 'open', 15600, 'pipedrive')`,
+    [user.id, a.rows[0].id]
+  );
+
+  const page = await listAccountPage(user.id, { scope: 'deals', pageSize: 50 });
+  const g = page.groups.find(x => x.name === 'Ternova Benali');
+
+  assert.ok(g, 'la societe doit etre listee malgre l absence de contact');
+  assert.strictEqual(g.sansInterlocuteur, true);
+  assert.strictEqual(g.openValue, 15600, 'et son pipeline doit etre visible');
+  assert.strictEqual(g.accountId, a.rows[0].id, 'son nom doit ouvrir sa fiche');
+  assert.strictEqual(g.orphan, false, 'ce n est PAS une personne sans societe');
+});
+
+test('elle apparait dans les DEUX cadrages', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+  await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source)
+     VALUES ($1, 'Muette SA', 'muette sa', 'crm')`, [user.id]
+  );
+
+  // Sans contact, on ne peut pas savoir si c'est un client ou un prospect.
+  // La ranger d'un seul cote serait une affirmation que rien ne soutient.
+  for (const scope of ['deals', 'clients']) {
+    const page = await listAccountPage(user.id, { scope, pageSize: 50 });
+    assert.ok(page.groups.some(x => x.name === 'Muette SA'), `absente du cadrage ${scope}`);
+  }
+});
+
+test('elle DISPARAIT des qu un filtre de contact est actif', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+  await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source)
+     VALUES ($1, 'Muette SA', 'muette sa', 'crm')`, [user.id]
+  );
+
+  // Une tuile « Silencieux 90 j » se calcule sur des contacts : une societe
+  // qui n'en a aucun ne peut ni la satisfaire ni la contredire, et l'y faire
+  // figurer rendrait le compteur de la tuile faux.
+  const parTuile = await listAccountPage(user.id, { scope: 'deals', tile: 'deal_stalled', pageSize: 50 });
+  assert.ok(!parTuile.groups.some(x => x.name === 'Muette SA'), 'ne doit pas survivre a une tuile');
+
+  const parStatut = await listAccountPage(user.id, { scope: 'deals', filter: 'negotiation', pageSize: 50 });
+  assert.ok(!parStatut.groups.some(x => x.name === 'Muette SA'), 'ne doit pas survivre a un filtre de statut');
+});
+
+test('la recherche par nom la retrouve', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+  await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source)
+     VALUES ($1, 'Ternova Benali', 'ternova benali', 'crm')`, [user.id]
+  );
+
+  const trouve = await listAccountPage(user.id, { scope: 'deals', search: 'ternova', pageSize: 50 });
+  assert.ok(trouve.groups.some(x => x.name === 'Ternova Benali'));
+
+  const absent = await listAccountPage(user.id, { scope: 'deals', search: 'inexistant', pageSize: 50 });
+  assert.ok(!absent.groups.some(x => x.name === 'Ternova Benali'));
+});
+
+test('elle compte dans le total, sinon la pagination ment', async (t) => {
+  await setup();
+  t.after(teardown);
+
+  const db = require('../db');
+  const { listAccountPage } = require('../lib/account-list');
+  const { user } = await registerAndLogin();
+
+  await contact(db, user.id, { name: 'Avec Contact', company: 'Avec SA', email: 'a@x.fr', status: 'negotiation', lastActivityAt: ilYA(5) });
+  await db.query(
+    `INSERT INTO accounts (user_id, name, name_normalized, source)
+     VALUES ($1, 'Muette SA', 'muette sa', 'crm')`, [user.id]
+  );
+
+  const page = await listAccountPage(user.id, { scope: 'deals', pageSize: 50 });
+  assert.strictEqual(page.total, page.groups.length, 'le total doit inclure les societes sans contact');
+  assert.strictEqual(page.total, 2);
+});

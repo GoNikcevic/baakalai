@@ -562,7 +562,14 @@ export default function ClientsPage({ scope }) {
         // Le décideur du compte, s'il y en a un : c'est lui qu'on met en avant.
         decideur: rows.find(c => c.is_primary_contact) || rows.find(c => c.account_role === 'decision_maker') || null,
       };
-    }).filter(g => g.rows.length > 0);
+    // Un groupe VIDE disparait... sauf s'il est une societe sans interlocuteur.
+    //
+    // Ces societes-la n'ont par definition aucune ligne de contact, et ce
+    // filtre les jetait donc juste apres que le serveur ait pris la peine de
+    // les remonter. C'est exactement le defaut qu'on corrige : une societe
+    // sans contact n'est ni scorable ni demarchable, et la cacher revient a
+    // cacher l'argent qu'elle porte.
+    }).filter(g => g.rows.length > 0 || g.sansInterlocuteur);
   }, [groups, filtered]);
 
   /**
@@ -1072,7 +1079,11 @@ export default function ClientsPage({ scope }) {
               se rafraîchit s'estompe, elle ne disparaît pas. */}
           {loading && groups.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>{t('common.loading')}</div>
-          ) : filtered.length === 0 ? (
+          ) : (filtered.length === 0 && accountGroups.length === 0) ? (
+            /* `filtered` ne compte que des CONTACTS. Une base qui n'aurait que
+               des societes sans interlocuteur affichait donc « aucun client »
+               alors qu'elle en a · c'est le meme angle mort que la liste
+               elle-meme, un cran plus loin. */
             <div style={{
               textAlign: 'center', padding: 50, background: 'var(--bg-card)',
               border: '1px solid var(--border)', borderRadius: 12,
@@ -1143,7 +1154,9 @@ export default function ClientsPage({ scope }) {
                 // une entreprise, pas un prénom.
                 if (item.type === 'account') {
                   const g = item.group;
-                  const ouvert = !!search || expandedAccounts.has(g.key);
+                  // Rien a deplier quand il n'y a aucun contact : le chevron
+                  // promettrait un contenu qui n'existe pas.
+                  const ouvert = !g.sansInterlocuteur && (!!search || expandedAccounts.has(g.key));
                   return (
                     <div
                       key={`acc-${g.key}`}
@@ -1161,7 +1174,7 @@ export default function ClientsPage({ scope }) {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 60 }}>
                         <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 10, flexShrink: 0 }}>
-                          {ouvert ? '▾' : '▸'}
+                          {g.sansInterlocuteur ? '' : (ouvert ? '▾' : '▸')}
                         </span>
                         {/* minWidth: 60, pas 0 : les colonnes à droite (fixes,
                             flexShrink: 0) ne cèdent jamais de la place, donc à
@@ -1202,8 +1215,14 @@ export default function ClientsPage({ scope }) {
                               </Link>
                             ) : g.name}
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {t('clients.accountSummary', { deals: g.deals.length, contacts: g.rows.length })}
+                          <div style={{ fontSize: 11, color: g.sansInterlocuteur ? 'var(--warning)' : 'var(--text-muted)' }}>
+                            {/* « aucun interlocuteur » plutot que « 0 contact » :
+                                ca ne decrit pas un compteur, ca explique d'un
+                                coup pourquoi la societe n'est ni scorable ni
+                                demarchable, et ce qu'il faut faire. */}
+                            {g.sansInterlocuteur
+                              ? t('clients.noContactAttached')
+                              : t('clients.accountSummary', { deals: g.deals.length, contacts: g.rows.length })}
                             {g.decideur ? ` · ${g.decideur.name}` : ''}
                           </div>
                         </div>

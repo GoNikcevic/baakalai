@@ -46,7 +46,7 @@ const DEALS = [
  * compteurs qui portent sur toute la base et non sur la page. Les règles
  * elles-mêmes sont gardées côté serveur par backend/tests/account-list.test.js.
  */
-function serveurDeComptes(lignes, url) {
+function serveurDeComptes(lignes, url, sansContact = []) {
   const p = new URLSearchParams(url.split('?')[1] || '');
   const scope = p.get('scope');
   const jours = (d) => (d ? Math.floor((Date.now() - new Date(d).getTime()) / DAY) : null);
@@ -142,9 +142,18 @@ function serveurDeComptes(lignes, url) {
     if (c.crm_provider) byProvider[c.crm_provider] = (byProvider[c.crm_provider] || 0) + 1;
   }
 
+  // Les societes SANS aucun contact, injectees telles que le vrai serveur les
+  // remonte (branche UNION de lib/account-list.js).
+  const tous = [...groups, ...sansContact.map(a => ({
+    key: a.accountId, name: a.name, orphan: false, sansInterlocuteur: true,
+    accountId: a.accountId, contacts: [], montant: a.openValue || 0,
+    value: a.openValue || 0, openValue: a.openValue || 0, wonValue: 0,
+    churnScore: null, owner: a.owner || null, lastActivityAt: null, recence: 0,
+  }))];
+
   return {
-    groups,
-    total: groups.length,
+    groups: tous,
+    total: tous.length,
     page: 1,
     pageSize: 25,
     tiles: clesTuiles.map(k => ({ key: k, count: pourCompter.filter(TUILES[k]).length })),
@@ -164,7 +173,7 @@ function mockApi(overrides = {}) {
   const lignes = overrides.opportunities || DEALS;
   request.mockImplementation((url) => {
     if (url.startsWith('/crm/providers')) return Promise.resolve({ providers: [{ provider: 'salesforce', connected: true }], activeCrm: 'salesforce' });
-    if (url.startsWith('/crm/account-list')) return Promise.resolve(serveurDeComptes(lignes, url));
+    if (url.startsWith('/crm/account-list')) return Promise.resolve(serveurDeComptes(lignes, url, overrides.accountsSansContact || []));
     if (url.startsWith('/crm/team-owners')) return Promise.resolve({ owners: [] });
     if (url.startsWith('/crm/stages')) return Promise.resolve({ stages: overrides.stages || [] });
     if (url.includes('/timeline')) return Promise.resolve({ timeline: [] });
@@ -773,5 +782,55 @@ describe('ClientsPage · la société s ouvre comme un contact', () => {
     fireEvent.click(contact);
 
     await waitFor(() => expect(screen.queryByText('RISQUE DE PERTE')).toBeNull());
+  });
+});
+
+describe('ClientsPage · les sociétés sans interlocuteur', () => {
+  // La liste part des contacts, donc une société sans aucun contact rattaché
+  // n'apparaissait pas du tout. Sur staging : 54 comptes dans ce cas, tous
+  // importés de Pipedrive avec un vrai `crm_account_id`, dont un portant
+  // 15 600 € de pipeline que personne ne voyait.
+  it('une société sans contact est listée, et dit pourquoi elle est vide', async () => {
+    mockApi({
+      opportunities: [],
+      accountsSansContact: [{ accountId: 'acc-t', name: 'Ternova Benali', openValue: 15600 }],
+    });
+    renderDeals();
+
+    expect(await screen.findByRole('link', { name: 'Ternova Benali' })).toBeTruthy();
+    // « aucun interlocuteur » et non « 0 contact » : ça n'énonce pas un
+    // compteur, ça explique pourquoi elle n'est ni scorable ni démarchable.
+    expect(screen.getByText(/aucun interlocuteur rattaché/)).toBeTruthy();
+    // Et son argent est visible · c'est la raison d'être du correctif.
+    expect(screen.getByText(/15\s?600\s?€/)).toBeTruthy();
+  });
+
+  it('elle affiche « Non scorable », pas « Sain 0 »', async () => {
+    mockApi({
+      opportunities: [],
+      accountsSansContact: [{ accountId: 'acc-m', name: 'Muette SA', openValue: 0 }],
+    });
+    // Cadrage CLIENTS : la colonne de risque n'existe que la. Un score de
+    // churn ne s'applique pas a un deal encore ouvert (arbitrage William),
+    // donc la chercher sous « deals » ne mesurerait rien.
+    renderClients();
+
+    await screen.findByRole('link', { name: 'Muette SA' });
+    // Un compte muet n'est pas un compte en bonne santé.
+    expect(screen.getByText('Non scorable')).toBeTruthy();
+  });
+
+  it('les sociétés normales gardent leur compte de contacts', async () => {
+    // Le revers : le libellé « aucun interlocuteur » ne doit pas déborder sur
+    // les groupes qui, eux, ont des contacts.
+    mockApi({
+      opportunities: [
+        { id: 'n1', name: 'A B', company: 'Acme', account_id: 'acc-1', status: 'negotiation', last_activity_at: new Date().toISOString() },
+      ],
+    });
+    renderDeals();
+
+    await screen.findByRole('link', { name: 'Acme' });
+    expect(screen.queryByText(/aucun interlocuteur rattaché/)).toBeNull();
   });
 });
