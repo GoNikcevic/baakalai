@@ -136,6 +136,22 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
     return t(e.status === 'won' ? 'reactivation.historyWonOn' : 'reactivation.historyLostOn', { date });
   };
 
+  /**
+   * Ou mene une ligne d'historique.
+   *
+   * Un ENVOI mene a l'email parti · c'est ce qu'on veut relire. Tout le reste
+   * mene a la fiche de la societe, qui porte les affaires, les interlocuteurs
+   * et le risque. Un evenement sans societe rattachee ne mene nulle part
+   * plutot que vers une page qui dirait « introuvable ».
+   */
+  const ouvrirEvenement = (e) => {
+    if (e.eventType === 'sent' && e.opportunityId) {
+      navigate(`${detailRouteBase}/${e.opportunityId}`);
+      return;
+    }
+    if (e.accountId) navigate(`/accounts/${e.accountId}`);
+  };
+
   const historyBadgeColor = (eventType) => {
     if (eventType === 'sent') return 'var(--accent)';
     if (eventType === 'postponed') return 'var(--text-muted)';
@@ -649,14 +665,50 @@ export default function ReactivationQueuePage({ kind, i18nNamespace, detailRoute
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {history.map((e, idx) => (
-              <div key={`${e.eventType}-${e.opportunityId}-${idx}`} className="card">
-                <div className="card-body" style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
+              /* ── Une ligne d'historique se CLIQUE ─────────────────────────
+                 Elle ne menait nulle part, alors que l'evenement porte son
+                 contact depuis toujours. On ne pouvait donc ni verifier ce qui
+                 s'etait passe, ni rouvrir le dossier. Un envoi mene a l'email
+                 parti ; tout le reste mene a la fiche de la societe. */
+              <div
+                key={`${e.eventType}-${e.opportunityId}-${idx}`}
+                className="card"
+                role="button"
+                tabIndex={0}
+                onClick={() => ouvrirEvenement(e)}
+                onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ouvrirEvenement(e); } }}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="card-body" style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{e.name || e.company}</div>
                     {e.name && <ContactSubline contact={e} withEmail={false} />}
+                    {/* L'OBJET de l'email parti. « Email envoye le 12/08 » ne
+                        dit pas ce qu'on a envoye, et c'est la premiere chose
+                        qu'on veut savoir en relisant un historique. */}
+                    {e.eventType === 'sent' && e.subject && (
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {'« '}{e.subject}{' »'}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: historyBadgeColor(e.eventType) }}>
-                    {historyLabel(e)}
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: historyBadgeColor(e.eventType) }}>
+                      {historyLabel(e)}
+                    </div>
+                    {/* Ce que baakalai a REELLEMENT fait avant la cloture.
+                        « Perdu apres 2 relances » et « perdu sans qu'on lui
+                        ecrive une seule fois » sont deux informations
+                        opposees, et c'est la seconde qui est actionnable.
+                        `null` veut dire « on n'a pas su compter » : on se tait
+                        plutot que d'affirmer qu'on n'a rien envoye. */}
+                    {e.eventType === 'closed' && e.touchCount != null && (
+                      <div style={{ fontSize: 11, color: e.touchCount === 0 ? 'var(--warning)' : 'var(--text-muted)', marginTop: 2 }}>
+                        {e.touchCount === 0
+                          ? t('reactivation.historyNoTouch')
+                          : t(e.touchCount === 1 ? 'reactivation.historyTouchOne' : 'reactivation.historyTouchMany', { count: e.touchCount })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

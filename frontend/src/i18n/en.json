@@ -2268,7 +2268,10 @@
     "allBounced": "Every address on this company has bounced: nobody is reachable anymore.",
     "unnamedDeal": "Unnamed deal",
     "stalled": "no movement for {days}d",
-    "noAmount": "amount unknown"
+    "noAmount": "amount unknown",
+    "historyNoTouch": "no follow-up was sent",
+    "historyTouchOne": "after 1 follow-up",
+    "historyTouchMany": "after {count} follow-ups"
   },
   "churn": {
     "title": "Clients at churn risk",

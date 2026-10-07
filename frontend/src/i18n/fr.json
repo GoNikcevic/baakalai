@@ -2268,7 +2268,10 @@
     "allBounced": "Toutes les adresses de cette societe ont rebondi : plus personne n est joignable.",
     "unnamedDeal": "Affaire sans nom",
     "stalled": "immobile depuis {days} j",
-    "noAmount": "montant inconnu"
+    "noAmount": "montant inconnu",
+    "historyNoTouch": "aucune relance envoyée",
+    "historyTouchOne": "après 1 relance",
+    "historyTouchMany": "après {count} relances"
   },
   "churn": {
     "title": "Clients à risque de churn",

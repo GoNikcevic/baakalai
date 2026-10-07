@@ -352,7 +352,8 @@ async function failedSendIds(userId, kind, opportunityIds) {
  */
 async function getHistory(userId, kind) {
   const sentResult = await db.query(
-    `SELECT ne.id, ne.opportunity_id, ne.to_name, ne.sent_at, o.title, o.company
+    `SELECT ne.id, ne.opportunity_id, ne.to_name, ne.sent_at, ne.subject,
+            o.title, o.company, o.account_id
      FROM nurture_emails ne
      LEFT JOIN opportunities o ON o.id = ne.opportunity_id
      WHERE ne.user_id = $1 AND ne.metadata ->> 'chain' = $2 AND ne.status = 'sent'
@@ -363,9 +364,14 @@ async function getHistory(userId, kind) {
     eventType: 'sent',
     date: r.sent_at,
     opportunityId: r.opportunity_id,
+    accountId: r.account_id || null,
     name: r.to_name,
     title: r.title,
     company: r.company,
+    // L'OBJET de l'email parti. « Email envoye le 12/08 » ne dit pas ce qu'on a
+    // envoye · c'est la premiere chose qu'on veut savoir en relisant un
+    // historique, et elle etait la, a une colonne pres.
+    subject: r.subject || null,
   }));
 
   // Trace réelle des changements (old → new, source) plutôt qu'un instantané de
@@ -373,7 +379,7 @@ async function getHistory(userId, kind) {
   // passée ou re-changée depuis (cf. migration 116 / setPlannedFollowupDate).
   const postponedResult = await db.query(
     `SELECT h.id, h.old_date, h.new_date, h.source, h.reason, h.changed_at,
-            o.id AS opportunity_id, o.name, o.title, o.company
+            o.id AS opportunity_id, o.name, o.title, o.company, o.account_id
      FROM followup_date_history h
      JOIN opportunities o ON o.id = h.opportunity_id
      WHERE h.user_id = $1 AND o.status ${kind === 'auto_upsell' ? "= 'won'" : "NOT IN ('won', 'lost')"}
@@ -386,6 +392,7 @@ async function getHistory(userId, kind) {
     eventType: 'postponed',
     date: r.changed_at,
     opportunityId: r.opportunity_id,
+    accountId: r.account_id || null,
     name: r.name,
     title: r.title,
     company: r.company,
@@ -397,21 +404,55 @@ async function getHistory(userId, kind) {
   }));
 
   const closedResult = await db.query(
-    `SELECT id, name, title, company, status, won_date, lost_date
+    `SELECT id, name, title, company, status, won_date, lost_date, account_id
      FROM opportunities
      WHERE user_id = $1 AND status ${kind === 'auto_upsell' ? "= 'lost'" : "IN ('won', 'lost')"}
        AND COALESCE(won_date, lost_date) IS NOT NULL
      ORDER BY COALESCE(won_date, lost_date) DESC LIMIT 50`,
     [userId]
   );
+  // ── Combien de relances sont REELLEMENT parties vers ces contacts ───────
+  //
+  // Un deal gagne ou perdu est un fait du CRM, pas une action de baakalai. Les
+  // afficher nus dans un onglet « Historique » laissait croire qu'on avait
+  // travaille ces clients et qu'on les avait perdus · mesure sur staging le
+  // 2026-10-07 : 23 lignes « Perdu le... » pour ZERO email envoye sur cette
+  // chaine. L'ecran racontait exactement l'inverse de ce qui s'etait passe.
+  //
+  // Le compte de relances tranche : « perdu apres 2 relances » et « perdu sans
+  // qu'on lui ecrive une seule fois » sont deux informations opposees, et c'est
+  // la seconde qui est actionnable.
+  const toucheParContact = new Map();
+  let comptageLisible = true;
+  try {
+    const touches = await db.query(
+      `SELECT opportunity_id, COUNT(*) AS n
+         FROM nurture_emails
+        WHERE user_id = $1 AND metadata ->> 'chain' = $2 AND status = 'sent'
+          AND opportunity_id IS NOT NULL
+        GROUP BY opportunity_id`,
+      [userId, kind]
+    );
+    for (const t of touches.rows) toucheParContact.set(String(t.opportunity_id), Number(t.n) || 0);
+  } catch (err) {
+    // Comptage illisible : on rend `null` et l'ecran se tait sur ce point,
+    // plutot que d'afficher « aucune relance », qui serait peut-etre faux.
+    comptageLisible = false;
+    logger.warn('reactivation-queue', `Comptage des relances impossible : ${err.message}`);
+  }
+
   const closed = closedResult.rows.map(r => ({
     eventType: 'closed',
     date: r.won_date || r.lost_date,
     opportunityId: r.id,
+    accountId: r.account_id || null,
     name: r.name,
     title: r.title,
     company: r.company,
     status: r.status,
+    // `null` quand on n'a pas su compter · distinct de 0, qui AFFIRME qu'on
+    // n'a rien envoye. L'ecran doit pouvoir se taire plutot que de mentir.
+    touchCount: comptageLisible ? (toucheParContact.get(String(r.id)) || 0) : null,
   }));
 
   return [...sent, ...postponed, ...closed]
