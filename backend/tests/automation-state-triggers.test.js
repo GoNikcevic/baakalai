@@ -22,12 +22,19 @@ const path = require('path');
 const dbPath = require.resolve('../db');
 
 const queries = [];
-const state = { rows: [], triggers: [] };
+const state = { rows: [], triggers: [], casseLeCompte: false };
 
 const fakeDb = {
   async query(sql, params) {
     queries.push({ sql, params });
     if (/FROM automation_triggers/.test(sql)) return { rows: state.triggers };
+    // Le COMPTE est une requete a part depuis qu'il ne mesure plus la longueur
+    // d'un tableau de lignes : il plafonnait a la limite de la liste, donc une
+    // base de 5000 contacts inactifs annoncait 1000.
+    if (/COUNT\(\*\)/.test(sql) && /FROM opportunities o/.test(sql)) {
+      if (state.casseLeCompte) throw new Error('colonne absente');
+      return { rows: [{ n: state.rows.length }] };
+    }
     if (/FROM opportunities o/.test(sql)) return { rows: state.rows };
     return { rows: [] };
   },
@@ -40,7 +47,7 @@ require.cache[dbPath] = {
 
 const stateTriggers = require('../lib/automation-state-triggers');
 
-function reset() { queries.length = 0; state.rows = []; state.triggers = []; }
+function reset() { queries.length = 0; state.rows = []; state.triggers = []; state.casseLeCompte = false; }
 
 test('les neuf types sont declares avec un defaut et une donnee requise', () => {
   assert.equal(stateTriggers.STATE_KEYS.length, 9);
@@ -121,7 +128,7 @@ test('le contexte dit ce que chaque type fournit aux etapes', () => {
   assert.equal(stateTriggers.contextFor('upsell_opportunity').owner, true);
 });
 
-test('le catalogue rend un compte par type, meme quand une requete casse', async () => {
+test('le catalogue rend un compte par type, et le compte est un vrai COUNT', async () => {
   reset();
   state.rows = [{ id: 'o1' }, { id: 'o2' }];
   const cat = await stateTriggers.catalogWithCounts('u1');
@@ -130,4 +137,26 @@ test('le catalogue rend un compte par type, meme quand une requete casse', async
   assert.ok(cat.every(c => typeof c.matching === 'number'));
   assert.ok(cat.every(c => c.needs));
   assert.equal(cat[0].matching, 2);
+  assert.ok(cat.every(c => c.countFailed === false));
+
+  // Un COUNT et pas une liste tronquee : la requete de comptage ne doit porter
+  // aucune LIMIT, sinon le chiffre affiche sature sans le dire.
+  const comptes = queries.filter(q => /COUNT\(\*\)/.test(q.sql));
+  assert.equal(comptes.length, 9);
+  assert.ok(comptes.every(q => !/LIMIT/i.test(q.sql)));
+});
+
+test('un compte IMPOSSIBLE rend null, jamais zero', async () => {
+  reset();
+  state.rows = [{ id: 'o1' }];
+  state.casseLeCompte = true;
+
+  const cat = await stateTriggers.catalogWithCounts('u1');
+
+  // Zero et « je n'ai pas pu regarder » s'affichaient pareil. L'un dit que
+  // l'automatisation n'a rien a faire aujourd'hui, l'autre qu'on n'en sait
+  // rien : les confondre fait renoncer a une automatisation qui marche.
+  assert.equal(cat.length, 9);
+  assert.ok(cat.every(c => c.matching === null), 'aucun chiffre invente');
+  assert.ok(cat.every(c => c.countFailed === true), 'et l ecran peut le dire');
 });

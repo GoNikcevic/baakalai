@@ -165,6 +165,7 @@
       "stateDaysLabel": "Threshold",
       "fromNowState": "Every contact that meets this condition will be enrolled automatically, at each daily pass.",
       "notPorted": "The two newsletter triggers stay in the older settings: they read Salesforce emailing activity, which does not live in the synced data.",
+      "countUnavailable": "Count unavailable right now. The automation can still be armed.",
       "needs": {
         "won_date": "No contact matches: you need a signing date in your CRM.",
         "lost_date": "No contact matches: you need a lost date in your CRM.",

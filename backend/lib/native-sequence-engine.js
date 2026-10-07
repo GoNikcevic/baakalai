@@ -353,9 +353,12 @@ async function emailsSentTodayByAccount(userId) {
  * passage, le rythme reste humain. Retourne :
  *   'sent' | 'skipped' | 'failed' | 'stopped' | 'waiting' | 'sequence_done'
  * `ids` = { campaignId } ou { enrollmentId } selon le conteneur ;
- * `onBounce(reason)` arrête la séquence du bon côté (opportunité ou enrollment).
+ * `onRecipientOut(reason)` sort CE destinataire du bon côté (opportunité ou
+ * enrollment). Deux raisons l'appellent : 'bounced' et 'unsubscribed'. Il
+ * s'appelait `onBounce`, ce qui est devenu faux le jour où le désabonnement a
+ * cessé d'être traité comme une panne générique.
  */
-async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report, onBounce, role = null, siblings = [] }) {
+async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report, onRecipientOut, role = null, siblings = [] }) {
   const userId = ctx.userId;
 
   // Prochain step : premier touchpoint du chemin sans ligne sent/skipped.
@@ -446,10 +449,49 @@ async function advanceOneStep({ prospect, path, done, baseTime, ctx, ids, report
     }
     if (result.code === 'recipient_bounced') {
       await recordSend({ ...base, status: 'failed', error: result.error });
-      await onBounce('bounced');
+      await onRecipientOut('bounced');
       report.stopped++;
       return 'stopped';
     }
+
+    // ── UN DÉSABONNEMENT EST UNE RÉPONSE, PAS UNE PANNE ──────────────────────
+    //
+    // Il tombait dans la branche générique `failed` plus bas, qui ne consomme
+    // pas l'étape. Elle restait donc due, et le cron repasse onze fois par
+    // jour ouvré : la même étape était rejouée jusqu'à ce que la durée maximale
+    // du workflow finisse par sortir le contact, 45 jours par défaut.
+    //
+    // Trois dégâts, tous silencieux. Chaque rejeu repayait la RÉDACTION de
+    // l'email, puisqu'une étape de workflow est écrite avant d'être envoyée.
+    // Le rapport comptait un échec technique à chaque passage, pour une
+    // décision du contact qu'on ne peut pas « réparer ». Et l'inscription
+    // restant vivante, l'index d'un seul parcours par contact (migration 103)
+    // interdisait à ce contact d'entrer dans le moindre autre workflow.
+    //
+    // `onRecipientOut` et non `stopEnrollment` : sur une inscription de compte,
+    // le refus d'Anne ne dit rien de Bruno, et faire taire ses collègues pour
+    // son désabonnement ferait perdre le compte entier.
+    if (result.code === 'recipient_unsubscribed') {
+      await recordSend({ ...base, status: 'skipped', error: result.error });
+      // Marqué sur le contact aussi, comme le fait déjà le chemin nurture
+      // (lib/email-outbound) : c'est ce que lit le scoring churn, et c'est ce
+      // qui empêche un autre chemin de le retenter.
+      await stopSequence(userId, prospect.id, 'unsubscribed');
+      await onRecipientOut('unsubscribed');
+      report.stopped++;
+      return 'stopped';
+    }
+
+    // ── UN PLAFOND DE CADENCE EST UNE RETENUE, PAS UN ÉCHEC ─────────────────
+    //
+    // La fenêtre se rouvrira seule. Rien n'est écrit au journal et rien n'est
+    // compté en échec : l'étape reste due et repartira au bon moment. L'écrire
+    // en `failed` ferait chercher une panne qui n'existe pas, et marquerait le
+    // journal d'une ligne d'erreur pour un comportement voulu.
+    if (result.code === 'account_cadence_exceeded') {
+      return 'waiting';
+    }
+
     if (result.code === 'no_email_account' || result.code === 'token_refresh_failed') {
       // Plus de boîte utilisable : inutile d'itérer les autres prospects.
       ctx.runBudget = 0;
@@ -559,9 +601,16 @@ async function processCampaign(campaign, ctx) {
       ctx,
       ids: { campaignId: campaign.id },
       report,
-      onBounce: async (reason) => {
+      onRecipientOut: async (reason) => {
         await stopSequence(userId, prospect.id, reason);
-        await insertActivity(userId, campaign.id, prospect, 'emailsBounced', `bounce:${prospect.id}`);
+        // L'activité de REBOND n'est écrite que pour un rebond. Un
+        // désabonnement passe par le même rappel depuis le lot de correction
+        // des refus, et l'inscrire comme un rebond ferait croire à une adresse
+        // morte : c'est l'inverse, l'adresse est vivante et la personne a
+        // répondu non.
+        if (reason === 'bounced') {
+          await insertActivity(userId, campaign.id, prospect, 'emailsBounced', `bounce:${prospect.id}`);
+        }
       },
     });
   }
@@ -659,14 +708,14 @@ async function processEnrollments(enrollments, ctx) {
       report,
       role: recipient.role || prospect.account_role || null,
       siblings,
-      // UN REBOND N'ARRETE QUE CE DESTINATAIRE.
+      // UN REBOND OU UN DESABONNEMENT N'ARRETE QUE CE DESTINATAIRE.
       //
       // Avant ce lot, une inscription valait un contact, donc arreter
       // l'inscription et arreter le contact etaient la meme chose. Avec
       // plusieurs destinataires ce n'est plus vrai : l'adresse d'Anne qui
       // rebondit ne dit rien de celle de Bruno, et arreter tout le monde pour
       // une adresse morte ferait perdre le compte entier.
-      onBounce: async (reason) => {
+      onRecipientOut: async (reason) => {
         if (recipient.recipientId) {
           await accountSequences.stopRecipient(recipient.recipientId, reason);
           if (await accountSequences.allRecipientsDone(enrollment.id)) {

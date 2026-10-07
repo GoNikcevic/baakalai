@@ -442,7 +442,17 @@ async function runStateTriggers(userId, { perTriggerLimit = 25 } = {}) {
         userId,
         trigger,
         workflow,
-        source: 'event',
+        // `'state'` et non `'event'` (migration 134). Le disjoncteur ne compte
+        // que l'événementiel, parce qu'il traque une BOUCLE. Une évaluation
+        // d'état inscrit un lot volontairement, comme le rattrapage : comptée
+        // comme un événement, elle ouvrait sa propre sécurité dès la deuxième
+        // évaluation de l'heure, et le déclencheur restait éteint jusqu'à une
+        // relance à la main.
+        //
+        // Ce qui borne cette voie, c'est `perTriggerLimit` par passage, pas le
+        // disjoncteur : 25 contacts à la fois, et l'index d'un seul parcours
+        // vivant par contact empêche de reprendre les mêmes au passage suivant.
+        source: 'state',
         rationale: trigger.event_key,
         resolve: async () => {
           const { isCrmContact } = require('./crm-scope');

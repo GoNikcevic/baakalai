@@ -165,6 +165,7 @@
       "stateDaysLabel": "Seuil",
       "fromNowState": "Chaque contact qui remplira cette condition sera inscrit automatiquement, à chaque passage quotidien.",
       "notPorted": "Les deux déclencheurs newsletter restent dans les anciens réglages : ils lisent l'activité d'emailing Salesforce, qui ne vit pas dans les données synchronisées.",
+      "countUnavailable": "Comptage indisponible pour l'instant. L'automatisation peut quand même être armée.",
       "needs": {
         "won_date": "Aucun contact concerné : il faut une date de signature dans ton CRM.",
         "lost_date": "Aucun contact concerné : il faut une date de perte dans ton CRM.",

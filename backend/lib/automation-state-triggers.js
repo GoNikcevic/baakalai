@@ -30,6 +30,7 @@
  */
 
 const db = require('../db');
+const logger = require('./logger');
 
 /**
  * Le catalogue. Chaque entrée porte son prédicat SQL, qui reçoit :
@@ -142,42 +143,66 @@ function contextFor(key) {
 }
 
 /**
- * Les contacts que ce type ferait entrer aujourd'hui.
+ * Le WHERE, écrit UNE fois.
  *
  * `excludeEnrolled` retire ceux déjà engagés dans un parcours : c'est ce qui
  * rend le compte affiché dans l'interface honnête. Annoncer « 240 contacts
  * concernés » puis n'en inscrire que 3 parce que les autres sont déjà en
  * cours serait exactement le genre d'écart qu'on ne rattrape pas.
+ *
+ * La liste et le compte posaient la même question ; le compte la posait en
+ * ramenant les lignes et en mesurant le tableau. Deux formulations d'une même
+ * condition finissent toujours par se répondre différemment.
  */
-async function listMatching(userId, key, conditions, { limit = 500, excludeEnrolled = true } = {}) {
-  if (!isStateKey(key)) return [];
-  const def = STATE_TRIGGERS[key];
-  const days = daysFor(key, conditions);
-
+function clauseDe(key, conditions, { excludeEnrolled = true } = {}) {
   const notEnrolled = excludeEnrolled
     ? `AND NOT EXISTS (
          SELECT 1 FROM sequence_enrollments e
           WHERE e.opportunity_id = o.id AND e.status IN ('draft', 'active', 'paused'))`
     : '';
 
+  return {
+    where: `o.user_id = $1
+        AND o.campaign_id IS NULL
+        AND o.email IS NOT NULL AND o.email <> ''
+        AND (${STATE_TRIGGERS[key].sql})
+        ${notEnrolled}`,
+    params: [null, daysFor(key, conditions)],
+  };
+}
+
+async function listMatching(userId, key, conditions, { limit = 500, excludeEnrolled = true } = {}) {
+  if (!isStateKey(key)) return [];
+  const { where, params } = clauseDe(key, conditions, { excludeEnrolled });
+  const plafond = Number.isFinite(Number(limit)) ? Math.max(1, Math.trunc(Number(limit))) : 500;
+
   const r = await db.query(
     `SELECT o.id, o.name, o.company, o.email
        FROM opportunities o
-      WHERE o.user_id = $1
-        AND o.campaign_id IS NULL
-        AND o.email IS NOT NULL AND o.email <> ''
-        AND (${def.sql})
-        ${notEnrolled}
+      WHERE ${where}
       ORDER BY o.last_activity_at ASC NULLS LAST
-      LIMIT ${Number(limit)}`,
-    [userId, days]
+      LIMIT ${plafond}`,
+    [userId, params[1]]
   );
   return r.rows;
 }
 
+/**
+ * Un COUNT, pas une longueur de tableau.
+ *
+ * Il comptait en ramenant jusqu'à 1000 lignes puis en mesurant le tableau, donc
+ * il PLAFONNAIT : une base avec 5000 contacts inactifs annonçait 1000. Le
+ * commentaire juste en dessous promet que ce chiffre est la meilleure protection
+ * contre la déception ; un chiffre qui sature est exactement ce qui la crée.
+ */
 async function countMatching(userId, key, conditions) {
-  const rows = await listMatching(userId, key, conditions, { limit: 1000 });
-  return rows.length;
+  if (!isStateKey(key)) return 0;
+  const { where, params } = clauseDe(key, conditions);
+  const r = await db.query(
+    `SELECT COUNT(*)::int AS n FROM opportunities o WHERE ${where}`,
+    [userId, params[1]]
+  );
+  return r.rows[0]?.n || 0;
 }
 
 /**
@@ -193,17 +218,30 @@ async function catalogWithCounts(userId) {
   const out = [];
   for (const key of STATE_KEYS) {
     const def = STATE_TRIGGERS[key];
-    let matching = 0;
+    // UN COMPTE RATÉ N'EST PAS UN COMPTE DE ZÉRO.
+    //
+    // Le `catch` rendait 0, et l'écran affichait alors exactement ce qu'il
+    // affiche pour « aucun contact ne correspond aujourd'hui ». Deux situations
+    // opposées sous le même visage : l'une dit « cette automatisation n'a rien
+    // à faire pour l'instant », l'autre dit « je n'ai pas réussi à regarder ».
+    // C'est le défaut que le commentaire au-dessus de cette fonction prétend
+    // justement éviter.
+    //
+    // `null` les sépare, et l'écran le dit au lieu d'inventer un chiffre.
+    let matching = null;
+    let countFailed = false;
     try {
       matching = await countMatching(userId, key, { days: def.defaultDays });
-    } catch {
-      matching = 0;
+    } catch (err) {
+      countFailed = true;
+      logger.warn('automation', `Comptage de ${key} impossible : ${err.message}`);
     }
     out.push({
       eventKey: key,
       defaultDays: def.defaultDays,
       needs: def.needs,
       matching,
+      countFailed,
       context: contextFor(key),
     });
   }

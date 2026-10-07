@@ -68,6 +68,11 @@ function reset(over = {}) {
 
 const fakeDb = {
   async query(sql, params) {
+    // EN PREMIER. Le SQL de `listMatching` porte aussi une sous-requete
+    // `FROM sequence_enrollments ... status IN (...)` pour ecarter les contacts
+    // deja engages : teste plus bas, il serait capte par la mauvaise branche et
+    // rendrait zero contact, ce qui ressemblerait a « aucun ne correspond ».
+    if (/FROM opportunities o/.test(sql)) return { rows: state.stateMatches || [] };
     if (/FROM email_accounts/.test(sql)) return { rows: state.mailbox ? [{ '?column?': 1 }] : [] };
     if (/UPDATE signals/.test(sql)) {
       state.signalUpdates.push({ status: params[0], triggerId: params[1], enrollmentId: params[2], skipReason: params[3], signalId: params[4] });
@@ -118,6 +123,7 @@ require.cache[dbPath] = {
 
 const {
   enrollFromSignal, runBackfill, dedupKeyFor, onCrmEvent, matchesConditions, BREAKER_PER_HOUR,
+  runStateTriggers,
 } = require('../lib/automation-enroll');
 
 const SIGNAL = {
@@ -421,4 +427,73 @@ test('un evenement CRM ne leve jamais, meme si la base tombe', async () => {
   assert.equal(out.ok, false);
   assert.equal(out.reason, 'error');
   delete state.crmTriggers;
+});
+
+/* ═══════════ Les declencheurs d'ETAT et le disjoncteur ═══════════ */
+
+/**
+ * Le disjoncteur protege d'une BOUCLE : un evenement qui en produit un autre,
+ * qui en reproduit un, vingt-cinq fois en une heure. C'est pour ca qu'il ne
+ * compte que les evenements, et que `runBackfill` passe `source: 'backfill'`
+ * pour y echapper.
+ *
+ * Une evaluation d'etat est de la meme nature qu'un rattrapage : elle inscrit
+ * volontairement un lot de contacts d'un coup, parce qu'une condition est vraie
+ * pour eux tous. « Contact inactif depuis 60 jours » peut etre vrai pour toute
+ * la base le jour ou on l'arme.
+ *
+ * En la comptant comme de l'evenementiel, deux evaluations dans la meme heure
+ * ouvrent le disjoncteur et le declencheur passe en `breaker`, statut qui exige
+ * une relance a la main. Et ces deux evaluations sont faciles a obtenir : le
+ * bouton « evaluer maintenant » existe precisement pour staging, ou aucun cron
+ * ne tourne.
+ */
+const DECLENCHEUR_ETAT = {
+  id: 'trig-etat', user_id: 'u1', workflow_id: 'wf-1',
+  event_source: 'crm_state', event_key: 'inactive_contact',
+  status: 'active', conditions: { days: 60 },
+};
+
+test('une evaluation d etat n ouvre pas le disjoncteur des evenements', async () => {
+  reset();
+  state.crmTriggers = [DECLENCHEUR_ETAT];
+  state.stateMatches = [{ id: 'opp-1', name: 'Paul Roy', company: 'Roy', email: 'paul@roy.fr' }];
+  // Vingt-cinq inscriptions evenementielles dans l'heure : le seuil est atteint.
+  // Ce que ca represente, c'est une premiere evaluation vingt minutes plus tot.
+  state.recentEventEnrollments = BREAKER_PER_HOUR;
+
+  const rapport = await runStateTriggers('u1');
+
+  assert.equal(state.triggerStatus.length, 0, 'aucun passage en breaker');
+  assert.equal(rapport.enrolled, 1);
+  assert.equal(rapport.reasons.breaker_open, undefined);
+});
+
+test('et ses inscriptions ne sont pas comptees comme des evenements', async () => {
+  reset();
+  state.crmTriggers = [DECLENCHEUR_ETAT];
+  state.stateMatches = [{ id: 'opp-1', name: 'Paul Roy', company: 'Roy', email: 'paul@roy.fr' }];
+
+  await runStateTriggers('u1');
+
+  // La source est ce qui alimente le compteur du disjoncteur
+  // (recentEventEnrollments filtre sur enrollment_source = 'event'). Si une
+  // inscription d'etat s'y ecrit, elle fera sauter la suivante.
+  assert.equal(state.createdEnrollments.length, 1);
+  assert.notEqual(state.createdEnrollments[0].enrollmentSource, 'event');
+});
+
+test('le disjoncteur protege toujours le flux evenementiel, lui', async () => {
+  // La contrepartie : relacher la garde sur l'etat ne doit pas la relacher
+  // partout. Un signal reste soumis au seuil.
+  reset();
+  state.recentEventEnrollments = BREAKER_PER_HOUR;
+
+  const out = await enrollFromSignal({
+    id: 'sig-1', user_id: 'u1', signal_type: 'hiring', title: 'Recrute', contact_email: 'paul@roy.fr',
+  }, { source: 'event' });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.reason, 'breaker_open');
+  assert.equal(state.triggerStatus[0].status, 'breaker');
 });

@@ -383,7 +383,12 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                       // donnée qui manque quand il est à zéro. Un type muet
                       // doit dire pourquoi, pas afficher un zéro nu.
                       count={st.matching}
-                      sub={t(`automation.wizard.needs.${st.needs}`)}
+                      // Le compte n'a pas pu etre fait. Afficher la donnee
+                      // manquante serait une explication fausse : la donnee
+                      // n'est peut-etre pas en cause.
+                      sub={st.countFailed
+                        ? t('automation.wizard.countUnavailable')
+                        : t(`automation.wizard.needs.${st.needs}`)}
                       selected={stateSel?.eventKey === st.eventKey}
                       onClick={() => setStateSel(
                         stateSel?.eventKey === st.eventKey
