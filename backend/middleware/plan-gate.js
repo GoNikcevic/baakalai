@@ -6,13 +6,13 @@
  * avec trial_ends_at NULL (fondateurs, beta gratuits) ne sont jamais bloqués.
  *
  * requireActivePlan() · bloque (402) quand l'essai est expiré sans abonnement.
- * requirePlan('growth') · exige un palier minimum (402 sinon, code plan_required).
  *
  * Non câblé par défaut : le choix des routes à protéger est un arbitrage
- * produit (voir ENTITLEMENTS dans lib/billing.js).
+ * produit. Il n'y a plus de gating PAR PALIER, puisqu'il n'y a plus de palier :
+ * un seul produit complet à 79 € par siège.
  */
 
-const { getBillingState, PLAN_ORDER, isBillingEnabled } = require('../lib/billing');
+const { getBillingState, isBillingEnabled } = require('../lib/billing');
 const logger = require('../lib/logger');
 
 function requireActivePlan() {
@@ -31,23 +31,14 @@ function requireActivePlan() {
   };
 }
 
-function requirePlan(minPlan) {
-  return async (req, res, next) => {
-    if (!isBillingEnabled()) return next();
-    try {
-      const state = await getBillingState(req.user.id);
-      if (state.locked) {
-        return res.status(402).json({ error: 'Trial expired', code: 'trial_expired' });
-      }
-      if (PLAN_ORDER.indexOf(state.plan) < PLAN_ORDER.indexOf(minPlan)) {
-        return res.status(402).json({ error: `Plan ${minPlan} required`, code: 'plan_required', requiredPlan: minPlan });
-      }
-      next();
-    } catch (err) {
-      logger.error('plan-gate', `requirePlan failed: ${err.message}`);
-      next();
-    }
-  };
-}
+/* `requirePlan(minPlan)` a ete SUPPRIME le 2026-10-07.
+ *
+ * Il exigeait un palier minimum parmi starter / growth / scale, une grille
+ * morte depuis l'arbitrage du 2026-09-21 : un seul produit complet a 79 € par
+ * siege. Il n'y a plus de palier a exiger · tout abonne a tout.
+ *
+ * Il n'etait cable sur aucune route, donc le retirer ne change rien a chaud.
+ * Le garder aurait ete pire que mort : du code qui rend credible une notion de
+ * palier que le produit ne vend plus, et qu'on finirait par rebrancher. */
 
-module.exports = { requireActivePlan, requirePlan };
+module.exports = { requireActivePlan };

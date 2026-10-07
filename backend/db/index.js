@@ -2572,6 +2572,16 @@ const teams = {
       ON CONFLICT (team_id, user_id) DO UPDATE SET role = $3
       RETURNING *
     `, [teamId, userId, role]);
+
+    // Un siege de plus se facture. Pose ICI et pas dans les routes : c'est le
+    // seul point par lequel un membre entre, donc le seul qu'un futur chemin
+    // d'appel ne pourra pas contourner sans le voir.
+    //
+    // `require` local et non en tete de fichier : lib/billing.js require ce
+    // module, et une dependance circulaire au chargement laisserait l'un des
+    // deux a moitie construit.
+    await require('../lib/billing').syncSeatsForTeam(teamId);
+
     return result.rows[0];
   },
 
@@ -2585,6 +2595,9 @@ const teams = {
 
   async removeMember(teamId, userId) {
     await query('DELETE FROM team_members WHERE team_id = $1 AND user_id = $2', [teamId, userId]);
+    // Un siege de moins se deduit · continuer a facturer quelqu'un qui est
+    // parti est une facture fausse envoyee a un client qui la lira.
+    await require('../lib/billing').syncSeatsForTeam(teamId);
   },
 
   async migrateUserData(teamId, userId) {

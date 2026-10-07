@@ -82,6 +82,10 @@ async function setup() {
   // retombe sur le 404 du gestionnaire d'erreurs, et un test ne distingue plus
   // « la route répond mal » de « la route n'existe pas ».
   app.use('/api/analytics', requireAuth, require('../routes/analytics'));
+  // La facturation · montee ici depuis le 2026-10-07. Sans ca, un test de
+  // checkout recevrait un 404 et passerait pour « pas de facturation », ce qui
+  // est exactement le genre de vert trompeur que ce harnais doit eviter.
+  app.use('/api/billing', requireAuth, require('../routes/billing'));
   app.use(errorHandler);
 
   return new Promise((resolve) => {

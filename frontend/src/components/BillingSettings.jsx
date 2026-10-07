@@ -31,12 +31,12 @@ export default function BillingSettings() {
     request('/billing').then(setState).catch(() => {});
   }, []);
 
-  const checkout = async (plan) => {
+  const checkout = async (cycle) => {
     setBusy(true);
     try {
       const d = await request('/billing/checkout', {
         method: 'POST',
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ cycle }),
       });
       if (d.url) window.location.href = d.url;
     } catch (err) {
@@ -57,11 +57,30 @@ export default function BillingSettings() {
   };
 
   const enabled = !!state?.billingEnabled;
-  const currentPlan = state?.plan || 'trial';
-  const plans = [
-    { key: 'starter', name: 'Starter', price: state?.prices?.starter ?? 49, feat: t('settings.billingFeatStarter') },
-    { key: 'growth', name: 'Growth', price: state?.prices?.growth ?? 149, feat: t('settings.billingFeatGrowth') },
-    { key: 'scale', name: 'Scale', price: state?.prices?.scale ?? 349, feat: t('settings.billingFeatScale') },
+  const abonne = !!state?.subscribed;
+  // ── UN SEUL PRODUIT, DEUX PERIODICITES ────────────────────────────────────
+  //
+  // L'ecran proposait trois paliers a 49, 149 et 349 €, la grille morte depuis
+  // le 2026-09-21. Il n'y a plus de palier a choisir : le produit est complet,
+  // il se paie 79 € par siege, et la seule question est mensuel ou annuel.
+  const seats = state?.seats ?? 1;
+  const seatPrice = state?.seatPrice ?? 79;
+  const moisOfferts = state?.annualMonthsFree ?? 2;
+  const offres = [
+    {
+      key: 'monthly',
+      nom: t('settings.billingMonthly'),
+      total: state?.monthlyTotal ?? seatPrice * seats,
+      unite: t('settings.billingPerMonth'),
+      note: null,
+    },
+    {
+      key: 'annual',
+      nom: t('settings.billingAnnual'),
+      total: state?.annualTotal ?? seatPrice * 10 * seats,
+      unite: t('settings.billingPerYear'),
+      note: t('settings.billingMonthsFree', { count: moisOfferts }),
+    },
   ];
 
   return (
@@ -70,7 +89,10 @@ export default function BillingSettings() {
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{t('settings.billingTitle')}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-            {t('settings.billingCurrent')} : <strong>{currentPlan === 'trial' ? t('settings.billingTrialLabel') : currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</strong>
+            {t('settings.billingCurrent')} : <strong>{abonne ? t('settings.billingSubscribedLabel') : t('settings.billingTrialLabel')}</strong>
+            {/* Le nombre de sieges facture, affiche AVANT de payer : c'est lui
+                qui multiplie le prix, donc la premiere chose a verifier. */}
+            {' · '}{t('settings.billingSeats', { count: seats, price: seatPrice })}
             {!enabled && <span style={{ marginLeft: 8, color: 'var(--primary)' }}>· {t('settings.billingSoon')}</span>}
           </div>
         </div>
@@ -80,24 +102,26 @@ export default function BillingSettings() {
           </button>
         )}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        {plans.map(p => (
-          <div key={p.key} style={{
-            border: currentPlan === p.key ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-            borderRadius: 10, padding: '14px 16px',
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        {offres.map(o => (
+          <div key={o.key} style={{
+            border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px',
           }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{p.name}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{o.nom}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', margin: '6px 0' }}>
-              {p.price}€<span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{t('settings.billingPerMonth')}</span>
+              {o.total.toLocaleString('fr-FR')}€
+              <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{o.unite}</span>
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', minHeight: 32 }}>{p.feat}</div>
+            <div style={{ fontSize: 11.5, color: o.note ? 'var(--success)' : 'var(--text-muted)', minHeight: 32 }}>
+              {o.note || t('settings.billingSeatDetail', { count: seats, price: seatPrice })}
+            </div>
             <button
-              className={currentPlan === p.key ? 'btn btn-ghost' : 'btn btn-primary'}
-              onClick={() => checkout(p.key)}
-              disabled={busy || !enabled || currentPlan === p.key}
+              className="btn btn-primary"
+              onClick={() => checkout(o.key)}
+              disabled={busy || !enabled || abonne}
               style={{ width: '100%', marginTop: 10 }}
             >
-              {currentPlan === p.key ? t('settings.billingCurrentBtn') : t('settings.billingSubscribe')}
+              {abonne ? t('settings.billingCurrentBtn') : t('settings.billingSubscribe')}
             </button>
           </div>
         ))}

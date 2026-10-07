@@ -12,11 +12,12 @@ const { Router } = require('express');
 const db = require('../db');
 const logger = require('../lib/logger');
 const {
-  PLANS,
+  CYCLES,
   isBillingEnabled,
   getStripe,
   priceIdFor,
-  planFromPriceId,
+  cycleFromPriceId,
+  countSeats,
   getBillingState,
   setUserPlan,
   findUserByCustomerId,
@@ -38,13 +39,15 @@ router.post('/checkout', async (req, res) => {
   if (!isBillingEnabled()) {
     return res.status(501).json({ error: 'Billing not configured', code: 'billing_not_configured' });
   }
-  const planKey = req.body?.plan;
-  if (!PLANS[planKey]) {
-    return res.status(400).json({ error: 'Unknown plan', code: 'unknown_plan' });
+  // Un seul produit, deux periodicites. Il n'y a plus de palier a choisir ·
+  // l'ancienne grille 49/149/349 est morte (arbitrage du 2026-09-21).
+  const cycleKey = req.body?.cycle || 'monthly';
+  if (!CYCLES[cycleKey]) {
+    return res.status(400).json({ error: 'Unknown billing cycle', code: 'unknown_cycle' });
   }
-  const priceId = priceIdFor(planKey);
+  const priceId = priceIdFor(cycleKey);
   if (!priceId) {
-    return res.status(501).json({ error: `Missing price ID for plan ${planKey}`, code: 'billing_not_configured' });
+    return res.status(501).json({ error: `Missing price ID for cycle ${cycleKey}`, code: 'billing_not_configured' });
   }
 
   try {
@@ -61,15 +64,22 @@ router.post('/checkout', async (req, res) => {
       await setUserPlan(req.user.id, { customerId });
     }
 
+    // ── LA QUANTITE EST LE NOMBRE DE SIEGES ────────────────────────────
+    //
+    // Elle valait `1` en dur. Une equipe de cinq aurait donc paye un siege,
+    // et rien dans l'ecran ni dans Stripe ne l'aurait signale · la facture
+    // aurait simplement ete quatre fois trop basse, tous les mois.
+    const seats = await countSeats(req.user.id);
+
     const appUrl = process.env.APP_URL || 'https://app.baakal.ai';
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: seats }],
       success_url: `${appUrl}/settings?billing=success`,
       cancel_url: `${appUrl}/settings?billing=cancelled`,
-      metadata: { baakalai_user_id: req.user.id, plan: planKey },
-      subscription_data: { metadata: { baakalai_user_id: req.user.id, plan: planKey } },
+      metadata: { baakalai_user_id: req.user.id, cycle: cycleKey, seats: String(seats) },
+      subscription_data: { metadata: { baakalai_user_id: req.user.id, cycle: cycleKey } },
     });
 
     res.json({ url: session.url });
@@ -132,8 +142,10 @@ async function stripeWebhook(req, res) {
         const userId = session.metadata?.baakalai_user_id
           || await findUserByCustomerId(session.customer);
         if (userId) {
+          // `seat` et non un nom de palier : il n'y en a plus qu'un. La valeur
+          // sert a distinguer un abonne d'un compte en essai, rien de plus.
           await setUserPlan(userId, {
-            plan: session.metadata?.plan || null,
+            plan: 'seat',
             planStatus: 'active',
             customerId: session.customer,
             subscriptionId: session.subscription,
@@ -146,9 +158,14 @@ async function stripeWebhook(req, res) {
         const userId = sub.metadata?.baakalai_user_id
           || await findUserByCustomerId(sub.customer);
         if (userId) {
+          // Le cycle est lu pour la TRACE (mensuel ou annuel), pas pour le
+          // plan : un changement de periodicite depuis le portail client ne
+          // doit pas faire croire a un changement de produit.
           const priceId = sub.items?.data?.[0]?.price?.id || null;
+          const cycle = cycleFromPriceId(priceId);
+          if (cycle) logger.info('billing', `User ${userId}: cycle ${cycle}, ${sub.items?.data?.[0]?.quantity ?? '?'} siège(s)`);
           await setUserPlan(userId, {
-            plan: planFromPriceId(priceId) || sub.metadata?.plan || null,
+            plan: 'seat',
             planStatus: sub.status, // active | past_due | canceled | unpaid…
             subscriptionId: sub.id,
           });
