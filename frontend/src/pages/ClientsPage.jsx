@@ -14,6 +14,7 @@ import CRMDiagnosticReport from '../components/CRMDiagnosticReport';
 import { accountFirstLines } from '../components/ContactSubline';
 import ProductLineTags from '../components/ProductLineTags';
 import Icon from '../components/Icon';
+import EmailComposer from '../components/EmailComposer';
 
 const TILE_COLORS = [
   'var(--text-muted)', 'var(--blue)', 'var(--accent)',
@@ -1766,7 +1767,10 @@ function ClientDetailPanel({ client, multiCrm, onClose }) {
   const STATUS_LABELS = getStatusLabels(lang);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  // Le compositeur d'email · il remplace deux invites natives du navigateur
+  // enchaines. L'etat `sending` a disparu avec eux : l'envoi se fait
+  // desormais DANS le compositeur, qui porte le sien.
+  const [composerOuvert, setComposerOuvert] = useState(false);
   const [timeline, setTimeline] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(true);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
@@ -1785,26 +1789,20 @@ function ClientDetailPanel({ client, multiCrm, onClose }) {
 .finally(() => setTimelineLoading(false));
   }, [client.id]);
 
-  const handleQuickEmail = async () => {
-    const subject = window['pro' + 'mpt'](lang === 'en' ? 'Email subject:' : 'Objet de l\'email :');
-    if (!subject) return;
-    const body = window['pro' + 'mpt'](lang === 'en' ? 'Message:' : 'Message :');
-    if (!body) return;
-    setSending(true);
+  /**
+   * Recharge la fiche apr\u00e8s un envoi, pour que l'email apparaisse dans la
+   * timeline sans que l'utilisateur ait \u00e0 rouvrir le contact.
+   *
+   * Un \u00e9chec de rechargement est aval\u00e9 volontairement : l'email EST parti,
+   * c'est l'essentiel, et afficher une erreur ici ferait croire le contraire.
+   */
+  const rechargerFiche = useCallback(async () => {
     try {
-      await request('/nurture/send', {
-        method: 'POST',
-        body: JSON.stringify({ to: client.email, toName: client.name, subject, body, opportunityId: client.id }),
-      });
-      showToast({ type: 'success', title: lang === 'en' ? 'Email sent' : 'Email envoy\u00e9', message: client.email });
-      // Reload detail
-      const data = await request(`/crm/client/${client.id}`);
-      setDetail(data);
-    } catch (err) {
-      showToast({ type: 'error', title: lang === 'en' ? 'Error' : 'Erreur', message: err.message });
+      setDetail(await request(`/crm/client/${client.id}`));
+    } catch {
+      /* la fiche reste telle quelle */
     }
-    setSending(false);
-  };
+  }, [client.id]);
 
   const color = STATUS_COLORS[client.status] || 'var(--text-muted)';
 
@@ -1907,20 +1905,25 @@ function ClientDetailPanel({ client, multiCrm, onClose }) {
         </div>
       )}
 
+      {composerOuvert && (
+        <EmailComposer
+          contact={client}
+          onClose={() => setComposerOuvert(false)}
+          onSent={rechargerFiche}
+        />
+      )}
+
       {/* Quick actions */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <button
           className="btn btn-primary"
           style={{ fontSize: 11, padding: '6px 14px' }}
-          onClick={handleQuickEmail}
-          disabled={sending || !client.email}
+          onClick={() => setComposerOuvert(true)}
+          disabled={!client.email}
+          title={client.email ? undefined : t('clients.noEmailForSend')}
         >
-          {sending ? <Icon name="clock" size={12} /> : (
-            <>
-              <Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
-              {t('clients.sendEmail')}
-            </>
-          )}
+          <Icon name="mail" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
+          {t('clients.sendEmail')}
         </button>
         {client.linkedin_url && (
           <a href={client.linkedin_url} target="_blank" rel="noopener noreferrer"

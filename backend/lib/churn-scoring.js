@@ -211,9 +211,24 @@ function scoreOpportunity(opp, {
       score += 20;
       factors.push({ signal: 'client_silent', weight: 20, detail: `Client sans contact depuis ${Math.round(daysSinceActivity)}d` });
     } else {
+      // ── L'abattement s'inscrit TOUJOURS, et pour sa valeur REELLE ─────────
+      //
+      // Avant : le facteur n'etait pousse que `if (score > 0)`, donc
+      // l'abattement disparaissait de l'explication precisement quand il etait
+      // determinant · celui qui ramene le score a zero. L'ecran affichait alors
+      // une decomposition qui ne fait pas la somme du score : « Churn 0/100 »
+      // avec un seul facteur « +10 » en dessous. Constate le 2026-10-07 sur un
+      // contact de staging, et c'est le genre de detail qui fait perdre
+      // confiance dans TOUS les chiffres de la page, pas seulement celui-la.
+      //
+      // Et pour sa valeur reelle : un contact a 10 ne beneficie pas de -15, il
+      // beneficie de -10, puisque le plancher a zero absorbe le reste.
+      // Annoncer -15 serait une seconde arithmetique fausse.
+      const avant = score;
       score = Math.max(0, score - 15);
-      if (score > 0) {
-        factors.push({ signal: 'status_won_offset', weight: -15, detail: 'Client actif (won), risque réduit' });
+      const applique = score - avant;
+      if (applique !== 0) {
+        factors.push({ signal: 'status_won_offset', weight: applique, detail: 'Client actif (won), risque réduit' });
       }
     }
   }

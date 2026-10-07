@@ -1326,6 +1326,95 @@ router.get('/client/search', async (req, res, next) => {
 });
 
 // GET /api/crm/client/:id · Get full client detail (opportunity + nurture emails + CRM activities)
+/**
+ * POST /api/crm/client/:id/draft-email · baakalai ecrit le premier jet.
+ *
+ * ── Pourquoi cette route existe ─────────────────────────────────────────────
+ *
+ * Le bouton « Envoyer un email » de la fiche contact ouvrait DEUX `prompt()`
+ * natifs du navigateur, l'un pour l'objet, l'autre pour le corps, et laissait
+ * l'utilisateur ecrire a partir de rien. Un produit qui promet de lire le CRM
+ * et d'ecrire la relance ne devrait pas demander a son utilisateur de taper un
+ * email dans une boite de dialogue grise.
+ *
+ * ── Pourquoi elle REUTILISE le redacteur des workflows ──────────────────────
+ *
+ * `generateStepEmail` (lib/workflow-step-email.js) sait deja ecrire un email a
+ * partir d'une CONSIGNE et de ce qu'on connait du contact, et il porte les deux
+ * verrous de style du produit : les regles anti-tournures-IA concatenees au
+ * prompt, et `humanize()` sur la sortie. Ecrire un second generateur ici aurait
+ * duplique ces verrous, donc ouvert la porte a ce qu'ils divergent.
+ *
+ * La consigne est deduite de l'etat du contact · c'est la seule chose de neuf.
+ * Elle n'INVENTE rien : chaque phrase qu'elle pose s'appuie sur une donnee
+ * presente, et si on ne sait rien on le dit plutot que de meubler.
+ *
+ * RIEN N'EST ENVOYE ICI. La route rend un brouillon, l'utilisateur le relit et
+ * decide. C'est l'envoi qui porte les gardes (desabonnement, plafond par
+ * societe), et il reste sur /nurture/send.
+ */
+router.post('/client/:id/draft-email', async (req, res, next) => {
+  try {
+    const opp = await db.opportunities.get(req.params.id);
+    if (!opp) return res.status(404).json({ error: 'Client not found' });
+    if (opp.user_id !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+    if (!opp.email) return res.status(400).json({ error: 'no_email', message: "Ce contact n’a pas d’adresse email." });
+
+    const JOUR = 86400000;
+    const silence = opp.last_activity_at
+      ? Math.round((Date.now() - new Date(opp.last_activity_at).getTime()) / JOUR)
+      : null;
+
+    // Ce qu'on sait, et rien d'autre. Un element absent ne produit PAS de
+    // phrase : une consigne qui affirme « client depuis des mois » sur une
+    // date inconnue ferait ecrire une contre-verite a baakalai, et c'est le
+    // destinataire qui la lirait.
+    const faits = [];
+    if (opp.status === 'won') faits.push("C’est un client, l’affaire a ete signee.");
+    else if (opp.status === 'lost') faits.push("L’affaire a ete perdue par le passe.");
+    if (silence != null) faits.push(`Aucun echange depuis ${silence} jours.`);
+    else faits.push('Aucune activite connue avec ce contact.');
+    if (opp.deal_value) faits.push(`Montant associe : ${Math.round(opp.deal_value)} euros.`);
+    if (opp.crm_stage) faits.push(`Etape dans le pipeline : ${opp.crm_stage}.`);
+
+    // Les facteurs de risque donnent l'ANGLE, pas le contenu : on ne recopie
+    // jamais un score dans un email, on s'en sert pour choisir quoi dire.
+    //
+    // `churn_factors` est du JSONB · Postgres le rend decode, et l'adaptateur
+    // du miroir le decode aussi depuis le 2026-10-02. Un `Array.isArray` suffit
+    // donc, et il protege du cas ou la colonne serait vide ou malformee.
+    const facteurs = Array.isArray(opp.churn_factors) ? opp.churn_factors : [];
+    const risques = facteurs
+      .filter(f => f && f.weight > 0 && f.detail)
+      .slice(0, 2)
+      .map(f => f.detail);
+    if (risques.length > 0) faits.push(`Points d’attention releves : ${risques.join(", ")}.`);
+
+    const consigne = [
+      'Reprendre contact avec ce contact, simplement et sans pretexte artificiel.',
+      faits.join(' '),
+      'Une seule question a la fin, concrete, a laquelle on peut repondre en une ligne.',
+      "Ne jamais mentionner de score, de risque calcule ni d’outil.",
+    ].join('\n');
+
+    const { generateStepEmail } = require('../lib/workflow-step-email');
+    const written = await generateStepEmail({
+      consigne,
+      prospect: opp,
+      previous: [],
+      isFirst: true,
+      role: opp.account_role || null,
+    });
+
+    // Pas de repli : expedier la consigne ou un gabarit creux mettrait une note
+    // de service sous les yeux d'un client. L'ecran garde ses champs vides et
+    // l'utilisateur ecrit lui-meme, ce qui est exactement l'etat d'avant.
+    if (!written) return res.status(502).json({ error: 'generation_failed' });
+
+    res.json({ subject: written.subject, body: written.body });
+  } catch (err) { next(err); }
+});
+
 router.get('/client/:id', async (req, res, next) => {
   try {
     const opp = await db.opportunities.get(req.params.id);

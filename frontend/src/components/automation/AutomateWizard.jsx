@@ -44,6 +44,77 @@ const CRM_EVENTS = ['deal_stage_changed', 'deal_created', 'contact_created'];
 const WIRED_CRM_EVENTS = ['deal_stage_changed'];
 const EMAIL_EVENTS = ['reply_received', 'no_reply_days'];
 
+/**
+ * Une carte d'evenement, dans le choix du declencheur.
+ *
+ * ── Ce que la couleur dit ───────────────────────────────────────────────────
+ *
+ * Douze cartes identiques, dont neuf portaient mot pour mot la meme phrase
+ * (« Aucun en attente, le declencheur s'arme quand meme et attend le
+ * premier »), noyaient les trois qui avaient reellement du travail pret. Une
+ * carte a 29 contacts se lisait exactement comme une carte a zero.
+ *
+ * La couleur porte donc l'ETAT, pas la marque :
+ *
+ *   · PRET · une bande coloree et un compte en gras. C'est ce qu'on cherche en
+ *     ouvrant cet ecran, donc c'est ce qui doit sauter aux yeux ;
+ *   · EN ATTENTE · rien de colore, deux mots au lieu d'une phrase. Le
+ *     declencheur s'arme quand meme, ce n'est pas une erreur, donc ca ne doit
+ *     pas crier ;
+ *   · INDISPONIBLE · trait pointille et opacite reduite. Clairement hors-jeu,
+ *     avec la raison en infobulle.
+ *
+ * Mettre du violet de marque sur les douze les aurait rendues jolies et
+ * toujours illisibles.
+ *
+ * ── Pourquoi il est DEHORS ──────────────────────────────────────────────────
+ *
+ * Il etait defini dans le corps de `AutomateWizard`, donc recree a chaque
+ * rendu : React le voyait comme un type de composant different a chaque fois et
+ * demontait puis remontait toutes les cartes. Sorti, il garde son identite.
+ */
+function EventButton({ label, count = null, sub, off, selected, onClick, t }) {
+  const pret = count != null && count > 0;
+  const indisponible = !!off;
+
+  return (
+    <button
+      disabled={indisponible}
+      title={off || ''}
+      onClick={onClick}
+      style={{
+        textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--r-lg)',
+        border: `1px solid ${selected ? 'var(--text-primary)' : 'var(--border)'}`,
+        borderStyle: indisponible ? 'dashed' : 'solid',
+        // La bande de gauche : c'est elle qui distingue une carte prete au
+        // premier coup d'oeil, avant meme qu'on lise le chiffre.
+        borderLeft: pret && !indisponible
+          ? '3px solid var(--primary)'
+          : `1px solid ${selected ? 'var(--text-primary)' : 'var(--border)'}`,
+        background: selected ? 'var(--bg-elevated)' : 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        cursor: indisponible ? 'not-allowed' : 'pointer',
+        opacity: indisponible ? 0.45 : 1,
+        width: '100%',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: selected ? 600 : 500 }}>{label}</div>
+      <div style={{
+        fontSize: 11.5, marginTop: 2,
+        fontWeight: pret ? 600 : 400,
+        color: pret ? 'var(--primary)' : 'var(--text-muted)',
+      }}>
+        {/* Singulier et pluriel sont DEUX cles, pas un « (s) » : l'ecran
+            affichait « 1 contacts concernes ». Une faute d'accord sur un
+            chiffre fait douter du chiffre. */}
+        {indisponible ? off
+          : pret ? t(count === 1 ? 'automation.wizard.readyOne' : 'automation.wizard.readyMany', { count })
+            : sub}
+      </div>
+    </button>
+  );
+}
+
 export default function AutomateWizard({ signalTypes, preselected, mode, onClose, onDone }) {
   const t = useT();
   const fromCatalog = mode === 'catalog';
@@ -199,23 +270,6 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
     return SIGNAL_CONTEXT;
   };
 
-  const EventButton = ({ label, sub, off, selected, onClick }) => (
-    <button
-      disabled={!!off}
-      title={off || ''}
-      onClick={onClick}
-      style={{
-        textAlign: 'left', padding: '10px 12px', borderRadius: 'var(--r-lg)',
-        border: `1px solid ${selected ? 'var(--text-primary)' : 'var(--border)'}`,
-        background: selected ? 'var(--bg-elevated)' : 'var(--bg-card)',
-        color: 'var(--text-primary)',
-        cursor: off ? 'not-allowed' : 'pointer', opacity: off ? 0.5 : 1, width: '100%',
-      }}
-    >
-      <div style={{ fontSize: 13, fontWeight: selected ? 600 : 500 }}>{label}</div>
-      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{off || sub}</div>
-    </button>
-  );
 
   return (
     <>
@@ -295,12 +349,13 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                   {(typesData?.families?.find(f => f.key === 'veille')?.types || []).map(ty => (
                     <EventButton
                       key={ty.signalType}
+                      t={t}
                       label={t(`signals.type.${ty.signalType}`)}
                       // Le compte est une information, pas une condition : un
                       // type à zéro s'arme très bien, il attend simplement.
-                      sub={ty.newCount > 0
-                        ? t('automation.wizard.pendingCount', { count: ty.newCount })
-                        : t('automation.wizard.noPending')}
+                      // C'est la carte qui décide quoi en faire visuellement.
+                      count={ty.newCount}
+                      sub={t('automation.wizard.waiting')}
                       off={automated[ty.signalType]
                         ? t('automation.wizard.alreadyAutomated', { workflow: automated[ty.signalType].workflowName })
                         : null}
@@ -322,13 +377,13 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                   {(stateData?.triggers || []).map(st => (
                     <EventButton
                       key={st.eventKey}
+                      t={t}
                       label={t(`automation.state.${st.eventKey}.label`)}
                       // Le nombre de contacts concernés aujourd'hui, et la
                       // donnée qui manque quand il est à zéro. Un type muet
                       // doit dire pourquoi, pas afficher un zéro nu.
-                      sub={st.matching > 0
-                        ? t('automation.wizard.matchingCount', { count: st.matching })
-                        : t(`automation.wizard.needs.${st.needs}`)}
+                      count={st.matching}
+                      sub={t(`automation.wizard.needs.${st.needs}`)}
                       selected={stateSel?.eventKey === st.eventKey}
                       onClick={() => setStateSel(
                         stateSel?.eventKey === st.eventKey
@@ -385,6 +440,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                   {CRM_EVENTS.map(k => (
                     <EventButton
                       key={k}
+                      t={t}
                       label={t(`automation.wizard.event.${k}`)}
                       sub={k === 'deal_stage_changed' ? t(`automation.wizard.latency.${stageData?.latency || 'none'}`) : ''}
                       off={WIRED_CRM_EVENTS.includes(k) ? null : t('automation.wizard.notWiredImport')}
@@ -454,6 +510,7 @@ export default function AutomateWizard({ signalTypes, preselected, mode, onClose
                   {EMAIL_EVENTS.map(k => (
                     <EventButton
                       key={k}
+                      t={t}
                       label={t(`automation.wizard.event.${k}`)}
                       off={t('automation.wizard.notWiredEvent')}
                     />

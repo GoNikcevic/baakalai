@@ -140,8 +140,6 @@
       },
       "familyCrmEmpty": "Deal stagnant, client à risque et contact inactif vivent encore sur leurs pages. Ils rejoindront ce catalogue.",
       "notWiredEvent": "Pas encore branché : seuls les signaux déclenchent un workflow pour l'instant.",
-      "pendingCount": "{count} en attente",
-      "noPending": "Aucun en attente, le déclencheur s'arme quand même et attend le premier.",
       "alreadyAutomated": "Déjà automatisé vers {workflow}.",
       "event": {
         "deal_stage_changed": "Le deal change de stage",
@@ -164,7 +162,6 @@
         "sync": "Reçu au prochain passage de synchro, ou dès que tu lances une synchro manuelle.",
         "none": "Ce connecteur ne remonte pas d'étapes de pipeline."
       },
-      "matchingCount": "{count} contacts concernés aujourd'hui",
       "stateDaysLabel": "Seuil",
       "fromNowState": "Chaque contact qui remplira cette condition sera inscrit automatiquement, à chaque passage quotidien.",
       "notPorted": "Les deux déclencheurs newsletter restent dans les anciens réglages : ils lisent l'activité d'emailing Salesforce, qui ne vit pas dans les données synchronisées.",
@@ -178,7 +175,10 @@
       "multiThreadTitle": "Plusieurs interlocuteurs",
       "multiThreadLabel": "Aborder jusqu'à trois interlocuteurs par société, un à la fois",
       "multiThreadHint": "Un seul message part par jour et par société, deux au maximum par semaine. Dès qu'une personne répond, les autres fils de sa société se taisent.",
-      "multiThreadRoleWarning": "Sur une étape écrite à la main, les variables personnalisent le prénom mais pas le propos : deux collègues recevraient le même texte. Pour différencier, utilisez des segments par rôle, par exemple {{#decision_maker}}...{{/decision_maker}}, ou laissez baakalai rédiger l'étape depuis une consigne."
+      "multiThreadRoleWarning": "Sur une étape écrite à la main, les variables personnalisent le prénom mais pas le propos : deux collègues recevraient le même texte. Pour différencier, utilisez des segments par rôle, par exemple {{#decision_maker}}...{{/decision_maker}}, ou laissez baakalai rédiger l'étape depuis une consigne.",
+      "waiting": "en attente",
+      "readyOne": "{count} contact prêt",
+      "readyMany": "{count} contacts prêts"
     },
     "editor": {
       "workflowName": "Nom du workflow",
@@ -1282,7 +1282,8 @@
     "riskNotScorableNoAccount": "Ce groupe n'est pas rattaché à une société : il ne peut pas être scoré.",
     "riskNotScorableYet": "Cette société n'a pas encore été scorée, ou n'a aucun interlocuteur rattaché. Un compte muet n'est pas un compte sain.",
     "ownerNone": "non rattaché",
-    "silenceUnknown": "inconnu"
+    "silenceUnknown": "inconnu",
+    "noEmailForSend": "Ce contact n'a pas d'adresse email."
   },
   "stageMapping": {
     "title": "Votre pipeline, vu par baakalai",
@@ -2511,5 +2512,18 @@
       "operational": "opérationnel",
       "other": "autre rôle"
     }
+  },
+  "composer": {
+    "title": "Écrire à {name}",
+    "draftCta": "Faire rédiger par baakalai",
+    "drafting": "Rédaction...",
+    "draftFailed": "La rédaction a échoué",
+    "overwriteConfirm": "Remplacer ce que vous avez déjà écrit par un brouillon de baakalai ?",
+    "subject": "Objet",
+    "body": "Message",
+    "fromMailbox": "L'email partira de votre boîte connectée, et sera tracé sur la fiche du contact.",
+    "send": "Envoyer",
+    "sent": "Email envoyé",
+    "needBoth": "Renseignez l'objet et le message pour pouvoir envoyer."
   }
 }

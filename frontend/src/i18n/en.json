@@ -140,8 +140,6 @@
       },
       "familyCrmEmpty": "Stagnant deal, at-risk customer and inactive contact still live on their own pages. They will join this catalogue.",
       "notWiredEvent": "Not wired yet: only signals trigger a workflow for now.",
-      "pendingCount": "{count} pending",
-      "noPending": "None pending. The trigger arms anyway and waits for the first one.",
       "alreadyAutomated": "Already automated to {workflow}.",
       "event": {
         "deal_stage_changed": "The deal changes stage",
@@ -164,7 +162,6 @@
         "sync": "Received at the next sync pass, or as soon as you run a manual sync.",
         "none": "This connector does not report pipeline stages."
       },
-      "matchingCount": "{count} contacts match today",
       "stateDaysLabel": "Threshold",
       "fromNowState": "Every contact that meets this condition will be enrolled automatically, at each daily pass.",
       "notPorted": "The two newsletter triggers stay in the older settings: they read Salesforce emailing activity, which does not live in the synced data.",
@@ -178,7 +175,10 @@
       "multiThreadTitle": "Multiple contacts",
       "multiThreadLabel": "Reach up to three contacts per company, one at a time",
       "multiThreadHint": "One message per company per day, two per week at most. As soon as someone replies, the other threads at their company go quiet.",
-      "multiThreadRoleWarning": "In a hand-written step, variables personalise the first name but not the message: two colleagues would get the same text. To differentiate, use role segments such as {{#decision_maker}}...{{/decision_maker}}, or let baakalai write the step from an instruction."
+      "multiThreadRoleWarning": "In a hand-written step, variables personalise the first name but not the message: two colleagues would get the same text. To differentiate, use role segments such as {{#decision_maker}}...{{/decision_maker}}, or let baakalai write the step from an instruction.",
+      "waiting": "waiting",
+      "readyOne": "{count} contact ready",
+      "readyMany": "{count} contacts ready"
     },
     "editor": {
       "workflowName": "Workflow name",
@@ -1282,7 +1282,8 @@
     "riskNotScorableNoAccount": "This group isn't linked to a company, so it can't be scored.",
     "riskNotScorableYet": "This company hasn't been scored yet, or has no linked contact. A silent account isn't a healthy one.",
     "ownerNone": "unassigned",
-    "silenceUnknown": "unknown"
+    "silenceUnknown": "unknown",
+    "noEmailForSend": "This contact has no email address."
   },
   "stageMapping": {
     "title": "Your pipeline, as baakalai reads it",
@@ -2511,5 +2512,18 @@
       "operational": "operational",
       "other": "other role"
     }
+  },
+  "composer": {
+    "title": "Write to {name}",
+    "draftCta": "Let baakalai write it",
+    "drafting": "Writing...",
+    "draftFailed": "Drafting failed",
+    "overwriteConfirm": "Replace what you've already written with a draft from baakalai?",
+    "subject": "Subject",
+    "body": "Message",
+    "fromMailbox": "The email will be sent from your connected mailbox, and logged on the contact's record.",
+    "send": "Send",
+    "sent": "Email sent",
+    "needBoth": "Fill in both the subject and the message to send."
   }
 }

@@ -61,7 +61,22 @@ const PATTERNS = [
       if (!filePath.includes('frontend/')) return [];
       const issues = [];
       for (let i = 0; i < lines.length; i++) {
-        if (/\b(alert|prompt)\s*\(/.test(lines[i]) && !lines[i].trim().startsWith('//')) {
+        // Les COMMENTAIRES sont exemptés, de toutes les formes.
+        //
+        // La règle n'exemptait que les lignes `//`, pas les blocs `/* */`.
+        // Conséquence : documenter POURQUOI on a retiré un de ces appels
+        // déclenchait l'alerte, donc la seule façon de committer l'explication
+        // était de ne pas l'écrire. Une règle qui interdit de parler de ce
+        // qu'elle interdit pousse à la contourner · c'est d'ailleurs ce qui
+        // était arrivé, le code appelait `window['pro' + 'mpt']` pour passer
+        // sous son radar.
+        //
+        // Une ligne qui commence par `*` ou `/*` est dans un bloc de
+        // commentaire : elle ne peut pas être un appel. La règle garde donc
+        // toutes ses dents sur le vrai sujet, les appels.
+        const ligne = lines[i].trim();
+        const estCommentaire = ligne.startsWith('//') || ligne.startsWith('*') || ligne.startsWith('/*');
+        if (/\b(alert|prompt)\s*\(/.test(lines[i]) && !estCommentaire) {
           issues.push(i + 1);
         }
       }
