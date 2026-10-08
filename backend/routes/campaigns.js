@@ -8,6 +8,7 @@ const { getUserKey } = require('../config');
 const { getUserCrmToken } = require('../lib/crm-token');
 const logger = require('../lib/logger');
 const { validateId } = require('../middleware/validate-params');
+const { allowOwnerOrAdmin } = require('../middleware/audit-log');
 
 const router = Router();
 
@@ -48,7 +49,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const data = await db.campaigns.getWithRelations(req.params.id);
     if (!data) return res.status(404).json({ error: 'Campaign not found' });
-    if (data.campaign.user_id && data.campaign.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, data.campaign.user_id, 'campaign', req.params.id, { allowUnowned: true })) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -97,7 +98,7 @@ router.patch('/:id', async (req, res, next) => {
   try {
     const existing = await db.campaigns.get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Campaign not found' });
-    if (existing.user_id && existing.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, existing.user_id, 'campaign', req.params.id, { allowUnowned: true })) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -117,7 +118,7 @@ router.put('/:id/sequence', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-    if (campaign.user_id && campaign.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, campaign.user_id, 'campaign', req.params.id, { allowUnowned: true })) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -553,7 +554,7 @@ router.delete('/:id/prospects/:prospectId', async (req, res, next) => {
   try {
     const opp = await db.opportunities.get(req.params.prospectId);
     if (!opp) return res.status(404).json({ error: 'Prospect not found' });
-    if (opp.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, opp.user_id, 'opportunity', req.params.prospectId)) {
       return res.status(403).json({ error: 'Access denied' });
     }
     if (opp.campaign_id !== req.params.id) {
@@ -576,7 +577,7 @@ router.delete('/:id/prospects', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-    if (campaign.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, campaign.user_id, 'campaign', req.params.id)) {
       return res.status(403).json({ error: 'Access denied' });
     }
     const result = await db.query(
@@ -1075,7 +1076,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const campaign = await db.campaigns.get(req.params.id);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-    if (campaign.user_id && campaign.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, campaign.user_id, 'campaign', req.params.id, { allowUnowned: true })) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

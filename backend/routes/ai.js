@@ -9,6 +9,7 @@ const logger = require('../lib/logger');
 const icpAgent = require('../lib/icp-agent');
 const { validateId } = require('../middleware/validate-params');
 const { requireAdmin } = require('../middleware/auth');
+const { logAudit } = require('../middleware/audit-log');
 
 const router = Router();
 router.param('id', (req, res, next, id) => validateId(req, res, next));
@@ -448,6 +449,11 @@ router.post('/memory/:id/toggle-share', requireAdmin, async (req, res, next) => 
       [req.params.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Pattern not found' });
+    // Exposer un pattern à tous les tenants est une action d'admin sur de
+    // l'état partagé : elle doit laisser une trace.
+    logAudit(req.user.id, 'admin.pattern_share', 'memory_pattern', req.params.id, {
+      shared: result.rows[0].shared,
+    }, req);
     res.json({ id: result.rows[0].id, shared: result.rows[0].shared });
   } catch (err) { next(err); }
 });

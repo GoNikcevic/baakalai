@@ -4,6 +4,7 @@ const lemlist = require('../api/lemlist');
 const { kpiCache } = require('../lib/cache');
 const { getUserKey } = require('../config');
 const hubspotSync = require('../orchestrator/jobs/hubspot-sync');
+const { allowOwnerOrAdmin } = require('../middleware/audit-log');
 
 const router = Router();
 
@@ -251,7 +252,7 @@ router.patch('/opportunities/:id', async (req, res, next) => {
   try {
     const existing = await db.opportunities.get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Opportunity not found' });
-    if (existing.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, existing.user_id, 'opportunity', req.params.id)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

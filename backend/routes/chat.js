@@ -7,6 +7,7 @@ const { buildThreadTitle, MAX_LEN: TITLE_MAX_LEN } = require('../lib/chat-title'
 const { rateLimit } = require('../lib/rate-limit');
 const { getValidatedIntegrations } = require('../config');
 const { getPatternContext, getTeamId } = require('../lib/email-context');
+const { allowOwnerOrAdmin } = require('../middleware/audit-log');
 const emailLimit = rateLimit({ windowMs: 60000, max: 10 }); // 10 emails per minute
 const cleanLimit = rateLimit({ windowMs: 60000, max: 5 });
 
@@ -199,7 +200,7 @@ router.patch('/threads/:id', async (req, res, next) => {
   try {
     const thread = await db.chatThreads.get(req.params.id);
     if (!thread) return res.status(404).json({ error: 'Thread not found' });
-    if (thread.user_id && thread.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, thread.user_id, 'chat_thread', req.params.id, { allowUnowned: true })) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -220,7 +221,7 @@ router.patch('/threads/:id', async (req, res, next) => {
 router.delete('/threads/:id', async (req, res, next) => {
   try {
     const thread = await db.chatThreads.get(req.params.id);
-    if (thread && thread.user_id && thread.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (thread && !allowOwnerOrAdmin(req, thread.user_id, 'chat_thread', req.params.id, { allowUnowned: true })) {
       return res.status(403).json({ error: 'Access denied' });
     }
     await db.chatMessages.deleteByThread(req.params.id);
@@ -236,7 +237,7 @@ router.get('/threads/:id/messages', async (req, res, next) => {
   try {
     const thread = await db.chatThreads.get(req.params.id);
     if (!thread) return res.status(404).json({ error: 'Thread not found' });
-    if (thread.user_id && thread.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (!allowOwnerOrAdmin(req, thread.user_id, 'chat_thread', req.params.id, { allowUnowned: true })) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
