@@ -30,9 +30,20 @@ export default function CampaignsList({ onNavigateCampaign }) {
   const confirm = useConfirm();
   const en = lang === 'en';
   const user = getUser();
-  // Non-admins get the campaign assistant only · no tab switcher, no campaign-list/autopilot
-  // management views (matches this app's existing "simplified UI for non-admins" principle
-  // elsewhere, e.g. Layout.jsx's simplified sidebar).
+  // Un non-admin a droit à l'assistant ET à l'historique de SES campagnes.
+  // La liste est déjà cloisonnée par l'API (GET /api/campaigns filtre sur
+  // req.user.id), donc il ne voit jamais celle d'un collègue, et le moteur
+  // d'envoi est cloisonné de la même façon : le cron boucle par user_id et
+  // resolveAccount ne rend que les boîtes de cet utilisateur.
+  //
+  // Avant, cette page lui rendait l'assistant seul, sans onglets. Il créait sa
+  // campagne, l'activait depuis sa fiche, et n'avait plus aucun chemin pour y
+  // revenir : ni suivi, ni mise en pause. Sa seule action restante était d'en
+  // créer une nouvelle.
+  //
+  // Restent réservés à l'admin : Autopilot, qui règle une politique d'envoi
+  // pour toute la portée, et Campagnes équipe, dont les routes répondent 403
+  // aux autres rôles.
   const isAdmin = !user?.teamRole || user.teamRole === 'admin';
   // L'écran principal de Prospection est la création de campagne (assistant) ;
   // la liste n'est qu'un historique accessible en second onglet. Les CTAs externes
@@ -160,15 +171,6 @@ export default function CampaignsList({ onNavigateCampaign }) {
     setActionLoading(prev => ({ ...prev, [campaign.id]: null }));
   }, [setCampaigns, t, en]);
 
-  /* ── Non-admins: campaign assistant only, no tab switcher ── */
-  if (!isAdmin) {
-    return (
-      <div id="campaigns-list-view">
-        <CampaignAssistant />
-      </div>
-    );
-  }
-
   const countText = t('campaigns.countSummary', {
     campaigns: campaignsList.length,
     campaignPlural: campaignsList.length > 1 ? 's' : '',
@@ -187,8 +189,10 @@ export default function CampaignsList({ onNavigateCampaign }) {
         {[
           { key: 'assistant', label: t('campaigns.tabCreate') },
           { key: 'campaigns', label: t('campaigns.tabHistory') },
-          { key: 'autopilot', label: 'Autopilot' },
-          ...(isAdmin ? [{ key: 'team', label: t('activation.teamCampaigns') }] : []),
+          ...(isAdmin ? [
+            { key: 'autopilot', label: 'Autopilot' },
+            { key: 'team', label: t('activation.teamCampaigns') },
+          ] : []),
         ].map(tab => (
           <button key={tab.key} onClick={() => setView(tab.key)} style={{
             padding: '10px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
@@ -201,9 +205,12 @@ export default function CampaignsList({ onNavigateCampaign }) {
         ))}
       </div>
 
-      {view === 'autopilot' && <AutopilotSettings scope="prospection" />}
+      {/* `isAdmin` est redemandé au rendu, et pas seulement à la construction
+          des onglets : sans lui, un `view` arrivé par location.state afficherait
+          à un non-admin un écran dont toutes les routes lui répondent 403. */}
+      {isAdmin && view === 'autopilot' && <AutopilotSettings scope="prospection" />}
 
-      {view === 'team' && <TeamCampaigns />}
+      {isAdmin && view === 'team' && <TeamCampaigns />}
 
       {view === 'assistant' && <CampaignAssistant />}
 

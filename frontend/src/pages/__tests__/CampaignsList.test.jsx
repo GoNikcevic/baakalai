@@ -1,13 +1,19 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import CampaignsList from '../CampaignsList';
 import { AppProvider } from '../../context/AppContext';
+
+// L'utilisateur courant est une référence mutable, et non une valeur figée : les
+// onglets de cette page dépendent de son rôle d'équipe, donc un test doit
+// pouvoir le changer. `vi.hoisted` est nécessaire parce que `vi.mock` est remonté
+// au-dessus des imports, avant toute déclaration de module.
+const { utilisateur } = vi.hoisted(() => ({ utilisateur: { courant: null } }));
 
 // Mock auth service
 vi.mock('../../services/auth', () => ({
   isLoggedIn: () => false,
-  getUser: () => null,
+  getUser: () => utilisateur.courant,
   getToken: () => null,
   getRefreshToken: () => null,
 }));
@@ -211,6 +217,67 @@ describe('CampaignsList', () => {
 
     expect(screen.getByText('247 prospects')).toBeInTheDocument();
     expect(screen.getByText('84 prospects')).toBeInTheDocument();
+  });
+});
+
+describe('CampaignsList, onglets selon le role d equipe', () => {
+  // `utilisateur.courant` est global au fichier : le laisser posé ferait basculer
+  // les tests suivants en non-admin sans qu'ils le demandent.
+  afterEach(() => { utilisateur.courant = null; });
+
+  it('un commercial garde l acces a l historique de ses campagnes', () => {
+    // Le defaut que ce test tient : la page rendait l'assistant SEUL a un
+    // non-admin, sans onglets. Il creait sa campagne, l'activait depuis sa
+    // fiche, puis n'avait plus aucun chemin pour y revenir ni pour la mettre en
+    // pause. La liste est cloisonnee cote API (GET /api/campaigns filtre sur
+    // req.user.id), donc la lui rendre ne lui montre pas celle d'un collegue.
+    utilisateur.courant = { teamRole: 'prospection' };
+    renderList();
+
+    expect(screen.getByRole('button', { name: 'Historique' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Créer une campagne' })).toBeInTheDocument();
+    // Et l'historique rend bien ses campagnes, pas une page vide.
+    expect(screen.getByText('DAF Ile-de-France')).toBeInTheDocument();
+  });
+
+  it('un commercial ne voit ni Autopilot ni Campagnes equipe', () => {
+    // Autopilot regle une politique d'envoi pour toute la portee, et les routes
+    // des campagnes equipe repondent 403 a un non-admin : afficher ces onglets
+    // serait proposer des boutons qui echouent.
+    utilisateur.courant = { teamRole: 'prospection' };
+    renderList();
+
+    expect(screen.queryByRole('button', { name: /Autopilot/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Campagnes équipe' })).not.toBeInTheDocument();
+  });
+
+  it('un viewer garde le meme acces en lecture', () => {
+    utilisateur.courant = { teamRole: 'viewer' };
+    renderList();
+
+    expect(screen.getByRole('button', { name: 'Historique' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Campagnes équipe' })).not.toBeInTheDocument();
+  });
+
+  it('un admin voit les quatre onglets', () => {
+    // Le controle positif : sans lui, masquer les onglets a tout le monde ferait
+    // passer les deux tests precedents.
+    utilisateur.courant = { teamRole: 'admin' };
+    renderList();
+
+    expect(screen.getByRole('button', { name: 'Créer une campagne' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Historique' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Autopilot/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Campagnes équipe' })).toBeInTheDocument();
+  });
+
+  it('un utilisateur sans equipe voit les quatre onglets', () => {
+    // Un compte solo n'a pas de teamRole et doit garder le produit complet.
+    utilisateur.courant = { teamRole: null };
+    renderList();
+
+    expect(screen.getByRole('button', { name: /Autopilot/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Campagnes équipe' })).toBeInTheDocument();
   });
 });
 
