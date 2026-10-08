@@ -310,6 +310,8 @@ export default function OnboardingWizard({ onComplete }) {
   // l'import ci-dessous : on ne bloque pas la fin de l'inscription, mais on ne
   // laisse pas croire que c'est enregistré.
   const [profileSaveFailed, setProfileSaveFailed] = useState(false);
+  // Premier passage de fin d'inscription en cours · verrouille le bouton.
+  const [finishing, setFinishing] = useState(false);
   // Empeche de rejouer la sauvegarde du profil / la synchro outreach au 2e clic.
   const setupDoneRef = useRef(false);
 
@@ -673,6 +675,25 @@ export default function OnboardingWizard({ onComplete }) {
       return;
     }
     setupDoneRef.current = true;
+    // Et le bouton se verrouille pendant tout le premier passage.
+    //
+    // `setupDoneRef` seul ne suffit plus depuis que la sauvegarde du profil est
+    // attendue : un second clic pendant cet aller-retour reseau prend la
+    // branche ci-dessus, finalise, et ferme le wizard AVANT que
+    // `runFirstImport` ait ete appele. L'utilisateur arrive alors sur un
+    // dashboard vide, c'est-a-dire exactement ce que le premier import existe
+    // pour eviter. `importState.status` ne protege pas cette fenetre : il ne
+    // passe a 'running' qu'une fois l'import lance, donc apres l'attente.
+    setFinishing(true);
+    try {
+      await runFinish(token);
+    } finally {
+      setFinishing(false);
+    }
+  }
+
+  /** Le corps du premier passage · voir le verrou dans handleFinish. */
+  async function runFinish(token) {
 
     // Save profile to localStorage (ProfilePage will pick it up)
     const profile = {
@@ -1449,7 +1470,7 @@ export default function OnboardingWizard({ onComplete }) {
         : t('wizard.goToDashboard');
       return (
         <div className="wizard-actions">
-          <button className="btn btn-primary" onClick={handleFinish} disabled={status === 'running'}>
+          <button className="btn btn-primary" onClick={handleFinish} disabled={status === 'running' || finishing}>
             {label}
           </button>
         </div>
