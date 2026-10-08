@@ -86,6 +86,11 @@ async function setup() {
   // checkout recevrait un 404 et passerait pour « pas de facturation », ce qui
   // est exactement le genre de vert trompeur que ce harnais doit eviter.
   app.use('/api/billing', requireAuth, require('../routes/billing'));
+  // Les equipes · montees pour que le CLOISONNEMENT entre equipes soit
+  // testable a travers HTTP. Sans ce montage, une requete vers /api/teams/...
+  // retombe sur le 404 du gestionnaire d'erreurs, et un test qui attend un
+  // refus passerait alors meme qu'aucun controle d'acces n'existe.
+  app.use('/api/teams', requireAuth, require('../routes/teams'));
   app.use(errorHandler);
 
   return new Promise((resolve) => {

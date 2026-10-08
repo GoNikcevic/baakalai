@@ -1190,6 +1190,27 @@ function query(text, params = []) {
   }
 
   if (isReturning) {
+    // `UPDATE ... RETURNING *` passe par SQLite, comme `RETURNING <colonnes>`.
+    //
+    // La reconstitution manuelle qui suivait devinait la ligne modifiee avec
+    // `SELECT * FROM <table> WHERE id = <dernier parametre>`, en pariant que le
+    // dernier parametre est l'identifiant. Il ne l'est pas toujours :
+    // `UPDATE team_members SET role = $1 WHERE team_id = $2 AND user_id = $3`
+    // finit sur un user_id, cherche donc `team_members.id = <user_id>`, ne
+    // trouve rien et rend `{ rows: [] }` alors que l'ecriture a bien eu lieu.
+    // Tout appelant ecrit sur le modele `result.rows[0] || null` lisait null et
+    // partait en 404 sous le miroir, en production jamais. Pire cas possible :
+    // un identifiant qui matche une autre ligne de la meme table, et le miroir
+    // rend alors une ligne fausse sans rien signaler.
+    //
+    // La branche INSERT garde son chemin historique, celui qui porte les tests
+    // existants : l'identifiant y est bien celui de la ligne inseree.
+    if (isUpdate) {
+      const stmt = d.prepare(adapted);
+      const rows = decoderJson(stmt.all(...params));
+      return { rows, rowCount: rows.length };
+    }
+
     // SQLite doesn't support RETURNING, so we need to handle it manually
     const withoutReturning = adapted.replace(/\s*RETURNING\s+\*/i, '');
     const info = d.prepare(withoutReturning).run(...params);
@@ -1203,17 +1224,6 @@ function query(text, params = []) {
         // Try to find by rowid
         const row = d.prepare(`SELECT * FROM ${table} WHERE rowid = ?`).get(info.lastInsertRowid);
         return { rows: decoderJson(row ? [row] : []), rowCount: 1 };
-      }
-    }
-
-    if (isUpdate) {
-      // For updates, try to find the updated row - the last param is usually the ID
-      const tableMatch = text.match(/UPDATE\s+(\w+)/i);
-      if (tableMatch) {
-        const table = tableMatch[1];
-        const lastParam = params[params.length - 1];
-        const row = d.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(lastParam);
-        return { rows: decoderJson(row ? [row] : []), rowCount: info.changes };
       }
     }
 
