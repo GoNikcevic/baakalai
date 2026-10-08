@@ -136,7 +136,15 @@ describe('AuthGate', () => {
     // Le mot s'écrit d'un seul morceau, et le symbole est la synapse, pas le
     // carré noir avec un « b » que portait cet écran jusqu'au 07/10.
     expect(screen.getByText('baakalai')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'baakalai' })).toBeInTheDocument();
     expect(screen.queryByText('.ai')).not.toBeInTheDocument();
+
+    // Le symbole est présent, et masqué aux lecteurs d'écran : le mot est juste
+    // à côté, donc lui donner un nom accessible ferait annoncer « baakalai »
+    // deux fois. On interroge le DOM et non le rôle, justement parce qu'il n'en
+    // a plus.
+    const symbole = document.querySelector('svg.brand-logo');
+    expect(symbole).not.toBeNull();
+    expect(symbole.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByRole('img', { name: 'baakalai' })).not.toBeInTheDocument();
   });
 });

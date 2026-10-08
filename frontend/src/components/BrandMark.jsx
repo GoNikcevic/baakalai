@@ -8,7 +8,15 @@
    pas entre le thème clair et le thème sombre, c'est la même marque.
    =============================================================================== */
 
-export function BrandMark({ size = 22, className, title = 'baakalai' }) {
+/* `decoratif` quand le symbole est accompagné du mot : sans lui, un lecteur
+   d'écran annonce « baakalai » deux fois, une pour le libellé du symbole et une
+   pour le texte juste à côté. Le symbole garde son nom accessible partout où il
+   figure seul, par exemple dans une barre latérale repliée. */
+export function BrandMark({ size = 22, className, title = 'baakalai', decoratif = false }) {
+  const accessibilite = decoratif
+    ? { 'aria-hidden': 'true' }
+    : { role: 'img', 'aria-label': title };
+
   return (
     <svg
       className={className}
@@ -16,8 +24,7 @@ export function BrandMark({ size = 22, className, title = 'baakalai' }) {
       height={size}
       viewBox="0 0 100 100"
       xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label={title}
+      {...accessibilite}
       style={{ flexShrink: 0 }}
     >
       <line x1="50" y1="50" x2="22" y2="26" stroke="#C4B5FD" strokeWidth="5" strokeLinecap="round" />
@@ -54,10 +61,10 @@ export function BrandLockup({ size = 22, fontSize = 16, gap = 8, glow = false })
         background: 'radial-gradient(circle, var(--accent-glow) 0%, transparent 70%)',
       }}
     >
-      <BrandMark size={size} className="brand-logo" />
+      <BrandMark size={size} className="brand-logo" decoratif />
     </span>
   ) : (
-    <BrandMark size={size} className="brand-logo" />
+    <BrandMark size={size} className="brand-logo" decoratif />
   );
 
   return (

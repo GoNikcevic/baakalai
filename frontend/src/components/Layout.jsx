@@ -213,7 +213,7 @@ export default function Layout() {
       <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
         {/* Brand */}
         <NavLink to="/dashboard" className="sidebar-brand" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <BrandMark size={22} className="brand-logo" />
+          <BrandMark size={22} className="brand-logo" decoratif />
           <span className="brand-text">baakalai</span>
         </NavLink>
 
