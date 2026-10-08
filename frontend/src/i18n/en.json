@@ -1633,6 +1633,9 @@
     "members": "members",
     "creator": "creator",
     "remove": "Remove",
+    "regenerate": "Regenerate the invite link",
+    "adminOnly": "Only a team admin can invite, change a role or remove a member.",
+    "yourRole": "Your role",
     "roles": {
       "admin": "Admin",
       "prospection": "Prospection",

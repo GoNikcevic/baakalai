@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════
-   Team Settings — Create/manage team, invite members, assign roles
+   Team Settings : create/manage team, invite members, assign roles
    ═══════════════════════════════════════════════════ */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -105,7 +105,7 @@ export default function TeamSettings() {
 
   if (loading) return null;
 
-  // No team — show creation form
+  // No team, show creation form
   if (!team) {
     return (
       <div className="card" style={{ marginBottom: 16 }}>
@@ -147,9 +147,19 @@ export default function TeamSettings() {
     );
   }
 
-  const isAdmin = members.find(m => m.user_id === team.created_by)?.role === 'admin';
+  // `isAdmin` lisait le rôle du CRÉATEUR de l'équipe, pas celui de
+  // l'utilisateur courant, et ni lui ni `currentUserRole` n'étaient utilisés
+  // ensuite : le lien d'invitation, sa régénération, le menu de rôle et la
+  // croix de suppression s'affichaient pour tout le monde, viewer inclus. Le
+  // backend répondait bien 403 « Admin uniquement », donc pas d'escalade de
+  // privilège, mais un viewer voyait des boutons qui échouent. La source de
+  // vérité est `team.role`, que GET /teams/me renvoie pour l'utilisateur
+  // authentifié ; la liste des membres ne sert que de repli.
   const currentUser = getUser();
-  const currentUserRole = members.find(m => m.user_id === currentUser?.id)?.role;
+  const currentUserRole = team.role
+    || members.find(m => m.user_id === currentUser?.id)?.role
+    || null;
+  const isAdmin = currentUserRole === 'admin';
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
@@ -177,39 +187,53 @@ export default function TeamSettings() {
           </div>
         )}
 
-        {/* Invite link */}
-        <div style={{
-          display: 'flex', gap: 8, alignItems: 'center',
-          padding: '10px 14px', borderRadius: 8, background: 'var(--bg-elevated)', marginBottom: 16,
-        }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t('team.inviteLink')}</div>
-            <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
-              {window.location.origin}/join/{team.invite_code}
+        {/* Lien d'invitation : réservé à l'admin, comme les routes derrière
+            (POST /teams/:id/regenerate-invite répond 403 aux autres rôles).
+            Le lien lui-même est un secret de partage : le montrer à un viewer
+            lui permettrait de faire entrer n'importe qui dans l'équipe. */}
+        {isAdmin ? (
+          <div style={{
+            display: 'flex', gap: 8, alignItems: 'center',
+            padding: '10px 14px', borderRadius: 8, background: 'var(--bg-elevated)', marginBottom: 16,
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t('team.inviteLink')}</div>
+              <div style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                {window.location.origin}/join/{team.invite_code}
+              </div>
             </div>
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 11, padding: '4px 12px' }}
+              onClick={handleCopyInvite}
+            >
+              {copied && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
+              {copied ? t('team.copied') : t('team.copy')}
+            </button>
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 11, padding: '4px 12px', color: 'var(--text-muted)' }}
+              onClick={handleRegenInvite}
+              title={t('team.regenerate')}
+            >
+              <Icon name="refresh" size={12} />
+            </button>
           </div>
-          <button
-            className="btn btn-ghost"
-            style={{ fontSize: 11, padding: '4px 12px' }}
-            onClick={handleCopyInvite}
-          >
-            {copied && <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />}
-            {copied ? t('team.copied') : t('team.copy')}
-          </button>
-          <button
-            className="btn btn-ghost"
-            style={{ fontSize: 11, padding: '4px 12px', color: 'var(--text-muted)' }}
-            onClick={handleRegenInvite}
-          >
-            <Icon name="refresh" size={12} />
-          </button>
-        </div>
+        ) : (
+          <div style={{
+            fontSize: 12, color: 'var(--text-muted)',
+            padding: '10px 14px', borderRadius: 8, background: 'var(--bg-elevated)', marginBottom: 16,
+          }}>
+            {t('team.adminOnly')}
+          </div>
+        )}
 
         {/* Members list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {members.map(m => {
             const roleConf = ROLE_CONFIG[m.role] || ROLE_CONFIG.viewer;
             const isCreator = m.user_id === team.created_by;
+            const isSelf = m.user_id === currentUser?.id;
             return (
               <div key={m.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -223,28 +247,42 @@ export default function TeamSettings() {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.email}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <select
-                    value={m.role}
-                    onChange={e => handleRoleChange(m.user_id, e.target.value)}
-                    disabled={isCreator}
-                    title={isCreator ? (lang === 'en' ? 'Creator role cannot be changed' : 'Le rôle du créateur ne peut pas être modifié') : ''}
-                    style={{
-                      fontSize: 11, padding: '3px 8px', borderRadius: 6,
-                      border: `1px solid ${roleConf.color}`,
-                      background: `${roleConf.color}15`, color: roleConf.color,
-                      cursor: isCreator ? 'not-allowed' : 'pointer',
-                      opacity: isCreator ? 0.7 : 1,
-                    }}
-                  >
-                    {Object.entries(ROLE_CONFIG).map(([key, conf]) => (
-                      <option key={key} value={key}>{conf.label}</option>
-                    ))}
-                  </select>
-                  {!isCreator && (
+                  {isAdmin ? (
+                    <select
+                      value={m.role}
+                      onChange={e => handleRoleChange(m.user_id, e.target.value)}
+                      disabled={isCreator}
+                      title={isCreator ? (lang === 'en' ? 'Creator role cannot be changed' : 'Le rôle du créateur ne peut pas être modifié') : ''}
+                      style={{
+                        fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                        border: `1px solid ${roleConf.color}`,
+                        background: `${roleConf.color}15`, color: roleConf.color,
+                        cursor: isCreator ? 'not-allowed' : 'pointer',
+                        opacity: isCreator ? 0.7 : 1,
+                      }}
+                    >
+                      {Object.entries(ROLE_CONFIG).map(([key, conf]) => (
+                        <option key={key} value={key}>{conf.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span
+                      title={isSelf ? t('team.yourRole') : roleConf.desc}
+                      style={{
+                        fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                        border: `1px solid ${roleConf.color}`,
+                        background: `${roleConf.color}15`, color: roleConf.color,
+                      }}
+                    >
+                      {roleConf.label}
+                    </span>
+                  )}
+                  {isAdmin && !isCreator && (
                     <button
                       className="btn btn-ghost"
                       style={{ fontSize: 10, padding: '2px 8px', color: 'var(--danger)' }}
                       onClick={() => handleRemove(m.user_id, m.name)}
+                      title={t('team.remove')}
                     >
                       {'\u2715'}
                     </button>
