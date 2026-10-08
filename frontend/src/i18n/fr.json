@@ -1771,6 +1771,7 @@
     "importDone": "{count} contacts importés. J'ai identifié vos deals sans activité récente, ils vous attendent sur le tableau de bord.",
     "importEmpty": "Aucun nouveau contact à importer. Vous pourrez relancer l'import depuis Clients.",
     "importError": "L'import CRM n'a pas abouti. Vous pourrez le relancer depuis Clients : cela ne bloque pas la suite.",
+    "profileSaveFailed": "Votre profil n'a pas pu être enregistré sur le serveur. Il reste affiché ici, mais le scoring de vos contacts s'en sert : ouvrez Profil et enregistrez-le à nouveau. Cela ne bloque pas la suite.",
     "seeDormantDeals": "Voir mes deals dormants →",
     "readTitle": "J'ai lu {count} deals dans votre CRM : {value} de pipeline.",
     "readDormant": "{count} dorment depuis plus de {days} jours : {value} à réveiller.",

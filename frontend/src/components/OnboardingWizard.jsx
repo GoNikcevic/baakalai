@@ -305,6 +305,11 @@ export default function OnboardingWizard({ onComplete }) {
   const [importState, setImportState] = useState({ status: 'idle', imported: null, error: null });
   // Compte-rendu de lecture (/crm/reading-summary), affiché après l'import.
   const [readingSummary, setReadingSummary] = useState(null);
+  // Le POST du profil a échoué : le serveur n'a pas le profil alors que
+  // ProfilePage l'affichera quand même depuis localStorage. Même principe que
+  // l'import ci-dessous : on ne bloque pas la fin de l'inscription, mais on ne
+  // laisse pas croire que c'est enregistré.
+  const [profileSaveFailed, setProfileSaveFailed] = useState(false);
   // Empeche de rejouer la sauvegarde du profil / la synchro outreach au 2e clic.
   const setupDoneRef = useRef(false);
 
@@ -656,7 +661,7 @@ export default function OnboardingWizard({ onComplete }) {
 
   /* ─── Save profile + complete ─── */
 
-  function handleFinish() {
+  async function handleFinish() {
     const token = localStorage.getItem('bakal_token');
 
     // Le bouton de l'etape 3 est cliquable deux fois : une fois pour lancer
@@ -679,15 +684,39 @@ export default function OnboardingWizard({ onComplete }) {
     };
     localStorage.setItem('bakal_profile', JSON.stringify(profile));
 
-    // Also try to save to backend
-    fetch('/api/profile', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(profile),
-    }).catch(() => {/* ignore */});
+    // Le profil part vers le serveur et on ATTEND le résultat.
+    //
+    // Cet appel était en fire-and-forget avec un `.catch(() => {})`. Comme
+    // ProfilePage retombe sur localStorage (ProfilePage.jsx, « Fallback to
+    // localStorage »), un échec restait invisible : l'utilisateur voyait son
+    // profil rempli à l'écran pendant que `user_profiles` était vide côté
+    // serveur. Or c'est le serveur qui score : lib/contact-scoring.js sort
+    // `{ score: 0 }` dès que le profil est absent, donc toute la composante
+    // fit du score de contact tombait à zéro, et `job_role`, le seul critère
+    // ICP non déductible du CRM, n'était jamais enregistré. Rien ne signalait
+    // l'écart, ni à l'utilisateur ni à nous.
+    //
+    // On passe par `request()` comme le reste du fichier, au lieu d'un fetch
+    // qui rejouait l'en-tête d'autorisation à la main. Bénéfice au passage :
+    // `request()` rafraîchit le token sur 401, ce que le fetch brut ne faisait
+    // pas, alors qu'un token tout juste émis à l'inscription est précisément
+    // le cas où cet appel pouvait échouer.
+    //
+    // Drapeau local en plus de l'état : `setProfileSaveFailed` n'est pas lu
+    // dans cette même exécution, et la suite de la fonction doit décider si
+    // elle rend la main ou non.
+    let profileFailed = false;
+    try {
+      await request('/profile', { method: 'POST', body: JSON.stringify(profile) });
+      setProfileSaveFailed(false);
+    } catch (err) {
+      // Non bloquant, comme l'import : l'inscription se termine, et la
+      // correction se fait depuis Profil, dont la sauvegarde repousse vers le
+      // serveur. Mais l'utilisateur est prévenu.
+      console.warn('profile save failed:', err.message);
+      profileFailed = true;
+      setProfileSaveFailed(true);
+    }
 
     // Trigger auto-sync in background if keys were provided
     if (outreachKey && outreachProvider) {
@@ -724,6 +753,10 @@ export default function OnboardingWizard({ onComplete }) {
       runFirstImport(crmProvider, token);
       return; // on ne rend la main qu'une fois le resultat annonce
     }
+    // Sans import pour retenir l'écran, finalize() fermerait le wizard avant
+    // que l'avertissement de profil soit lisible. Le clic suivant passe par le
+    // garde-fou setupDoneRef et finalise.
+    if (profileFailed) return;
     finalize(token);
   }
 
@@ -1371,6 +1404,18 @@ export default function OnboardingWizard({ onComplete }) {
                     : t('wizard.importEmpty')
                 )}
                 {importState.status === 'error' && t('wizard.importError')}
+              </div>
+            )}
+            {/* Profil non enregistre cote serveur. Sans ce retour, l'ecran
+                Profil affichait le profil depuis localStorage et le score de
+                contact tournait sans sa composante fit, en silence. */}
+            {profileSaveFailed && (
+              <div className="wizard-profile-warning" style={{
+                marginTop: 12, padding: '12px 14px', borderRadius: 10, fontSize: 13,
+                background: 'var(--danger-bg, #FEF2F2)', color: 'var(--danger, #B42318)',
+                textAlign: 'left', lineHeight: 1.6,
+              }}>
+                {t('wizard.profileSaveFailed')}
               </div>
             )}
           </>

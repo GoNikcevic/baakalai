@@ -1771,6 +1771,7 @@
     "importDone": "{count} contacts imported. I've identified your deals with no recent activity, they're waiting on your dashboard.",
     "importEmpty": "No new contacts to import. You can run the import again from Clients.",
     "importError": "The CRM import didn't complete. You can retry it from Clients: this doesn't block anything.",
+    "profileSaveFailed": "Your profile couldn't be saved to the server. It still shows here, but contact scoring relies on it: open Profile and save it again. This doesn't block anything.",
     "seeDormantDeals": "See my dormant deals →",
     "readTitle": "I read {count} deals from your CRM: {value} in open pipeline.",
     "readDormant": "{count} have been dormant for {days}+ days: {value} to revive.",
