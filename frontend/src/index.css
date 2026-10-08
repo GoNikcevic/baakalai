@@ -91,8 +91,15 @@
   --container-lg: 1360px;
 
   /* Font stacks */
-  --font-sans:  'Satoshi', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono:  'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  /* Geist, comme la landing et comme colors_and_type.css, qui se presente
+     depuis le debut comme « shared between marketing site and app » sans que
+     l'app l'importe. La palette, elle, etait deja identique valeur par valeur ;
+     la police etait la seule divergence, et un testeur qui passait de
+     baakal.ai a l'app changeait de typographie au moment ou il doit reconnaitre
+     le produit. Au passage, un fournisseur de polices en moins : Satoshi venait
+     de Fontshare, Geist et Geist Mono viennent de Google Fonts comme le reste. */
+  --font-sans:  'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:  'Geist Mono', 'SF Mono', Menlo, monospace;
   /* Legacy alias */
   --font:       var(--font-sans);
 
