@@ -143,13 +143,29 @@ export default function Layout() {
   }, []);
 
   // The section holding the active page always ends up open (without closing others).
-  useEffect(() => {
+  //
+  // Ajustement pendant le rendu, et non dans un effet. Un setState() posé dans
+  // un effet peint une première fois la section fermée, puis une seconde fois
+  // ouverte : la bascule est visible et React la signale comme un rendu en
+  // cascade. Ici React relance le rendu avant la peinture, l'utilisateur ne voit
+  // qu'un seul état. C'est le motif « ajuster l'état quand une valeur change »
+  // de la doc React, pas un contournement de la règle de lint.
+  //
+  // Le chemin précédent est gardé en état pour ne rejouer l'ouverture qu'au
+  // changement de route, et pas à chaque rendu : sans cela, replier la section
+  // de la page courante serait impossible, elle se rouvrirait aussitôt. Il part
+  // à null et non au chemin courant pour que le tout premier rendu compte comme
+  // un changement, sinon arriver directement sur /deals/... laisserait la
+  // section repliée.
+  const [prevPath, setPrevPath] = useState(null);
+  if (prevPath !== location.pathname) {
+    setPrevPath(location.pathname);
     const owner = NAV_ITEMS.find(item =>
       item.children?.some(child => routeMatches(location.pathname, child.to)));
     if (owner && !openSections[owner.section]) {
       setOpenSections(prev => ({ ...prev, [owner.section]: true }));
     }
-  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   // Action counters for the nav badges · refreshed on navigation (throttled)
   // so approving emails or postponing a deal updates the numbers, plus a slow

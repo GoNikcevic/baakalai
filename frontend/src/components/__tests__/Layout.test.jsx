@@ -82,6 +82,30 @@ describe('Layout', () => {
     expect(screen.getAllByText('Vue globale').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('deplie la section qui contient la page active des le premier rendu', () => {
+    // Les deux tests precedents ouvrent des sections, et toggleSection persiste
+    // dans localStorage : sans ce nettoyage, les sections arriveraient deja
+    // ouvertes et le test passerait sans rien prouver.
+    localStorage.removeItem('nav_open_sections');
+    renderLayout('/deals-to-reactivate');
+
+    // Ce que ce test attrape : l'ouverture se joue pendant le rendu, et le
+    // chemin precedent part de null pour que le tout premier rendu compte comme
+    // un changement. Le faire partir du chemin courant parait plus naturel et
+    // casse exactement ce cas (verifie : le test echoue sur cette variante).
+    // Ce qu'il n'attrape pas : le double rendu lui-meme, invisible depuis le DOM.
+    expect(screen.getAllByText('À relancer').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('laisse repliees les sections qui ne contiennent pas la page active', () => {
+    localStorage.removeItem('nav_open_sections');
+    renderLayout('/dashboard');
+
+    // Le pendant du test precedent : l'ouverture suit la route, elle n'est pas
+    // un « tout ouvert » deguise.
+    expect(screen.queryByText('À relancer')).not.toBeInTheDocument();
+  });
+
   it('renders the brand logo', () => {
     renderLayout();
 
