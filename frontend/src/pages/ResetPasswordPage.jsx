@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n';
+import { BrandLockup } from '../components/BrandMark';
 
 const styles = {
   overlay: {
     position: 'fixed',
     inset: 0,
     zIndex: 10000,
-    background: 'var(--bg-primary)',
+    background: 'radial-gradient(900px 420px at 50% -8%, var(--accent-glow) 0%, transparent 70%), var(--bg-primary)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -20,33 +21,14 @@ const styles = {
   },
   header: {
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
-  brandRow: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  brandIcon: {
-    width: 36,
-    height: 36,
-    background: 'var(--text-primary)',
-    color: 'var(--bg-primary)',
-    borderRadius: 8,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 700,
-    fontSize: 18,
-  },
-  brandText: {
-    fontSize: 22,
-    fontWeight: 600,
-    color: 'var(--text-primary)',
-  },
-  brandSuffix: {
-    color: 'var(--text-muted)',
+  card: {
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    boxShadow: 'var(--shadow-lg)',
+    padding: '26px 24px',
   },
   label: {
     display: 'block',
@@ -58,7 +40,7 @@ const styles = {
   input: {
     width: '100%',
     padding: '10px 14px',
-    background: 'var(--bg-card)',
+    background: 'var(--paper-2)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-sm)',
     color: 'var(--text-primary)',
@@ -81,24 +63,30 @@ const styles = {
     lineHeight: 1.6,
     marginBottom: 20,
   },
+  /* Même bouton de marque que l'écran de connexion : violet, et --paper en
+     couleur de texte pour rester lisible quand le thème sombre éclaircit
+     --primary. */
   submitBtn: {
     width: '100%',
     padding: 11,
-    background: 'var(--text-primary)',
-    color: 'var(--bg-primary)',
+    background: 'var(--primary)',
+    color: 'var(--paper)',
     border: 'none',
     borderRadius: 'var(--radius-sm)',
     fontSize: 14,
     fontWeight: 600,
     cursor: 'pointer',
     fontFamily: 'var(--font)',
+    boxShadow: '0 2px 12px rgba(110, 87, 250, 0.25)',
+    transition: 'background 0.15s, box-shadow 0.15s',
   },
   submitBtnDisabled: {
     opacity: 0.6,
     cursor: 'not-allowed',
+    boxShadow: 'none',
   },
   link: {
-    color: 'var(--text-primary)',
+    color: 'var(--primary)',
     textDecoration: 'underline',
     cursor: 'pointer',
     background: 'none',
@@ -149,17 +137,16 @@ export default function ResetPasswordPage() {
       <div style={styles.overlay}>
         <div style={styles.container}>
           <div style={styles.header}>
-            <div style={styles.brandRow}>
-              <div style={styles.brandIcon}>b</div>
-              <span style={styles.brandText}>baakal<span style={styles.brandSuffix}>.ai</span></span>
-            </div>
+            <BrandLockup size={36} fontSize={25} gap={9} glow />
           </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
-            {en ? 'Invalid or missing reset link.' : 'Lien de réinitialisation invalide ou manquant.'}
-          </p>
-          <button style={styles.submitBtn} onClick={() => navigate('/login')}>
-            {en ? 'Back to login' : 'Retour à la connexion'}
-          </button>
+          <div style={styles.card}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
+              {en ? 'Invalid or missing reset link.' : 'Lien de réinitialisation invalide ou manquant.'}
+            </p>
+            <button style={styles.submitBtn} onClick={() => navigate('/login')}>
+              {en ? 'Back to login' : 'Retour à la connexion'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -169,12 +156,10 @@ export default function ResetPasswordPage() {
     <div style={styles.overlay}>
       <div style={styles.container}>
         <div style={styles.header}>
-          <div style={styles.brandRow}>
-            <div style={styles.brandIcon}>b</div>
-            <span style={styles.brandText}>baakal<span style={styles.brandSuffix}>.ai</span></span>
-          </div>
+          <BrandLockup size={36} fontSize={25} gap={9} glow />
         </div>
 
+        <div style={styles.card}>
         {status === 'success' ? (
           <div>
             <p style={styles.success}>
@@ -232,6 +217,7 @@ export default function ResetPasswordPage() {
             </button>
           </form>
         )}
+        </div>
       </div>
     </div>
   );

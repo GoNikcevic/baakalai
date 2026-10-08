@@ -133,7 +133,10 @@ describe('AuthGate', () => {
   it('renders the brand header', () => {
     render(<AuthGate onAuth={mockOnAuth} />);
 
-    expect(screen.getByText('b')).toBeInTheDocument();
-    expect(screen.getByText('.ai')).toBeInTheDocument();
+    // Le mot s'écrit d'un seul morceau, et le symbole est la synapse, pas le
+    // carré noir avec un « b » que portait cet écran jusqu'au 07/10.
+    expect(screen.getByText('baakalai')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'baakalai' })).toBeInTheDocument();
+    expect(screen.queryByText('.ai')).not.toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { login, register, resendVerification } from '../services/auth';
 import { useT, useI18n } from '../i18n';
 import Icon from './Icon';
+import { BrandLockup } from './BrandMark';
 
 /* ─── Inline styles matching the vanilla app's auth overlay ─── */
 const styles = {
@@ -15,11 +16,14 @@ const styles = {
     position: 'fixed',
     inset: 0,
     zIndex: 10000,
-    background: 'var(--bg-primary)',
+    /* Lavage d'accent très léger en haut de l'écran : la page reste du papier,
+       la marque pose juste sa couleur derrière le logo. */
+    background: 'radial-gradient(900px 420px at 50% -8%, var(--accent-glow) 0%, transparent 70%), var(--bg-primary)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontFamily: 'var(--font)',
+    overflowY: 'auto',
   },
   container: {
     width: '100%',
@@ -28,38 +32,19 @@ const styles = {
   },
   header: {
     textAlign: 'center',
-    marginBottom: 32,
-  },
-  brandRow: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  brandIcon: {
-    width: 36,
-    height: 36,
-    background: 'var(--text-primary)',
-    color: 'var(--bg-primary)',
-    borderRadius: 8,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 700,
-    fontSize: 18,
-  },
-  brandText: {
-    fontSize: 22,
-    fontWeight: 600,
-    color: 'var(--text-primary)',
-  },
-  brandSuffix: {
-    color: 'var(--text-muted)',
+    marginBottom: 24,
   },
   subtitle: {
     color: 'var(--text-secondary)',
     fontSize: 13,
-    marginTop: 8,
+    marginTop: 6,
+  },
+  card: {
+    background: 'var(--bg-card)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    boxShadow: 'var(--shadow-lg)',
+    padding: '26px 24px',
   },
   label: {
     display: 'block',
@@ -74,7 +59,10 @@ const styles = {
   input: {
     width: '100%',
     padding: '10px 14px',
-    background: 'var(--bg-card)',
+    /* Le champ se creuse dans la carte : en clair paper-2 est plus sombre que
+       le papier, en sombre il est plus clair. Dans les deux cas il se détache,
+       ce que --bg-card (identique au fond de la carte) ne faisait pas. */
+    background: 'var(--paper-2)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--radius-sm)',
     color: 'var(--text-primary)',
@@ -94,21 +82,43 @@ const styles = {
     fontSize: 12,
     marginBottom: 12,
   },
+  /* Le bouton d'action porte le violet de la marque, comme le CTA de la landing.
+     Il était noir, c'est-à-dire la seule couleur de l'écran qui ne disait rien
+     de baakalai. */
   submitBtn: {
     width: '100%',
     padding: 11,
-    background: 'var(--text-primary)',
-    color: 'var(--bg-primary)',
+    background: 'var(--primary)',
+    /* --paper et non du blanc en dur : en thème sombre --primary s'éclaircit
+       (#A998FF) et du blanc dessus ne se lirait plus. --paper suit le thème,
+       c'est ce que fait déjà .btn-accent. */
+    color: 'var(--paper)',
     border: 'none',
     borderRadius: 'var(--radius-sm)',
     fontSize: 14,
     fontWeight: 600,
     cursor: 'pointer',
     fontFamily: 'var(--font)',
+    boxShadow: '0 2px 12px rgba(110, 87, 250, 0.25)',
+    transition: 'background 0.15s, box-shadow 0.15s, transform 0.15s',
   },
   submitBtnDisabled: {
     opacity: 0.6,
     cursor: 'not-allowed',
+    boxShadow: 'none',
+  },
+  /* Bouton secondaire : même gabarit, sans la couleur de marque. */
+  secondaryBtn: {
+    width: '100%',
+    padding: 11,
+    background: 'var(--bg-card)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'var(--font)',
   },
   toggleText: {
     textAlign: 'center',
@@ -117,7 +127,7 @@ const styles = {
     color: 'var(--text-muted)',
   },
   toggleLink: {
-    color: 'var(--text-primary)',
+    color: 'var(--primary)',
     textDecoration: 'underline',
     cursor: 'pointer',
     background: 'none',
@@ -125,6 +135,22 @@ const styles = {
     fontFamily: 'var(--font)',
     fontSize: 13,
     padding: 0,
+  },
+};
+
+/* Les styles de cet écran sont en ligne, donc aucun `:hover` n'est possible.
+   Ces deux gestionnaires le rejouent à la main sur le bouton d'action. */
+const accentHover = {
+  onMouseEnter: (e) => {
+    if (e.currentTarget.disabled) return;
+    e.currentTarget.style.background = 'var(--primary-deep)';
+    e.currentTarget.style.boxShadow = '0 4px 20px rgba(110, 87, 250, 0.35)';
+  },
+  onMouseLeave: (e) => {
+    e.currentTarget.style.background = 'var(--primary)';
+    e.currentTarget.style.boxShadow = e.currentTarget.disabled
+      ? 'none'
+      : '0 2px 12px rgba(110, 87, 250, 0.25)';
   },
 };
 
@@ -167,7 +193,10 @@ export default function AuthGate({ onAuth, error: externalError }) {
       setError(en ? 'Verification link invalid or expired. Request a new link below.' : 'Lien de vérification invalide ou expiré. Demande un nouveau lien ci-dessous.');
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, []);
+    // `en` est bien dans les dépendances : le rejouer au changement de langue
+    // ne coûte rien, les deux branches qui agissent nettoient la query string,
+    // donc un second passage ne retrouve plus aucun paramètre et ne fait rien.
+  }, [en]);
 
   // Focus the first input whenever mode changes
   useEffect(() => {
@@ -254,22 +283,18 @@ export default function AuthGate({ onAuth, error: externalError }) {
       <div style={styles.container}>
         {/* ─── Brand header ─── */}
         <div style={styles.header}>
-          <div style={styles.brandRow}>
-            <div style={styles.brandIcon}>b</div>
-            <span style={styles.brandText}>
-              baakal<span style={styles.brandSuffix}>.ai</span>
-            </span>
-          </div>
+          <BrandLockup size={36} fontSize={25} gap={9} glow />
           <p style={styles.subtitle}>
-            {t('common.tagline') || 'Plateforme de prospection intelligente'}
+            {t('common.tagline')}
           </p>
         </div>
 
+        <div style={styles.card}>
         {/* ─── Check-email screen (post-registration) ─── */}
         {registeredEmail ? (
           <div>
             <div style={{
-              background: 'var(--bg-card)',
+              background: 'var(--paper-2)',
               border: '1px solid var(--border)',
               borderRadius: 'var(--radius-sm)',
               padding: 20,
@@ -309,12 +334,9 @@ export default function AuthGate({ onAuth, error: externalError }) {
               onClick={handleResendVerification}
               disabled={resendCooldown > 0}
               style={{
-                ...styles.submitBtn,
+                ...styles.secondaryBtn,
                 marginBottom: 10,
-                ...(resendCooldown > 0 ? styles.submitBtnDisabled : {}),
-                background: 'var(--bg-card)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--border)',
+                ...(resendCooldown > 0 ? { opacity: 0.6, cursor: 'not-allowed' } : {}),
               }}
             >
               {resendCooldown > 0
@@ -334,6 +356,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
                 setCompany('');
               }}
               style={styles.submitBtn}
+              {...accentHover}
             >
               {t('auth.backToLogin')}
             </button>
@@ -351,6 +374,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
                   type="button"
                   onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(''); setError(''); }}
                   style={styles.submitBtn}
+                  {...accentHover}
                 >
                   {en ? 'Back to login' : 'Retour à la connexion'}
                 </button>
@@ -382,6 +406,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
                     ...styles.submitBtn,
                     ...(loading ? styles.submitBtnDisabled : {}),
                   }}
+                  {...accentHover}
                 >
                   {loading ? (en ? 'Sending...' : 'Envoi...') : (en ? 'Send reset link' : 'Envoyer le lien')}
                 </button>
@@ -564,6 +589,7 @@ export default function AuthGate({ onAuth, error: externalError }) {
               ...styles.submitBtn,
               ...(loading ? styles.submitBtnDisabled : {}),
             }}
+            {...accentHover}
           >
             {loading
               ? t('auth.loading')
@@ -586,9 +612,10 @@ export default function AuthGate({ onAuth, error: externalError }) {
         </form>
         </>
         )}
+        </div>
 
         {/* Legal links */}
-        <div style={{ textAlign: 'center', marginTop: 24, fontSize: 11, color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', marginTop: 20, fontSize: 11, color: 'var(--text-muted)' }}>
           <a href="/legal" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
             {t('legal.terms') || 'CGU'}
           </a>
