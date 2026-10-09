@@ -405,17 +405,17 @@ body {
 .clients-account-chevron {
   display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; margin: -5px 0 -5px -4px; flex-shrink: 0; padding: 0;
-  border: 1px solid var(--border); border-radius: 8px; background: var(--paper-2);
+  border: 1px solid transparent; border-radius: 8px; background: transparent;
   color: var(--text-secondary); cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, color 0.12s;
 }
 .clients-account-chevron svg { transition: transform 0.15s ease; }
 .clients-account-chevron[aria-expanded="true"] svg { transform: rotate(90deg); }
+/* Invisible au repos, le bouton n'apparaît qu'au survol : la flèche suffit à
+   dire qu'on peut déplier, le cadre dit où cliquer au moment où on vise. */
 .clients-account-chevron:hover {
-  background: var(--accent-glow); border-color: var(--primary); color: var(--primary);
-}
-.clients-account-chevron[aria-expanded="true"] {
-  background: var(--accent-glow); border-color: var(--primary); color: var(--primary);
+  background: var(--bg-card); border-color: var(--border); color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .clients-account-chevron:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .account-sheet-contact:hover { background: var(--paper-2); }

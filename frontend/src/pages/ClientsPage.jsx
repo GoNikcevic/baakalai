@@ -1220,7 +1220,7 @@ export default function ClientsPage({ scope }) {
                             title={ouvert ? t('clients.hideContacts') : t('clients.showContacts')}
                             onClick={e => { e.stopPropagation(); basculer(); }}
                           >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
                               <polygon points="8 4.5 18 12 8 19.5" />
                             </svg>
                           </button>
