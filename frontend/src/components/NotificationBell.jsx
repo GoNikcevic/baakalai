@@ -29,7 +29,7 @@ const TYPE_ICONS = {
 const TYPE_LINKS = {
   churn_alert: '/clients?filter=churn',
   warning: '/clients?filter=churn',
-  signals: '/automations?section=signals',
+  signals: '/automatisations?section=signals',
 };
 
 /* ─── Time-ago helper ─── */

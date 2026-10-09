@@ -152,7 +152,7 @@ export default function SignalsZone({ onAutomated }) {
           <button
             className="btn btn-ghost"
             style={{ fontSize: 12, padding: '4px 12px' }}
-            onClick={() => navigate('/automations?section=settings')}
+            onClick={() => navigate('/automatisations?section=settings')}
           >
             {t('automation.signals.veilleSettings')}
           </button>
@@ -173,7 +173,7 @@ export default function SignalsZone({ onAutomated }) {
             <button
               className="btn btn-ghost"
               style={{ fontSize: 12, padding: '6px 16px' }}
-              onClick={loadError ? load : () => navigate('/automations?section=triggers')}
+              onClick={loadError ? load : () => navigate('/automatisations?section=triggers')}
             >
               {loadError ? t('automation.wizard.retry') : t('automation.signals.empty.cta')}
             </button>

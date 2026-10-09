@@ -227,7 +227,7 @@ function CrmActionCard({ metadata, actionType, label, icon }) {
             </div>
           )}
           {result?.queued > 0 && (
-            <a href="/automations" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', display: 'inline-block', marginTop: 8 }}>
+            <a href="/automatisations" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', display: 'inline-block', marginTop: 8 }}>
               {en ? 'Review and approve →' : 'Relire et approuver →'}
             </a>
           )}
@@ -477,7 +477,7 @@ function SignalSearchCard({ metadata }) {
             <Icon name="checkCircle" size={12} style={{ display: 'inline-block', verticalAlign: '-2px', marginRight: 6 }} />
             {results.detected || 0} {en ? 'signals detected' : 'signaux détectés'}
           </div>
-          <a href="/automations?section=signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
+          <a href="/automatisations?section=signals" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>
             {en ? 'View signals →' : 'Voir les signaux →'}
           </a>
         </div>

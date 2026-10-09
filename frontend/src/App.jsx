@@ -61,11 +61,13 @@ function DiagnosticRedirect() {
 }
 
 // `/activation` est l'ancien nom de la page Automatisation (renommée le
-// 14/09, l'adresse le 09/10). Les liens déjà envoyés et les favoris gardent
-// leurs paramètres (`?section=signals`) : un <Navigate> nu les perdrait.
+// 14/09, l'adresse le 09/10). `/automations` a vécu quelques minutes sur
+// staging avant qu'on choisisse le français, il redirige aussi. Les liens
+// déjà envoyés et les favoris gardent leurs paramètres (`?section=signals`) :
+// un <Navigate> nu les perdrait.
 function ActivationRedirect() {
   const { search, hash } = useLocation()
-  return <Navigate to={`/automations${search}${hash}`} replace />
+  return <Navigate to={`/automatisations${search}${hash}`} replace />
 }
 
 export default function App() {
@@ -238,16 +240,17 @@ export default function App() {
             <Route path="/data-quality" element={<DataQualityPage />} />
             <Route path="/churn-risk" element={<ChurnPage />} />
             <Route path="/churn-risk/:opportunityId/workflow" element={<WorkflowPage goal="churn_prevention" backBase="/churn-risk" backLabelKey="workflow.backToChurn" />} />
-            <Route path="/automations" element={<ActivationPage />} />
+            <Route path="/automatisations" element={<ActivationPage />} />
             <Route path="/activation" element={<ActivationRedirect />} />
+            <Route path="/automations" element={<ActivationRedirect />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsWrapper />} />
             <Route path="/recos" element={<RecosPage />} />
             <Route path="/help" element={<Navigate to="/chat" replace />} />
             <Route path="/join/:code" element={<JoinTeamPage />} />
             {/* Redirects for old routes */}
-            <Route path="/nurture" element={<Navigate to="/automations" replace />} />
-            <Route path="/signals" element={<Navigate to="/automations?section=signals" replace />} />
+            <Route path="/nurture" element={<Navigate to="/automatisations" replace />} />
+            <Route path="/signals" element={<Navigate to="/automatisations?section=signals" replace />} />
             <Route path="/crm-analytics" element={<Navigate to="/analytics" replace />} />
             <Route path="/performance" element={<Navigate to="/analytics" replace />} />
             <Route path="/membership" element={<Navigate to="/analytics" replace />} />

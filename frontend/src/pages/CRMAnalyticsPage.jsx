@@ -754,7 +754,7 @@ function DealTouchBlock({ dt }) {
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
               {t('analytics.dealTouchEmptyBody', { count: dt.untouched.count })}
             </div>
-            <button className="btn btn-accent" onClick={() => navigate('/automations')}>
+            <button className="btn btn-accent" onClick={() => navigate('/automatisations')}>
               {t('analytics.dealTouchEmptyCta')}
             </button>
           </div>
