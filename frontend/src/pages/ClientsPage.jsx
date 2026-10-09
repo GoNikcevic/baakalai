@@ -1207,7 +1207,7 @@ export default function ClientsPage({ scope }) {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 60 }}>
                         {g.sansInterlocuteur ? (
-                          <span style={{ width: 26, flexShrink: 0 }} />
+                          <span style={{ width: 28, flexShrink: 0 }} />
                         ) : (
                           // Un vrai bouton, avec sa propre zone de clic : c'est
                           // le seul chemin vers les contacts quand la ligne
@@ -1220,8 +1220,8 @@ export default function ClientsPage({ scope }) {
                             title={ouvert ? t('clients.hideContacts') : t('clients.showContacts')}
                             onClick={e => { e.stopPropagation(); basculer(); }}
                           >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="9 6 15 12 9 18" />
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+                              <polygon points="8 4.5 18 12 8 19.5" />
                             </svg>
                           </button>
                         )}
