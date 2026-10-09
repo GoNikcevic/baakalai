@@ -768,10 +768,9 @@ describe('ClientsPage · la société s ouvre comme un contact', () => {
     });
     renderDeals();
 
-    // Déplier le groupe D'ABORD, en cliquant la sous-ligne du compte : le nom
-    // lui-même est un lien, et son clic est intercepté pour ouvrir le panneau.
-    const sousLigne = await screen.findByText(/affaire\(s\)/);
-    fireEvent.click(sousLigne);
+    // Déplier le groupe D'ABORD, par le chevron : la ligne, elle, ouvre la
+    // fiche de la société.
+    fireEvent.click(await screen.findByRole('button', { name: 'Afficher les contacts de la société' }));
     const contact = await screen.findByText('Claire Benali');
 
     fireEvent.click(await screen.findByRole('link', { name: 'Acme' }));
@@ -782,6 +781,76 @@ describe('ClientsPage · la société s ouvre comme un contact', () => {
     fireEvent.click(contact);
 
     await waitFor(() => expect(screen.queryByText('RISQUE DE PERTE')).toBeNull());
+  });
+});
+
+describe('ClientsPage · la ligne ouvre la fiche, le chevron déplie', () => {
+  // Avant le 09/10, la ligne dépliait les contacts et seul le texte du nom
+  // ouvrait la fiche, sans que rien ne distingue les deux zones.
+  const acme = [
+    { id: 'p4', name: 'Claire Benali', company: 'Acme', account_id: 'acc-1', status: 'negotiation', last_activity_at: new Date().toISOString() },
+  ];
+  const ficheAvecContact = {
+    compte: { id: 'acc-1', name: 'Acme', churnScore: 64, churnFactors: [], lastActivityAt: new Date().toISOString() },
+    affaires: [],
+    contacts: [{ id: 'p4', name: 'Claire Benali', email: 'claire@acme.fr', status: 'negotiation' }],
+    resume: {
+      ouvert: 0, gagne: 0, contacts: 1, joignables: 1,
+      upsell: false, injoignable: false, sansInterlocuteur: false,
+      devisesMelangees: false, devises: [], champsManquants: [],
+    },
+  };
+
+  it('un clic n importe où sur la ligne ouvre la fiche, sans déplier', async () => {
+    mockApi({ opportunities: acme });
+    renderDeals();
+
+    fireEvent.click(await screen.findByText(/affaire\(s\)/));
+
+    expect(await screen.findByText('RISQUE DE PERTE')).toBeTruthy();
+    expect(screen.queryByText('Claire Benali')).toBeNull();
+  });
+
+  it('le chevron déplie sans ouvrir de fiche', async () => {
+    mockApi({ opportunities: acme });
+    renderDeals();
+
+    const chevron = await screen.findByRole('button', { name: 'Afficher les contacts de la société' });
+    expect(chevron.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(chevron);
+
+    expect(await screen.findByText('Claire Benali')).toBeTruthy();
+    expect(screen.queryByText('RISQUE DE PERTE')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Masquer les contacts de la société' }).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('un contact ouvert depuis la fiche revient à sa société', async () => {
+    mockApi({ opportunities: acme, accountSheet: ficheAvecContact });
+    renderDeals();
+
+    fireEvent.click(await screen.findByText(/affaire\(s\)/));
+    fireEvent.click(await screen.findByTitle('Ouvrir la fiche du contact'));
+
+    const retour = await screen.findByRole('button', { name: /Retour à Acme/ });
+    expect(screen.queryByText('RISQUE DE PERTE')).toBeNull();
+
+    fireEvent.click(retour);
+    expect(await screen.findByText('RISQUE DE PERTE')).toBeTruthy();
+  });
+
+  it('la société d un contact ouvre sa fiche', async () => {
+    mockApi({ opportunities: acme });
+    renderDeals();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Afficher les contacts de la société' }));
+    fireEvent.click(await screen.findByText('Claire Benali'));
+    // Ouvert depuis la liste, pas depuis la fiche : aucun retour à proposer.
+    // Un bouton dans l'en-tête du panneau, distinct du lien de la ligne.
+    const societe = await screen.findByRole('button', { name: 'Acme' });
+    expect(screen.queryByRole('button', { name: /Retour à/ })).toBeNull();
+
+    fireEvent.click(societe);
+    expect(await screen.findByText('RISQUE DE PERTE')).toBeTruthy();
   });
 });
 

@@ -1289,7 +1289,11 @@
     "ownerNone": "non rattaché",
     "silenceUnknown": "inconnu",
     "noEmailForSend": "Ce contact n'a pas d'adresse email.",
-    "noContactAttached": "aucun interlocuteur rattaché"
+    "noContactAttached": "aucun interlocuteur rattaché",
+    "showContacts": "Afficher les contacts de la société",
+    "hideContacts": "Masquer les contacts de la société",
+    "openCompanyOfContact": "Ouvrir la fiche de la société",
+    "backToAccount": "Retour à {name}"
   },
   "stageMapping": {
     "title": "Votre pipeline, vu par baakalai",
@@ -2526,7 +2530,8 @@
       "other": "autre rôle"
     },
     "fullPage": "Page entière",
-    "openFullPage": "Ouvrir la fiche dans une page, pour la partager ou la mettre en favori"
+    "openFullPage": "Ouvrir la fiche dans une page, pour la partager ou la mettre en favori",
+    "openContact": "Ouvrir la fiche du contact"
   },
   "composer": {
     "title": "Écrire à {name}",

@@ -211,6 +211,23 @@ export default function ClientsPage({ scope }) {
   // ouvert, et reciproquement · c'est fait dans les deux poseurs ci-dessous
   // plutot que par un effet, pour que la cause soit lisible la ou on clique.
   const [selectedAccountId, setSelectedAccountId] = useState(null);
+  // Exception à la règle ci-dessus, et la seule : un contact ouvert DEPUIS la
+  // fiche d'une société laisse `selectedAccountId` posé. Le panneau de contact
+  // le recouvre, et « Retour à <société> » n'a qu'à retirer le contact.
+  const [nomCompteRetour, setNomCompteRetour] = useState('');
+  const fermerPanneaux = () => {
+    setSelectedClient(null);
+    setSelectedAccountId(null);
+  };
+  // Le contact de la fiche société n'a que les champs de la fiche (pas de
+  // score, pas de propriétaire). On reprend la ligne complète de la liste quand
+  // elle est chargée ; sinon celle de la fiche, à qui l'on rend la société
+  // qu'elle ne porte pas, pour que l'en-tête du panneau la nomme.
+  const ouvrirContactDuCompte = (contact, compte) => {
+    const complet = groups.flatMap(g => g.contacts || []).find(c => c.id === contact.id);
+    setNomCompteRetour(compte.name || '');
+    setSelectedClient(complet || { ...contact, company: compte.name, account_id: compte.id });
+  };
   const [crmFilter, setCrmFilter] = useState('all');
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [selected, setSelected] = useState(new Set());
@@ -1157,25 +1174,55 @@ export default function ClientsPage({ scope }) {
                   // Rien a deplier quand il n'y a aucun contact : le chevron
                   // promettrait un contenu qui n'existe pas.
                   const ouvert = !g.sansInterlocuteur && (!!search || expandedAccounts.has(g.key));
+                  const basculer = () => setExpandedAccounts(prev => {
+                    const suivant = new Set(prev);
+                    if (suivant.has(g.key)) suivant.delete(g.key); else suivant.add(g.key);
+                    return suivant;
+                  });
+                  const ouvrirFiche = () => {
+                    setSelectedClient(null);
+                    setSelectedAccountId(g.accountId);
+                  };
+                  const actif = !!g.accountId && selectedAccountId === g.accountId;
+                  // La LIGNE ouvre la fiche, le CHEVRON déplie (09/10). Avant,
+                  // la ligne dépliait et seul le texte du nom ouvrait la fiche,
+                  // sans que rien ne distingue les deux zones : on voulait voir
+                  // la société et on dépliait ses contacts, ou l'inverse. C'est
+                  // maintenant le même geste que pour un contact. Un groupe
+                  // sans fiche (nom en texte libre, personne seule) n'a rien à
+                  // ouvrir : sa ligne garde le seul geste qu'elle a, déplier.
                   return (
                     <div
                       key={`acc-${g.key}`}
-                      onClick={() => setExpandedAccounts(prev => {
-                        const suivant = new Set(prev);
-                        if (suivant.has(g.key)) suivant.delete(g.key); else suivant.add(g.key);
-                        return suivant;
-                      })}
+                      className="clients-account-row"
+                      onClick={g.accountId ? ouvrirFiche : (g.sansInterlocuteur ? undefined : basculer)}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        gap: 14, padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
-                        border: '1px solid var(--border)', background: 'var(--bg-card)',
+                        gap: 14, padding: '11px 14px', borderRadius: 8,
+                        cursor: g.accountId || !g.sansInterlocuteur ? 'pointer' : 'default',
+                        border: `1px solid ${actif ? 'var(--primary)' : 'var(--border)'}`,
+                        background: actif ? 'var(--accent-glow)' : 'var(--bg-card)',
                         fontSize: 13, marginTop: 4,
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 60 }}>
-                        <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 10, flexShrink: 0 }}>
-                          {g.sansInterlocuteur ? '' : (ouvert ? '▾' : '▸')}
-                        </span>
+                        {g.sansInterlocuteur ? (
+                          <span style={{ width: 10, flexShrink: 0 }} />
+                        ) : (
+                          // Un vrai bouton, avec sa propre zone de clic : c'est
+                          // le seul chemin vers les contacts quand la ligne
+                          // ouvre la fiche, il doit se viser et se tabuler.
+                          <button
+                            type="button"
+                            className="clients-account-chevron"
+                            aria-expanded={ouvert}
+                            aria-label={ouvert ? t('clients.hideContacts') : t('clients.showContacts')}
+                            title={ouvert ? t('clients.hideContacts') : t('clients.showContacts')}
+                            onClick={e => { e.stopPropagation(); basculer(); }}
+                          >
+                            {ouvert ? '▾' : '▸'}
+                          </button>
+                        )}
                         {/* minWidth: 60, pas 0 : les colonnes à droite (fixes,
                             flexShrink: 0) ne cèdent jamais de la place, donc à
                             largeur d'écran réduite tout le rétrécissement
@@ -1185,28 +1232,22 @@ export default function ClientsPage({ scope }) {
                             avec l'ellipse déjà prévue juste en dessous. */}
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {/* Le nom ouvre la fiche de la société (lot 7), mais
-                                seulement quand le groupe EST une société : un
-                                groupe formé sur un nom en texte libre ou sur une
-                                personne sans entreprise n'a pas de fiche.
-                                `stopPropagation` parce que la ligne entière
-                                déplie le groupe · sans ça, un clic sur le lien
-                                ferait les deux à la fois. */}
+                            {/* Le nom reste un lien quand le groupe EST une
+                                société : un clic simple remonte à la ligne, qui
+                                ouvre la fiche dans le panneau, mais un clic
+                                MODIFIÉ (Ctrl, Cmd, Maj) garde son sens de lien
+                                et ouvre la page à côté. Un groupe formé sur un
+                                nom en texte libre ou sur une personne sans
+                                entreprise n'a pas de fiche. */}
                             {g.accountId ? (
                               <Link
                                 to={`/accounts/${g.accountId}`}
                                 onClick={e => {
-                                  e.stopPropagation();   // la ligne entiere deplie le groupe
-                                  // Un clic MODIFIE (Ctrl, Cmd, molette, Maj)
-                                  // garde son sens de lien : nouvel onglet,
-                                  // nouvelle fenetre. C'est la raison pour
-                                  // laquelle ca reste un <Link> et non un
-                                  // <button> · on ouvre dans le panneau, sans
-                                  // retirer la possibilite d'ouvrir a cote.
-                                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
-                                  e.preventDefault();
-                                  setSelectedClient(null);
-                                  setSelectedAccountId(g.accountId);
+                                  if (e.metaKey || e.ctrlKey || e.shiftKey) {
+                                    e.stopPropagation();   // la page s'ouvre a cote, le panneau ne bouge pas
+                                    return;
+                                  }
+                                  e.preventDefault();      // la ligne ouvre le panneau
                                 }}
                                 style={{ color: 'inherit', textDecoration: 'none' }}
                                 title={t('clients.openAccount')}
@@ -1520,10 +1561,14 @@ export default function ClientsPage({ scope }) {
             un contact ouvrait ce panneau : deux objets du meme tableau, deux
             modeles d'interaction, et un aller-retour obligatoire pour comparer
             deux societes. */}
+        {/* La cle force un remontage d'une societe a l'autre : sans elle, la
+            fiche precedente restait affichee le temps du chargement. */}
         {selectedAccountId && !selectedClient && (
           <AccountDetailPanel
+            key={selectedAccountId}
             accountId={selectedAccountId}
-            onClose={() => setSelectedAccountId(null)}
+            onClose={fermerPanneaux}
+            onOpenContact={ouvrirContactDuCompte}
           />
         )}
 
@@ -1534,7 +1579,7 @@ export default function ClientsPage({ scope }) {
               client={selectedClient}
               issueType={dealQualityIssue}
               multiCrm={multiCrm}
-              onClose={() => setSelectedClient(null)}
+              onClose={fermerPanneaux}
               onFieldSaved={(id, patch) => {
                 // La correction est appliquée SUR PLACE, sans recharger : c'est
                 // ce qui fait sortir la ligne de la liste dès qu'elle est
@@ -1548,7 +1593,16 @@ export default function ClientsPage({ scope }) {
               }}
             />
           ) : (
-            <ClientDetailPanel client={selectedClient} multiCrm={multiCrm} onClose={() => setSelectedClient(null)} />
+            <ClientDetailPanel
+              client={selectedClient}
+              multiCrm={multiCrm}
+              onClose={fermerPanneaux}
+              // `selectedAccountId` encore pose sous un contact ouvert = on
+              // vient de la fiche de cette societe : le retour y ramene.
+              onBack={selectedAccountId ? () => setSelectedClient(null) : undefined}
+              backLabel={nomCompteRetour}
+              onOpenAccount={(accountId) => { setSelectedClient(null); setSelectedAccountId(accountId); }}
+            />
           )
         )}
       </div>
@@ -1564,7 +1618,7 @@ export default function ClientsPage({ scope }) {
    `compact` passe la fiche sur une seule colonne : a 36 % de large, la grille a
    deux colonnes de la page donnerait des montants coupes et des libelles sur
    trois lignes. */
-function AccountDetailPanel({ accountId, onClose }) {
+function AccountDetailPanel({ accountId, onClose, onOpenContact }) {
   const t = useT();
   const [fiche, setFiche] = useState(null);
   const [etat, setEtat] = useState('chargement');
@@ -1623,7 +1677,13 @@ function AccountDetailPanel({ accountId, onClose }) {
       {etat === 'introuvable' && (
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('accountSheet.notFoundBody')}</div>
       )}
-      {etat === 'ok' && <AccountSheet fiche={fiche} compact />}
+      {etat === 'ok' && (
+        <AccountSheet
+          fiche={fiche}
+          compact
+          onOpenContact={onOpenContact ? (c) => onOpenContact(c, fiche.compte) : undefined}
+        />
+      )}
     </div>
   );
 }
@@ -1884,7 +1944,7 @@ function DealDetailPanel({ client, issueType, multiCrm, onClose, onFieldSaved })
 
 /* ═══ Client Detail Panel ═══ */
 
-function ClientDetailPanel({ client, multiCrm, onClose }) {
+function ClientDetailPanel({ client, multiCrm, onClose, onBack, backLabel, onOpenAccount }) {
   const t = useT();
   const { lang } = useI18n();
   const STATUS_LABELS = getStatusLabels(lang);
@@ -1948,13 +2008,38 @@ function ClientDetailPanel({ client, multiCrm, onClose }) {
 
   return (
     <div style={DETAIL_PANEL_STYLE}>
+      {onBack && (
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={onBack}
+          style={{ fontSize: 12, padding: '2px 8px', margin: '-4px 0 10px -8px', color: 'var(--text-muted)' }}
+        >
+          {'← '}{t('clients.backToAccount', { name: backLabel || client.company || '' })}
+        </button>
+      )}
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{client.name}</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
             {client.title && <span>{client.title}</span>}
-            {client.company && <span>{client.title ? ' @ ' : ''}{client.company}</span>}
+            {client.company && client.title && <span>{' @ '}</span>}
+            {/* La société du contact ouvre SA fiche dans le même panneau : le
+                chemin inverse du clic sur un contact depuis la fiche société. */}
+            {client.company && (client.account_id && onOpenAccount ? (
+              <button
+                type="button"
+                onClick={() => onOpenAccount(client.account_id)}
+                title={t('clients.openCompanyOfContact')}
+                style={{
+                  border: 'none', background: 'none', padding: 0, font: 'inherit',
+                  color: 'var(--primary)', cursor: 'pointer',
+                }}
+              >
+                {client.company}
+              </button>
+            ) : <span>{client.company}</span>)}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{client.email}</div>
         </div>

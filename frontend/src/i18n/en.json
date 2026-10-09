@@ -1289,7 +1289,11 @@
     "ownerNone": "unassigned",
     "silenceUnknown": "unknown",
     "noEmailForSend": "This contact has no email address.",
-    "noContactAttached": "no contact linked"
+    "noContactAttached": "no contact linked",
+    "showContacts": "Show the company contacts",
+    "hideContacts": "Hide the company contacts",
+    "openCompanyOfContact": "Open the company sheet",
+    "backToAccount": "Back to {name}"
   },
   "stageMapping": {
     "title": "Your pipeline, as baakalai reads it",
@@ -2526,7 +2530,8 @@
       "other": "other role"
     },
     "fullPage": "Full page",
-    "openFullPage": "Open the record as a page, to share or bookmark it"
+    "openFullPage": "Open the record as a page, to share or bookmark it",
+    "openContact": "Open the contact sheet"
   },
   "composer": {
     "title": "Write to {name}",

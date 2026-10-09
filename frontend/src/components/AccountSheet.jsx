@@ -95,8 +95,10 @@ function Bloc({ titre, indice, children }) {
 /**
  * @param {object} fiche la réponse de `GET /crm/accounts/:id`
  * @param {boolean} compact rendu pour un panneau latéral · une seule colonne
+ * @param {function} [onOpenContact] reçoit le contact cliqué. Absent, les
+ *   contacts restent du texte : la page entière n'a pas de panneau où les ouvrir.
  */
-export default function AccountSheet({ fiche, compact = false }) {
+export default function AccountSheet({ fiche, compact = false, onOpenContact }) {
   const t = useT();
 
   const money = (n, devise) => {
@@ -212,10 +214,17 @@ export default function AccountSheet({ fiche, compact = false }) {
                 {contacts.map(c => {
                   const j = daysSince(c.last_activity_at);
                   return (
-                    <div key={c.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0',
-                      borderBottom: '1px solid var(--border)',
-                    }}>
+                    <div
+                      key={c.id}
+                      onClick={onOpenContact ? () => onOpenContact(c) : undefined}
+                      title={onOpenContact ? t('accountSheet.openContact') : undefined}
+                      className={onOpenContact ? 'account-sheet-contact' : undefined}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0',
+                        borderBottom: '1px solid var(--border)',
+                        cursor: onOpenContact ? 'pointer' : 'default',
+                      }}
+                    >
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>
                           {c.name || c.email || t('accountSheet.unnamedContact')}

@@ -398,6 +398,18 @@ body {
 .dd-item:hover { background: var(--accent-glow); color: var(--text-primary); }
 .dd-item.danger { color: var(--danger); }
 .dd-item.danger:hover { background: var(--danger-bg); }
+
+/* Écran Clients : la ligne société ouvre la fiche, le chevron seul déplie.
+   Deux gestes sur la même ligne, donc deux survols distincts. */
+.clients-account-row:hover { border-color: var(--primary) !important; }
+.clients-account-chevron {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; margin: -6px -4px -6px -8px; flex-shrink: 0;
+  border: none; border-radius: 6px; background: transparent;
+  color: var(--text-muted); font-size: 11px; cursor: pointer;
+}
+.clients-account-chevron:hover { background: var(--paper-2); color: var(--ink); }
+.account-sheet-contact:hover { background: var(--paper-2); }
 .dd-sep { height: 1px; background: var(--border); margin: 4px 0; }
 
 /* ═══════════ MAIN ═══════════ */
