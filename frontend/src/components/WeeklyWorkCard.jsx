@@ -93,7 +93,7 @@ export default function WeeklyWorkCard() {
     }
     if (item.kind === 'reply') {
       return {
-        key: `p${i}`, to: '/activation',
+        key: `p${i}`, to: '/automations',
         main: t('weeklyWork.item.reply', { company: item.company || t('weeklyWork.item.unnamed') }),
         sub: null,
       };
@@ -111,8 +111,8 @@ export default function WeeklyWorkCard() {
   const rates = data.rates || {};
   const ledger = [
     { key: 'accountsReviewed', to: '/clients' },
-    { key: 'signals', to: '/activation?section=signals' },
-    { key: 'followUps', to: '/activation' },
+    { key: 'signals', to: '/automations?section=signals' },
+    { key: 'followUps', to: '/automations' },
     { key: 'issuesFound', to: '/data-quality' },
     { key: 'analyses', to: '/recos' },
   ]
@@ -136,7 +136,7 @@ export default function WeeklyWorkCard() {
   const alerts = [];
   if (pending.approvals > 0) {
     alerts.push({
-      key: 'approvals', to: '/activation', cta: t('weeklyWork.alert.approve'),
+      key: 'approvals', to: '/automations', cta: t('weeklyWork.alert.approve'),
       text: t(`weeklyWork.alert.${plural(pending.approvals, 'approvals')}`, { count: pending.approvals })
         + (pending.approvalsOldestDays > 1
           ? ` ${t('weeklyWork.alert.since', { days: pending.approvalsOldestDays })}`
