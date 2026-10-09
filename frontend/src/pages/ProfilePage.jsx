@@ -630,6 +630,21 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                     {files.map((f, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}>
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                        {/* Le type décide de ce que lit l'auto-remplissage du profil : il
+                            préfère les présentations d'entreprise et écarte les listes de
+                            prospects (routes/profile.js). Ce sélecteur avait disparu le 30/06
+                            avec l'ancien bloc d'envoi : tout partait en « other », et une liste
+                            de prospects était lue comme si elle décrivait l'entreprise. */}
+                        <select
+                          aria-label={t('documents.typeLabel')}
+                          value={fileTypes?.[f.name] || 'other'}
+                          onChange={e => setFileTypes(prev => ({ ...prev, [f.name]: e.target.value }))}
+                          style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-secondary)' }}
+                        >
+                          {['company', 'prospects', 'brief', 'other'].map(type => (
+                            <option key={type} value={type}>{t('documents.types.' + type)}</option>
+                          ))}
+                        </select>
                         <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{formatSize(f.size)}</span>
                         <button onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13 }}>x</button>
                       </div>

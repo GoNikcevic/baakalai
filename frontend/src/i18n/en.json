@@ -2550,6 +2550,13 @@
     "alreadyExists": "A product line named \"{name}\" already exists."
   },
   "documents": {
-    "deleteFailed": "\"{name}\" could not be deleted. Please try again."
+    "deleteFailed": "\"{name}\" could not be deleted. Please try again.",
+    "typeLabel": "Document type",
+    "types": {
+      "company": "Company overview",
+      "prospects": "Prospect list",
+      "brief": "Campaign brief",
+      "other": "Other"
+    }
   }
 }

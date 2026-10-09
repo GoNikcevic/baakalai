@@ -9,7 +9,7 @@
    =============================================================================== */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ProfilePage from '../ProfilePage';
 
 const { faux } = vi.hoisted(() => ({
@@ -70,5 +70,41 @@ describe('ProfilePage, suppression d un document', () => {
     // Le document est toujours là : il n'a pas été supprimé, l'écran ne doit pas
     // prétendre le contraire.
     expect(screen.getByText('plaquette.pdf')).toBeInTheDocument();
+  });
+});
+
+describe('ProfilePage, type des documents envoyes', () => {
+  // Le type part avec le fichier et décide de ce que lit l'auto-remplissage du
+  // profil, qui écarte les listes de prospects. Le sélecteur avait disparu le
+  // 30/06 : tout partait en « other », sans moyen de le changer.
+  const fetchOrigine = globalThis.fetch;
+  let envois;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    envois = [];
+    globalThis.fetch = vi.fn((url, opts) => {
+      if (String(url).includes('/api/documents/upload')) envois.push(opts.body);
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+  });
+
+  afterEach(() => { globalThis.fetch = fetchOrigine; });
+
+  it('le type choisi pour un fichier part avec lui', async () => {
+    const { container } = render(<ProfilePage />);
+    await screen.findByText('plaquette.pdf');
+
+    const fichier = new File(['nom,email'], 'prospects-q4.csv', { type: 'text/csv' });
+    fireEvent.change(container.querySelector('input[type=file]'), { target: { files: [fichier] } });
+
+    const selecteur = await screen.findByLabelText('Type du document');
+    expect(selecteur.value).toBe('other');
+    fireEvent.change(selecteur, { target: { value: 'prospects' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer 1 fichier/ }));
+
+    await waitFor(() => expect(envois).toHaveLength(1));
+    expect(envois[0].get('docTypes')).toBe(JSON.stringify({ 'prospects-q4.csv': 'prospects' }));
   });
 });

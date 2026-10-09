@@ -2550,6 +2550,13 @@
     "alreadyExists": "Une ligne de produit « {name} » existe déjà."
   },
   "documents": {
-    "deleteFailed": "« {name} » n'a pas pu être supprimé. Réessayez."
+    "deleteFailed": "« {name} » n'a pas pu être supprimé. Réessayez.",
+    "typeLabel": "Type du document",
+    "types": {
+      "company": "Présentation entreprise",
+      "prospects": "Liste de prospects",
+      "brief": "Brief campagne",
+      "other": "Autre"
+    }
   }
 }
