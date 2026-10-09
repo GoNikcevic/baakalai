@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/useApp';
 import { request } from '../services/api-client';
 import { showToast } from '../services/notifications';
-import { useI18n } from '../i18n';
+import { useI18n, useT } from '../i18n';
 import Icon from '../components/Icon';
 
 /* ─── Default empty profile ─── */
@@ -358,6 +358,7 @@ export default function ProfilePage() {
 /* ═══ Product Lines Section ═══ */
 
 function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelect, docProps }) {
+  const t = useT();
   const { files, fileTypes, setFileTypes, isDragging, fileInputRef, handleDragEnter, handleDragLeave, handleDragOver, handleDrop, addFiles, removeFile, handleUpload, uploading, uploadSuccess, uploadedDocs, setUploadedDocs, handleAutoFill, autoFilling, formatSize, pendingAutoProducts, setPendingAutoProducts } = docProps || {};
   const { lang } = useI18n();
   const en = lang === 'en';
@@ -458,7 +459,15 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
         await request(`/crm/product-lines/${activeTab}`, { method: 'PATCH', body: JSON.stringify(form) });
         await load();
       }
-    } catch { import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: en ? 'Failed to save product' : 'Échec de la sauvegarde du produit' })); }
+    } catch (err) {
+      // Un nom déjà pris dans l'équipe : le serveur refuse (409) plutôt que de
+      // rendre la ligne existante, qui jetterait ce qui vient d'être saisi. On
+      // le dit tel quel, au lieu du message générique d'échec.
+      const message = err?.code === 'product_line_exists'
+        ? t('productLines.alreadyExists').replace('{name}', form.name.trim())
+        : (en ? 'Failed to save product' : 'Échec de la sauvegarde du produit');
+      import('../services/notifications').then(m => m.showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message }));
+    }
     setSaving(false);
   };
 

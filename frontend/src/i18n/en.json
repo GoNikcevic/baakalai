@@ -2540,5 +2540,8 @@
     "send": "Send",
     "sent": "Email sent",
     "needBoth": "Fill in both the subject and the message to send."
+  },
+  "productLines": {
+    "alreadyExists": "A product line named \"{name}\" already exists."
   }
 }

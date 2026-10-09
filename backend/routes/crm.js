@@ -1601,31 +1601,53 @@ router.get('/product-lines', async (req, res, next) => {
 router.post('/product-lines', async (req, res, next) => {
   try {
     const { name, description, icon, targetSectors, valueProp, painPoints } = req.body;
-    if (!name) return res.status(400).json({ error: 'name is required' });
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'name is required' });
     let teamResult = await db.query(
       `SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1`, [req.user.id]
     );
     let teamId = teamResult.rows[0]?.team_id;
 
-    // Auto-create a team for solo users who don't have one yet
+    // Une ligne de produit appartient à une équipe : un compte solo en reçoit
+    // une ici. Elle passe par db.teams.create (équipe + membre admin) PUIS par
+    // migrateUserData, comme POST /api/teams.
+    //
+    // Les deux INSERT en ligne qui tenaient lieu de création sautaient
+    // migrateUserData : les contacts, campagnes, déclencheurs, boîtes et
+    // intégrations déjà présents restaient sans team_id, et ceux importés
+    // ensuite aussi, rien ne repassant derrière. Constaté en prod le 08/10 :
+    // l'unique équipe, « Goran Nikcevic's Team », est née de cette route
+    // pendant l'analyse d'entreprise de l'onboarding (première ligne de
+    // produit 62 ms après l'équipe), et 0 contact sur 443 lui était rattaché.
     if (!teamId) {
       const user = await db.query(`SELECT name, email FROM users WHERE id = $1`, [req.user.id]);
       const userName = user.rows[0]?.name || user.rows[0]?.email?.split('@')[0] || 'My Team';
-      const team = await db.query(
-        `INSERT INTO teams (name, created_by) VALUES ($1, $2) RETURNING id`,
-        [`${userName}'s Team`, req.user.id]
-      );
-      teamId = team.rows[0].id;
-      await db.query(
-        `INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, 'admin')`,
-        [teamId, req.user.id]
-      );
+      const team = await db.teams.create({ name: `${userName}'s Team`, createdBy: req.user.id });
+      teamId = team.id;
+      await db.teams.migrateUserData(teamId, req.user.id);
+    }
+
+    // Un nom par équipe, sans tenir compte de la casse ni des espaces. Sans ce
+    // contrôle, relancer l'analyse d'entreprise de l'onboarding (Retour, site
+    // modifié, Continuer) recréait toutes les lignes détectées en double. On
+    // refuse plutôt que de rendre la ligne existante : depuis la page Profil,
+    // la rendre en silence jetterait la description que l'utilisateur vient
+    // de saisir.
+    const existante = await db.query(
+      `SELECT id FROM product_lines WHERE team_id = $1 AND lower(trim(name)) = lower(trim($2)) LIMIT 1`,
+      [teamId, name]
+    );
+    if (existante.rows[0]) {
+      return res.status(409).json({
+        error: `Une ligne de produit « ${String(name).trim()} » existe déjà.`,
+        code: 'product_line_exists',
+        productLineId: existante.rows[0].id,
+      });
     }
 
     const result = await db.query(
       `INSERT INTO product_lines (team_id, name, description, icon, target_sectors, value_prop, pain_points)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [teamId, name, description || null, icon || null, targetSectors || null, valueProp || null, painPoints || null]
+      [teamId, String(name).trim(), description || null, icon || null, targetSectors || null, valueProp || null, painPoints || null]
     );
     res.json({ productLine: result.rows[0] });
   } catch (err) { next(err); }

@@ -2540,5 +2540,8 @@
     "send": "Envoyer",
     "sent": "Email envoyé",
     "needBoth": "Renseignez l'objet et le message pour pouvoir envoyer."
+  },
+  "productLines": {
+    "alreadyExists": "Une ligne de produit « {name} » existe déjà."
   }
 }
