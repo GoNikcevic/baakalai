@@ -205,7 +205,7 @@ export default function ProfilePage() {
       console.warn('Upload failed:', err.message);
     }
     setUploading(false);
-  }, [files, fileTypes]);
+  }, [files, fileTypes, en]);
 
   const removeFile = useCallback((i) => {
     setFiles(prev => prev.filter((_, idx) => idx !== i));
@@ -266,7 +266,7 @@ export default function ProfilePage() {
       }
     }
     setAutoFilling(false);
-  }, []);
+  }, [en]);
 
   const formatSize = (bytes) => {
     if (bytes < 1024) return bytes + ' o';
@@ -656,7 +656,12 @@ function ProductLinesSection({ profile, renderInput, renderTextarea, renderSelec
                         />
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.original_name}</span>
                         <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{new Date(doc.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
-                        <button onClick={async () => { try { await request('/documents/' + doc.id, { method: 'DELETE' }); setUploadedDocs(prev => prev.filter(d => d.id !== doc.id)); } catch {} }}
+                        <button onClick={async () => { try { await request('/documents/' + doc.id, { method: 'DELETE' }); setUploadedDocs(prev => prev.filter(d => d.id !== doc.id)); } catch (err) {
+                          // Le document reste affiché : sans message, le clic paraissait
+                          // simplement ignoré.
+                          console.warn('document delete failed:', err.message);
+                          showToast({ type: 'error', title: en ? 'Error' : 'Erreur', message: t('documents.deleteFailed').replace('{name}', doc.original_name) });
+                        } }}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>×</button>
                       </div>
                     ))}

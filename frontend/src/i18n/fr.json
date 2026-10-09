@@ -2548,5 +2548,8 @@
   },
   "productLines": {
     "alreadyExists": "Une ligne de produit « {name} » existe déjà."
+  },
+  "documents": {
+    "deleteFailed": "« {name} » n'a pas pu être supprimé. Réessayez."
   }
 }

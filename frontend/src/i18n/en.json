@@ -2548,5 +2548,8 @@
   },
   "productLines": {
     "alreadyExists": "A product line named \"{name}\" already exists."
+  },
+  "documents": {
+    "deleteFailed": "\"{name}\" could not be deleted. Please try again."
   }
 }
